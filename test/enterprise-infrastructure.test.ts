@@ -19,9 +19,13 @@ describe("enterprise branch infrastructure operations", () => {
     store = new MemoryStore();
     agentId = (await store.registerEdgeAgent("branch-blr-001", "Branch gateway", "1.0.0")).id;
     const camera = store.cameras.get("cam-001")!;
+    camera.branchId = "branch-blr-001";
     camera.sourceType = "analog-dvr-channel";
     camera.recorderId = "dvr-01";
     camera.recorderChannel = 1;
+    const cameraNode = store.nodes.get(camera.nodeId)!;
+    cameraNode.parentId = "branch-blr-001";
+    cameraNode.path = ["company-1", "division-retail", "region-south", "branch-blr-001", cameraNode.id];
     app = await buildApp({ store });
   });
 
@@ -106,9 +110,8 @@ describe("enterprise branch infrastructure operations", () => {
     expect(response.json().data.map((node: { deviceId: string }) => node.deviceId)).toEqual([
       "cam-001", "dvr-01", "switch-01", "firewall-01", "ups-01", "wan-primary",
     ]);
-    // The seeded second camera is intentionally unmapped, so coverage exposes
-    // that inventory gap instead of presenting a false 100% topology claim.
-    expect(response.json().graphCoverage).toBe(85.7);
+    // Every device in this isolated branch has evidence-backed topology.
+    expect(response.json().graphCoverage).toBe(100);
   });
 
   it("does not invent health or dependency links when evidence is absent", async () => {

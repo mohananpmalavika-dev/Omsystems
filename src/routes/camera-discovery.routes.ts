@@ -219,6 +219,20 @@ export async function registerCameraDiscoveryRoutes(
 
       try {
         const created = await store.createDiscovery(branchId, normalized as any);
+        await store.writeAudit({
+          tenantId: branch.tenantId,
+          actorUserId: request.edgeAgentAuthenticated ? null : request.currentUser.id,
+          action: "camera.discovery_reported",
+          resourceNodeId: branchId,
+          outcome: "success",
+          sourceIp: request.ip,
+          details: {
+            discoveryId: created.id,
+            edgeAgentId: itemAgentId,
+            discoveryMethod: normalized.discoveryMethod,
+            sourceType: normalized.sourceType,
+          },
+        });
         results.push(created);
       } catch (err: any) {
         request.log.error({ err, normalized }, "Failed to save discovered camera to database");

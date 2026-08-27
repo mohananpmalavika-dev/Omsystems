@@ -5,12 +5,14 @@ import { GET, POST } from "../app/api/control/[...path]/route";
 const originalControlUrl = process.env.CONTROL_PLANE_INTERNAL_URL;
 const originalBridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
 const originalDevUser = process.env.DASHBOARD_DEV_USER_ID;
+const originalNodeEnv = process.env.NODE_ENV;
 
 afterEach(() => {
   vi.unstubAllGlobals();
   restore("CONTROL_PLANE_INTERNAL_URL", originalControlUrl);
   restore("EDGE_BRIDGE_SHARED_KEY", originalBridgeKey);
   restore("DASHBOARD_DEV_USER_ID", originalDevUser);
+  restore("NODE_ENV", originalNodeEnv);
 });
 
 describe("dashboard control-plane BFF", () => {
@@ -45,6 +47,7 @@ describe("dashboard control-plane BFF", () => {
   });
 
   it("uses the configured development identity when no session is present", async () => {
+    process.env.NODE_ENV = "test";
     process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
     const upstream = vi.fn(async (
       _input: RequestInfo | URL,
@@ -61,6 +64,22 @@ describe("dashboard control-plane BFF", () => {
     expect(new Headers(init?.headers).get("x-user-id")).toBe(
       "user-global-admin",
     );
+  });
+
+  it("rejects unauthenticated production requests without calling upstream", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
+    const upstream = vi.fn();
+    vi.stubGlobal("fetch", upstream);
+
+    const response = await GET(
+      new NextRequest("https://sentinel.example/api/control/v1/users"),
+      { params: Promise.resolve({ path: ["v1", "users"] }) },
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: "unauthenticated" });
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it("does not forward dashboard Basic Auth as control-plane authentication", async () => {

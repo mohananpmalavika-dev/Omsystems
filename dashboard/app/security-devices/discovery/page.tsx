@@ -61,6 +61,9 @@ export default function DeviceDiscoveryPage() {
   const [loading, setLoading] = useState(true);
   const [showNewJobModal, setShowNewJobModal] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     loadDiscoveryData();
@@ -79,6 +82,11 @@ export default function DeviceDiscoveryPage() {
         const jobsData = await jobsRes.json();
         setJobs(jobsData.data || []);
       }
+      if (!jobsRes.ok || !devicesRes.ok) {
+        const failed = !jobsRes.ok ? jobsRes : devicesRes;
+        const payload = await failed.json().catch(() => ({}));
+        throw new Error(payload.message || 'Device discovery data is unavailable');
+      }
 
       if (devicesRes.ok) {
         const devicesData = await devicesRes.json();
@@ -86,8 +94,10 @@ export default function DeviceDiscoveryPage() {
       }
 
       setLoading(false);
+      setError(null);
     } catch (error) {
       console.error('Failed to load discovery data:', error);
+      setError(error instanceof Error ? error.message : 'Device discovery data is unavailable');
       setLoading(false);
     }
   };
@@ -119,30 +129,75 @@ export default function DeviceDiscoveryPage() {
   };
 
   const handleApproveDevice = async (deviceId: string) => {
+    setActionBusy(true);
+    setError(null);
     try {
       const response = await fetch(`/api/security-devices/discovery/devices/${deviceId}/approve`, {
         method: 'POST',
       });
 
-      if (response.ok) {
-        loadDiscoveryData();
-      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Failed to approve device');
+      setNotice('Device approved.');
+      await loadDiscoveryData();
     } catch (error) {
       console.error('Failed to approve device:', error);
+      setError(error instanceof Error ? error.message : 'Failed to approve device');
+    } finally {
+      setActionBusy(false);
     }
   };
 
   const handleRejectDevice = async (deviceId: string) => {
+    setActionBusy(true);
+    setError(null);
     try {
       const response = await fetch(`/api/security-devices/discovery/devices/${deviceId}/reject`, {
         method: 'POST',
       });
 
-      if (response.ok) {
-        loadDiscoveryData();
-      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || 'Failed to reject device');
+      setNotice('Device rejected.');
+      await loadDiscoveryData();
     } catch (error) {
       console.error('Failed to reject device:', error);
+      setError(error instanceof Error ? error.message : 'Failed to reject device');
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const handleApproveHighConfidence = async () => {
+    const eligibleIds = discoveredDevices
+      .filter((device) => Number(device.confidence) >= 90)
+      .map((device) => device.id);
+    if (eligibleIds.length === 0) {
+      setNotice('No pending devices meet the 90% confidence threshold.');
+      return;
+    }
+    setActionBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch('/api/security-devices/discovery/devices/approve-high-confidence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threshold: 90, deviceIds: eligibleIds }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok && response.status !== 207) {
+        throw new Error(payload.message || 'Bulk approval failed');
+      }
+      setNotice(`${payload.approved || 0} high-confidence device${payload.approved === 1 ? '' : 's'} approved.`);
+      if (Array.isArray(payload.failures) && payload.failures.length > 0) {
+        setError(`${payload.failures.length} device approval${payload.failures.length === 1 ? '' : 's'} failed.`);
+      }
+      await loadDiscoveryData();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Bulk approval failed');
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -181,6 +236,17 @@ export default function DeviceDiscoveryPage() {
         </div>
       </div>
 
+      {error && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          {notice}
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -216,8 +282,9 @@ export default function DeviceDiscoveryPage() {
               Pending Device Approvals ({pendingDevices})
             </h2>
             <button
-              onClick={() => {/* TODO: Bulk approve */}}
-              className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+              onClick={() => void handleApproveHighConfidence()}
+              disabled={actionBusy}
+              className="text-sm text-blue-600 hover:text-blue-700 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Approve All High Confidence
             </button>
@@ -254,14 +321,16 @@ export default function DeviceDiscoveryPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleApproveDevice(device.id)}
+                    onClick={() => void handleApproveDevice(device.id)}
+                    disabled={actionBusy}
                     className="px-4 py-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 flex items-center gap-2"
                   >
                     <Check className="w-4 h-4" />
                     Approve
                   </button>
                   <button
-                    onClick={() => handleRejectDevice(device.id)}
+                    onClick={() => void handleRejectDevice(device.id)}
+                    disabled={actionBusy}
                     className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 flex items-center gap-2"
                   >
                     <X className="w-4 h-4" />

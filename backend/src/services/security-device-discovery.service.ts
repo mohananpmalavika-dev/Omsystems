@@ -72,8 +72,8 @@ export class SecurityDeviceDiscoveryService {
       `INSERT INTO security_device_discovery_jobs (
         tenant_id, branch_id, network_range, scan_type,
         include_device_types, exclude_device_types,
-        status, progress_percent, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        status, progress_percent, metadata, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
         tenantId,
@@ -84,6 +84,10 @@ export class SecurityDeviceDiscoveryService {
         JSON.stringify(options.excludeDeviceTypes || []),
         'PENDING',
         0,
+        JSON.stringify({
+          protocols: options.protocols || [],
+          deepScan: Boolean(options.deepScan),
+        }),
         createdBy,
       ]
     );
@@ -512,14 +516,18 @@ export class SecurityDeviceDiscoveryService {
     discoveredId: string,
     reviewedBy: string
   ): Promise<void> {
-    await this.pool.query(
+    const result = await this.pool.query(
       `UPDATE security_discovered_devices
        SET enrollment_status = 'APPROVED',
            reviewed_by = $1,
            reviewed_at = NOW()
-       WHERE id = $2 AND tenant_id = $3`,
+       WHERE id = $2 AND tenant_id = $3
+         AND enrollment_status = 'PENDING_REVIEW'`,
       [reviewedBy, discoveredId, tenantId]
     );
+    if (result.rowCount === 0) {
+      throw new Error('discovered_device_not_pending');
+    }
   }
 
   /**
@@ -530,14 +538,18 @@ export class SecurityDeviceDiscoveryService {
     discoveredId: string,
     reviewedBy: string
   ): Promise<void> {
-    await this.pool.query(
+    const result = await this.pool.query(
       `UPDATE security_discovered_devices
        SET enrollment_status = 'REJECTED',
            reviewed_by = $1,
            reviewed_at = NOW()
-       WHERE id = $2 AND tenant_id = $3`,
+       WHERE id = $2 AND tenant_id = $3
+         AND enrollment_status = 'PENDING_REVIEW'`,
       [reviewedBy, discoveredId, tenantId]
     );
+    if (result.rowCount === 0) {
+      throw new Error('discovered_device_not_pending');
+    }
   }
 
   /**

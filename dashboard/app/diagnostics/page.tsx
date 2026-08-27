@@ -19,37 +19,12 @@ export default function DiagnosticsPage() {
     setLoading(true);
     const diagnostics: DiagnosticResult[] = [];
 
-    // 1. Check localStorage for access token
+    // Check the server-managed session and safe configuration flags. Access
+    // tokens stay in HttpOnly cookies and are intentionally not exposed to JS.
     try {
-      const token = localStorage.getItem("accessToken");
-      if (token) {
-        diagnostics.push({
-          name: "Authentication Token",
-          status: "success",
-          message: "Access token found in localStorage",
-          details: `Token length: ${token.length} characters`,
-        });
-      } else {
-        diagnostics.push({
-          name: "Authentication Token",
-          status: "error",
-          message: "No access token found",
-          details: "You need to log in to access the video wall",
-        });
-      }
-    } catch (error) {
-      diagnostics.push({
-        name: "localStorage Access",
-        status: "error",
-        message: "Cannot access localStorage",
-        details: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-
-    // 2. Check authentication debug endpoint
-    try {
-      const response = await fetch("/api/live/debug");
+      const response = await fetch("/api/live/debug", { credentials: "include" });
       const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
       setAuthDebug(data);
 
       if (data.authentication?.hasSessionToken) {
@@ -68,12 +43,11 @@ export default function DiagnosticsPage() {
         });
       }
 
-      if (data.environment.controlPlaneUrl !== "NOT_SET") {
+      if (data.environment?.controlPlaneConfigured) {
         diagnostics.push({
           name: "Control Plane URL",
           status: "success",
           message: "Control plane URL configured",
-          details: data.environment.controlPlaneUrl,
         });
       } else {
         diagnostics.push({
@@ -83,23 +57,32 @@ export default function DiagnosticsPage() {
           details: "Backend cannot connect to control plane API",
         });
       }
-    } catch (error) {
+
       diagnostics.push({
-        name: "Auth Debug Endpoint",
+        name: "Media Gateway",
+        status: data.environment?.mediaGatewayConfigured ? "success" : "error",
+        message: data.environment?.mediaGatewayConfigured
+          ? "Media gateway route configured"
+          : "No media gateway route configured",
+        details: data.environment?.localMediaGatewayConfigured
+          ? "LAN/VPN browser fallback is also configured"
+          : "Configure a public gateway or a LAN/VPN fallback",
+      });
+    } catch (error) {
+      setAuthDebug(null);
+      diagnostics.push({
+        name: "Session Authentication",
         status: "error",
-        message: "Failed to fetch authentication debug info",
+        message: "Unable to verify the authenticated server session",
         details: error instanceof Error ? error.message : "Unknown error",
       });
     }
 
-    // 3. Test camera API endpoint
+    // Verify a read-only control-plane request. Never create a synthetic live
+    // session from diagnostics because that would leave misleading audit data.
     try {
-      const token = localStorage.getItem("accessToken");
       const response = await fetch("/api/control/v1/cameras?limit=1", {
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}`, "x-sentinel-session": token } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         credentials: "include",
       });
 
@@ -126,79 +109,6 @@ export default function DiagnosticsPage() {
         name: "Camera API",
         status: "error",
         message: "Failed to connect to camera API",
-        details: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-
-    // 4. Test live session API
-    try {
-      const token = localStorage.getItem("accessToken");
-      const response = await fetch("/api/live", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}`, "x-sentinel-session": token } : {}),
-        },
-        credentials: "include",
-        body: JSON.stringify({ cameraId: "test-camera-id", profile: "sub" }),
-      });
-
-      const body = await response.json();
-      
-      if (response.status === 404 || body.error === "camera_not_found") {
-        diagnostics.push({
-          name: "Live Session API",
-          status: "warning",
-          message: "Live API is accessible but test camera not found",
-          details: "This is expected - API is working",
-        });
-      } else if (response.ok) {
-        diagnostics.push({
-          name: "Live Session API",
-          status: "success",
-          message: "Live session API is accessible",
-        });
-      } else {
-        diagnostics.push({
-          name: "Live Session API",
-          status: "error",
-          message: `Live API returned HTTP ${response.status}`,
-          details: typeof body.error === "string" ? body.error : "Unknown error",
-        });
-      }
-    } catch (error) {
-      diagnostics.push({
-        name: "Live Session API",
-        status: "error",
-        message: "Failed to connect to live session API",
-        details: error instanceof Error ? error.message : "Unknown error",
-      });
-    }
-
-    // 5. Check cookies
-    try {
-      const cookies = document.cookie;
-      const hasSentinelCookie = cookies.includes("sentinel_access");
-      
-      if (hasSentinelCookie) {
-        diagnostics.push({
-          name: "Authentication Cookies",
-          status: "success",
-          message: "Sentinel session cookie found",
-        });
-      } else {
-        diagnostics.push({
-          name: "Authentication Cookies",
-          status: "warning",
-          message: "No sentinel session cookie",
-          details: "Using localStorage token instead",
-        });
-      }
-    } catch (error) {
-      diagnostics.push({
-        name: "Cookie Access",
-        status: "error",
-        message: "Cannot access cookies",
         details: error instanceof Error ? error.message : "Unknown error",
       });
     }

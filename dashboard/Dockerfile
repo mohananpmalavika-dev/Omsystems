@@ -9,10 +9,8 @@ COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm ci
 ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ARG MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
-ARG DASHBOARD_DEV_USER_ID=user-south-operator
 ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
-ENV DASHBOARD_DEV_USER_ID=$DASHBOARD_DEV_USER_ID
 COPY dashboard ./dashboard
 COPY backend ./backend
 RUN --mount=type=cache,target=/root/.cache/next-swc \
@@ -23,7 +21,6 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ENV MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
-ENV DASHBOARD_DEV_USER_ID=user-south-operator
 WORKDIR /app
 COPY --from=build /app/dashboard/.next/standalone ./
 COPY --from=build /app/dashboard/.next/static ./dashboard/.next/static

@@ -13,6 +13,7 @@ interface BrowserDirectLiveStart {
 }
 
 const LIVE_START_TIMEOUT_MS = 30_000;
+const DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS = 6_000;
 
 export async function startLiveFromBrowser(
   cameraId: string,
@@ -85,16 +86,22 @@ async function startDirectSession(
   for (const candidate of candidates) {
     let localResponse: Response;
     try {
+      const attemptSignal = AbortSignal.any([
+        signal,
+        AbortSignal.timeout(DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS),
+      ]);
       localResponse = await fetch(candidate.url, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ controlPlaneToken: candidate.controlPlaneToken }),
         cache: "no-store",
-        signal,
+        signal: attemptSignal,
       });
     } catch (error) {
-      const normalized = timeoutError(error);
-      if (normalized instanceof Error && normalized.message === "live_session_timeout") throw normalized;
+      // A branch-local gateway can be offline or unreachable from the current
+      // network. Keep enough of the overall startup budget to try its secure
+      // tunnel. Only the caller's deadline/cancellation stops the sequence.
+      if (signal.aborted) throw timeoutError(signal.reason ?? error);
       continue;
     }
 

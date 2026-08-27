@@ -316,7 +316,12 @@ export async function registerOperationalHealthRoutes(
   });
 
   app.get("/v1/operations/health/summary", async (request) => {
-    const projections = await loadAccessibleProjections(request, store);
+    const query = z.object({ branchId: z.string().min(1).optional() }).parse(request.query);
+    const projections = await loadAccessibleProjections(
+      request,
+      store,
+      query.branchId ? [query.branchId] : undefined,
+    );
     const cameras = projections.flatMap((branch) => branch.cameras);
     const agents = (await Promise.all(projections.map((branch) => store.listEdgeAgentsByBranch(branch.id)))).flat();
     const scoredBranches = projections.filter((branch) => branch.healthScore !== null);
@@ -370,6 +375,7 @@ export async function registerOperationalHealthRoutes(
   app.get("/v1/operations/health/branches", async (request) => {
     const query = paginationSchema.parse(request.query);
     let accessible = await loadAccessibleBranchMetadata(request, store);
+    if (query.branchId) accessible = accessible.filter(({ branch }) => branch.id === query.branchId);
     if (query.region) accessible = accessible.filter((item) => item.region === query.region);
     if (query.search) {
       const search = query.search.toLowerCase();

@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { buildControlPlaneHeaders } from '../../../../../../lib/server/control-plane-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,19 +19,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
     normalizeHttpOrigin(controlPlaneUrl),
   );
 
-  const headers: HeadersInit = {
-    accept: 'application/json',
-  };
-  const employeeSession = request.cookies.get('sentinel_access')?.value ??
-    request.headers.get('x-sentinel-session');
-  if (employeeSession) {
-    headers.authorization = `Bearer ${employeeSession}`;
-  } else {
-    headers['x-user-id'] = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
-  }
-
-  const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
-  if (bridgeKey) headers['x-edge-bridge-key'] = bridgeKey;
+  const headers = buildControlPlaneHeaders(request, { accept: 'application/json' });
+  if (!headers) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
   try {
     const response = await fetch(upstream, {

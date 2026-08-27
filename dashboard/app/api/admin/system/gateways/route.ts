@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { buildControlPlaneHeaders } from '../../../../../lib/server/control-plane-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,25 +10,8 @@ export async function GET(request: NextRequest) {
                            process.env.CONTROL_PLANE_PUBLIC_URL ||
                            'http://localhost:8080';
     
-    // Get authentication
-    const employeeSession = request.cookies.get('sentinel_access')?.value ??
-      request.headers.get('x-sentinel-session');
-    const devUserId = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
-    
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
-    
-    if (employeeSession) {
-      headers['authorization'] = 'Bearer ' + employeeSession;
-    } else {
-      headers['x-user-id'] = devUserId;
-    }
-    
-    const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
-    if (bridgeKey) {
-      headers['x-edge-bridge-key'] = bridgeKey;
-    }
+    const headers = buildControlPlaneHeaders(request, { 'content-type': 'application/json' });
+    if (!headers) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
     
     // Step 1: Fetch all branches using organization nodes endpoint
     const branchesResponse = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {

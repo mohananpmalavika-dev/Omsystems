@@ -147,7 +147,7 @@ const seedNodes: ResourceNode[] = [
   { id: "group-a006-vault", parentId: "A006", tenantId, type: "camera-group", name: "Forex & Bullion Vault Air-Lock", path: ["company-1", "division-retail", "region-west", "A006", "group-a006-vault"] },
 
   // Compatibility test nodes
-  { id: "camera-entrance", parentId: "region-south", tenantId, type: "camera-group", name: "Main Entrance", path: ["company-1", "division-retail", "region-south", "camera-entrance"] },
+  { id: "camera-entrance", parentId: "A005", tenantId, type: "camera-group", name: "Main Entrance", path: ["company-1", "division-retail", "region-south", "A005", "camera-entrance"] },
   { id: "camera-cash-room", parentId: "A005", tenantId, type: "camera-group", name: "Cash Room", isSensitive: true, path: ["company-1", "division-retail", "region-south", "A005", "camera-cash-room"] },
 ];
 
@@ -581,9 +581,9 @@ const seedDeviceIdentities: DeviceIdentity[] = seedCameras.map((camera) => ({
 }));
 
 export class MemoryStore {
-  // The in-memory store is an explicitly non-production adapter. Start empty so
-  // local/dev runs cannot silently present fixture branches, users, or cameras
-  // as operational data. Production startup requires DATABASE_URL.
+  // The in-memory store is an explicitly non-production adapter populated with
+  // deterministic development fixtures. Production startup requires DATABASE_URL
+  // and never uses these records as operational data.
   readonly nodes = new Map<string, ResourceNode>(seedNodes.map((n) => [n.id, n]));
   readonly users = new Map<string, User>(seedUsers.map((u) => [u.id, u]));
   readonly cameras = new Map<string, Camera>(seedCameras.map((c) => [c.id, c]));

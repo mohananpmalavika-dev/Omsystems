@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
+import { buildControlPlaneHeaders } from '../../../../../../lib/server/control-plane-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,24 +16,8 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
       'http://localhost:8080';
     const normalizedControlPlaneUrl = normalizeHttpOrigin(controlPlaneUrl);
 
-    // Build forwarded headers so the control plane sees the same auth identity
-    // that the browser request carried into the dashboard BFF.
-    const forwardedHeaders: Record<string, string> = {
-      'content-type': 'application/json',
-    };
-
-    const sentinelSession = request.headers.get('x-sentinel-session');
-    const cookieHeader = request.headers.get('cookie');
-    const cookieAccessToken = cookieHeader?.split(';').map((segment) => segment.trim()).find((segment) => segment.startsWith('sentinel_access='))?.split('=')[1];
-    const sessionToken = cookieAccessToken || sentinelSession;
-    if (sessionToken) {
-      forwardedHeaders.authorization = `Bearer ${sessionToken}`;
-    } else {
-      forwardedHeaders['x-user-id'] = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
-    }
-
-    const bridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
-    if (bridgeKey) forwardedHeaders['x-edge-bridge-key'] = bridgeKey;
+    const forwardedHeaders = buildControlPlaneHeaders(request, { 'content-type': 'application/json' });
+    if (!forwardedHeaders) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
 
     const controlUrl = new URL(`/v1/admin/cameras/${encodeURIComponent(id)}`, normalizedControlPlaneUrl).toString();
     let response;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { Pool } from "pg";
+import { getCurrentUser } from "../../../../../../lib/backend";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -24,8 +24,8 @@ export interface GridLayout {
 // GET - Retrieve all grid layouts for the current user
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -48,13 +48,14 @@ export async function GET(req: NextRequest) {
         u.email as "userEmail"
       FROM grid_layouts gl
       LEFT JOIN users u ON u.id = gl.user_id
-      WHERE gl.user_id = (SELECT id FROM users WHERE email = $1)
+      WHERE gl.user_id = $1
     `;
 
-    const params = [session.user.email];
+    const params = [user.id];
 
     if (includeShared) {
-      query += ` OR gl.is_shared = true`;
+      query += ` OR (gl.is_shared = true AND u.tenant_id = $2)`;
+      params.push(user.tenantId);
     }
 
     query += ` ORDER BY gl.updated_at DESC`;
@@ -74,8 +75,8 @@ export async function GET(req: NextRequest) {
 // POST - Create a new grid layout
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         $1,
         $2,
         $3,
-        (SELECT id FROM users WHERE email = $4),
+        $4,
         $5
       ) RETURNING 
         id,
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
         body.name,
         body.gridSize,
         JSON.stringify(body.cameraPositions),
-        session.user.email,
+        user.id,
         body.isShared || false,
       ]
     );
@@ -144,8 +145,8 @@ export async function POST(req: NextRequest) {
 // PUT - Update an existing grid layout
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -170,7 +171,7 @@ export async function PUT(req: NextRequest) {
         is_shared = COALESCE($4, is_shared),
         updated_at = NOW()
        WHERE id = $5
-       AND user_id = (SELECT id FROM users WHERE email = $6)
+       AND user_id = $6
        RETURNING 
         id,
         name,
@@ -186,7 +187,7 @@ export async function PUT(req: NextRequest) {
         body.cameraPositions ? JSON.stringify(body.cameraPositions) : null,
         body.isShared,
         body.id,
-        session.user.email,
+        user.id,
       ]
     );
 
@@ -210,8 +211,8 @@ export async function PUT(req: NextRequest) {
 // DELETE - Delete a grid layout
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -231,9 +232,9 @@ export async function DELETE(req: NextRequest) {
     const result = await pool.query(
       `DELETE FROM grid_layouts
        WHERE id = $1
-       AND user_id = (SELECT id FROM users WHERE email = $2)
+       AND user_id = $2
        RETURNING id`,
-      [layoutId, session.user.email]
+      [layoutId, user.id]
     );
 
     if (result.rows.length === 0) {
@@ -251,4 +252,13 @@ export async function DELETE(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function authenticatedUser(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const sessionToken = request.cookies.get("sentinel_access")?.value ??
+    request.headers.get("x-sentinel-session") ?? bearerToken;
+  if (!sessionToken) return null;
+  return getCurrentUser(sessionToken);
 }

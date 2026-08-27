@@ -39,14 +39,28 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   headers.delete("cookie");
   headers.delete("content-length");
 
+  const incomingAuthorization = request.headers.get("authorization");
+  const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
+    ? incomingAuthorization.slice(7).trim()
+    : undefined;
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
-    request.headers.get("x-sentinel-session");
+    request.headers.get("x-sentinel-session") ?? bearerSession;
   if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
+    headers.delete("x-user-id");
+  } else if (pathString.startsWith("auth/")) {
+    headers.delete("authorization");
+    headers.delete("x-user-id");
   } else if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
     headers.delete("authorization");
   }
-  if (!employeeSession) {
+  if (!employeeSession && !pathString.startsWith("auth/") && process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      { success: false, error: "unauthenticated", message: "Sign in to continue" },
+      { status: 401, headers: { "cache-control": "no-store" } },
+    );
+  }
+  if (!employeeSession && !pathString.startsWith("auth/") && process.env.NODE_ENV !== "production") {
     headers.set("x-user-id", process.env.DASHBOARD_DEV_USER_ID || "user-global-admin");
   }
 

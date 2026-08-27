@@ -13,13 +13,15 @@ export async function GET(request: NextRequest) {
   const sentinelSession = request.headers.get("x-sentinel-session");
 
   const isDashboardAuth = isDashboardBasicAuth(authorization);
-  const sessionToken = isDashboardAuth
-    ? undefined
-    : getLiveSessionToken({
-        cookieToken,
-        sentinelSession,
-        authorization,
-      });
+  const sessionToken = getLiveSessionToken({
+    cookieToken,
+    sentinelSession,
+    authorization,
+  });
+
+  if (!sessionToken && process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
 
   return NextResponse.json({
     status: "diagnostic",
@@ -38,11 +40,9 @@ export async function GET(request: NextRequest) {
         : "none",
     },
     environment: {
-      controlPlaneUrl: process.env.CONTROL_PLANE_URL || process.env.CONTROL_PLANE_INTERNAL_URL || "NOT_SET",
-      mediaGatewayUrl: process.env.MEDIA_GATEWAY_INTERNAL_URL || "NOT_SET",
-      dashboardUserId: process.env.DASHBOARD_DEV_USER_ID || "NOT_SET",
-      hasControlPlane: Boolean(process.env.CONTROL_PLANE_URL || process.env.CONTROL_PLANE_INTERNAL_URL),
-      hasMediaGateway: Boolean(process.env.MEDIA_GATEWAY_INTERNAL_URL),
+      controlPlaneConfigured: Boolean(process.env.CONTROL_PLANE_URL || process.env.CONTROL_PLANE_INTERNAL_URL),
+      mediaGatewayConfigured: Boolean(process.env.MEDIA_GATEWAY_INTERNAL_URL || process.env.MEDIA_GATEWAY_PUBLIC_URL),
+      localMediaGatewayConfigured: Boolean(process.env.MEDIA_GATEWAY_LOCAL_URL),
     },
     timestamp: new Date().toISOString(),
   });

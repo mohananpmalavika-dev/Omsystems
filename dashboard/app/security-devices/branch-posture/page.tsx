@@ -213,6 +213,36 @@ export default function BranchSecurityPosturePage() {
       return a.overallScore - b.overallScore;
     });
 
+  const exportCsv = () => {
+    const categoryKeys = ['cctv', 'accessControl', 'intrusion', 'fire', 'banking', 'power', 'network'] as const;
+    const header = [
+      'Branch ID', 'Branch Name', 'Overall Score', 'Risk Level', 'Active Alarms',
+      'Critical Issues', 'Last Updated',
+      ...categoryKeys.flatMap((key) => [
+        `${getCategoryLabel(key)} Total`, `${getCategoryLabel(key)} Online`,
+        `${getCategoryLabel(key)} Offline`, `${getCategoryLabel(key)} Degraded`,
+        `${getCategoryLabel(key)} Score`, `${getCategoryLabel(key)} Status`,
+      ]),
+    ];
+    const rows = filteredBranches.map((branch) => [
+      branch.branchId, branch.branchName || '', branch.overallScore, branch.riskLevel,
+      branch.activeAlarms, branch.criticalIssues, branch.lastUpdated,
+      ...categoryKeys.flatMap((key) => {
+        const category = branch.categories[key];
+        return [category.total, category.online, category.offline, category.degraded, category.score, category.status];
+      }),
+    ]);
+    const csv = [header, ...rows]
+      .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `branch-security-posture-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
@@ -229,7 +259,8 @@ export default function BranchSecurityPosturePage() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {/* TODO: Export to CSV */}}
+              onClick={exportCsv}
+              disabled={filteredBranches.length === 0}
               className="px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
             >
               <Download className="w-4 h-4" />

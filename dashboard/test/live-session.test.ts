@@ -47,6 +47,22 @@ describe("dashboard live session startup", () => {
     expect(controlHeaders.has("authorization")).toBe(false);
   });
 
+  it("does not impersonate a development user in production", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const headers = new Headers(init?.headers);
+      expect(headers.has("x-user-id")).toBe(false);
+      expect(headers.has("authorization")).toBe(false);
+      return Response.json({ error: "unauthenticated" }, { status: 401 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startLive("camera-1")).rejects.toThrow("unauthenticated");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does not manufacture a demo stream when the media gateway rejects a session", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
@@ -84,7 +100,38 @@ describe("dashboard live session startup", () => {
       direct: {
         url: "http://192.168.29.101:8090/v1/live/start",
       },
+      directFallbacks: [{
+        url: "https://public.example/v1/live/start",
+      }],
     });
+  });
+
+  it("uses the configured public gateway for an explicit public retry", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.MEDIA_GATEWAY_PUBLIC_URL = "https://current-public.example";
+    process.env.MEDIA_GATEWAY_INTERNAL_URL = "http://media.internal:8090";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("control.internal")) {
+        return Response.json({
+          token: "t".repeat(43),
+          mediaGatewayUrl: "https://expired-tunnel.example",
+          localMediaGatewayUrl: "http://192.168.29.101:8090",
+        }, { status: 201 });
+      }
+      expect(url).toBe("https://current-public.example/v1/live/start");
+      return Response.json({
+        cameraId: "camera-1",
+        hls: { url: "http://127.0.0.1:8888/hls/camera-1/index.m3u8", bearerToken: "stream-token" },
+      }, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startLive("camera-1", undefined, "public")).resolves.toMatchObject({
+      hls: { url: "https://current-public.example/hls/camera-1/index.m3u8" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("returns the edge-advertised LAN gateway to a VPN or local-network browser when no tunnel is available", async () => {
@@ -135,7 +182,7 @@ describe("dashboard live session startup", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("uses the public gateway server-side when an edge LAN gateway is also advertised", async () => {
+  it("returns both LAN and secure public routes when both are advertised", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     delete process.env.MEDIA_GATEWAY_LOCAL_URL;
@@ -157,7 +204,8 @@ describe("dashboard live session startup", () => {
 
     await expect(startLive("camera-1")).resolves.toMatchObject({
       cameraId: "camera-1",
-      hls: { url: "https://public.example/live/camera-1/index.m3u8" },
+      direct: { url: "http://192.168.29.101:8090/v1/live/start" },
+      directFallbacks: [{ url: "https://public.example/v1/live/start" }],
     });
   });
 });

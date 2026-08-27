@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Server, Camera, Building2, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Server, Camera, Building2, RefreshCw, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 
 type Gateway = {
@@ -155,33 +155,6 @@ export default function SystemManagementPage() {
     }
   };
 
-  const handleDeleteAll = async (type: 'gateways' | 'cameras' | 'branches') => {
-    const confirmText = prompt(
-      `⚠️ DELETE ALL ${type.toUpperCase()}?\n\nThis action cannot be undone!\n\nType "DELETE ALL" to confirm:`
-    );
-
-    if (confirmText !== 'DELETE ALL') {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/admin/system/${type}/all`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        await loadStats();
-        await loadData();
-      } else {
-        const body = await response.json().catch(() => null) as { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null;
-        alert(getDeleteErrorMessage(body));
-      }
-    } catch (error) {
-      console.error('Delete all failed:', error);
-      alert('An error occurred. Please try again.');
-    }
-  };
-
   return (
     <AppLayout>
       <div className="admin-shell">
@@ -285,22 +258,6 @@ export default function SystemManagementPage() {
                 }}
               >
                 <RefreshCw size={16} /> Refresh
-              </button>
-              <button
-                onClick={() => handleDeleteAll(tab)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  background: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Trash2 size={16} /> Delete All
               </button>
             </div>
           </div>
@@ -470,20 +427,9 @@ export default function SystemManagementPage() {
                               {branch.id}
                             </td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
-                              <button
-                                onClick={() => setDeleteConfirm({ type: 'branch', id: branch.id, name: branch.name })}
-                                style={{
-                                  padding: '0.25rem 0.5rem',
-                                  background: '#dc3545',
-                                  color: 'white',
-                                  border: 'none',
-                                  borderRadius: '4px',
-                                  cursor: 'pointer',
-                                  fontSize: '0.875rem'
-                                }}
-                              >
-                                Delete
-                              </button>
+                              <a href="/admin/organization" style={{ color: 'var(--accent)', fontSize: '0.875rem' }}>
+                                Manage lifecycle
+                              </a>
                             </td>
                           </tr>
                         ))}

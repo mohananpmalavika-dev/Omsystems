@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { Pool } from "pg";
+import { getCurrentUser } from "../../../../../../lib/backend";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -21,8 +21,8 @@ export interface VideoWallConfig {
 // GET - Retrieve all video wall configs
 export async function GET(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -41,9 +41,9 @@ export async function GET(req: NextRequest) {
         vw.created_at as "createdAt",
         vw.updated_at as "updatedAt"
       FROM video_wall_configs vw
-      WHERE vw.user_id = (SELECT id FROM users WHERE email = $1)
+      WHERE vw.user_id = $1
       ORDER BY vw.updated_at DESC`,
-      [session.user.email]
+      [user.id]
     );
 
     return NextResponse.json(result.rows);
@@ -59,8 +59,8 @@ export async function GET(req: NextRequest) {
 // POST - Create a new video wall config
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         user_id
       ) VALUES (
         $1, $2, $3, $4, $5,
-        (SELECT id FROM users WHERE email = $6)
+        $6
       ) RETURNING 
         id,
         name,
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         body.syncEnabled,
         body.rotationInterval || null,
         body.rotationEnabled,
-        session.user.email,
+        user.id,
       ]
     );
 
@@ -120,8 +120,8 @@ export async function POST(req: NextRequest) {
 // DELETE - Delete a video wall config
 export async function DELETE(req: NextRequest) {
   try {
-    const session = await getServerSession();
-    if (!session?.user?.email) {
+    const user = await authenticatedUser(req);
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -141,9 +141,9 @@ export async function DELETE(req: NextRequest) {
     const result = await pool.query(
       `DELETE FROM video_wall_configs
        WHERE id = $1
-       AND user_id = (SELECT id FROM users WHERE email = $2)
+       AND user_id = $2
        RETURNING id`,
-      [configId, session.user.email]
+      [configId, user.id]
     );
 
     if (result.rows.length === 0) {
@@ -161,4 +161,13 @@ export async function DELETE(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function authenticatedUser(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+  const bearerToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+  const sessionToken = request.cookies.get("sentinel_access")?.value ??
+    request.headers.get("x-sentinel-session") ?? bearerToken;
+  if (!sessionToken) return null;
+  return getCurrentUser(sessionToken);
 }

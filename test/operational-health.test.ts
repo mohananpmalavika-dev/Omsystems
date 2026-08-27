@@ -14,6 +14,11 @@ describe("Phase 1 operational health", () => {
 
   beforeEach(async () => {
     store = new MemoryStore();
+    const camera = store.cameras.get("cam-001")!;
+    camera.branchId = "branch-blr-001";
+    const cameraNode = store.nodes.get(camera.nodeId)!;
+    cameraNode.parentId = "branch-blr-001";
+    cameraNode.path = ["company-1", "division-retail", "region-south", "branch-blr-001", cameraNode.id];
     const agent = await store.registerEdgeAgent("branch-blr-001", "Pilot edge", "1.0.0");
     agentId = agent.id;
     app = await buildApp({ store });
@@ -109,7 +114,7 @@ describe("Phase 1 operational health", () => {
 
   it("returns paginated branches and preserves unknown components", async () => {
     const response = await app.inject({
-      method: "GET", url: "/v1/operations/health/branches?limit=1&offset=0", headers: admin,
+      method: "GET", url: "/v1/operations/health/branches?branchId=branch-blr-001&limit=1&offset=0", headers: admin,
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().data.total).toBe(1);
@@ -119,7 +124,7 @@ describe("Phase 1 operational health", () => {
 
   it("reports whether an enrolled branch gateway and its stable media tunnel are live-ready", async () => {
     const beforeHeartbeat = await app.inject({
-      method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
+      method: "GET", url: "/v1/operations/health/branches?branchId=branch-blr-001", headers: admin,
     });
     expect(beforeHeartbeat.json().data.branches[0]).toMatchObject({
       gatewayCount: 1,
@@ -147,7 +152,7 @@ describe("Phase 1 operational health", () => {
       reasonCodes: ["managed_media_runtime_verified"],
     });
     const ready = await app.inject({
-      method: "GET", url: "/v1/operations/health/branches?search=Bengaluru", headers: admin,
+      method: "GET", url: "/v1/operations/health/branches?branchId=branch-blr-001", headers: admin,
     });
     expect(ready.json().data.branches[0]).toMatchObject({
       gatewayCount: 1,
@@ -175,7 +180,7 @@ describe("Phase 1 operational health", () => {
 
   it("returns summary metrics and supports connectivity click-through filtering", async () => {
     const summary = await app.inject({
-      method: "GET", url: "/v1/operations/health/summary", headers: admin,
+      method: "GET", url: "/v1/operations/health/summary?branchId=branch-blr-001", headers: admin,
     });
     expect(summary.statusCode).toBe(200);
     expect(summary.json().data).toMatchObject({
@@ -184,7 +189,7 @@ describe("Phase 1 operational health", () => {
     });
 
     const filtered = await app.inject({
-      method: "GET", url: "/v1/operations/health/branches?connectivity=unknown", headers: admin,
+      method: "GET", url: "/v1/operations/health/branches?branchId=branch-blr-001&connectivity=unknown", headers: admin,
     });
     expect(filtered.statusCode).toBe(200);
     expect(filtered.json().data.total).toBe(1);

@@ -1,38 +1,11 @@
 import { NextResponse } from 'next/server';
-import { Client } from 'pg';
-
-const DATABASE_URL = process.env.DATABASE_URL ?? '';
 
 export async function DELETE() {
-  const client = new Client({
-    connectionString: DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
-  });
-
-  try {
-    await client.connect();
-
-    // Delete all gateways and their dependencies first
-    await client.query('DELETE FROM cameras');
-    await client.query('DELETE FROM edge_agent_telemetry');
-    await client.query('DELETE FROM camera_discovery_records');
-    await client.query('DELETE FROM camera_scan_jobs');
-    await client.query('DELETE FROM live_sessions');
-    await client.query('DELETE FROM edge_agents');
-    
-    // Then delete all branches
-    const result = await client.query('DELETE FROM branches');
-
-    return NextResponse.json({ 
-      success: true, 
-      deleted: result.rowCount 
-    });
-  } catch (error: any) {
-    console.error('Delete all branches error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  } finally {
-    await client.end();
-  }
+  return NextResponse.json(
+    {
+      error: 'operation_not_supported',
+      message: 'Bulk branch deletion is disabled. Use the audited branch lifecycle workflow.',
+    },
+    { status: 405, headers: { Allow: 'GET' } },
+  );
 }

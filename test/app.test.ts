@@ -45,7 +45,7 @@ describe("control-plane API", () => {
 
   it("accepts only the valid edge bridge key on production agent ingress routes", async () => {
     const bridgeKey = "e".repeat(43);
-    const agent = await store.registerEdgeAgent("branch-blr-001", "Production edge", "0.1.0");
+    const agent = await store.registerEdgeAgent("A005", "Production edge", "0.1.0");
     store.cameras.get("cam-001")!.edgeAgentId = agent.id;
     const productionApp = await buildApp({
       store,
@@ -63,7 +63,7 @@ describe("control-plane API", () => {
 
       const discovery = await productionApp.inject({
         method: "POST",
-        url: "/v1/branches/branch-blr-001/cameras/discovered",
+        url: "/v1/branches/A005/cameras/discovered",
         headers: { "x-edge-bridge-key": bridgeKey },
         payload: {
           edgeAgentId: agent.id,
@@ -89,7 +89,7 @@ describe("control-plane API", () => {
       expect(consumedSession.statusCode).toBe(200);
       expect(consumedSession.json()).toMatchObject({
         cameraId: "cam-001",
-        connectionSecretRef: "vault://branches/blr-001/cameras/001",
+        connectionSecretRef: "secret://cam-001",
       });
 
       const invalidKey = await productionApp.inject({
@@ -131,15 +131,22 @@ describe("control-plane API", () => {
   });
 
   it("filters cameras according to camera-group restrictions", async () => {
+    store.cameras.set("cam-denied", {
+      ...structuredClone(store.cameras.get("cam-001")!),
+      id: "cam-denied",
+      deviceIdentityId: "device-denied",
+      nodeId: "camera-cash-room",
+      name: "Denied cash-room camera",
+    });
     const response = await app.inject({
       method: "GET",
-      url: "/v1/branches/branch-blr-001/cameras",
+      url: "/v1/branches/A005/cameras",
       headers: { "x-user-id": "user-branch-manager" },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().data).toHaveLength(1);
-    expect(response.json().data[0].id).toBe("cam-001");
+    expect(response.json().data.map((camera: { id: string }) => camera.id)).toContain("cam-001");
+    expect(response.json().data.map((camera: { id: string }) => camera.id)).not.toContain("cam-denied");
     expect(response.body).not.toContain("connectionSecretRef");
   });
 
@@ -150,7 +157,7 @@ describe("control-plane API", () => {
       headers: { "x-user-id": "user-global-admin" },
     });
     expect(allowed.statusCode).toBe(200);
-    expect(allowed.json().data).toHaveLength(1);
+    expect(allowed.json().data).toHaveLength(10);
 
     const denied = await app.inject({
       method: "GET",
@@ -390,7 +397,7 @@ describe("control-plane API", () => {
     const headers = { "x-user-id": "user-global-admin" };
     const catalog = await app.inject({ method: "GET", url: "/v1/analytics/capabilities", headers });
     expect(catalog.statusCode).toBe(200);
-    expect(catalog.json().summary.domains).toBe(15);
+    expect(catalog.json().summary.domains).toBe(16);
     expect(catalog.json().summary.capabilities).toBeGreaterThan(100);
     expect(catalog.json().domains.map((domain: any) => domain.id)).toEqual(
       expect.arrayContaining(["human", "vehicle", "face", "banking", "search", "assistant"]),

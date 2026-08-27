@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { SecurityDeviceDiscoveryService } from '@/lib/backend/security-device-discovery-service';
+import { getCurrentUser } from '@/lib/backend';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,8 @@ export async function POST(
     const { deviceId } = await params;
 
     const service = SecurityDeviceDiscoveryService.getInstance();
-    await service.approveDiscoveredDevice(deviceId, sessionToken);
+    const currentUser = await getCurrentUser(sessionToken);
+    await service.approveDiscoveredDevice(deviceId, currentUser.id);
 
     return NextResponse.json({ success: true });
   } catch (error) {

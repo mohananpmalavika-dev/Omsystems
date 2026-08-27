@@ -24,11 +24,17 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   upstream.search = request.nextUrl.search;
 
   const routePath = `/${path.join("/")}`;
+  const incomingAuthorization = request.headers.get("authorization");
+  const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
+    ? incomingAuthorization.slice(7).trim()
+    : undefined;
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
-    request.headers.get("x-sentinel-session");
+    request.headers.get("x-sentinel-session") ?? bearerSession;
   const edgeAgentToken = request.headers.get("x-edge-agent-token");
   const isEdgeEnrollment = routePath === "/v1/edge-enrollment/activate";
   const isEdgeAgentRequest = Boolean(edgeAgentToken) || isEdgeEnrollment;
+  const isPublicControlRoute = routePath.startsWith("/v1/auth/") ||
+    routePath.startsWith("/v1/edge-updates/artifacts/");
   const bridgeKey = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
   // Preserve incoming headers so upstream can honor Accept and other request metadata.
   const headers = new Headers(request.headers);
@@ -46,6 +52,10 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     headers.delete("x-user-id");
   } else if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
+    headers.delete("x-user-id");
+  } else if (isPublicControlRoute) {
+    headers.delete("authorization");
+    headers.delete("x-user-id");
   } else {
     // Render's optional dashboard Basic Auth also arrives in this header. It
     // authenticates the browser to Next.js, not the employee to the control
@@ -54,10 +64,14 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
       headers.delete("authorization");
     }
-    headers.set(
-      "x-user-id",
-      runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin"),
-    );
+    if (process.env.NODE_ENV === "production") {
+      return Response.json(
+        { error: "unauthenticated", message: "Sign in to continue" },
+        { status: 401, headers: { "cache-control": "no-store" } },
+      );
+    }
+    const developmentUserId = runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
+    if (developmentUserId) headers.set("x-user-id", developmentUserId);
   }
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";

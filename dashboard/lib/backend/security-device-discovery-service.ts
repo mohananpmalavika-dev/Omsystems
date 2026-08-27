@@ -63,7 +63,10 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 			enrollmentStatus: status,
 		});
 
-		return result.devices;
+		return result.devices.map((device: any) => ({
+			...device,
+			status: String(device.enrollmentStatus || 'pending').toLowerCase().replace('_review', ''),
+		}));
 	}
 
 	listDiscoveryJobs(tenantId: string, filters: any): Promise<any>;
@@ -74,11 +77,27 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 		}
 
 		const result = await super.listDiscoveryJobs(this.tenantId, {
-			status: first,
+			status: first?.toUpperCase(),
 			limit: 100,
 		});
 
-		return result.jobs;
+		return result.jobs.map((job: any) => ({
+			id: job.id,
+			branchId: job.branchId,
+			networkRanges: String(job.networkRange || '').split(',').map((range) => range.trim()).filter(Boolean),
+			protocols: Array.isArray(job.metadata?.protocols)
+				? job.metadata.protocols
+				: Array.isArray(job.metadata?.protocolFilter)
+					? job.metadata.protocolFilter
+					: [],
+			status: String(job.status || 'pending').toLowerCase(),
+			devicesFound: Number(job.devicesDiscovered || 0),
+			devicesEnrolled: Number(job.devicesEnrolled || 0),
+			startedAt: job.startedAt || job.createdAt,
+			completedAt: job.completedAt,
+			initiatedBy: job.createdBy,
+			error: job.errorMessage,
+		}));
 	}
 
 	startDiscovery(
@@ -117,7 +136,9 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 			includeDeviceTypes: undefined,
 			excludeDeviceTypes: undefined,
 			...(options || {}),
-			...(protocols ? { protocolFilter: protocols } : {}),
+			...(protocols
+				? { protocols: protocols.map((protocol) => protocol.toUpperCase()) }
+				: {}),
 		};
 
 		return super.startDiscovery(

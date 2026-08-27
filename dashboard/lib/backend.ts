@@ -18,6 +18,13 @@ type DirectLiveStart = {
 
 export type LiveRoutePreference = "auto" | "public";
 
+export async function getCurrentUser(employeeSession: string): Promise<{ id: string; tenantId?: string }> {
+  const response = await controlFetch("/v1/auth/me", undefined, employeeSession);
+  const user = await response.json() as { id?: string; tenantId?: string } | null;
+  if (!user?.id) throw new Error("authenticated_user_unavailable");
+  return { id: user.id, ...(user.tenantId ? { tenantId: user.tenantId } : {}) };
+}
+
 export async function listBranches(employeeSession?: string): Promise<Branch[]> {
   const response = await controlFetch("/v1/branches", undefined, employeeSession);
   const body = await response.json() as { data: Branch[] };
@@ -50,7 +57,7 @@ export async function startLive(
     // Render protects the dashboard with Basic Auth, there may be no employee
     // session cookie even though the rest of the dashboard is authorized via
     // its configured dashboard identity.
-    const dashboardUserId = employeeSession
+    const dashboardUserId = employeeSession || runtimeEnv("NODE_ENV", "development") === "production"
       ? undefined
       : runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
     const permission = await controlFetch(
@@ -107,11 +114,27 @@ export async function startLive(
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
       };
-      return { cameraId, direct };
+      const publicFallback = publicMediaGatewayUrl &&
+        !sameOrigin(publicMediaGatewayUrl, localMediaGatewayUrl)
+        ? [{
+            url: new URL("/v1/live/start", normalizeHttpOrigin(publicMediaGatewayUrl)).toString(),
+            controlPlaneToken: controlSession.token,
+          }]
+        : undefined;
+      return {
+        cameraId,
+        direct,
+        ...(publicFallback ? { directFallbacks: publicFallback } : {}),
+      };
     }
 
-    const mediaGatewayUrl = controlSession.mediaGatewayUrl ??
-      runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
+    // A public retry must not select the private address that just failed in
+    // the browser. Prefer the mapped/configured HTTPS tunnel and otherwise
+    // use the dashboard's server-to-server gateway. This also replaces stale
+    // quick-tunnel hostnames advertised by an older edge heartbeat.
+    const mediaGatewayUrl = routePreference === "public"
+      ? publicMediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090")
+      : controlSession.mediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
 
     if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
         isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
@@ -280,6 +303,14 @@ function isHttpsUrl(value?: string): boolean {
   if (!value) return false;
   try {
     return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function sameOrigin(left: string, right: string): boolean {
+  try {
+    return new URL(normalizeHttpOrigin(left)).origin === new URL(normalizeHttpOrigin(right)).origin;
   } catch {
     return false;
   }

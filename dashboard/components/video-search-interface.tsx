@@ -10,7 +10,6 @@ import {
   Grid,
   List,
   Loader2,
-  MoreVertical,
   Play,
   Search,
   SlidersHorizontal,
@@ -89,6 +88,7 @@ export function VideoSearchInterface() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list" | "timeline">("list");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [playbackSegment, setPlaybackSegment] = useState<RecordingSegment | null>(null);
 
   // Load branches on mount
   useEffect(() => {
@@ -184,7 +184,9 @@ export function VideoSearchInterface() {
     setFilters((prev) => ({
       ...prev,
       [field]: value,
+      ...(field === "branchId" ? { cameraId: undefined } : {}),
     }));
+    if (field === "branchId") setCameras([]);
   }
 
   return (
@@ -508,15 +510,23 @@ export function VideoSearchInterface() {
                       </div>
                     </div>
                     <div className="segment-actions">
-                      <button className="icon-button" title="Play">
+                      <button
+                        className="icon-button"
+                        title="Play"
+                        aria-label={`Play recording from ${formatTime(segment.startedAt)}`}
+                        onClick={() => setPlaybackSegment(segment)}
+                      >
                         <Play size={16} />
                       </button>
-                      <button className="icon-button" title="Download">
+                      <a
+                        className="icon-button"
+                        title="Download"
+                        aria-label={`Download recording from ${formatTime(segment.startedAt)}`}
+                        href={`/api/recordings/play?segmentId=${encodeURIComponent(segment.id)}`}
+                        download={`recording-${segment.id}.mp4`}
+                      >
                         <Download size={16} />
-                      </button>
-                      <button className="icon-button" title="More">
-                        <MoreVertical size={16} />
-                      </button>
+                      </a>
                     </div>
                   </div>
                 ))
@@ -524,16 +534,99 @@ export function VideoSearchInterface() {
             </div>
           )}
 
+          {viewMode === "grid" && (
+            <div className="results-grid">
+              {results.segments.length === 0 ? (
+                <div className="empty-state">
+                  <Video size={48} />
+                  <h3>No recordings found</h3>
+                  <p>Try adjusting your search filters</p>
+                </div>
+              ) : results.segments.map((segment) => (
+                <article key={segment.id} className="segment-card">
+                  <button
+                    className="segment-preview"
+                    onClick={() => setPlaybackSegment(segment)}
+                    aria-label={`Play recording from ${formatTime(segment.startedAt)}`}
+                  >
+                    <Play size={28} />
+                  </button>
+                  <div className="segment-card-body">
+                    <strong>{formatTime(segment.startedAt)}</strong>
+                    <span>{formatDuration(Math.max(0, Math.round((Date.parse(segment.endedAt) - Date.parse(segment.startedAt)) / 1000)))}</span>
+                    <span>{segment.codec?.toUpperCase() || "MP4"} · {formatBytes(segment.sizeBytes)}</span>
+                    <a href={`/api/recordings/play?segmentId=${encodeURIComponent(segment.id)}`} download={`recording-${segment.id}.mp4`}>
+                      <Download size={14} /> Download
+                    </a>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+
           {viewMode === "timeline" && (
             <div className="timeline-view">
               <div className="timeline-visualization">
-                {/* Timeline bars would go here */}
-                <p style={{ textAlign: "center", padding: "40px", color: "#666" }}>
-                  Timeline visualization coming soon
-                </p>
+                {(results.timeline.length > 0 ? results.timeline : results.segments.map((segment) => ({
+                  startTime: segment.startedAt,
+                  endTime: segment.endedAt,
+                  type: "recording" as const,
+                }))).length === 0 ? (
+                  <div className="empty-state">No timeline evidence is available for this period.</div>
+                ) : (
+                  <>
+                    <div className="timeline-track" aria-label="Recording coverage timeline">
+                      {(results.timeline.length > 0 ? results.timeline : results.segments.map((segment) => ({
+                        startTime: segment.startedAt,
+                        endTime: segment.endedAt,
+                        type: "recording" as const,
+                      }))).map((item, index) => {
+                        const position = timelinePosition(item.startTime, item.endTime, filters.from, filters.to);
+                        return (
+                          <div
+                            key={`${item.startTime}-${item.endTime}-${index}`}
+                            className={`timeline-block ${item.type}`}
+                            style={{ left: `${position.left}%`, width: `${position.width}%` }}
+                            title={`${item.type === "recording" ? "Recorded" : "Gap"}: ${formatTime(item.startTime)} – ${formatTime(item.endTime)}`}
+                          />
+                        );
+                      })}
+                    </div>
+                    <div className="timeline-labels">
+                      <span>{formatTime(filters.from)}</span>
+                      <span>{formatTime(filters.to)}</span>
+                    </div>
+                    <div className="timeline-legend">
+                      <span><i className="recording" /> Recorded</span>
+                      <span><i className="gap" /> Gap</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {playbackSegment && (
+        <div className="playback-modal" role="dialog" aria-modal="true" aria-label="Recording playback">
+          <div className="playback-panel">
+            <div className="playback-header">
+              <div>
+                <strong>Recording playback</strong>
+                <span>{formatTime(playbackSegment.startedAt)} – {formatTime(playbackSegment.endedAt)}</span>
+              </div>
+              <button className="icon-button" onClick={() => setPlaybackSegment(null)} aria-label="Close playback">
+                <X size={18} />
+              </button>
+            </div>
+            <video
+              src={`/api/recordings/play?segmentId=${encodeURIComponent(playbackSegment.id)}`}
+              controls
+              autoPlay
+              className="playback-video"
+            />
+          </div>
         </div>
       )}
 
@@ -739,6 +832,78 @@ export function VideoSearchInterface() {
           gap: 12px;
         }
 
+        .results-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+          gap: 16px;
+        }
+
+        .segment-card {
+          overflow: hidden;
+          border: 1px solid #e5e7eb;
+          border-radius: 8px;
+          background: white;
+        }
+
+        .segment-preview {
+          display: flex;
+          width: 100%;
+          aspect-ratio: 16 / 9;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          background: #111827;
+          color: white;
+          cursor: pointer;
+        }
+
+        .segment-card-body {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding: 12px;
+          color: #4b5563;
+          font-size: 13px;
+        }
+
+        .segment-card-body strong { color: #111827; }
+        .segment-card-body a { display: inline-flex; align-items: center; gap: 6px; color: #2563eb; }
+
+        .timeline-visualization { padding: 20px 4px; }
+        .timeline-track {
+          position: relative;
+          height: 44px;
+          overflow: hidden;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          background: #fee2e2;
+        }
+        .timeline-block { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+        .timeline-block.recording { background: #22c55e; }
+        .timeline-block.gap { background: #ef4444; }
+        .timeline-labels { display: flex; justify-content: space-between; margin-top: 8px; color: #6b7280; font-size: 12px; }
+        .timeline-legend { display: flex; gap: 18px; margin-top: 14px; color: #4b5563; font-size: 13px; }
+        .timeline-legend span { display: inline-flex; align-items: center; gap: 6px; }
+        .timeline-legend i { width: 12px; height: 12px; border-radius: 2px; }
+        .timeline-legend i.recording { background: #22c55e; }
+        .timeline-legend i.gap { background: #ef4444; }
+
+        .playback-modal {
+          position: fixed;
+          inset: 0;
+          z-index: 60;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          background: rgb(0 0 0 / 70%);
+        }
+        .playback-panel { width: min(960px, 100%); overflow: hidden; border-radius: 10px; background: white; }
+        .playback-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; }
+        .playback-header > div { display: flex; flex-direction: column; gap: 3px; }
+        .playback-header span { color: #6b7280; font-size: 13px; }
+        .playback-video { display: block; width: 100%; max-height: 75vh; background: black; }
+
         .segment-item {
           display: flex;
           justify-content: space-between;
@@ -867,4 +1032,16 @@ function formatDuration(seconds: number): string {
     return `${minutes}m ${secs}s`;
   }
   return `${secs}s`;
+}
+
+function timelinePosition(start: string, end: string, windowStart: string, windowEnd: string) {
+  const from = Date.parse(windowStart);
+  const to = Date.parse(windowEnd);
+  const range = Math.max(1, to - from);
+  const startAt = Math.min(to, Math.max(from, Date.parse(start)));
+  const endAt = Math.min(to, Math.max(startAt, Date.parse(end)));
+  return {
+    left: ((startAt - from) / range) * 100,
+    width: Math.max(0.15, ((endAt - startAt) / range) * 100),
+  };
 }
