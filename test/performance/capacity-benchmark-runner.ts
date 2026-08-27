@@ -7,7 +7,8 @@ import {
   BranchSimulator,
   DEFAULT_TIER_A_SLO_BUDGET,
 } from "../../src/performance/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 
 async function runCapacityBenchmarkTests() {
   console.log("================================================================================");
@@ -72,30 +73,55 @@ async function runCapacityBenchmarkTests() {
 
   // Suite 4: Fastify REST API Endpoints Verification
   console.log("\nSuite 4: Fastify REST API Endpoints Verification");
+  const app = await buildApp({ store: new MemoryStore() });
   await app.ready();
+
+  const authHeaders = {
+    "x-user-id": "usr-admin-1",
+    "x-user-role": "SUPER_ADMIN",
+    "x-tenant-id": "bank-corp",
+  };
 
   const getSloResp = await app.inject({
     method: "GET",
     url: "/api/v1/benchmarks/slo-budget",
+    headers: authHeaders,
   });
-  assert(getSloResp.statusCode === 200, "GET /api/v1/benchmarks/slo-budget returns 200 OK");
-  const sloData = JSON.parse(getSloResp.body).data;
-  assert(sloData.healthIngestSustainedMin === 1000, "Exposes formal SLO target: healthIngestSustainedMin = 1000");
+  assert(getSloResp.statusCode === 200, "GET /api/v1/benchmarks/slo-budget returns 200 OK", {
+    status: getSloResp.statusCode,
+    body: getSloResp.body,
+  });
+  if (getSloResp.statusCode === 200) {
+    const sloData = JSON.parse(getSloResp.body).data;
+    assert(sloData.healthIngestSustainedMin === 1000, "Exposes formal SLO target: healthIngestSustainedMin = 1000");
+  }
 
   const getLatestResp = await app.inject({
     method: "GET",
     url: "/api/v1/benchmarks/latest",
+    headers: authHeaders,
   });
-  assert(getLatestResp.statusCode === 200, "GET /api/v1/benchmarks/latest returns 200 OK");
-  const latestData = JSON.parse(getLatestResp.body).data;
-  assert(latestData.overallPassed === true, "Latest benchmark scorecard indicates overallPassed = true");
+  assert(getLatestResp.statusCode === 200, "GET /api/v1/benchmarks/latest returns 200 OK", {
+    status: getLatestResp.statusCode,
+    body: getLatestResp.body,
+  });
+  if (getLatestResp.statusCode === 200) {
+    const latestData = JSON.parse(getLatestResp.body).data;
+    assert(latestData.overallPassed === true, "Latest benchmark scorecard indicates overallPassed = true");
+  }
 
   const runResp = await app.inject({
     method: "POST",
     url: "/api/v1/benchmarks/run",
+    headers: authHeaders,
     payload: { tier: "TIER_A" },
   });
-  assert(runResp.statusCode === 201, "POST /api/v1/benchmarks/run triggers on-demand capacity test (201 Created)");
+  assert(runResp.statusCode === 201, "POST /api/v1/benchmarks/run triggers on-demand capacity test (201 Created)", {
+    status: runResp.statusCode,
+    body: runResp.body,
+  });
+
+  await app.close();
 
   console.log("\n================================================================================");
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);

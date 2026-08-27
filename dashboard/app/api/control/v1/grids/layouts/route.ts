@@ -51,11 +51,11 @@ export async function GET(req: NextRequest) {
       WHERE gl.user_id = $1
     `;
 
-    const params = [user.id];
+    const params: any[] = [user.id];
 
     if (includeShared) {
       query += ` OR (gl.is_shared = true AND u.tenant_id = $2)`;
-      params.push(user.tenantId);
+      params.push(user.tenantId || "default-tenant");
     }
 
     query += ` ORDER BY gl.updated_at DESC`;

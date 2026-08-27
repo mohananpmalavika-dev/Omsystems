@@ -42,20 +42,20 @@ const eventSchema = z.object({
   sourceIp: z.string().ip().optional(),
 });
 
-function normalizeRetryConfig(value: z.infer<typeof retrySchema> | undefined): IntegrationConfig['retryConfig'] {
+function normalizeRetryConfig(value: Partial<z.infer<typeof retrySchema>> | undefined): IntegrationConfig['retryConfig'] {
   if (!value) return undefined;
   return {
-    maxRetries: value.maxRetries!,
-    retryDelayMs: value.retryDelayMs!,
-    backoffMultiplier: value.backoffMultiplier!,
+    maxRetries: value.maxRetries ?? 3,
+    retryDelayMs: value.retryDelayMs ?? 1000,
+    backoffMultiplier: value.backoffMultiplier ?? 2,
   };
 }
 
-function normalizeRateLimitConfig(value: z.infer<typeof rateLimitSchema> | undefined): IntegrationConfig['rateLimitConfig'] {
+function normalizeRateLimitConfig(value: Partial<z.infer<typeof rateLimitSchema>> | undefined): IntegrationConfig['rateLimitConfig'] {
   if (!value) return undefined;
   return {
-    maxRequestsPerMinute: value.maxRequestsPerMinute!,
-    burstSize: value.burstSize!,
+    maxRequestsPerMinute: value.maxRequestsPerMinute ?? 60,
+    burstSize: value.burstSize ?? 10,
   };
 }
 

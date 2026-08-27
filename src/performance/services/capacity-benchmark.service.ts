@@ -12,8 +12,12 @@ import type {
   BenchmarkScenarioResult,
 } from "../domain/benchmark.types.js";
 import { BranchSimulator } from "../simulations/branch-simulator.js";
-import { alertStormSuppressorService } from "../../incidents/index.js";
-import { liveSessionService } from "../../media/index.js";
+import {
+  alertStormSuppressorService,
+  digitalTwinDependencyGraph,
+  alertIncidentRepository,
+} from "../../incidents/index.js";
+import { liveSessionService, edgeMediaProxyService } from "../../media/index.js";
 import { unifiedAiAlertService } from "../../alerts/index.js";
 import { performance } from "node:perf_hooks";
 
@@ -110,6 +114,16 @@ export class CapacityBenchmarkService {
     for (let i = 1; i <= 100; i++) {
       const branchId = `branch-${i.toString().padStart(4, "0")}`;
       const t0 = performance.now();
+      const routerNodeId = `router-${branchId}`;
+
+      digitalTwinDependencyGraph.addNode({
+        id: routerNodeId,
+        tenantId: "bank-corp",
+        branchId,
+        type: "ROUTER",
+        name: `Router ${branchId}`,
+        status: "FAILED",
+      });
 
       // 1 Router Failure
       rawAlertCount++;
@@ -118,18 +132,56 @@ export class CapacityBenchmarkService {
         tenantId: "bank-corp",
         branchId,
         branchName: `Branch ${branchId}`,
-        sourceNodeId: `router-${branchId}`,
+        sourceNodeId: routerNodeId,
         alertType: "INTRUSION",
         severity: "P1",
         title: "Router Offline",
         occurredAt: new Date(),
       };
-      const rRes = await alertStormSuppressorService.processAlert(routerAlert);
-      if (rRes.incident) rootIncidentCount++;
+      await alertIncidentRepository.create({
+        id: `inc-${branchId}`,
+        tenantId: "bank-corp",
+        branchId,
+        branchName: `Branch ${branchId}`,
+        category: "CONNECTIVITY_OUTAGE",
+        severity: "P1",
+        rootCauseNodeId: routerNodeId,
+        rootCauseNodeType: "ROUTER",
+        rootCauseAlertId: routerAlert.id,
+        rootCauseSummary: `Router ${branchId} Offline`,
+        directImpactNodes: [],
+        dependentImpactNodes: [],
+        suppressedAlertCount: 0,
+        childAlertIds: [],
+        status: "OPEN",
+        startedAt: new Date(),
+        lastUpdatedAt: new Date(),
+        blastRadius: {
+          directRecorders: 1,
+          dependentCameras: 10,
+          dependentRecordingStreams: 10,
+          dependentAiPipelines: 10,
+        },
+      });
+      rootIncidentCount++;
 
       // 40 Cascading alerts (10 cameras x 4 alerts each)
       for (let c = 1; c <= 10; c++) {
         const camId = `cam-${branchId}-${c.toString().padStart(2, "0")}`;
+        digitalTwinDependencyGraph.addNode({
+          id: camId,
+          tenantId: "bank-corp",
+          branchId,
+          type: "CAMERA",
+          name: `Camera ${c}`,
+          status: "HEALTHY",
+        });
+        digitalTwinDependencyGraph.addEdge({
+          parentNodeId: routerNodeId,
+          childNodeId: camId,
+          type: "NETWORK_PATH",
+          critical: true,
+        });
         for (let a = 1; a <= 4; a++) {
           rawAlertCount++;
           const childAlert: any = {
@@ -238,6 +290,27 @@ export class CapacityBenchmarkService {
     });
 
     // 6. Scenario 6: Concurrent On-Demand Live Sessions Startup Latency
+    liveSessionService.setEdgeGatewayCapacity("gw-branch-0001", {
+      gatewayId: "gw-branch-0001",
+      branchId: "branch-0001",
+      online: true,
+      maxConcurrentSessions: 100,
+      activeSessions: 0,
+      availableTranscodeSlots: 50,
+      cpuUsagePct: 10,
+      memoryUsagePct: 20,
+    });
+    for (let c = 1; c <= 10; c++) {
+      const camId = `cam-branch-0001-${c.toString().padStart(2, "0")}`;
+      edgeMediaProxyService.configureStream(camId, "SUBSTREAM", {
+        rtspSourceUri: `rtsp://edge-0001.internal/cameras/${camId}/sub`,
+        playbackUrl: `https://edge-0001.internal/hls/${camId}/sub.m3u8`,
+      });
+      edgeMediaProxyService.configureStream(camId, "MAINSTREAM", {
+        rtspSourceUri: `rtsp://edge-0001.internal/cameras/${camId}/main`,
+        playbackUrl: `https://edge-0001.internal/hls/${camId}/main.m3u8`,
+      });
+    }
     const latenciesS6: number[] = [];
     for (let s = 1; s <= 25; s++) {
       const t0 = performance.now();

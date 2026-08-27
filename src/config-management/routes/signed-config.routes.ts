@@ -308,7 +308,7 @@ export async function registerSignedConfigRoutes(
     }
     try {
       const assignment = fleetRolloutControllerService.recordBranchResult(id, branchId, {
-        status: body.status!,
+        status: body.status,
         ...(body.error ? { error: body.error } : {}),
       });
       return reply.send({ success: true, data: assignment });
@@ -348,7 +348,7 @@ export async function registerSignedConfigRoutes(
       appliedVersion: body.appliedVersion,
       appliedPackageSha256: body.appliedPackageSha256,
       gatewayVersion: body.gatewayVersion,
-      actualConfig: body.actualConfig as BranchConfiguration,
+      actualConfig: body.actualConfig as unknown as BranchConfiguration,
     });
 
     return { success: true, data: report };

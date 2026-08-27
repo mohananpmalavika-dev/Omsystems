@@ -129,6 +129,7 @@ import { registerCeoScreenRoutes } from "./routes/ceo-screen.routes.js";
 import { registerClientMediaSchedulerRoutes } from "./routes/client-media-scheduler.routes.js";
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
+import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
@@ -2659,6 +2660,14 @@ export async function buildApp(options?: {
     app.log.info("Event Normalization routes registered (CP PLUS, Dahua, Hikvision, Axis, ONVIF, Edge Agent)");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register event normalization routes");
+  }
+
+  // Register Capacity & Performance Benchmark SLO routes
+  try {
+    await registerPerformanceBenchmarkRoutes(app);
+    app.log.info("Capacity & Performance Benchmark routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register performance benchmark routes");
   }
 
   const alertWorker = setInterval(() => {
