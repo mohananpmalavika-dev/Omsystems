@@ -1,0 +1,380 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Sentinel Grid (Om Systems) - 1-Click AWS EC2 Production Deployment with Docker Compose & Automatic SSL'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.small
+      - t3.micro
+      - c7i-flex.large
+      - m7i-flex.large
+      - t3.large
+      - t3.xlarge
+    Description: EC2 Instance Type. Free-Tier eligible types include t3.small, t3.micro, c7i-flex.large.
+
+  VolumeSize:
+    Type: Number
+    Default: 30
+    MinValue: 20
+    MaxValue: 2000
+    Description: EBS gp3 root storage volume size in GB. Free Tier includes 30GB.
+
+  KeyName:
+    Type: String
+    Description: Optional EC2 Key Pair for SSH access. Leave empty to use AWS SSM Session Manager.
+    Default: ''
+
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Optional Custom Domain or Subdomain (e.g. cctv.yourcompany.com). If provided, Caddy will automatically issue a Let's Encrypt SSL certificate.
+
+  AdminEmail:
+    Type: String
+    Default: admin@example.com
+    Description: Administrator email for SSL certificate renewal alerts and initial SuperAdmin account.
+
+  RepositoryBranch:
+    Type: String
+    Default: main
+    Description: Git branch to deploy.
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+  HasDomainName: !Not [!Equals [!Ref DomainName, '']]
+
+Resources:
+  # ==========================================
+  # Networking: VPC, Subnet, Internet Gateway
+  # ==========================================
+  SentinelVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SentinelVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SentinelVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-public-subnet
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SentinelVPC
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-public-rt
+
+  DefaultPublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  # ==========================================
+  # Security Group: Web, Streaming, Control Plane
+  # ==========================================
+  SentinelSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Sentinel Grid CCTV & AI Video Analytics
+      VpcId: !Ref SentinelVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP (Caddy/Nginx & Lets Encrypt Challenge)
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS (Secure Dashboard & API)
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH Remote Management
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+          Description: Control Plane REST/WebSocket API
+        - IpProtocol: tcp
+          FromPort: 10000
+          ToPort: 10000
+          CidrIp: 0.0.0.0/0
+          Description: Sentinel Grid Web Dashboard
+        - IpProtocol: tcp
+          FromPort: 8090
+          ToPort: 8090
+          CidrIp: 0.0.0.0/0
+          Description: Media Gateway API
+        - IpProtocol: tcp
+          FromPort: 8554
+          ToPort: 8554
+          CidrIp: 0.0.0.0/0
+          Description: RTSP Streaming Proxy
+        - IpProtocol: tcp
+          FromPort: 8888
+          ToPort: 8888
+          CidrIp: 0.0.0.0/0
+          Description: HLS Live Video Streams & WebRTC WHEP
+        - IpProtocol: udp
+          FromPort: 8189
+          ToPort: 8189
+          CidrIp: 0.0.0.0/0
+          Description: WebRTC ICE/UDP Media Transport
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-sg
+
+  # ==========================================
+  # IAM Role: S3 Archive, CloudWatch & SSM Access
+  # ==========================================
+  SentinelInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: [ec2.amazonaws.com]
+            Action: ['sts:AssumeRole']
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: SentinelS3ArchivePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::sentinel-recordings-${AWS::AccountId}-${AWS::Region}'
+                  - !Sub 'arn:aws:s3:::sentinel-recordings-${AWS::AccountId}-${AWS::Region}/*'
+
+  SentinelInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SentinelInstanceRole
+
+  # ==========================================
+  # S3 Bucket for Long-Term Video Evidence Archive
+  # ==========================================
+  SentinelRecordingsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'sentinel-recordings-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER_IR
+              - TransitionInDays: 120
+                StorageClass: DEEP_ARCHIVE
+            ExpirationInDays: 365
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  # ==========================================
+  # EC2 Instance & Elastic IP
+  # ==========================================
+  SentinelElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-eip
+
+  SentinelInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      SubnetId: !Ref PublicSubnet
+      SecurityGroupIds:
+        - !Ref SentinelSecurityGroup
+      IamInstanceProfile: !Ref SentinelInstanceProfile
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            VolumeType: gp3
+            DeleteOnTermination: true
+            Encrypted: true
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      Tags:
+        - Key: Name
+          Value: sentinel-grid-server
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+          echo "🚀 Starting Sentinel Grid AWS Auto-Provisioning..."
+
+          # Update system
+          dnf update -y
+          dnf install -y docker git curl wget jq openssl
+
+          # Start and enable Docker
+          systemctl start docker
+          systemctl enable docker
+          usermod -aG docker ec2-user
+
+          # Install Docker Compose plugin
+          DOCKER_CONFIG=/usr/local/lib/docker/cli-plugins
+          mkdir -p $DOCKER_CONFIG
+          curl -SL https://github.com/docker/compose/releases/download/v2.29.2/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/docker-compose
+          chmod +x $DOCKER_CONFIG/docker-compose
+          ln -s $DOCKER_CONFIG/docker-compose /usr/bin/docker-compose || true
+
+          # Create app directory
+          mkdir -p /opt/sentinel-grid
+          cd /opt/sentinel-grid
+
+          # Generate secure production keys
+          JWT_SECRET=$(openssl rand -hex 32)
+          SESSION_SECRET=$(openssl rand -hex 32)
+          MEDIA_KEY=$(openssl rand -hex 24)
+          REC_KEY=$(openssl rand -hex 24)
+          ANALYTICS_KEY=$(openssl rand -hex 24)
+          ANALYTICS_SRC_KEY=$(openssl rand -hex 24)
+          REPORT_SECRET=$(openssl rand -hex 24)
+          DB_PASS=$(openssl rand -hex 20)
+          REDIS_PASS=$(openssl rand -hex 20)
+
+          # Write production .env file
+          cat <<EOF > /opt/sentinel-grid/.env
+          NODE_ENV=production
+          PORT=8080
+          HOST=0.0.0.0
+          DB_PASSWORD=$DB_PASS
+          REDIS_PASSWORD=$REDIS_PASS
+          DATABASE_URL=postgresql://sentinel_admin:$DB_PASS@postgres:5432/sentinel_grid
+          REDIS_URL=redis://:$REDIS_PASS@redis:6379
+          JWT_SECRET=$JWT_SECRET
+          SESSION_SECRET=$SESSION_SECRET
+          MEDIA_GATEWAY_SHARED_KEY=$MEDIA_KEY
+          RECORDING_ENGINE_SHARED_KEY=$REC_KEY
+          ANALYTICS_ENGINE_SHARED_KEY=$ANALYTICS_KEY
+          ANALYTICS_SOURCE_SHARED_KEY=$ANALYTICS_SRC_KEY
+          REPORT_DOWNLOAD_SECRET=$REPORT_SECRET
+          S3_RECORDINGS_BUCKET=sentinel-recordings-${AWS::AccountId}-${AWS::Region}
+          AWS_REGION=${AWS::Region}
+          DOMAIN_NAME=${DomainName}
+          ADMIN_EMAIL=${AdminEmail}
+          EOF
+
+          echo "✅ Environment configured at /opt/sentinel-grid/.env"
+
+          # Setup systemd service for Sentinel Grid
+          cat <<'SERVICE' > /etc/systemd/system/sentinel-grid.service
+          [Unit]
+          Description=Sentinel Grid Surveillance & AI Analytics Platform
+          Requires=docker.service
+          After=docker.service network-online.target
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/opt/sentinel-grid
+          ExecStart=/usr/local/lib/docker/cli-plugins/docker-compose -f docker-compose.aws.yml up -d
+          ExecStop=/usr/local/lib/docker/cli-plugins/docker-compose -f docker-compose.aws.yml down
+
+          [Install]
+          WantedBy=multi-user.target
+          SERVICE
+
+          systemctl daemon-reload
+          systemctl enable sentinel-grid
+
+          echo "✅ Sentinel Grid CloudFormation Initialization Complete!"
+
+  EIPAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      InstanceId: !Ref SentinelInstance
+      AllocationId: !GetAtt SentinelElasticIP.AllocationId
+
+Outputs:
+  InstanceId:
+    Description: Sentinel Grid EC2 Instance ID
+    Value: !Ref SentinelInstance
+
+  PublicIP:
+    Description: Sentinel Grid Elastic Public IP Address
+    Value: !Ref SentinelElasticIP
+
+  DashboardDirectURL:
+    Description: Web Dashboard Direct URL (Next.js)
+    Value: !Sub 'http://${SentinelElasticIP}:10000'
+
+  ControlPlaneDirectURL:
+    Description: Control Plane API URL
+    Value: !Sub 'http://${SentinelElasticIP}:8080/ready'
+
+  HLSStreamingURL:
+    Description: Live Video Streaming (HLS/WebRTC) Gateway
+    Value: !Sub 'http://${SentinelElasticIP}:8888'
+
+  S3RecordingsBucket:
+    Description: Amazon S3 Long-Term Video Archive Bucket
+    Value: !Ref SentinelRecordingsBucket
+
+  SSMConnectCommand:
+    Description: AWS Systems Manager Terminal Connect Command (No SSH key needed)
+    Value: !Sub 'aws ssm start-session --target ${SentinelInstance} --region ${AWS::Region}'

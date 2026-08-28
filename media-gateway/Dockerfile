@@ -27,5 +27,6 @@ COPY --from=build /app/media-gateway/dist ./media-gateway/dist
 COPY --from=mediamtx /mediamtx /usr/local/bin/mediamtx
 COPY media-gateway/mediamtx.render.yml ./media-gateway/mediamtx.render.yml
 COPY --chmod=755 media-gateway/start-render.sh ./media-gateway/start-render.sh
+RUN sed -i 's/\r$//' ./media-gateway/start-render.sh
 USER node
-CMD ["media-gateway/start-render.sh"]
+CMD ["sh", "media-gateway/start-render.sh"]

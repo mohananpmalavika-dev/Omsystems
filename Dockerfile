@@ -11,6 +11,7 @@ COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 RUN npm ci
+ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
 # Build the cross-platform edge-agent bundle and the activation-bound

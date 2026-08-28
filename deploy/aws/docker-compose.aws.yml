@@ -1,0 +1,248 @@
+version: "3.8"
+
+# =================================================================
+# Sentinel Grid (Om Systems) - AWS Production Docker Compose
+# =================================================================
+
+services:
+  # -------------------------------------------------------------
+  # 0. Edge Reverse Proxy & Automatic SSL (Caddy)
+  # -------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: sentinel-aws-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 (QUIC)
+    environment:
+      - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+      - control-plane
+      - media-gateway
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 1. PostgreSQL 16 Relational Database
+  # -------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sentinel-aws-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: sentinel_grid
+      POSTGRES_USER: sentinel_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SentinelGridDbMaster2026}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinel_grid"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 2. Redis Cache & Distributed Event Bus
+  # -------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: sentinel-aws-redis
+    restart: always
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-SentinelGridRedisMaster2026}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SentinelGridRedisMaster2026}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # -------------------------------------------------------------
+  # 3. Fastify Control Plane API & WebSocket Gateway
+  # -------------------------------------------------------------
+  control-plane:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: sentinel-aws-control-plane
+    restart: always
+    environment:
+      NODE_ENV: production
+      AUTH_MODE: ${AUTH_MODE:-session}
+      PORT: 8080
+      HOST: 0.0.0.0
+      DATABASE_URL: ${DATABASE_URL:-postgresql://sentinel_admin:${DB_PASSWORD:-SentinelGridDbMaster2026}@postgres:5432/sentinel_grid}
+      REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-SentinelGridRedisMaster2026}@redis:6379}
+      JWT_SECRET: ${JWT_SECRET:-356c732f9f08e79b8e56315a4f65734f469dd2d350e5c072ca6634de0d0e2b57}
+      SESSION_SECRET: ${SESSION_SECRET:-e6e3e9100fe8981c564e942867d778fbe79cad6b3e477af7e4ec45d3c5bd2921}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-cbe91a924912683e42b03365a68f37d0ef307e52caee53dd305af9f550909bb2}
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-690717d8b00c695a063eced95a642a5856e464e492bcb0d8eb084e7b7e70531a}
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
+      REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-beb9be9407b659e637760235d2f6fb466508133082374c489d5ccbf8f8ba0faf}
+      S3_RECORDINGS_BUCKET: ${S3_RECORDINGS_BUCKET:-sentinel-recordings-493168377672-ap-south-1}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+      CONTROL_PLANE_PUBLIC_URL: ${CONTROL_PLANE_PUBLIC_URL:-http://3.7.216.169:8080}
+      RECORDING_ENGINE_URL: http://recording-engine:8091
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8092
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 4. Next.js Management Web Dashboard
+  # -------------------------------------------------------------
+  dashboard:
+    build:
+      context: ../..
+      dockerfile: dashboard/Dockerfile
+    container_name: sentinel-aws-dashboard
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 10000
+      HOSTNAME: 0.0.0.0
+      CONTROL_PLANE_URL: http://control-plane:8080
+      CONTROL_PLANE_INTERNAL_URL: http://control-plane:8080
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      NEXT_PUBLIC_APP_NAME: Sentinel Grid
+    ports:
+      - "10000:10000"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 5. Media Gateway (RTSP, HLS, WebRTC Streaming)
+  # -------------------------------------------------------------
+  media-gateway:
+    build:
+      context: ../..
+      dockerfile: media-gateway/Dockerfile
+    container_name: sentinel-aws-media-gateway
+    restart: always
+    environment:
+      PORT: 8090
+      CONTROL_PLANE_URL: http://control-plane:8080
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-cbe91a924912683e42b03365a68f37d0ef307e52caee53dd305af9f550909bb2}
+      MEDIAMTX_API_URL: http://127.0.0.1:9997
+      MEDIAMTX_HLS_URL: http://127.0.0.1:8888
+    ports:
+      - "8090:8090"
+      - "8888:8888"
+      - "8554:8554"
+      - "8189:8189/udp"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # -------------------------------------------------------------
+  # 6. Recording Engine (Continuous Archival Buffer)
+  # -------------------------------------------------------------
+  recording-engine:
+    build:
+      context: ../..
+      dockerfile: recording-engine/Dockerfile
+    container_name: sentinel-aws-recording-engine
+    restart: always
+    environment:
+      PORT: 8091
+      CONTROL_PLANE_URL: http://control-plane:8080
+      RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-690717d8b00c695a063eced95a642a5856e464e492bcb0d8eb084e7b7e70531a}
+      RECORDING_ROOT: /recordings
+      S3_BUCKET: ${S3_RECORDINGS_BUCKET:-sentinel-recordings-493168377672-ap-south-1}
+      AWS_REGION: ${AWS_REGION:-ap-south-1}
+    volumes:
+      - recordings_data:/recordings
+    ports:
+      - "8091:8091"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # -------------------------------------------------------------
+  # 7. Analytics Engine (AI Detection & Alarm Pipeline)
+  # -------------------------------------------------------------
+  analytics-engine:
+    build:
+      context: ../..
+      dockerfile: analytics-engine/Dockerfile.aws
+    container_name: sentinel-aws-analytics-engine
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 8092
+      CONTROL_PLANE_URL: http://control-plane:8080
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
+      ANALYTICS_REQUIRE_MODELS: "false"
+    ports:
+      - "8092:8092"
+    depends_on:
+      - control-plane
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+# =================================================================
+# Persistent Named Volumes (EBS Backed)
+# =================================================================
+volumes:
+  postgres_data:
+  redis_data:
+  recordings_data:
+  caddy_data:
+  caddy_config:

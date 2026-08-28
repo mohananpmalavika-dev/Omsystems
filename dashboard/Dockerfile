@@ -13,6 +13,7 @@ ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
 COPY dashboard ./dashboard
 COPY backend ./backend
+ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN --mount=type=cache,target=/root/.cache/next-swc \
     npm run build --workspace @sentinel/dashboard
 

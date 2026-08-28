@@ -38,8 +38,9 @@ echo "1) Vercel (Dashboard only)"
 echo "2) Railway (Full backend)"
 echo "3) Self-hosted (Docker Compose)"
 echo "4) All of the above"
+echo -e "5) ${GREEN}🌟 AWS (CloudFormation / EC2 / Lightsail / ECS)${NC}"
 echo ""
-read -p "Enter choice [1-4]: " choice
+read -p "Enter choice [1-5]: " choice
 
 case $choice in
     1)
@@ -195,6 +196,12 @@ EOF
         echo ""
         echo "🚀 Full deployment coming soon..."
         echo "For now, run options 1, 2, and 3 separately"
+        ;;
+        
+    5)
+        echo ""
+        echo -e "${CYAN}🚀 Launching AWS Deployment Center...${NC}"
+        bash "$(dirname "$0")/aws/deploy-to-aws.sh"
         ;;
         
     *)

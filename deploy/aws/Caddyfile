@@ -1,0 +1,56 @@
+# =================================================================
+# Sentinel Grid - Caddy Automated SSL Reverse Proxy
+# =================================================================
+
+{
+    # Global options
+    admin off
+    email {$ADMIN_EMAIL:admin@example.com}
+    auto_https disable_redirects
+}
+
+:80, :443, {$DOMAIN_NAME:localhost} {
+    # Encode responses with zstd or gzip
+    encode zstd gzip
+
+    # 1. MediaMTX Live Video Streams (HLS & WebRTC WHEP)
+    handle_path /stream/* {
+        reverse_proxy media-gateway:8888 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    # 2. Control Plane Core API & WebSockets
+    handle /api/control/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    handle /ready {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /health {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /ws/* {
+        reverse_proxy control-plane:8080 {
+            header_up Upgrade {>Upgrade}
+            header_up Connection {>Connection}
+        }
+    }
+
+    # 3. Next.js Web Dashboard
+    handle {
+        reverse_proxy dashboard:10000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
