@@ -161,12 +161,12 @@ const seedUsers: User[] = [
     status: "active",
     tenantId,
   },
-  { id: "user-global-admin", displayName: "Global Surveillance Director", tenantId },
-  { id: "user-south-operator", displayName: "South Zone Lead Operator (Kochi SOC)", tenantId },
-  { id: "user-west-operator", displayName: "West Zone Lead Operator (Mumbai SOC)", tenantId },
-  { id: "user-branch-manager", displayName: "Adithi Malavika Hub Manager", tenantId },
-  { id: "user-investigator", displayName: "Chief Forensic Investigator", tenantId },
-  { id: "user-evidence-officer", displayName: "Statutory Evidence & Compliance Officer", tenantId },
+  { id: "user-global-admin", displayName: "Global Surveillance Director", role: "company_admin", status: "active", tenantId },
+  { id: "user-south-operator", displayName: "South Zone Lead Operator (Kochi SOC)", role: "operator", status: "active", tenantId },
+  { id: "user-west-operator", displayName: "West Zone Lead Operator (Mumbai SOC)", role: "operator", status: "active", tenantId },
+  { id: "user-branch-manager", displayName: "Adithi Malavika Hub Manager", role: "branch_manager", status: "active", tenantId },
+  { id: "user-investigator", displayName: "Chief Forensic Investigator", role: "security_officer", status: "active", tenantId },
+  { id: "user-evidence-officer", displayName: "Statutory Evidence & Compliance Officer", role: "auditor", status: "active", tenantId },
 ];
 
 const operatorActions: Action[] = [
@@ -4960,6 +4960,8 @@ export class MemoryStore {
   }
 
   // Operational Alert Event methods
+  private readonly operationalAlertEvents: any[] = [];
+
   async recordOperationalAlertEvent(event: {
     id: string | undefined;
     alertId: string;
@@ -4983,16 +4985,31 @@ export class MemoryStore {
     occurredAt: Date;
     createdAt: Date;
   }): Promise<void> {
-    // Store in generic storage (could add dedicated array if needed)
-    console.debug(`Recorded operational alert event: ${event.eventType} for alert ${event.alertId}`);
+    this.operationalAlertEvents.push({
+      ...structuredClone(event),
+      id: event.id ?? randomUUID(),
+    });
   }
 
   async listOperationalAlertEvents(
     alertId: string,
     tenantId: string
   ): Promise<any[]> {
-    // Return empty array for now (would need dedicated storage)
-    return [];
+    return this.operationalAlertEvents
+      .filter((event) => event.alertId === alertId && event.tenantId === tenantId)
+      .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+      .map((event) => structuredClone(event));
+  }
+
+  async listOperationalAlertEventsForAlerts(
+    tenantId: string,
+    alertIds: string[],
+  ): Promise<any[]> {
+    const selected = new Set(alertIds);
+    return this.operationalAlertEvents
+      .filter((event) => event.tenantId === tenantId && selected.has(event.alertId))
+      .sort((left, right) => new Date(left.occurredAt).getTime() - new Date(right.occurredAt).getTime())
+      .map((event) => structuredClone(event));
   }
 
   // Missing methods from ControlPlaneStore interface

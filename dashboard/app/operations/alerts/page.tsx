@@ -5,7 +5,6 @@ import {
   AlertTriangle, 
   Filter, 
   RefreshCw, 
-  Download,
   ChevronDown 
 } from "lucide-react";
 import { 
@@ -23,12 +22,17 @@ import {
 } from "@/lib/api/operational-health";
 import { AlertCard } from "@/components/operational-health/alert-card";
 import { AlertActionModal } from "@/components/operational-health/alert-action-modal";
+import type { AlertActionSubmission } from "@/components/operational-health/alert-action-modal";
 
 type ActionType = 'acknowledge' | 'assign' | 'resolve' | 'work-order' | null;
+const ALERT_PAGE_SIZE = 100;
 
 export default function OperationalAlertsPage() {
   const [alerts, setAlerts] = useState<OperationalAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [selectedAlert, setSelectedAlert] = useState<OperationalAlert | null>(null);
   const [modalAction, setModalAction] = useState<ActionType>(null);
   
@@ -41,9 +45,10 @@ export default function OperationalAlertsPage() {
   const fetchAlerts = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const filters: AlertFilters = {
-        limit: 100,
-        offset: 0
+        limit: ALERT_PAGE_SIZE,
+        offset,
       };
       
       if (severity) filters.severity = severity;
@@ -52,8 +57,10 @@ export default function OperationalAlertsPage() {
       
       const data = await fetchOperationalAlerts(filters);
       setAlerts(data.alerts || []);
-    } catch (error) {
-      console.error('Failed to fetch alerts:', error);
+      setTotal(Number.isSafeInteger(data.total) ? data.total : (data.alerts || []).length);
+    } catch (reason: unknown) {
+      console.error('Failed to fetch alerts:', reason);
+      setLoadError(reason instanceof Error ? reason.message : 'Operational alerts are unavailable');
     } finally {
       setLoading(false);
     }
@@ -61,7 +68,7 @@ export default function OperationalAlertsPage() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [severity, status, component]);
+  }, [severity, status, component, offset]);
 
   const handleAcknowledge = async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
@@ -95,7 +102,7 @@ export default function OperationalAlertsPage() {
     }
   };
 
-  const handleModalSubmit = async (data: any) => {
+  const handleModalSubmit = async (data: AlertActionSubmission) => {
     if (!selectedAlert) return;
 
     try {
@@ -107,13 +114,13 @@ export default function OperationalAlertsPage() {
           break;
         case 'assign':
           await assignAlert(selectedAlert.id, { 
-            assignedTo: data.assigneeId,
+            assignedTo: data.assigneeId!,
             note: data.note,
           });
           break;
         case 'resolve':
           await resolveAlert(selectedAlert.id, {
-            resolutionCode: data.resolutionCode,
+            resolutionCode: data.resolutionCode!,
             comment: data.comment,
           });
           break;
@@ -173,10 +180,6 @@ export default function OperationalAlertsPage() {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
           </button>
-          <button className="btn-secondary flex items-center gap-2">
-            <Download size={16} />
-            Export
-          </button>
         </div>
       </div>
 
@@ -190,7 +193,10 @@ export default function OperationalAlertsPage() {
               </label>
               <select
                 value={severity}
-                onChange={(e) => setSeverity(e.target.value as any)}
+                onChange={(e) => {
+                  setOffset(0);
+                  setSeverity(e.target.value as AlertSeverity | '');
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="">All Severities</option>
@@ -205,7 +211,10 @@ export default function OperationalAlertsPage() {
               </label>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as any)}
+                onChange={(e) => {
+                  setOffset(0);
+                  setStatus(e.target.value as AlertStatus | '');
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="">All Statuses</option>
@@ -213,7 +222,8 @@ export default function OperationalAlertsPage() {
                 <option value="acknowledged">Acknowledged</option>
                 <option value="assigned">Assigned</option>
                 <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
+                <option value="suppressed">Suppressed</option>
+                <option value="reopened">Reopened</option>
               </select>
             </div>
             <div>
@@ -222,7 +232,10 @@ export default function OperationalAlertsPage() {
               </label>
               <select
                 value={component}
-                onChange={(e) => setComponent(e.target.value)}
+                onChange={(e) => {
+                  setOffset(0);
+                  setComponent(e.target.value);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="">All Components</option>
@@ -239,7 +252,13 @@ export default function OperationalAlertsPage() {
       )}
 
       {/* Alerts List */}
-      {loading && alerts.length === 0 ? (
+      {loadError ? (
+        <div className="card text-center py-10" role="alert">
+          <AlertTriangle size={40} className="mx-auto mb-3 text-red-500" />
+          <p className="text-red-700 mb-3">{loadError}</p>
+          <button type="button" className="btn-secondary" onClick={fetchAlerts}>Retry</button>
+        </div>
+      ) : loading && alerts.length === 0 ? (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <RefreshCw className="animate-spin mx-auto mb-4 text-gray-400" size={32} />
@@ -257,17 +276,40 @@ export default function OperationalAlertsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {alerts.map((alert) => (
-            <AlertCard
-              key={alert.id}
-              alert={alert}
-              onAcknowledge={handleAcknowledge}
-              onAssign={handleAssign}
-              onResolve={handleResolve}
-              onCreateWorkOrder={handleCreateWorkOrder}
-            />
-          ))}
+        <div>
+          <div className="space-y-4">
+            {alerts.map((alert) => (
+              <AlertCard
+                key={alert.id}
+                alert={alert}
+                onAcknowledge={handleAcknowledge}
+                onAssign={handleAssign}
+                onResolve={handleResolve}
+                onCreateWorkOrder={handleCreateWorkOrder}
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-between mt-5 text-sm text-gray-600">
+            <span>Showing {offset + 1}–{Math.min(offset + alerts.length, total)} of {total}</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={offset === 0 || loading}
+                onClick={() => setOffset(Math.max(0, offset - ALERT_PAGE_SIZE))}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={offset + alerts.length >= total || loading}
+                onClick={() => setOffset(offset + ALERT_PAGE_SIZE)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

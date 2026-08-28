@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const [camerasResponse, branchesResponse, gatewaysResponse] = await Promise.all([
-      fetch(`${controlPlaneUrl}/v1/admin/cameras/count`, { headers, cache: 'no-store' }),
+      fetch(`${controlPlaneUrl}/v1/cameras?action=device%3Aconfigure&limit=1&offset=0`, { headers, cache: 'no-store' }),
       fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, { headers, cache: 'no-store' }),
       fetch(`${controlPlaneUrl}/v1/edge-agents`, { headers, cache: 'no-store' }),
     ]);
@@ -25,11 +25,11 @@ export async function GET(request: NextRequest) {
     }
 
     const [camerasData, branchesData, gatewaysData] = await Promise.all([
-      camerasResponse.json() as Promise<{ total_cameras?: string | number }>,
+      camerasResponse.json() as Promise<{ total?: string | number }>,
       branchesResponse.json() as Promise<{ data?: unknown[] }>,
       gatewaysResponse.json() as Promise<{ data?: unknown[] }>,
     ]);
-    const cameraCount = Number(camerasData.total_cameras);
+    const cameraCount = Number(camerasData.total);
     if (!Number.isFinite(cameraCount) || cameraCount < 0) {
       return NextResponse.json({ error: 'invalid_camera_count' }, { status: 502 });
     }

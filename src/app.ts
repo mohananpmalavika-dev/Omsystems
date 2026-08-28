@@ -2781,6 +2781,18 @@ export async function buildApp(options?: {
   }
 
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof Error && error.name === "AlertNotFoundError") {
+      return reply.code(404).send({ error: "alert_not_found" });
+    }
+    if (error instanceof Error && error.name === "AlertAuthorizationError") {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    if (error instanceof Error && error.name === "InvalidAlertTransitionError") {
+      return reply.code(409).send({ error: "invalid_alert_transition" });
+    }
+    if (error instanceof Error && error.message === "Assignee not found or not in same tenant") {
+      return reply.code(400).send({ error: "invalid_assignee" });
+    }
     if (error instanceof z.ZodError) {
       return reply.code(400).send({
         error: "invalid_request",

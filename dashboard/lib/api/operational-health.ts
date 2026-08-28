@@ -370,6 +370,7 @@ export async function createWorkOrderFromAlert(
   const response = await fetch(`${API_BASE}/alerts/${alertId}/work-order`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload)
   });
   if (!response.ok) throw new Error('Failed to create work order');

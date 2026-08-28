@@ -11,7 +11,7 @@ export type DiskWriteVerification = 'verified' | 'failed' | 'unverified';
 export type UPSStatus = 'online' | 'on_battery' | 'offline' | 'overload' | 'unknown';
 export type EdgeAgentStatus = 'online' | 'offline' | 'warning' | 'unknown';
 export type AlertSeverity = 'critical' | 'warning' | 'info';
-export type AlertStatus = 'active' | 'acknowledged' | 'assigned' | 'resolved' | 'closed';
+export type AlertStatus = 'active' | 'acknowledged' | 'assigned' | 'resolved' | 'suppressed' | 'reopened' | 'closed';
 
 /**
  * Top-level operational health summary

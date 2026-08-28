@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, AlertTriangle, User, CheckCircle, Wrench } from "lucide-react";
 import { OperationalAlert } from "@/lib/types/operational-health";
 
@@ -13,18 +13,77 @@ interface AlertActionModalProps {
   alert: OperationalAlert | null;
   action: 'acknowledge' | 'assign' | 'resolve' | 'work-order' | null;
   onClose: () => void;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: AlertActionSubmission) => Promise<void>;
 }
+
+export type AlertActionSubmission = {
+  assigneeId?: string;
+  note?: string;
+  notes?: string;
+  resolutionCode?: 'TRUE_POSITIVE_RESOLVED' | 'FALSE_POSITIVE' | 'DUPLICATE' | 'EXPECTED_ACTIVITY' | 'MAINTENANCE_SCHEDULED' | 'OTHER';
+  comment?: string;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+};
+
+type Assignee = {
+  id: string;
+  displayName: string;
+  role?: string;
+};
 
 export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActionModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [assignees, setAssignees] = useState<Assignee[]>([]);
+  const [assigneesLoading, setAssigneesLoading] = useState(false);
+  const [assigneesError, setAssigneesError] = useState<string | null>(null);
   
   // Form state
   const [assigneeId, setAssigneeId] = useState('');
-  const [resolution, setResolution] = useState('');
+  const [resolutionCode, setResolutionCode] = useState<AlertActionSubmission['resolutionCode']>();
   const [notes, setNotes] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'critical'>('medium');
+
+  useEffect(() => {
+    setAssigneeId('');
+    setResolutionCode(undefined);
+    setNotes('');
+    setError(null);
+    if (!alert || (action !== 'assign' && action !== 'work-order')) return;
+
+    let cancelled = false;
+    setAssigneesLoading(true);
+    setAssigneesError(null);
+    void fetch('/api/control/v1/users?status=active&limit=100', { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Assignee directory is unavailable');
+        const payload = await response.json() as { data?: unknown };
+        if (!Array.isArray(payload.data)) throw new Error('Invalid assignee directory response');
+        const users = payload.data.flatMap((candidate): Assignee[] => {
+          if (!candidate || typeof candidate !== 'object') return [];
+          const user = candidate as Record<string, unknown>;
+          if (typeof user.id !== 'string' || typeof user.displayName !== 'string') return [];
+          return [{
+            id: user.id,
+            displayName: user.displayName,
+            ...(typeof user.role === 'string' ? { role: user.role } : {}),
+          }];
+        });
+        if (!cancelled) setAssignees(users);
+      })
+      .catch((reason: unknown) => {
+        if (!cancelled) {
+          setAssignees([]);
+          setAssigneesError(reason instanceof Error ? reason.message : 'Assignee directory is unavailable');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAssigneesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [alert, action]);
 
   if (!alert || !action) return null;
 
@@ -34,7 +93,7 @@ export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActi
     setError(null);
 
     try {
-      let data: any = {};
+      let data: AlertActionSubmission = {};
 
       switch (action) {
         case 'acknowledge':
@@ -46,15 +105,20 @@ export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActi
             setLoading(false);
             return;
           }
-          data = { assigneeId };
+          data = { assigneeId, ...(notes.trim() ? { note: notes.trim() } : {}) };
           break;
         case 'resolve':
-          if (!resolution) {
+          if (!resolutionCode) {
             setError('Please provide a resolution');
             setLoading(false);
             return;
           }
-          data = { resolution, notes };
+          if (resolutionCode === 'OTHER' && !notes.trim()) {
+            setError('Resolution notes are required for Other');
+            setLoading(false);
+            return;
+          }
+          data = { resolutionCode, ...(notes.trim() ? { comment: notes.trim() } : {}) };
           break;
         case 'work-order':
           data = { priority, assigneeId: assigneeId || undefined, notes };
@@ -164,13 +228,30 @@ export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActi
                   onChange={(e) => setAssigneeId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
+                  disabled={assigneesLoading || Boolean(assigneesError)}
                 >
-                  <option value="">Select a technician...</option>
-                  {/* TODO: Fetch technicians from API */}
-                  <option value="tech-1">John Smith - Senior Technician</option>
-                  <option value="tech-2">Sarah Johnson - Network Specialist</option>
-                  <option value="tech-3">Mike Chen - Hardware Engineer</option>
+                  <option value="">{assigneesLoading ? 'Loading assignees...' : 'Select an assignee...'}</option>
+                  {assignees.map((assignee) => (
+                    <option key={assignee.id} value={assignee.id}>
+                      {assignee.displayName}{assignee.role ? ` — ${assignee.role.replaceAll('_', ' ')}` : ''}
+                    </option>
+                  ))}
                 </select>
+                {assigneesError && <p className="mt-2 text-sm text-red-700">{assigneesError}</p>}
+                {!assigneesLoading && !assigneesError && assignees.length === 0 && (
+                  <p className="mt-2 text-sm text-gray-500">No active assignees are available in your scope.</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Note</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Optional context for the assignee"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
               {alert.recommendedAction && (
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded">
@@ -188,18 +269,18 @@ export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActi
                   Resolution *
                 </label>
                 <select
-                  value={resolution}
-                  onChange={(e) => setResolution(e.target.value)}
+                  value={resolutionCode ?? ''}
+                  onChange={(e) => setResolutionCode(e.target.value as AlertActionSubmission['resolutionCode'])}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
                   <option value="">Select resolution...</option>
-                  <option value="fixed">Issue Fixed</option>
-                  <option value="replaced">Component Replaced</option>
-                  <option value="restarted">Service Restarted</option>
-                  <option value="false_positive">False Positive</option>
-                  <option value="workaround">Workaround Applied</option>
-                  <option value="monitoring">Monitoring</option>
+                  <option value="TRUE_POSITIVE_RESOLVED">Issue verified and resolved</option>
+                  <option value="FALSE_POSITIVE">False positive</option>
+                  <option value="DUPLICATE">Duplicate alert</option>
+                  <option value="EXPECTED_ACTIVITY">Expected activity</option>
+                  <option value="MAINTENANCE_SCHEDULED">Maintenance scheduled</option>
+                  <option value="OTHER">Other</option>
                 </select>
               </div>
               <div>
@@ -243,12 +324,16 @@ export function AlertActionModal({ alert, action, onClose, onSubmit }: AlertActi
                   value={assigneeId}
                   onChange={(e) => setAssigneeId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={assigneesLoading || Boolean(assigneesError)}
                 >
-                  <option value="">Assign later...</option>
-                  <option value="tech-1">John Smith - Senior Technician</option>
-                  <option value="tech-2">Sarah Johnson - Network Specialist</option>
-                  <option value="tech-3">Mike Chen - Hardware Engineer</option>
+                  <option value="">{assigneesLoading ? 'Loading assignees...' : 'Assign later...'}</option>
+                  {assignees.map((assignee) => (
+                    <option key={assignee.id} value={assignee.id}>
+                      {assignee.displayName}{assignee.role ? ` — ${assignee.role.replaceAll('_', ' ')}` : ''}
+                    </option>
+                  ))}
                 </select>
+                {assigneesError && <p className="mt-2 text-sm text-red-700">{assigneesError}</p>}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

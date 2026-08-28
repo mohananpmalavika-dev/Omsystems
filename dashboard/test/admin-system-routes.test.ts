@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as getBranches } from "../app/api/admin/system/branches/route";
+import { GET as getCameras } from "../app/api/admin/system/cameras/route";
 import { GET as getGateways } from "../app/api/admin/system/gateways/route";
 import { GET as getStats } from "../app/api/admin/system/stats/route";
 
@@ -54,12 +55,62 @@ describe("admin system routes", () => {
     await expect(response.json()).resolves.toEqual({ error: "branches_unavailable" });
   });
 
+  it("returns a paginated camera inventory with real network and gateway fields", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/cameras?")) {
+        expect(url).toContain("action=device%3Aconfigure");
+        expect(url).toContain("limit=100");
+        expect(url).toContain("offset=200");
+        expect(url).toContain("search=entrance");
+        return Response.json({
+          data: [{
+            id: "camera-201",
+            name: "Entrance",
+            model: "IPC-42",
+            vendor: "other",
+            ipAddress: "10.20.30.40",
+            status: "online",
+            edgeAgentId: "gateway-1",
+            branchId: "branch-1",
+            branchName: "Kochi",
+          }],
+          total: 3000,
+          limit: 100,
+          offset: 200,
+        });
+      }
+      expect(url).toBe("http://control.internal:8080/v1/edge-agents");
+      return Response.json({ data: [{ id: "gateway-1", name: "Kochi gateway" }] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await getCameras(authenticatedRequest(
+      "/api/admin/system/cameras?limit=100&offset=200&search=entrance",
+    ));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      data: [expect.objectContaining({
+        id: "camera-201",
+        ip_address: "10.20.30.40",
+        gateway_name: "Kochi gateway",
+        branch_name: "Kochi",
+      })],
+      total: 3000,
+      limit: 100,
+      offset: 200,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("uses real counts and marks unavailable aggregate metrics as unknown", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith("/v1/admin/cameras/count")) {
-        return Response.json({ total_cameras: "3000" });
+      if (url.includes("/v1/cameras?")) {
+        return Response.json({ total: "3000", data: [] });
       }
       if (url.includes("organization/nodes")) {
         return Response.json({ data: [{ id: "branch-1" }, { id: "branch-2" }] });

@@ -811,6 +811,70 @@ export async function registerOperationalHealthRoutes(
     return reply.send({ success: true, data: timeline });
   });
 
+  app.post("/v1/operations/alerts/:alertId/work-order", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().min(1).max(200) }).parse(request.params);
+    const body = z.object({
+      priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
+      assigneeId: z.string().uuid().optional(),
+      notes: z.string().trim().max(2000).optional(),
+    }).strict().parse(request.body);
+    const parts = alertId.split(":");
+    const branchId = parts[1];
+    if (parts.length < 3 || !branchId) {
+      return reply.code(404).send({ error: "alert_not_found" });
+    }
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch" || branch.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: "alert_not_found" });
+    }
+    const access = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (!access?.allowed) {
+      return reply.code(403).send({ error: "forbidden", reason: access?.reason });
+    }
+
+    const assignee = body.assigneeId ? await store.getUser(body.assigneeId) : undefined;
+    if (body.assigneeId && (!assignee || assignee.tenantId !== request.currentUser.tenantId)) {
+      return reply.code(400).send({ error: "invalid_assignee" });
+    }
+    const workOrderNumber = `OPS-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
+    const workOrder = await store.createWorkOrder({
+      tenantId: request.currentUser.tenantId,
+      workOrderNumber,
+      branchNodeId: branchId,
+      problem: body.notes ? `Operational alert ${alertId}: ${body.notes}` : `Operational alert ${alertId}`,
+      severity: body.priority,
+      ...(assignee ? { technician: assignee.displayName, status: "assigned" as const } : { status: "open" as const }),
+      rootCause: `Generated from operational alert ${alertId}`,
+      createdBy: request.currentUser.id,
+    });
+    const now = new Date();
+    await store.recordOperationalAlertEvent({
+      id: undefined,
+      alertId,
+      tenantId: request.currentUser.tenantId,
+      branchId,
+      eventType: "ALERT_COMMENTED",
+      actorType: "USER",
+      actorUserId: request.currentUser.id,
+      actorUserName: request.currentUser.displayName,
+      metadata: { kind: "work_order_created", workOrderId: workOrder.id, workOrderNumber },
+      requestId: request.id,
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"],
+      occurredAt: now,
+      createdAt: now,
+    });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.workorder_created_from_alert",
+      resourceNodeId: branchId,
+      outcome: "success",
+      details: { alertId, workOrderId: workOrder.id, workOrderNumber },
+    });
+    return reply.code(201).send({ success: true, data: { workOrderId: workOrder.id, workOrderNumber } });
+  });
+
   // =====================================================================
   // ALERT LISTING (existing endpoint)
   // =====================================================================
@@ -818,7 +882,7 @@ export async function registerOperationalHealthRoutes(
   app.get("/v1/operations/alerts", async (request) => {
     const query = z.object({
       severity: z.enum(["critical", "warning", "info"]).optional(),
-      status: z.enum(["active", "acknowledged", "resolved"]).optional(),
+      status: z.enum(["active", "acknowledged", "assigned", "resolved", "suppressed", "reopened"]).optional(),
       branchId: z.string().optional(),
       component: z.string().max(100).optional(),
       limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -946,12 +1010,68 @@ export async function registerOperationalHealthRoutes(
       return [...componentAlerts, ...retentionAlerts];
     });
     alerts = [...diskAlerts, ...networkAlerts, ...recorderAlerts, ...alerts];
+    const alertEvents = await store.listOperationalAlertEventsForAlerts(
+      request.currentUser.tenantId,
+      alerts.map((alert) => alert.id),
+    );
+    alerts = projectOperationalAlertEvents(alerts, alertEvents);
     if (query.severity) alerts = alerts.filter((alert) => alert.severity === query.severity);
     if (query.status) alerts = alerts.filter((alert) => alert.status === query.status);
     if (query.component) alerts = alerts.filter((alert) => alert.componentType === query.component);
     const total = alerts.length;
     return { success: true, data: { alerts: alerts.slice(query.offset, query.offset + query.limit), total, limit: query.limit, offset: query.offset } };
   });
+}
+
+function projectOperationalAlertEvents<T extends { id: string }>(alerts: T[], events: any[]): T[] {
+  const eventsByAlert = new Map<string, any[]>();
+  for (const event of events) {
+    if (typeof event?.alertId !== "string") continue;
+    const selected = eventsByAlert.get(event.alertId) ?? [];
+    selected.push(event);
+    eventsByAlert.set(event.alertId, selected);
+  }
+
+  return alerts.map((alert) => {
+    const projection: Record<string, unknown> = {};
+    for (const event of eventsByAlert.get(alert.id) ?? []) {
+      const occurredAt = eventTime(event);
+      if (typeof event.newStatus === "string") projection.status = event.newStatus;
+      switch (event.eventType) {
+        case "ALERT_ACKNOWLEDGED":
+          projection.acknowledgedAt = occurredAt;
+          projection.acknowledgedBy = event.actorUserId ?? null;
+          projection.acknowledgedByName = event.actorUserName ?? null;
+          break;
+        case "ALERT_ASSIGNED":
+        case "ALERT_REASSIGNED":
+          projection.assignedAt = occurredAt;
+          projection.assignedTo = event.targetUserId ?? null;
+          projection.assignedToName = event.targetUserName ?? null;
+          break;
+        case "ALERT_RESOLVED":
+        case "ALERT_AUTO_RESOLVED":
+          projection.resolvedAt = occurredAt;
+          projection.resolvedBy = event.actorUserId ?? null;
+          projection.resolvedByName = event.actorUserName ?? event.actorService ?? null;
+          projection.resolution = event.metadata?.resolutionCode ?? event.metadata?.comment ?? null;
+          break;
+        case "ALERT_COMMENTED":
+          if (event.metadata?.kind === "work_order_created" && typeof event.metadata.workOrderId === "string") {
+            projection.workOrderId = event.metadata.workOrderId;
+          }
+          break;
+      }
+    }
+    return { ...alert, ...projection } as T;
+  });
+}
+
+function eventTime(event: any): string {
+  const value = event?.occurredAt ?? event?.createdAt;
+  if (value instanceof Date) return value.toISOString();
+  const parsed = typeof value === "string" ? new Date(value) : null;
+  return parsed && Number.isFinite(parsed.getTime()) ? parsed.toISOString() : new Date(0).toISOString();
 }
 
 async function loadAccessibleProjections(

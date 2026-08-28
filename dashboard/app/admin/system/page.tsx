@@ -14,11 +14,15 @@ type Gateway = {
 
 type CameraType = {
   id: string;
+  name: string;
   model: string;
-  ip_address: string;
+  vendor: string | null;
+  ip_address: string | null;
   status: string;
   edge_agent_id: string | null;
-  gateway_name?: string;
+  gateway_name: string | null;
+  branch_id: string | null;
+  branch_name: string | null;
 };
 
 type Branch = {
@@ -37,6 +41,8 @@ type Stats = {
 };
 
 type ManagedResource = "gateway" | "camera";
+
+const CAMERA_PAGE_SIZE = 100;
 
 function getDeleteErrorMessage(body: { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null, fallback = 'Failed to delete. Please try again.') {
   const nestedDetails = typeof body?.details === 'string'
@@ -77,6 +83,10 @@ export default function SystemManagementPage() {
   const [gateways, setGateways] = useState<Gateway[]>([]);
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [cameraTotal, setCameraTotal] = useState(0);
+  const [cameraOffset, setCameraOffset] = useState(0);
+  const [cameraSearchInput, setCameraSearchInput] = useState("");
+  const [cameraSearch, setCameraSearch] = useState("");
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -85,9 +95,12 @@ export default function SystemManagementPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: ManagedResource; id: string; name: string } | null>(null);
 
   useEffect(() => {
-    loadStats();
-    loadData();
-  }, [tab]);
+    void loadStats();
+  }, []);
+
+  useEffect(() => {
+    void loadData();
+  }, [tab, cameraOffset, cameraSearch]);
 
   const loadStats = async () => {
     try {
@@ -110,7 +123,12 @@ export default function SystemManagementPage() {
       if (tab === 'gateways') {
         response = await fetch('/api/admin/system/gateways');
       } else if (tab === 'cameras') {
-        response = await fetch('/api/admin/system/cameras');
+        const query = new URLSearchParams({
+          limit: String(CAMERA_PAGE_SIZE),
+          offset: String(cameraOffset),
+        });
+        if (cameraSearch) query.set('search', cameraSearch);
+        response = await fetch(`/api/admin/system/cameras?${query}`);
       } else if (tab === 'branches') {
         response = await fetch('/api/admin/system/branches');
       } else {
@@ -118,10 +136,17 @@ export default function SystemManagementPage() {
       }
       if (!response.ok) throw new Error(await responseError(response, `Unable to load ${tab}`));
       const data = await response.json();
-      if (!Array.isArray(data)) throw new Error(`Invalid ${tab} response`);
-      if (tab === 'gateways') setGateways(data);
-      else if (tab === 'cameras') setCameras(data);
-      else setBranches(data);
+      if (tab === 'cameras') {
+        if (!Array.isArray(data?.data) || !Number.isSafeInteger(data?.total)) {
+          throw new Error('Invalid cameras response');
+        }
+        setCameras(data.data);
+        setCameraTotal(data.total);
+      } else {
+        if (!Array.isArray(data)) throw new Error(`Invalid ${tab} response`);
+        if (tab === 'gateways') setGateways(data);
+        else setBranches(data);
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
       setDataError(error instanceof Error ? error.message : `Unable to load ${tab}`);
@@ -144,7 +169,11 @@ export default function SystemManagementPage() {
       if (response.ok) {
         setDeleteConfirm(null);
         await loadStats();
-        await loadData();
+        if (type === 'camera' && cameras.length === 1 && cameraOffset > 0) {
+          setCameraOffset(Math.max(0, cameraOffset - CAMERA_PAGE_SIZE));
+        } else {
+          await loadData();
+        }
       } else {
         const body = await response.json().catch(() => null) as { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null;
         alert(getDeleteErrorMessage(body));
@@ -224,7 +253,10 @@ export default function SystemManagementPage() {
           </button>
           <button
             className={tab === "cameras" ? "active" : ""}
-            onClick={() => setTab("cameras")}
+            onClick={() => {
+              setCameraOffset(0);
+              setTab("cameras");
+            }}
           >
             <Camera size={16} /> Cameras
           </button>
@@ -251,6 +283,39 @@ export default function SystemManagementPage() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {tab === 'cameras' && (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    setCameraOffset(0);
+                    setCameraSearch(cameraSearchInput.trim());
+                  }}
+                  style={{ display: 'flex', gap: '0.5rem' }}
+                >
+                  <input
+                    aria-label="Search cameras"
+                    value={cameraSearchInput}
+                    onChange={(event) => setCameraSearchInput(event.target.value)}
+                    placeholder="Search name or model"
+                    maxLength={120}
+                    style={{ padding: '0.5rem 0.75rem', border: '1px solid var(--line)', borderRadius: '4px', background: 'var(--surface)', color: 'var(--ink)' }}
+                  />
+                  <button type="submit" style={{ padding: '0.5rem 0.75rem' }}>Search</button>
+                  {cameraSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCameraSearchInput('');
+                        setCameraSearch('');
+                        setCameraOffset(0);
+                      }}
+                      style={{ padding: '0.5rem 0.75rem' }}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </form>
+              )}
               <button
                 onClick={loadData}
                 style={{
@@ -357,9 +422,11 @@ export default function SystemManagementPage() {
                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ background: 'var(--canvas)', borderBottom: '2px solid var(--line)' }}>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Camera</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Model</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>IP Address</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Gateway</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Branch</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Status</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>ID</th>
                           <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--muted)' }}>Actions</th>
@@ -368,9 +435,11 @@ export default function SystemManagementPage() {
                       <tbody>
                         {cameras.map((camera) => (
                           <tr key={camera.id} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '1rem', color: 'var(--ink)', fontWeight: 600 }}>{camera.name}</td>
                             <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.model}</td>
-                            <td style={{ padding: '1rem', fontFamily: 'monospace', color: 'var(--ink)' }}>{camera.ip_address}</td>
-                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.gateway_name || 'None'}</td>
+                            <td style={{ padding: '1rem', fontFamily: 'monospace', color: 'var(--ink)' }}>{camera.ip_address || 'Not reported'}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.gateway_name || 'Unassigned'}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{camera.branch_name || 'Unknown'}</td>
                             <td style={{ padding: '1rem' }}>
                               <span style={{
                                 padding: '0.25rem 0.75rem',
@@ -389,7 +458,7 @@ export default function SystemManagementPage() {
                             </td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
                               <button
-                                onClick={() => setDeleteConfirm({ type: 'camera', id: camera.id, name: camera.model })}
+                                onClick={() => setDeleteConfirm({ type: 'camera', id: camera.id, name: camera.name })}
                                 style={{
                                   padding: '0.25rem 0.5rem',
                                   background: '#dc3545',
@@ -407,6 +476,29 @@ export default function SystemManagementPage() {
                         ))}
                       </tbody>
                     </table>
+                  )}
+                  {cameraTotal > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem', borderTop: '1px solid var(--line)' }}>
+                      <span style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+                        Showing {cameraOffset + 1}–{Math.min(cameraOffset + cameras.length, cameraTotal)} of {cameraTotal.toLocaleString()}
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          type="button"
+                          disabled={cameraOffset === 0 || loading}
+                          onClick={() => setCameraOffset(Math.max(0, cameraOffset - CAMERA_PAGE_SIZE))}
+                        >
+                          Previous
+                        </button>
+                        <button
+                          type="button"
+                          disabled={cameraOffset + cameras.length >= cameraTotal || loading}
+                          onClick={() => setCameraOffset(cameraOffset + CAMERA_PAGE_SIZE)}
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}

@@ -279,6 +279,70 @@ describe("Phase 1 operational health", () => {
     expect(byDevice.get("nvr-storage-alerts:disk:4")).toMatchObject({ severity: "critical", title: expect.stringContaining("recording write failed") });
   });
 
+  it("persists alert actions and creates a real maintenance work order", async () => {
+    const observedAt = new Date().toISOString();
+    const accepted = await app.inject({
+      method: "POST", url: `/v1/edge-agents/${agentId}/recorder-hdd`, headers: admin,
+      payload: {
+        branchId: "branch-blr-001", recorderId: "nvr-action-test", observedAt,
+        source: "cp-plus-adapter", idempotencyKey: `nvr-action-test:${observedAt}`,
+        hddStatus: [{ diskNo: 1, state: "failed", serial: "ACTION-FAIL-1" }],
+      },
+    });
+    expect(accepted.statusCode).toBe(202);
+
+    const active = await app.inject({
+      method: "GET", url: "/v1/operations/alerts?component=storage&status=active", headers: admin,
+    });
+    const alert = active.json().data.alerts.find((item: { deviceId: string }) =>
+      item.deviceId === "nvr-action-test:disk:1",
+    );
+    expect(alert).toBeDefined();
+
+    const acknowledged = await app.inject({
+      method: "POST",
+      url: `/v1/operations/alerts/${encodeURIComponent(alert.id)}/acknowledge`,
+      headers: admin,
+      payload: { comment: "SOC accepted the disk replacement task" },
+    });
+    expect(acknowledged.statusCode).toBe(200);
+
+    const workOrder = await app.inject({
+      method: "POST",
+      url: `/v1/operations/alerts/${encodeURIComponent(alert.id)}/work-order`,
+      headers: admin,
+      payload: { priority: "critical", notes: "Replace failed recorder disk" },
+    });
+    expect(workOrder.statusCode).toBe(201);
+    expect(workOrder.json().data.workOrderId).toEqual(expect.any(String));
+
+    const projected = await app.inject({
+      method: "GET", url: "/v1/operations/alerts?component=storage&status=acknowledged", headers: admin,
+    });
+    expect(projected.json().data.alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: alert.id,
+        status: "acknowledged",
+        acknowledgedByName: "Global Surveillance Director",
+        workOrderId: workOrder.json().data.workOrderId,
+      }),
+    ]));
+
+    const resolved = await app.inject({
+      method: "POST",
+      url: `/v1/operations/alerts/${encodeURIComponent(alert.id)}/resolve`,
+      headers: admin,
+      payload: { resolutionCode: "MAINTENANCE_SCHEDULED", comment: "Work order created" },
+    });
+    expect(resolved.statusCode).toBe(200);
+    const resolvedList = await app.inject({
+      method: "GET", url: "/v1/operations/alerts?component=storage&status=resolved", headers: admin,
+    });
+    expect(resolvedList.json().data.alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: alert.id, status: "resolved", resolution: "MAINTENANCE_SCHEDULED" }),
+    ]));
+  });
+
   it("publishes a warning before retained footage falls below policy", async () => {
     const now = Date.now();
     await store.createRecordingSegment({
