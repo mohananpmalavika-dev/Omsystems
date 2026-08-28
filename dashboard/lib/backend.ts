@@ -47,6 +47,23 @@ export async function listCameras(
   }));
 }
 
+export async function checkCameraAccess(
+  cameraId: string,
+  employeeSession?: string,
+  action = "live:view",
+): Promise<{ allowed: boolean; reason: string; requiresApproval: boolean }> {
+  const response = await controlFetch(
+    `/v1/cameras/${encodeURIComponent(cameraId)}/check-access?action=${encodeURIComponent(action)}`,
+    undefined,
+    employeeSession,
+  );
+  return await response.json() as {
+    allowed: boolean;
+    reason: string;
+    requiresApproval: boolean;
+  };
+}
+
 export async function startLive(
   cameraId: string,
   employeeSession?: string,

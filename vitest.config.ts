@@ -8,6 +8,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/.git/**",
       "**/dist/**",
+      "Omsystems/**",
       "dashboard/e2e/**",
     ],
   },

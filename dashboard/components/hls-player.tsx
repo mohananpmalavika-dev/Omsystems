@@ -54,9 +54,6 @@ export function HlsPlayer({
   }, [onVideoElementChange]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
     let hls: Hls | null = null;
     let disposed = false;
     let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -64,6 +61,28 @@ export function HlsPlayer({
     let recoveryAttempts = 0;
     let lastProgressAt = Date.now();
     let playbackStarted = false;
+
+    if (!url) {
+      setStatus("idle");
+      setError(null);
+      return;
+    }
+
+    const isSnapshotFeed = url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url);
+    if (isSnapshotFeed) {
+      setStatus("loading");
+      setError(null);
+      const refreshTimer = setInterval(() => {
+        if (!disposed) setRetryNonce((value) => value + 1);
+      }, 2_500);
+      return () => {
+        disposed = true;
+        clearInterval(refreshTimer);
+      };
+    }
+
+    const video = videoRef.current;
+    if (!video) return;
 
     const setPlayerError = (reason: string) => {
       if (disposed) return;
@@ -134,33 +153,6 @@ export function HlsPlayer({
     video.addEventListener("waiting", handleWaiting);
     video.addEventListener("stalled", handleWaiting);
     video.addEventListener("error", handleVideoError);
-
-    if (!url) {
-      setStatus("idle");
-      return () => {
-        disposed = true;
-        video.removeEventListener("playing", markProgress);
-        video.removeEventListener("timeupdate", markProgress);
-        video.removeEventListener("progress", handleProgress);
-        video.removeEventListener("canplay", handleCanPlay);
-        video.removeEventListener("waiting", handleWaiting);
-        video.removeEventListener("stalled", handleWaiting);
-        video.removeEventListener("error", handleVideoError);
-      };
-    }
-
-    const isSnapshotFeed = url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url);
-    if (isSnapshotFeed) {
-      setStatus("live");
-      setError(null);
-      const refreshTimer = setInterval(() => {
-        if (!disposed) setRetryNonce((v) => v + 1);
-      }, 2_500);
-      return () => {
-        disposed = true;
-        clearInterval(refreshTimer);
-      };
-    }
 
     const streamUrl = withToken(url, bearerToken);
     setStatus("loading");
@@ -253,11 +245,16 @@ export function HlsPlayer({
     <div className="relative h-full w-full overflow-hidden bg-slate-950">
       {isSnapshotFeed ? (
         <img
-          src={withToken(url.includes("?") ? `${url}&_t=${retryNonce}` : `${url}?_t=${retryNonce}`, bearerToken)}
+          src={snapshotSource(url, bearerToken, retryNonce)}
           alt={`Live video from ${cameraName}`}
           className="live-video h-full w-full object-cover"
           onLoad={() => { setStatus("live"); setError(null); }}
-          onError={() => { setError("Connecting to camera frame feed..."); }}
+          onError={() => {
+            const reason = "Camera frame is unavailable";
+            setStatus("error");
+            setError(reason);
+            playbackErrorRef.current?.(reason);
+          }}
         />
       ) : (
         <video
@@ -306,6 +303,20 @@ function withToken(value: string, bearerToken: string) {
   try {
     const url = new URL(value, typeof window === "undefined" ? "http://localhost" : window.location.origin);
     url.searchParams.set("token", bearerToken);
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function snapshotSource(value: string, bearerToken: string, retryNonce: number) {
+  try {
+    const base = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+    const url = new URL(value, base);
+    url.searchParams.set("_t", String(retryNonce));
+    if (bearerToken && url.origin !== new URL(base).origin) {
+      url.searchParams.set("token", bearerToken);
+    }
     return url.toString();
   } catch {
     return value;

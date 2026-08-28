@@ -102,4 +102,26 @@ describe("browser live startup", () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
+
+  it("reports an unavailable gateway instead of manufacturing a snapshot feed", async () => {
+    vi.stubGlobal("window", { location: { protocol: "https:" } });
+    vi.stubGlobal("localStorage", { getItem: vi.fn(() => null) });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/live" && fetchMock.mock.calls.length === 1) {
+        return Response.json({
+          cameraId: "camera-1",
+          direct: {
+            url: "http://192.168.29.101:8090/v1/live/start",
+            controlPlaneToken: "t".repeat(43),
+          },
+        }, { status: 201 });
+      }
+      return Response.json({ error: "media_gateway_unavailable" }, { status: 503 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startLiveFromBrowser("camera-1")).rejects.toThrow("media_gateway_unavailable");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes("snapshot-relay"))).toBe(false);
+  });
 });

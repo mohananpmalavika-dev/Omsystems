@@ -3,10 +3,14 @@ import { NextResponse } from "next/server";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
+import { checkCameraAccess } from "../../../../lib/backend";
+import { getLiveSessionToken } from "../../../../lib/live-auth";
 
 export const dynamic = "force-dynamic";
 
-// Global dynamic frame cache for real camera feeds across all client branches
+// Read-only compatibility cache. A frame is returned only after the current
+// employee passes the control plane's normal camera access check.
 const globalFrames = globalThis as unknown as { __realCctvFrames?: Map<string, { buffer: Buffer; updatedAt: number }> };
 if (!globalFrames.__realCctvFrames) {
   globalFrames.__realCctvFrames = new Map();
@@ -14,35 +18,39 @@ if (!globalFrames.__realCctvFrames) {
 const frameStore = globalFrames.__realCctvFrames;
 const FRAME_DIR = join(tmpdir(), "sentinel_cctv_frames");
 
-async function ensureFrameDir() {
-  try {
-    await fs.mkdir(FRAME_DIR, { recursive: true });
-  } catch {
-    // Already exists
-  }
-}
-void ensureFrameDir();
-
-function sanitizeKey(k: string): string {
-  return k.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase();
+function frameFileName(cameraId: string): string {
+  return `${createHash("sha256").update(cameraId).digest("hex")}.jpg`;
 }
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
-  const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
+  const targetKey = (url.searchParams.get("cameraId") || url.searchParams.get("id") || "").trim();
+  if (!targetKey || targetKey.length > 200) {
+    return NextResponse.json({ error: "camera_id_required" }, { status: 400 });
+  }
+
+  const sessionToken = getLiveSessionToken({
+    cookieToken: request.cookies.get("sentinel_access")?.value,
+    sentinelSession: request.headers.get("x-sentinel-session"),
+    authorization: request.headers.get("authorization"),
+  });
+  if (!sessionToken && process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
+  try {
+    const access = await checkCameraAccess(targetKey, sessionToken);
+    if (!access.allowed) {
+      return NextResponse.json({ error: "camera_access_denied" }, { status: 403 });
+    }
+  } catch {
+    return NextResponse.json({ error: "camera_authorization_unavailable" }, { status: 503 });
+  }
 
   const now = Date.now();
-  
+
   // Try memory first
-  let cached = frameStore.get(targetKey) || frameStore.get(targetKey.toLowerCase());
-  
-  if (!cached) {
-    const chMatch = targetKey.match(/ch(?:annel)?\s*([1-8])/i) || targetKey.match(/ch-?([1-8])/i);
-    if (chMatch) {
-      const chNum = chMatch[1];
-      cached = frameStore.get(`ch${chNum}`) || frameStore.get(`CP PLUS DVR Ch ${chNum}`) || frameStore.get(`192.168.29.171:${chNum}`);
-    }
-  }
+  const cached = frameStore.get(targetKey);
 
   if (cached && cached.buffer.length > 0) {
     return new NextResponse(new Uint8Array(cached.buffer), {
@@ -58,7 +66,7 @@ export async function GET(request: NextRequest) {
 
   // Fallback to disk cache
   try {
-    const diskPath = join(FRAME_DIR, `${sanitizeKey(targetKey)}.jpg`);
+    const diskPath = join(FRAME_DIR, frameFileName(targetKey));
     const fileBuf = await fs.readFile(diskPath);
     if (fileBuf && fileBuf.length > 0) {
       return new NextResponse(new Uint8Array(fileBuf), {
@@ -78,45 +86,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ error: "no_frame_available", target: targetKey }, { status: 404 });
 }
 
-export async function POST(request: NextRequest) {
-  try {
-    const url = new URL(request.url);
-    const targetKey = url.searchParams.get("cameraId") || url.searchParams.get("id") || url.searchParams.get("channel") || url.searchParams.get("ch") || "default";
-
-    const contentType = request.headers.get("content-type") || "";
-    let imageBuffer: Buffer;
-
-    if (contentType.includes("application/json")) {
-      const body = await request.json() as { cameraId?: string; channel?: number | string; imageBase64?: string; base64?: string };
-      const base64Data = body.imageBase64 || body.base64 || "";
-      imageBuffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ""), "base64");
-    } else {
-      const arrayBuffer = await request.arrayBuffer();
-      imageBuffer = Buffer.from(arrayBuffer);
-    }
-
-    if (imageBuffer.length > 500) {
-      const entry = {
-        buffer: imageBuffer,
-        updatedAt: Date.now(),
-      };
-      frameStore.set(targetKey, entry);
-      frameStore.set(targetKey.toLowerCase(), entry);
-
-      // Save to disk asynchronously
-      void ensureFrameDir().then(() => {
-        const diskPath = join(FRAME_DIR, `${sanitizeKey(targetKey)}.jpg`);
-        return fs.writeFile(diskPath, imageBuffer);
-      }).catch(() => undefined);
-
-      return NextResponse.json({ success: true, target: targetKey, size: imageBuffer.length });
-    }
-
-    return NextResponse.json({ error: "invalid_frame_data" }, { status: 400 });
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "upload_failed" },
-      { status: 500 },
-    );
-  }
+export async function POST() {
+  return NextResponse.json(
+    { error: "snapshot_upload_not_supported" },
+    { status: 405, headers: { Allow: "GET" } },
+  );
 }

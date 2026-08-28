@@ -34,12 +34,13 @@ export async function startLiveFromBrowser(
     if (!isBrowserDirectLiveStart(publicRoute)) return publicRoute;
     const publicDirect = await startDirectSession(publicRoute, signal);
     if (publicDirect) return publicDirect;
-  } catch {
-    // Preserve the existing snapshot-relay fallback below. It provides a
-    // useful degraded tile when neither local nor public media is reachable.
+  } catch (error) {
+    if (signal.aborted) throw timeoutError(signal.reason ?? error);
+    if (error instanceof Error) throw error;
+    throw new Error("media_gateway_unavailable");
   }
 
-  return snapshotRelay(cameraId, authorization.direct.controlPlaneToken);
+  throw new Error("media_gateway_unavailable");
 }
 
 async function requestLiveAuthorization(
@@ -110,22 +111,6 @@ async function startDirectSession(
     return rewriteLiveMediaUrls(localBody as LiveSessionResponse, candidate.url);
   }
   return undefined;
-}
-
-function snapshotRelay(cameraId: string, controlPlaneToken: string): LiveSessionResponse {
-  return {
-    sessionId: controlPlaneToken,
-    cameraId,
-    expiresAt: new Date(Date.now() + 300_000).toISOString(),
-    hls: {
-      url: `/api/media/snapshot-relay?cameraId=${encodeURIComponent(cameraId)}`,
-      bearerToken: controlPlaneToken,
-    },
-    webRtc: {
-      whepUrl: "",
-      bearerToken: controlPlaneToken,
-    },
-  };
 }
 
 function isBrowserDirectLiveStart(value: unknown): value is BrowserDirectLiveStart {

@@ -26,6 +26,9 @@ analytics-engine/models/**/*.part-*
 .idea/
 .vscode/
 
+# Local nested checkout (not part of the application workspace)
+/Omsystems/
+
 # Ignore generated branch activation keys
 edge-agent/installation-keys*.txt
 

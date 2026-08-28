@@ -6154,3 +6154,382 @@ body {
   .command-center-metrics > div { min-height: 112px; }
 }
 @media (prefers-reduced-motion: reduce) { .command-center-metrics > div, .command-center-hero > div:last-child :where(a, button) { transition: none; } }
+
+/* ===========================================================================
+   Cross-route design stabilization
+   Keep the navigation shell, legacy utility pages, and dense operational
+   modules readable and responsive from one final cascade layer.
+   ========================================================================== */
+:root {
+  --sidebar-ink: #f3f7fd;
+  --sidebar-copy: #afc0d5;
+  --sidebar-muted-copy: #839ab7;
+  --control-height: 40px;
+}
+
+.app-shell,
+.workspace,
+.route-surface,
+.route-surface > * {
+  min-width: 0;
+}
+
+.route-surface {
+  overflow-x: clip;
+}
+
+.route-surface > * {
+  max-width: 100%;
+}
+
+/* The sidebar is intentionally fixed-dark in every content theme. */
+.sidebar {
+  color: var(--sidebar-copy);
+}
+
+.sidebar .brand-copy strong,
+.sidebar .sidebar-status strong,
+.sidebar .sidebar-user strong {
+  color: var(--sidebar-ink);
+}
+
+.sidebar .brand-copy span,
+.sidebar .sidebar-status span,
+.sidebar .sidebar-user span,
+.sidebar .sidebar-legal,
+.sidebar .nav-group-meta small {
+  color: var(--sidebar-muted-copy);
+}
+
+.sidebar .mobile-close {
+  color: var(--sidebar-ink);
+}
+
+.sidebar .command-search {
+  color: var(--sidebar-copy);
+}
+
+.sidebar .command-search kbd {
+  color: #9eb2ca;
+  border-color: rgba(255,255,255,.13);
+  background: rgba(255,255,255,.055);
+}
+
+.sidebar .nav-shortcuts a,
+.sidebar .nav-utility > :where(a, button),
+.sidebar .nav-group summary,
+.sidebar .main-nav a,
+.sidebar .sidebar-help {
+  color: var(--sidebar-copy);
+}
+
+.sidebar .nav-shortcuts a:hover,
+.sidebar .nav-utility > :where(a, button):hover,
+.sidebar .nav-group summary:hover,
+.sidebar .main-nav a:hover,
+.sidebar .sidebar-help:hover {
+  color: var(--sidebar-ink);
+}
+
+.sidebar .nav-shortcuts a { font-size: 11px; }
+.sidebar .nav-utility > a { font-size: 11px; }
+.sidebar .nav-utility > a small { font-size: 10px; }
+.sidebar .nav-group summary { min-height: 34px; font-size: 10px; }
+.sidebar .nav-group-meta small { font-size: 9px; }
+.sidebar .main-nav a { min-height: 40px; font-size: 12px; }
+.sidebar .sidebar-help { font-size: 11px; }
+.sidebar .sidebar-legal { font-size: 10px; }
+.sidebar .sidebar-status strong,
+.sidebar .sidebar-user strong { font-size: 12px; }
+.sidebar .sidebar-status span,
+.sidebar .sidebar-user span { font-size: 10px; line-height: 1.35; }
+
+/* Shared typography and controls. Tiny operational labels were difficult to
+   scan at normal desktop distance and failed quickly on high-density screens. */
+.breadcrumbs { font-size: 11px; }
+.topbar-title { font-size: 20px; line-height: 1.2; }
+.live-state { font-size: 11px; }
+.page-hero-eyebrow,
+.eyebrow { font-size: 10px; }
+.page-hero-description { font-size: 13px; line-height: 1.6; }
+.page-hero-actions :where(a, button) { min-height: var(--control-height); font-size: 12px; }
+.page-hero-status span { font-size: 10px; }
+.page-hero-status strong { font-size: 12px; }
+.page-alert { font-size: 12px; }
+.summary-copy span,
+.summary-copy small { font-size: 12px; }
+.branch-tabs strong { font-size: 12px; }
+.branch-tabs small,
+.live-heading p { font-size: 11px; }
+.workspace th { font-size: 11px; line-height: 1.35; }
+.workspace td { font-size: 12px; line-height: 1.45; }
+
+.route-surface :where(
+  .text-\[6px\], .text-\[6\.5px\], .text-\[7px\], .text-\[7\.5px\],
+  .text-\[8px\], .text-\[8\.5px\], .text-\[9px\], .text-\[9\.5px\],
+  .text-\[10px\], .text-\[10\.5px\], .text-\[11px\]
+) {
+  font-size: .75rem !important;
+  line-height: 1.45;
+}
+
+.command-results-heading > span,
+.command-results-heading > a,
+.command-results > a strong,
+.command-results > a small,
+.command-dialog > footer,
+.create-menu > summary,
+.create-menu-panel > p,
+.create-menu-panel > a strong {
+  font-size: 11px;
+}
+
+.command-results > a { min-height: 58px; }
+
+/* Theme switcher is part of the shell, so it cannot rely on route-level
+   Tailwind color translation. */
+.theme-switcher-trigger {
+  min-height: 36px;
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  background: color-mix(in srgb, var(--surface) 90%, transparent) !important;
+}
+
+.theme-switcher-trigger:hover {
+  color: var(--blue-dark) !important;
+  border-color: color-mix(in srgb, var(--blue) 45%, var(--line)) !important;
+  background: var(--blue-soft) !important;
+}
+
+.theme-switcher-panel {
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  background: color-mix(in srgb, var(--surface) 96%, transparent) !important;
+  box-shadow: var(--shadow-panel) !important;
+}
+
+.theme-switcher-heading {
+  color: var(--muted) !important;
+  border-color: var(--line) !important;
+  font-size: 11px !important;
+}
+
+.theme-switcher-option {
+  color: var(--ink) !important;
+  font-size: 12px !important;
+}
+
+.theme-switcher-option:hover {
+  background: var(--surface-soft) !important;
+}
+
+.theme-switcher-description {
+  color: var(--muted) !important;
+  font-size: 11px !important;
+}
+
+/* Dense administration, reporting, compliance, directory, support, and
+   device-manager modules share a readable copy floor. */
+.device-manager :where(p, small, label, summary, button, input, select, textarea, code),
+.module-directory-page :where(p, small, label, button, a),
+.compliance-hub-page :where(p, small, label, button, a),
+.compliance-create-page :where(p, small, label, button, a),
+.compliance-record-page :where(p, small, label, button, a),
+.support-page :where(p, small, label, button, a),
+.legal-page :where(p, small, label, button, a),
+.employee-report-page :where(p, small, label, time, button, a, em) {
+  font-size: max(.75rem, 1em) !important;
+}
+
+.device-toolbar p,
+.device-card-heading p,
+.device-advanced-content > p,
+.remote-camera-note span,
+.branch-connectivity-heading p,
+.connectivity-option small,
+.connectivity-guidance p,
+.gateway-row small,
+.camera-inventory-row small,
+.device-empty span,
+.field-help {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.device-message,
+.device-scope label,
+.device-scope select,
+.device-scope span,
+.connectivity-fields label,
+.connectivity-fields input,
+.connectivity-fields select,
+.connectivity-feedback,
+.connectivity-empty,
+.gateway-row strong,
+.camera-inventory-row strong,
+.inventory-status,
+.gateway-actions .gateway-action-text {
+  font-size: 12px;
+}
+
+.device-card-heading h3,
+.branch-connectivity-heading h3 { font-size: 14px; }
+.connectivity-status { font-size: 10px; }
+.connectivity-option strong { font-size: 12px; }
+
+.module-directory-page :where(.directory-toolbar > span, .directory-group header p, .directory-group header div > span, .directory-module-grid small),
+.compliance-hub-page :where(.compliance-hub-summary-card > span, .compliance-hub-summary-card > p, .compliance-hub-heading p, .compliance-hub-module p, .compliance-hub-module-action, .compliance-capability-grid p, .compliance-controls-count),
+.compliance-create-page :where(.compliance-create-form header span, .compliance-form-grid label > span, .compliance-form-checks label, .compliance-form-error),
+.compliance-record-page :where(.compliance-record-panel header span, .compliance-record-panel header strong, .compliance-record-panel header em, .compliance-record-grid article span, .compliance-record-grid article strong),
+.support-page :where(.support-panel header span, .support-panel header p, .support-option-grid p, .support-option-grid em, .support-escalation span, .support-escalation p),
+.legal-page :where(.legal-updated, .legal-panel section p),
+.employee-report-page :where(.employee-table-head, .employee-table-row, .employee-timeline-head, .employee-timeline-row, .employee-report-empty) {
+  font-size: 12px !important;
+  line-height: 1.5;
+}
+
+/* Keep intrinsically wide operational data inside the page instead of
+   expanding the entire workspace. */
+.route-surface :where(
+  .user-table-container,
+  .permission-table-container,
+  .incident-table-panel,
+  .employee-table,
+  .employee-timeline-list,
+  .table-container,
+  [class$="-table-container"]
+) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-gutter: stable;
+}
+
+.modal-overlay { padding: clamp(8px, 3vw, 24px); }
+.modal-container {
+  width: min(650px, 100%);
+  max-height: min(88dvh, 820px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* Video and live-wall canvases must stay dark even when a light content theme
+   translates legacy slate utility classes into surface colors. */
+[data-theme="light"] .route-surface :where(
+  .feed-stage,
+  .zoom-stage,
+  .camera-wall,
+  .fullscreen-content,
+  [class*="video-stage"],
+  [class*="player-stage"],
+  [class*="video-wall"]
+),
+html.light .route-surface :where(
+  .feed-stage,
+  .zoom-stage,
+  .camera-wall,
+  .fullscreen-content,
+  [class*="video-stage"],
+  [class*="player-stage"],
+  [class*="video-wall"]
+) {
+  color: #e8f0fb !important;
+  background: #071522 !important;
+}
+
+[data-theme="light"] .route-surface :where(
+  .feed-stage,
+  .camera-wall,
+  .fullscreen-content,
+  [class*="video-stage"],
+  [class*="player-stage"],
+  [class*="video-wall"]
+) :where(.text-white, [class*="text-slate-"]),
+html.light .route-surface :where(
+  .feed-stage,
+  .camera-wall,
+  .fullscreen-content,
+  [class*="video-stage"],
+  [class*="player-stage"],
+  [class*="video-wall"]
+) :where(.text-white, [class*="text-slate-"]) {
+  color: #e8f0fb !important;
+}
+
+/* The hardware lifecycle route used to mount a second full-screen dark canvas
+   inside the application shell. It now behaves like every other content page. */
+.device-management-page {
+  min-height: calc(100dvh - 78px);
+  color: var(--ink);
+  background: transparent;
+}
+
+.device-management-layout { width: min(100%, 1280px); }
+
+[data-theme="light"] .device-management-page :where(.bg-slate-950, .bg-slate-900\/90) {
+  color: var(--ink) !important;
+  border-color: var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 991px) {
+  .topbar-context { flex: 1 1 auto; }
+  .topbar-actions { flex: 0 0 auto; }
+  .route-surface > :where(.min-h-screen) { min-height: calc(100dvh - 78px); }
+}
+
+@media (max-width: 760px) {
+  .topbar { gap: 10px; padding-inline: 14px; }
+  .menu-button { margin-right: 0; }
+  .topbar-context { overflow: hidden; }
+  .topbar-title { overflow: hidden; font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+  .breadcrumbs { display: none; }
+  .topbar-actions { gap: 6px; }
+  .topbar-actions > :where(.top-avatar, .notification) { display: none; }
+  .theme-switcher-trigger { width: 36px; justify-content: center; padding-inline: 0; }
+  .theme-switcher-trigger > span { display: none !important; }
+  .theme-switcher-panel { position: fixed !important; top: 62px; right: 10px; width: min(280px, calc(100vw - 20px)); }
+  .route-surface :where(.page-hero, .module-hero) { border-radius: 17px; }
+  .page-hero h1 { font-size: clamp(22px, 7vw, 28px); }
+  .page-hero-copy { gap: 12px; }
+  .page-hero-icon { width: 44px; height: 44px; }
+  .page-hero-actions :where(a, button) { flex: 1 1 150px; }
+  .device-toolbar,
+  .device-card-heading,
+  .branch-connectivity-heading { align-items: flex-start; flex-direction: column; }
+  .device-toolbar > div:last-child { width: 100%; display: flex; flex-wrap: wrap; }
+  .device-toolbar > div:last-child > :where(a, button) { flex: 1 1 150px; justify-content: center; }
+  .device-scope { align-items: stretch; flex-direction: column; }
+  .device-scope select { width: 100%; min-width: 0; }
+  .device-management-page nav { max-width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .device-management-page nav button { flex: 0 0 auto; white-space: nowrap; }
+  .device-management-page .md\:col-span-2 { align-items: stretch; flex-direction: column; gap: 12px; }
+  .device-management-page .md\:col-span-2 button { width: 100%; }
+  .route-surface table { display: block; max-width: 100%; overflow-x: auto; white-space: nowrap; }
+}
+
+@media (max-width: 480px) {
+  .content,
+  .module-directory-page,
+  .compliance-create-page,
+  .compliance-record-page,
+  .support-page,
+  .legal-page { padding-inline: 12px; }
+  .topbar { padding-inline: 10px; }
+  .topbar-title { font-size: 16px; }
+  .page-hero { padding: 18px; }
+  .page-hero-copy { flex-direction: column; }
+  .command-dialog > footer { display: none; }
+  .modal-container { max-height: calc(100dvh - 16px); border-radius: 14px; }
+  .modal-header,
+  .modal-body,
+  .modal-form,
+  .modal-actions { padding-inline: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+  }
+}

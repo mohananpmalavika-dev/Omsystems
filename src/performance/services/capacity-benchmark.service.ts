@@ -294,11 +294,14 @@ export class CapacityBenchmarkService {
       gatewayId: "gw-branch-0001",
       branchId: "branch-0001",
       online: true,
-      maxConcurrentSessions: 100,
-      activeSessions: 0,
-      availableTranscodeSlots: 50,
-      cpuUsagePct: 10,
-      memoryUsagePct: 20,
+      maxRtspInputs: 100,
+      maxWebRtcOutputs: 100,
+      maxTranscode1080p: 50,
+      activeRtspInputs: 10,
+      activeWebRtcOutputs: 0,
+      activeTranscodes: 0,
+      cpuPct: 10,
+      memoryPct: 20,
     });
     for (let c = 1; c <= 10; c++) {
       const camId = `cam-branch-0001-${c.toString().padStart(2, "0")}`;

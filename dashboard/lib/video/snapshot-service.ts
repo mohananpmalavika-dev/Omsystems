@@ -161,6 +161,7 @@ export class SnapshotService {
       
       const response = await fetch(url, {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Accept': 'image/jpeg',
         },
