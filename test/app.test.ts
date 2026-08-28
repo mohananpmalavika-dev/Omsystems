@@ -320,6 +320,29 @@ describe("control-plane API", () => {
     expect(heartbeat.statusCode).toBe(200);
     expect(heartbeat.json().status).toBe("online");
 
+    const fleet = await app.inject({
+      method: "GET",
+      url: "/v1/edge-agents",
+      headers,
+    });
+    expect(fleet.statusCode).toBe(200);
+    expect(fleet.json().data).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: agent.id,
+        branchId: "branch-blr-001",
+        branchName: expect.stringContaining("Bengaluru"),
+        status: "online",
+      }),
+    ]));
+
+    const restrictedFleet = await app.inject({
+      method: "GET",
+      url: "/v1/edge-agents",
+      headers: { "x-user-id": "user-south-operator" },
+    });
+    expect(restrictedFleet.statusCode).toBe(200);
+    expect(restrictedFleet.json().data).toEqual([]);
+
     const requestedScan = await app.inject({
       method: "POST",
       url: "/v1/branches/branch-blr-001/scan-jobs",

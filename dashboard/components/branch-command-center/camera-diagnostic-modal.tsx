@@ -43,90 +43,73 @@ export function CameraDiagnosticModal({
   if (!isOpen) return null;
 
   const channelNum = camera.channelNumber;
-  const isLoss = channelNum === 4 || camera.health.videoLoss === "DETECTED" || camera.health.connectivity === "OFFLINE";
-  const isStoppedRecording = channelNum === 7 || camera.health.recording === "NOT_RECORDING";
-
-  const diag = camera.diagnostic ?? {
-    network: { state: isLoss ? "FAIL" : "PASS", source: "TCP", latencyMs: 12 },
-    stream: { state: isLoss ? "FAIL" : "PASS", source: "RTSP", latencyMs: 35 },
-    decoding: { state: isLoss ? "FAIL" : "PASS", source: "FFMPEG", latencyMs: 48 },
-    freeze: { state: "PASS", source: "FFMPEG" },
-    signal: { state: isLoss ? "FAIL" : "PASS", source: "DAHUA_CGI" },
-    recorderConnection: { state: "PASS", source: "DAHUA_CGI" },
-    recording: { state: isStoppedRecording || isLoss ? "FAIL" : "PASS", source: "RECORDER_ARCHIVE" },
-    lastFrameAt: isLoss ? "Unavailable" : "Just now",
-    lastRecordingAt: isStoppedRecording || isLoss ? "15 min ago (Stopped)" : "Just now",
-    reasonCodes: isLoss
-      ? ["SIGNAL_LOST", "DECODE_FAILED", "RTSP_UNREACHABLE"]
-      : isStoppedRecording
-      ? ["RECORDING_STOPPED"]
-      : [],
-    state: isLoss ? "CRITICAL" : isStoppedRecording ? "DEGRADED" : "HEALTHY",
-  };
+  const isLoss = camera.health.videoLoss === "DETECTED" || camera.health.connectivity === "OFFLINE";
+  const isStoppedRecording = camera.health.recording === "NOT_RECORDING";
+  const diag = camera.diagnostic;
 
   const layers = [
     {
       id: "L1",
       name: "Network Reachable",
       desc: "TCP Port 554 / 80 Socket Handshake",
-      state: diag.network?.state ?? "PASS",
-      source: diag.network?.source ?? "TCP",
-      latency: diag.network?.latencyMs ? `${diag.network.latencyMs}ms` : undefined,
+      state: diag?.network?.state ?? "UNKNOWN",
+      source: diag?.network?.source ?? "NOT_REPORTED",
+      latency: diag?.network?.latencyMs !== undefined ? `${diag.network.latencyMs}ms` : undefined,
       icon: Radio,
     },
     {
       id: "L2",
       name: "RTSP Stream Available",
       desc: "RTSP DESCRIBE / SDP H.264 Video Track",
-      state: diag.stream?.state ?? "PASS",
-      source: diag.stream?.source ?? "RTSP",
-      latency: diag.stream?.latencyMs ? `${diag.stream.latencyMs}ms` : undefined,
+      state: diag?.stream?.state ?? "UNKNOWN",
+      source: diag?.stream?.source ?? "NOT_REPORTED",
+      latency: diag?.stream?.latencyMs !== undefined ? `${diag.stream.latencyMs}ms` : undefined,
       icon: Video,
     },
     {
       id: "L3",
       name: "Video Decodable",
       desc: "Valid NAL Units Decoded (>= 3 Frames)",
-      state: diag.decoding?.state ?? "PASS",
-      source: diag.decoding?.source ?? "FFMPEG",
-      latency: diag.decoding?.latencyMs ? `${diag.decoding.latencyMs}ms` : undefined,
+      state: diag?.decoding?.state ?? "UNKNOWN",
+      source: diag?.decoding?.source ?? "NOT_REPORTED",
+      latency: diag?.decoding?.latencyMs !== undefined ? `${diag.decoding.latencyMs}ms` : undefined,
       icon: Layers,
     },
     {
       id: "L4",
       name: "Frozen Video Detection",
       desc: "PTS Clock Progression & Hash Variance",
-      state: diag.freeze?.state ?? "PASS",
-      source: diag.freeze?.source ?? "FFMPEG",
+      state: diag?.freeze?.state ?? "UNKNOWN",
+      source: diag?.freeze?.source ?? "NOT_REPORTED",
       icon: Activity,
     },
     {
       id: "L5",
       name: "Video Signal Present",
       desc: "DVR/NVR Video Loss Flag",
-      state: diag.signal?.state ?? "PASS",
-      source: diag.signal?.source ?? "DAHUA_CGI",
+      state: diag?.signal?.state ?? "UNKNOWN",
+      source: diag?.signal?.source ?? "NOT_REPORTED",
       icon: Video,
     },
     {
       id: "L6",
       name: "Recorder Channel Link",
       desc: "DVR/NVR Channel Configuration & Binding",
-      state: diag.recorderConnection?.state ?? "PASS",
-      source: diag.recorderConnection?.source ?? "DAHUA_CGI",
+      state: diag?.recorderConnection?.state ?? "UNKNOWN",
+      source: diag?.recorderConnection?.source ?? "NOT_REPORTED",
       icon: HardDrive,
     },
     {
       id: "L7",
       name: "Recording Active",
       desc: "Recent Archive Segments Verified on Storage",
-      state: diag.recording?.state ?? "PASS",
-      source: diag.recording?.source ?? "RECORDER_ARCHIVE",
+      state: diag?.recording?.state ?? "UNKNOWN",
+      source: diag?.recording?.source ?? "NOT_REPORTED",
       icon: HardDrive,
     },
   ];
 
-  const overallState = diag.state ?? (isLoss ? "CRITICAL" : isStoppedRecording ? "DEGRADED" : "HEALTHY");
+  const overallState = diag?.state ?? (isLoss ? "CRITICAL" : isStoppedRecording ? "DEGRADED" : "UNKNOWN");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
@@ -163,7 +146,9 @@ export function CameraDiagnosticModal({
                 ? "bg-emerald-950/30 border-emerald-500/30 text-emerald-300"
                 : overallState === "DEGRADED"
                 ? "bg-amber-950/30 border-amber-500/30 text-amber-300"
-                : "bg-rose-950/30 border-rose-500/30 text-rose-300"
+                : overallState === "CRITICAL"
+                ? "bg-rose-950/30 border-rose-500/30 text-rose-300"
+                : "bg-slate-950/50 border-slate-700 text-slate-300"
             }`}
           >
             <div className="flex items-center gap-3">
@@ -171,8 +156,10 @@ export function CameraDiagnosticModal({
                 <CheckCircle2 className="h-6 w-6 text-emerald-400" />
               ) : overallState === "DEGRADED" ? (
                 <AlertTriangle className="h-6 w-6 text-amber-400" />
-              ) : (
+              ) : overallState === "CRITICAL" ? (
                 <XCircle className="h-6 w-6 text-rose-400" />
+              ) : (
+                <AlertTriangle className="h-6 w-6 text-slate-400" />
               )}
               <div>
                 <div className="text-sm font-semibold uppercase tracking-wider">
@@ -183,11 +170,13 @@ export function CameraDiagnosticModal({
                     ? "Live video streaming and archive recording are both verified operational."
                     : overallState === "DEGRADED"
                     ? "Live stream is decodable, but recording has halted (Compliance Warning)."
-                    : "Video stream or signal is offline/undecodable (Critical Surveillance Fault)."}
+                    : overallState === "CRITICAL"
+                    ? "Video stream or signal is offline/undecodable (Critical Surveillance Fault)."
+                    : "No layer-by-layer diagnostic evidence has been reported for this camera."}
                 </div>
               </div>
             </div>
-            {diag.reasonCodes && diag.reasonCodes.length > 0 && (
+            {diag?.reasonCodes && diag.reasonCodes.length > 0 && (
               <div className="text-right">
                 <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-900 border border-slate-700 text-slate-300">
                   {diag.reasonCodes.join(", ")}
@@ -247,13 +236,13 @@ export function CameraDiagnosticModal({
               <span className="text-slate-400 flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-slate-500" /> Last Decoded Frame
               </span>
-              <div className="font-mono text-slate-200">{diag.lastFrameAt || "Unavailable"}</div>
+              <div className="font-mono text-slate-200">{diag?.lastFrameAt || "Not reported"}</div>
             </div>
             <div className="space-y-1">
               <span className="text-slate-400 flex items-center gap-1.5">
                 <HardDrive className="h-3.5 w-3.5 text-slate-500" /> Last Verified Recording
               </span>
-              <div className="font-mono text-slate-200">{diag.lastRecordingAt || "Unavailable"}</div>
+              <div className="font-mono text-slate-200">{diag?.lastRecordingAt || "Not reported"}</div>
             </div>
           </div>
         </div>

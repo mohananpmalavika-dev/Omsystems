@@ -9,7 +9,7 @@ type Gateway = {
   name: string;
   status: string;
   last_seen_at: string | null;
-  created_at: string;
+  branch_name?: string;
 };
 
 type CameraType = {
@@ -32,9 +32,11 @@ type Stats = {
   gateways: number;
   cameras: number;
   branches: number;
-  live_sessions: number;
-  telemetry_records: number;
+  live_sessions: number | null;
+  telemetry_records: number | null;
 };
+
+type ManagedResource = "gateway" | "camera";
 
 function getDeleteErrorMessage(body: { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null, fallback = 'Failed to delete. Please try again.') {
   const nestedDetails = typeof body?.details === 'string'
@@ -78,7 +80,9 @@ export default function SystemManagementPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: ManagedResource; id: string; name: string } | null>(null);
 
   useEffect(() => {
     loadStats();
@@ -88,52 +92,50 @@ export default function SystemManagementPage() {
   const loadStats = async () => {
     try {
       const response = await fetch('/api/admin/system/stats');
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      if (!response.ok) throw new Error(await responseError(response, 'System statistics are unavailable'));
+      setStats(await response.json());
+      setStatsError(null);
     } catch (error) {
       console.error('Failed to load stats:', error);
+      setStats(null);
+      setStatsError(error instanceof Error ? error.message : 'System statistics are unavailable');
     }
   };
 
   const loadData = async () => {
     setLoading(true);
+    setDataError(null);
     try {
+      let response: Response;
       if (tab === 'gateways') {
-        const response = await fetch('/api/admin/system/gateways');
-        if (response.ok) {
-          const data = await response.json();
-          setGateways(data);
-        }
+        response = await fetch('/api/admin/system/gateways');
       } else if (tab === 'cameras') {
-        const response = await fetch('/api/admin/system/cameras');
-        if (response.ok) {
-          const data = await response.json();
-          setCameras(data);
-        }
+        response = await fetch('/api/admin/system/cameras');
       } else if (tab === 'branches') {
-        const response = await fetch('/api/admin/system/branches');
-        if (response.ok) {
-          const data = await response.json();
-          setBranches(data);
-        }
+        response = await fetch('/api/admin/system/branches');
+      } else {
+        return;
       }
+      if (!response.ok) throw new Error(await responseError(response, `Unable to load ${tab}`));
+      const data = await response.json();
+      if (!Array.isArray(data)) throw new Error(`Invalid ${tab} response`);
+      if (tab === 'gateways') setGateways(data);
+      else if (tab === 'cameras') setCameras(data);
+      else setBranches(data);
     } catch (error) {
       console.error('Failed to load data:', error);
+      setDataError(error instanceof Error ? error.message : `Unable to load ${tab}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (type: 'gateway' | 'camera' | 'branch', id: string) => {
+  const handleDelete = async (type: ManagedResource, id: string) => {
     if (deleting) return;
     setDeleting(true);
     try {
       // Pluralize the type for the API endpoint
-      const pluralType = type === 'gateway' ? 'gateways' 
-        : type === 'camera' ? 'cameras' 
-        : 'branches';
+      const pluralType = type === 'gateway' ? 'gateways' : 'cameras';
       
       const response = await fetch(`/api/admin/system/${pluralType}/${id}`, {
         method: 'DELETE',
@@ -198,12 +200,18 @@ export default function SystemManagementPage() {
             </div>
             <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
               <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Live Sessions</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.live_sessions}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{formatMetric(stats.live_sessions)}</div>
             </div>
             <div style={{ padding: '1rem', background: 'var(--surface)', border: '1px solid var(--line)', borderRadius: '8px', color: 'var(--ink)' }}>
               <div style={{ fontSize: '0.875rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Telemetry Records</div>
-              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{stats.telemetry_records}</div>
+              <div style={{ fontSize: '2rem', fontWeight: 'bold', color: 'var(--ink)' }}>{formatMetric(stats.telemetry_records)}</div>
             </div>
+          </div>
+        )}
+
+        {statsError && (
+          <div className="admin-panel" role="alert" style={{ margin: '1rem', color: 'var(--red)' }}>
+            {statsError}. <button type="button" onClick={loadStats}>Retry statistics</button>
           </div>
         )}
 
@@ -266,6 +274,11 @@ export default function SystemManagementPage() {
             <div style={{ padding: '2rem', textAlign: 'center' }}>
               <p>Loading...</p>
             </div>
+          ) : dataError ? (
+            <div role="alert" style={{ padding: '2rem', textAlign: 'center', color: 'var(--red)' }}>
+              <p>{dataError}</p>
+              <button type="button" onClick={loadData}>Retry</button>
+            </div>
           ) : (
             <>
               {tab === 'gateways' && (
@@ -282,7 +295,7 @@ export default function SystemManagementPage() {
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>ID</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Status</th>
                           <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Last Seen</th>
-                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Created</th>
+                          <th style={{ padding: '1rem', textAlign: 'left', color: 'var(--muted)' }}>Branch</th>
                           <th style={{ padding: '1rem', textAlign: 'center', color: 'var(--muted)' }}>Actions</th>
                         </tr>
                       </thead>
@@ -309,9 +322,7 @@ export default function SystemManagementPage() {
                             <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {gateway.last_seen_at ? new Date(gateway.last_seen_at).toLocaleString() : 'Never'}
                             </td>
-                            <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>
-                              {new Date(gateway.created_at).toLocaleDateString()}
-                            </td>
+                            <td style={{ padding: '1rem', fontSize: '0.875rem', color: 'var(--ink)' }}>{gateway.branch_name || 'Unknown'}</td>
                             <td style={{ padding: '1rem', textAlign: 'center' }}>
                               <button
                                 onClick={() => setDeleteConfirm({ type: 'gateway', id: gateway.id, name: gateway.name })}
@@ -476,16 +487,11 @@ export default function SystemManagementPage() {
                   This disconnects the gateway and removes it from management. Historical camera and telemetry records are retained.
                 </p>
               )}
-              {deleteConfirm.type === 'branch' && (
-                <p style={{ color: '#dc3545', fontSize: '0.875rem' }}>
-                  This will delete the branch and ALL its gateways and cameras.
-                </p>
-              )}
               <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
                 <button
                   disabled={deleting}
                   onClick={() => {
-                    handleDelete(deleteConfirm.type as any, deleteConfirm.id);
+                    handleDelete(deleteConfirm.type, deleteConfirm.id);
                   }}
                   style={{
                     flex: 1,
@@ -524,4 +530,13 @@ export default function SystemManagementPage() {
       </div>
     </AppLayout>
   );
+}
+
+function formatMetric(value: number | null) {
+  return value === null ? '—' : value.toLocaleString();
+}
+
+async function responseError(response: Response, fallback: string) {
+  const body = await response.json().catch(() => null) as { error?: string; message?: string } | null;
+  return body?.message || body?.error || fallback;
 }

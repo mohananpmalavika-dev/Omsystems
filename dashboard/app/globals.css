@@ -6533,3 +6533,95 @@ html.light .route-surface :where(
     scroll-behavior: auto !important;
   }
 }
+
+/* Shell overlays and custom utility routes use the active theme directly. */
+.create-menu-panel,
+.command-dialog {
+  color: var(--ink);
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--surface) 97%, transparent);
+}
+
+.create-menu-panel > p,
+.command-results-heading > span,
+.command-dialog > footer {
+  color: var(--muted);
+}
+
+.create-menu-panel > a,
+.command-results > a,
+.command-input-row input,
+.command-empty strong {
+  color: var(--ink) !important;
+}
+
+.create-menu-panel > a > span,
+.command-result-icon {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.command-input-row,
+.command-dialog > footer {
+  border-color: var(--line);
+}
+
+.command-input-row input { background: transparent !important; }
+.command-input-row input::placeholder,
+.command-results > a small,
+.command-empty span { color: var(--muted); }
+.command-input-row button,
+.command-dialog > footer { background: var(--surface-soft); }
+.command-dialog kbd { color: var(--muted); border-color: var(--line); background: var(--surface); }
+.command-results > a:hover,
+.command-results > a.active,
+.command-results > a[aria-selected="true"] { background: var(--blue-soft); }
+
+.module-directory-page :where(.directory-summary article, .directory-toolbar, .directory-group, .directory-empty),
+.compliance-create-page :where(.compliance-create-form, .compliance-record-state),
+.compliance-record-page .compliance-record-panel,
+.support-page .support-panel,
+.legal-page .legal-panel {
+  color: var(--ink);
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+.module-directory-page :where(.directory-summary strong, .directory-group header h2, .directory-module-grid > a, .directory-empty strong),
+.compliance-create-page :where(.compliance-create-form h2),
+.compliance-record-page :where(.compliance-record-panel strong),
+.support-page :where(.support-panel h2, .support-option-grid strong),
+.legal-page :where(.legal-panel h2) {
+  color: var(--ink);
+}
+
+.module-directory-page :where(.directory-summary small, .directory-search, .directory-search input, .directory-toolbar > span, .directory-group header p, .directory-group header div > span, .directory-module-grid small, .directory-empty),
+.compliance-create-page :where(.compliance-create-form header span, .compliance-form-grid label > span, .compliance-form-checks label),
+.compliance-record-page :where(.compliance-record-panel header span, .compliance-record-grid article span),
+.support-page :where(.support-panel header span, .support-panel header p, .support-option-grid p),
+.legal-page :where(.legal-updated, .legal-panel section p) {
+  color: var(--muted);
+}
+
+.module-directory-page :where(.directory-group > header, .directory-toolbar > span),
+.compliance-create-page :where(.compliance-create-form > section > header, .compliance-create-form > footer),
+.compliance-record-page .compliance-record-panel > header,
+.support-page .support-panel > header,
+.legal-page .legal-updated {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
+.module-directory-page .directory-module-grid > a {
+  border-color: var(--line);
+}
+
+.module-directory-page .directory-module-grid > a:hover {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+.module-directory-page .directory-module-icon {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
