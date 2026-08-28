@@ -424,28 +424,50 @@ export class OperationalAlertService {
     branchId?: string;
     assignedTo?: string;
   }> {
-    // Note: Current implementation generates alerts dynamically
-    // This is a placeholder for when alerts become persistent
-
-    // For now, parse the alertId to extract context
-    // Format: "type:branchId:deviceId" or "health:branchId:component"
     const parts = alertId.split(":");
-    const branchId = parts.length > 1 ? parts[1] : undefined;
+    const supportedTypes = new Set(["hdd", "internet", "recorder", "health", "retention"]);
+    const branchId = parts[1];
+    if (parts.length < 3 || !supportedTypes.has(parts[0] ?? "") || !branchId) {
+      throw new AlertNotFoundError(alertId);
+    }
 
-    // Verify branch access if branchId is present
-    if (branchId) {
-      const decision = await this.store.checkAccess(
-        { id: actor.userId!, tenantId: actor.tenantId } as any,
-        "recording:view",
-        branchId
-      );
+    const branch = await this.store.getNode(branchId);
+    if (!branch || branch.type !== "branch" || branch.tenantId !== actor.tenantId) {
+      throw new AlertNotFoundError(alertId);
+    }
 
-      if (!decision?.allowed) {
-        throw new AlertAuthorizationError("view this alert");
+    const decision = await this.store.checkAccess(
+      { id: actor.userId!, tenantId: actor.tenantId } as any,
+      "recording:view",
+      branchId,
+    );
+    if (!decision?.allowed) {
+      throw new AlertAuthorizationError("view this alert");
+    }
+
+    const events = await this.store.listOperationalAlertEvents(alertId, actor.tenantId);
+    const validStatuses = new Set<AlertStatus>([
+      "active", "acknowledged", "assigned", "resolved", "suppressed", "reopened",
+    ]);
+    let status: AlertStatus = "active";
+    let assignedTo: string | undefined;
+    for (const event of events) {
+      if (typeof event.newStatus === "string" && validStatuses.has(event.newStatus as AlertStatus)) {
+        status = event.newStatus as AlertStatus;
+      }
+      if ((event.eventType === "ALERT_ASSIGNED" || event.eventType === "ALERT_REASSIGNED")
+        && typeof event.targetUserId === "string") {
+        assignedTo = event.targetUserId;
       }
     }
 
-    throw new Error("operational_alert_persistence_not_configured");
+    return {
+      id: alertId,
+      status,
+      severity: "unknown",
+      branchId,
+      ...(assignedTo ? { assignedTo } : {}),
+    };
   }
 
   /**
@@ -455,29 +477,24 @@ export class OperationalAlertService {
     actor: ActorContext,
     permission: string
   ): Promise<void> {
-    // For now, simple role-based check
-    // In production, use proper permission system
-
     if (actor.type !== "USER") {
       return; // System and automation actors bypass permission checks
     }
 
-    // Basic permission mapping
-    // In production, query actual user permissions from database
     const allowedRoles = {
-      "alerts.acknowledge": ["operator", "branch_manager", "region_manager"],
-      "alerts.assign": ["branch_manager", "region_manager", "company_admin"],
-      "alerts.resolve": ["operator", "branch_manager", "region_manager"],
-      "alerts.escalate": ["branch_manager", "region_manager"],
-      "alerts.suppress": ["region_manager", "company_admin"],
-      "alerts.comment": ["operator", "branch_manager", "region_manager"],
+      "alerts.acknowledge": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager", "area_manager", "branch_manager", "operator", "security_officer"],
+      "alerts.assign": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager", "area_manager", "branch_manager"],
+      "alerts.resolve": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager", "area_manager", "branch_manager", "operator", "security_officer"],
+      "alerts.escalate": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager", "area_manager", "branch_manager"],
+      "alerts.suppress": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager"],
+      "alerts.comment": ["super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager", "area_manager", "branch_manager", "operator", "security_officer"],
     } as Record<string, string[]>;
 
-    // This is simplified - in production, query user's actual role
-    // const user = await this.store.getUser(actor.userId!);
-    // if (!allowedRoles[permission]?.includes(user.role)) {
-    //   throw new AlertAuthorizationError(permission);
-    // }
+    const user = actor.userId ? await this.store.getUser(actor.userId) : undefined;
+    if (!user || user.tenantId !== actor.tenantId || !user.role
+      || !allowedRoles[permission]?.includes(user.role)) {
+      throw new AlertAuthorizationError(permission);
+    }
   }
 
   /**

@@ -13,34 +13,49 @@ export async function GET(request: NextRequest) {
     const headers = buildControlPlaneHeaders(request, { 'content-type': 'application/json' });
     if (!headers) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
     
-    // Fetch branches list using organization nodes endpoint
-    const response = await fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
-      method: 'GET',
-      headers,
-      cache: 'no-store',
-    });
+    const [branchesResponse, agentsResponse] = await Promise.all([
+      fetch(`${controlPlaneUrl}/v1/organization/nodes?type=branch`, {
+        method: 'GET', headers, cache: 'no-store',
+      }),
+      fetch(`${controlPlaneUrl}/v1/edge-agents`, {
+        method: 'GET', headers, cache: 'no-store',
+      }),
+    ]);
 
-    if (!response.ok) {
-      console.error(`Failed to fetch branches: ${response.status} ${response.statusText}`);
-      const text = await response.text();
-      console.error(`Response body: ${text}`);
-      return NextResponse.json([], { status: 200 }); // Return empty array on error
+    if (!branchesResponse.ok || !agentsResponse.ok) {
+      const failed = !branchesResponse.ok ? branchesResponse : agentsResponse;
+      return upstreamFailure(failed, 'branches');
     }
 
-    const data = await response.json();
-    
-    // Transform to match frontend expectations
-    const branches = (data.data || []).map((branch: any) => ({
-      id: branch.id,
-      name: branch.name,
-      address: null, // Address not in basic branch data
-      gateway_count: 0, // Would need separate query
-    }));
+    const [branchesData, agentsData] = await Promise.all([
+      branchesResponse.json() as Promise<{ data?: unknown[] }>,
+      agentsResponse.json() as Promise<{ data?: Array<{ branchId?: string }> }>,
+    ]);
+    const agentsByBranch = new Map<string, number>();
+    for (const agent of agentsData.data ?? []) {
+      if (!agent.branchId) continue;
+      agentsByBranch.set(agent.branchId, (agentsByBranch.get(agent.branchId) ?? 0) + 1);
+    }
+    const branches = (branchesData.data ?? []).map((value) => {
+      const branch = value as { id?: string; name?: string; address?: string | null };
+      return {
+        id: branch.id,
+        name: branch.name,
+        address: branch.address ?? null,
+        gateway_count: branch.id ? agentsByBranch.get(branch.id) ?? 0 : 0,
+      };
+    });
     
     return NextResponse.json(branches);
   } catch (error) {
     console.error('Error fetching branches:', error);
-    return NextResponse.json([], { status: 200 }); // Return empty array on error
+    return NextResponse.json({ error: 'control_plane_unavailable' }, { status: 503 });
   }
+}
+
+function upstreamFailure(response: Response, resource: string) {
+  console.error(`Failed to fetch ${resource}: ${response.status} ${response.statusText}`);
+  const status = response.status === 401 || response.status === 403 ? response.status : 502;
+  return NextResponse.json({ error: `${resource}_unavailable` }, { status });
 }
 

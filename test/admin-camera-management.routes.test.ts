@@ -41,6 +41,13 @@ function createStore(options: { failCameraDelete?: boolean } = {}) {
     release: vi.fn(),
   };
   const store = {
+    getCamera: vi.fn(async (id: string) => ({
+      id,
+      nodeId: "camera-node-123",
+      branchId: "branch-123",
+    })),
+    checkAccess: vi.fn(async () => ({ allowed: true, reason: "admin" })),
+    listAccessibleCameras: vi.fn(async () => ({ cameras: [], total: 0 })),
     db: {
       connect: vi.fn(async () => client),
       query: vi.fn(),
@@ -66,6 +73,7 @@ describe("admin camera deletion", () => {
       const { store, calls } = createStore();
       const app = Fastify();
       apps.push(app);
+      registerAsAdmin(app);
       await adminCameraManagementRoutes(app, store);
 
       const response = await app.inject(request);
@@ -85,6 +93,7 @@ describe("admin camera deletion", () => {
     const { store, client } = createStore({ failCameraDelete: true });
     const app = Fastify();
     apps.push(app);
+    registerAsAdmin(app);
     await adminCameraManagementRoutes(app, store);
 
     const response = await app.inject({
@@ -99,4 +108,53 @@ describe("admin camera deletion", () => {
     });
     expect(client.query).toHaveBeenCalledWith("ROLLBACK");
   });
+
+  it("keeps fleet-wide camera deletion disabled", async () => {
+    const { store, client } = createStore();
+    const app = Fastify();
+    apps.push(app);
+    registerAsAdmin(app);
+    await adminCameraManagementRoutes(app, store);
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/admin/cameras/all",
+      payload: { confirmDelete: "DELETE_ALL_CAMERAS" },
+    });
+
+    expect(response.statusCode).toBe(405);
+    expect(client.query).not.toHaveBeenCalled();
+  });
+
+  it("rejects camera deletion when the admin cannot configure that camera", async () => {
+    const { store, client } = createStore();
+    store.checkAccess.mockResolvedValue({ allowed: false, reason: "outside_scope" });
+    const app = Fastify();
+    apps.push(app);
+    registerAsAdmin(app);
+    await adminCameraManagementRoutes(app, store);
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/admin/cameras/camera-123",
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(client.query).not.toHaveBeenCalled();
+  });
 });
+
+function registerAsAdmin(app: ReturnType<typeof Fastify>) {
+  app.decorateRequest("currentUser");
+  app.addHook("preHandler", async (request) => {
+    request.currentUser = {
+      id: "00000000-0000-4000-8000-000000000201",
+      tenantId: "00000000-0000-4000-8000-000000000001",
+      username: "admin",
+      displayName: "Administrator",
+      email: "admin@example.test",
+      role: "super_admin",
+      status: "active",
+    };
+  });
+}

@@ -2226,6 +2226,79 @@ export class PostgresStore
     }));
   }
 
+  async recordOperationalAlertEvent(event: {
+    id: string | undefined;
+    alertId: string;
+    tenantId: string;
+    branchId?: string;
+    eventType: string;
+    actorType: string;
+    actorUserId?: string;
+    actorUserName?: string;
+    actorService?: string;
+    targetUserId?: string;
+    targetUserName?: string;
+    previousStatus?: string;
+    newStatus?: string;
+    metadata?: Record<string, unknown>;
+    requestId?: string;
+    correlationId?: string;
+    sessionId?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    occurredAt: Date;
+    createdAt: Date;
+  }): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO operational_alert_events (
+         id, alert_id, tenant_id, branch_id, event_type, actor_type,
+         actor_user_id, actor_user_name, actor_service, target_user_id,
+         target_user_name, previous_status, new_status, metadata, request_id,
+         correlation_id, session_id, ip_address, user_agent, occurred_at, created_at
+       ) VALUES (
+         COALESCE($1::uuid, gen_random_uuid()), $2, $3::uuid, $4::uuid, $5, $6,
+         $7::uuid, $8, $9, $10::uuid, $11, $12, $13, $14::jsonb, $15,
+         $16::uuid, $17::uuid, $18::inet, $19, $20, $21
+       )`,
+      [
+        event.id ?? null, event.alertId, event.tenantId, event.branchId ?? null,
+        event.eventType, event.actorType, event.actorUserId ?? null,
+        event.actorUserName ?? null, event.actorService ?? null,
+        event.targetUserId ?? null, event.targetUserName ?? null,
+        event.previousStatus ?? null, event.newStatus ?? null,
+        JSON.stringify(event.metadata ?? {}), event.requestId ?? null,
+        event.correlationId ?? null, event.sessionId ?? null,
+        event.ipAddress ?? null, event.userAgent ?? null,
+        event.occurredAt, event.createdAt,
+      ],
+    );
+  }
+
+  async listOperationalAlertEvents(alertId: string, tenantId: string): Promise<any[]> {
+    return this.listOperationalAlertEventsForAlerts(tenantId, [alertId]);
+  }
+
+  async listOperationalAlertEventsForAlerts(tenantId: string, alertIds: string[]): Promise<any[]> {
+    if (alertIds.length === 0) return [];
+    const result = await this.pool.query(
+      `SELECT id::text, alert_id AS "alertId", tenant_id::text AS "tenantId",
+              branch_id::text AS "branchId", event_type AS "eventType",
+              actor_type AS "actorType", actor_user_id::text AS "actorUserId",
+              actor_user_name AS "actorUserName", actor_service AS "actorService",
+              target_user_id::text AS "targetUserId", target_user_name AS "targetUserName",
+              previous_status AS "previousStatus", new_status AS "newStatus",
+              metadata, request_id AS "requestId", correlation_id::text AS "correlationId",
+              session_id::text AS "sessionId", host(ip_address) AS "ipAddress",
+              user_agent AS "userAgent", occurred_at AS "occurredAt",
+              created_at AS "createdAt"
+       FROM operational_alert_events
+       WHERE tenant_id = $1::uuid AND alert_id = ANY($2::text[])
+       ORDER BY occurred_at ASC, created_at ASC`,
+      [tenantId, alertIds],
+    );
+    return result.rows;
+  }
+
   // ============================================
   // Activity Tracking Store Methods
   // ============================================

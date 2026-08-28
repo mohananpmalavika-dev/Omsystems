@@ -47,6 +47,8 @@ export function AlertCard({
       acknowledged: 'bg-blue-100 text-blue-700',
       assigned: 'bg-purple-100 text-purple-700',
       resolved: 'bg-green-100 text-green-700',
+      suppressed: 'bg-gray-100 text-gray-500',
+      reopened: 'bg-amber-100 text-amber-700',
       closed: 'bg-gray-100 text-gray-500'
     };
     return colors[alert.status];
@@ -146,7 +148,7 @@ export function AlertCard({
       )}
 
       {/* Actions */}
-      {alert.status === 'active' && (
+      {(alert.status === 'active' || alert.status === 'reopened') && (
         <div className="flex flex-wrap gap-2 pt-3 border-t border-current/10">
           {onAcknowledge && (
             <button

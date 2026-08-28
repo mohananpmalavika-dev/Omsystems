@@ -1828,6 +1828,10 @@ export interface ControlPlaneStore {
     alertId: string,
     tenantId: string
   ): Promise<any[]>;
+  listOperationalAlertEventsForAlerts(
+    tenantId: string,
+    alertIds: string[],
+  ): Promise<any[]>;
 }
 
 export interface CctvInfrastructureStore {

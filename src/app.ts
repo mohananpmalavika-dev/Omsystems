@@ -979,6 +979,49 @@ export async function buildApp(options?: {
     return { data };
   });
 
+  app.get("/v1/edge-agents", async (request) => {
+    const branches = await store.listAccessibleNodes(
+      request.currentUser,
+      "device:configure",
+      "branch",
+    );
+    const branchesById = new Map(branches.map((branch) => [branch.id, branch]));
+    const agents = (await store.listEdgeAgents(request.currentUser.tenantId))
+      .filter((agent) => branchesById.has(agent.branchId) && agent.credentialStatus !== "revoked");
+
+    const data = await Promise.all(agents.map(async (agent) => {
+      let status = agent.status;
+      let publicMediaUrl: string | undefined;
+      if (edgePresenceCache) {
+        try {
+          const presence = await edgePresenceCache.get(agent.id);
+          status = presence
+            ? "online"
+            : agent.status === "pending"
+              ? "pending"
+              : "offline";
+          publicMediaUrl = presence?.publicMediaUrl;
+        } catch {
+          // The durable agent state remains useful if the presence cache is unavailable.
+        }
+      }
+      const branch = branchesById.get(agent.branchId)!;
+      return {
+        id: agent.id,
+        name: agent.name,
+        branchId: agent.branchId,
+        branchName: branch.name,
+        version: agent.version,
+        status,
+        lastSeenAt: agent.lastSeenAt,
+        credentialStatus: agent.credentialStatus ?? "unknown",
+        ...(publicMediaUrl ? { publicMediaUrl } : {}),
+      };
+    }));
+
+    return { data };
+  });
+
   app.post("/v1/edge-agents/:id/heartbeat", async (request, reply) => {
     try {
       const { id } = edgeAgentParams.parse(request.params);
@@ -2738,6 +2781,18 @@ export async function buildApp(options?: {
   }
 
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof Error && error.name === "AlertNotFoundError") {
+      return reply.code(404).send({ error: "alert_not_found" });
+    }
+    if (error instanceof Error && error.name === "AlertAuthorizationError") {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    if (error instanceof Error && error.name === "InvalidAlertTransitionError") {
+      return reply.code(409).send({ error: "invalid_alert_transition" });
+    }
+    if (error instanceof Error && error.message === "Assignee not found or not in same tenant") {
+      return reply.code(400).send({ error: "invalid_assignee" });
+    }
     if (error instanceof z.ZodError) {
       return reply.code(400).send({
         error: "invalid_request",

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { isPgError, isConstraintViolation } from "../utils/pg-error-utils.js";
@@ -55,7 +55,7 @@ async function listCameraReferences(client: any): Promise<CameraReference[]> {
 
 async function deleteCameraDependencies(
   client: any,
-  cameraId?: string,
+  cameraId: string,
 ): Promise<Record<string, number>> {
   const references = await listCameraReferences(client);
   const deleteCounts: Record<string, number> = {};
@@ -63,9 +63,7 @@ async function deleteCameraDependencies(
   for (const reference of references) {
     const table = `${quoteIdentifier(reference.table_schema)}.${quoteIdentifier(reference.table_name)}`;
     const column = quoteIdentifier(reference.column_name);
-    const result = cameraId
-      ? await client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [cameraId])
-      : await client.query(`DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM cameras)`);
+    const result = await client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [cameraId]);
     const key = `${reference.table_schema}.${reference.table_name}`;
     deleteCounts[key] = (deleteCounts[key] ?? 0) + (result.rowCount ?? 0);
   }
@@ -159,24 +157,50 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
   return { found: true, deletedNodes, relatedDataDeleted };
 }
 
-async function deleteAllCameras(client: any, app: FastifyInstance) {
-  const cameraRows = await client.query(
-    `SELECT resource_node_id
-     FROM cameras
-     FOR UPDATE`,
-  );
-  const resourceNodeIds = cameraRows.rows
-    .map((row: any) => row.resource_node_id as string | null)
-    .filter((id: string | null): id is string => Boolean(id));
-  const relatedDataDeleted = await deleteCameraDependencies(client);
-  const deleted = await client.query('DELETE FROM cameras');
-  const deletedNodes = await cleanupResourceNodes(client, resourceNodeIds, app);
+const cameraAdminRoles = new Set([
+  "super_admin",
+  "superadmin",
+  "global_admin",
+  "company_admin",
+  "hq_admin",
+  "admin",
+]);
 
-  return {
-    deletedCameras: deleted.rowCount ?? 0,
-    deletedNodes,
-    relatedDataDeleted,
-  };
+async function requireCameraAdmin(request: FastifyRequest, reply: FastifyReply) {
+  const user = request.currentUser;
+  if (!user) {
+    await reply.code(401).send({ error: "unauthenticated" });
+    return false;
+  }
+  if (!user.role || !cameraAdminRoles.has(user.role)) {
+    await reply.code(403).send({ error: "forbidden" });
+    return false;
+  }
+  return true;
+}
+
+async function requireCameraDeleteAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  cameraId: string,
+) {
+  if (!(await requireCameraAdmin(request, reply))) return false;
+  const camera = await store.getCamera(cameraId);
+  if (!camera) {
+    await reply.code(404).send({ error: "camera_not_found" });
+    return false;
+  }
+  const decision = await store.checkAccess(request.currentUser, "device:configure", camera.nodeId);
+  if (!decision) {
+    await reply.code(404).send({ error: "camera_not_found" });
+    return false;
+  }
+  if (!decision.allowed) {
+    await reply.code(403).send({ error: "forbidden", reason: decision.reason });
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -187,91 +211,65 @@ async function deleteAllCameras(client: any, app: FastifyInstance) {
 export async function adminCameraManagementRoutes(app: FastifyInstance, store: ControlPlaneStore) {
   
   // Delete all cameras
-  app.delete("/v1/admin/cameras/all", async (request, reply) => {
-    if (!hasDbPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
-    }
-
-    const { confirmDelete } = z.object({
-      confirmDelete: z.literal("DELETE_ALL_CAMERAS"),
-    }).parse(request.body);
-    
-    const client = await store.db.connect();
-    
-    try {
-      await client.query("BEGIN");
-      
-      const deletion = await deleteAllCameras(client, app);
-      
-      await client.query("COMMIT");
-      
-      return reply.code(200).send({
-        success: true,
-        ...deletion,
-      });
-      
-    } catch (error) {
-      await client.query("ROLLBACK");
-      app.log.error(error);
-      return reply.code(500).send({
-        error: "camera_deletion_failed",
-        message: error instanceof Error ? error.message : "Unknown error",
-      });
-    } finally {
-      client.release();
-    }
+  app.delete("/v1/admin/cameras/all", async (_request, reply) => {
+    return reply.code(405).send({
+      error: "bulk_camera_deletion_disabled",
+      message: "Delete cameras individually so authorization and audit checks remain enforceable.",
+    });
   });
   
   // Get camera count (for preview)
   app.get("/v1/admin/cameras/count", async (request, reply) => {
-    if (!hasDbPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
-    }
-
-    const result = await store.db.query(`
-      SELECT 
-        COUNT(*) as total_cameras,
-        (SELECT COUNT(*) FROM analytics_alerts WHERE camera_id IN (SELECT id FROM cameras)) as alerts,
-        (SELECT COUNT(*) FROM recording_segments WHERE camera_id IN (SELECT id FROM cameras)) as segments,
-        (SELECT COUNT(*) FROM incident_cameras WHERE camera_id IN (SELECT id FROM cameras)) as incidents
-      FROM cameras
-    `);
-    
-    return reply.send(result.rows[0]);
+    if (!(await requireCameraAdmin(request, reply))) return;
+    const result = await store.listAccessibleCameras(
+      request.currentUser,
+      "device:configure",
+      { limit: 1, offset: 0 },
+    );
+    return reply.send({ total_cameras: result.total });
   });
   
   // List all cameras
   app.get("/v1/admin/cameras/list", async (request, reply) => {
-    if (!hasDbPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store support" });
-    }
-
-    const result = await store.db.query(`
-      SELECT 
-        c.id::text,
-        rn.name,
-        c.branch_node_id::text,
-        c.status,
-        c.vendor,
-        c.model,
-        b.name as branch_name
-      FROM cameras c
-      JOIN resource_nodes rn ON c.resource_node_id = rn.id
-      LEFT JOIN resource_nodes b ON c.branch_node_id = b.id
-      ORDER BY rn.name
-      LIMIT 100
-    `);
-    
-    return reply.send({ cameras: result.rows });
+    if (!(await requireCameraAdmin(request, reply))) return;
+    const query = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+      search: z.string().trim().max(120).optional(),
+    }).parse(request.query);
+    const result = await store.listAccessibleCameras(
+      request.currentUser,
+      "device:configure",
+      {
+        limit: query.limit,
+        offset: query.offset,
+        ...(query.search ? { search: query.search } : {}),
+      },
+    );
+    return reply.send({
+      cameras: result.cameras.map((camera) => ({
+        id: camera.id,
+        name: camera.name,
+        branch_node_id: camera.branchId,
+        edge_agent_id: camera.edgeAgentId ?? null,
+        ip_address: camera.ipAddress ?? null,
+        status: camera.status,
+        vendor: camera.vendor,
+        model: camera.model,
+      })),
+      total: result.total,
+      limit: query.limit,
+      offset: query.offset,
+    });
   });
 
   // Delete a single camera by id (admin)
   app.delete('/v1/admin/cameras/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!(await requireCameraDeleteAccess(request, reply, store, id))) return;
     if (!hasDbPool(store)) {
       return reply.code(501).send({ error: 'not_implemented', message: 'This endpoint requires PostgreSQL store support' });
     }
-
-    const { id } = request.params as { id: string };
     let client: Awaited<ReturnType<typeof store.db.connect>> | undefined;
 
     try {
@@ -330,6 +328,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     }
 
     const id = body.data.id;
+    if (!(await requireCameraDeleteAccess(request, reply, store, id))) return;
     app.log.info({ cameraId: id }, 'Camera deletion requested');
     let client: Awaited<ReturnType<typeof store.db.connect>> | undefined;
 
