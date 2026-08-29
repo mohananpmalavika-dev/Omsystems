@@ -115,6 +115,43 @@ describe("AI Command Center", () => {
     expect(executed.json().error).toBe("action_integration_not_configured");
   });
 
+  it("correlates real unhealthy signals across multiple authorized branches", async () => {
+    const secondBranch = await store.createNode(
+      "omsystems",
+      "branch-test-002",
+      "branch",
+      "region-south",
+      { name: "Branch Test 002" },
+    );
+    const secondAgent = await store.registerEdgeAgent(secondBranch.id, "Second edge", "1.0.0");
+    const observedAt = new Date(Date.now() - 1_000).toISOString();
+    await store.ingestOperationalTelemetry({
+      tenantId: "omsystems", branchId: "branch-blr-001", edgeAgentId: agentId,
+      deviceType: "network", deviceId: "wan-primary", observedAt, receivedAt: observedAt,
+      source: "system", quality: "verified", idempotencyKey: `wan-1:${observedAt}`,
+      metrics: { status: "offline", connectivity: false }, reasonCodes: ["wan_unreachable"],
+    });
+    await store.ingestOperationalTelemetry({
+      tenantId: "omsystems", branchId: secondBranch.id, edgeAgentId: secondAgent.id,
+      deviceType: "network", deviceId: "wan-primary", observedAt, receivedAt: observedAt,
+      source: "system", quality: "verified", idempotencyKey: `wan-2:${observedAt}`,
+      metrics: { status: "offline", connectivity: false }, reasonCodes: ["wan_unreachable"],
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/command-center/rca/multi-branch-analysis?branchIds=branch-blr-001,${secondBranch.id}`,
+      headers: admin,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().branches).toHaveLength(2);
+    expect(response.json().rootCauseClusters).toContainEqual(expect.objectContaining({ branchCount: 2 }));
+    expect(response.json().crossBranchSignals).toContainEqual(expect.objectContaining({
+      entityType: "network", signal: "wan_unreachable", branchCount: 2,
+    }));
+  });
+
   async function ingest(deviceType: TelemetryDeviceType, deviceId: string, observed: number, metrics: OperationalTelemetryEnvelope["metrics"]) {
     const observedAt = new Date(observed).toISOString();
     await store.ingestOperationalTelemetry({

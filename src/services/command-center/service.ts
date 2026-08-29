@@ -25,7 +25,16 @@ export class CommandCenterService {
     }
     const branches = await this.store.listAccessibleNodes(user, "recording:view", "branch");
     const normalizedQuestion = normalize(question);
-    const matches = branches.filter((branch) => normalizedQuestion.includes(normalize(branch.name)) || normalizedQuestion.includes(normalize(branch.id)));
+    const scored = branches
+      .map((branch) => ({
+        branch,
+        score: branchQuestionScore(normalizedQuestion, branch.id, branch.name),
+      }))
+      .filter(({ score }) => score > 0);
+    const highestScore = Math.max(0, ...scored.map(({ score }) => score));
+    const matches = scored
+      .filter(({ score }) => score === highestScore)
+      .map(({ branch }) => branch);
     if (matches.length === 1) return matches[0]!;
     if (branches.length === 1) return branches[0]!;
     if (matches.length > 1) throw new CommandCenterError("branch_ambiguous", 409, { matches: matches.map(({ id, name }) => ({ id, name })) });
@@ -163,29 +172,23 @@ export class CommandCenterService {
     try {
       let result: Record<string, unknown>;
       if (action.actionType === "create_work_order") {
-        // TODO: Check if execute method exists on store before calling
-        // For now, create a placeholder result
-        result = { 
-          workOrderId: `WO-${Date.now()}`,
-          workOrderNumber: `CC-${Date.now()}-${action.caseId.slice(0, 6).toUpperCase()}`,
-          status: "pending"
+        const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+        const workOrder = await this.store.createWorkOrder({
+          tenantId: user.tenantId,
+          workOrderNumber: `CC-${date}-${randomUUID().slice(0, 8).toUpperCase()}`,
+          branchNodeId: action.branchId,
+          problem: action.reason,
+          severity: action.risk === "high" ? "critical" : action.risk === "medium" ? "high" : "medium",
+          rootCause: action.reason,
+          actionTaken: "Created from an approved AI Command Center recommendation; no device change was performed.",
+          status: "open",
+          createdBy: user.id,
+        });
+        result = {
+          workOrderId: workOrder.id,
+          workOrderNumber: workOrder.workOrderNumber,
+          status: workOrder.status,
         };
-        
-        // Attempt to create work order if the method exists
-        if (typeof this.store.createWorkOrder === 'function') {
-          const workOrder = await this.store.createWorkOrder({
-            tenantId: user.tenantId,
-            workOrderNumber: `CC-${Date.now()}-${action.caseId.slice(0, 6).toUpperCase()}`,
-            branchNodeId: action.branchId,
-            problem: action.reason,
-            severity: action.risk === "high" ? "critical" : action.risk === "medium" ? "high" : "medium",
-            rootCause: action.reason,
-            actionTaken: "Created from an approved AI Command Center recommendation; no device change was performed.",
-            status: "open",
-            createdBy: user.id,
-          });
-          result = { workOrderId: workOrder.id, workOrderNumber: workOrder.workOrderNumber, status: workOrder.status };
-        }
       } else {
         result = { opened: action.href ?? `/operations/ai-command-center?caseId=${action.caseId}` };
       }
@@ -367,5 +370,28 @@ function priorityScore(value: CommandCenterDiagnosis) {
 }
 function actionId(caseId: string, type: CommandActionType) { return `cca_${createHash("sha256").update(`${caseId}:${type}`).digest("hex").slice(0, 24)}`; }
 function normalize(value: string) { return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, " "); }
+const branchQuestionStopWords = new Set([
+  "a", "an", "and", "at", "branch", "current", "diagnose", "evidence", "explain",
+  "for", "health", "in", "is", "of", "please", "show", "status", "the", "what", "why",
+]);
+function branchQuestionScore(question: string, branchId: string, branchName: string) {
+  const normalizedId = normalize(branchId);
+  const normalizedName = normalize(branchName);
+  if (question.includes(normalizedId) || question.includes(normalizedName)) return 100;
+
+  const questionTokens = new Set(
+    question.split(" ").filter((token) => token && !branchQuestionStopWords.has(token)),
+  );
+  const branchTokens = new Set(
+    `${normalizedId} ${normalizedName}`
+      .split(" ")
+      .filter((token) => token && !branchQuestionStopWords.has(token)),
+  );
+  let score = 0;
+  for (const token of questionTokens) {
+    if (branchTokens.has(token)) score += /^\d+$/.test(token) ? 3 : 1;
+  }
+  return score;
+}
 function label(value: string) { return value.replaceAll("_", " ").replaceAll("-", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function newest(values: string[]) { return values.filter(Boolean).sort().at(-1) ?? new Date().toISOString(); }

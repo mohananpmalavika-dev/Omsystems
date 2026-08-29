@@ -95,6 +95,7 @@ export async function buildOperationalGraph(
     });
   }
 
+  const inventoryCameraIds = new Set(cameras.map((camera) => camera.id));
   for (const camera of cameras) {
     const item = latest.get(`camera:${camera.id}`);
     addEntity(entities, item ? telemetryEntity(item, camera.name) : {
@@ -117,6 +118,31 @@ export async function buildOperationalGraph(
     });
     if (recorderId && recorderIds.has(recorderId)) {
       dependencies.push({ fromEntityId: `camera:${camera.id}`, toEntityId: `recorder:${recorderId}`, relationship: "records_to", source: "telemetry" });
+    }
+  }
+
+  // Edge telemetry can arrive before camera inventory synchronization. Keep
+  // those observed cameras in the dependency graph instead of showing their
+  // health without the recorder relationship that explains the outage.
+  for (const item of telemetry.filter(
+    (telemetryItem) =>
+      telemetryItem.deviceType === "camera"
+      && !inventoryCameraIds.has(telemetryItem.deviceId),
+  )) {
+    dependencies.push({
+      fromEntityId: branchEntityId,
+      toEntityId: `camera:${item.deviceId}`,
+      relationship: "contains",
+      source: "telemetry",
+    });
+    const recorderId = stringMetric(item.metrics.recorderId);
+    if (recorderId && recorderIds.has(recorderId)) {
+      dependencies.push({
+        fromEntityId: `camera:${item.deviceId}`,
+        toEntityId: `recorder:${recorderId}`,
+        relationship: "records_to",
+        source: "telemetry",
+      });
     }
   }
 

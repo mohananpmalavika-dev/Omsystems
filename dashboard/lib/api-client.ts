@@ -1,6 +1,13 @@
 // API client for backend communication
 
-import type { AlertNotificationPolicy, AlertNotificationPolicyInput, ProvisioningRun } from '@/lib/types';
+import type {
+  AlertNotificationPolicy,
+  AlertNotificationPolicyInput,
+  MaintenanceAsset,
+  MaintenanceVendor,
+  ProvisioningRun,
+  WorkOrder,
+} from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
 
@@ -854,25 +861,61 @@ export const alertPolicyApi = {
   }),
 };
 
+export type WorkOrderWriteInput = {
+  workOrderNumber?: string;
+  assetId?: string | null;
+  branchNodeId?: string | null;
+  problem?: string;
+  severity?: WorkOrder['severity'];
+  technician?: string | null;
+  vendorId?: string | null;
+  slaDueAt?: string | null;
+  eta?: string | null;
+  parts?: string[] | null;
+  cost?: number | null;
+  rootCause?: string | null;
+  actionTaken?: string | null;
+  verification?: string | null;
+  status?: WorkOrder['status'];
+};
+
+export type MaintenanceAssetWriteInput = {
+  category?: MaintenanceAsset['category'];
+  assetType?: string;
+  serialNumber?: string | null;
+  make?: string | null;
+  model?: string | null;
+  firmwareVersion?: string | null;
+  warrantyExpiresAt?: string | null;
+  purchaseDate?: string | null;
+  installationDate?: string | null;
+  vendorId?: string | null;
+  branchNodeId?: string | null;
+  location?: string | null;
+  mountingHeight?: string | null;
+  status?: MaintenanceAsset['status'];
+  notes?: string | null;
+};
+
 export const maintenanceApi = {
-  listAssets: () => fetchApi<{ data: any[] }>('/v1/maintenance/assets'),
-  getAsset: (id: string) => fetchApi<any>(`/v1/maintenance/assets/${encodeURIComponent(id)}`),
-  createAsset: (data: any) => fetchApi<any>('/v1/maintenance/assets', {
+  listAssets: () => fetchApi<{ data: MaintenanceAsset[] }>('/v1/maintenance/assets'),
+  getAsset: (id: string) => fetchApi<MaintenanceAsset>(`/v1/maintenance/assets/${encodeURIComponent(id)}`),
+  createAsset: (data: MaintenanceAssetWriteInput & Pick<MaintenanceAsset, 'category' | 'assetType'>) => fetchApi<MaintenanceAsset>('/v1/maintenance/assets', {
     method: 'POST', body: JSON.stringify(data),
   }),
-  updateAsset: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/assets/${encodeURIComponent(id)}`, {
+  updateAsset: (id: string, data: MaintenanceAssetWriteInput) => fetchApi<MaintenanceAsset>(`/v1/maintenance/assets/${encodeURIComponent(id)}`, {
     method: 'PATCH', body: JSON.stringify(data),
   }),
-  listWorkOrders: () => fetchApi<{ data: any[] }>('/v1/maintenance/workorders'),
-  getWorkOrder: (id: string) => fetchApi<any>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`),
-  createWorkOrder: (data: any) => fetchApi<any>('/v1/maintenance/workorders', {
+  listWorkOrders: () => fetchApi<{ data: WorkOrder[] }>('/v1/maintenance/workorders'),
+  getWorkOrder: (id: string) => fetchApi<WorkOrder>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`),
+  createWorkOrder: (data: WorkOrderWriteInput & Pick<WorkOrder, 'problem'>) => fetchApi<WorkOrder>('/v1/maintenance/workorders', {
     method: 'POST', body: JSON.stringify(data),
   }),
-  updateWorkOrder: (id: string, data: any) => fetchApi<any>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`, {
+  updateWorkOrder: (id: string, data: WorkOrderWriteInput) => fetchApi<WorkOrder>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`, {
     method: 'PATCH', body: JSON.stringify(data),
   }),
-  listVendors: () => fetchApi<{ data: any[] }>('/v1/maintenance/vendors'),
-  getVendor: (id: string) => fetchApi<any>(`/v1/maintenance/vendors/${encodeURIComponent(id)}`),
+  listVendors: () => fetchApi<{ data: MaintenanceVendor[] }>('/v1/maintenance/vendors'),
+  getVendor: (id: string) => fetchApi<MaintenanceVendor>(`/v1/maintenance/vendors/${encodeURIComponent(id)}`),
   createVendor: (data: any) => fetchApi<any>('/v1/maintenance/vendors', {
     method: 'POST', body: JSON.stringify(data),
   }),

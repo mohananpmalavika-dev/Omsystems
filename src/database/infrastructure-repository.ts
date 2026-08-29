@@ -847,6 +847,15 @@ export class InfrastructureRepository {
       values.push(filters.status);
       clauses.push(`u.status=$${values.length}::user_status`);
     }
+    if (Array.isArray(filters.manageableRoles)) {
+      values.push(filters.manageableRoles);
+      const rolesParameter = values.length;
+      values.push(filters.includeUserId ?? "");
+      const selfParameter = values.length;
+      clauses.push(
+        `(u.role::text = ANY($${rolesParameter}::text[]) OR u.id::text=$${selfParameter})`,
+      );
+    }
     if (filters.orgNodeId) {
       values.push(filters.orgNodeId);
       clauses.push(`EXISTS (SELECT 1 FROM user_organizational_assignments a
@@ -857,7 +866,6 @@ export class InfrastructureRepository {
     if (filters.managerUserId) {
       values.push(filters.managerUserId);
       const managerParameter = values.length;
-      console.log('[DEBUG] Applying managerUserId filter:', filters.managerUserId);
       clauses.push(`EXISTS (
         SELECT 1
         FROM user_organizational_assignments target_assignment
@@ -885,8 +893,6 @@ export class InfrastructureRepository {
               AND (deny_grant.valid_until IS NULL OR deny_grant.valid_until>now())
           )
       )`);
-    } else {
-      console.log('[DEBUG] No managerUserId filter applied - querying all users');
     }
     if (filters.search) {
       values.push(`%${filters.search}%`);
@@ -899,14 +905,12 @@ export class InfrastructureRepository {
       `SELECT count(*)::integer AS total FROM users u WHERE ${clauses.join(" AND ")}`,
       values,
     );
-    console.log('[DEBUG] User count query result:', count.rows[0]?.total ?? 0, 'users found');
     values.push(filters.limit ?? 50, filters.offset ?? 0);
     const result = await this.pool.query(
       `${this.userSelect()} WHERE ${clauses.join(" AND ")}
        ORDER BY u.display_name LIMIT $${values.length - 1} OFFSET $${values.length}`,
       values,
     );
-    console.log('[DEBUG] User list query returned', result.rows.length, 'rows');
     return { data: camelRows(result.rows), total: count.rows[0]?.total ?? 0 };
   }
 

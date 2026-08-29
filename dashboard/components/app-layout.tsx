@@ -73,6 +73,7 @@ import {
 } from "lucide-react";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { logout } from "@/lib/auth-manager";
+import { authApi } from "@/lib/api-client";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -101,8 +102,7 @@ export const navigation: NavGroup[] = [
       { label: "Command Center", href: "/", icon: LayoutDashboard },
       { label: "Fleet Branches", href: "/operations/branches", icon: Building2 },
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
-      { label: "Alert Command Center", href: "/operations/alert-command-center", icon: Radio },
-      { label: "Alerts Inbox", href: "/operations/alerts", icon: Bell },
+      { label: "Alert Operations", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Media Pipeline & Scheduler", href: "/operations/media-pipeline", icon: Layers },
@@ -300,6 +300,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
+  const [operator, setOperator] = useState<{
+    displayName?: string;
+    username?: string;
+    email?: string;
+    role?: string;
+  } | null>(null);
   const pathname = usePathname() || "/";
   const currentPage = pageMeta
     .filter((item) => item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`))
@@ -338,6 +344,21 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       `${item.label} ${item.section} ${item.href}`.toLowerCase().includes(query)
     ).slice(0, 12).map((item) => ({ ...item, recent: false }));
   }, [commandQuery, recentHrefs, searchableModules]);
+
+  useEffect(() => {
+    let active = true;
+    authApi.getCurrentUser()
+      .then((user) => {
+        if (active && user) setOperator(user);
+      })
+      .catch(() => {
+        // Authentication and authorization remain server-enforced. Keep the shell usable
+        // if the optional identity label cannot be refreshed during a transient outage.
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -397,6 +418,20 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return next;
     });
   };
+
+  const operatorName = operator?.displayName?.trim()
+    || operator?.username?.trim()
+    || operator?.email?.trim()
+    || "Signed-in user";
+  const operatorRole = operator?.role
+    ? operator.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Protected enterprise session";
+  const operatorInitials = operatorName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "U";
 
   useEffect(() => {
     setActiveCommandIndex(0);
@@ -569,8 +604,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </Link>
           <div className="sidebar-user-menu">
             <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
-              <div className="avatar">SO</div>
-              <div><strong>Security operator</strong><span>Protected enterprise session</span></div>
+              <div className="avatar" aria-hidden="true">{operatorInitials}</div>
+              <div><strong>{operatorName}</strong><span>{operatorRole}</span></div>
               <Settings size={16} />
             </Link>
             <button 

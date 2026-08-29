@@ -1,19 +1,203 @@
 import { Pool } from 'pg';
-import { AuditService } from './audit-service.js';
 import { ComplianceService } from './compliance-service.js';
 import { AuditRepository } from '../database/audit-repository.js';
+
+type TelemetryAuditRow = {
+  tenant_id: string;
+  branch_node_id: string;
+  device_id: string;
+  observed_at: Date;
+  received_at: Date;
+  source: string;
+  quality: string;
+  idempotency_key: string;
+  metrics: Record<string, unknown> | null;
+  reason_codes: string[] | null;
+};
+
+const CAMERA_TELEMETRY_MAX_AGE_MS = 10 * 60 * 1000;
+const STORAGE_TELEMETRY_MAX_AGE_MS = 2 * 60 * 60 * 1000;
+
+function metricNumber(metrics: Record<string, unknown>, key: string) {
+  const value = metrics[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function metricBoolean(metrics: Record<string, unknown>, key: string) {
+  const value = metrics[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function metricString(metrics: Record<string, unknown>, key: string) {
+  const value = metrics[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function telemetryMetadata(row: TelemetryAuditRow) {
+  return {
+    telemetryIdempotencyKey: row.idempotency_key,
+    telemetrySource: row.source,
+    telemetryQuality: row.quality,
+    telemetryObservedAt: row.observed_at.toISOString(),
+    telemetryReceivedAt: row.received_at.toISOString(),
+    reasonCodes: row.reason_codes ?? [],
+  };
+}
+
+export function cameraHealthAuditFromTelemetry(row: TelemetryAuditRow, now = new Date()) {
+  if (!['verified', 'estimated'].includes(row.quality)) return null;
+  if (now.getTime() - row.observed_at.getTime() > CAMERA_TELEMETRY_MAX_AGE_MS) return null;
+
+  const metrics = row.metrics ?? {};
+  const status = metricString(metrics, 'status');
+  const streamActive = metricBoolean(metrics, 'streamActive');
+  const isOnline = status === 'online' || status === 'degraded' || streamActive === true;
+  const isOffline = status === 'offline' || streamActive === false;
+  const videoLoss = metricBoolean(metrics, 'videoLoss');
+  const frozenImage = metricBoolean(metrics, 'imageFrozen');
+  const blackImage = metricBoolean(metrics, 'blackScreen');
+  const blurredImage = metricBoolean(metrics, 'severeBlur');
+  const obstructed = metricBoolean(metrics, 'obstructionSuspected');
+  const tamperingDetected = metricBoolean(metrics, 'cameraMovementSuspected');
+  const latencyMs = metricNumber(metrics, 'responseTimeMs') ?? metricNumber(metrics, 'latencyMs');
+  const packetLossPercentage = metricNumber(metrics, 'packetLossPercent');
+
+  let overallStatus: 'healthy' | 'warning' | 'degraded' | 'critical' | 'offline' | 'unknown' = 'unknown';
+  if (isOffline) overallStatus = 'offline';
+  else if (isOnline && (videoLoss || frozenImage || blackImage || tamperingDetected)) overallStatus = 'critical';
+  else if (isOnline && (blurredImage || obstructed || status === 'degraded')) overallStatus = 'degraded';
+  else if (isOnline && ((latencyMs ?? 0) > 200 || (packetLossPercentage ?? 0) > 5)) overallStatus = 'warning';
+  else if (isOnline) overallStatus = 'healthy';
+
+  const issues = new Set(row.reason_codes ?? []);
+  if (isOffline) issues.add('camera_offline');
+  if (videoLoss) issues.add('video_loss');
+  if (frozenImage) issues.add('image_frozen');
+  if (blackImage) issues.add('black_screen');
+  if (blurredImage) issues.add('severe_blur');
+  if (obstructed) issues.add('obstruction_suspected');
+  if (tamperingDetected) issues.add('camera_movement_suspected');
+
+  return {
+    tenantId: row.tenant_id,
+    cameraId: row.device_id,
+    branchNodeId: row.branch_node_id,
+    checkTimestamp: row.observed_at.toISOString(),
+    isOnline,
+    rtspAvailable: streamActive,
+    latencyMs,
+    packetLossPercentage,
+    currentFps: metricNumber(metrics, 'fps'),
+    currentBitrateKbps: metricNumber(metrics, 'bitrateKbps'),
+    resolutionWidth: metricNumber(metrics, 'width'),
+    resolutionHeight: metricNumber(metrics, 'height'),
+    videoLoss,
+    frozenImage,
+    blackImage,
+    blurredImage,
+    obstructed,
+    tamperingDetected,
+    isRecording: metricBoolean(metrics, 'isRecording'),
+    healthScore: metricNumber(metrics, 'healthScore'),
+    overallStatus,
+    issuesDetected: [...issues],
+    alertGenerated: ['critical', 'offline'].includes(overallStatus),
+    metadata: telemetryMetadata(row),
+  };
+}
+
+export function storageHealthAuditFromTelemetry(row: TelemetryAuditRow, now = new Date()) {
+  if (!['verified', 'estimated'].includes(row.quality)) return null;
+  if (now.getTime() - row.observed_at.getTime() > STORAGE_TELEMETRY_MAX_AGE_MS) return null;
+
+  const metrics = row.metrics ?? {};
+  const reportedStatus = metricString(metrics, 'operationalStatus') ?? metricString(metrics, 'status');
+  if (!reportedStatus || reportedStatus === 'unknown') return null;
+  const overallStatus = reportedStatus === 'healthy'
+    ? 'healthy'
+    : reportedStatus === 'warning' ? 'warning' : reportedStatus === 'failed' ? 'failed' : 'critical';
+  const bytesToGb = (value: number | undefined) => value && value > 0
+    ? Math.round((value / (1024 ** 3)) * 100) / 100
+    : undefined;
+  const detected = metricBoolean(metrics, 'detected');
+  const raidFailedMembers = metricNumber(metrics, 'raidFailedMemberCount');
+  const alerts = new Set(row.reason_codes ?? []);
+  if (overallStatus !== 'healthy' && alerts.size === 0) alerts.add(`disk_${overallStatus}`);
+
+  return {
+    tenantId: row.tenant_id,
+    storageNodeId: null,
+    branchNodeId: row.branch_node_id,
+    checkTimestamp: row.observed_at.toISOString(),
+    storageNodeName: metricString(metrics, 'model') ?? metricString(metrics, 'devicePath') ?? row.device_id,
+    storageType: 'local',
+    totalCapacityGb: bytesToGb(metricNumber(metrics, 'capacityBytes')),
+    usedCapacityGb: bytesToGb(metricNumber(metrics, 'usedBytes')),
+    freeCapacityGb: bytesToGb(metricNumber(metrics, 'availableBytes')),
+    utilizationPercentage: metricNumber(metrics, 'usagePercent'),
+    averageLatencyMs: metricNumber(metrics, 'writeLatencyMs'),
+    raidStatus: metricString(metrics, 'raidStatus'),
+    raidLevel: metricString(metrics, 'raidLevel'),
+    failedDisks: raidFailedMembers ?? (detected === false ? 1 : 0),
+    rebuildInProgress: (metricNumber(metrics, 'raidRebuildPercent') ?? 0) > 0,
+    rebuildPercentage: metricNumber(metrics, 'raidRebuildPercent'),
+    overallStatus,
+    healthScore: metricNumber(metrics, 'healthScore'),
+    alertsTriggered: [...alerts],
+    metadata: telemetryMetadata(row),
+  };
+}
+
+export function recordingVerificationFromArchiveTelemetry(
+  row: TelemetryAuditRow,
+  cameraId: string,
+  verificationPeriodStart: Date,
+  verificationPeriodEnd: Date,
+) {
+  if (!['verified', 'estimated'].includes(row.quality)) return null;
+  const metrics = row.metrics ?? {};
+  const archiveStatus = metricString(metrics, 'archiveStatus');
+  if (!archiveStatus) return null;
+  const coverageComplete = metricBoolean(metrics, 'coverageComplete');
+  const playbackVerified = metricBoolean(metrics, 'playbackVerified');
+  const gapCount = metricNumber(metrics, 'gapCount');
+  const largestGapSeconds = metricNumber(metrics, 'largestGapSeconds');
+  const compliant = archiveStatus === 'available' && coverageComplete === true
+    && (gapCount ?? 0) === 0 && playbackVerified !== false;
+  const unavailable = archiveStatus === 'unavailable' || archiveStatus === 'empty';
+  const verificationStatus = compliant
+    ? 'compliant'
+    : unavailable ? 'non_compliant' : archiveStatus === 'available' ? 'partially_compliant' : 'not_assessed';
+
+  return {
+    tenantId: row.tenant_id,
+    cameraId,
+    branchNodeId: row.branch_node_id,
+    verificationDate: verificationPeriodStart.toISOString().slice(0, 10),
+    verificationPeriodStart: verificationPeriodStart.toISOString(),
+    verificationPeriodEnd: verificationPeriodEnd.toISOString(),
+    expectedDurationSeconds: Math.round((verificationPeriodEnd.getTime() - verificationPeriodStart.getTime()) / 1000),
+    totalGaps: gapCount,
+    largestGapSeconds,
+    timestampContinuityVerified: coverageComplete === undefined ? undefined : coverageComplete && (gapCount ?? 0) === 0,
+    storageAccessible: archiveStatus === 'available',
+    playbackFailures: playbackVerified === undefined ? undefined : playbackVerified ? 0 : 1,
+    verificationStatus,
+    compliancePercentage: compliant ? 100 : undefined,
+    issuesSummary: compliant ? undefined : [...new Set(row.reason_codes ?? [])].join(', ') || `archive_${archiveStatus}`,
+    metadata: telemetryMetadata(row),
+  };
+}
 
 /**
  * Scheduler Service - Manages automated compliance and audit jobs
  */
 export class SchedulerService {
-  private auditService: AuditService;
   private complianceService: ComplianceService;
   private auditRepo: AuditRepository;
   private scheduledJobs: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(private readonly pool: Pool) {
-    this.auditService = new AuditService(pool);
     this.complianceService = new ComplianceService(pool);
     this.auditRepo = new AuditRepository(pool);
   }
@@ -31,9 +215,6 @@ export class SchedulerService {
 
     // Recording Verification Jobs (run at 00:30 daily)
     this.scheduleDailyJob('daily-recording-verification', '00:30', () => this.runDailyRecordingVerification());
-
-    // Quality Assurance Jobs
-    this.scheduleWeeklyJob('weekly-quality-check', 'monday', '02:00', () => this.runWeeklyQualityChecks());
 
     // Compliance Assessment Jobs
     this.scheduleMonthlyJob('monthly-compliance-assessment', 1, '01:00', () => this.runMonthlyComplianceAssessment());
@@ -236,27 +417,48 @@ export class SchedulerService {
     const jobExecutionId = String(jobExecution.id);
 
     try {
-      // Get all active cameras from database
-      const result = await this.pool.query(
-        `SELECT c.id, c.tenant_id, c.branch_node_id 
-         FROM cameras c 
-         WHERE c.approval_status = 'approved'`
+      // Audit only fresh edge evidence. A missing probe is not a healthy camera.
+      const result = await this.pool.query<TelemetryAuditRow>(
+        `SELECT c.tenant_id::text, c.branch_node_id::text, c.id::text AS device_id,
+                telemetry.observed_at, telemetry.received_at, telemetry.source,
+                telemetry.quality, telemetry.idempotency_key, telemetry.metrics,
+                telemetry.reason_codes
+         FROM cameras c
+         JOIN LATERAL (
+           SELECT observed_at, received_at, source, quality, idempotency_key, metrics, reason_codes
+           FROM operational_health_telemetry
+           WHERE tenant_id = c.tenant_id
+             AND branch_id = c.branch_node_id
+             AND device_type = 'camera'
+             AND device_id = c.id::text
+           ORDER BY observed_at DESC, received_at DESC
+           LIMIT 1
+         ) telemetry ON true
+         WHERE c.approval_status = 'approved'
+           AND telemetry.observed_at >= now() - interval '10 minutes'
+           AND NOT EXISTS (
+             SELECT 1 FROM camera_health_checks checks
+             WHERE checks.camera_id = c.id
+               AND checks.metadata->>'telemetryIdempotencyKey' = telemetry.idempotency_key
+           )`
       );
 
       const cameras = result.rows;
       let succeeded = 0;
       let failed = 0;
+      let notAssessed = 0;
 
       for (const camera of cameras) {
         try {
-          await this.auditService.performCameraHealthCheck({
-            tenantId: camera.tenant_id,
-            cameraId: camera.id,
-            branchNodeId: camera.branch_node_id,
-          });
+          const input = cameraHealthAuditFromTelemetry(camera);
+          if (!input) {
+            notAssessed++;
+            continue;
+          }
+          await this.auditRepo.createCameraHealthCheck(input);
           succeeded++;
         } catch (error) {
-          console.error(`Health check failed for camera ${camera.id}:`, error);
+          console.error(`Health audit failed for camera ${camera.device_id}:`, error);
           failed++;
         }
       }
@@ -269,8 +471,9 @@ export class SchedulerService {
         itemsFailed: failed,
         resultSummary: {
           totalCameras: cameras.length,
-          healthChecksCompleted: succeeded,
-          healthChecksFailed: failed,
+          telemetryBackedChecks: succeeded,
+          notAssessed,
+          failed,
         },
       });
     } catch (error) {
@@ -298,35 +501,40 @@ export class SchedulerService {
     const jobExecutionId = String(jobExecution.id);
 
     try {
-      // Get all storage nodes
-      const result = await this.pool.query(
-        `SELECT DISTINCT storage_node_id, tenant_id, branch_node_id 
-         FROM storage_health_checks 
-         WHERE check_timestamp >= NOW() - INTERVAL '7 days'
-         UNION
-         SELECT id as storage_node_id, tenant_id, NULL as branch_node_id
-         FROM infrastructure_nodes 
-         WHERE node_type = 'storage'`
+      const result = await this.pool.query<TelemetryAuditRow>(
+        `SELECT DISTINCT ON (telemetry.tenant_id, telemetry.branch_id, telemetry.device_id)
+                telemetry.tenant_id::text, telemetry.branch_id::text AS branch_node_id,
+                telemetry.device_id, telemetry.observed_at, telemetry.received_at,
+                telemetry.source, telemetry.quality, telemetry.idempotency_key,
+                telemetry.metrics, telemetry.reason_codes
+         FROM operational_health_telemetry telemetry
+         WHERE telemetry.device_type = 'disk'
+           AND telemetry.observed_at >= now() - interval '2 hours'
+           AND NOT EXISTS (
+             SELECT 1 FROM storage_health_checks checks
+             WHERE checks.metadata->>'telemetryIdempotencyKey' = telemetry.idempotency_key
+           )
+         ORDER BY telemetry.tenant_id, telemetry.branch_id, telemetry.device_id,
+                  telemetry.observed_at DESC, telemetry.received_at DESC`
       );
 
       const nodes = result.rows;
       let succeeded = 0;
+      let notAssessed = 0;
+      let failed = 0;
 
       for (const node of nodes) {
         try {
-          await this.auditRepo.createStorageHealthCheck({
-            tenantId: node.tenant_id,
-            storageNodeId: node.storage_node_id,
-            branchNodeId: node.branch_node_id,
-            checkTimestamp: new Date().toISOString(),
-            storageNodeName: `Storage Node ${node.storage_node_id}`,
-            storageType: 'local',
-            overallStatus: 'healthy',
-            healthScore: 95,
-          });
+          const input = storageHealthAuditFromTelemetry(node);
+          if (!input) {
+            notAssessed++;
+            continue;
+          }
+          await this.auditRepo.createStorageHealthCheck(input);
           succeeded++;
         } catch (error) {
-          console.error(`Storage check failed for node ${node.storage_node_id}:`, error);
+          console.error(`Storage audit failed for device ${node.device_id}:`, error);
+          failed++;
         }
       }
 
@@ -335,7 +543,8 @@ export class SchedulerService {
         completedAt: new Date().toISOString(),
         itemsProcessed: nodes.length,
         itemsSucceeded: succeeded,
-        itemsFailed: nodes.length - succeeded,
+        itemsFailed: failed,
+        resultSummary: { telemetryBackedChecks: succeeded, notAssessed, failed },
       });
     } catch (error) {
       await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
@@ -373,39 +582,60 @@ export class SchedulerService {
     const jobExecutionId = String(jobExecution.id);
 
     try {
-      // Get all cameras
-      const result = await this.pool.query(
-        `SELECT c.id, c.tenant_id, c.branch_node_id 
-         FROM cameras c 
-         WHERE c.approval_status = 'approved'`
-      );
-
-      const cameras = result.rows;
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStart = new Date(yesterday.setHours(0, 0, 0, 0));
       const yesterdayEnd = new Date(yesterday.setHours(23, 59, 59, 999));
+      const result = await this.pool.query<TelemetryAuditRow & { camera_id: string }>(
+        `SELECT c.id::text AS camera_id, c.tenant_id::text,
+                c.branch_node_id::text AS branch_node_id, archive.device_id,
+                archive.observed_at, archive.received_at, archive.source,
+                archive.quality, archive.idempotency_key, archive.metrics,
+                archive.reason_codes
+         FROM cameras c
+         JOIN LATERAL (
+           SELECT device_id, observed_at, received_at, source, quality,
+                  idempotency_key, metrics, reason_codes
+           FROM operational_health_telemetry
+           WHERE tenant_id = c.tenant_id
+             AND branch_id = c.branch_node_id
+             AND device_type = 'archive'
+             AND metrics->>'cameraId' = c.id::text
+             AND observed_at >= now() - interval '36 hours'
+           ORDER BY observed_at DESC, received_at DESC
+           LIMIT 1
+         ) archive ON true
+         WHERE c.approval_status = 'approved'
+           AND NOT EXISTS (
+             SELECT 1 FROM recording_verification_jobs existing
+             WHERE existing.camera_id = c.id
+               AND existing.verification_date = $1::date
+           )`,
+        [yesterdayStart.toISOString().slice(0, 10)],
+      );
+
+      const cameras = result.rows;
 
       let succeeded = 0;
       let failed = 0;
+      let notAssessed = 0;
 
       for (const camera of cameras) {
         try {
-          // Create verification job for previous day
-          await this.auditRepo.createRecordingVerificationJob({
-            tenantId: camera.tenant_id,
-            cameraId: camera.id,
-            branchNodeId: camera.branch_node_id,
-            verificationDate: yesterdayStart.toISOString().split('T')[0],
-            verificationPeriodStart: yesterdayStart.toISOString(),
-            verificationPeriodEnd: yesterdayEnd.toISOString(),
-            expectedDurationSeconds: 86400,
-            verificationStatus: 'compliant',
-            compliancePercentage: 98.5,
-          });
+          const input = recordingVerificationFromArchiveTelemetry(
+            camera,
+            camera.camera_id,
+            yesterdayStart,
+            yesterdayEnd,
+          );
+          if (!input) {
+            notAssessed++;
+            continue;
+          }
+          await this.auditRepo.createRecordingVerificationJob(input);
           succeeded++;
         } catch (error) {
-          console.error(`Verification failed for camera ${camera.id}:`, error);
+          console.error(`Recording verification failed for camera ${camera.camera_id}:`, error);
           failed++;
         }
       }
@@ -416,6 +646,7 @@ export class SchedulerService {
         itemsProcessed: cameras.length,
         itemsSucceeded: succeeded,
         itemsFailed: failed,
+        resultSummary: { directArchiveChecks: succeeded, notAssessed, failed },
       });
     } catch (error) {
       await this.auditRepo.updateComplianceJobExecution(jobExecutionId, {
@@ -423,37 +654,6 @@ export class SchedulerService {
         completedAt: new Date().toISOString(),
         errorMessage: error instanceof Error ? error.message : String(error || 'Unknown error'),
       });
-    }
-  }
-
-  /**
-   * Run weekly quality checks on sample cameras
-   */
-  private async runWeeklyQualityChecks() {
-    console.log('Running weekly quality checks...');
-    // Sample 10% of cameras for quality check
-    const result = await this.pool.query(
-      `SELECT c.id, c.tenant_id, c.branch_node_id 
-       FROM cameras c 
-       WHERE c.approval_status = 'approved'
-       ORDER BY RANDOM() 
-       LIMIT (SELECT COUNT(*) / 10 FROM cameras WHERE approval_status = 'approved')`
-    );
-
-    for (const camera of result.rows) {
-      try {
-        await this.auditService.performCameraQualityCheck({
-          tenantId: camera.tenant_id,
-          cameraId: camera.id,
-          branchNodeId: camera.branch_node_id,
-          checkedBy: 'system',
-          expectedResolution: '1920x1080',
-          expectedFps: 25,
-          expectedBitrateKbps: 4096,
-        });
-      } catch (error) {
-        console.error(`Quality check failed for camera ${camera.id}:`, error);
-      }
     }
   }
 
