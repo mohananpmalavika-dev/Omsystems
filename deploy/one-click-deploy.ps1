@@ -39,8 +39,9 @@ Write-Host "1) Vercel (Dashboard only)"
 Write-Host "2) Railway (Full backend)"
 Write-Host "3) Self-hosted (Docker Compose)"
 Write-Host "4) Test local cameras (Quick start)"
+Write-Host "5) 🌟 AWS (CloudFormation / EC2 / Lightsail / ECS)" -ForegroundColor Green
 Write-Host ""
-$choice = Read-Host "Enter choice [1-4]"
+$choice = Read-Host "Enter choice [1-5]"
 
 switch ($choice) {
     "1" {
@@ -252,6 +253,12 @@ DASHBOARD_DEV_USER_ID=user-global-admin
         Write-Host "4. Open http://localhost:3000 to view cameras"
         Write-Host ""
         Write-Host "See QUICK_START_2_CAMERAS.md for detailed instructions"
+    }
+    
+    "5" {
+        Write-Host ""
+        Write-Host "🚀 Launching AWS Deployment Center..." -ForegroundColor Cyan
+        & "$PSScriptRoot\aws\deploy-to-aws.ps1"
     }
     
     default {
