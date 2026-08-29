@@ -37,6 +37,7 @@
   ],
   "exclude": [
     "node_modules",
+    "vite.config.ts",
     "**/__tests__/**",
     "**/*.test.ts",
     "**/*.test.tsx"
