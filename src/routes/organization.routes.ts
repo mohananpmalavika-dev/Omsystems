@@ -250,20 +250,21 @@ export async function registerOrganizationRoutes(
         });
       }
 
-      // Fail closed if this existence check errors. Proceeding after a
-      // transient database failure can create a duplicate company root.
-      const existingNodes = await store.listOrganizationNodes(
-        request.currentUser.tenantId,
-        "company",
-        undefined,
-        false,
-      );
+      // Allow super_admin to create multiple client/organization roots
+      if (request.currentUser.role !== "super_admin") {
+        const existingNodes = await store.listOrganizationNodes(
+          request.currentUser.tenantId,
+          "company",
+          undefined,
+          false,
+        );
 
-      if (existingNodes.length > 0) {
-        return reply.code(409).send({
-          error: "organization_already_exists",
-          message: "An organization already exists for this tenant. Only one company node is allowed per tenant.",
-        });
+        if (existingNodes.length > 0) {
+          return reply.code(409).send({
+            error: "organization_already_exists",
+            message: "An organization already exists for this tenant. Only one company node is allowed per tenant.",
+          });
+        }
       }
     } else if (
       !(await requireAccess(

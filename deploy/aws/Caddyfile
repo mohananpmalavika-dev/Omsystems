@@ -5,13 +5,18 @@
 {
     # Global options
     admin off
-    email {$ADMIN_EMAIL:admin@example.com}
-    auto_https disable_redirects
+    email dhanyamohan@kryptonlogic.com
 }
 
-:80, :443, {$DOMAIN_NAME:localhost} {
+3-7-216-169.sslip.io, 3.7.216.169.sslip.io, :80, :443 {
     # Encode responses with zstd or gzip
     encode zstd gzip
+
+    # Remove restrictive frame headers and allow modal iframe embedding
+    header {
+        -X-Frame-Options
+        Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
+    }
 
     # 1. MediaMTX Live Video Streams (HLS & WebRTC WHEP)
     handle_path /stream/* {
@@ -21,15 +26,7 @@
         }
     }
 
-    # 2. Control Plane Core API & WebSockets
-    handle /api/control/* {
-        reverse_proxy control-plane:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-
+    # 2. Direct Control Plane endpoints & WebSockets
     handle /ready {
         reverse_proxy control-plane:8080
     }
@@ -45,7 +42,7 @@
         }
     }
 
-    # 3. Next.js Web Dashboard
+    # 3. Next.js Web Dashboard & BFF (/api/control/*)
     handle {
         reverse_proxy dashboard:10000 {
             header_up Host {host}

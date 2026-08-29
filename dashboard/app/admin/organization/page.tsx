@@ -88,6 +88,20 @@ type CameraItem = {
   vendor: string;
 };
 
+async function fetchWithAuth(url: string, options: RequestInit = {}) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  const headers = new Headers(options.headers);
+  if (token) {
+    headers.set("x-sentinel-session", token);
+    headers.set("authorization", `Bearer ${token}`);
+  }
+  return fetch(url, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+}
+
 export default function OrganizationHierarchyPage() {
   const [activeTab, setActiveTab] = useState<"hierarchy" | "employees">("hierarchy");
   const [loading, setLoading] = useState(true);
@@ -104,6 +118,12 @@ export default function OrganizationHierarchyPage() {
 
   // Modals & Form state
   const [showAddNodeModal, setShowAddNodeModal] = useState(false);
+  const [showEditNodeModal, setShowEditNodeModal] = useState(false);
+  const [editingNode, setEditingNode] = useState<OrgNode | null>(null);
+  const [editNodeName, setEditNodeName] = useState("");
+  const [editNodeCode, setEditNodeCode] = useState("");
+  const [editNodeDesc, setEditNodeDesc] = useState("");
+
   const [selectedParentNode, setSelectedParentNode] = useState<OrgNode | null>(null);
   const [newNodeType, setNewNodeType] = useState<OrgNode["type"]>("branch");
   const [newNodeName, setNewNodeName] = useState("");
@@ -151,7 +171,7 @@ export default function OrganizationHierarchyPage() {
     setError(null);
     try {
       // 1. Fetch Tree
-      const treeRes = await fetch("/api/control/v1/organization/tree");
+      const treeRes = await fetchWithAuth("/api/control/v1/organization/tree");
       if (treeRes.ok) {
         const treeJson = await treeRes.json();
         const nodes = Array.isArray(treeJson) ? treeJson : treeJson.data || [];
@@ -179,14 +199,14 @@ export default function OrganizationHierarchyPage() {
       }
 
       // 2. Fetch Users / Employees
-      const usersRes = await fetch("/api/control/v1/users");
+      const usersRes = await fetchWithAuth("/api/control/v1/users");
       if (usersRes.ok) {
         const usersJson = await usersRes.json();
         setEmployees(Array.isArray(usersJson) ? usersJson : usersJson.data || []);
       }
 
       // 3. Fetch Cameras
-      const camsRes = await fetch("/api/control/v1/cameras");
+      const camsRes = await fetchWithAuth("/api/control/v1/cameras");
       if (camsRes.ok) {
         const camsJson = await camsRes.json();
         setCameras(Array.isArray(camsJson) ? camsJson : camsJson.data || []);
@@ -301,6 +321,47 @@ export default function OrganizationHierarchyPage() {
     reader.readAsDataURL(file);
   }
 
+  function openEditNode(node: OrgNode) {
+    setEditingNode(node);
+    setEditNodeName(node.name || "");
+    setEditNodeCode(node.code || "");
+    setEditNodeDesc(node.description || "");
+    setShowEditNodeModal(true);
+  }
+
+  async function handleUpdateNode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingNode || !editNodeName.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload = {
+        name: editNodeName.trim(),
+        code: editNodeCode.trim() || undefined,
+        description: editNodeDesc.trim() || undefined,
+      };
+
+      const res = await fetchWithAuth(`/api/control/v1/organization/nodes/${editingNode.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || errJson.error || "Failed to update organization node");
+      }
+
+      setNotice(`Successfully updated ${editingNode.type} "${editNodeName}"!`);
+      setShowEditNodeModal(false);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to update node");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function openAddNode(parent: OrgNode | null, defaultType: OrgNode["type"] = "branch") {
     setSelectedParentNode(parent);
     setNewNodeType(defaultType);
@@ -324,7 +385,7 @@ export default function OrganizationHierarchyPage() {
         description: newNodeDesc.trim() || undefined,
       };
 
-      const res = await fetch("/api/control/v1/organization/nodes", {
+      const res = await fetchWithAuth("/api/control/v1/organization/nodes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -350,7 +411,7 @@ export default function OrganizationHierarchyPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/control/v1/organization/nodes/${node.id}`, {
+      const res = await fetchWithAuth(`/api/control/v1/organization/nodes/${node.id}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -396,7 +457,7 @@ export default function OrganizationHierarchyPage() {
         faceEnrolled: true,
       };
 
-      const res = await fetch("/api/control/v1/users", {
+      const res = await fetchWithAuth("/api/control/v1/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -446,7 +507,7 @@ export default function OrganizationHierarchyPage() {
         isPrimary: false,
       };
 
-      await fetch(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
+      await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -529,13 +590,22 @@ export default function OrganizationHierarchyPage() {
 
           <div className="flex items-center gap-1.5 opacity-80 hover:opacity-100 transition-opacity">
             {node.type === "company" && (
-              <button
-                onClick={() => openAddNode(node, "zone")}
-                className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 rounded flex items-center gap-1"
-                title="Add Zone / Division"
-              >
-                <Plus size={12} /> Add Zone
-              </button>
+              <>
+                <button
+                  onClick={() => openAddNode(node, "branch")}
+                  className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 rounded flex items-center gap-1"
+                  title="Add Branch / Facility"
+                >
+                  <Plus size={12} /> Add Branch
+                </button>
+                <button
+                  onClick={() => openAddNode(node, "zone")}
+                  className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 rounded flex items-center gap-1"
+                  title="Add Zone / Division"
+                >
+                  <Plus size={12} /> Add Zone
+                </button>
+              </>
             )}
             {(node.type === "zone" || node.type === "division") && (
               <button
@@ -564,6 +634,13 @@ export default function OrganizationHierarchyPage() {
                 <Plus size={12} /> Add Location Zone
               </button>
             )}
+            <button
+              onClick={() => openEditNode(node)}
+              className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition-colors"
+              title="Edit / Rename Node"
+            >
+              <Edit2 size={13} />
+            </button>
             {node.type !== "company" && (
               <button
                 onClick={() => handleDeleteNode(node)}
@@ -916,13 +993,36 @@ export default function OrganizationHierarchyPage() {
 
               <form onSubmit={handleCreateNode} className="space-y-3.5 text-xs">
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Parent Location</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={selectedParentNode ? `${selectedParentNode.name} (${selectedParentNode.type})` : "Root Organization"}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-400 font-mono text-xs"
-                  />
+                  <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
+                    <span>Parent Location / Organization</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Select parent or leave empty for root</span>
+                  </label>
+                  <select
+                    value={selectedParentNode?.id || ""}
+                    onChange={(e) => {
+                      const found = flatNodes.find((n) => n.id === e.target.value) || null;
+                      setSelectedParentNode(found);
+                      if (!found) {
+                        setNewNodeType("company");
+                      } else if (found.type === "company") {
+                        setNewNodeType("branch");
+                      } else if (found.type === "zone" || found.type === "division") {
+                        setNewNodeType("region");
+                      } else if (found.type === "region") {
+                        setNewNodeType("branch");
+                      } else if (found.type === "branch") {
+                        setNewNodeType("location-group");
+                      }
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
+                  >
+                    <option value="">None (Create as Top-Level Root Organization)</option>
+                    {flatNodes.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.name} ({n.type.toUpperCase()})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -990,6 +1090,86 @@ export default function OrganizationHierarchyPage() {
                     className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5"
                   >
                     {saving ? "Saving..." : "Save to Database"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 1B: Edit Node / Location */}
+        {showEditNodeModal && editingNode && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Edit2 size={16} className="text-amber-400" />
+                  Edit {editingNode.type.toUpperCase()}: {editingNode.name}
+                </h3>
+                <button
+                  onClick={() => setShowEditNodeModal(false)}
+                  className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateNode} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Node Type</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={editingNode.type.toUpperCase()}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-400 font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editNodeName}
+                    onChange={(e) => setEditNodeName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Code (Optional)</label>
+                  <input
+                    type="text"
+                    value={editNodeCode}
+                    onChange={(e) => setEditNodeCode(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Description</label>
+                  <textarea
+                    rows={2}
+                    value={editNodeDesc}
+                    onChange={(e) => setEditNodeDesc(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditNodeModal(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                  >
+                    {saving ? "Saving..." : "Update Changes"}
                   </button>
                 </div>
               </form>

@@ -40,7 +40,11 @@ try {
   console.log("");
   
   // Import and run the edge agent
-  await import("./build/tsc/index.js");
+  try {
+    await import("./src/index.ts");
+  } catch {
+    await import("./build/tsc/index.js");
+  }
 } catch (error) {
   console.error("Failed to load .env or start edge agent:", error.message);
   process.exit(1);

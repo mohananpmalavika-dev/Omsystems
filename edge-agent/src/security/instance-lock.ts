@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
 
 export interface InstanceLockResult {
   acquired: boolean;
@@ -31,13 +32,43 @@ export function isPidRunning(pid: number): boolean {
   }
 }
 
+/**
+ * Forcefully terminates a previous process by PID.
+ */
+export function killProcessByPid(pid: number): boolean {
+  if (!pid || pid <= 0 || pid === process.pid) return false;
+  try {
+    if (process.platform === "win32") {
+      try {
+        execSync(`taskkill /F /T /PID ${pid}`, { stdio: "ignore" });
+        return true;
+      } catch {
+        // Fallback to process.kill
+      }
+    }
+    process.kill(pid, "SIGTERM");
+    setTimeout(() => {
+      try {
+        if (isPidRunning(pid)) process.kill(pid, "SIGKILL");
+      } catch {}
+    }, 500);
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
 const activeHeldLocks = new Set<string>();
 
 /**
  * Acquires a single-instance lock for the Edge Agent.
- * If another instance is running, returns acquired: false with the existing PID.
+ * When takeOver is true (default), automatically terminates previous agent instances
+ * so the new instance starts cleanly without manual intervention.
  */
-export function acquireSingleInstanceLock(homeDirectory: string): InstanceLockResult {
+export function acquireSingleInstanceLock(
+  homeDirectory: string,
+  options: { takeOver?: boolean } = { takeOver: true }
+): InstanceLockResult {
   const dataDir = join(homeDirectory, "data");
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true });
@@ -45,30 +76,40 @@ export function acquireSingleInstanceLock(homeDirectory: string): InstanceLockRe
 
   const lockPath = join(dataDir, "edge-agent.lock");
 
-  if (activeHeldLocks.has(lockPath)) {
-    return {
-      acquired: false,
-      lockPath,
-      existingPid: process.pid,
-      release: () => {},
-    };
-  }
-
   // Check existing lock
   if (existsSync(lockPath)) {
     try {
       const content = readFileSync(lockPath, "utf8");
       const data: LockFilePayload = JSON.parse(content);
-      if (data.pid && isPidRunning(data.pid)) {
-        return {
-          acquired: false,
-          lockPath,
-          existingPid: data.pid,
-          release: () => {},
-        };
+      if (data.pid && data.pid !== process.pid) {
+        if (isPidRunning(data.pid)) {
+          if (options.takeOver !== false) {
+            console.log(`[InstanceLock] Terminating previous Edge Agent instance (PID: ${data.pid})...`);
+            killProcessByPid(data.pid);
+            // Brief pause to allow the OS to release resources
+            try {
+              unlinkSync(lockPath);
+            } catch {}
+          } else {
+            return {
+              acquired: false,
+              lockPath,
+              existingPid: data.pid,
+              release: () => {},
+            };
+          }
+        } else {
+          // Stale lock from a dead process
+          try {
+            unlinkSync(lockPath);
+          } catch {}
+        }
       }
     } catch {
       // Invalid or corrupted lockfile; will be overwritten
+      try {
+        unlinkSync(lockPath);
+      } catch {}
     }
   }
 

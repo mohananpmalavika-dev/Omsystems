@@ -139,19 +139,19 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         status: response.status,
         headers: { "cache-control": "no-store" },
       });
-      const secure = request.nextUrl.protocol === "https:" || process.env.NODE_ENV === "production";
+      const isHttps = request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
-        sameSite: "strict",
-        secure,
+        sameSite: "lax",
+        secure: isHttps,
         path: "/",
         maxAge: payload.expiresIn || 86400,
       });
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
           httpOnly: true,
-          sameSite: "strict",
-          secure,
+          sameSite: "lax",
+          secure: isHttps,
           path: "/",
           maxAge: 30 * 24 * 60 * 60,
         });

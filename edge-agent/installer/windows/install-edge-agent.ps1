@@ -101,27 +101,25 @@ function Get-InstalledAgentProcesses([string]$Root) {
 }
 
 function Stop-InstalledAgentProcesses([string]$Root) {
-  # Task Scheduler returns before the agent and its media children always exit.
-  # Wait for a graceful shutdown before replacing any in-use EXE or runtime file.
-  $gracefulDeadline = (Get-Date).AddSeconds(20)
-  do {
-    $running = @(Get-InstalledAgentProcesses $Root)
-    if ($running.Count -eq 0) { return }
-    Start-Sleep -Milliseconds 250
-  } while ((Get-Date) -lt $gracefulDeadline)
+  Write-Host "Terminating any previous Sentinel Grid Edge Agent processes..." -ForegroundColor Yellow
+  
+  # 1. Kill by specific process names
+  Get-Process -Name "edge-agent", "mediamtx", "ffmpeg", "cloudflared" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Id -ne $PID } |
+    Stop-Process -Force -ErrorAction SilentlyContinue
 
-  foreach ($process in $running) {
-    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+  # 2. Kill by Root directory path matching
+  try {
+    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+      Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase) -and $_.ProcessId -ne $PID } |
+      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+  } catch { }
+
+  # 3. Clean stale lock files
+  $lockFile = Join-Path $Root "data\edge-agent.lock"
+  if (Test-Path -LiteralPath $lockFile) {
+    Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue
   }
-
-  $forcedDeadline = (Get-Date).AddSeconds(10)
-  do {
-    $running = @(Get-InstalledAgentProcesses $Root)
-    if ($running.Count -eq 0) { return }
-    Start-Sleep -Milliseconds 250
-  } while ((Get-Date) -lt $forcedDeadline)
-
-  throw "The existing Sentinel Grid Edge Agent processes did not stop. Close any running scanner window and retry the installer."
 }
 
 Assert-Administrator
@@ -137,8 +135,7 @@ $DataDirectory = Join-Path $InstallDirectory "data"
 New-Item -ItemType Directory -Path $InstallDirectory, $ConfigDirectory, $LogDirectory, $DataDirectory -Force | Out-Null
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existingTask) {
-  Disable-ScheduledTask -TaskName $TaskName -ErrorAction Stop | Out-Null
-  $RestoreExistingTaskOnFailure = $true
+  Disable-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
 Stop-InstalledAgentProcesses $InstallDirectory

@@ -543,13 +543,14 @@ export class InfrastructureRepository {
 
     if (input.parentNodeId) {
       const parentRes = await this.pool.query(
-        `SELECT id::text, path::text FROM resource_nodes WHERE id = $1::uuid AND tenant_id = $2::uuid LIMIT 1`,
-        [input.parentNodeId, resolvedTenantId],
+        `SELECT id::text, path::text, tenant_id::text FROM resource_nodes WHERE id = $1::uuid LIMIT 1`,
+        [input.parentNodeId],
       );
       const parent = parentRes.rows[0];
       if (!parent) {
         throw new Error("invalid_parent");
       }
+      const actualTenantId = parent.tenant_id || resolvedTenantId;
       const newPath = `${parent.path}.${ltreeId}`;
       const result = await this.pool.query(
         `INSERT INTO resource_nodes (
@@ -563,7 +564,7 @@ export class InfrastructureRepository {
          RETURNING id::text`,
         [
           id,
-          resolvedTenantId,
+          actualTenantId,
           parent.id,
           input.nodeType,
           input.name,

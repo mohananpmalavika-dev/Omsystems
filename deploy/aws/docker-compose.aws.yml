@@ -110,6 +110,7 @@ services:
       CONTROL_PLANE_PUBLIC_URL: ${CONTROL_PLANE_PUBLIC_URL:-http://3.7.216.169:8080}
       RECORDING_ENGINE_URL: http://recording-engine:8091
       ANALYTICS_ENGINE_URL: http://analytics-engine:8092
+      BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
     ports:
       - "8080:8080"
     depends_on:
