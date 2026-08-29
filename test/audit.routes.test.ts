@@ -1,246 +1,139 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type FastifyInstance } from "fastify";
-import { createTestApp, type TestContext } from "./test-app.js";
+import Fastify, { type FastifyInstance } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ControlPlaneStore } from '../src/control-plane-store.js';
+import type { AuditRepository } from '../src/database/audit-repository.js';
+import { registerAuditRoutes } from '../src/routes/audit.routes.js';
 
-describe("Audit Routes", () => {
+const user = {
+  id: 'user-1', tenantId: 'tenant-1', username: 'operator', displayName: 'Operator',
+  role: 'global_admin', status: 'active',
+};
+const branch = { id: '00000000-0000-4000-8000-000000000101', name: 'Branch 101', type: 'branch' };
+const camera = {
+  id: '00000000-0000-4000-8000-000000000201', name: 'Entrance',
+  branchId: branch.id, nodeId: branch.id, edgeAgentId: 'edge-1', status: 'online',
+};
+
+function makeStore(overrides: Record<string, unknown> = {}) {
+  return {
+    listAccessibleNodes: vi.fn().mockResolvedValue([branch]),
+    listCamerasByBranch: vi.fn().mockResolvedValue([camera]),
+    getCamera: vi.fn().mockResolvedValue(camera),
+    checkAccess: vi.fn().mockResolvedValue({ allowed: true, reason: 'role_grant' }),
+    getEdgeAgent: vi.fn().mockResolvedValue({ id: 'edge-1', branchId: branch.id, status: 'online' }),
+    createEdgeCommand: vi.fn().mockResolvedValue({ id: 'command-1', status: 'queued' }),
+    writeAudit: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  } as unknown as ControlPlaneStore;
+}
+
+function makeAudits(overrides: Record<string, unknown> = {}) {
+  return {
+    getBranchComplianceSummary: vi.fn().mockResolvedValue([]),
+    listLatestCameraHealthChecks: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  } as unknown as AuditRepository;
+}
+
+describe('audit routes', () => {
   let app: FastifyInstance;
-  let context: TestContext;
 
-  beforeEach(async () => {
-    const testApp = await createTestApp();
-    app = testApp.app;
-    context = testApp.context;
+  beforeEach(() => {
+    app = Fastify({ logger: false });
+    app.decorateRequest('currentUser', null);
+    app.addHook('onRequest', async (request) => {
+      request.currentUser = user as typeof request.currentUser;
+    });
   });
 
   afterEach(async () => {
     await app.close();
   });
 
-  describe("GET /v1/audit/health", () => {
-    it("returns health summary when summary=true", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/health?summary=true",
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("summary");
-      expect(payload.summary).toHaveProperty("total");
-      expect(payload.summary).toHaveProperty("healthy");
-      expect(payload.summary).toHaveProperty("degraded");
-      expect(payload.summary).toHaveProperty("offline");
-      expect(payload.summary).toHaveProperty("healthScore");
-      
-      expect(typeof payload.summary.total).toBe("number");
-      expect(typeof payload.summary.healthScore).toBe("number");
+  it('summarizes only persisted, accessible camera audit evidence', async () => {
+    const audits = makeAudits({
+      listLatestCameraHealthChecks: vi.fn().mockResolvedValue([{
+        id: 'health-1', cameraId: camera.id, overallStatus: 'degraded',
+        isOnline: true, isRecording: null, healthScore: null,
+      }]),
     });
+    await registerAuditRoutes(app, makeStore(), audits);
 
-    it("returns detailed health records without summary parameter", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/health",
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
+    const response = await app.inject({ method: 'GET', url: '/v1/audit/health?summary=true' });
 
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("data");
-      expect(payload).toHaveProperty("total");
-      expect(Array.isArray(payload.data)).toBe(true);
-      expect(typeof payload.total).toBe("number");
-    });
-
-    it("filters cameras by branchNodeId", async () => {
-      // First, create a test branch and camera
-      const branch = await context.store.createNode(
-        context.tenantId,
-        "branch-test",
-        "branch",
-        null,
-        { name: "Test Branch" },
-      );
-
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/audit/health?branchNodeId=${branch.id}`,
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("data");
-      // All returned cameras should belong to the specified branch
-      if (payload.data.length > 0) {
-        payload.data.forEach((record: any) => {
-          expect(record.branchNodeId).toBe(branch.id);
-        });
-      }
-    });
-
-    it("filters cameras by status", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/health?status=healthy",
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("data");
-      // All returned cameras should have 'healthy' status
-      payload.data.forEach((record: any) => {
-        expect(record.status).toBe("healthy");
-      });
-    });
-
-    it("returns camera health metrics", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/health",
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
-
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      if (payload.data.length > 0) {
-        const healthRecord = payload.data[0];
-        
-        expect(healthRecord).toHaveProperty("cameraId");
-        expect(healthRecord).toHaveProperty("cameraName");
-        expect(healthRecord).toHaveProperty("branchNodeId");
-        expect(healthRecord).toHaveProperty("status");
-        expect(healthRecord).toHaveProperty("lastCheckAt");
-        expect(healthRecord).toHaveProperty("uptime");
-        expect(healthRecord).toHaveProperty("metrics");
-        
-        expect(healthRecord.metrics).toHaveProperty("fps");
-        expect(healthRecord.metrics).toHaveProperty("bitrate");
-        expect(healthRecord.metrics).toHaveProperty("temperature");
-      }
-    });
-
-    it("requires authentication", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/health",
-      });
-
-      // Should return 401 or 403 without proper authentication
-      expect([401, 403]).toContain(response.statusCode);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      data: {
+        totalCameras: 1,
+        assessedCameras: 1,
+        unassessedCameras: 0,
+        onlineCameras: 1,
+        recordingCameras: 0,
+        healthyCameras: 0,
+        warningCameras: 0,
+        degradedCameras: 1,
+        criticalCameras: 0,
+        offlineCameras: 0,
+        avgHealthScore: null,
+      },
     });
   });
 
-  describe("POST /v1/audit/health/check", () => {
-    it("triggers health check and returns 202", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/audit/health/check",
-        headers: {
-          "x-user-id": "user-global-admin",
-          "content-type": "application/json",
-        },
-        payload: {
-          branchNodeId: "00000000-0000-0000-0000-000000000001",
-        },
-      });
+  it('does not expose audit rows for a camera removed by camera-level access rules', async () => {
+    const audits = makeAudits({
+      listLatestCameraHealthChecks: vi.fn().mockResolvedValue([
+        { id: 'allowed', cameraId: camera.id, overallStatus: 'healthy' },
+        { id: 'blocked', cameraId: '00000000-0000-4000-8000-000000000999', overallStatus: 'healthy' },
+      ]),
+    });
+    await registerAuditRoutes(app, makeStore(), audits);
 
-      expect(response.statusCode).toBe(202);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("message");
-      expect(payload).toHaveProperty("status");
-      expect(payload.status).toBe("in-progress");
+    const response = await app.inject({ method: 'GET', url: '/v1/audit/health' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ data: [{ id: 'allowed' }], total: 1 });
+  });
+
+  it('queues a real edge camera probe for a manual health check', async () => {
+    const store = makeStore();
+    await registerAuditRoutes(app, store, makeAudits());
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/health/check',
+      payload: { cameraId: camera.id },
     });
 
-    it("accepts cameraId parameter", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/audit/health/check",
-        headers: {
-          "x-user-id": "user-global-admin",
-          "content-type": "application/json",
-        },
-        payload: {
-          cameraId: "00000000-0000-0000-0000-000000000002",
-        },
-      });
-
-      expect(response.statusCode).toBe(202);
-    });
-
-    it("accepts empty body for global health check", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/audit/health/check",
-        headers: {
-          "x-user-id": "user-global-admin",
-          "content-type": "application/json",
-        },
-        payload: {},
-      });
-
-      expect(response.statusCode).toBe(202);
-    });
-
-    it("requires authentication", async () => {
-      const response = await app.inject({
-        method: "POST",
-        url: "/v1/audit/health/check",
-        payload: {},
-      });
-
-      // Should return 401 or 403 without proper authentication
-      expect([401, 403]).toContain(response.statusCode);
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({ status: 'queued', queued: 1, unavailable: 0 });
+    expect(store.createEdgeCommand).toHaveBeenCalledWith({
+      edgeAgentId: 'edge-1', type: 'probe-camera', payload: { cameraId: camera.id }, requestedBy: user.id,
     });
   });
 
-  describe("GET /v1/audit/branch-compliance", () => {
-    it("returns branch compliance summary", async () => {
-      const response = await app.inject({
-        method: "GET",
-        url: "/v1/audit/branch-compliance",
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
+  it('reports an unavailable probe instead of claiming a check was started', async () => {
+    const store = makeStore({ getEdgeAgent: vi.fn().mockResolvedValue({ id: 'edge-1', branchId: branch.id, status: 'offline' }) });
+    await registerAuditRoutes(app, store, makeAudits());
 
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("data");
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/audit/health/check',
+      payload: { cameraId: camera.id },
     });
 
-    it("filters by branchNodeId when provided", async () => {
-      const branchId = "00000000-0000-0000-0000-000000000001";
-      const response = await app.inject({
-        method: "GET",
-        url: `/v1/audit/branch-compliance?branchNodeId=${branchId}`,
-        headers: {
-          "x-user-id": "user-global-admin",
-        },
-      });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: 'edge_probe_unavailable' });
+    expect(store.createEdgeCommand).not.toHaveBeenCalled();
+  });
 
-      expect(response.statusCode).toBe(200);
-      const payload = response.json();
-      
-      expect(payload).toHaveProperty("data");
-    });
+  it('scopes branch compliance queries to accessible branches', async () => {
+    const getBranchComplianceSummary = vi.fn().mockResolvedValue([{ branchId: branch.id }]);
+    await registerAuditRoutes(app, makeStore(), makeAudits({ getBranchComplianceSummary }));
+
+    const response = await app.inject({ method: 'GET', url: '/v1/audit/branch-compliance' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ data: [{ branchId: branch.id }] });
+    expect(getBranchComplianceSummary).toHaveBeenCalledWith(user.tenantId, branch.id);
   });
 });

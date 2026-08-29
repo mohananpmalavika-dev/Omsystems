@@ -1,20 +1,50 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ClipboardCheck } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
+import type { MaintenanceAsset, WorkOrder } from "@/lib/types";
+
+function assetLabel(asset: MaintenanceAsset | undefined) {
+  if (!asset) return "Not linked";
+  const identity = [asset.make, asset.model].filter(Boolean).join(" ");
+  return identity || asset.assetType;
+}
 
 export default function WorkOrdersListPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<WorkOrder[]>([]);
+  const [assets, setAssets] = useState<MaintenanceAsset[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    void maintenanceApi.listWorkOrders().then((r) => setItems(r.data)).catch((err) => setError(err.message || String(err))).finally(() => setLoading(false));
+    let active = true;
+    void Promise.all([
+      maintenanceApi.listWorkOrders(),
+      maintenanceApi.listAssets(),
+    ])
+      .then(([workOrders, assetResponse]) => {
+        if (!active) return;
+        setItems(workOrders.data);
+        setAssets(assetResponse.data);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
+
+  const assetsById = useMemo(
+    () => new Map(assets.map((asset) => [asset.id, asset])),
+    [assets],
+  );
 
   return (
     <ModulePage
@@ -33,32 +63,36 @@ export default function WorkOrdersListPage() {
       emptyDescription="Create a work order when an asset needs inspection, repair, replacement, or planned service."
     >
       <div className="module-table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Order ID</th>
-            <th>Task</th>
-            <th>Asset</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th><span className="sr-only">Actions</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => (
-            <tr key={it.id}>
-              <td><span className="module-id">{it.id}</span></td>
-              <td><strong className="module-row-title">{it.title}</strong></td>
-              <td>{it.assetId ?? 'Not linked'}</td>
-              <td><span className={`module-priority ${(it.priority || '').toLowerCase()}`}>{it.priority ?? 'Normal'}</span></td>
-              <td><ModuleStatus value={it.status} /></td>
-              <td className="module-row-action">
-                <Link href={`/maintenance/workorders/${it.id}`}>View details</Link>
-              </td>
+        <table>
+          <thead>
+            <tr>
+              <th>Order</th>
+              <th>Problem</th>
+              <th>Asset</th>
+              <th>Severity</th>
+              <th>Status</th>
+              <th><span className="sr-only">Actions</span></th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map((item) => (
+              <tr key={item.id}>
+                <td><span className="module-id">{item.workOrderNumber}</span></td>
+                <td><strong className="module-row-title">{item.problem}</strong></td>
+                <td>{item.assetId ? assetLabel(assetsById.get(item.assetId)) : "Not linked"}</td>
+                <td>
+                  <span className={`module-priority ${item.severity}`}>
+                    {item.severity}
+                  </span>
+                </td>
+                <td><ModuleStatus value={item.status} /></td>
+                <td className="module-row-action">
+                  <Link href={`/maintenance/workorders/${item.id}`}>View details</Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </ModulePage>
   );

@@ -6,6 +6,8 @@ import { PageHero } from '@/components/page-hero';
 
 interface HealthSummary {
   totalCameras: number;
+  assessedCameras: number;
+  unassessedCameras: number;
   onlineCameras: number;
   recordingCameras: number;
   healthyCameras: number;
@@ -13,7 +15,7 @@ interface HealthSummary {
   degradedCameras: number;
   criticalCameras: number;
   offlineCameras: number;
-  avgHealthScore: number;
+  avgHealthScore: number | null;
 }
 
 interface CameraHealth {
@@ -24,13 +26,13 @@ interface CameraHealth {
   branchName: string;
   checkTimestamp: string;
   isOnline: boolean;
-  isRecording: boolean;
+  isRecording: boolean | null;
   overallStatus: string;
-  healthScore: number;
+  healthScore: number | string | null;
   issuesDetected: string[];
-  currentFps: number;
-  currentBitrateKbps: number;
-  latencyMs: number;
+  currentFps: number | string | null;
+  currentBitrateKbps: number | string | null;
+  latencyMs: number | string | null;
 }
 
 export default function CameraHealthPage() {
@@ -98,11 +100,19 @@ export default function CameraHealthPage() {
     }
   };
 
-  const getHealthScoreColor = (score: number) => {
-    if (score >= 90) return 'text-green-600';
-    if (score >= 70) return 'text-yellow-600';
-    if (score >= 50) return 'text-orange-600';
+  const getHealthScoreColor = (score: number | string | null) => {
+    const normalized = score === null ? Number.NaN : Number(score);
+    if (!Number.isFinite(normalized)) return 'text-gray-500';
+    if (normalized >= 90) return 'text-green-600';
+    if (normalized >= 70) return 'text-yellow-600';
+    if (normalized >= 50) return 'text-orange-600';
     return 'text-red-600';
+  };
+
+  const formatMetric = (value: number | string | null, decimals = 0) => {
+    if (value === null || value === '') return 'N/A';
+    const normalized = Number(value);
+    return Number.isFinite(normalized) ? normalized.toFixed(decimals) : 'N/A';
   };
 
   if (loading) {
@@ -128,10 +138,18 @@ export default function CameraHealthPage() {
 
       {/* Summary Statistics */}
       {summary && (
-        <div className="audit-health-summary-grid grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-6">
+        <div className="audit-health-summary-grid grid grid-cols-2 md:grid-cols-5 lg:grid-cols-10 gap-4 mb-6">
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600 mb-1">Total</div>
             <div className="text-2xl font-bold text-gray-900">{summary.totalCameras}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-600 mb-1">Assessed</div>
+            <div className="text-2xl font-bold text-blue-700">{summary.assessedCameras}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-4">
+            <div className="text-sm text-gray-600 mb-1">Unassessed</div>
+            <div className="text-2xl font-bold text-gray-600">{summary.unassessedCameras}</div>
           </div>
           <div className="bg-white rounded-lg shadow p-4">
             <div className="text-sm text-gray-600 mb-1">Online</div>
@@ -170,11 +188,11 @@ export default function CameraHealthPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-gray-900 mb-1">Overall Health Score</h2>
-              <p className="text-sm text-gray-600">Average health score across all cameras</p>
+              <p className="text-sm text-gray-600">Average of edge probes that reported an explicit score</p>
             </div>
             <div className="text-right">
               <div className={`text-5xl font-bold ${getHealthScoreColor(summary.avgHealthScore)}`}>
-                {summary.avgHealthScore.toFixed(1)}
+                {summary.avgHealthScore === null ? 'N/A' : summary.avgHealthScore.toFixed(1)}
               </div>
               <div className="text-sm text-gray-600 mt-1">out of 100</div>
             </div>
@@ -217,7 +235,7 @@ export default function CameraHealthPage() {
                 <div className="text-xs text-gray-500">{camera.branchName}</div>
               </div>
               <div className={`text-2xl font-bold ${getHealthScoreColor(camera.healthScore)}`}>
-                {camera.healthScore}
+                {formatMetric(camera.healthScore)}
               </div>
             </div>
 
@@ -234,21 +252,21 @@ export default function CameraHealthPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Recording:</span>
-                <span className={camera.isRecording ? 'text-green-600' : 'text-red-600'}>
-                  {camera.isRecording ? 'Yes' : 'No'}
+                <span className={camera.isRecording === true ? 'text-green-600' : camera.isRecording === false ? 'text-red-600' : 'text-gray-500'}>
+                  {camera.isRecording === true ? 'Yes' : camera.isRecording === false ? 'No' : 'Unknown'}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">FPS:</span>
-                <span className="font-medium">{camera.currentFps?.toFixed(1) || 'N/A'}</span>
+                <span className="font-medium">{formatMetric(camera.currentFps, 1)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Bitrate:</span>
-                <span className="font-medium">{camera.currentBitrateKbps || 'N/A'} kbps</span>
+                <span className="font-medium">{formatMetric(camera.currentBitrateKbps)}{camera.currentBitrateKbps === null ? '' : ' kbps'}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Latency:</span>
-                <span className="font-medium">{camera.latencyMs || 'N/A'} ms</span>
+                <span className="font-medium">{formatMetric(camera.latencyMs)}{camera.latencyMs === null ? '' : ' ms'}</span>
               </div>
             </div>
 

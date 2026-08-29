@@ -5,15 +5,28 @@ import Link from "next/link";
 import { Boxes } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
+import type { MaintenanceAsset } from "@/lib/types";
 
 export default function AssetsListPage() {
-  const [assets, setAssets] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [assets, setAssets] = useState<MaintenanceAsset[]>([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    void maintenanceApi.listAssets().then((res) => setAssets(res.data)).catch((err) => setError(err.message || String(err))).finally(() => setLoading(false));
+    let active = true;
+    void maintenanceApi.listAssets()
+      .then((response) => {
+        if (active) setAssets(response.data);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -36,22 +49,28 @@ export default function AssetsListPage() {
       <table>
         <thead>
           <tr>
-            <th>Asset ID</th>
-            <th>Device type</th>
+            <th>Asset</th>
+            <th>Identity</th>
             <th>Category</th>
+            <th>Location</th>
             <th>Status</th>
             <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
         <tbody>
-          {assets.map((a) => (
-            <tr key={a.id}>
-              <td><span className="module-id">{a.id}</span></td>
-              <td><strong className="module-row-title">{a.assetType}</strong></td>
-              <td><span className="module-category">{a.category}</span></td>
-              <td><ModuleStatus value={a.status} /></td>
+          {assets.map((asset) => (
+            <tr key={asset.id}>
+              <td><strong className="module-row-title">{asset.assetType}</strong></td>
+              <td>
+                <span className="module-id">
+                  {[asset.make, asset.model, asset.serialNumber].filter(Boolean).join(" · ") || "Not reported"}
+                </span>
+              </td>
+              <td><span className="module-category">{asset.category}</span></td>
+              <td>{asset.location || "Not reported"}</td>
+              <td><ModuleStatus value={asset.status} /></td>
               <td className="module-row-action">
-                <Link href={`/maintenance/assets/${a.id}`}>View details</Link>
+                <Link href={`/maintenance/assets/${asset.id}`}>View details</Link>
               </td>
             </tr>
           ))}

@@ -66,12 +66,12 @@ export class AuditRepository {
         input.currentBitrateKbps ?? null,
         input.resolutionWidth ?? null,
         input.resolutionHeight ?? null,
-        input.videoLoss ?? false,
-        input.frozenImage ?? false,
-        input.blackImage ?? false,
-        input.blurredImage ?? false,
-        input.obstructed ?? false,
-        input.tamperingDetected ?? false,
+        input.videoLoss ?? null,
+        input.frozenImage ?? null,
+        input.blackImage ?? null,
+        input.blurredImage ?? null,
+        input.obstructed ?? null,
+        input.tamperingDetected ?? null,
         input.cameraTime ?? null,
         input.timeOffsetSeconds ?? null,
         input.ntpSynced ?? null,
@@ -83,7 +83,7 @@ export class AuditRepository {
         input.powerStatus ?? null,
         input.overallStatus,
         input.healthScore ?? null,
-        input.issuesDetected ? JSON.stringify(input.issuesDetected) : null,
+        input.issuesDetected ?? null,
         input.alertGenerated ?? false,
         input.metadata ? JSON.stringify(input.metadata) : null,
       ]
@@ -110,7 +110,7 @@ export class AuditRepository {
         n.name as branch_name
       FROM camera_health_checks chc
       LEFT JOIN cameras c ON c.id = chc.camera_id
-      LEFT JOIN organizational_nodes n ON n.id = chc.branch_node_id
+      LEFT JOIN resource_nodes n ON n.id = chc.branch_node_id
       WHERE chc.tenant_id = $1
         AND ($2::uuid IS NULL OR chc.camera_id = $2)
         AND ($3::uuid IS NULL OR chc.branch_node_id = $3)
@@ -128,6 +128,43 @@ export class AuditRepository {
         filters?.to ?? null,
         filters?.limit ?? 100,
       ]
+    );
+    return camelRows(result.rows);
+  }
+
+  async listLatestCameraHealthChecks(
+    tenantId: string,
+    branchNodeIds: string[],
+    filters?: { cameraId?: string; status?: string; from?: string; to?: string },
+  ) {
+    if (branchNodeIds.length === 0) return [];
+    const result = await this.pool.query(
+      `SELECT * FROM (
+         SELECT DISTINCT ON (chc.camera_id)
+           chc.*,
+           c.name AS camera_name,
+           c.location AS camera_location,
+           branch.name AS branch_name
+         FROM camera_health_checks chc
+         LEFT JOIN cameras c ON c.id = chc.camera_id
+         LEFT JOIN resource_nodes branch ON branch.id = chc.branch_node_id
+         WHERE chc.tenant_id = $1
+           AND chc.branch_node_id = ANY($2::uuid[])
+           AND ($3::uuid IS NULL OR chc.camera_id = $3)
+           AND ($5::timestamptz IS NULL OR chc.check_timestamp >= $5)
+           AND ($6::timestamptz IS NULL OR chc.check_timestamp <= $6)
+         ORDER BY chc.camera_id, chc.check_timestamp DESC
+       ) latest
+       WHERE ($4::text IS NULL OR overall_status = $4)
+       ORDER BY check_timestamp DESC`,
+      [
+        tenantId,
+        branchNodeIds,
+        filters?.cameraId ?? null,
+        filters?.status ?? null,
+        filters?.from ?? null,
+        filters?.to ?? null,
+      ],
     );
     return camelRows(result.rows);
   }
@@ -222,7 +259,7 @@ export class AuditRepository {
         input.noCorruption ?? null,
         input.overallQualityScore ?? null,
         input.qualityRating ?? null,
-        input.deficienciesFound ? JSON.stringify(input.deficienciesFound) : null,
+        input.deficienciesFound ?? null,
         input.recommendations ?? null,
         input.checkedBy ?? null,
         input.metadata ? JSON.stringify(input.metadata) : null,
@@ -307,11 +344,11 @@ export class AuditRepository {
         input.totalSegments ?? null,
         input.segmentsVerified ?? null,
         input.segmentsWithErrors ?? null,
-        input.checksumFailures ?? 0,
-        input.decodeFailures ?? 0,
-        input.playbackFailures ?? 0,
+        input.checksumFailures ?? null,
+        input.decodeFailures ?? null,
+        input.playbackFailures ?? null,
         input.timestampContinuityVerified ?? null,
-        input.timestampIssuesFound ? JSON.stringify(input.timestampIssuesFound) : null,
+        input.timestampIssuesFound ?? null,
         input.storageLocation ?? null,
         input.storageAccessible ?? null,
         input.legalHoldActive ?? false,
@@ -469,23 +506,23 @@ export class AuditRepository {
         input.averageLatencyMs ?? null,
         input.raidStatus ?? null,
         input.raidLevel ?? null,
-        input.failedDisks ?? 0,
-        input.degradedArrays ?? 0,
-        input.rebuildInProgress ?? false,
+        input.failedDisks ?? null,
+        input.degradedArrays ?? null,
+        input.rebuildInProgress ?? null,
         input.rebuildPercentage ?? null,
         input.objectStorageAvailable ?? null,
         input.replicationLagSeconds ?? null,
-        input.writeFailures24h ?? 0,
-        input.readFailures24h ?? 0,
-        input.orphanedFiles ?? 0,
+        input.writeFailures24h ?? null,
+        input.readFailures24h ?? null,
+        input.orphanedFiles ?? null,
         input.backupConfigured ?? null,
         input.lastBackupTime ?? null,
         input.backupStatus ?? null,
-        input.cleanupJobRunning ?? false,
-        input.filesPendingDeletion ?? 0,
+        input.cleanupJobRunning ?? null,
+        input.filesPendingDeletion ?? null,
         input.overallStatus,
         input.healthScore ?? null,
-        input.alertsTriggered ? JSON.stringify(input.alertsTriggered) : null,
+        input.alertsTriggered ?? null,
         input.recommendations ?? null,
         input.metadata ? JSON.stringify(input.metadata) : null,
       ]

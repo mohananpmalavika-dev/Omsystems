@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { AuditRepository } from "../database/audit-repository.js";
+import type { Camera } from "../domain/models.js";
 
 const branchComplianceQuery = z.object({
   branchNodeId: z.string().uuid().optional(),
@@ -10,169 +11,175 @@ const branchComplianceQuery = z.object({
 const healthQuery = z.object({
   cameraId: z.string().uuid().optional(),
   branchNodeId: z.string().uuid().optional(),
-  status: z.enum(['healthy', 'degraded', 'offline']).optional(),
-  from: z.string().optional(),
-  to: z.string().optional(),
-  summary: z.string().transform(val => val === 'true').optional(),
+  status: z.enum(['healthy', 'warning', 'degraded', 'critical', 'offline', 'maintenance', 'unknown']).optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  summary: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
 });
 
 const healthCheckBody = z.object({
   cameraId: z.string().uuid().optional(),
   branchNodeId: z.string().uuid().optional(),
+}).refine((value) => Boolean(value.cameraId) !== Boolean(value.branchNodeId), {
+  message: 'Provide exactly one cameraId or branchNodeId',
 });
 
-/**
- * Register audit routes
- * Provides access to branch compliance summaries and audit reports
- */
 export async function registerAuditRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
   auditRepo: AuditRepository,
 ) {
-  /**
-   * GET /v1/audit/branch-compliance
-   * Get comprehensive branch compliance summary
-   */
-  app.get("/v1/audit/branch-compliance", async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const query = branchComplianceQuery.parse(request.query);
-      const tenantId = request.currentUser.tenantId;
-
-      const data = await auditRepo.getBranchComplianceSummary(
-        tenantId,
-        query.branchNodeId,
-      );
-
-      return { data };
-    } catch (error) {
-      request.log.error({ error }, "Failed to fetch branch compliance summary");
-      return reply.code(500).send({
-        error: "internal_server_error",
-        message: "Failed to fetch branch compliance summary",
-      });
+  app.get("/v1/audit/branch-compliance", async (request, reply) => {
+    const query = branchComplianceQuery.parse(request.query);
+    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+    const targets = query.branchNodeId
+      ? branches.filter((branch) => branch.id === query.branchNodeId)
+      : branches;
+    if (query.branchNodeId && targets.length === 0) {
+      return reply.code(403).send({ error: "forbidden" });
     }
+    const rows = await Promise.all(targets.map((branch) =>
+      auditRepo.getBranchComplianceSummary(request.currentUser.tenantId, branch.id),
+    ));
+    return { data: rows.flat() };
   });
 
-  /**
-   * GET /v1/audit/health
-   * Get camera health checks and summary
-   */
-  app.get("/v1/audit/health", async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const query = healthQuery.parse(request.query);
-      const tenantId = request.currentUser.tenantId;
+  app.get("/v1/audit/health", async (request, reply) => {
+    const query = healthQuery.parse(request.query);
+    const branches = await store.listAccessibleNodes(
+      request.currentUser,
+      "analytics:view",
+      "branch",
+    );
+    const targetBranches = query.branchNodeId
+      ? branches.filter((branch) => branch.id === query.branchNodeId)
+      : branches;
+    if (query.branchNodeId && targetBranches.length === 0) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
 
-      // Get accessible branches
-      const branches = await store.listAccessibleNodes(
-        request.currentUser,
-        "analytics:view",
-        "branch"
-      );
+    const allCameras = (await Promise.all(targetBranches.map((branch) =>
+      store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view"),
+    ))).flat();
+    const allowedCameraIds = new Set(allCameras.map((camera) => camera.id));
+    if (query.cameraId && !allowedCameraIds.has(query.cameraId)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
 
-      // Filter by specific branch if requested
-      const targetBranches = query.branchNodeId
-        ? branches.filter(b => b.id === query.branchNodeId)
-        : branches;
+    const rows = await auditRepo.listLatestCameraHealthChecks(
+      request.currentUser.tenantId,
+      targetBranches.map((branch) => branch.id),
+      {
+        ...(query.cameraId ? { cameraId: query.cameraId } : {}),
+        ...(query.status ? { status: query.status } : {}),
+        ...(query.from ? { from: query.from } : {}),
+        ...(query.to ? { to: query.to } : {}),
+      },
+    ) as Array<Record<string, unknown>>;
+    const records = rows.filter((row) => typeof row.cameraId === 'string' && allowedCameraIds.has(row.cameraId));
 
-      // Get cameras from all target branches
-      const allCameras = (await Promise.all(
-        targetBranches.map(b => 
-          store.listCamerasByBranch(request.currentUser, b.id, "analytics:view")
-        )
-      )).flat();
-
-      // If summary is requested
-      if (query.summary) {
-        const onlineCount = allCameras.filter(c => c.status === 'online').length;
-        const offlineCount = allCameras.filter(c => c.status === 'offline').length;
-        const degradedCount = allCameras.filter(c => c.status === 'degraded').length;
-
-        return {
-          summary: {
-            total: allCameras.length,
-            healthy: onlineCount,
-            degraded: degradedCount,
-            offline: offlineCount,
-            healthScore: allCameras.length > 0 
-              ? Math.round((onlineCount / allCameras.length) * 100) 
-              : 0,
-          },
-        };
-      }
-
-      // Return detailed health records
-      let filteredCameras = allCameras;
-      if (query.cameraId) {
-        filteredCameras = allCameras.filter(c => c.id === query.cameraId);
-      }
-      if (query.status) {
-        const statusMap: Record<string, string> = {
-          'healthy': 'online',
-          'degraded': 'degraded',
-          'offline': 'offline',
-        };
-        filteredCameras = filteredCameras.filter(c => c.status === statusMap[query.status!]);
-      }
-
-      const healthRecords = filteredCameras.map(camera => ({
-        cameraId: camera.id,
-        cameraName: camera.name,
-        branchNodeId: camera.branchId,
-        status: camera.status === 'online' ? 'healthy' : camera.status,
-        lastCheckAt: new Date().toISOString(),
-        uptime: camera.status === 'online' ? 99.5 : 0,
-        metrics: {
-          fps: camera.status === 'online' ? 25 : 0,
-          bitrate: camera.status === 'online' ? 2048 : 0,
-          temperature: camera.status === 'online' ? 45 : null,
-        },
-      }));
-
+    if (query.summary) {
+      const assessed = records.filter((row) => row.overallStatus !== 'unknown');
+      const scores = assessed
+        .filter((row) => row.healthScore !== null && row.healthScore !== undefined && row.healthScore !== '')
+        .map((row) => typeof row.healthScore === 'number' ? row.healthScore : Number(row.healthScore))
+        .filter((score) => Number.isFinite(score));
+      const countStatus = (status: string) => records.filter((row) => row.overallStatus === status).length;
       return {
-        data: healthRecords,
-        total: healthRecords.length,
+        data: {
+          totalCameras: allCameras.length,
+          assessedCameras: assessed.length,
+          unassessedCameras: Math.max(0, allCameras.length - assessed.length),
+          onlineCameras: records.filter((row) => row.isOnline === true).length,
+          recordingCameras: records.filter((row) => row.isRecording === true).length,
+          healthyCameras: countStatus('healthy'),
+          warningCameras: countStatus('warning'),
+          degradedCameras: countStatus('degraded'),
+          criticalCameras: countStatus('critical'),
+          offlineCameras: countStatus('offline'),
+          avgHealthScore: scores.length
+            ? Math.round((scores.reduce((total, score) => total + score, 0) / scores.length) * 10) / 10
+            : null,
+        },
       };
-    } catch (error) {
-      request.log.error({ error }, "Failed to fetch camera health data");
-      return reply.code(500).send({
-        error: "internal_server_error",
-        message: "Failed to fetch camera health data",
-      });
     }
+
+    return { data: records, total: records.length };
   });
 
-  /**
-   * POST /v1/audit/health/check
-   * Trigger camera health check
-   */
-  app.post("/v1/audit/health/check", async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const body = healthCheckBody.parse(request.body);
-      const tenantId = request.currentUser.tenantId;
+  app.post("/v1/audit/health/check", async (request, reply) => {
+    const body = healthCheckBody.parse(request.body);
+    let cameras: Camera[] = [];
+    let resourceNodeId: string;
 
-      await store.writeAudit({
-        tenantId,
-        actorUserId: request.currentUser.id,
-        action: 'audit.health_check_triggered',
-        resourceNodeId: body.cameraId || body.branchNodeId || null,
-        outcome: 'success',
-        details: { 
-          cameraId: body.cameraId,
-          branchNodeId: body.branchNodeId,
-        },
-      });
+    if (body.cameraId) {
+      const camera = await store.getCamera(body.cameraId);
+      if (!camera) return reply.code(404).send({ error: 'camera_not_found' });
+      const decision = await store.checkAccess(request.currentUser, 'device:configure', camera.nodeId);
+      if (!decision?.allowed) return reply.code(403).send({ error: 'forbidden' });
+      cameras = [camera];
+      resourceNodeId = camera.nodeId;
+    } else {
+      resourceNodeId = body.branchNodeId!;
+      const decision = await store.checkAccess(request.currentUser, 'device:configure', resourceNodeId);
+      if (!decision?.allowed) return reply.code(403).send({ error: 'forbidden' });
+      cameras = await store.listCamerasByBranch(request.currentUser, resourceNodeId, 'device:configure');
+    }
 
-      return reply.code(202).send({
-        message: 'Health check initiated',
-        status: 'in-progress',
+    const commands: Array<{ cameraId: string; commandId: string }> = [];
+    const unavailable: Array<{ cameraId: string; reason: string }> = [];
+    const agentCache = new Map<string, Awaited<ReturnType<typeof store.getEdgeAgent>>>();
+    for (const camera of cameras) {
+      if (!camera.edgeAgentId) {
+        unavailable.push({ cameraId: camera.id, reason: 'edge_agent_not_assigned' });
+        continue;
+      }
+      let agent = agentCache.get(camera.edgeAgentId);
+      if (agent === undefined) {
+        agent = await store.getEdgeAgent(camera.edgeAgentId);
+        agentCache.set(camera.edgeAgentId, agent);
+      }
+      if (!agent || agent.branchId !== camera.branchId || agent.status !== 'online') {
+        unavailable.push({ cameraId: camera.id, reason: 'edge_agent_not_connected' });
+        continue;
+      }
+      const command = await store.createEdgeCommand({
+        edgeAgentId: agent.id,
+        type: 'probe-camera',
+        payload: { cameraId: camera.id },
+        requestedBy: request.currentUser.id,
       });
-    } catch (error) {
-      request.log.error({ error }, "Failed to perform camera health check");
-      return reply.code(500).send({
-        error: "internal_server_error",
-        message: "Failed to perform camera health check",
+      commands.push({ cameraId: camera.id, commandId: command.id });
+    }
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: 'audit.health_check_requested',
+      resourceNodeId,
+      outcome: commands.length > 0 ? 'success' : 'failure',
+      sourceIp: request.ip,
+      details: {
+        requestedCameraCount: cameras.length,
+        queuedCameraCount: commands.length,
+        unavailableCameraCount: unavailable.length,
+        commandIds: commands.map((command) => command.commandId),
+      },
+    });
+
+    if (commands.length === 0) {
+      return reply.code(409).send({
+        error: 'edge_probe_unavailable',
+        message: 'No online Branch Gateway is available for the selected cameras.',
+        unavailable,
       });
     }
+    return reply.code(202).send({
+      message: 'Camera probes were queued on the connected Branch Gateways.',
+      status: 'queued',
+      queued: commands.length,
+      unavailable: unavailable.length,
+      commands,
+    });
   });
 }
