@@ -10,14 +10,14 @@ COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
-RUN npm ci
+RUN npm ci || npm install --legacy-peer-deps
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
 # Build the cross-platform edge-agent bundle and the activation-bound
 # Windows self-installer served by the control plane.
 WORKDIR /app/edge-agent
-RUN npm ci
+RUN npm ci || npm install --legacy-peer-deps
 RUN npm run build:exe
 RUN npm run bundle:delta
 WORKDIR /app
