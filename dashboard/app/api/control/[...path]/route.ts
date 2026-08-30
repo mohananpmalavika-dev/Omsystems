@@ -141,7 +141,12 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         status: response.status,
         headers: { "cache-control": "no-store" },
       });
-      const isHttps = request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+      const isHttps =
+        process.env.NODE_ENV === "production" ||
+        request.nextUrl.protocol === "https:" ||
+        request.headers.get("x-forwarded-proto") === "https" ||
+        request.headers.get("origin")?.startsWith("https:") ||
+        request.headers.get("referer")?.startsWith("https:");
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
         sameSite: isHttps ? "none" : "lax",
