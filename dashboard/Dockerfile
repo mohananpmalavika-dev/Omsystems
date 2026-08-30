@@ -1,13 +1,15 @@
 FROM node:22-alpine AS build
-WORKDIR /app
-COPY . .
+WORKDIR /app/dashboard
+COPY dashboard/package.json ./
 RUN npm install --legacy-peer-deps
+COPY dashboard/ ./
+COPY backend/ ../backend/
 ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ARG MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
 ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
-ENV NODE_OPTIONS="--max-old-space-size=3072"
-RUN npm run build --workspace @sentinel/dashboard
+ENV NODE_OPTIONS="--max-old-space-size=2048"
+RUN npm run build
 
 FROM node:22-alpine
 ENV NODE_ENV=production
