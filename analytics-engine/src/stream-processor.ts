@@ -14,8 +14,10 @@ export interface StreamSource {
   tenantId: string;
   branchId?: string;
   streamUrl: string;
+  substreamUrl?: string; // High-efficiency low-bitrate substream for AI analytics over VPN
   enabled: boolean;
-  frameRate?: number; // Frames per second to process
+  frameRate?: number; // Frames per second to process (default 2-3 FPS for high-scale enterprise)
+  dvrBrand?: string;
 }
 
 export interface ProcessingStats {
@@ -25,6 +27,7 @@ export interface ProcessingStats {
   lastFrameAt?: string;
   averageProcessingTime?: number;
   errors: number;
+  activeStreamType: "substream" | "mainstream";
 }
 
 export class StreamProcessor {
@@ -60,7 +63,9 @@ export class StreamProcessor {
       processedFrames: 0,
       generatedEvents: 0,
       errors: 0,
+      consecutiveFailures: 0,
       processingTimes: [],
+      usingSubstream: Boolean(source.substreamUrl),
     };
 
     this.activeStreams.set(source.cameraId, context);
@@ -69,9 +74,10 @@ export class StreamProcessor {
       framesProcessed: 0,
       eventsGenerated: 0,
       errors: 0,
+      activeStreamType: context.usingSubstream ? "substream" : "mainstream",
     });
 
-    console.log(`Started stream processing for camera ${source.cameraId}`);
+    console.log(`Started high-efficiency stream processing for camera ${source.cameraId} (Type: ${context.usingSubstream ? "substream" : "mainstream"})`);
 
     // Start frame processing loop
     void this.processStreamLoop(context);
@@ -114,19 +120,24 @@ export class StreamProcessor {
   private async processStreamLoop(
     context: StreamProcessingContext,
   ): Promise<void> {
-    const frameInterval = 1000 / (context.source.frameRate ?? 1); // Default 1 FPS
+    // Default 3 FPS for high-scale enterprise CCTV analytics
+    const targetFps = Math.max(0.5, Math.min(10, context.source.frameRate ?? 3));
+    const frameInterval = 1000 / targetFps;
 
     while (context.isActive) {
       try {
         const startTime = Date.now();
 
-        // Fetch frame from stream
-        const frame = await this.fetchFrame(context.source);
+        // Fetch frame from stream (with automatic substream -> mainstream fallback)
+        const frame = await this.fetchFrame(context);
         if (!frame) {
-          // No frame available, wait and retry
-          await new Promise((resolve) => setTimeout(resolve, frameInterval));
+          context.consecutiveFailures++;
+          const backoff = Math.min(5000, 500 * Math.pow(1.5, Math.min(context.consecutiveFailures, 6)));
+          await new Promise((resolve) => setTimeout(resolve, backoff));
           continue;
         }
+
+        context.consecutiveFailures = 0;
 
         // Process frame through analytics pipeline
         const events = await this.pipeline.processFrame(frame, context.rules);
@@ -141,7 +152,7 @@ export class StreamProcessor {
             if (this.incidentHook) {
               try {
                 const detectionSummary = {
-                      detectionType: event.detectionType,
+                  detectionType: event.detectionType,
                   metadata: event.metadata ?? {},
                   objects: event.objects ?? [],
                   frame,
@@ -176,6 +187,7 @@ export class StreamProcessor {
           stats.eventsGenerated = context.generatedEvents;
           stats.lastFrameAt = new Date().toISOString();
           stats.errors = context.errors;
+          stats.activeStreamType = context.usingSubstream ? "substream" : "mainstream";
           stats.averageProcessingTime =
             context.processingTimes.reduce((a, b) => a + b, 0) /
             context.processingTimes.length;
@@ -183,7 +195,7 @@ export class StreamProcessor {
 
         // Wait for next frame interval
         const elapsed = Date.now() - startTime;
-        const waitTime = Math.max(0, frameInterval - elapsed);
+        const waitTime = Math.max(10, frameInterval - elapsed);
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } catch (error) {
         console.error(
@@ -193,19 +205,40 @@ export class StreamProcessor {
         context.errors++;
 
         // Wait before retrying
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
     }
   }
 
-  /** Fetch one normalized RGB frame through the configured extractor. */
+  /** Fetch one normalized RGB frame through the configured extractor with fallback. */
   private async fetchFrame(
-    source: StreamSource,
+    context: StreamProcessingContext,
   ): Promise<DetectionFrame | null> {
+    const streamToTry = context.usingSubstream && context.source.substreamUrl 
+      ? context.source.substreamUrl 
+      : context.source.streamUrl;
+
     try {
-      return await this.frameExtractor.extract(source);
+      return await this.frameExtractor.extract({
+        cameraId: context.source.cameraId,
+        tenantId: context.source.tenantId,
+        streamUrl: streamToTry,
+      });
     } catch (error) {
-      console.error(`Failed to fetch frame for camera ${source.cameraId}:`, error);
+      // If substream failed and we have mainstream, try fallback
+      if (context.usingSubstream && context.source.streamUrl && context.source.streamUrl !== streamToTry) {
+        try {
+          const frame = await this.frameExtractor.extract({
+            cameraId: context.source.cameraId,
+            tenantId: context.source.tenantId,
+            streamUrl: context.source.streamUrl,
+          });
+          context.usingSubstream = false;
+          return frame;
+        } catch {
+          // Both failed
+        }
+      }
       return null;
     }
   }
@@ -256,5 +289,7 @@ interface StreamProcessingContext {
   processedFrames: number;
   generatedEvents: number;
   errors: number;
+  consecutiveFailures: number;
+  usingSubstream: boolean;
   processingTimes: number[];
 }

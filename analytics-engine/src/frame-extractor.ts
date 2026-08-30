@@ -40,10 +40,21 @@ export class FfmpegFrameExtractor implements FrameExtractor {
     assertStreamUrl(source.streamUrl);
     const expectedBytes = this.width * this.height * 3;
     const inputOptions = /^rtsps?:/i.test(source.streamUrl)
-      ? ["-rtsp_transport", "tcp"]
+      ? [
+          "-rtsp_transport", "tcp",
+          "-rtsp_flags", "prefer_tcp",
+          "-fflags", "nobuffer",
+          "-flags", "low_delay",
+          "-stimeout", "5000000",
+        ]
+      : [];
+    const hwaccelOptions = process.env.ENABLE_GPU_ACCELERATION === "true"
+      ? ["-hwaccel", "auto"]
       : [];
     const args = [
-      "-hide_banner", "-loglevel", "error", ...inputOptions,
+      "-hide_banner", "-loglevel", "error",
+      ...hwaccelOptions,
+      ...inputOptions,
       "-i", source.streamUrl,
       "-frames:v", "1",
       "-vf", `scale=${this.width}:${this.height}:force_original_aspect_ratio=decrease,pad=${this.width}:${this.height}:(ow-iw)/2:(oh-ih)/2`,

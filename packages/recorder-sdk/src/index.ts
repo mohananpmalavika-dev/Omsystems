@@ -120,3 +120,20 @@ export {
   parseOnvifStreamUri,
   parseOnvifRecordings,
 } from "./drivers/onvif/onvif.parsers.js";
+
+// Substream & Multi-Branch DVR Builders
+export {
+  SubstreamUrlBuilder,
+  type DvrBrand,
+  type StreamProfileType,
+  type DvrChannelEndpoint,
+  type BranchDvrConfig,
+} from "./core/substream-url-builder.js";
+
+export {
+  DvrProfileManager,
+  ENTERPRISE_INDUSTRY_PROFILES,
+  type BranchIndustryProfile,
+  type BranchChannelProfile,
+  type ChannelAnalyticsRuleConfig,
+} from "./core/dvr-profile-manager.js";
