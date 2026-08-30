@@ -135,10 +135,21 @@ export default function AdminPage() {
             <div role="alert" style={{ maxWidth: 640, margin: "3rem auto", textAlign: "center" }}>
               <AlertTriangle size={42} style={{ color: "#dc2626", marginBottom: "1rem" }} />
               <h2>We couldn&apos;t load the organization</h2>
-              <p style={{ color: "#667286" }}>{organizationError}</p>
-              <button className="btn btn-primary" onClick={() => void checkOrganizationExists()}>
-                Retry
-              </button>
+              <p style={{ color: "#667286", marginBottom: "1.5rem" }}>{organizationError}</p>
+              <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+                {organizationError?.toLowerCase().includes("sign in") || organizationError?.toLowerCase().includes("unauthenticated") ? (
+                  <a className="btn btn-primary" href="/login">
+                    Sign in to continue
+                  </a>
+                ) : (
+                  <button className="btn btn-primary" onClick={() => void checkOrganizationExists()}>
+                    Retry
+                  </button>
+                )}
+                <a className="btn btn-secondary" href="/login">
+                  Go to Login
+                </a>
+              </div>
             </div>
           </section>
         </div>

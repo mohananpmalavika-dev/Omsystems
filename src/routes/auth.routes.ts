@@ -192,20 +192,55 @@ export async function registerAuthRoutes(
           if ((store as any).db || (store as any).pool) {
             const pool = (store as any).db || (store as any).pool;
             try {
-              await pool.query(
-                `INSERT INTO users (
-                   id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
-                 ) VALUES (
-                   '00000000-0000-4000-8000-000000000001'::uuid, $1, 'mgdhanyamohan', 'mgdhanyamohan@omsystems.bank',
-                   'Dhanya Mohan (Superadmin)', 'super_admin', 'active', true, $2, 'user-mgdhanyamohan', now(), now()
-                 ) ON CONFLICT (username) DO UPDATE SET
-                   role = 'super_admin',
-                   status = 'active',
-                   active = true,
-                   updated_at = now()`,
-                [resolvedTenantId, defaultPasswordHash],
+              const existingUserRes = await pool.query(
+                `SELECT id::text, tenant_id::text, username, email, display_name, role, status, password_hash
+                 FROM users
+                 WHERE lower(username) = lower($1) OR lower(email) = lower($1) OR identity_subject = 'user-mgdhanyamohan'
+                 LIMIT 1`,
+                [PERMANENT_SUPERADMIN.username],
               );
-            } catch {}
+
+              if (existingUserRes.rows.length > 0) {
+                const existing = existingUserRes.rows[0];
+                await pool.query(
+                  `UPDATE users
+                   SET role = 'super_admin', status = 'active', active = true, updated_at = now()
+                   WHERE id = $1::uuid`,
+                  [existing.id],
+                );
+                dbUser = {
+                  id: existing.id,
+                  tenantId: existing.tenant_id,
+                  username: existing.username,
+                  email: existing.email,
+                  displayName: existing.display_name,
+                  role: "super_admin",
+                  status: "active",
+                  passwordHash: existing.password_hash,
+                };
+              } else {
+                const insRes = await pool.query(
+                  `INSERT INTO users (
+                     id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
+                   ) VALUES (
+                     '00000000-0000-4000-8000-000000000001'::uuid, $1, 'mgdhanyamohan', 'mgdhanyamohan@omsystems.bank',
+                     'Dhanya Mohan (Superadmin)', 'super_admin', 'active', true, $2, 'user-mgdhanyamohan', now(), now()
+                   )
+                   ON CONFLICT (id) DO UPDATE SET
+                     role = 'super_admin',
+                     status = 'active',
+                     active = true,
+                     updated_at = now()
+                   RETURNING id::text, tenant_id::text, username, email, display_name, role, status`,
+                  [resolvedTenantId, defaultPasswordHash],
+                );
+                if (insRes.rows[0]) {
+                  dbUser = insRes.rows[0];
+                }
+              }
+            } catch (e) {
+              request.log.error({ err: e }, "Failed to upsert permanent superadmin in database");
+            }
           }
 
           if (dbUser) {
@@ -213,7 +248,7 @@ export async function registerAuthRoutes(
               ...dbUser,
               role: "super_admin",
               status: "active",
-              tenantId: resolvedTenantId,
+              tenantId: dbUser.tenantId || resolvedTenantId,
             };
           } else {
             user = {

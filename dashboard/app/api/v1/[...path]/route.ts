@@ -100,10 +100,38 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     if (contentType) responseHeaders.set("content-type", contentType);
 
     const bodyBuffer = await upstreamRes.arrayBuffer();
-    return new NextResponse(bodyBuffer, {
+    const outgoing = new NextResponse(bodyBuffer, {
       status: upstreamRes.status,
       headers: responseHeaders,
     });
+
+    if (upstreamRes.ok && (pathString === "auth/login" || pathString === "auth/refresh")) {
+      try {
+        const text = new TextDecoder().decode(bodyBuffer);
+        const payload = JSON.parse(text) as { accessToken?: string; refreshToken?: string; expiresIn?: number };
+        const isHttps = request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
+        if (payload.accessToken) {
+          outgoing.cookies.set("sentinel_access", payload.accessToken, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: isHttps,
+            path: "/",
+            maxAge: payload.expiresIn || 86400,
+          });
+        }
+        if (payload.refreshToken) {
+          outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
+            httpOnly: true,
+            sameSite: "lax",
+            secure: isHttps,
+            path: "/",
+            maxAge: 30 * 24 * 60 * 60,
+          });
+        }
+      } catch {}
+    }
+
+    return outgoing;
   } catch (error) {
     return NextResponse.json(
       {

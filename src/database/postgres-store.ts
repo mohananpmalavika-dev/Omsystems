@@ -149,24 +149,44 @@ export class PostgresStore
       const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
 
       // 3. Upsert superuser mgdhanyamohan
-      await this.pool.query(
-        `INSERT INTO users (
-           id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
-         ) VALUES (
-           '00000000-0000-4000-8000-000000000001'::uuid, $1, $2, $3,
-           $4, 'super_admin', 'active', true, $5, 'user-mgdhanyamohan', now(), now()
-         )
-         ON CONFLICT (username) DO UPDATE SET
-           role = 'super_admin',
-           status = 'active',
-           active = true,
-           password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash),
-           tenant_id = EXCLUDED.tenant_id,
-           display_name = EXCLUDED.display_name,
-           identity_subject = COALESCE(users.identity_subject, 'user-mgdhanyamohan'),
-           updated_at = now()`,
-        [tenantId, PERMANENT_SUPERADMIN.username, PERMANENT_SUPERADMIN.email, PERMANENT_SUPERADMIN.displayName, passwordHash],
-      ).catch(() => {});
+      const existingUserRes = await this.pool.query(
+        `SELECT id::text, tenant_id::text FROM users
+         WHERE lower(username) = lower($1) OR lower(email) = lower($1) OR identity_subject = 'user-mgdhanyamohan'
+         LIMIT 1`,
+        [PERMANENT_SUPERADMIN.username],
+      ).catch(() => ({ rows: [] }));
+
+      let superUserId = "00000000-0000-4000-8000-000000000001";
+      if (existingUserRes.rows.length > 0) {
+        superUserId = existingUserRes.rows[0].id;
+        await this.pool.query(
+          `UPDATE users
+           SET role = 'super_admin', status = 'active', active = true, updated_at = now()
+           WHERE id = $1::uuid`,
+          [superUserId],
+        ).catch(() => {});
+      } else {
+        const insRes = await this.pool.query(
+          `INSERT INTO users (
+             id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
+           ) VALUES (
+             '00000000-0000-4000-8000-000000000001'::uuid, $1, $2, $3,
+             $4, 'super_admin', 'active', true, $5, 'user-mgdhanyamohan', now(), now()
+           )
+           ON CONFLICT (id) DO UPDATE SET
+             role = 'super_admin',
+             status = 'active',
+             active = true,
+             password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash),
+             tenant_id = EXCLUDED.tenant_id,
+             display_name = EXCLUDED.display_name,
+             identity_subject = COALESCE(users.identity_subject, 'user-mgdhanyamohan'),
+             updated_at = now()
+           RETURNING id::text`,
+          [tenantId, PERMANENT_SUPERADMIN.username, PERMANENT_SUPERADMIN.email, PERMANENT_SUPERADMIN.displayName, passwordHash],
+        ).catch(() => ({ rows: [] }));
+        if (insRes.rows[0]?.id) superUserId = insRes.rows[0].id;
+      }
 
       // 4. Ensure root resource node exists and superuser has root access grant
       const rootNodeRes = await this.pool.query(
