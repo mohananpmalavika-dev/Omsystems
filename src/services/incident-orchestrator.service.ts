@@ -453,7 +453,7 @@ export class IncidentOrchestrator {
       this.store.listIncidentReports(incidentId),
       this.slaService.getSLAStatus(incidentId),
       this.workflowService.getAvailableTransitions(incident.status as any),
-      Promise.resolve(null), // RCA enrichment metadata - to be implemented
+      this.rcaService.getEnrichment(incidentId, incident.tenantId).catch(() => null),
       this.rcaService.getRemediationActions(incidentId, incident.tenantId).catch(() => []),
     ]);
     

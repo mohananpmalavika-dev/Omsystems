@@ -77,6 +77,13 @@ export const IncidentManagementMethods = {
     if (filters?.branchId) {
       results = results.filter((i: any) => i.branchId === filters.branchId);
     }
+    if (filters?.branchIds) {
+      const branchIds = new Set(filters.branchIds);
+      results = results.filter((i: any) =>
+        (i.branchId && branchIds.has(i.branchId)) ||
+        (!i.branchId && filters.includeUnscoped === true)
+      );
+    }
     if (filters?.assignedTo) {
       results = results.filter((i: any) => i.assignedTo === filters.assignedTo);
     }

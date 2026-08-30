@@ -5,10 +5,10 @@
  * providing RCA-driven remediation recommendations and automated actions.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { User } from "../domain/models.js";
 import { RCAStore } from "./command-center/rca-store.js";
-import { CommandCenterService } from "./command-center/service.js";
 import type { RCADiagnosis } from "./command-center/rca/types.js";
 
 export interface RCARemediationAction {
@@ -30,6 +30,7 @@ export interface RCARemediationAction {
   
   expectedOutcome: string;
   rollbackProcedure?: string;
+  statusNotes?: string;
   
   status: "proposed" | "approved" | "in_progress" | "completed" | "failed";
   
@@ -55,23 +56,18 @@ export interface RCAIncidentEnrichment {
   isMultiBranchFailure: boolean;
   commonCause: boolean;
   
-  predictedResolutionTimeMinutes: number;
+  predictedResolutionTimeMinutes: number | null;
   
   generatedAt: string;
 }
 
 export class RCAIncidentIntegrationService {
   private rcaStore: RCAStore;
-  private commandCenter: CommandCenterService;
   
   constructor(
     private readonly store: ControlPlaneStore,
-    commandCenter?: CommandCenterService
   ) {
     this.rcaStore = new RCAStore(store);
-    
-    // Command center service requires state, will be lazy-loaded if needed
-    this.commandCenter = commandCenter as any;
   }
   
   /**
@@ -110,7 +106,7 @@ export class RCAIncidentIntegrationService {
     
     // Store remediation actions
     for (const action of remediationActions) {
-      await this.storeRemediationAction(action, user.tenantId);
+      await this.storeRemediationAction(action);
     }
     
     // Create enrichment record
@@ -129,11 +125,12 @@ export class RCAIncidentIntegrationService {
       isMultiBranchFailure: diagnosis.blastRadius.summary.totalBranches >= 2,
       commonCause: diagnosis.blastRadius.summary.totalBranches >= 2 &&
                    diagnosis.temporalAnalysis.simultaneousFailures,
-      predictedResolutionTimeMinutes: this.predictResolutionTime(diagnosis),
+      predictedResolutionTimeMinutes: null,
       generatedAt: new Date().toISOString(),
     };
     
-    // Store enrichment (using incident notes as metadata storage is not available)
+    // Persist structured RCA metadata through the incident-note store shared by
+    // both the in-memory and PostgreSQL implementations.
     await this.store.addIncidentNote({
       incidentId,
       noteType: "rca_enrichment",
@@ -199,7 +196,7 @@ export class RCAIncidentIntegrationService {
     switch (diagnosis.primaryCause.code) {
       case "wan_failure":
         actions.push({
-          id: `rca-action-${Date.now()}-1`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "investigate_network",
@@ -216,7 +213,7 @@ export class RCAIncidentIntegrationService {
         });
         
         actions.push({
-          id: `rca-action-${Date.now()}-2`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "notify_branch",
@@ -234,7 +231,7 @@ export class RCAIncidentIntegrationService {
         
         if (diagnosis.confidenceScore >= 0.8) {
           actions.push({
-            id: `rca-action-${Date.now()}-3`,
+            id: `rca-action-${randomUUID()}`,
             diagnosisId: diagnosis.diagnosisId,
             incidentId,
             actionType: "create_work_order",
@@ -254,7 +251,7 @@ export class RCAIncidentIntegrationService {
       
       case "power_failure":
         actions.push({
-          id: `rca-action-${Date.now()}-1`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "check_power",
@@ -271,7 +268,7 @@ export class RCAIncidentIntegrationService {
         });
         
         actions.push({
-          id: `rca-action-${Date.now()}-2`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "notify_branch",
@@ -290,7 +287,7 @@ export class RCAIncidentIntegrationService {
       
       case "dvr_failure":
         actions.push({
-          id: `rca-action-${Date.now()}-1`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "restart_dvr",
@@ -308,7 +305,7 @@ export class RCAIncidentIntegrationService {
         });
         
         actions.push({
-          id: `rca-action-${Date.now()}-2`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "create_work_order",
@@ -327,7 +324,7 @@ export class RCAIncidentIntegrationService {
       
       case "insufficient_evidence":
         actions.push({
-          id: `rca-action-${Date.now()}-1`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "manual_investigation",
@@ -347,7 +344,7 @@ export class RCAIncidentIntegrationService {
       default:
         // Generic investigation for unknown root causes
         actions.push({
-          id: `rca-action-${Date.now()}-1`,
+          id: `rca-action-${randomUUID()}`,
           diagnosisId: diagnosis.diagnosisId,
           incidentId,
           actionType: "manual_investigation",
@@ -368,7 +365,7 @@ export class RCAIncidentIntegrationService {
     if (diagnosis.blastRadius.summary.totalBranches >= 3 || 
         diagnosis.blastRadius.summary.totalCameras >= 50) {
       actions.push({
-        id: `rca-action-${Date.now()}-escalate`,
+        id: `rca-action-${randomUUID()}`,
         diagnosisId: diagnosis.diagnosisId,
         incidentId,
         actionType: "escalate",
@@ -389,47 +386,9 @@ export class RCAIncidentIntegrationService {
   }
   
   /**
-   * Predict resolution time based on RCA diagnosis
+   * Store a structured remediation action in the incident-note store.
    */
-  private predictResolutionTime(diagnosis: RCADiagnosis): number {
-    // Base times by root cause (in minutes)
-    const baseTimes: Record<string, number> = {
-      wan_failure: 120, // 2 hours - depends on ISP
-      power_failure: 60, // 1 hour - depends on utility restoration
-      dvr_failure: 30, // 30 minutes - restart or replace
-      camera_hardware_failure: 45, // 45 minutes - individual camera issues
-      insufficient_evidence: 90, // 1.5 hours - investigation needed
-    };
-    
-    const baseTime = baseTimes[diagnosis.primaryCause.code] || 60;
-    
-    // Adjust for blast radius
-    let multiplier = 1.0;
-    
-    if (diagnosis.blastRadius.summary.totalBranches >= 5) {
-      multiplier += 0.5; // Multi-branch adds complexity
-    }
-    
-    if (diagnosis.blastRadius.summary.totalCameras >= 100) {
-      multiplier += 0.3; // Large camera count adds verification time
-    }
-    
-    // Adjust for confidence - lower confidence means more investigation time
-    if (diagnosis.confidenceScore < 0.6) {
-      multiplier += 0.4;
-    }
-    
-    return Math.round(baseTime * multiplier);
-  }
-  
-  /**
-   * Store remediation action (using incident notes as metadata storage)
-   */
-  private async storeRemediationAction(
-    action: RCARemediationAction,
-    tenantId: string
-  ): Promise<void> {
-    // Store action as incident note
+  private async storeRemediationAction(action: RCARemediationAction): Promise<void> {
     if (action.incidentId) {
       await this.store.addIncidentNote({
         incidentId: action.incidentId,
@@ -447,35 +406,145 @@ export class RCAIncidentIntegrationService {
     incidentId: string,
     tenantId: string
   ): Promise<RCARemediationAction[]> {
-    const notes = await this.store.listIncidentNotes(incidentId, "rca_remediation_action");
-    
-    const actions: RCARemediationAction[] = [];
-    
-    for (const note of notes) {
-      try {
-        const action = JSON.parse(note.content) as RCARemediationAction;
-        actions.push(action);
-      } catch (error) {
-        console.error("Failed to parse RCA action:", error);
-      }
-    }
-    
-    // Sort by priority
+    const incident = await this.store.getIncident(incidentId);
+    if (!incident || incident.tenantId !== tenantId) throw new Error("incident_not_found");
+    const [notes, enrichment] = await Promise.all([
+      this.store.listIncidentNotes(incidentId, "rca_remediation_action"),
+      this.getEnrichment(incidentId, tenantId),
+    ]);
+    const actions = notes
+      .map((note) => parseNote<RCARemediationAction>(note))
+      .filter((action): action is RCARemediationAction => Boolean(action))
+      .filter((action) => !enrichment || action.diagnosisId === enrichment.diagnosisId);
     const priorityOrder = { immediate: 0, high: 1, medium: 2, low: 3 };
     return actions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
   }
-  
-  /**
-   * Update remediation action status (find and update in incident notes)
-   */
+
+  async getEnrichment(
+    incidentId: string,
+    tenantId: string,
+  ): Promise<RCAIncidentEnrichment | null> {
+    const incident = await this.store.getIncident(incidentId);
+    if (!incident || incident.tenantId !== tenantId) throw new Error("incident_not_found");
+    const notes = await this.store.listIncidentNotes(incidentId, "rca_enrichment");
+    const newestFirst = [...notes].sort((left, right) => noteTime(right) - noteTime(left));
+    for (const note of newestFirst) {
+      const enrichment = parseNote<RCAIncidentEnrichment>(note);
+      if (enrichment?.incidentId === incidentId) return enrichment;
+    }
+    return null;
+  }
+
+  async getRemediationAction(
+    actionId: string,
+    tenantId: string,
+  ): Promise<RCARemediationAction | null> {
+    const found = await this.findActionNote(actionId, tenantId);
+    return found?.action ?? null;
+  }
+
   async updateActionStatus(
     actionId: string,
     tenantId: string,
     status: RCARemediationAction["status"],
     notes?: string
   ): Promise<RCARemediationAction> {
-    // Since we store actions as incident notes, we need to find the note containing this action
-    // This is a limitation of the current approach - in production, use dedicated storage
-    throw new Error("updateActionStatus not fully implemented - requires dedicated RCA action storage");
+    const found = await this.findActionNote(actionId, tenantId);
+    if (!found) throw new Error("remediation_action_not_found");
+    if (found.action.status === status) return found.action;
+    if (!validTransition(found.action, status)) throw new Error("invalid_remediation_action_transition");
+    const updated: RCARemediationAction = {
+      ...found.action,
+      status,
+      ...(notes?.trim() ? { statusNotes: notes.trim() } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    const saved = await this.store.updateIncidentNote(found.note.id, JSON.stringify(updated));
+    if (!saved) throw new Error("remediation_action_update_failed");
+    return updated;
   }
+
+  async getSummary(
+    tenantId: string,
+    filters: {
+      from?: string;
+      to?: string;
+      rootCauseCode?: string;
+      allowedBranchIds: Set<string>;
+    },
+  ) {
+    const incidents = await this.store.listIncidents(tenantId, {
+      ...(filters.from ? { from: filters.from } : {}),
+      ...(filters.to ? { to: filters.to } : {}),
+      limit: 10_000,
+    });
+    const accessible = incidents
+      .filter((incident) => incident.branchId && filters.allowedBranchIds.has(incident.branchId));
+    const enrichments: RCAIncidentEnrichment[] = [];
+    for (let index = 0; index < accessible.length; index += 25) {
+      const batch = await Promise.all(accessible.slice(index, index + 25)
+        .map((incident) => this.getEnrichment(incident.id, tenantId)));
+      for (const enrichment of batch) {
+        if (enrichment && (!filters.rootCauseCode || enrichment.rootCauseCode === filters.rootCauseCode)) {
+          enrichments.push(enrichment);
+        }
+      }
+    }
+    const byRootCause: Record<string, number> = {};
+    for (const enrichment of enrichments) {
+      byRootCause[enrichment.rootCauseCode] = (byRootCause[enrichment.rootCauseCode] ?? 0) + 1;
+    }
+    return {
+      totalIncidentsEnriched: enrichments.length,
+      byRootCause,
+      averageConfidence: enrichments.length
+        ? enrichments.reduce((sum, item) => sum + item.confidence, 0) / enrichments.length
+        : null,
+      multiBranchIncidents: enrichments.filter((item) => item.isMultiBranchFailure).length,
+      truncated: incidents.length === 10_000,
+    };
+  }
+
+  private async findActionNote(actionId: string, tenantId: string) {
+    const incidents = await this.store.listIncidents(tenantId, { limit: 10_000 });
+    for (const incident of incidents) {
+      const [enrichment, notes] = await Promise.all([
+        this.getEnrichment(incident.id, tenantId),
+        this.store.listIncidentNotes(incident.id, "rca_remediation_action"),
+      ]);
+      for (const note of notes) {
+        const action = parseNote<RCARemediationAction>(note);
+        if (action?.id === actionId && (!enrichment || action.diagnosisId === enrichment.diagnosisId)) {
+          return { action, note };
+        }
+      }
+    }
+    return null;
+  }
+}
+
+function parseNote<T>(note: { content?: unknown }): T | null {
+  if (typeof note.content !== "string") return null;
+  try {
+    return JSON.parse(note.content) as T;
+  } catch {
+    return null;
+  }
+}
+
+function noteTime(note: Record<string, unknown>) {
+  const value = note.editedAt ?? note.edited_at ?? note.createdAt ?? note.created_at;
+  return typeof value === "string" ? Date.parse(value) || 0 : 0;
+}
+
+function validTransition(
+  action: RCARemediationAction,
+  next: RCARemediationAction["status"],
+) {
+  if (next === "approved") return action.status === "proposed";
+  if (next === "in_progress") {
+    return action.status === "approved" || (action.status === "proposed" && !action.requiresApproval);
+  }
+  if (next === "completed" || next === "failed") return action.status === "in_progress";
+  return false;
 }

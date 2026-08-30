@@ -835,6 +835,8 @@ export interface ControlPlaneStore {
     incidentType?: string;
     severity?: string;
     branchId?: string;
+    branchIds?: string[];
+    includeUnscoped?: boolean;
     assignedTo?: string;
     from?: string;
     to?: string;

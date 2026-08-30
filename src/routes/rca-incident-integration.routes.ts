@@ -7,6 +7,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { Action } from "../domain/models.js";
 import { RCAIncidentIntegrationService } from "../services/rca-incident-integration.service.js";
 
 const incidentParams = z.object({ incidentId: z.string().min(1) });
@@ -25,10 +26,11 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const { incidentId } = incidentParams.parse(request.params);
-      
+      const incident = await authorizedIncident(request, reply, store, incidentId, "incident:update");
+      if (!incident) return;
       const result = await service.enrichIncidentWithRCA(incidentId, user);
       
-      await audit(store, request, "incident.rca_enrichment.create", incidentId, "success", {
+      await audit(store, request, "incident.rca_enrichment.create", incident.branchId, "success", {
         diagnosisId: result.diagnosis.diagnosisId,
         rootCause: result.enrichment.rootCauseCode,
         confidence: result.enrichment.confidence,
@@ -56,10 +58,9 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const { incidentId } = incidentParams.parse(request.params);
-      
-      // Get enrichment
-      // TODO: Implement getMetadata method in ControlPlaneStore
-      const enrichment = null; // await store.getMetadata(`rca:enrichment:${incidentId}`, user.tenantId);
+      const incident = await authorizedIncident(request, reply, store, incidentId, "incident:view");
+      if (!incident) return;
+      const enrichment = await service.getEnrichment(incidentId, user.tenantId);
       
       if (!enrichment) {
         return reply.code(404).send({ error: "enrichment_not_found" });
@@ -83,7 +84,8 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const { incidentId } = incidentParams.parse(request.params);
-      
+      const incident = await authorizedIncident(request, reply, store, incidentId, "incident:view");
+      if (!incident) return;
       const actions = await service.getRemediationActions(incidentId, user.tenantId);
       
       return {
@@ -114,14 +116,17 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const { actionId } = actionParams.parse(request.params);
-      
+      const existing = await service.getRemediationAction(actionId, user.tenantId);
+      if (!existing?.incidentId) return reply.code(404).send({ error: "remediation_action_not_found" });
+      const incident = await authorizedIncident(request, reply, store, existing.incidentId, "incident:update");
+      if (!incident) return;
       const action = await service.updateActionStatus(
         actionId,
         user.tenantId,
         "approved"
       );
       
-      await audit(store, request, "incident.remediation_action.approve", action.incidentId || "", "success", {
+      await audit(store, request, "incident.remediation_action.approve", incident.branchId, "success", {
         actionId,
         actionType: action.actionType,
       });
@@ -137,14 +142,17 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const { actionId } = actionParams.parse(request.params);
-      
+      const existing = await service.getRemediationAction(actionId, user.tenantId);
+      if (!existing?.incidentId) return reply.code(404).send({ error: "remediation_action_not_found" });
+      const incident = await authorizedIncident(request, reply, store, existing.incidentId, "incident:update");
+      if (!incident) return;
       const action = await service.updateActionStatus(
         actionId,
         user.tenantId,
         "in_progress"
       );
       
-      await audit(store, request, "incident.remediation_action.start", action.incidentId || "", "success", {
+      await audit(store, request, "incident.remediation_action.start", incident.branchId, "success", {
         actionId,
         actionType: action.actionType,
       });
@@ -161,10 +169,13 @@ export async function registerRCAIncidentIntegrationRoutes(
       const user = authenticated(request);
       const { actionId } = actionParams.parse(request.params);
       const body = z.object({
-        notes: z.string().optional(),
+        notes: z.string().trim().max(5_000).optional(),
         successful: z.boolean().default(true),
       }).parse(request.body);
-      
+      const existing = await service.getRemediationAction(actionId, user.tenantId);
+      if (!existing?.incidentId) return reply.code(404).send({ error: "remediation_action_not_found" });
+      const incident = await authorizedIncident(request, reply, store, existing.incidentId, "incident:update");
+      if (!incident) return;
       const action = await service.updateActionStatus(
         actionId,
         user.tenantId,
@@ -172,7 +183,7 @@ export async function registerRCAIncidentIntegrationRoutes(
         body.notes
       );
       
-      await audit(store, request, "incident.remediation_action.complete", action.incidentId || "", "success", {
+      await audit(store, request, "incident.remediation_action.complete", incident.branchId, "success", {
         actionId,
         actionType: action.actionType,
         successful: body.successful,
@@ -189,21 +200,22 @@ export async function registerRCAIncidentIntegrationRoutes(
     return handleRequest(reply, async () => {
       const user = authenticated(request);
       const query = z.object({
-        from: z.string().datetime().optional(),
-        to: z.string().datetime().optional(),
-        rootCauseCode: z.string().optional(),
+        from: z.string().datetime({ offset: true }).optional(),
+        to: z.string().datetime({ offset: true }).optional(),
+        rootCauseCode: z.string().trim().min(1).max(120).optional(),
+      }).superRefine((value, context) => {
+        if (value.from && value.to && Date.parse(value.from) > Date.parse(value.to)) {
+          context.addIssue({ code: "custom", path: ["from"], message: "from must not be after to" });
+        }
       }).parse(request.query);
-      
-      // This would aggregate RCA enrichment data across incidents
-      // For now, return a placeholder
+      const branches = await store.listAccessibleNodes(user, "incident:view", "branch");
+      const summary = await service.getSummary(user.tenantId, {
+        ...query,
+        allowedBranchIds: new Set(branches.map((branch) => branch.id)),
+      });
       return {
-        summary: {
-          totalIncidentsEnriched: 0,
-          byRootCause: {},
-          averageConfidence: 0,
-          multiBranchIncidents: 0,
-        },
-        message: "RCA summary aggregation to be implemented",
+        summary,
+        generatedAt: new Date().toISOString(),
       };
     });
   });
@@ -223,9 +235,14 @@ async function handleRequest(
   try {
     return await work();
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({ error: "invalid_request", issues: error.issues });
+    }
     if (error instanceof Error) {
       const statusCode = error.message === "unauthorized" ? 401
         : error.message.includes("not_found") ? 404
+        : error.message.includes("invalid_remediation_action_transition") ||
+          error.message.includes("incident_missing_branch") ? 409
         : 500;
       
       return reply.code(statusCode).send({
@@ -235,6 +252,35 @@ async function handleRequest(
     }
     throw error;
   }
+}
+
+async function authorizedIncident(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  incidentId: string,
+  action: Extract<Action, "incident:view" | "incident:update">,
+) {
+  const user = authenticated(request);
+  const incident = await store.getIncident(incidentId);
+  if (!incident || incident.tenantId !== user.tenantId) {
+    await reply.code(404).send({ error: "incident_not_found" });
+    return undefined;
+  }
+  if (!incident.branchId) {
+    await reply.code(409).send({ error: "incident_missing_branch" });
+    return undefined;
+  }
+  const decision = await store.checkAccess(user, action, incident.branchId);
+  if (!decision) {
+    await reply.code(404).send({ error: "branch_not_found" });
+    return undefined;
+  }
+  if (!decision.allowed) {
+    await reply.code(403).send({ error: "forbidden", reason: decision.reason });
+    return undefined;
+  }
+  return incident;
 }
 
 async function audit(
@@ -256,6 +302,6 @@ async function audit(
       details,
     });
   } catch (error) {
-    console.error("Failed to write audit log:", error);
+    request.log.error({ error, action, resourceNodeId }, "Failed to write RCA incident audit log");
   }
 }

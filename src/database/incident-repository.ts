@@ -42,18 +42,52 @@ export class IncidentRepository {
     return mapIncident(result.rows[0]);
   }
 
-  async listIncidents(tenantId: string, filters?: { status?: string; limit?: number }) {
-    const limit = filters?.limit ?? 100;
-    if (filters?.status) {
-      const res = await this.pool.query(
-        `SELECT * FROM incidents WHERE tenant_id=$1 AND status=$2 ORDER BY detected_at DESC LIMIT $3`,
-        [tenantId, filters.status, limit],
-      );
-      return res.rows.map(mapIncident);
+  async listIncidents(tenantId: string, filters?: {
+    status?: string;
+    incidentType?: string;
+    severity?: string;
+    branchId?: string;
+    branchIds?: string[];
+    includeUnscoped?: boolean;
+    assignedTo?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }) {
+    const clauses = ["tenant_id=$1"];
+    const params: unknown[] = [tenantId];
+    const addFilter = (column: string, value: string | undefined) => {
+      if (value === undefined) return;
+      params.push(value);
+      clauses.push(`${column}=$${params.length}`);
+    };
+    addFilter("status", filters?.status);
+    addFilter("incident_type", filters?.incidentType);
+    addFilter("severity", filters?.severity);
+    addFilter("branch_id", filters?.branchId);
+    addFilter("assigned_to", filters?.assignedTo);
+    if (filters?.branchIds) {
+      params.push(filters.branchIds);
+      const branchPredicate = `branch_id::text = ANY($${params.length}::text[])`;
+      clauses.push(filters.includeUnscoped
+        ? `(${branchPredicate} OR branch_id IS NULL)`
+        : branchPredicate);
     }
+    if (filters?.from !== undefined) {
+      params.push(filters.from);
+      clauses.push(`occurred_at >= $${params.length}`);
+    }
+    if (filters?.to !== undefined) {
+      params.push(filters.to);
+      clauses.push(`occurred_at <= $${params.length}`);
+    }
+    params.push(filters?.limit ?? 100);
     const res = await this.pool.query(
-      `SELECT * FROM incidents WHERE tenant_id=$1 ORDER BY detected_at DESC LIMIT $2`,
-      [tenantId, limit],
+      `SELECT * FROM incidents
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY occurred_at DESC NULLS LAST, detected_at DESC
+       LIMIT $${params.length}`,
+      params,
     );
     return res.rows.map(mapIncident);
   }
