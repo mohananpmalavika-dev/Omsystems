@@ -1060,9 +1060,54 @@ export const privacyApi = {
   }),
 };
 
+export type AnalyticsDashboardSummary = {
+  period: { startDate: string; endDate: string };
+  totalAlerts: number;
+  criticalAlerts: number;
+  resolvedAlerts: number;
+  totalFootfall: number | null;
+  averageDwellTime: number | null;
+  activeRules: number;
+  totalEvents: number;
+  eventsByType: Record<string, number>;
+  truncated: boolean;
+  branch: { id: string; name: string; eventCount: number };
+};
+
 export const analyticsApi = {
   capabilities: () => fetchApi<any>('/v1/analytics/capabilities'),
   engineHealth: () => fetchApi<any>('/v1/analytics/engine-health'),
+  branchSummary: (branchId: string, range: { from: string; to: string }) => {
+    const query = new URLSearchParams(range);
+    return fetchApi<AnalyticsDashboardSummary>(
+      `/v1/branches/${encodeURIComponent(branchId)}/analytics/summary?${query}`,
+    );
+  },
+  cameraFootfall: (cameraId: string, range: { from: string; to: string }) => {
+    const query = new URLSearchParams({ ...range, interval: 'hour' });
+    return fetchApi<{ data: Array<{
+      bucket_at: string; entries: number; exits: number; total_crossings: number;
+    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/footfall?${query}`);
+  },
+  cameraDwellTime: (cameraId: string, range: { from: string; to: string }) => {
+    const query = new URLSearchParams({ ...range, interval: 'hour' });
+    return fetchApi<{ data: Array<{
+      bucket_at: string; average_seconds: number; maximum_seconds: number; sample_count: number;
+      zone_name?: string;
+    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/dwell-time?${query}`);
+  },
+  cameraQueue: (cameraId: string, range: { from: string; to: string }) => {
+    const query = new URLSearchParams({ ...range, interval: 'hour' });
+    return fetchApi<{ data: Array<{
+      bucket_at: string; average_count: number; maximum_count: number; zone_name?: string;
+    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/queue?${query}`);
+  },
+  exportBranchCsv: (branchId: string, range: { from: string; to: string }) => {
+    const query = new URLSearchParams(range);
+    return downloadApi(
+      `/v1/branches/${encodeURIComponent(branchId)}/analytics/export/csv?${query}`,
+    );
+  },
   enableAllCameras: (branchId: string) => fetchApi<any>(
     `/v1/branches/${encodeURIComponent(branchId)}/analytics/enable-all-cameras`,
     { method: 'POST', body: JSON.stringify({}) },
@@ -1111,6 +1156,21 @@ export const analyticsApi = {
     fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
       method: 'POST', body: JSON.stringify(data),
     }),
+};
+
+export const platformCapabilitiesApi = {
+  list: () => fetchApi<{
+    success: boolean;
+    capabilities: Array<{
+      id: string;
+      name: string;
+      state: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'DISABLED';
+      reason?: string;
+      since?: string;
+      dependencies?: string[];
+    }>;
+    timestamp: string;
+  }>('/api/capabilities'),
 };
 
 export const provisioningApi = {

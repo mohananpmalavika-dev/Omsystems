@@ -557,66 +557,126 @@ export async function registerAnalyticsRoutes(
     return reply.code(202).send(result);
   });
 
-  // Backwards-compatible branch summary route used by dashboard
-  app.get("/v1/branches/:branchId/analytics/summary", async (request, reply) => {
-    const params = z.object({ 
-      branchId: z.string().uuid().optional(), 
-      from: z.string().optional(), 
-      to: z.string().optional() 
-    }).parse({
-      branchId: (request.params as any).branchId,
-      from: (request.query as any).from,
-      to: (request.query as any).to,
-    });
-    
-    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
-    const branch = branches.find((b) => b.id === params.branchId) ?? branches[0];
-    if (!branch) return reply.code(404).send({ error: "branch_not_found" });
+  const branchAnalyticsParams = z.object({
+    branchId: z.string().trim().min(1).max(200),
+  });
+  const branchAnalyticsQuery = z.object({
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  }).superRefine((value, context) => {
+    if (value.from && value.to && Date.parse(value.from) > Date.parse(value.to)) {
+      context.addIssue({ code: "custom", path: ["from"], message: "from must not be after to" });
+    }
+  });
 
-    // Query actual analytics alerts and events for this branch
-    const alerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, {
+  const loadBranchAnalytics = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    action: Extract<Action, "analytics:view" | "analytics:export">,
+  ) => {
+    const { branchId } = branchAnalyticsParams.parse(request.params);
+    const query = branchAnalyticsQuery.parse(request.query);
+    const branches = await store.listAccessibleNodes(request.currentUser, action, "branch");
+    const branch = branches.find((candidate) => candidate.id === branchId);
+    if (!branch) {
+      await reply.code(404).send({ error: "branch_not_found" });
+      return undefined;
+    }
+
+    const cameras = await store.listCamerasByBranch(request.currentUser, branch.id, action);
+    const rules = cameras.length > 0
+      ? await store.listAnalyticsRulesByCameraIds(cameras.map((camera) => camera.id))
+      : [];
+    const rowLimit = 10_000;
+    const loadedAlerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, {
       branchId: branch.id,
-      from: params.from,
-      to: params.to,
-      limit: 1000,
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      limit: rowLimit + 1,
     });
+    const truncated = loadedAlerts.length > rowLimit;
+    const alerts = loadedAlerts.slice(0, rowLimit);
+    return { branch, cameras, rules, alerts, query, truncated };
+  };
 
-    // Get all unique rule IDs to fetch detection types
-    const ruleIds = [...new Set(alerts.map(a => a.ruleId))];
-    const rules = new Map<string, string>(); // ruleId -> detectionType
-    
-    // Fetch rules to get detection types (batch query per camera)
-    const cameraIds = [...new Set(alerts.map(a => a.cameraId))];
-    for (const cameraId of cameraIds) {
-      const cameraRules = await store.listAnalyticsRules(cameraId);
-      for (const rule of cameraRules) {
-        if (ruleIds.includes(rule.id)) {
-          rules.set(rule.id, rule.detectionType);
-        }
-      }
-    }
+  app.get("/v1/branches/:branchId/analytics/summary", async (request, reply) => {
+    const report = await loadBranchAnalytics(request, reply, "analytics:view");
+    if (!report) return;
 
-    // Group by detection type
+    const rulesById = new Map(report.rules.map((rule) => [rule.id, rule]));
     const eventsByType: Record<string, number> = {};
-    for (const alert of alerts) {
-      const type = rules.get(alert.ruleId) || 'unknown';
-      eventsByType[type] = (eventsByType[type] ?? 0) + 1;
+    for (const alert of report.alerts) {
+      const type = rulesById.get(alert.ruleId)?.detectionType ?? "unknown";
+      eventsByType[type] = (eventsByType[type] ?? 0) + alert.occurrenceCount;
     }
+    const footfallTypes = new Set(["footfall", "customer-counting", "person-counting"]);
+    const hasFootfallRule = report.rules.some((rule) => footfallTypes.has(rule.detectionType));
+    const totalFootfall = hasFootfallRule
+      ? Object.entries(eventsByType).reduce(
+        (total, [type, count]) => total + (footfallTypes.has(type) ? count : 0),
+        0,
+      )
+      : null;
+    const totalEvents = Object.values(eventsByType).reduce((total, count) => total + count, 0);
 
-    const summary = {
-      period: { 
-        startDate: params.from ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), 
-        endDate: params.to ?? new Date().toISOString() 
+    return reply.send({
+      period: {
+        startDate: report.query.from ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        endDate: report.query.to ?? new Date().toISOString(),
       },
-      totalEvents: alerts.length,
+      totalAlerts: report.alerts.length,
+      criticalAlerts: report.alerts.filter((alert) => alert.severity === "P1").length,
+      resolvedAlerts: report.alerts.filter((alert) => alert.status === "resolved").length,
+      totalFootfall,
+      averageDwellTime: null,
+      activeRules: report.rules.filter((rule) => rule.enabled).length,
+      totalEvents,
       eventsByType,
-      branch: { 
-        id: branch.id, 
-        name: branch.name, 
-        eventCount: alerts.length 
+      truncated: report.truncated,
+      branch: {
+        id: report.branch.id,
+        name: report.branch.name,
+        eventCount: totalEvents,
       },
-    };
-    return reply.send(summary);
+    });
+  });
+
+  app.get("/v1/branches/:branchId/analytics/export/csv", async (request, reply) => {
+    const report = await loadBranchAnalytics(request, reply, "analytics:export");
+    if (!report) return;
+
+    const camerasById = new Map(report.cameras.map((camera) => [camera.id, camera]));
+    const rulesById = new Map(report.rules.map((rule) => [rule.id, rule]));
+    const rows = report.alerts.map((alert) => [
+      alert.id,
+      alert.cameraId,
+      camerasById.get(alert.cameraId)?.name ?? "",
+      rulesById.get(alert.ruleId)?.detectionType ?? "unknown",
+      alert.severity,
+      alert.status,
+      alert.confidence,
+      alert.occurrenceCount,
+      alert.firstDetectedAt,
+      alert.lastDetectedAt,
+      alert.title,
+    ]);
+    const csv = [
+      [
+        "alert_id", "camera_id", "camera_name", "detection_type", "severity", "status",
+        "confidence", "occurrences", "first_detected_at", "last_detected_at", "title",
+      ],
+      ...rows,
+    ].map((row) => row.map(csvCell).join(",")).join("\r\n");
+    const safeBranchId = report.branch.id.replace(/[^a-zA-Z0-9_-]/g, "-");
+
+    await audit(request, store, "analytics.summary_exported", report.branch.id, {
+      format: "csv", rowCount: report.alerts.length, truncated: report.truncated,
+      from: report.query.from ?? null, to: report.query.to ?? null,
+    });
+    return reply
+      .type("text/csv; charset=utf-8")
+      .header("content-disposition", `attachment; filename="analytics-${safeBranchId}.csv"`)
+      .send(`\uFEFF${csv}\r\n`);
   });
 
   // Camera analytics endpoints - proxy to analytics engine
@@ -942,4 +1002,10 @@ function same(left: string, right: string) {
   const a = Buffer.from(left);
   const b = Buffer.from(right);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function csvCell(value: unknown) {
+  let text = value == null ? "" : String(value);
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return `"${text.replaceAll('"', '""')}"`;
 }

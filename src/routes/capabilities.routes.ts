@@ -1,13 +1,13 @@
 /**
  * Capabilities API Routes
  * 
- * Provides UI components with real-time capability availability information.
+ * Provides UI components with declared implementation availability information.
  * This prevents showing features that are not yet implemented or currently unavailable.
  * 
  * Core Principle:
  * - UI should query capabilities before showing features
  * - Features that return UNAVAILABLE should be hidden, not shown with "coming soon" alerts
- * - Capabilities can change at runtime (service restarts, feature flags, etc.)
+ * - Hardware and service runtime health is reported by the feature-specific APIs
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -37,8 +37,8 @@ interface CapabilityInfo {
 /**
  * Capability registry
  * 
- * This should be populated from actual service checks, not hardcoded.
- * In production, capabilities should be discovered dynamically.
+ * This registry describes implemented product support. It deliberately does not
+ * claim that branch hardware or an optional runtime is currently connected.
  */
 class CapabilityRegistry {
   private capabilities: Map<string, CapabilityInfo> = new Map();
@@ -50,7 +50,8 @@ class CapabilityRegistry {
   /**
    * Initialize capability states
    * 
-   * TODO: Replace with dynamic service discovery
+   * Runtime-dependent capabilities remain PARTIAL until their feature endpoint
+   * confirms that the required branch service is reachable.
    */
   private initializeCapabilities(): void {
     // Analytics & Reporting
@@ -58,21 +59,21 @@ class CapabilityRegistry {
       id: 'analytics.export.csv',
       name: 'CSV Export',
       state: 'AVAILABLE',
-      reason: 'Analog camera CSV export fully implemented'
+      reason: 'Branch-scoped analytics alert export is implemented'
     });
     
     this.register({
       id: 'analytics.export.pdf',
       name: 'PDF Export',
-      state: 'PARTIAL',
-      reason: 'PDF generation implemented but some report types incomplete'
+      state: 'UNAVAILABLE',
+      reason: 'No analytics PDF export endpoint is implemented'
     });
     
     this.register({
       id: 'analytics.export.excel',
       name: 'Excel Export',
-      state: 'AVAILABLE',
-      reason: 'Excel export via exceljs library'
+      state: 'UNAVAILABLE',
+      reason: 'No analytics Excel export endpoint is implemented'
     });
     
     // Video Search & Timeline
@@ -127,12 +128,20 @@ class CapabilityRegistry {
       state: 'AVAILABLE',
       reason: 'Real-time device status overlay operational'
     });
+
+    this.register({
+      id: 'branch.media-gateway',
+      name: 'Branch Media Gateway',
+      state: 'PARTIAL',
+      reason: 'Support is implemented; availability is determined separately for each branch'
+    });
     
     this.register({
       id: 'digital-twin.video',
       name: 'Digital Twin Live Video',
-      state: 'AVAILABLE',
-      reason: 'Live video streaming via media gateway'
+      state: 'PARTIAL',
+      reason: 'Implemented, but each stream requires a reachable branch media gateway',
+      dependencies: ['branch.media-gateway']
     });
     
     // Incidents & Investigations
@@ -174,10 +183,8 @@ class CapabilityRegistry {
     this.register({
       id: 'assistant.nlp',
       name: 'Natural Language Processing',
-      state: process.env.OPENAI_API_KEY ? 'AVAILABLE' : 'PARTIAL',
-      reason: process.env.OPENAI_API_KEY 
-        ? 'ChatGPT Plus integration active'
-        : 'Rule-based parser only (no GPT-4)'
+      state: 'PARTIAL',
+      reason: 'Deterministic local parsing is available; optional Ollama provides free local LLM interpretation'
     });
     
     this.register({

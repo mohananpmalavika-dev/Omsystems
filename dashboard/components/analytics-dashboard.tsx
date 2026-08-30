@@ -6,22 +6,17 @@
  */
 
 import {
-  Activity, BarChart3, Clock, Eye, Footprints, MapPin, TrendingDown,
-  TrendingUp, Users, Calendar, Download, RefreshCw, AlertTriangle,
+  Activity, BarChart3, Clock, Eye, Footprints, Users, Download, RefreshCw,
+  AlertTriangle,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
+import {
+  analyticsApi,
+  cameraInventoryApi,
+  type AnalyticsDashboardSummary,
+} from "@/lib/api-client";
 import type { Branch, Camera } from "@/lib/types";
 import { useCapabilities } from "@/hooks/useCapabilities";
-
-interface MetricsSummary {
-  totalAlerts: number;
-  criticalAlerts: number;
-  resolvedAlerts: number;
-  totalFootfall: number;
-  averageDwellTime: number;
-  activeRules: number;
-}
 
 interface FootfallData {
   bucket_at: string;
@@ -46,14 +41,14 @@ interface QueueData {
 }
 
 export function AnalyticsDashboard() {
-  const { isAvailable, isPartial, getCapability } = useCapabilities();
+  const { isAvailable, getCapability } = useCapabilities();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedCamera, setSelectedCamera] = useState("");
   const [timeRange, setTimeRange] = useState("24h");
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<MetricsSummary | null>(null);
+  const [summary, setSummary] = useState<AnalyticsDashboardSummary | null>(null);
   const [footfallData, setFootfallData] = useState<FootfallData[]>([]);
   const [dwellData, setDwellData] = useState<DwellTimeData[]>([]);
   const [queueData, setQueueData] = useState<QueueData[]>([]);
@@ -74,7 +69,7 @@ export function AnalyticsDashboard() {
     void cameraInventoryApi.listByBranch(selectedBranch, "analytics:view")
       .then(({ data }) => {
         setCameras(data as Camera[]);
-        if (data.length > 0) setSelectedCamera(data[0]!.id);
+        setSelectedCamera(data[0]?.id ?? "");
       })
       .catch((err) => setError(readable(err)));
   }, [selectedBranch]);
@@ -95,16 +90,7 @@ export function AnalyticsDashboard() {
     setError(undefined);
 
     try {
-      const { from, to } = getTimeRange(timeRange);
-      const response = await fetch(
-        `/v1/branches/${selectedBranch}/analytics/summary?from=${from}&to=${to}`,
-      );
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Failed to load analytics summary (${response.status})`);
-      }
-      const data = await response.json();
-      setSummary(data);
+      setSummary(await analyticsApi.branchSummary(selectedBranch, getTimeRange(timeRange)));
     } catch (err) {
       console.error('[AnalyticsDashboard] Error loading summary:', err);
       setError(readable(err));
@@ -118,75 +104,49 @@ export function AnalyticsDashboard() {
     setLoading(true);
 
     try {
-      const { from, to } = getTimeRange(timeRange);
-
-      const [footfallRes, dwellRes, queueRes] = await Promise.all([
-        fetch(
-          `/v1/cameras/${selectedCamera}/analytics/footfall?from=${from}&to=${to}&interval=hour`,
-        ),
-        fetch(
-          `/v1/cameras/${selectedCamera}/analytics/dwell-time?from=${from}&to=${to}&interval=hour`,
-        ),
-        fetch(
-          `/v1/cameras/${selectedCamera}/analytics/queue?from=${from}&to=${to}&interval=hour`,
-        ),
+      const range = getTimeRange(timeRange);
+      const [footfall, dwell, queue] = await Promise.all([
+        analyticsApi.cameraFootfall(selectedCamera, range),
+        analyticsApi.cameraDwellTime(selectedCamera, range),
+        analyticsApi.cameraQueue(selectedCamera, range),
       ]);
-
-      if (footfallRes.ok) {
-        const footfall = await footfallRes.json();
-        setFootfallData(footfall.data || []);
-      }
-
-      if (dwellRes.ok) {
-        const dwell = await dwellRes.json();
-        setDwellData(dwell.data || []);
-      }
-
-      if (queueRes.ok) {
-        const queue = await queueRes.json();
-        setQueueData(queue.data || []);
-      }
+      setFootfallData(footfall.data ?? []);
+      setDwellData(dwell.data ?? []);
+      setQueueData(queue.data ?? []);
     } catch (err) {
+      setFootfallData([]);
+      setDwellData([]);
+      setQueueData([]);
       setError(readable(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const exportReport = async (format: 'csv' | 'pdf' | 'excel') => {
-    // Check capability before attempting export
-    const capabilityId = `analytics.export.${format}`;
-    
-    if (!isAvailable(capabilityId) && !isPartial(capabilityId)) {
+  const exportReport = async () => {
+    if (!isAvailable('analytics.export.csv')) {
+      const capabilityId = 'analytics.export.csv';
       const capability = getCapability(capabilityId);
-      alert(capability?.reason || `${format.toUpperCase()} export is not currently available`);
+      setError(capability?.reason || 'CSV export is not currently available');
       return;
     }
-    
+
     try {
-      const { from, to } = getTimeRange(timeRange);
-      const response = await fetch(
-        `/v1/branches/${selectedBranch}/analytics/export/${format}?from=${from}&to=${to}`,
-        { credentials: 'include' }
+      setError(undefined);
+      const blob = await analyticsApi.exportBranchCsv(
+        selectedBranch,
+        getTimeRange(timeRange),
       );
-      
-      if (!response.ok) {
-        throw new Error(`Export failed: ${response.statusText}`);
-      }
-      
-      // Trigger download
-      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `analytics-${selectedBranch}-${Date.now()}.${format}`;
+      a.download = `analytics-${selectedBranch}-${Date.now()}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
     } catch (err) {
-      alert(`Export failed: ${readable(err)}`);
+      setError(`Export failed: ${readable(err)}`);
     }
   };
 
@@ -222,24 +182,11 @@ export function AnalyticsDashboard() {
           <button onClick={() => void loadDashboardData()} title="Refresh data">
             <RefreshCw size={16} />
           </button>
-          {/* Show export buttons only if at least one format is available */}
-          {(isAvailable('analytics.export.csv') || isAvailable('analytics.export.pdf') || isAvailable('analytics.export.excel')) && (
+          {isAvailable('analytics.export.csv') && (
             <div className="export-buttons">
-              {isAvailable('analytics.export.csv') && (
-                <button onClick={() => void exportReport('csv')} title="Export as CSV">
-                  <Download size={16} /> CSV
-                </button>
-              )}
-              {(isAvailable('analytics.export.pdf') || isPartial('analytics.export.pdf')) && (
-                <button onClick={() => void exportReport('pdf')} title="Export as PDF">
-                  <Download size={16} /> PDF
-                </button>
-              )}
-              {isAvailable('analytics.export.excel') && (
-                <button onClick={() => void exportReport('excel')} title="Export as Excel">
-                  <Download size={16} /> Excel
-                </button>
-              )}
+              <button onClick={() => void exportReport()} title="Export as CSV">
+                <Download size={16} /> CSV
+              </button>
             </div>
           )}
         </div>
@@ -249,6 +196,13 @@ export function AnalyticsDashboard() {
         <div className="dashboard-error">
           <AlertTriangle size={16} />
           {error}
+        </div>
+      )}
+
+      {summary?.truncated && (
+        <div className="dashboard-error">
+          <AlertTriangle size={16} />
+          This view reached the 10,000-alert safety limit. Narrow the time range for complete totals.
         </div>
       )}
 
@@ -275,13 +229,15 @@ export function AnalyticsDashboard() {
             <MetricCard
               icon={<Footprints />}
               label="Total Footfall"
-              value={summary.totalFootfall}
+              value={summary.totalFootfall ?? "N/A"}
               color="green"
             />
             <MetricCard
               icon={<Clock />}
               label="Avg Dwell Time"
-              value={`${Math.round(summary.averageDwellTime)}s`}
+              value={summary.averageDwellTime == null
+                ? "N/A"
+                : `${Math.round(summary.averageDwellTime)}s`}
               color="purple"
             />
             <MetricCard
@@ -381,7 +337,7 @@ export function AnalyticsDashboard() {
                         ).toFixed(1)}
                       </span>
                       <span>
-                        Maximum: {Math.max(...queueData.map((d) => d.maximum_count))}
+                        Maximum: {Math.max(...queueData.map((d) => Number(d.maximum_count)))}
                       </span>
                     </div>
                   </div>
@@ -458,6 +414,7 @@ function SimpleLineChart({
   color: string;
 }) {
   const maxValue = Math.max(...data.map((d) => d.value), 1);
+  const xDivisor = Math.max(data.length - 1, 1);
 
   return (
     <div className="simple-line-chart">
@@ -468,14 +425,14 @@ function SimpleLineChart({
           strokeWidth="2"
           points={data
             .map((item, index) => {
-              const x = (index / (data.length - 1)) * 400;
+              const x = (index / xDivisor) * 400;
               const y = 200 - (item.value / maxValue) * 180;
               return `${x},${y}`;
             })
             .join(" ")}
         />
         {data.map((item, index) => {
-          const x = (index / (data.length - 1)) * 400;
+          const x = (index / xDivisor) * 400;
           const y = 200 - (item.value / maxValue) * 180;
           return (
             <circle

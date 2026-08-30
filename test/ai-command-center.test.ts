@@ -116,14 +116,8 @@ describe("AI Command Center", () => {
   });
 
   it("correlates real unhealthy signals across multiple authorized branches", async () => {
-    const secondBranch = await store.createNode(
-      "omsystems",
-      "branch-test-002",
-      "branch",
-      "region-south",
-      { name: "Branch Test 002" },
-    );
-    const secondAgent = await store.registerEdgeAgent(secondBranch.id, "Second edge", "1.0.0");
+    const secondBranchId = "A005";
+    const secondAgent = await store.registerEdgeAgent(secondBranchId, "Second edge", "1.0.0");
     const observedAt = new Date(Date.now() - 1_000).toISOString();
     await store.ingestOperationalTelemetry({
       tenantId: "omsystems", branchId: "branch-blr-001", edgeAgentId: agentId,
@@ -132,7 +126,7 @@ describe("AI Command Center", () => {
       metrics: { status: "offline", connectivity: false }, reasonCodes: ["wan_unreachable"],
     });
     await store.ingestOperationalTelemetry({
-      tenantId: "omsystems", branchId: secondBranch.id, edgeAgentId: secondAgent.id,
+      tenantId: "omsystems", branchId: secondBranchId, edgeAgentId: secondAgent.id,
       deviceType: "network", deviceId: "wan-primary", observedAt, receivedAt: observedAt,
       source: "system", quality: "verified", idempotencyKey: `wan-2:${observedAt}`,
       metrics: { status: "offline", connectivity: false }, reasonCodes: ["wan_unreachable"],
@@ -140,7 +134,7 @@ describe("AI Command Center", () => {
 
     const response = await app.inject({
       method: "GET",
-      url: `/v1/command-center/rca/multi-branch-analysis?branchIds=branch-blr-001,${secondBranch.id}`,
+      url: `/v1/command-center/rca/multi-branch-analysis?branchIds=branch-blr-001,${secondBranchId}`,
       headers: admin,
     });
 

@@ -20,15 +20,15 @@ describe("video analytics and alert workflow", () => {
   it("enables the complete camera-ready AI bundle across a branch idempotently", async () => {
     const first = await app.inject({
       method: "POST",
-      url: "/v1/branches/branch-blr-001/analytics/enable-all-cameras",
+      url: "/v1/branches/A005/analytics/enable-all-cameras",
       headers: admin,
       payload: {},
     });
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
-      cameraCount: 2,
+      cameraCount: 9,
       capabilityCount: 15,
-      created: 30,
+      created: 135,
       enabled: 0,
       unchanged: 0,
     });
@@ -38,17 +38,17 @@ describe("video analytics and alert workflow", () => {
 
     const second = await app.inject({
       method: "POST",
-      url: "/v1/branches/branch-blr-001/analytics/enable-all-cameras",
+      url: "/v1/branches/A005/analytics/enable-all-cameras",
       headers: admin,
       payload: {},
     });
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
-      cameraCount: 2,
+      cameraCount: 9,
       capabilityCount: 15,
       created: 0,
       enabled: 0,
-      unchanged: 30,
+      unchanged: 135,
     });
   });
 
@@ -133,7 +133,7 @@ describe("video analytics and alert workflow", () => {
     const alert = result.alerts[0]!;
 
     const operatorList = await app.inject({
-      method: "GET", url: "/v1/analytics/alerts?branchId=branch-blr-001",
+      method: "GET", url: "/v1/analytics/alerts?branchId=A005",
       headers: { "x-user-id": "user-south-operator" },
     });
     expect(operatorList.statusCode).toBe(200);
@@ -185,5 +185,61 @@ describe("video analytics and alert workflow", () => {
     expect(first.json().event.status).toBe("unmatched");
     expect(second.json().event.status).toBe("duplicate");
     expect(store.analyticsEvents).toHaveLength(1);
+  });
+
+  it("reports the requested branch and exports real analytics rows as safe CSV", async () => {
+    await store.createAnalyticsRule(
+      "omsystems", "cam-001", "user-global-admin",
+      {
+        name: "Entrance footfall", detectionType: "footfall", enabled: true,
+        objectClasses: ["person"], minConfidence: 0.5, minDurationSeconds: 0,
+        direction: "any", severity: "P1", cooldownSeconds: 0,
+        recipients: [], recordingPolicy: "none",
+        preRollSeconds: 30, postRollSeconds: 120,
+      },
+    );
+    const observedAt = new Date().toISOString();
+    const detection = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "dashboard-footfall",
+      detectionType: "footfall", occurredAt: observedAt,
+      confidence: 0.91, durationSeconds: 1, modelVersion: "footfall-local-v1",
+      objects: [{ label: "person", confidence: 0.91 }],
+    });
+    detection.alerts[0]!.title = "=unsafe spreadsheet formula";
+
+    const summary = await app.inject({
+      method: "GET", url: "/v1/branches/A005/analytics/summary", headers: admin,
+    });
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json()).toMatchObject({
+      totalAlerts: 1,
+      criticalAlerts: 1,
+      resolvedAlerts: 0,
+      totalFootfall: 1,
+      activeRules: 1,
+      totalEvents: 1,
+      truncated: false,
+      eventsByType: { footfall: 1 },
+      branch: { id: "A005", eventCount: 1 },
+    });
+    expect(summary.json().averageDwellTime).toBeNull();
+
+    const missing = await app.inject({
+      method: "GET", url: "/v1/branches/not-a-real-branch/analytics/summary", headers: admin,
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().error).toBe("branch_not_found");
+
+    const exported = await app.inject({
+      method: "GET", url: "/v1/branches/A005/analytics/export/csv", headers: admin,
+    });
+    expect(exported.statusCode).toBe(200);
+    expect(exported.headers["content-type"]).toContain("text/csv");
+    expect(exported.headers["content-disposition"]).toContain("analytics-A005.csv");
+    expect(exported.body).toContain('"footfall"');
+    expect(exported.body).toContain('"\'=unsafe spreadsheet formula"');
+    expect(store.auditEvents).toContainEqual(expect.objectContaining({
+      action: "analytics.summary_exported", resourceNodeId: "A005",
+    }));
   });
 });

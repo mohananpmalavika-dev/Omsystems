@@ -20,6 +20,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { platformCapabilitiesApi } from '@/lib/api-client';
 
 export type CapabilityState = 
   | 'AVAILABLE'
@@ -72,15 +73,7 @@ interface UseCapabilitiesReturn {
  * Fetch capabilities from backend
  */
 async function fetchCapabilities(): Promise<CapabilitiesResponse> {
-  const response = await fetch('/api/capabilities', {
-    credentials: 'include'
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Failed to fetch capabilities: ${response.statusText}`);
-  }
-  
-  return response.json();
+  return platformCapabilitiesApi.list();
 }
 
 /**
