@@ -86,6 +86,9 @@ async function fetchApi<T>(
     // The public dashboard can itself be protected by HTTP Basic auth, so the
     // employee session travels to the BFF in a separate header.
     headers.set('x-sentinel-session', token);
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   let response: Response;
@@ -169,6 +172,9 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
   const headers = new Headers(options.headers);
   if (token) {
     headers.set('x-sentinel-session', token);
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
   }
 
   let response: Response;

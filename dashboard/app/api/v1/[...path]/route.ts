@@ -113,8 +113,9 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         if (payload.accessToken) {
           outgoing.cookies.set("sentinel_access", payload.accessToken, {
             httpOnly: true,
-            sameSite: "lax",
+            sameSite: isHttps ? "none" : "lax",
             secure: isHttps,
+            partitioned: isHttps,
             path: "/",
             maxAge: payload.expiresIn || 86400,
           });
@@ -122,8 +123,9 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         if (payload.refreshToken) {
           outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
             httpOnly: true,
-            sameSite: "lax",
+            sameSite: isHttps ? "none" : "lax",
             secure: isHttps,
+            partitioned: isHttps,
             path: "/",
             maxAge: 30 * 24 * 60 * 60,
           });

@@ -144,16 +144,18 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       const isHttps = request.nextUrl.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https";
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: isHttps ? "none" : "lax",
         secure: isHttps,
+        partitioned: isHttps,
         path: "/",
         maxAge: payload.expiresIn || 86400,
       });
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
           httpOnly: true,
-          sameSite: "lax",
+          sameSite: isHttps ? "none" : "lax",
           secure: isHttps,
+          partitioned: isHttps,
           path: "/",
           maxAge: 30 * 24 * 60 * 60,
         });

@@ -3963,7 +3963,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .login-container {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 15% 20%, rgba(72,130,255,.28), transparent 24rem),
     radial-gradient(circle at 85% 82%, rgba(39,184,199,.13), transparent 22rem),
@@ -3982,7 +3987,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .login-card {
   width: min(430px, 100%);
-  padding: 34px;
+  max-width: 430px;
+  margin: auto;
+  padding: 24px 28px;
   border: 1px solid #d4deeb;
   border-radius: 20px;
   background: #ffffff !important;
