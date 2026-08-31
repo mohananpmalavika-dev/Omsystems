@@ -351,12 +351,17 @@ export function useVideoWallScheduler(
     };
   }, [enableSnapshots, snapshotBaseUrl]);
 
+  const runSchedulerRef = useRef(runScheduler);
+  useEffect(() => {
+    runSchedulerRef.current = runScheduler;
+  }, [runScheduler]);
+
   useEffect(() => {
     if (!isInitialized) return;
     let cancelled = false;
     const run = async () => {
       try {
-        await runScheduler();
+        await runSchedulerRef.current?.();
       } catch (error) {
         if (!cancelled) console.error("[VideoWallScheduler] Scheduling error:", error);
       }
@@ -367,7 +372,7 @@ export function useVideoWallScheduler(
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [isInitialized, runScheduler]);
+  }, [isInitialized]);
 
   useEffect(() => () => {
     snapshotServiceRef.current?.stopAll();

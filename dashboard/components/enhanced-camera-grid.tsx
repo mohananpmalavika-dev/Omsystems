@@ -1,6 +1,4 @@
-"use client";
-
-import { useCallback, useEffect, useState, useRef, useMemo } from "react";
+import { memo, useCallback, useEffect, useState, useRef, useMemo } from "react";
 import {
   Save,
   Settings,
@@ -20,6 +18,7 @@ import { VisibilityTracker } from "./visibility-tracker";
 import { TileStateIndicator } from "./tile-state-indicator";
 import type { Camera, LiveSessionResponse } from "@/lib/types";
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
+import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
@@ -58,6 +57,61 @@ interface VisibleRange {
 const MAX_PARALLEL_LIVE_STARTS = 2;
 const LIVE_START_TIMEOUT_MS = 30_000;
 const SAVED_LAYOUTS_STORAGE_KEY = "sentinel.video-wall.layouts.v1";
+
+interface GridTileProps {
+  camera: Camera;
+  session?: LiveSessionResponse;
+  loading: boolean;
+  playbackMode?: CameraPlaybackMode;
+  desiredPlaybackMode?: CameraPlaybackMode;
+  degradationReason?: DegradationReason;
+  snapshotUrl?: string;
+  liveError?: string;
+  index: number;
+  onStart: (cameraId: string) => void;
+  onVideoElementChange: (cameraId: string, videoElement: HTMLVideoElement | null) => void;
+  onPlaybackError: (cameraId: string, reason?: string) => void;
+}
+
+const GridTile = memo(function GridTile({
+  camera,
+  session,
+  loading,
+  playbackMode,
+  desiredPlaybackMode,
+  degradationReason,
+  snapshotUrl,
+  liveError,
+  index,
+  onStart,
+  onVideoElementChange,
+  onPlaybackError,
+}: GridTileProps) {
+  const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
+  const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
+    onVideoElementChange(camera.id, videoElement);
+  }, [onVideoElementChange, camera.id]);
+  const handlePlaybackError = useCallback((reason?: string) => {
+    onPlaybackError(camera.id, reason);
+  }, [onPlaybackError, camera.id]);
+
+  return (
+    <CameraTile
+      camera={camera}
+      session={session}
+      loading={loading}
+      onStart={handleStart}
+      playbackMode={playbackMode}
+      desiredPlaybackMode={desiredPlaybackMode}
+      degradationReason={degradationReason}
+      snapshotUrl={snapshotUrl}
+      liveError={liveError}
+      onVideoElementChange={handleVideoElementChange}
+      onPlaybackError={handlePlaybackError}
+      index={index}
+    />
+  );
+});
 
 export function EnhancedCameraGrid({
   cameras,
@@ -927,18 +981,18 @@ export function EnhancedCameraGrid({
                     ×
                   </button>
                 </div>
-                <CameraTile
+                <GridTile
                   camera={camera}
                   session={sessions.get(camera.id)}
                   loading={loading.has(camera.id)}
-                  onStart={() => handleRequestLive(camera.id)}
                   playbackMode={playbackState?.actualMode}
                   desiredPlaybackMode={scheduledCamera?.mode}
                   degradationReason={viewerReason}
                   snapshotUrl={snapshotUrls.get(camera.id)}
                   liveError={liveErrors.get(camera.id)}
-                  onVideoElementChange={(videoElement) => handleTileVideoElementChange(camera.id, videoElement)}
-                  onPlaybackError={(reason) => handleTilePlaybackError(camera.id, reason)}
+                  onStart={handleRequestLive}
+                  onVideoElementChange={handleTileVideoElementChange}
+                  onPlaybackError={handleTilePlaybackError}
                   index={i}
                 />
               </div>
