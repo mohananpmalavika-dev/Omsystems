@@ -65,7 +65,7 @@ type DataSection = "cameras" | "health" | "alerts" | "nodes";
 type DataMode = "live" | "partial" | "unavailable";
 type UserTier = "basic" | "standard" | "premium" | "enterprise";
 
-export const getMaxConcurrentStreams = (userTier: UserTier = "standard") => {
+const getMaxConcurrentStreams = (userTier: UserTier = "standard") => {
   const limits: Record<UserTier, number> = {
     basic: 16,
     standard: 32,
@@ -84,7 +84,7 @@ const controlRoomTier: UserTier =
     ? configuredTier
     : "standard";
 
-export const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(controlRoomTier);
+const CONTROL_ROOM_MAX_CONCURRENT_STREAMS = getMaxConcurrentStreams(controlRoomTier);
 
 const DEFAULT_EMPTY_STATS: ControlRoomStats = {
   totalCameras: 0,
