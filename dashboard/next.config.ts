@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 // In production (Vercel/Railway), set CONTROL_PLANE_URL to your Railway backend URL.
 // Locally defaults to http://localhost:8080.

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 0.0.0.0 --port 3000",
-    "build": "next build",
+    "build": "next build --webpack",
     "build:sites": "cross-env SITES_BUILD=true vinext build && node scripts/patch-sites-runtime.mjs",
     "start": "next start --hostname 0.0.0.0 --port 3000",
     "typecheck": "tsc --noEmit"

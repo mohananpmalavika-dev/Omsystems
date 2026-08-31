@@ -356,7 +356,7 @@ async function genericAnprEvents(
         vehicleColor: firstString(reading, "vehicleColor", "vehicle_color") ?? null,
         vehicleMake: firstString(reading, "vehicleMake", "vehicle_make") ?? null,
         vehicleModel: firstString(reading, "vehicleModel", "vehicle_model") ?? null,
-        plateBoundingBox: asRecord(reading.plateBoundingBox ?? reading.plate_bbox) ?? null,
+        plateBoundingBox: asRecord((reading as any).plateBoundingBox ?? (reading as any).plate_bbox) ?? null,
         entryDirection: ["entry", "exit", "unknown"].includes(direction) ? direction : "unknown",
         watchlistId: explicitWatchlistId ?? null,
         plateId: firstString(match, "plateId", "plate_id") ?? null,
@@ -916,7 +916,7 @@ export async function registerAnalyticsPhase2Routes(
       ...(query.personId ? { personId: query.personId } : {}),
       minSimilarity: query.minSimilarity,
     });
-    const data = recentUniqueRows(specializedEvents, genericEvents, query.limit);
+    const data = recentUniqueRows(specializedEvents as any[], genericEvents as any[], query.limit);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
