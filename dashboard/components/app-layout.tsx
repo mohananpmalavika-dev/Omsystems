@@ -511,19 +511,19 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </button>
 
         <div className="nav-shortcuts" aria-label="Quick access">
-          <Link href="/" className={isActive("/") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={closeSidebar}>
             <LayoutDashboard size={15} /><span>Overview</span>
           </Link>
-          <Link href="/control-room" className={isActive("/control-room") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={closeSidebar}>
             <MonitorPlay size={15} /><span>Live</span>
           </Link>
-          <Link href="/operations/alerts" className={isActive("/operations/alerts") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={closeSidebar}>
             <Radar size={15} /><span>Alerts</span>
           </Link>
         </div>
 
         <div className="nav-utility">
-          <Link href="/modules" className={isActive("/modules") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/modules" prefetch={true} className={isActive("/modules") ? "active" : ""} onClick={closeSidebar}>
             <LayoutGrid size={14} />
             <span>All modules</span>
             <small>{moduleCount}</small>
@@ -566,6 +566,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                   <Link
                     key={`${group.label}-${item.label}`}
                     href={item.href}
+                    prefetch={true}
                     className={isActive(item.href) ? "active" : ""}
                     onClick={closeSidebar}
                     aria-current={isActive(item.href) ? "page" : undefined}

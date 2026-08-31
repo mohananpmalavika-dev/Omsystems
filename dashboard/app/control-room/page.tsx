@@ -356,6 +356,12 @@ export default function ControlRoomPage() {
           </div>
         </div>
         <div className="header-actions">
+          <Link href="/" className="exit-button" title="Back to Overview dashboard">
+            ← Overview
+          </Link>
+          <Link href="/operations/branches" className="exit-button" title="Go to Branches">
+            Branches
+          </Link>
           <span className={`data-status ${dataMode}`}>
             <i />
             {dataMode === "live" ? "Live data" : dataMode === "partial" ? "Partially connected" : "Data unavailable"}
@@ -459,6 +465,24 @@ export default function ControlRoomPage() {
         .data-status i { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 0 3px rgba(74,222,128,.18); }
         .data-status.partial i { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.2); }
         .data-status.unavailable i { background: #f87171; box-shadow: 0 0 0 3px rgba(248,113,113,.2); }
+        .exit-button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.15);
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          color: white;
+          font-size: 12px;
+          font-weight: 700;
+          text-decoration: none;
+          transition: all 0.15s ease;
+        }
+        .exit-button:hover {
+          background: white;
+          color: #1d4ed8;
+        }
         .refresh-button, .primary-action { border: 0; border-radius: 8px; background: white; color: #1d4ed8; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 36px; padding: 0 13px; font-weight: 700; cursor: pointer; text-decoration: none; }
         .refresh-button:disabled, .primary-action:disabled { opacity: .65; cursor: wait; }
         .data-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 16px; background: #fffbeb; border-bottom: 1px solid #fde68a; color: #92400e; font-size: 12px; }
