@@ -1,9 +1,10 @@
 FROM node:22-alpine AS build
+WORKDIR /app
+COPY dashboard/package.json ./dashboard/
+RUN cd dashboard && npm install --legacy-peer-deps
+COPY dashboard/ ./dashboard/
+COPY backend/ ./backend/
 WORKDIR /app/dashboard
-COPY dashboard/package.json ./
-RUN npm install --legacy-peer-deps
-COPY dashboard/ ./
-COPY backend/ ../backend/
 ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ARG MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
 ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
