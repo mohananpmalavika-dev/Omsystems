@@ -8,37 +8,15 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action, User } from "../domain/models.js";
+import { localIdentityState } from "../analytics/identity-registry.js";
 
 // Type guard to check if store has pool access
 function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
   return 'db' in store && store.db !== undefined;
 }
 
-type LocalIdentityState = {
-  faceWatchlists: any[];
-  facePersons: any[];
-  faceEvents: any[];
-  anprWatchlists: any[];
-  anprPlates: any[];
-  anprEvents: any[];
-  anprSessions: any[];
-  protectedObjects: any[];
-  behaviorEvents: any[];
-};
-
-const localIdentityStates = new WeakMap<object, LocalIdentityState>();
-
 function localState(store: ControlPlaneStore) {
-  let state = localIdentityStates.get(store as object);
-  if (!state) {
-    state = {
-      faceWatchlists: [], facePersons: [], faceEvents: [],
-      anprWatchlists: [], anprPlates: [], anprEvents: [], anprSessions: [],
-      protectedObjects: [], behaviorEvents: [],
-    };
-    localIdentityStates.set(store as object, state);
-  }
-  return state;
+  return localIdentityState(store);
 }
 
 async function hasAnyAccess(store: ControlPlaneStore, user: User, action: Action) {
@@ -243,6 +221,9 @@ async function genericFaceEvents(
       watchlistId,
       watchlistName: watchlistId ? watchlistNames.get(watchlistId) ?? null : null,
       personName: event.personName ?? (event.personId ? personNames.get(event.personId) ?? null : null),
+      ageEstimate: null,
+      genderEstimate: null,
+      wearingMask: null,
     }];
   });
 }
@@ -343,11 +324,11 @@ async function genericAnprEvents(
     const legacyPlates = Array.isArray(metadata?.plates)
       ? metadata.plates.filter((item): item is string => typeof item === "string")
       : [];
-    const observations = readingRows.length
+    const observations: UnknownRecord[] = readingRows.length
       ? readingRows
       : matchRows.length
         ? matchRows
-        : legacyPlates.map((plateNumber) => ({ plateNumber }));
+        : legacyPlates.map((plateNumber): UnknownRecord => ({ plateNumber }));
 
     return observations.flatMap((reading, index) => {
       const plateNumber = firstString(reading, "plateNumber", "plate_number");

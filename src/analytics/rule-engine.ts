@@ -10,8 +10,9 @@ export function sortedMatchingRules(
   rules: readonly AnalyticsRule[],
   event: AnalyticsEventInput,
 ): AnalyticsRule[] {
+  const detectionTypes = new Set(eventDetectionTypes(event));
   return rules
-    .filter((rule) => rule.enabled && rule.detectionType === event.detectionType)
+    .filter((rule) => rule.enabled && detectionTypes.has(rule.detectionType))
     .filter((rule) => event.confidence >= rule.minConfidence)
     .filter((rule) => event.durationSeconds >= rule.minDurationSeconds)
     .filter((rule) => objectClassesMatch(rule, event))
@@ -19,6 +20,17 @@ export function sortedMatchingRules(
     .filter((rule) => zoneMatches(rule, event))
     .filter((rule) => isWithinSchedule(rule, event.occurredAt))
     .sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity]);
+}
+
+export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
+  const types = [event.detectionType];
+  if (event.detectionType !== "anpr" || !Array.isArray(event.metadata?.matches)) return types;
+  const hasAlertingMatch = event.metadata.matches.some((value) =>
+    value !== null && typeof value === "object" && !Array.isArray(value) &&
+    (value as Record<string, unknown>).alertOnMatch !== false
+  );
+  if (hasAlertingMatch) types.push("watchlist-match");
+  return types;
 }
 
 export function isTerminalAlertStatus(status: AnalyticsAlertStatus) {

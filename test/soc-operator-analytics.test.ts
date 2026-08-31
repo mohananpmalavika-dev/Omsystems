@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import {
-  socOperatorAnalyticsService,
-  SocOperatorAnalyticsService,
-} from '../src/analytics/services/soc-operator-analytics.service.js';
+import { SocOperatorAnalyticsService } from '../src/analytics/services/soc-operator-analytics.service.js';
+import type {
+  AlertCategoryType,
+  IncidentLifecycleRecord,
+  ShiftType,
+} from '../src/analytics/domain/soc-analytics.types.js';
 
 describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec Mission Control Parity)', () => {
   it('computes fleetwide executive summary with MTTA, MTTI, MTTR, escalation, and false positive rates', async () => {
     const service = new SocOperatorAnalyticsService();
+    await seedFleet(service);
     const summary = await service.getDashboardSummary('LAST_30_DAYS');
 
     expect(summary.period).toBe('LAST_30_DAYS');
@@ -31,6 +34,7 @@ describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec M
 
   it('calculates performance breakdown across all 5 dimensions (Branch, Region, Operator, Shift, Alert Type)', async () => {
     const service = new SocOperatorAnalyticsService();
+    await seedFleet(service);
 
     // 1. By Branch
     const branches = await service.getMetricsByBranch();
@@ -67,8 +71,8 @@ describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec M
     const morning = shifts.find((s) => s.shift === 'MORNING')!;
     const evening = shifts.find((s) => s.shift === 'EVENING')!;
     const night = shifts.find((s) => s.shift === 'NIGHT')!;
-    expect(morning.activeOperatorsCount).toBe(8);
-    expect(evening.activeOperatorsCount).toBe(6);
+    expect(morning.activeOperatorsCount).toBe(4);
+    expect(evening.activeOperatorsCount).toBe(4);
     expect(night.activeOperatorsCount).toBe(4);
 
     // 5. By Alert Type / Detector
@@ -82,6 +86,7 @@ describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec M
 
   it('supports filtered analytics queries (e.g. shift = NIGHT, priority = P1)', async () => {
     const service = new SocOperatorAnalyticsService();
+    await seedFleet(service);
     const summary = await service.getDashboardSummary('LAST_30_DAYS', {
       shift: 'NIGHT',
       priority: 'P1',
@@ -94,9 +99,11 @@ describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec M
 
   it('ingests live incident lifecycle events and updates operator SLA metrics', async () => {
     const service = new SocOperatorAnalyticsService();
+    await seedFleet(service);
     const now = new Date();
 
     await service.recordIncidentLifecycle({
+      tenantId: 'omsystems',
       incidentId: 'INC-2026-LIVE-999',
       priority: 'P1',
       alertType: 'VAULT_INTRUSION',
@@ -119,4 +126,87 @@ describe('SOC Operator Performance Analytics & SLA Learning Subsystem (Genetec M
     const summary = await service.getDashboardSummary('LAST_30_DAYS');
     expect(summary.fleetSummary.totalIncidents).toBe(251);
   });
+
+  it('updates repeated lifecycle records idempotently and applies inclusive date filters', async () => {
+    const service = new SocOperatorAnalyticsService();
+    const initial = fleetRecord(0, new Date('2026-08-30T10:00:00.000Z'));
+    await service.recordIncidentLifecycle(initial);
+    await service.recordIncidentLifecycle({
+      ...initial,
+      resolvedAt: new Date('2026-08-30T10:03:00.000Z'),
+    });
+
+    const included = await service.getDashboardSummary('CUSTOM', {
+      tenantId: 'omsystems',
+      startDate: '2026-08-30T10:00:00.000Z',
+      endDate: '2026-08-30T10:00:00.000Z',
+    });
+    expect(included.fleetSummary).toMatchObject({ totalIncidents: 1, mttrSeconds: 180 });
+
+    const excluded = await service.getDashboardSummary('CUSTOM', {
+      tenantId: 'omsystems',
+      startDate: '2026-08-30T10:00:00.001Z',
+    });
+    expect(excluded.fleetSummary.totalIncidents).toBe(0);
+  });
 });
+
+const branches = [
+  ['BR-118', 'Kollam Main Branch', 'REG-S-KL', 'South Kerala Region', 'KL'],
+  ['BR-119', 'Thiruvananthapuram Central', 'REG-S-KL', 'South Kerala Region', 'KL'],
+  ['BR-210', 'Kochi North', 'REG-C-KL', 'Central Kerala Region', 'KL'],
+  ['BR-310', 'Kozhikode Main', 'REG-N-KL', 'North Kerala Region', 'KL'],
+  ['BR-311', 'Kannur Main', 'REG-N-KL', 'North Kerala Region', 'KL'],
+] as const;
+const operators = [
+  ['usr-op-01', 'Arun Kumar'],
+  ['usr-op-02', 'Beena Joseph'],
+  ['usr-op-03', 'Cyril Mathew'],
+  ['usr-op-04', 'Deepa Nair'],
+] as const;
+const shifts: ShiftType[] = ['MORNING', 'EVENING', 'NIGHT'];
+const alertTypes: AlertCategoryType[] = [
+  'VAULT_INTRUSION', 'LINE_CROSSING', 'CROWD_LOITERING',
+  'CAMERA_TAMPER', 'ANPR_BLACKLIST', 'CASH_VAN_DELAY',
+  'RECORDER_OFFLINE', 'CAMERA_OFFLINE', 'UNAUTHORIZED_ACCESS',
+];
+
+async function seedFleet(service: SocOperatorAnalyticsService, count = 250) {
+  const now = Date.now();
+  for (let index = 0; index < count; index += 1) {
+    await service.recordIncidentLifecycle(fleetRecord(
+      index,
+      new Date(now - index * 60_000),
+    ));
+  }
+}
+
+function fleetRecord(index: number, triggeredAt: Date): IncidentLifecycleRecord {
+  const branch = branches[index % branches.length]!;
+  const operator = operators[index % operators.length]!;
+  const acknowledgeSeconds = 8 + (index % operators.length) * 4;
+  return {
+    tenantId: 'omsystems',
+    incidentId: `INC-TEST-${index.toString().padStart(4, '0')}`,
+    priority: index % 5 === 0 ? 'P1' : index % 2 === 0 ? 'P2' : 'P3',
+    alertType: alertTypes[index % alertTypes.length]!,
+    branchId: branch[0],
+    branchName: branch[1],
+    regionId: branch[2],
+    regionName: branch[3],
+    stateId: branch[4],
+    operatorId: operator[0],
+    operatorName: operator[1],
+    operatorRole: 'SOC_OPERATOR',
+    shift: shifts[index % shifts.length]!,
+    triggeredAt,
+    acknowledgedAt: new Date(triggeredAt.getTime() + acknowledgeSeconds * 1_000),
+    investigationStartedAt: new Date(triggeredAt.getTime() + (acknowledgeSeconds + 20) * 1_000),
+    resolvedAt: new Date(triggeredAt.getTime() + (120 + index % 30) * 1_000),
+    isEscalated: index % 10 === 0,
+    isFalsePositive: index % 25 === 0,
+    isRepeatIncident: index % 20 === 0,
+    isSlaBreached: index % 20 === 0,
+    isSopCompliant: index % 15 !== 0,
+  };
+}

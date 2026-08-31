@@ -113,6 +113,127 @@ describe("video analytics and alert workflow", () => {
     expect(store.recordingLegalHolds).toHaveLength(1);
   });
 
+  it("correlates generic ANPR readings with the central plate registry", async () => {
+    const watchlistResponse = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/anpr-watchlists",
+      headers: admin,
+      payload: {
+        name: "Stolen vehicles",
+        listType: "stolen",
+        alertOnMatch: true,
+        alertSeverity: "P1",
+        alertAuthorities: false,
+      },
+    });
+    expect(watchlistResponse.statusCode).toBe(201);
+    const watchlistId = watchlistResponse.json().data.id as string;
+
+    const plateResponse = await app.inject({
+      method: "POST",
+      url: `/v1/analytics/anpr-watchlists/${watchlistId}/plates`,
+      headers: admin,
+      payload: {
+        plateNumber: "KL 07 AB 1234",
+        countryCode: "IN",
+        reason: "Reported stolen",
+      },
+    });
+    expect(plateResponse.statusCode).toBe(201);
+    const plateId = plateResponse.json().data.id as string;
+
+    const ruleResponse = await app.inject({
+      method: "POST",
+      url: "/v1/cameras/cam-001/analytics/rules",
+      headers: admin,
+      payload: {
+        name: "Registered plate match",
+        detectionType: "watchlist-match",
+        objectClasses: ["license-plate"],
+        minConfidence: 0.7,
+        severity: "P1",
+        cooldownSeconds: 0,
+        recordingPolicy: "event-recording",
+      },
+    });
+    expect(ruleResponse.statusCode).toBe(201);
+
+    const payload = {
+      tenantId: "omsystems",
+      cameraId: "cam-001",
+      sourceEventId: "generic-anpr-registry-match",
+      detectionType: "anpr",
+      occurredAt: "2026-08-31T10:00:00.000Z",
+      confidence: 0.94,
+      durationSeconds: 0,
+      modelVersion: "generic-anpr-v1",
+      objects: [{ label: "license-plate", confidence: 0.94 }],
+      metadata: {
+        readings: [{ plateNumber: "kl07ab1234", confidence: 0.94, countryCode: "IN" }],
+      },
+    };
+    const detection = await app.inject({
+      method: "POST",
+      url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": engineKey },
+      payload,
+    });
+    expect(detection.statusCode).toBe(202);
+    expect(detection.json().event).toMatchObject({
+      detectionType: "anpr",
+      status: "accepted",
+      metadata: {
+        matches: [{
+          plateId,
+          plateNumber: "KL07AB1234",
+          watchlistId,
+          watchlistName: "Stolen vehicles",
+          reason: "Reported stolen",
+          alertOnMatch: true,
+        }],
+      },
+    });
+    expect(detection.json().alerts).toEqual([
+      expect.objectContaining({
+        ruleId: ruleResponse.json().id,
+        title: "Watchlist match detected",
+        severity: "P1",
+      }),
+    ]);
+
+    const duplicate = await app.inject({
+      method: "POST",
+      url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": engineKey },
+      payload,
+    });
+    expect(duplicate.json().event.status).toBe("duplicate");
+
+    const plates = await app.inject({
+      method: "GET",
+      url: `/v1/analytics/anpr-watchlists/${watchlistId}/plates`,
+      headers: admin,
+    });
+    expect(plates.json().data).toEqual([
+      expect.objectContaining({ id: plateId, matchCount: 1, lastMatchedAt: payload.occurredAt }),
+    ]);
+
+    const events = await app.inject({
+      method: "GET",
+      url: "/v1/analytics/anpr-events?plateNumber=KL07AB1234&justification=active-investigation",
+      headers: admin,
+    });
+    expect(events.statusCode).toBe(200);
+    expect(events.json().data).toEqual([
+      expect.objectContaining({
+        plateId,
+        plateNumber: "KL07AB1234",
+        watchlistId,
+        watchlistName: "Stolen vehicles",
+      }),
+    ]);
+  });
+
   it("enforces analytics permissions and records alert acknowledgement and escalation", async () => {
     const rule = await store.createAnalyticsRule(
       "omsystems", "cam-001", "user-global-admin",
@@ -161,6 +282,61 @@ describe("video analytics and alert workflow", () => {
     expect(escalation.statusCode).toBe(200);
     expect(escalation.json().status).toBe("escalated");
     expect(store.analyticsEscalations).toHaveLength(1);
+  });
+
+  it("protects fleetwide SOC metrics and validates lifecycle ingestion", async () => {
+    const denied = await app.inject({
+      method: "GET",
+      url: "/v1/analytics/soc/summary",
+      headers: { "x-user-id": "user-south-operator" },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const invalidRange = await app.inject({
+      method: "GET",
+      url: "/v1/analytics/soc/summary?period=CUSTOM&startDate=2026-08-31T11%3A00%3A00.000Z&endDate=2026-08-31T10%3A00%3A00.000Z",
+      headers: admin,
+    });
+    expect(invalidRange.statusCode).toBe(400);
+
+    const triggeredAt = new Date();
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/soc/incident-event",
+      headers: admin,
+      payload: {
+        incidentId: "INC-SOC-001",
+        priority: "P1",
+        alertType: "ANPR_BLACKLIST",
+        branchId: "A005",
+        branchName: "South Region",
+        regionId: "REG-SOUTH",
+        regionName: "South",
+        stateId: "KL",
+        operatorId: "user-global-admin",
+        operatorName: "Global Admin",
+        operatorRole: "CHIEF_SECURITY_OFFICER",
+        shift: "NIGHT",
+        triggeredAt: triggeredAt.toISOString(),
+        acknowledgedAt: new Date(triggeredAt.getTime() + 8_000).toISOString(),
+        investigationStartedAt: new Date(triggeredAt.getTime() + 20_000).toISOString(),
+        resolvedAt: new Date(triggeredAt.getTime() + 90_000).toISOString(),
+      },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const summary = await app.inject({
+      method: "GET",
+      url: "/v1/analytics/soc/summary?period=LAST_24_HOURS",
+      headers: admin,
+    });
+    expect(summary.statusCode).toBe(200);
+    expect(summary.json().data.fleetSummary).toMatchObject({
+      totalIncidents: 1,
+      p1Count: 1,
+      mttaSeconds: 8,
+      mttrSeconds: 90,
+    });
   });
 
   it("rejects untrusted events and treats repeated source IDs idempotently", async () => {

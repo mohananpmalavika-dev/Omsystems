@@ -2691,7 +2691,7 @@ export async function buildApp(options?: {
 
   // Register Enterprise SOC Operations (Signed Config, Edge Lifecycle, Clock Drift, Maps, SOC Analytics, Maintenance, Deterministic RCA)
   try {
-    await registerEnterpriseSocOperationsRoutes(app);
+    await registerEnterpriseSocOperationsRoutes(app, store);
     app.log.info("Enterprise SOC Operations routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register enterprise SOC operations routes");
