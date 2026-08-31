@@ -242,4 +242,54 @@ describe("video analytics and alert workflow", () => {
       action: "analytics.summary_exported", resourceNodeId: "A005",
     }));
   });
+
+  it("builds camera metric series only from persisted detector events", async () => {
+    for (const detectionType of ["line-crossing", "loitering", "queue"] as const) {
+      await store.createAnalyticsRule(
+        "omsystems", "cam-001", "user-global-admin",
+        {
+          name: `Metric ${detectionType}`, detectionType, enabled: true,
+          objectClasses: ["person"], minConfidence: 0.5, minDurationSeconds: 0,
+          direction: "any", severity: "P4", cooldownSeconds: 0,
+          recipients: [], recordingPolicy: "none",
+          preRollSeconds: 0, postRollSeconds: 30,
+        },
+      );
+    }
+
+    const inputs = [
+      { sourceEventId: "metric-entry", detectionType: "line-crossing", occurredAt: "2026-08-30T10:05:00.000Z", durationSeconds: 0, metadata: { direction: "a-to-b" }, objects: [{ label: "person", confidence: 0.9 }] },
+      { sourceEventId: "metric-exit", detectionType: "line-crossing", occurredAt: "2026-08-30T10:35:00.000Z", durationSeconds: 0, metadata: { direction: "b-to-a" }, objects: [{ label: "person", confidence: 0.9 }] },
+      { sourceEventId: "metric-dwell-1", detectionType: "loitering", occurredAt: "2026-08-30T10:15:00.000Z", durationSeconds: 30, metadata: { dwellTimeSeconds: 30 }, objects: [{ label: "person", confidence: 0.9 }] },
+      { sourceEventId: "metric-dwell-2", detectionType: "loitering", occurredAt: "2026-08-30T10:45:00.000Z", durationSeconds: 90, metadata: { dwellTimeSeconds: 90 }, objects: [{ label: "person", confidence: 0.9 }] },
+      { sourceEventId: "metric-queue", detectionType: "queue", occurredAt: "2026-08-30T10:25:00.000Z", durationSeconds: 0, metadata: { queues: [{ length: 3 }, { queueLength: 5 }] }, objects: [] },
+    ];
+    for (const input of inputs) {
+      await store.processAnalyticsEvent({
+        tenantId: "omsystems", cameraId: "cam-001", confidence: 0.9,
+        modelVersion: "metric-test-v1", ...input,
+      });
+    }
+
+    const range = "from=2026-08-30T10%3A00%3A00.000Z&to=2026-08-30T11%3A00%3A00.000Z&interval=hour";
+    const [footfall, dwell, queue, empty] = await Promise.all([
+      app.inject({ method: "GET", url: `/v1/cameras/cam-001/analytics/footfall?${range}`, headers: admin }),
+      app.inject({ method: "GET", url: `/v1/cameras/cam-001/analytics/dwell-time?${range}`, headers: admin }),
+      app.inject({ method: "GET", url: `/v1/cameras/cam-001/analytics/queue?${range}`, headers: admin }),
+      app.inject({ method: "GET", url: `/v1/cameras/cam-a006-01/analytics/footfall?${range}`, headers: admin }),
+    ]);
+
+    expect(footfall.statusCode).toBe(200);
+    expect(footfall.json()).toMatchObject({
+      basis: "persisted_analytics_events", truncated: false,
+      data: [{ entries: 1, exits: 1, total_crossings: 2 }],
+    });
+    expect(dwell.json().data).toEqual([expect.objectContaining({
+      average_seconds: 60, maximum_seconds: 90, sample_count: 2,
+    })]);
+    expect(queue.json().data).toEqual([expect.objectContaining({
+      average_count: 4, maximum_count: 5,
+    })]);
+    expect(empty.json().data).toEqual([]);
+  });
 });

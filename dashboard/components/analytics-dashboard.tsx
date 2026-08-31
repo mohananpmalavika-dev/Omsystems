@@ -52,6 +52,7 @@ export function AnalyticsDashboard() {
   const [footfallData, setFootfallData] = useState<FootfallData[]>([]);
   const [dwellData, setDwellData] = useState<DwellTimeData[]>([]);
   const [queueData, setQueueData] = useState<QueueData[]>([]);
+  const [metricsTruncated, setMetricsTruncated] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -102,6 +103,7 @@ export function AnalyticsDashboard() {
   const loadCameraMetrics = async () => {
     if (!selectedCamera) return;
     setLoading(true);
+    setError(undefined);
 
     try {
       const range = getTimeRange(timeRange);
@@ -113,10 +115,12 @@ export function AnalyticsDashboard() {
       setFootfallData(footfall.data ?? []);
       setDwellData(dwell.data ?? []);
       setQueueData(queue.data ?? []);
+      setMetricsTruncated(footfall.truncated || dwell.truncated || queue.truncated);
     } catch (err) {
       setFootfallData([]);
       setDwellData([]);
       setQueueData([]);
+      setMetricsTruncated(false);
       setError(readable(err));
     } finally {
       setLoading(false);
@@ -258,6 +262,19 @@ export function AnalyticsDashboard() {
             <>
               <section className="camera-metrics">
                 <h2>Camera Metrics: {cameras.find((c) => c.id === selectedCamera)?.name}</h2>
+
+                {metricsTruncated && (
+                  <div className="dashboard-error">
+                    <AlertTriangle size={16} />
+                    This metric series reached the 10,000-event safety limit. Narrow the time range for complete totals.
+                  </div>
+                )}
+
+                {!loading && footfallData.length === 0 && dwellData.length === 0 && queueData.length === 0 && (
+                  <p className="analytics-empty-state">
+                    No persisted footfall, dwell-time, or queue detector events were recorded for this camera in the selected period.
+                  </p>
+                )}
                 
                 {footfallData.length > 0 && (
                   <div className="metric-chart">

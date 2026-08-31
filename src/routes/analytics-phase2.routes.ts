@@ -3,14 +3,80 @@
  * Face Recognition, ANPR, Behavior Analysis, Protected Objects
  */
 
-import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
-import type { PostgresStore } from "../database/postgres-store.js";
+import type { Action, User } from "../domain/models.js";
 
 // Type guard to check if store has pool access
 function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
   return 'db' in store && store.db !== undefined;
+}
+
+type LocalIdentityState = {
+  faceWatchlists: any[];
+  facePersons: any[];
+  faceEvents: any[];
+  anprWatchlists: any[];
+  anprPlates: any[];
+  anprEvents: any[];
+  anprSessions: any[];
+  protectedObjects: any[];
+  behaviorEvents: any[];
+};
+
+const localIdentityStates = new WeakMap<object, LocalIdentityState>();
+
+function localState(store: ControlPlaneStore) {
+  let state = localIdentityStates.get(store as object);
+  if (!state) {
+    state = {
+      faceWatchlists: [], facePersons: [], faceEvents: [],
+      anprWatchlists: [], anprPlates: [], anprEvents: [], anprSessions: [],
+      protectedObjects: [], behaviorEvents: [],
+    };
+    localIdentityStates.set(store as object, state);
+  }
+  return state;
+}
+
+async function hasAnyAccess(store: ControlPlaneStore, user: User, action: Action) {
+  return (await store.listAccessibleNodes(user, action)).length > 0;
+}
+
+async function hasTenantWideAccess(store: ControlPlaneStore, user: User, action: Action) {
+  return (await store.listAccessibleNodes(user, action, "company")).length > 0;
+}
+
+async function accessibleCameraIds(store: ControlPlaneStore, user: User, action: Action) {
+  const result = await store.listAccessibleCameras(user, action, {
+    limit: 10_000,
+    offset: 0,
+  });
+  return new Set(result.cameras.map((camera) => camera.id));
+}
+
+async function authorizeCamera(
+  store: ControlPlaneStore,
+  user: User,
+  cameraId: string,
+  action: Action,
+) {
+  const camera = await store.getCamera(cameraId);
+  if (!camera) return { found: false, allowed: false };
+  const decision = await store.checkAccess(user, action, camera.nodeId);
+  return { found: true, allowed: decision?.allowed === true, camera };
+}
+
+function invalidInput(reply: FastifyReply, error: z.ZodError) {
+  return reply.code(400).send({
+    error: "invalid_request",
+    issues: error.issues.map((issue) => ({
+      path: issue.path.join("."),
+      message: issue.message,
+    })),
+  });
 }
 
 const faceWatchlistSchema = z.object({
@@ -58,56 +124,141 @@ const protectedObjectSchema = z.object({
   description: z.string().optional(),
   objectType: z.string(),
   zone: z.object({
-    x: z.number(),
-    y: z.number(),
-    width: z.number(),
-    height: z.number(),
+    x: z.number().min(0).max(1),
+    y: z.number().min(0).max(1),
+    width: z.number().positive().max(1),
+    height: z.number().positive().max(1),
+  }).refine((zone) => zone.x + zone.width <= 1 && zone.y + zone.height <= 1, {
+    message: "zone must remain inside the normalized camera frame",
   }),
   alertOnRemoval: z.boolean().default(true),
   alertSeverity: z.enum(["P1", "P2", "P3", "P4", "P5"]).default("P2"),
   removalThresholdSeconds: z.number().int().min(5).max(600).default(30),
 });
 
+const telemetryMetadataSchema = z.record(z.unknown()).default({});
+const telemetryIngestSchema = z.object({
+  sessionId: z.string().uuid(),
+  timestamp: z.string().datetime(),
+  events: z.array(z.object({
+    category: z.string().trim().min(1).max(50),
+    action: z.string().trim().min(1).max(100),
+    label: z.string().max(255).optional(),
+    value: z.number().finite().optional(),
+    metadata: telemetryMetadataSchema,
+    timestamp: z.string().datetime(),
+  })).max(100).default([]),
+  performance: z.array(z.object({
+    name: z.string().trim().min(1).max(80),
+    value: z.number().finite(),
+    unit: z.enum(["ms", "bytes", "count", "percent"]),
+    metadata: telemetryMetadataSchema,
+    timestamp: z.string().datetime(),
+  })).max(100).default([]),
+  errors: z.array(z.object({
+    error: z.string().min(1).max(2_000),
+    context: z.string().max(255),
+    severity: z.enum(["low", "medium", "high", "critical"]),
+    metadata: telemetryMetadataSchema,
+    timestamp: z.string().datetime(),
+  })).max(100).default([]),
+}).refine(
+  (payload) => payload.events.length + payload.performance.length + payload.errors.length > 0,
+  { message: "at least one telemetry item is required" },
+);
+
+const sensitiveTelemetryKey = /password|passcode|secret|token|credential|authorization|cookie|api.?key|private.?key|query|search.?term/i;
+
+function sanitizeTelemetryMetadata(value: unknown, depth = 0): unknown {
+  if (depth > 3) return "[truncated]";
+  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.slice(0, 250);
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeTelemetryMetadata(item, depth + 1));
+  if (!value || typeof value !== "object") return String(value).slice(0, 250);
+
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value).slice(0, 50)) {
+    sanitized[key.slice(0, 100)] = sensitiveTelemetryKey.test(key)
+      ? "[redacted]"
+      : sanitizeTelemetryMetadata(item, depth + 1);
+  }
+  return sanitized;
+}
+
 export async function registerAnalyticsPhase2Routes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
   if (!hasPool(store)) {
-    app.log.warn('Analytics Phase 2 routes require database pool - routes will be non-functional');
+    app.log.info("Identity analytics is using the local in-process configuration store");
   }
 
-  /**
-   * Telemetry and user instrumentation ingestion endpoint
-   * Handles navigator.sendBeacon and fetch from dashboard/lib/analytics.ts
-   */
-  const handleAnalyticsIngest = async (request: any, reply: any) => {
-    return reply.code(200).send({
-      success: true,
+  app.post("/api/v1/analytics", async (request, reply) => {
+    const parsed = telemetryIngestSchema.safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+
+    const { sessionId, timestamp, events, performance, errors } = parsed.data;
+    const entries = [
+      ...events.map((event) => ({
+        actionType: event.action,
+        actionCategory: event.category,
+        actionTarget: event.label ?? null,
+        actionDescription: event.label ?? null,
+        featureName: event.action,
+        metadata: { ...sanitizeTelemetryMetadata(event.metadata) as Record<string, unknown>, value: event.value, eventTimestamp: event.timestamp, batchTimestamp: timestamp },
+      })),
+      ...performance.map((metric) => ({
+        actionType: `performance.${metric.name}`,
+        actionCategory: "performance",
+        actionTarget: metric.name,
+        actionDescription: `${metric.value} ${metric.unit}`,
+        featureName: metric.name,
+        metadata: { ...sanitizeTelemetryMetadata(metric.metadata) as Record<string, unknown>, value: metric.value, unit: metric.unit, eventTimestamp: metric.timestamp, batchTimestamp: timestamp },
+      })),
+      ...errors.map((error) => ({
+        actionType: `error.${error.severity}`,
+        actionCategory: "error",
+        actionTarget: error.context || null,
+        actionDescription: error.error.slice(0, 500),
+        featureName: error.context || null,
+        metadata: { ...sanitizeTelemetryMetadata(error.metadata) as Record<string, unknown>, severity: error.severity, eventTimestamp: error.timestamp, batchTimestamp: timestamp },
+      })),
+    ];
+
+    await Promise.all(entries.map((entry) => store.logUserAction(
+      request.currentUser.id,
+      request.currentUser.tenantId,
+      sessionId,
+      null,
+      entry.actionType,
+      entry.actionCategory,
+      entry.actionTarget,
+      entry.actionDescription,
+      "dashboard_telemetry",
+      entry.featureName,
+      entry.metadata,
+    )));
+
+    return reply.code(202).send({
+      accepted: entries.length,
       receivedAt: new Date().toISOString(),
     });
-  };
-
-  app.post("/api/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
-  app.post("/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
-  app.get("/api/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
-  app.get("/v1/analytics", { config: { noAuth: true } }, handleAnalyticsIngest);
-
+  });
 
   /**
    * List face watchlists
    */
   app.get("/v1/analytics/face-watchlists", async (request, reply) => {
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "face:view",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasTenantWideAccess(store, request.currentUser, "face:view")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
     if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      return {
+        data: localState(store).faceWatchlists
+          .filter((watchlist) => watchlist.tenantId === request.currentUser.tenantId && !watchlist.archivedAt)
+          .sort((left, right) => left.name.localeCompare(right.name)),
+      };
     }
 
     const watchlists = await store.db.query(
@@ -126,20 +277,30 @@ export async function registerAnalyticsPhase2Routes(
    * Create face watchlist
    */
   app.post("/v1/analytics/face-watchlists", async (request, reply) => {
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "face:manage-watchlist",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasTenantWideAccess(store, request.currentUser, "face:manage-watchlist")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-    }
+    const parsed = faceWatchlistSchema.safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const body = parsed.data;
 
-    const body = faceWatchlistSchema.parse(request.body);
+    if (!hasPool(store)) {
+      const watchlist = {
+        id: randomUUID(), tenantId: request.currentUser.tenantId,
+        name: body.name, description: body.description,
+        listType: body.listType, enabled: true,
+        alertOnMatch: body.alertOnMatch, alertSeverity: body.alertSeverity,
+        createdBy: request.currentUser.id, createdAt: new Date().toISOString(),
+      };
+      localState(store).faceWatchlists.push(watchlist);
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "face.watchlist_created", resourceNodeId: null, outcome: "success",
+        details: { watchlistId: watchlist.id, listType: watchlist.listType },
+      });
+      return reply.code(201).send({ data: watchlist });
+    }
 
     const result = await store.db.query(
       `INSERT INTO face_watchlists
@@ -158,7 +319,12 @@ export async function registerAnalyticsPhase2Routes(
       ],
     );
 
-    return { data: result.rows[0] };
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+      action: "face.watchlist_created", resourceNodeId: null, outcome: "success",
+      details: { watchlistId: result.rows[0]!.id, listType: body.listType },
+    });
+    return reply.code(201).send({ data: result.rows[0] });
   });
 
   /**
@@ -167,21 +333,25 @@ export async function registerAnalyticsPhase2Routes(
   app.get(
     "/v1/analytics/face-watchlists/:watchlistId/persons",
     async (request, reply) => {
-      const { watchlistId } = z
-        .object({ watchlistId: z.string().uuid() })
-        .parse(request.params);
+      const parsedParams = z.object({ watchlistId: z.string().uuid() }).safeParse(request.params);
+      if (!parsedParams.success) return invalidInput(reply, parsedParams.error);
+      const { watchlistId } = parsedParams.data;
 
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "face:view",
-        "",
-      );
-      if (!decision?.allowed) {
+      if (!await hasTenantWideAccess(store, request.currentUser, "face:view")) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
       if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+        const state = localState(store);
+        const watchlist = state.faceWatchlists.find((item) =>
+          item.id === watchlistId && item.tenantId === request.currentUser.tenantId && !item.archivedAt
+        );
+        if (!watchlist) return reply.code(404).send({ error: "face_watchlist_not_found" });
+        return {
+          data: state.facePersons
+            .filter((person) => person.watchlistId === watchlistId && !person.archivedAt)
+            .sort((left, right) => left.fullName.localeCompare(right.fullName)),
+        };
       }
 
       const persons = await store.db.query(
@@ -190,10 +360,10 @@ export async function registerAnalyticsPhase2Routes(
                 COUNT(e.id) as embedding_count
          FROM face_watchlist_persons p
          LEFT JOIN face_embeddings e ON e.person_id = p.id
-         WHERE p.watchlist_id = $1 AND p.archived_at IS NULL
+         WHERE p.tenant_id = $1 AND p.watchlist_id = $2 AND p.archived_at IS NULL
          GROUP BY p.id
          ORDER BY p.full_name ASC`,
-        [watchlistId],
+        [request.currentUser.tenantId, watchlistId],
       );
 
       return { data: persons.rows };
@@ -206,23 +376,39 @@ export async function registerAnalyticsPhase2Routes(
   app.post(
     "/v1/analytics/face-watchlists/:watchlistId/persons",
     async (request, reply) => {
-      const { watchlistId } = z
-        .object({ watchlistId: z.string().uuid() })
-        .parse(request.params);
+      const parsedParams = z.object({ watchlistId: z.string().uuid() }).safeParse(request.params);
+      if (!parsedParams.success) return invalidInput(reply, parsedParams.error);
+      const { watchlistId } = parsedParams.data;
 
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "face:enrol",
-        "",
-      );
-      if (!decision?.allowed) {
+      if (!await hasTenantWideAccess(store, request.currentUser, "face:enrol")) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      const body = facePersonSchema.parse(request.body);
+      const parsedBody = facePersonSchema.safeParse(request.body);
+      if (!parsedBody.success) return invalidInput(reply, parsedBody.error);
+      const body = parsedBody.data;
 
       if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+        const state = localState(store);
+        const watchlist = state.faceWatchlists.find((item) =>
+          item.id === watchlistId && item.tenantId === request.currentUser.tenantId && !item.archivedAt
+        );
+        if (!watchlist) return reply.code(404).send({ error: "face_watchlist_not_found" });
+        const person = {
+          id: randomUUID(), tenantId: request.currentUser.tenantId, watchlistId,
+          externalId: body.externalId, fullName: body.fullName,
+          dateOfBirth: body.dateOfBirth, gender: body.gender,
+          notes: body.notes, metadata: body.metadata,
+          enrolledBy: request.currentUser.id, enrolledAt: new Date().toISOString(),
+          lastSeenAt: null, matchCount: 0, embeddingCount: 0,
+        };
+        state.facePersons.push(person);
+        await store.writeAudit({
+          tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+          action: "face.identity_enrolled", resourceNodeId: null, outcome: "success",
+          details: { watchlistId, personId: person.id },
+        });
+        return reply.code(201).send({ data: person });
       }
 
       // TODO: Process face images and extract embeddings
@@ -236,7 +422,9 @@ export async function registerAnalyticsPhase2Routes(
         `INSERT INTO face_watchlist_persons
           (tenant_id, watchlist_id, external_id, full_name, date_of_birth,
            gender, notes, metadata, enrolled_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         SELECT $1, w.id, $3, $4, $5, $6, $7, $8, $9
+         FROM face_watchlists w
+         WHERE w.id = $2 AND w.tenant_id = $1 AND w.archived_at IS NULL
          RETURNING id, full_name, enrolled_at`,
         [
           request.currentUser.tenantId,
@@ -250,21 +438,13 @@ export async function registerAnalyticsPhase2Routes(
           request.currentUser.id,
         ],
       );
-
-      // Log audit trail
-      await store.db.query(
-        `INSERT INTO analytics_audit_log
-          (tenant_id, user_id, action, resource_type, resource_id, details)
-         VALUES ($1, $2, 'face_enrol', 'face_watchlist_person', $3, $4)`,
-        [
-          request.currentUser.tenantId,
-          request.currentUser.id,
-          result.rows[0]!.id,
-          JSON.stringify({ watchlistId, personName: body.fullName }),
-        ],
-      );
-
-      return { data: result.rows[0] };
+      if (!result.rows[0]) return reply.code(404).send({ error: "face_watchlist_not_found" });
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "face.identity_enrolled", resourceNodeId: null, outcome: "success",
+        details: { watchlistId, personId: result.rows[0].id },
+      });
+      return reply.code(201).send({ data: result.rows[0] });
     },
   );
 
@@ -272,34 +452,62 @@ export async function registerAnalyticsPhase2Routes(
    * Search face recognition events
    */
   app.get("/v1/analytics/face-events", async (request, reply) => {
-    const query = z
+    const parsed = z
       .object({
         from: z.string().datetime().optional(),
         to: z.string().datetime().optional(),
-        cameraId: z.string().uuid().optional(),
+        cameraId: z.string().trim().min(1).max(200).optional(),
         watchlistId: z.string().uuid().optional(),
         personId: z.string().uuid().optional(),
         minSimilarity: z.coerce.number().min(0).max(1).default(0.6),
         limit: z.coerce.number().int().min(1).max(1000).default(100),
       })
-      .parse(request.query);
+      .superRefine((value, context) => {
+        if (value.from && value.to && value.from > value.to) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be on or after from" });
+        }
+      })
+      .safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "face:view",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasAnyAccess(store, request.currentUser, "face:view")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
+    const permittedCameraIds = await accessibleCameraIds(store, request.currentUser, "face:view");
+    if (query.cameraId && !permittedCameraIds.has(query.cameraId)) {
+      return reply.code(404).send({ error: "camera_not_found_or_forbidden" });
+    }
+    const cameraIds = query.cameraId ? [query.cameraId] : [...permittedCameraIds];
+    if (cameraIds.length === 0) return { data: [] };
+
     if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      const data = localState(store).faceEvents
+        .filter((event) => event.tenantId === request.currentUser.tenantId)
+        .filter((event) => cameraIds.includes(event.cameraId))
+        .filter((event) => event.similarityScore >= query.minSimilarity)
+        .filter((event) => !query.from || event.occurredAt >= query.from)
+        .filter((event) => !query.to || event.occurredAt <= query.to)
+        .filter((event) => !query.watchlistId || event.watchlistId === query.watchlistId)
+        .filter((event) => !query.personId || event.personId === query.personId)
+        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+        .slice(0, query.limit);
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "face.events_searched", resourceNodeId: null, outcome: "success",
+        details: { ...query, resultCount: data.length },
+      });
+      return { data };
     }
 
-    const conditions = ["fe.tenant_id = $1", "fe.similarity_score >= $2"];
-    const params: any[] = [request.currentUser.tenantId, query.minSimilarity];
-    let paramIndex = 3;
+    const conditions = [
+      "fe.tenant_id = $1",
+      "fe.similarity_score >= $2",
+      "fe.camera_id::text = ANY($3::text[])",
+    ];
+    const params: any[] = [request.currentUser.tenantId, query.minSimilarity, cameraIds];
+    let paramIndex = 4;
 
     if (query.from) {
       conditions.push(`fe.occurred_at >= $${paramIndex++}`);
@@ -339,17 +547,11 @@ export async function registerAnalyticsPhase2Routes(
       [...params, query.limit],
     );
 
-    // Log audit trail for face searches
-    await store.db.query(
-      `INSERT INTO analytics_audit_log
-        (tenant_id, user_id, action, details)
-       VALUES ($1, $2, 'face_search', $3)`,
-      [
-        request.currentUser.tenantId,
-        request.currentUser.id,
-        JSON.stringify(query),
-      ],
-    );
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+      action: "face.events_searched", resourceNodeId: null, outcome: "success",
+      details: { ...query, resultCount: events.rows.length },
+    });
 
     return { data: events.rows };
   });
@@ -360,17 +562,16 @@ export async function registerAnalyticsPhase2Routes(
    * List ANPR watchlists
    */
   app.get("/v1/analytics/anpr-watchlists", async (request, reply) => {
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "anpr:view",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasTenantWideAccess(store, request.currentUser, "anpr:view")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
     if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+      return {
+        data: localState(store).anprWatchlists
+          .filter((watchlist) => watchlist.tenantId === request.currentUser.tenantId && !watchlist.archivedAt)
+          .sort((left, right) => left.name.localeCompare(right.name)),
+      };
     }
 
     const watchlists = await store.db.query(
@@ -389,20 +590,31 @@ export async function registerAnalyticsPhase2Routes(
    * Create ANPR watchlist
    */
   app.post("/v1/analytics/anpr-watchlists", async (request, reply) => {
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "anpr:manage-watchlist",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasTenantWideAccess(store, request.currentUser, "anpr:manage-watchlist")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-    }
+    const parsed = anprWatchlistSchema.safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const body = parsed.data;
 
-    const body = anprWatchlistSchema.parse(request.body);
+    if (!hasPool(store)) {
+      const watchlist = {
+        id: randomUUID(), tenantId: request.currentUser.tenantId,
+        name: body.name, description: body.description,
+        listType: body.listType, enabled: true,
+        alertOnMatch: body.alertOnMatch, alertSeverity: body.alertSeverity,
+        alertAuthorities: body.alertAuthorities,
+        createdBy: request.currentUser.id, createdAt: new Date().toISOString(),
+      };
+      localState(store).anprWatchlists.push(watchlist);
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "anpr.watchlist_created", resourceNodeId: null, outcome: "success",
+        details: { watchlistId: watchlist.id, listType: watchlist.listType },
+      });
+      return reply.code(201).send({ data: watchlist });
+    }
 
     const result = await store.db.query(
       `INSERT INTO anpr_watchlists
@@ -422,8 +634,58 @@ export async function registerAnalyticsPhase2Routes(
       ],
     );
 
-    return { data: result.rows[0] };
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+      action: "anpr.watchlist_created", resourceNodeId: null, outcome: "success",
+      details: { watchlistId: result.rows[0]!.id, listType: body.listType },
+    });
+    return reply.code(201).send({ data: result.rows[0] });
   });
+
+  /**
+   * List plates in an ANPR watchlist
+   */
+  app.get(
+    "/v1/analytics/anpr-watchlists/:watchlistId/plates",
+    async (request, reply) => {
+      const parsed = z.object({ watchlistId: z.string().uuid() }).safeParse(request.params);
+      if (!parsed.success) return invalidInput(reply, parsed.error);
+      const { watchlistId } = parsed.data;
+      if (!await hasTenantWideAccess(store, request.currentUser, "anpr:view")) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+
+      if (!hasPool(store)) {
+        const state = localState(store);
+        const watchlist = state.anprWatchlists.find((item) =>
+          item.id === watchlistId && item.tenantId === request.currentUser.tenantId && !item.archivedAt
+        );
+        if (!watchlist) return reply.code(404).send({ error: "anpr_watchlist_not_found" });
+        return {
+          data: state.anprPlates
+            .filter((plate) => plate.watchlistId === watchlistId && !plate.archivedAt)
+            .sort((left, right) => left.plateNumber.localeCompare(right.plateNumber)),
+        };
+      }
+
+      const watchlist = await store.db.query(
+        `SELECT id FROM anpr_watchlists
+         WHERE id = $1 AND tenant_id = $2 AND archived_at IS NULL`,
+        [watchlistId, request.currentUser.tenantId],
+      );
+      if (!watchlist.rows[0]) return reply.code(404).send({ error: "anpr_watchlist_not_found" });
+      const plates = await store.db.query(
+        `SELECT id, plate_number, country_code, region_code, vehicle_make,
+                vehicle_model, vehicle_color, vehicle_type, owner_name,
+                reason, notes, expires_at, added_at, last_matched_at, match_count
+         FROM anpr_watchlist_plates
+         WHERE tenant_id = $1 AND watchlist_id = $2 AND archived_at IS NULL
+         ORDER BY plate_number ASC`,
+        [request.currentUser.tenantId, watchlistId],
+      );
+      return { data: plates.rows };
+    },
+  );
 
   /**
    * Add plate to watchlist
@@ -431,31 +693,51 @@ export async function registerAnalyticsPhase2Routes(
   app.post(
     "/v1/analytics/anpr-watchlists/:watchlistId/plates",
     async (request, reply) => {
-      const { watchlistId } = z
-        .object({ watchlistId: z.string().uuid() })
-        .parse(request.params);
+      const parsedParams = z.object({ watchlistId: z.string().uuid() }).safeParse(request.params);
+      if (!parsedParams.success) return invalidInput(reply, parsedParams.error);
+      const { watchlistId } = parsedParams.data;
 
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "anpr:manage-watchlist",
-        "",
-      );
-      if (!decision?.allowed) {
+      if (!await hasTenantWideAccess(store, request.currentUser, "anpr:manage-watchlist")) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-      }
+      const parsedBody = anprPlateSchema.safeParse(request.body);
+      if (!parsedBody.success) return invalidInput(reply, parsedBody.error);
+      const body = parsedBody.data;
 
-      const body = anprPlateSchema.parse(request.body);
+      if (!hasPool(store)) {
+        const state = localState(store);
+        const watchlist = state.anprWatchlists.find((item) =>
+          item.id === watchlistId && item.tenantId === request.currentUser.tenantId && !item.archivedAt
+        );
+        if (!watchlist) return reply.code(404).send({ error: "anpr_watchlist_not_found" });
+        const plate = {
+          id: randomUUID(), tenantId: request.currentUser.tenantId, watchlistId,
+          plateNumber: body.plateNumber.toUpperCase(), countryCode: body.countryCode.toUpperCase(),
+          regionCode: body.regionCode, vehicleMake: body.vehicleMake,
+          vehicleModel: body.vehicleModel, vehicleColor: body.vehicleColor,
+          vehicleType: body.vehicleType, ownerName: body.ownerName,
+          reason: body.reason, notes: body.notes, expiresAt: body.expiresAt,
+          addedBy: request.currentUser.id, addedAt: new Date().toISOString(),
+          lastMatchedAt: null, matchCount: 0,
+        };
+        state.anprPlates.push(plate);
+        await store.writeAudit({
+          tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+          action: "anpr.plate_registered", resourceNodeId: null, outcome: "success",
+          details: { watchlistId, plateId: plate.id },
+        });
+        return reply.code(201).send({ data: plate });
+      }
 
       const result = await store.db.query(
         `INSERT INTO anpr_watchlist_plates
           (tenant_id, watchlist_id, plate_number, country_code, region_code,
            vehicle_make, vehicle_model, vehicle_color, vehicle_type,
            owner_name, reason, notes, expires_at, added_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         SELECT $1, w.id, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+         FROM anpr_watchlists w
+         WHERE w.id = $2 AND w.tenant_id = $1 AND w.archived_at IS NULL
          RETURNING id, plate_number, added_at`,
         [
           request.currentUser.tenantId,
@@ -474,8 +756,13 @@ export async function registerAnalyticsPhase2Routes(
           request.currentUser.id,
         ],
       );
-
-      return { data: result.rows[0] };
+      if (!result.rows[0]) return reply.code(404).send({ error: "anpr_watchlist_not_found" });
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "anpr.plate_registered", resourceNodeId: null, outcome: "success",
+        details: { watchlistId, plateId: result.rows[0].id },
+      });
+      return reply.code(201).send({ data: result.rows[0] });
     },
   );
 
@@ -483,31 +770,60 @@ export async function registerAnalyticsPhase2Routes(
    * Search ANPR events
    */
   app.get("/v1/analytics/anpr-events", async (request, reply) => {
-    const query = z
+    const parsed = z
       .object({
         from: z.string().datetime().optional(),
         to: z.string().datetime().optional(),
-        cameraId: z.string().uuid().optional(),
+        cameraId: z.string().trim().min(1).max(200).optional(),
         plateNumber: z.string().optional(),
         watchlistId: z.string().uuid().optional(),
         entryDirection: z.enum(["entry", "exit", "unknown"]).optional(),
         limit: z.coerce.number().int().min(1).max(1000).default(100),
         justification: z.string().optional(), // Required for searches in some jurisdictions
       })
-      .parse(request.query);
+      .superRefine((value, context) => {
+        if (value.from && value.to && value.from > value.to) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be on or after from" });
+        }
+      })
+      .safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "anpr:search",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasAnyAccess(store, request.currentUser, "anpr:search")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const conditions = ["ae.tenant_id = $1"];
-    const params: any[] = [request.currentUser.tenantId];
-    let paramIndex = 2;
+    const permittedCameraIds = await accessibleCameraIds(store, request.currentUser, "anpr:search");
+    if (query.cameraId && !permittedCameraIds.has(query.cameraId)) {
+      return reply.code(404).send({ error: "camera_not_found_or_forbidden" });
+    }
+    const cameraIds = query.cameraId ? [query.cameraId] : [...permittedCameraIds];
+    if (cameraIds.length === 0) return { data: [] };
+
+    if (!hasPool(store)) {
+      const plateQuery = query.plateNumber?.toUpperCase();
+      const data = localState(store).anprEvents
+        .filter((event) => event.tenantId === request.currentUser.tenantId)
+        .filter((event) => cameraIds.includes(event.cameraId))
+        .filter((event) => !query.from || event.occurredAt >= query.from)
+        .filter((event) => !query.to || event.occurredAt <= query.to)
+        .filter((event) => !plateQuery || event.plateNumber.includes(plateQuery))
+        .filter((event) => !query.watchlistId || event.watchlistId === query.watchlistId)
+        .filter((event) => !query.entryDirection || event.entryDirection === query.entryDirection)
+        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+        .slice(0, query.limit);
+      await store.writeAudit({
+        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+        action: "anpr.events_searched", resourceNodeId: null, outcome: "success",
+        details: { ...query, resultCount: data.length },
+      });
+      return { data };
+    }
+
+    const conditions = ["ae.tenant_id = $1", "ae.camera_id::text = ANY($2::text[])"];
+    const params: any[] = [request.currentUser.tenantId, cameraIds];
+    let paramIndex = 3;
 
     if (query.from) {
       conditions.push(`ae.occurred_at >= $${paramIndex++}`);
@@ -534,10 +850,6 @@ export async function registerAnalyticsPhase2Routes(
       params.push(query.entryDirection);
     }
 
-    if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-    }
-
     const events = await store.db.query(
       `SELECT ae.id, ae.camera_id, ae.plate_number, ae.plate_confidence,
               ae.country_code, ae.vehicle_type, ae.vehicle_color,
@@ -555,18 +867,11 @@ export async function registerAnalyticsPhase2Routes(
       [...params, query.limit],
     );
 
-    // Log audit trail for ANPR searches
-    await store.db.query(
-      `INSERT INTO analytics_audit_log
-        (tenant_id, user_id, action, details, justification)
-       VALUES ($1, $2, 'anpr_search', $3, $4)`,
-      [
-        request.currentUser.tenantId,
-        request.currentUser.id,
-        JSON.stringify(query),
-        query.justification,
-      ],
-    );
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
+      action: "anpr.events_searched", resourceNodeId: null, outcome: "success",
+      details: { ...query, resultCount: events.rows.length },
+    });
 
     return { data: events.rows };
   });
@@ -577,21 +882,27 @@ export async function registerAnalyticsPhase2Routes(
   app.get(
     "/v1/analytics/anpr-sessions/:plateNumber",
     async (request, reply) => {
-      const { plateNumber } = z
-        .object({ plateNumber: z.string() })
-        .parse(request.params);
+      const parsed = z.object({ plateNumber: z.string().trim().min(2).max(20) }).safeParse(request.params);
+      if (!parsed.success) return invalidInput(reply, parsed.error);
+      const { plateNumber } = parsed.data;
 
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "anpr:view",
-        "",
-      );
-      if (!decision?.allowed) {
+      if (!await hasAnyAccess(store, request.currentUser, "anpr:view")) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
+      const cameraIds = [...await accessibleCameraIds(store, request.currentUser, "anpr:view")];
+      if (cameraIds.length === 0) return { data: [] };
+
       if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+        const normalizedPlate = plateNumber.toUpperCase();
+        return {
+          data: localState(store).anprSessions
+            .filter((session) => session.tenantId === request.currentUser.tenantId)
+            .filter((session) => session.plateNumber.toUpperCase() === normalizedPlate)
+            .filter((session) => cameraIds.includes(session.entryCameraId) || cameraIds.includes(session.exitCameraId))
+            .sort((left, right) => right.entryAt.localeCompare(left.entryAt))
+            .slice(0, 50),
+        };
       }
 
       const sessions = await store.db.query(
@@ -604,9 +915,11 @@ export async function registerAnalyticsPhase2Routes(
          LEFT JOIN cameras xc ON xc.id = vs.exit_camera_id
          LEFT JOIN resource_nodes rn_exit ON rn_exit.id = xc.resource_node_id
          WHERE vs.tenant_id = $1 AND vs.plate_number ILIKE $2
+           AND (vs.entry_camera_id::text = ANY($3::text[])
+             OR vs.exit_camera_id::text = ANY($3::text[]))
          ORDER BY vs.entry_at DESC
          LIMIT 50`,
-        [request.currentUser.tenantId, plateNumber.toUpperCase()],
+        [request.currentUser.tenantId, plateNumber.toUpperCase(), cameraIds],
       );
 
       return { data: sessions.rows };
@@ -621,21 +934,21 @@ export async function registerAnalyticsPhase2Routes(
   app.get(
     "/v1/cameras/:cameraId/protected-objects",
     async (request, reply) => {
-      const { cameraId } = z
-        .object({ cameraId: z.string().uuid() })
-        .parse(request.params);
-
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "analytics:view",
-        cameraId,
-      );
-      if (!decision?.allowed) {
+      const parsed = z.object({ cameraId: z.string().trim().min(1).max(200) }).safeParse(request.params);
+      if (!parsed.success) return invalidInput(reply, parsed.error);
+      const { cameraId } = parsed.data;
+      const authorization = await authorizeCamera(store, request.currentUser, cameraId, "analytics:view");
+      if (!authorization.found) return reply.code(404).send({ error: "camera_not_found" });
+      if (!authorization.allowed) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
       if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
+        return {
+          data: localState(store).protectedObjects
+            .filter((item) => item.tenantId === request.currentUser.tenantId && item.cameraId === cameraId && !item.archivedAt)
+            .sort((left, right) => left.name.localeCompare(right.name)),
+        };
       }
 
       const objects = await store.db.query(
@@ -643,9 +956,9 @@ export async function registerAnalyticsPhase2Routes(
                 alert_severity, removal_threshold_seconds, created_at,
                 last_verified_at
          FROM protected_objects
-         WHERE camera_id = $1 AND archived_at IS NULL
+         WHERE tenant_id = $1 AND camera_id = $2 AND archived_at IS NULL
          ORDER BY name ASC`,
-        [cameraId],
+        [request.currentUser.tenantId, cameraId],
       );
 
       return { data: objects.rows };
@@ -658,24 +971,32 @@ export async function registerAnalyticsPhase2Routes(
   app.post(
     "/v1/cameras/:cameraId/protected-objects",
     async (request, reply) => {
-      const { cameraId } = z
-        .object({ cameraId: z.string().uuid() })
-        .parse(request.params);
-
-      const decision = await store.checkAccess(
-        request.currentUser,
-        "analytics:view",
-        cameraId,
-      );
-      if (!decision?.allowed) {
+      const parsedParams = z.object({ cameraId: z.string().trim().min(1).max(200) }).safeParse(request.params);
+      if (!parsedParams.success) return invalidInput(reply, parsedParams.error);
+      const { cameraId } = parsedParams.data;
+      const authorization = await authorizeCamera(store, request.currentUser, cameraId, "analytics:configure");
+      if (!authorization.found) return reply.code(404).send({ error: "camera_not_found" });
+      if (!authorization.allowed) {
         return reply.code(403).send({ error: "forbidden" });
       }
 
-      if (!hasPool(store)) {
-        return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
-      }
+      const parsedBody = protectedObjectSchema.safeParse(request.body);
+      if (!parsedBody.success) return invalidInput(reply, parsedBody.error);
+      const body = parsedBody.data;
 
-      const body = protectedObjectSchema.parse(request.body);
+      if (!hasPool(store)) {
+        const protectedObject = {
+          id: randomUUID(), tenantId: request.currentUser.tenantId, cameraId,
+          name: body.name, description: body.description, objectType: body.objectType,
+          zone: body.zone, alertOnRemoval: body.alertOnRemoval,
+          alertSeverity: body.alertSeverity,
+          removalThresholdSeconds: body.removalThresholdSeconds,
+          createdBy: request.currentUser.id, createdAt: new Date().toISOString(),
+          lastVerifiedAt: new Date().toISOString(),
+        };
+        localState(store).protectedObjects.push(protectedObject);
+        return reply.code(201).send({ data: protectedObject });
+      }
 
       const result = await store.db.query(
         `INSERT INTO protected_objects
@@ -698,7 +1019,7 @@ export async function registerAnalyticsPhase2Routes(
         ],
       );
 
-      return { data: result.rows[0] };
+      return reply.code(201).send({ data: result.rows[0] });
     },
   );
 
@@ -706,28 +1027,50 @@ export async function registerAnalyticsPhase2Routes(
    * Get behavior events
    */
   app.get("/v1/analytics/behavior-events", async (request, reply) => {
-    const query = z
+    const parsed = z
       .object({
         from: z.string().datetime().optional(),
         to: z.string().datetime().optional(),
-        cameraId: z.string().uuid().optional(),
+        cameraId: z.string().trim().min(1).max(200).optional(),
         behaviorType: z.string().optional(),
         limit: z.coerce.number().int().min(1).max(1000).default(100),
       })
-      .parse(request.query);
+      .superRefine((value, context) => {
+        if (value.from && value.to && value.from > value.to) {
+          context.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be on or after from" });
+        }
+      })
+      .safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
-    const decision = await store.checkAccess(
-      request.currentUser,
-      "behavior:view",
-      "",
-    );
-    if (!decision?.allowed) {
+    if (!await hasAnyAccess(store, request.currentUser, "behavior:view")) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const conditions = ["be.tenant_id = $1"];
-    const params: any[] = [request.currentUser.tenantId];
-    let paramIndex = 2;
+    const permittedCameraIds = await accessibleCameraIds(store, request.currentUser, "behavior:view");
+    if (query.cameraId && !permittedCameraIds.has(query.cameraId)) {
+      return reply.code(404).send({ error: "camera_not_found_or_forbidden" });
+    }
+    const cameraIds = query.cameraId ? [query.cameraId] : [...permittedCameraIds];
+    if (cameraIds.length === 0) return { data: [] };
+
+    if (!hasPool(store)) {
+      return {
+        data: localState(store).behaviorEvents
+          .filter((event) => event.tenantId === request.currentUser.tenantId)
+          .filter((event) => cameraIds.includes(event.cameraId))
+          .filter((event) => !query.from || event.occurredAt >= query.from)
+          .filter((event) => !query.to || event.occurredAt <= query.to)
+          .filter((event) => !query.behaviorType || event.behaviorType === query.behaviorType)
+          .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+          .slice(0, query.limit),
+      };
+    }
+
+    const conditions = ["be.tenant_id = $1", "be.camera_id::text = ANY($2::text[])"];
+    const params: any[] = [request.currentUser.tenantId, cameraIds];
+    let paramIndex = 3;
 
     if (query.from) {
       conditions.push(`be.occurred_at >= $${paramIndex++}`);
@@ -744,10 +1087,6 @@ export async function registerAnalyticsPhase2Routes(
     if (query.behaviorType) {
       conditions.push(`be.behavior_type = $${paramIndex++}`);
       params.push(query.behaviorType);
-    }
-
-    if (!hasPool(store)) {
-      return reply.code(501).send({ error: "not_implemented", message: "This endpoint requires PostgreSQL store" });
     }
 
     const events = await store.db.query(

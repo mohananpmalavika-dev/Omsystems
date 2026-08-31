@@ -169,6 +169,7 @@ export class FaceDetector extends BaseDetector {
           metadata: {
             matchCount: matchedFaces.length,
             watchlistMatches: matchedFaces.map((f) => ({
+              watchlistId: f.match!.watchlistId,
               personId: f.match!.personId,
               personName: f.match!.personName,
               similarity: f.match!.similarity,

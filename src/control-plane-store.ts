@@ -7,6 +7,7 @@ import type {
   AnalyticsAlertStatus,
   AnalyticsDetectionType,
   AnalyticsDetectedObject,
+  AnalyticsEvent,
   AnalyticsIngestResult,
   AnalyticsRule,
   AuditEventInput,
@@ -522,6 +523,15 @@ export interface AnalyticsEventInput {
   snapshotReference?: string | undefined;
   clipReference?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
+}
+
+export interface AnalyticsEventFilters {
+  cameraId?: string | undefined;
+  cameraIds?: string[] | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  detectionTypes?: string[] | undefined;
+  limit: number;
 }
 
 export interface AnalyticsAlertTransitionInput {
@@ -1257,6 +1267,10 @@ export interface ControlPlaneStore {
     cameraId: string,
   ): Promise<boolean>;
   processAnalyticsEvent(input: AnalyticsEventInput): Promise<AnalyticsIngestResult>;
+  listAnalyticsEvents(
+    tenantId: string,
+    filters: AnalyticsEventFilters,
+  ): Promise<AnalyticsEvent[]>;
   listAnalyticsAlerts(
     tenantId: string,
     filters: AnalyticsAlertFilters,
@@ -1327,6 +1341,19 @@ export interface ControlPlaneStore {
   completeOperationalReportDelivery(id: string, result: { status: "delivered" | "failed" | "dead"; providerId?: string; error?: string; nextAttemptAt?: string }): Promise<OperationalReportDelivery | undefined>;
   listOperationalReportDeliveries(tenantId: string, runId: string): Promise<OperationalReportDelivery[]>;
   writeAudit(event: AuditEventInput): Promise<void>;
+  logUserAction(
+    userId: string,
+    tenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    actionType: string,
+    actionCategory: string,
+    actionTarget: string | null,
+    actionDescription: string | null,
+    moduleName: string,
+    featureName: string | null,
+    actionMetadata: unknown,
+  ): Promise<void>;
   createMaintenanceAsset(input: MaintenanceAssetInput): Promise<MaintenanceAsset>;
   listMaintenanceAssets(tenantId: string, category?: AssetCategory): Promise<MaintenanceAsset[]>;
   // ============ DEVICE MANAGEMENT - Credentials ============

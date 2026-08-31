@@ -11,6 +11,7 @@ import type {
 import type {
   AnalyticsAlertFilters,
   AnalyticsAlertTransitionInput,
+  AnalyticsEventFilters,
   AnalyticsEventInput,
   AnalyticsRuleInput,
 } from "../control-plane-store.js";
@@ -387,6 +388,42 @@ export class AnalyticsRepository {
     } finally {
       client.release();
     }
+  }
+
+  async listEvents(tenantId: string, filters: AnalyticsEventFilters): Promise<AnalyticsEvent[]> {
+    const conditions = ["event.tenant_id=$1"];
+    const values: unknown[] = [tenantId];
+    let parameter = 2;
+    if (filters.cameraId) {
+      conditions.push(`event.camera_id=$${parameter++}`);
+      values.push(filters.cameraId);
+    }
+    if (filters.cameraIds?.length) {
+      conditions.push(`event.camera_id::text = ANY($${parameter++}::text[])`);
+      values.push(filters.cameraIds);
+    }
+    if (filters.from) {
+      conditions.push(`event.occurred_at >= $${parameter++}`);
+      values.push(filters.from);
+    }
+    if (filters.to) {
+      conditions.push(`event.occurred_at <= $${parameter++}`);
+      values.push(filters.to);
+    }
+    if (filters.detectionTypes?.length) {
+      conditions.push(`event.detection_type = ANY($${parameter++}::text[])`);
+      values.push(filters.detectionTypes);
+    }
+    values.push(filters.limit);
+    const result = await this.pool.query(
+      `SELECT event.*
+       FROM analytics_events event
+       WHERE ${conditions.join(" AND ")}
+       ORDER BY event.occurred_at ASC
+       LIMIT $${parameter}`,
+      values,
+    );
+    return result.rows.map((row) => mapEvent(row, []));
   }
 
   async listAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<AnalyticsAlert[]> {

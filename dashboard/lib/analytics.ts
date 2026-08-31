@@ -1,292 +1,197 @@
-/**
- * Analytics and monitoring instrumentation for Zero-Touch Provisioning
- * Tracks user interactions, performance metrics, and errors
- */
+"use client";
 
 export interface AnalyticsEvent {
   category: string;
   action: string;
   label?: string;
   value?: number;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PerformanceMetric {
   name: string;
   value: number;
-  unit: "ms" | "bytes" | "count";
-  metadata?: Record<string, any>;
+  unit: "ms" | "bytes" | "count" | "percent";
+  metadata?: Record<string, unknown>;
 }
 
-export interface ErrorEvent {
-  error: Error | string;
+export interface AnalyticsError {
+  error: Error | unknown;
   context: string;
   severity: "low" | "medium" | "high" | "critical";
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
-class AnalyticsService {
-  private sessionId: string;
-  private pageLoadTime: number;
-  private eventQueue: AnalyticsEvent[] = [];
-  private performanceQueue: PerformanceMetric[] = [];
-  private errorQueue: ErrorEvent[] = [];
-  private flushInterval: NodeJS.Timeout | null = null;
+type QueuedEvent = AnalyticsEvent & { timestamp: string };
+type QueuedMetric = PerformanceMetric & { timestamp: string };
+type QueuedError = {
+  error: string;
+  context: string;
+  severity: AnalyticsError["severity"];
+  metadata: Record<string, unknown>;
+  timestamp: string;
+};
 
-  constructor() {
-    this.sessionId = this.generateSessionId();
-    this.pageLoadTime = Date.now();
-    this.startFlushInterval();
-    this.trackPageLoad();
+const FLUSH_INTERVAL_MS = 10_000;
+const MAX_ITEMS_PER_KIND = 100;
+const activitySessionKey = "activitySessionId";
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const sensitiveKey = /password|passcode|secret|token|credential|authorization|cookie|api.?key|private.?key|query|search.?term/i;
+
+let events: QueuedEvent[] = [];
+let performance: QueuedMetric[] = [];
+let errors: QueuedError[] = [];
+let flushTimer: ReturnType<typeof setInterval> | undefined;
+let flushInProgress = false;
+
+function sanitizeMetadata(value: unknown, depth = 0): unknown {
+  if (depth > 3) return "[truncated]";
+  if (value === null || typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value === "string") return value.slice(0, 250);
+  if (Array.isArray(value)) return value.slice(0, 50).map((item) => sanitizeMetadata(item, depth + 1));
+  if (!value || typeof value !== "object") return String(value).slice(0, 250);
+
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value).slice(0, 50)) {
+    output[key.slice(0, 100)] = sensitiveKey.test(key)
+      ? "[redacted]"
+      : sanitizeMetadata(item, depth + 1);
   }
+  return output;
+}
 
-  private generateSessionId(): string {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  }
+function safeMetadata(value?: Record<string, unknown>) {
+  return (sanitizeMetadata(value ?? {}) as Record<string, unknown>);
+}
 
-  private startFlushInterval() {
-    // Flush queues every 10 seconds
-    this.flushInterval = setInterval(() => {
-      this.flush();
-    }, 10000);
-  }
+function activeSessionId() {
+  if (typeof window === "undefined") return undefined;
+  const sessionId = window.sessionStorage.getItem(activitySessionKey)?.trim();
+  return sessionId && uuidPattern.test(sessionId) ? sessionId : undefined;
+}
 
-  private async flush() {
-    if (this.eventQueue.length === 0 && this.performanceQueue.length === 0 && this.errorQueue.length === 0) {
+function ensureTimer() {
+  if (typeof window === "undefined" || flushTimer) return;
+  flushTimer = setInterval(() => void flushAnalytics(), FLUSH_INTERVAL_MS);
+}
+
+function retainFailedBatch(batch: {
+  events: QueuedEvent[];
+  performance: QueuedMetric[];
+  errors: QueuedError[];
+}) {
+  events = [...batch.events, ...events].slice(-MAX_ITEMS_PER_KIND);
+  performance = [...batch.performance, ...performance].slice(-MAX_ITEMS_PER_KIND);
+  errors = [...batch.errors, ...errors].slice(-MAX_ITEMS_PER_KIND);
+}
+
+async function flushAnalytics(useBeacon = false) {
+  if (typeof window === "undefined" || flushInProgress) return;
+  const sessionId = activeSessionId();
+  if (!sessionId || (!events.length && !performance.length && !errors.length)) return;
+
+  const batch = { events, performance, errors };
+  events = [];
+  performance = [];
+  errors = [];
+  flushInProgress = true;
+
+  const payload = JSON.stringify({
+    sessionId,
+    timestamp: new Date().toISOString(),
+    ...batch,
+  });
+
+  try {
+    if (useBeacon && typeof navigator.sendBeacon === "function") {
+      const queued = navigator.sendBeacon(
+        "/api/v1/analytics",
+        new Blob([payload], { type: "application/json" }),
+      );
+      if (!queued) throw new Error("browser rejected analytics beacon");
       return;
     }
 
-    const payload = {
-      sessionId: this.sessionId,
-      timestamp: new Date().toISOString(),
-      events: [...this.eventQueue],
-      performance: [...this.performanceQueue],
-      errors: [...this.errorQueue],
-    };
-
-    // Clear queues
-    this.eventQueue = [];
-    this.performanceQueue = [];
-    this.errorQueue = [];
-
-    try {
-      // Send to analytics endpoint (could be your own backend, Google Analytics, etc.)
-      if (typeof window !== "undefined" && navigator.sendBeacon) {
-        const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
-        navigator.sendBeacon("/api/v1/analytics", blob);
-      } else {
-        // Fallback for environments without sendBeacon
-        await fetch("/api/v1/analytics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-          keepalive: true,
-        }).catch(() => {
-          // Silent fail for analytics
-        });
-      }
-    } catch (err) {
-      // Silent fail - don't let analytics break the app
-      console.warn("Analytics flush failed:", err);
-    }
-  }
-
-  /**
-   * Track user interaction events
-   */
-  trackEvent(event: AnalyticsEvent) {
-    this.eventQueue.push({
-      ...event,
-      metadata: {
-        ...event.metadata,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-      },
+    const response = await fetch("/api/v1/analytics", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
     });
-  }
-
-  /**
-   * Track performance metrics
-   */
-  trackPerformance(metric: PerformanceMetric) {
-    this.performanceQueue.push({
-      ...metric,
-      metadata: {
-        ...metric.metadata,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-      },
-    });
-  }
-
-  /**
-   * Track errors
-   */
-  trackError(errorEvent: ErrorEvent) {
-    const errorMessage = errorEvent.error instanceof Error ? errorEvent.error.message : String(errorEvent.error);
-    const errorStack = errorEvent.error instanceof Error ? errorEvent.error.stack : undefined;
-
-    this.errorQueue.push({
-      error: errorMessage,
-      context: errorEvent.context,
-      severity: errorEvent.severity,
-      metadata: {
-        ...errorEvent.metadata,
-        stack: errorStack,
-        timestamp: Date.now(),
-        sessionId: this.sessionId,
-        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
-      },
-    });
-  }
-
-  /**
-   * Track page load performance
-   */
-  private trackPageLoad() {
-    if (typeof window === "undefined" || !window.performance) return;
-
-    // Use Navigation Timing API
-    window.addEventListener("load", () => {
-      setTimeout(() => {
-        const perfData = window.performance.timing;
-        const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
-        const domReadyTime = perfData.domContentLoadedEventEnd - perfData.navigationStart;
-        const firstPaintTime = perfData.responseStart - perfData.navigationStart;
-
-        this.trackPerformance({
-          name: "page_load_time",
-          value: pageLoadTime,
-          unit: "ms",
-          metadata: { page: "zero-touch-provisioning" },
-        });
-
-        this.trackPerformance({
-          name: "dom_ready_time",
-          value: domReadyTime,
-          unit: "ms",
-          metadata: { page: "zero-touch-provisioning" },
-        });
-
-        this.trackPerformance({
-          name: "first_paint_time",
-          value: firstPaintTime,
-          unit: "ms",
-          metadata: { page: "zero-touch-provisioning" },
-        });
-      }, 0);
-    });
-  }
-
-  /**
-   * Track API call performance
-   */
-  trackApiCall(endpoint: string, method: string, duration: number, success: boolean, statusCode?: number) {
-    this.trackPerformance({
-      name: "api_call_duration",
-      value: duration,
-      unit: "ms",
-      metadata: {
-        endpoint,
-        method,
-        success,
-        statusCode,
-      },
-    });
-
-    this.trackEvent({
-      category: "api",
-      action: success ? "success" : "error",
-      label: `${method} ${endpoint}`,
-      value: duration,
-      metadata: { statusCode },
-    });
-  }
-
-  /**
-   * Track user flow completion
-   */
-  trackFlowComplete(flowName: string, duration: number, stepsCompleted: number) {
-    this.trackEvent({
-      category: "flow",
-      action: "complete",
-      label: flowName,
-      value: duration,
-      metadata: { stepsCompleted },
-    });
-  }
-
-  /**
-   * Track feature usage
-   */
-  trackFeatureUsage(featureName: string, metadata?: Record<string, any>) {
-    this.trackEvent({
-      category: "feature",
-      action: "use",
-      label: featureName,
-      metadata,
-    });
-  }
-
-  /**
-   * Track search queries
-   */
-  trackSearch(query: string, resultsCount: number) {
-    this.trackEvent({
-      category: "search",
-      action: "query",
-      label: query.substring(0, 50), // Limit length for privacy
-      value: resultsCount,
-    });
-  }
-
-  /**
-   * Clean up on unmount
-   */
-  cleanup() {
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval);
-      this.flushInterval = null;
-    }
-    // Final flush
-    this.flush();
+    if (!response.ok) throw new Error(`analytics ingestion failed (${response.status})`);
+  } catch {
+    retainFailedBatch(batch);
+  } finally {
+    flushInProgress = false;
   }
 }
 
-// Singleton instance
-let analyticsInstance: AnalyticsService | null = null;
-
-export function getAnalytics(): AnalyticsService {
-  if (!analyticsInstance) {
-    analyticsInstance = new AnalyticsService();
-  }
-  return analyticsInstance;
-}
-
-export function cleanupAnalytics() {
-  if (analyticsInstance) {
-    analyticsInstance.cleanup();
-    analyticsInstance = null;
-  }
-}
-
-// Convenience functions
 export function trackEvent(event: AnalyticsEvent) {
-  getAnalytics().trackEvent(event);
+  events.push({
+    ...event,
+    category: event.category.slice(0, 50),
+    action: event.action.slice(0, 100),
+    label: event.label?.slice(0, 255),
+    metadata: safeMetadata(event.metadata),
+    timestamp: new Date().toISOString(),
+  });
+  events = events.slice(-MAX_ITEMS_PER_KIND);
+  ensureTimer();
 }
 
 export function trackPerformance(metric: PerformanceMetric) {
-  getAnalytics().trackPerformance(metric);
+  if (!Number.isFinite(metric.value)) return;
+  performance.push({
+    ...metric,
+    name: metric.name.slice(0, 80),
+    metadata: safeMetadata(metric.metadata),
+    timestamp: new Date().toISOString(),
+  });
+  performance = performance.slice(-MAX_ITEMS_PER_KIND);
+  ensureTimer();
 }
 
-export function trackError(errorEvent: ErrorEvent) {
-  getAnalytics().trackError(errorEvent);
+export function trackError(input: AnalyticsError) {
+  const message = input.error instanceof Error ? input.error.message : String(input.error);
+  errors.push({
+    error: message.slice(0, 2_000),
+    context: input.context.slice(0, 255),
+    severity: input.severity,
+    metadata: safeMetadata(input.metadata),
+    timestamp: new Date().toISOString(),
+  });
+  errors = errors.slice(-MAX_ITEMS_PER_KIND);
+  ensureTimer();
 }
 
-export function trackApiCall(endpoint: string, method: string, duration: number, success: boolean, statusCode?: number) {
-  getAnalytics().trackApiCall(endpoint, method, duration, success, statusCode);
+export function trackApiCall(
+  endpoint: string,
+  method: string,
+  durationMs: number,
+  success: boolean,
+  status?: number,
+) {
+  trackEvent({
+    category: "api",
+    action: `${method.toLowerCase()}.${success ? "success" : "failure"}`,
+    label: endpoint,
+    value: Number.isFinite(durationMs) ? durationMs : undefined,
+    metadata: { status },
+  });
 }
 
 export function trackSearch(query: string, resultsCount: number) {
-  getAnalytics().trackSearch(query, resultsCount);
+  trackEvent({
+    category: "search",
+    action: "completed",
+    value: Number.isFinite(resultsCount) ? resultsCount : undefined,
+    metadata: { queryLength: query.length },
+  });
+}
+
+export function cleanupAnalytics() {
+  if (flushTimer) clearInterval(flushTimer);
+  flushTimer = undefined;
+  void flushAnalytics(true);
 }

@@ -639,6 +639,9 @@ export class PostgresStore
     return this.analytics.deleteRule(id, tenantId, cameraId);
   }
   async processAnalyticsEvent(input: any) { return this.analytics.processEvent(input); }
+  async listAnalyticsEvents(tenantId: string, filters: any) {
+    return this.analytics.listEvents(tenantId, filters);
+  }
   async listAnalyticsAlerts(tenantId: string, filters: any) {
     return this.analytics.listAlerts(tenantId, filters);
   }

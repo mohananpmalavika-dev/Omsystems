@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   identityAnalyticsApi,
   type AnprEvent,
+  type AnprWatchlistPlate,
   type FaceRecognitionEvent,
   type FaceWatchlistPerson,
   type IdentityWatchlist,
@@ -119,6 +120,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
   const [faceEvents, setFaceEvents] = useState<FaceRecognitionEvent[]>([]);
   const [anprEvents, setAnprEvents] = useState<AnprEvent[]>([]);
   const [persons, setPersons] = useState<FaceWatchlistPerson[]>([]);
+  const [plates, setPlates] = useState<AnprWatchlistPlate[]>([]);
   const [selectedFaceList, setSelectedFaceList] = useState("");
   const [selectedAnprList, setSelectedAnprList] = useState("");
   const [plateQuery, setPlateQuery] = useState("");
@@ -184,6 +186,16 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
       .then((response) => setPersons(response.data ?? []))
       .catch((error) => setMessage({ kind: "error", text: readable(error) }));
   }, [selectedFaceList]);
+
+  useEffect(() => {
+    if (!selectedAnprList) {
+      setPlates([]);
+      return;
+    }
+    void identityAnalyticsApi.listAnprPlates(selectedAnprList)
+      .then((response) => setPlates(response.data ?? []))
+      .catch((error) => setMessage({ kind: "error", text: readable(error) }));
+  }, [selectedAnprList]);
 
   useEffect(() => {
     const create = new URLSearchParams(window.location.search).get("create");
@@ -279,6 +291,8 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
       });
       setPlateForm(emptyPlate);
       closeDialog();
+      const response = await identityAnalyticsApi.listAnprPlates(selectedAnprList);
+      setPlates(response.data ?? []);
       setMessage({ kind: "success", text: "Plate registered in the selected ANPR watchlist." });
     } catch (error) {
       setSaving(false);
@@ -326,7 +340,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
 
       <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric icon={<ListFilter />} label="Watchlists" value={currentWatchlists.length} detail="available to this tenant" />
-        <Metric icon={mode === "face" ? <UsersRound /> : <CarFront />} label={mode === "face" ? "Enrolled identities" : "Matched plates"} value={mode === "face" ? persons.length : anprEvents.length} detail={mode === "face" ? `${matchReadyPersons} match ready` : "in current result set"} />
+        <Metric icon={mode === "face" ? <UsersRound /> : <CarFront />} label={mode === "face" ? "Enrolled identities" : "Registered plates"} value={mode === "face" ? persons.length : plates.length} detail={mode === "face" ? `${matchReadyPersons} match ready` : "in selected watchlist"} />
         <Metric icon={<Eye />} label="Recent events" value={currentEvents.length} detail="latest authorized results" />
         <Metric icon={<ShieldCheck />} label="Priority policies" value={criticalLists} detail="P1 or P2 notification" />
       </section>
@@ -397,7 +411,10 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
           ) : (
             <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
               <header className="flex items-center justify-between gap-3 border-b border-slate-800 p-5"><div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">VEHICLE REGISTRY</p><h2 className="mt-1 text-lg font-semibold">{selectedAnpr?.name ?? "Select an ANPR watchlist"}</h2></div><button type="button" disabled={!selectedAnprList} onClick={() => setDialog("anpr-plate")} className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Plus size={14} />Register plate</button></header>
-              <div className="grid min-h-36 place-items-center p-6 text-center"><div><CarFront className="mx-auto text-slate-700" size={28} /><p className="mt-3 text-sm text-slate-400">{selectedAnprList ? "Register plates here; matching sightings appear in the event queue below." : "Select or create a watchlist first."}</p><p className="mt-2 text-xs text-slate-600">Plate records are write-only in the current control-plane API, while sighting results remain reviewable.</p></div></div>
+              {plates.length === 0 ? <EmptyState icon={<CarFront />} title="No registered plates" text={selectedAnprList ? "Register an approved plate in this watchlist." : "Select or create a watchlist first."} /> : <div className="divide-y divide-slate-800">{plates.map((plate) => {
+                const expiresAt = stringValue(value(plate, "expiresAt", "expires_at"));
+                return <article key={plate.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><strong className="block truncate font-mono text-sm tracking-wider">{stringValue(value(plate, "plateNumber", "plate_number"), "UNKNOWN")}</strong><span className="mt-1 block truncate text-xs text-slate-500">{stringValue(value(plate, "vehicleMake", "vehicle_make"), "Unknown make")} {stringValue(value(plate, "vehicleModel", "vehicle_model"))} · {stringValue(plate.reason, "No reason recorded")}</span></div><div className="text-right"><span className="block text-[10px] text-slate-500">{numberValue(value(plate, "matchCount", "match_count"))} matches</span><span className="text-[10px] text-slate-600">{expiresAt ? `Expires ${date(expiresAt)}` : "No expiry"}</span></div></article>;
+              })}</div>}
             </section>
           )}
 

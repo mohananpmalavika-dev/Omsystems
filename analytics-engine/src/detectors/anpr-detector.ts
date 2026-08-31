@@ -168,6 +168,19 @@ export class ANPRDetector extends BaseDetector {
         metadata: {
           plateCount: plateObjects.length,
           plates: plateObjects.map((p) => p.plateReading!.plateNumber),
+          readings: plateObjects.map((plate) => ({
+            plateNumber: plate.plateReading!.plateNumber,
+            confidence: plate.plateReading!.confidence,
+            countryCode: plate.plateReading!.country,
+            regionCode: plate.plateReading!.region,
+            plateType: plate.plateReading!.plateType,
+            characters: plate.plateReading!.characters,
+            plateBoundingBox: plate.boundingBox,
+            vehicleType: plate.vehicle?.type,
+            vehicleColor: plate.vehicle?.color,
+            vehicleMake: plate.vehicle?.make,
+            vehicleModel: plate.vehicle?.model,
+          })),
         },
         requiresAlert: false, // ANPR alone doesn't alert
       });
@@ -185,6 +198,10 @@ export class ANPRDetector extends BaseDetector {
               plateNumber: p.plateReading!.plateNumber,
               reason: p.watchlistMatch!.reason,
               severity: p.watchlistMatch!.severity,
+              watchlistId: typeof p.watchlistMatch!.metadata?.watchlistId === "string"
+                ? p.watchlistMatch!.metadata.watchlistId : undefined,
+              plateId: typeof p.watchlistMatch!.metadata?.plateId === "string"
+                ? p.watchlistMatch!.metadata.plateId : undefined,
             })),
           },
           requiresAlert: true, // Watchlist match requires immediate alert

@@ -8,6 +8,7 @@ import {
 import type {
   Action,
   AnalyticsAlert,
+  AnalyticsEvent,
   AnalyticsAlertStatus,
   Camera,
   ResourceNode,
@@ -575,7 +576,12 @@ export async function registerAnalyticsRoutes(
     action: Extract<Action, "analytics:view" | "analytics:export">,
   ) => {
     const { branchId } = branchAnalyticsParams.parse(request.params);
-    const query = branchAnalyticsQuery.parse(request.query);
+    const requestedRange = branchAnalyticsQuery.parse(request.query);
+    const now = new Date();
+    const query = {
+      from: requestedRange.from ?? new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString(),
+      to: requestedRange.to ?? now.toISOString(),
+    };
     const branches = await store.listAccessibleNodes(request.currentUser, action, "branch");
     const branch = branches.find((candidate) => candidate.id === branchId);
     if (!branch) {
@@ -590,45 +596,63 @@ export async function registerAnalyticsRoutes(
     const rowLimit = 10_000;
     const loadedAlerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, {
       branchId: branch.id,
-      ...(query.from ? { from: query.from } : {}),
-      ...(query.to ? { to: query.to } : {}),
+      from: query.from,
+      to: query.to,
       limit: rowLimit + 1,
     });
-    const truncated = loadedAlerts.length > rowLimit;
+    const loadedEvents = cameras.length > 0
+      ? await store.listAnalyticsEvents(request.currentUser.tenantId, {
+        cameraIds: cameras.map((camera) => camera.id),
+        from: query.from,
+        to: query.to,
+        limit: rowLimit + 1,
+      })
+      : [];
+    const truncated = loadedAlerts.length > rowLimit || loadedEvents.length > rowLimit;
     const alerts = loadedAlerts.slice(0, rowLimit);
-    return { branch, cameras, rules, alerts, query, truncated };
+    const events = loadedEvents.slice(0, rowLimit);
+    return { branch, cameras, rules, alerts, events, query, truncated };
   };
 
   app.get("/v1/branches/:branchId/analytics/summary", async (request, reply) => {
     const report = await loadBranchAnalytics(request, reply, "analytics:view");
     if (!report) return;
 
-    const rulesById = new Map(report.rules.map((rule) => [rule.id, rule]));
     const eventsByType: Record<string, number> = {};
-    for (const alert of report.alerts) {
-      const type = rulesById.get(alert.ruleId)?.detectionType ?? "unknown";
-      eventsByType[type] = (eventsByType[type] ?? 0) + alert.occurrenceCount;
+    for (const event of report.events) {
+      eventsByType[event.detectionType] = (eventsByType[event.detectionType] ?? 0) + 1;
     }
-    const footfallTypes = new Set(["footfall", "customer-counting", "person-counting"]);
+    const footfallTypes = new Set(["line-crossing", "footfall", "customer-counting", "person-counting"]);
     const hasFootfallRule = report.rules.some((rule) => footfallTypes.has(rule.detectionType));
     const totalFootfall = hasFootfallRule
-      ? Object.entries(eventsByType).reduce(
-        (total, [type, count]) => total + (footfallTypes.has(type) ? count : 0),
-        0,
-      )
+      ? aggregateFootfall(
+        report.events.filter((event) => footfallTypes.has(event.detectionType)),
+        "day",
+      ).reduce((total, bucket) => total + bucket.total_crossings, 0)
       : null;
     const totalEvents = Object.values(eventsByType).reduce((total, count) => total + count, 0);
+    const dwellBuckets = aggregateDwell(
+      report.events.filter((event) => event.detectionType === "loitering" || event.detectionType === "dwell-time"),
+      "day",
+    );
+    const dwellSamples = dwellBuckets.reduce((total, bucket) => total + bucket.sample_count, 0);
+    const averageDwellTime = dwellSamples > 0
+      ? dwellBuckets.reduce(
+        (total, bucket) => total + bucket.average_seconds * bucket.sample_count,
+        0,
+      ) / dwellSamples
+      : null;
 
     return reply.send({
       period: {
-        startDate: report.query.from ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        endDate: report.query.to ?? new Date().toISOString(),
+        startDate: report.query.from,
+        endDate: report.query.to,
       },
       totalAlerts: report.alerts.length,
       criticalAlerts: report.alerts.filter((alert) => alert.severity === "P1").length,
       resolvedAlerts: report.alerts.filter((alert) => alert.status === "resolved").length,
       totalFootfall,
-      averageDwellTime: null,
+      averageDwellTime,
       activeRules: report.rules.filter((rule) => rule.enabled).length,
       totalEvents,
       eventsByType,
@@ -679,163 +703,161 @@ export async function registerAnalyticsRoutes(
       .send(`\uFEFF${csv}\r\n`);
   });
 
-  // Camera analytics endpoints - proxy to analytics engine
-  const analyticsQuery = z.object({ 
-    from: z.string().optional(), 
-    to: z.string().optional(), 
-    interval: z.string().optional() 
+  // Camera metrics are derived from the normalized, persisted event stream.
+  // The analytics engine's retail endpoints expose process-wide snapshots and
+  // cannot safely be presented as camera-specific historical measurements.
+  const analyticsQuery = z.object({
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+    interval: z.enum(["hour", "day"]).default("hour"),
+  }).superRefine((value, context) => {
+    if (value.from && value.to && Date.parse(value.from) > Date.parse(value.to)) {
+      context.addIssue({ code: "custom", path: ["from"], message: "from must not be after to" });
+    }
+  });
+
+  const metricEventLimit = 10_001;
+  const metricRange = (query: z.infer<typeof analyticsQuery>) => ({
+    from: query.from ?? new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString(),
+    to: query.to ?? new Date().toISOString(),
   });
 
   app.get("/v1/cameras/:id/analytics/footfall", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const query = analyticsQuery.parse(request.query);
-    
-    // Check camera access
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
     if (!camera) return;
-
-    // Try to get real data from analytics engine retail module
-    if (options.analyticsEngineUrl) {
-      try {
-        const queryParams = new URLSearchParams();
-        if (query.from) queryParams.set('from', query.from);
-        if (query.to) queryParams.set('to', query.to);
-        
-        const response = await fetch(
-          new URL(`/v1/analytics/retail/customer-flow?${queryParams}`, options.analyticsEngineUrl),
-          { signal: AbortSignal.timeout(5_000) }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Transform to expected format
-          const now = Date.now();
-          const buckets = Array.from({ length: 24 }).map((_, i) => ({
-            bucket_at: new Date(now - i * 3600_000).toISOString(),
-            entries: Math.floor((data.totalEntries || 0) / 24),
-            exits: Math.floor((data.totalExits || 0) / 24),
-            total_crossings: Math.floor((data.totalEntries || 0 + data.totalExits || 0) / 24),
-          }));
-          return reply.send({ data: buckets.reverse() });
-        }
-      } catch (error) {
-        app.log.warn({ error, cameraId: id }, "Analytics engine footfall query failed, using fallback");
-      }
-    }
-
-    // Fallback to empty data
-    const now = Date.now();
-    const buckets = Array.from({ length: 24 }).map((_, i) => ({
-      bucket_at: new Date(now - i * 3600_000).toISOString(),
-      entries: 0,
-      exits: 0,
-      total_crossings: 0,
-    }));
-    return reply.send({ data: buckets.reverse() });
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["line-crossing", "footfall", "customer-counting", "person-counting"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateFootfall(events.slice(0, 10_000), query.interval), events));
   });
 
   app.get("/v1/cameras/:id/analytics/dwell-time", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const query = analyticsQuery.parse(request.query);
-    
-    // Check camera access
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
     if (!camera) return;
-
-    // Try to get real data from analytics engine
-    if (options.analyticsEngineUrl) {
-      try {
-        const queryParams = new URLSearchParams();
-        if (query.from) queryParams.set('from', query.from);
-        if (query.to) queryParams.set('to', query.to);
-        
-        const response = await fetch(
-          new URL(`/v1/analytics/retail/conversion?${queryParams}`, options.analyticsEngineUrl),
-          { signal: AbortSignal.timeout(5_000) }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Transform to expected format
-          const now = Date.now();
-          const avgDwell = data.avgDwellTime || 0;
-          const buckets = Array.from({ length: 24 }).map((_, i) => ({
-            bucket_at: new Date(now - i * 3600_000).toISOString(),
-            average_seconds: Math.floor(avgDwell),
-            maximum_seconds: Math.floor(avgDwell * 1.5),
-            sample_count: Math.floor((data.totalVisitors || 0) / 24),
-          }));
-          return reply.send({ data: buckets.reverse() });
-        }
-      } catch (error) {
-        app.log.warn({ error, cameraId: id }, "Analytics engine dwell-time query failed, using fallback");
-      }
-    }
-
-    // Fallback to empty data
-    const now = Date.now();
-    const buckets = Array.from({ length: 24 }).map((_, i) => ({
-      bucket_at: new Date(now - i * 3600_000).toISOString(),
-      average_seconds: 0,
-      maximum_seconds: 0,
-      sample_count: 0,
-    }));
-    return reply.send({ data: buckets.reverse() });
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["loitering", "dwell-time"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateDwell(events.slice(0, 10_000), query.interval), events));
   });
 
   app.get("/v1/cameras/:id/analytics/queue", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const query = analyticsQuery.parse(request.query);
-    
-    // Check camera access
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
     if (!camera) return;
-
-    // Try to get real data from analytics engine
-    if (options.analyticsEngineUrl) {
-      try {
-        const queryParams = new URLSearchParams();
-        if (query.from) queryParams.set('from', query.from);
-        if (query.to) queryParams.set('to', query.to);
-        
-        const response = await fetch(
-          new URL(`/v1/analytics/retail/queue-analytics?${queryParams}`, options.analyticsEngineUrl),
-          { signal: AbortSignal.timeout(5_000) }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Transform to expected format
-          const now = Date.now();
-          const queues = data.queues || [];
-          const avgLength = queues.length > 0 
-            ? queues.reduce((sum: number, q: any) => sum + (q.currentLength || 0), 0) / queues.length 
-            : 0;
-          const maxLength = queues.length > 0
-            ? Math.max(...queues.map((q: any) => q.currentLength || 0))
-            : 0;
-          
-          const buckets = Array.from({ length: 24 }).map((_, i) => ({
-            bucket_at: new Date(now - i * 3600_000).toISOString(),
-            average_count: Math.floor(avgLength),
-            maximum_count: Math.floor(maxLength),
-          }));
-          return reply.send({ data: buckets.reverse() });
-        }
-      } catch (error) {
-        app.log.warn({ error, cameraId: id }, "Analytics engine queue query failed, using fallback");
-      }
-    }
-
-    // Fallback to empty data
-    const now = Date.now();
-    const buckets = Array.from({ length: 24 }).map((_, i) => ({
-      bucket_at: new Date(now - i * 3600_000).toISOString(),
-      average_count: 0,
-      maximum_count: 0,
-    }));
-    return reply.send({ data: buckets.reverse() });
+    const range = metricRange(query);
+    const events = await store.listAnalyticsEvents(request.currentUser.tenantId, {
+      cameraId: id, ...range,
+      detectionTypes: ["queue", "queue-length"],
+      limit: metricEventLimit,
+    });
+    return reply.send(metricSeriesResponse(aggregateQueue(events.slice(0, 10_000), query.interval), events));
   });
+}
+
+function metricSeriesResponse<T>(data: T[], loadedEvents: AnalyticsEvent[]) {
+  return {
+    data,
+    basis: "persisted_analytics_events",
+    truncated: loadedEvents.length > 10_000,
+  };
+}
+
+function eventBucket(timestamp: string, interval: "hour" | "day") {
+  const date = new Date(timestamp);
+  date.setUTCMinutes(0, 0, 0);
+  if (interval === "day") date.setUTCHours(0, 0, 0, 0);
+  return date.toISOString();
+}
+
+function finiteMetadataNumber(metadata: Record<string, unknown>, ...keys: string[]) {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+  }
+  return undefined;
+}
+
+function aggregateFootfall(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; entries: number; exits: number; total_crossings: number }>();
+  for (const event of events) {
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, entries: 0, exits: 0, total_crossings: 0 };
+    const direction = typeof event.metadata.direction === "string" ? event.metadata.direction.toLowerCase() : "unknown";
+    const entries = finiteMetadataNumber(event.metadata, "entries", "entryCount") ??
+      (["entry", "enter", "a-to-b"].includes(direction) ? 1 : 0);
+    const exits = finiteMetadataNumber(event.metadata, "exits", "exitCount") ??
+      (["exit", "leave", "b-to-a"].includes(direction) ? 1 : 0);
+    bucket.entries += Math.max(0, entries);
+    bucket.exits += Math.max(0, exits);
+    bucket.total_crossings += Math.max(0,
+      finiteMetadataNumber(event.metadata, "totalCrossings", "crossings") ?? Math.max(1, entries + exits));
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()].sort((left, right) => left.bucket_at.localeCompare(right.bucket_at));
+}
+
+function aggregateDwell(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; total: number; maximum: number; samples: number }>();
+  for (const event of events) {
+    const seconds = finiteMetadataNumber(event.metadata, "dwellTimeSeconds", "dwellSeconds", "durationSeconds")
+      ?? event.durationSeconds;
+    if (!Number.isFinite(seconds) || seconds < 0) continue;
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, total: 0, maximum: 0, samples: 0 };
+    bucket.total += seconds;
+    bucket.maximum = Math.max(bucket.maximum, seconds);
+    bucket.samples += 1;
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()]
+    .sort((left, right) => left.bucket_at.localeCompare(right.bucket_at))
+    .map((bucket) => ({
+      bucket_at: bucket.bucket_at,
+      average_seconds: bucket.samples ? bucket.total / bucket.samples : 0,
+      maximum_seconds: bucket.maximum,
+      sample_count: bucket.samples,
+    }));
+}
+
+function aggregateQueue(events: AnalyticsEvent[], interval: "hour" | "day") {
+  const buckets = new Map<string, { bucket_at: string; total: number; maximum: number; samples: number }>();
+  for (const event of events) {
+    const queueRows = Array.isArray(event.metadata.queues) ? event.metadata.queues : [];
+    const lengths = queueRows.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const row = item as Record<string, unknown>;
+      const value = finiteMetadataNumber(row, "length", "queueLength", "currentLength");
+      return value === undefined ? [] : [value];
+    });
+    if (lengths.length === 0 && event.objects.length > 0) lengths.push(event.objects.length);
+    if (lengths.length === 0) continue;
+    const bucketAt = eventBucket(event.occurredAt, interval);
+    const bucket = buckets.get(bucketAt) ?? { bucket_at: bucketAt, total: 0, maximum: 0, samples: 0 };
+    for (const length of lengths) {
+      bucket.total += Math.max(0, length);
+      bucket.maximum = Math.max(bucket.maximum, length);
+      bucket.samples += 1;
+    }
+    buckets.set(bucketAt, bucket);
+  }
+  return [...buckets.values()]
+    .sort((left, right) => left.bucket_at.localeCompare(right.bucket_at))
+    .map((bucket) => ({
+      bucket_at: bucket.bucket_at,
+      average_count: bucket.samples ? bucket.total / bucket.samples : 0,
+      maximum_count: bucket.maximum,
+    }));
 }
 
 function publishAlert(alert: AnalyticsAlert, type: "alert.created" | "alert.updated") {

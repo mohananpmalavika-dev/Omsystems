@@ -606,6 +606,21 @@ export class MemoryStore {
   readonly videoWallLayouts: VideoWallLayout[] = [];
   readonly discoveries = new Map<string, DiscoveredCamera>();
   readonly auditEvents: AuditEventInput[] = [];
+  readonly userActionLogs: Array<{
+    id: string;
+    userId: string;
+    tenantId: string;
+    sessionId: string;
+    pageVisitId: string | null;
+    actionType: string;
+    actionCategory: string;
+    actionTarget: string | null;
+    actionDescription: string | null;
+    moduleName: string;
+    featureName: string | null;
+    actionMetadata: unknown;
+    createdAt: string;
+  }> = [];
   readonly liveSessions = new Map<
     string,
     LiveSession & { tokenHash: string; consumed: boolean }
@@ -3413,6 +3428,24 @@ export class MemoryStore {
     return { event, alerts, rules: matchingRules };
   }
 
+  async listAnalyticsEvents(
+    inputTenantId: string,
+    filters: Parameters<ControlPlaneStore["listAnalyticsEvents"]>[1],
+  ) {
+    const detectionTypes = filters.detectionTypes ? new Set(filters.detectionTypes) : undefined;
+    const cameraIds = filters.cameraIds ? new Set(filters.cameraIds) : undefined;
+    return this.analyticsEvents
+      .filter((event) => event.tenantId === inputTenantId)
+      .filter((event) => !filters.cameraId || event.cameraId === filters.cameraId)
+      .filter((event) => !cameraIds || cameraIds.has(event.cameraId))
+      .filter((event) => !filters.from || event.occurredAt >= filters.from)
+      .filter((event) => !filters.to || event.occurredAt <= filters.to)
+      .filter((event) => !detectionTypes || detectionTypes.has(event.detectionType))
+      .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
+      .slice(0, filters.limit)
+      .map((event) => structuredClone(event));
+  }
+
   async listAnalyticsAlerts(
     inputTenantId: string,
     filters: Parameters<ControlPlaneStore["listAnalyticsAlerts"]>[1],
@@ -3715,6 +3748,36 @@ export class MemoryStore {
 
   async writeAudit(event: AuditEventInput) {
     this.auditEvents.push(structuredClone(event));
+  }
+
+  async logUserAction(
+    userId: string,
+    inputTenantId: string,
+    sessionId: string,
+    pageVisitId: string | null,
+    actionType: string,
+    actionCategory: string,
+    actionTarget: string | null,
+    actionDescription: string | null,
+    moduleName: string,
+    featureName: string | null,
+    actionMetadata: unknown,
+  ) {
+    this.userActionLogs.push({
+      id: randomUUID(),
+      userId,
+      tenantId: inputTenantId,
+      sessionId,
+      pageVisitId,
+      actionType,
+      actionCategory,
+      actionTarget,
+      actionDescription,
+      moduleName,
+      featureName,
+      actionMetadata: structuredClone(actionMetadata),
+      createdAt: new Date().toISOString(),
+    });
   }
 
   // ============ HEALTH MONITORING ============

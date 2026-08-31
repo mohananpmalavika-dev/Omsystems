@@ -1080,6 +1080,17 @@ export type AnalyticsDashboardSummary = {
   branch: { id: string; name: string; eventCount: number };
 };
 
+export type CameraMetricSeries<T> = {
+  data: T[];
+  basis: "persisted_analytics_events";
+  truncated: boolean;
+};
+
+function analyticsMetricInterval(range: { from: string; to: string }) {
+  const durationMs = Date.parse(range.to) - Date.parse(range.from);
+  return durationMs > 7 * 24 * 60 * 60 * 1_000 ? "day" : "hour";
+}
+
 export const analyticsApi = {
   capabilities: () => fetchApi<any>('/v1/analytics/capabilities'),
   engineHealth: () => fetchApi<any>('/v1/analytics/engine-health'),
@@ -1090,23 +1101,23 @@ export const analyticsApi = {
     );
   },
   cameraFootfall: (cameraId: string, range: { from: string; to: string }) => {
-    const query = new URLSearchParams({ ...range, interval: 'hour' });
-    return fetchApi<{ data: Array<{
+    const query = new URLSearchParams({ ...range, interval: analyticsMetricInterval(range) });
+    return fetchApi<CameraMetricSeries<{
       bucket_at: string; entries: number; exits: number; total_crossings: number;
-    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/footfall?${query}`);
+    }>>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/footfall?${query}`);
   },
   cameraDwellTime: (cameraId: string, range: { from: string; to: string }) => {
-    const query = new URLSearchParams({ ...range, interval: 'hour' });
-    return fetchApi<{ data: Array<{
+    const query = new URLSearchParams({ ...range, interval: analyticsMetricInterval(range) });
+    return fetchApi<CameraMetricSeries<{
       bucket_at: string; average_seconds: number; maximum_seconds: number; sample_count: number;
       zone_name?: string;
-    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/dwell-time?${query}`);
+    }>>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/dwell-time?${query}`);
   },
   cameraQueue: (cameraId: string, range: { from: string; to: string }) => {
-    const query = new URLSearchParams({ ...range, interval: 'hour' });
-    return fetchApi<{ data: Array<{
+    const query = new URLSearchParams({ ...range, interval: analyticsMetricInterval(range) });
+    return fetchApi<CameraMetricSeries<{
       bucket_at: string; average_count: number; maximum_count: number; zone_name?: string;
-    }> }>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/queue?${query}`);
+    }>>(`/v1/cameras/${encodeURIComponent(cameraId)}/analytics/queue?${query}`);
   },
   exportBranchCsv: (branchId: string, range: { from: string; to: string }) => {
     const query = new URLSearchParams(range);
@@ -1303,6 +1314,31 @@ export type AnprEvent = {
   occurredAt?: string;
 };
 
+export type AnprWatchlistPlate = {
+  id: string;
+  plate_number?: string;
+  plateNumber?: string;
+  country_code?: string;
+  countryCode?: string;
+  region_code?: string | null;
+  regionCode?: string | null;
+  vehicle_make?: string | null;
+  vehicleMake?: string | null;
+  vehicle_model?: string | null;
+  vehicleModel?: string | null;
+  vehicle_color?: string | null;
+  vehicleColor?: string | null;
+  vehicle_type?: string | null;
+  vehicleType?: string | null;
+  owner_name?: string | null;
+  ownerName?: string | null;
+  reason?: string;
+  expires_at?: string | null;
+  expiresAt?: string | null;
+  match_count?: number | string;
+  matchCount?: number | string;
+};
+
 export const identityAnalyticsApi = {
   listFaceWatchlists: () =>
     fetchApi<{ data: IdentityWatchlist[] }>('/v1/analytics/face-watchlists'),
@@ -1348,6 +1384,10 @@ export const identityAnalyticsApi = {
   }) => fetchApi<{ data: IdentityWatchlist }>('/v1/analytics/anpr-watchlists', {
     method: 'POST', body: JSON.stringify(data),
   }),
+  listAnprPlates: (watchlistId: string) =>
+    fetchApi<{ data: AnprWatchlistPlate[] }>(
+      `/v1/analytics/anpr-watchlists/${encodeURIComponent(watchlistId)}/plates`,
+    ),
   addAnprPlate: (watchlistId: string, data: {
     plateNumber: string;
     countryCode: string;
