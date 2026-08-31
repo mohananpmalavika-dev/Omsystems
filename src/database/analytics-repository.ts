@@ -17,6 +17,7 @@ import type {
 } from "../control-plane-store.js";
 import {
   analyticsAlertTitle,
+  eventDetectionTypes,
   isTerminalAlertStatus,
   sortedMatchingRules,
 } from "../analytics/rule-engine.js";
@@ -277,8 +278,8 @@ export class AnalyticsRepository {
         `${ruleSelection}
          WHERE rule.camera_id=$1 AND rule.tenant_id=$2
            AND rule.enabled AND rule.archived_at IS NULL
-           AND rule.detection_type=$3`,
-        [input.cameraId, input.tenantId, input.detectionType],
+           AND rule.detection_type = ANY($3::text[])`,
+        [input.cameraId, input.tenantId, eventDetectionTypes(input)],
       );
       const rules = sortedMatchingRules(candidates.rows.map(mapRule), input);
       const eventId = randomUUID();

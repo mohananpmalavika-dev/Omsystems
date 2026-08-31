@@ -13,13 +13,16 @@ import type {
 } from '../domain/soc-analytics.types.js';
 
 export class SocOperatorAnalyticsService {
-  private readonly records: IncidentLifecycleRecord[] = [];
+  private readonly records = new Map<string, IncidentLifecycleRecord>();
 
   /**
    * Ingest an incident lifecycle event.
    */
   async recordIncidentLifecycle(record: IncidentLifecycleRecord): Promise<void> {
-    this.records.push(record);
+    validateLifecycle(record);
+    const key = `${record.tenantId}:${record.incidentId}`;
+    const existing = this.records.get(key);
+    this.records.set(key, cloneLifecycle(existing ? { ...existing, ...record } : record));
   }
 
   /**
@@ -121,8 +124,14 @@ export class SocOperatorAnalyticsService {
    * Filter records based on criteria.
    */
   private filterRecords(filter?: SocAnalyticsFilter): IncidentLifecycleRecord[] {
-    if (!filter) return this.records;
-    return this.records.filter((r) => {
+    const records = [...this.records.values()];
+    if (!filter) return records;
+    const start = filter.startDate ? Date.parse(filter.startDate) : Number.NEGATIVE_INFINITY;
+    const end = filter.endDate ? Date.parse(filter.endDate) : Number.POSITIVE_INFINITY;
+    if (Number.isNaN(start) || Number.isNaN(end) || start > end) {
+      throw new Error("invalid_soc_analytics_date_range");
+    }
+    return records.filter((r) => {
       if (filter.tenantId && r.tenantId !== filter.tenantId) return false;
       if (filter.branchId && r.branchId !== filter.branchId) return false;
       if (filter.regionId && r.regionId !== filter.regionId) return false;
@@ -130,6 +139,8 @@ export class SocOperatorAnalyticsService {
       if (filter.shift && r.shift !== filter.shift) return false;
       if (filter.alertType && r.alertType !== filter.alertType) return false;
       if (filter.priority && r.priority !== filter.priority) return false;
+      const triggeredAt = r.triggeredAt.getTime();
+      if (triggeredAt < start || triggeredAt > end) return false;
       return true;
     });
   }
@@ -138,14 +149,15 @@ export class SocOperatorAnalyticsService {
    * 1. Get Fleetwide Executive Dashboard Summary with all 5 breakdown dimensions.
    */
   async getDashboardSummary(period = 'LAST_30_DAYS', filter?: SocAnalyticsFilter): Promise<SocAnalyticsDashboardSummary> {
-    const dataset = this.filterRecords(filter);
+    const effectiveFilter = filterForPeriod(period, filter);
+    const dataset = this.filterRecords(effectiveFilter);
     const fleetSummary = this.aggregateMetrics(dataset);
 
-    const byBranch = await this.getMetricsByBranch(filter);
-    const byRegion = await this.getMetricsByRegion(filter);
-    const byOperator = await this.getMetricsByOperator(filter);
-    const byShift = await this.getMetricsByShift(filter);
-    const byAlertType = await this.getMetricsByAlertType(filter);
+    const byBranch = await this.getMetricsByBranch(effectiveFilter);
+    const byRegion = await this.getMetricsByRegion(effectiveFilter);
+    const byOperator = await this.getMetricsByOperator(effectiveFilter);
+    const byShift = await this.getMetricsByShift(effectiveFilter);
+    const byAlertType = await this.getMetricsByAlertType(effectiveFilter);
 
     return {
       period,
@@ -317,3 +329,52 @@ export class SocOperatorAnalyticsService {
 }
 
 export const socOperatorAnalyticsService = new SocOperatorAnalyticsService();
+
+function validateLifecycle(record: IncidentLifecycleRecord) {
+  const triggeredAt = record.triggeredAt.getTime();
+  if (!record.tenantId.trim() || !record.incidentId.trim() || !Number.isFinite(triggeredAt)) {
+    throw new Error("invalid_incident_lifecycle");
+  }
+  const ordered = [
+    record.acknowledgedAt,
+    record.investigationStartedAt,
+    record.resolvedAt,
+  ].filter((value): value is Date => value !== undefined);
+  if (ordered.some((value) => !Number.isFinite(value.getTime()) || value.getTime() < triggeredAt)) {
+    throw new Error("invalid_incident_lifecycle_order");
+  }
+  if (record.acknowledgedAt && record.investigationStartedAt &&
+      record.investigationStartedAt < record.acknowledgedAt) {
+    throw new Error("invalid_incident_lifecycle_order");
+  }
+}
+
+function cloneLifecycle(record: IncidentLifecycleRecord): IncidentLifecycleRecord {
+  return {
+    ...record,
+    triggeredAt: new Date(record.triggeredAt),
+    ...(record.acknowledgedAt ? { acknowledgedAt: new Date(record.acknowledgedAt) } : {}),
+    ...(record.investigationStartedAt
+      ? { investigationStartedAt: new Date(record.investigationStartedAt) }
+      : {}),
+    ...(record.resolvedAt ? { resolvedAt: new Date(record.resolvedAt) } : {}),
+  };
+}
+
+function filterForPeriod(period: string, filter?: SocAnalyticsFilter): SocAnalyticsFilter | undefined {
+  if (filter?.startDate || filter?.endDate || period === "ALL_TIME" || period === "CUSTOM") return filter;
+  const durations: Record<string, number> = {
+    LAST_24_HOURS: 24 * 60 * 60 * 1_000,
+    LAST_7_DAYS: 7 * 24 * 60 * 60 * 1_000,
+    LAST_30_DAYS: 30 * 24 * 60 * 60 * 1_000,
+    LAST_90_DAYS: 90 * 24 * 60 * 60 * 1_000,
+  };
+  const duration = durations[period];
+  if (!duration) return filter;
+  const end = new Date();
+  return {
+    ...filter,
+    startDate: new Date(end.getTime() - duration).toISOString(),
+    endDate: end.toISOString(),
+  };
+}

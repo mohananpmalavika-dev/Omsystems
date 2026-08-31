@@ -31,6 +31,11 @@ import {
   CAMERA_AI_SETUP_REQUIRED,
   ensureCameraAiBundle,
 } from "../analytics/camera-ai-bundle.js";
+import {
+  activeAnprRegistryMatches,
+  normalizePlateNumber,
+  recordAnprRegistryMatches,
+} from "../analytics/identity-registry.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -117,6 +122,68 @@ const alertListQuery = z.object({
   from: z.string().datetime().optional(), to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
+
+async function enrichAnprMetadata(
+  store: ControlPlaneStore,
+  tenantId: string,
+  metadata: Record<string, unknown>,
+) {
+  const plateNumbers = anprPlateNumbers(metadata);
+  const registrations = await activeAnprRegistryMatches(store, tenantId, plateNumbers);
+  if (registrations.length === 0) return { metadata, matchedPlateIds: [] as string[] };
+
+  const matches = new Map<string, Record<string, unknown>>();
+  for (const registration of registrations) {
+    matches.set(`${registration.watchlistId}:${registration.plateNumber}`, {
+      plateId: registration.plateId,
+      plateNumber: registration.plateNumber,
+      watchlistId: registration.watchlistId,
+      watchlistName: registration.watchlistName,
+      reason: registration.reason,
+      severity: registration.severity,
+      alertAuthorities: registration.alertAuthorities,
+      alertOnMatch: registration.alertOnMatch,
+    });
+  }
+  for (const value of Array.isArray(metadata.matches) ? metadata.matches : []) {
+    const match = asUnknownRecord(value);
+    const plateNumber = stringMetadata(match, "plateNumber", "plate_number");
+    if (!match || !plateNumber) continue;
+    const watchlistId = stringMetadata(match, "watchlistId", "watchlist_id") ?? "engine";
+    const key = `${watchlistId}:${normalizePlateNumber(plateNumber)}`;
+    if (!matches.has(key)) matches.set(key, match);
+  }
+  return {
+    metadata: { ...metadata, matches: [...matches.values()] },
+    matchedPlateIds: registrations.map((registration) => registration.plateId),
+  };
+}
+
+function anprPlateNumbers(metadata: Record<string, unknown>) {
+  const plates = new Set<string>();
+  for (const value of Array.isArray(metadata.readings) ? metadata.readings : []) {
+    const plate = stringMetadata(asUnknownRecord(value), "plateNumber", "plate_number");
+    if (plate) plates.add(normalizePlateNumber(plate));
+  }
+  for (const value of Array.isArray(metadata.plates) ? metadata.plates : []) {
+    if (typeof value === "string" && value.trim()) plates.add(normalizePlateNumber(value));
+  }
+  return [...plates];
+}
+
+function asUnknownRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function stringMetadata(record: Record<string, unknown> | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
 
 export async function registerAnalyticsRoutes(
   app: FastifyInstance,
@@ -469,6 +536,9 @@ export async function registerAnalyticsRoutes(
   app.post("/internal/analytics/events", async (request, reply) => {
     if (!engineIdentity(request, reply, options.analyticsEngineSharedKey)) return;
     const input = eventSchema.parse(request.body);
+    const anprEnrichment = input.detectionType === "anpr"
+      ? await enrichAnprMetadata(store, input.tenantId, input.metadata)
+      : { metadata: input.metadata, matchedPlateIds: [] as string[] };
     
     // Ensure all required fields are present
     const eventInput: any = {
@@ -484,10 +554,18 @@ export async function registerAnalyticsRoutes(
       ...(input.endedAt !== undefined && { endedAt: input.endedAt }),
       ...(input.snapshotReference !== undefined && { snapshotReference: input.snapshotReference }),
       ...(input.clipReference !== undefined && { clipReference: input.clipReference }),
-      metadata: input.metadata,
+      metadata: anprEnrichment.metadata,
     };
     
     const result = await store.processAnalyticsEvent(eventInput);
+    if (result.event.status !== "duplicate") {
+      await recordAnprRegistryMatches(
+        store,
+        input.tenantId,
+        anprEnrichment.matchedPlateIds,
+        input.occurredAt,
+      );
+    }
     for (let index = 0; index < result.alerts.length; index += 1) {
       const alert = result.alerts[index]!;
       const rule = result.rules.find((item) => item.id === alert.ruleId);
