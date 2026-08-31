@@ -213,7 +213,13 @@ export function EnhancedCameraGrid({
   }, [attachVideoElement]);
 
   const handleTilePlaybackError = useCallback((cameraId: string, reason?: string) => {
-    setLiveErrors((current) => new Map(current).set(cameraId, reason ?? "HLS playback failed"));
+    const errorMsg = reason ?? "HLS playback failed";
+    setLiveErrors((current) => {
+      if (current.get(cameraId) === errorMsg) return current;
+      const next = new Map(current);
+      next.set(cameraId, errorMsg);
+      return next;
+    });
     reportPlaybackFailure(cameraId, reason);
   }, [reportPlaybackFailure]);
 
@@ -267,9 +273,13 @@ export function EnhancedCameraGrid({
         : "LIVE_SUBSTREAM";
       updateStreamState(cameraId, streamState);
     } catch (error) {
-      console.warn("Live session startup failed for", cameraId, error);
       const reason = error instanceof Error ? error.message : "Unknown error";
-      setLiveErrors((current) => new Map(current).set(cameraId, reason));
+      setLiveErrors((current) => {
+        if (current.get(cameraId) === reason) return current;
+        const next = new Map(current);
+        next.set(cameraId, reason);
+        return next;
+      });
       updateStreamState(cameraId, "ERROR", reason);
       reportPlaybackFailure(cameraId, reason);
     } finally {

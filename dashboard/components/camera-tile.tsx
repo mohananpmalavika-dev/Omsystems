@@ -18,7 +18,7 @@ import {
   VolumeX,
   SlidersHorizontal,
 } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
@@ -60,7 +60,7 @@ function shouldOfferCredentialUpdate(reason?: string) {
     normalized.includes("unauthorized camera");
 }
 
-export function CameraTile({
+function CameraTileComponent({
   camera,
   session,
   loading,
@@ -230,7 +230,7 @@ export function CameraTile({
               cameraName={camera.name}
               cameraId={camera.id}
               muted={isMuted}
-              onPlaybackError={() => onPlaybackError?.("HLS playback failed")}
+              onPlaybackError={onPlaybackError}
               onVideoElementChange={handleVideoElementChange}
             />
           ) : snapshotUrl ? (
@@ -248,7 +248,7 @@ export function CameraTile({
                   className="camera-login-link"
                   href={`/admin/branch-onboarding?branchId=${encodeURIComponent(camera.branchId)}&cameraId=${encodeURIComponent(camera.id)}&action=camera-login`}
                 >
-                  Update camera login
+                  Configure credentials
                 </Link>
               )}
             </div>
@@ -502,3 +502,5 @@ export function CameraTile({
     </article>
   );
 }
+
+export const CameraTile = memo(CameraTileComponent);

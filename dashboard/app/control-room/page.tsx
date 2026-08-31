@@ -176,6 +176,21 @@ function formatFailedSections(sections: DataSection[]) {
   return sections.map((section) => labels[section]).join(", ");
 }
 
+function HeaderClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
+    return () => window.clearInterval(clockTimer);
+  }, []);
+
+  return (
+    <time className="header-time" dateTime={now.toISOString()}>
+      <Clock size={16} aria-hidden="true" />
+      {now.toLocaleString()}
+    </time>
+  );
+}
+
 export default function ControlRoomPage() {
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
@@ -188,7 +203,6 @@ export default function ControlRoomPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
-  const [now, setNow] = useState(() => new Date());
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
   const monitoredCameraSignatureRef = useRef("");
   const monitoredCamerasRef = useRef<CameraType[]>([]);
@@ -273,10 +287,8 @@ export default function ControlRoomPage() {
     const refreshTimer = window.setInterval(() => {
       if (document.visibilityState === "visible") void loadData();
     }, 30_000);
-    const clockTimer = window.setInterval(() => setNow(new Date()), 1_000);
     return () => {
       window.clearInterval(refreshTimer);
-      window.clearInterval(clockTimer);
       requestSequenceRef.current += 1;
       requestControllerRef.current?.abort();
     };
@@ -348,10 +360,7 @@ export default function ControlRoomPage() {
             <i />
             {dataMode === "live" ? "Live data" : dataMode === "partial" ? "Partially connected" : "Data unavailable"}
           </span>
-          <time className="header-time" dateTime={now.toISOString()}>
-            <Clock size={16} aria-hidden="true" />
-            {now.toLocaleString()}
-          </time>
+          <HeaderClock />
           <button type="button" className="refresh-button" onClick={() => void loadData()} disabled={refreshing}>
             <RefreshCw size={16} className={refreshing ? "spin" : ""} aria-hidden="true" />
             {refreshing ? "Refreshing" : "Refresh"}
