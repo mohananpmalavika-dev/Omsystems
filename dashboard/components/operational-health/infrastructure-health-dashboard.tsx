@@ -14,6 +14,7 @@
 
 import { useState, useEffect } from "react";
 import { Server, RefreshCw } from "lucide-react";
+import { fetchBranchesHealth } from "@/lib/api/operational-health";
 import { InfrastructureHealthScoreWidget } from "./infrastructure-health-score-widget";
 import { ActiveInfrastructureIncidentsWidget } from "./active-infrastructure-incidents-widget";
 import { RootCauseBreakdownWidget } from "./root-cause-breakdown-widget";
@@ -30,7 +31,7 @@ export function InfrastructureHealthDashboard() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -44,12 +45,7 @@ export function InfrastructureHealthDashboard() {
       let offset = 0;
       let total = 0;
       do {
-        const response = await fetch(`/api/control/v1/operations/health/branches?limit=500&offset=${offset}`, {
-          cache: "no-store",
-          credentials: "include",
-        });
-        if (!response.ok) throw new Error("Failed to load branches");
-        const { data } = await response.json();
+        const data = await fetchBranchesHealth({ limit: 500, offset });
         const page: Branch[] = data?.branches ?? [];
         branchList.push(...page);
         total = Number(data?.total ?? page.length);

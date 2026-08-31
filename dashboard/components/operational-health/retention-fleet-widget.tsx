@@ -15,9 +15,15 @@ export function RetentionFleetWidget({ detailed = false, autoRefresh = true, ref
   const [message, setMessage] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-sentinel-session"] = token;
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const [retentionResponse, policyResponse] = await Promise.all([
-        fetch("/api/control/v1/operations/health/retention", { cache: "no-store" }),
-        fetch("/api/control/v1/operations/health/policy", { cache: "no-store" }),
+        fetch("/api/control/v1/operations/health/retention", { cache: "no-store", credentials: "include", headers }),
+        fetch("/api/control/v1/operations/health/policy", { cache: "no-store", credentials: "include", headers }),
       ]);
       if (!retentionResponse.ok) throw new Error("Retention health is unavailable");
       setItems((await retentionResponse.json()).data.items ?? []);
@@ -37,8 +43,14 @@ export function RetentionFleetWidget({ detailed = false, autoRefresh = true, ref
 
   const savePolicy = async () => {
     if (!policy) return;
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const headers: Record<string, string> = { "content-type": "application/json" };
+    if (token) {
+      headers["x-sentinel-session"] = token;
+      headers["Authorization"] = `Bearer ${token}`;
+    }
     const response = await fetch("/api/control/v1/operations/health/policy", {
-      method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ policy }),
+      method: "PUT", headers, credentials: "include", body: JSON.stringify({ policy }),
     });
     if (!response.ok) { setMessage("You do not have permission to update the retention policy."); return; }
     setMessage("Retention thresholds saved.");

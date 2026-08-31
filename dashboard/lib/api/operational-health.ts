@@ -36,11 +36,34 @@ import {
 
 const API_BASE = '/api/control/v1/operations';
 
+function getAuthHeaders(customHeaders?: HeadersInit): Headers {
+  const headers = new Headers(customHeaders);
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('accessToken');
+    if (token) {
+      headers.set('x-sentinel-session', token);
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+    }
+  }
+  return headers;
+}
+
+async function authFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  const headers = getAuthHeaders(init.headers);
+  return fetch(url, {
+    ...init,
+    credentials: 'include',
+    headers,
+  });
+}
+
 /**
  * Fetch health summary
  */
 export async function fetchHealthSummary(): Promise<HealthSummary> {
-  const response = await fetch(`${API_BASE}/health/summary`);
+  const response = await authFetch(`${API_BASE}/health/summary`);
   if (!response.ok) throw new Error('Failed to fetch health summary');
   const data: ApiResponse<HealthSummary> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -57,7 +80,7 @@ export async function fetchBranchesHealth(filters?: BranchHealthFilters) {
   if (filters?.limit) params.append('limit', filters.limit.toString());
   if (filters?.offset) params.append('offset', filters.offset.toString());
   
-  const response = await fetch(`${API_BASE}/health/branches?${params}`);
+  const response = await authFetch(`${API_BASE}/health/branches?${params}`);
   if (!response.ok) throw new Error('Failed to fetch branches health');
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Invalid response');
@@ -68,7 +91,7 @@ export async function fetchBranchesHealth(filters?: BranchHealthFilters) {
  * Fetch branch health detail
  */
 export async function fetchBranchHealthDetail(branchId: string): Promise<BranchHealthDetail> {
-  const response = await fetch(`${API_BASE}/health/branches/${branchId}`);
+  const response = await authFetch(`${API_BASE}/health/branches/${branchId}`);
   if (!response.ok) throw new Error('Failed to fetch branch health');
   const data: ApiResponse<BranchHealthDetail> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -82,7 +105,7 @@ export async function fetchBranchHealthDetail(branchId: string): Promise<BranchH
  * branch health model meant to be consumed by the Branch Command Center UI.
  */
 export async function fetchBranchOperationalSnapshot(branchId: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/health/branches/${branchId}/operational-snapshot`);
+  const response = await authFetch(`${API_BASE}/health/branches/${branchId}/operational-snapshot`);
   if (!response.ok) throw new Error('Failed to fetch branch operational snapshot');
   const data: ApiResponse<any> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -100,7 +123,7 @@ export async function fetchCamerasHealth(filters?: CameraHealthFilters) {
   if (filters?.limit) params.append('limit', filters.limit.toString());
   if (filters?.offset) params.append('offset', filters.offset.toString());
   
-  const response = await fetch(`${API_BASE}/health/cameras?${params}`);
+  const response = await authFetch(`${API_BASE}/health/cameras?${params}`);
   if (!response.ok) throw new Error('Failed to fetch cameras health');
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Invalid response');
@@ -122,7 +145,7 @@ export async function fetchAllCamerasHealth(filters?: Omit<CameraHealthFilters, 
  */
 export async function fetchRecordingHealth(branchId?: string): Promise<RecordingHealth> {
   const params = branchId ? `?branchId=${branchId}` : '';
-  const response = await fetch(`${API_BASE}/health/recording${params}`);
+  const response = await authFetch(`${API_BASE}/health/recording${params}`);
   if (!response.ok) throw new Error('Failed to fetch recording health');
   const data: ApiResponse<RecordingHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -134,7 +157,7 @@ export async function fetchRecordingHealth(branchId?: string): Promise<Recording
  */
 export async function fetchStorageHealth(branchId?: string): Promise<StorageHealth> {
   const params = branchId ? `?branchId=${branchId}` : '';
-  const response = await fetch(`${API_BASE}/health/storage${params}`);
+  const response = await authFetch(`${API_BASE}/health/storage${params}`);
   if (!response.ok) throw new Error('Failed to fetch storage health');
   const data: ApiResponse<StorageHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -149,7 +172,7 @@ export async function fetchDisksHealth(filters?: DiskHealthFilters): Promise<Dis
   if (filters?.branchId) params.append('branchId', filters.branchId);
   if (filters?.status) params.append('status', filters.status);
   
-  const response = await fetch(`${API_BASE}/health/disks?${params}`);
+  const response = await authFetch(`${API_BASE}/health/disks?${params}`);
   if (!response.ok) throw new Error('Failed to fetch disks health');
   const data: ApiResponse<DiskHealth[]> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -161,7 +184,7 @@ export async function fetchDisksHealth(filters?: DiskHealthFilters): Promise<Dis
  */
 export async function fetchNetworkHealth(branchId?: string): Promise<InternetFleetHealth> {
   const params = branchId ? `?branchId=${branchId}` : '';
-  const response = await fetch(`${API_BASE}/health/network${params}`);
+  const response = await authFetch(`${API_BASE}/health/network${params}`);
   if (!response.ok) throw new Error('Failed to fetch network health');
   const data: ApiResponse<InternetFleetHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -170,7 +193,7 @@ export async function fetchNetworkHealth(branchId?: string): Promise<InternetFle
 
 export async function fetchRecordersHealth(branchId?: string): Promise<RecorderFleetHealth> {
   const params = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
-  const response = await fetch(`${API_BASE}/health/recorders${params}`);
+  const response = await authFetch(`${API_BASE}/health/recorders${params}`);
   if (!response.ok) throw new Error('Failed to fetch DVR/NVR health');
   const data: ApiResponse<RecorderFleetHealth> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -185,7 +208,7 @@ export async function fetchUPSHealth(filters?: UPSHealthFilters): Promise<UPSHea
   if (filters?.branchId) params.append('branchId', filters.branchId);
   if (filters?.status) params.append('status', filters.status);
   
-  const response = await fetch(`${API_BASE}/health/ups?${params}`);
+  const response = await authFetch(`${API_BASE}/health/ups?${params}`);
   if (!response.ok) throw new Error('Failed to fetch UPS health');
   const data: ApiResponse<UPSHealth[]> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -200,7 +223,7 @@ export async function fetchEdgeAgentsHealth(filters?: EdgeAgentFilters): Promise
   if (filters?.branchId) params.append('branchId', filters.branchId);
   if (filters?.status) params.append('status', filters.status);
   
-  const response = await fetch(`${API_BASE}/health/edge-agents?${params}`);
+  const response = await authFetch(`${API_BASE}/health/edge-agents?${params}`);
   if (!response.ok) throw new Error('Failed to fetch edge agents health');
   const data: ApiResponse<EdgeAgentHealth[]> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -218,7 +241,7 @@ export async function fetchHealthTrends(filters?: HealthTrendFilters): Promise<H
   if (filters?.endDate) params.append('endDate', filters.endDate);
   if (filters?.interval) params.append('interval', filters.interval);
   
-  const response = await fetch(`${API_BASE}/health/trends?${params}`);
+  const response = await authFetch(`${API_BASE}/health/trends?${params}`);
   if (!response.ok) throw new Error('Failed to fetch health trends');
   const data: ApiResponse<HealthTrend[]> = await response.json();
   if (!data.success || !data.data) throw new Error(data.error || 'Invalid response');
@@ -237,7 +260,7 @@ export async function fetchOperationalAlerts(filters?: AlertFilters) {
   if (filters?.limit) params.append('limit', filters.limit.toString());
   if (filters?.offset) params.append('offset', filters.offset.toString());
   
-  const response = await fetch(`${API_BASE}/alerts?${params}`);
+  const response = await authFetch(`${API_BASE}/alerts?${params}`);
   if (!response.ok) throw new Error('Failed to fetch operational alerts');
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Invalid response');
@@ -253,10 +276,9 @@ export async function acknowledgeAlert(
   alertId: string,
   payload?: AcknowledgeAlertPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/acknowledge`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/acknowledge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include', // Send authentication cookies/headers
     body: JSON.stringify(payload || {}),
   });
   if (!response.ok) throw new Error('Failed to acknowledge alert');
@@ -272,10 +294,9 @@ export async function assignAlert(
   alertId: string,
   payload: AssignAlertPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/assign`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/assign`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to assign alert');
@@ -291,10 +312,9 @@ export async function resolveAlert(
   alertId: string,
   payload: ResolveAlertPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/resolve`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/resolve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to resolve alert');
@@ -307,10 +327,9 @@ export async function escalateAlert(
   alertId: string,
   payload: EscalateAlertPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/escalate`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/escalate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to escalate alert');
@@ -323,10 +342,9 @@ export async function suppressAlert(
   alertId: string,
   payload: SuppressAlertPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/suppress`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/suppress`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to suppress alert');
@@ -339,10 +357,9 @@ export async function addAlertComment(
   alertId: string,
   payload: AddAlertCommentPayload
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/comment`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/comment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw new Error('Failed to add alert comment');
@@ -352,9 +369,7 @@ export async function addAlertComment(
  * Get alert timeline/history
  */
 export async function getAlertTimeline(alertId: string): Promise<any[]> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/timeline`, {
-    credentials: 'include',
-  });
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/timeline`);
   if (!response.ok) throw new Error('Failed to fetch alert timeline');
   const data = await response.json();
   return data.data;
@@ -367,10 +382,9 @@ export async function createWorkOrderFromAlert(
   alertId: string, 
   payload: CreateWorkOrderPayload
 ): Promise<{ workOrderId: string }> {
-  const response = await fetch(`${API_BASE}/alerts/${alertId}/work-order`, {
+  const response = await authFetch(`${API_BASE}/alerts/${alertId}/work-order`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(payload)
   });
   if (!response.ok) throw new Error('Failed to create work order');
@@ -396,10 +410,9 @@ export async function reconnectEdgeAgent(
   camerasAffected: number;
   message: string;
 }> {
-  const response = await fetch(`${API_BASE}/health/edge-agents/${edgeAgentId}/reconnect`, {
+  const response = await authFetch(`${API_BASE}/health/edge-agents/${edgeAgentId}/reconnect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({ reconnectCameras }),
   });
   if (!response.ok) {
@@ -423,11 +436,10 @@ export async function bringCamerasOnline(params: {
   commandIds?: string[];
   status: string;
   message: string;
-}> {
-  const response = await fetch(`${API_BASE}/health/cameras/bulk-online`, {
+  }> {
+  const response = await authFetch(`${API_BASE}/health/cameras/bulk-online`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify(params),
   });
   if (!response.ok) {
@@ -452,10 +464,9 @@ export async function reconnectCamera(
   branchName: string;
   message: string;
 }> {
-  const response = await fetch(`${API_BASE}/health/cameras/${cameraId}/reconnect`, {
+  const response = await authFetch(`${API_BASE}/health/cameras/${cameraId}/reconnect`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
     body: JSON.stringify({}),
   });
   if (!response.ok) {

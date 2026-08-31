@@ -40,7 +40,18 @@ export function RootCauseBreakdownWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch(`/api/control/v1/infrastructure/rca/branch/${branchId}/statistics?days=30`, { cache: "no-store" });
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-sentinel-session"] = token;
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`/api/control/v1/infrastructure/rca/branch/${branchId}/statistics?days=30`, {
+        cache: "no-store",
+        credentials: "include",
+        headers,
+      });
       if (!response.ok) throw new Error("Failed to load statistics");
       
       const { data } = await response.json();

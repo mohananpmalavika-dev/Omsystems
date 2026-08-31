@@ -21,6 +21,7 @@ import {
   getHealthStatusIcon,
   getTimeAgo
 } from "@/lib/types/operational-health";
+import { fetchHealthSummary, fetchOperationalAlerts } from "@/lib/api/operational-health";
 import { BranchHealthMosaic, BranchSummaryWidget, HddFleetWidget, InternetFleetWidget, RecorderFleetWidget, RetentionFleetWidget } from "@/components/operational-health";
 import type { BranchSummaryFilter } from "@/components/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
@@ -45,18 +46,22 @@ export default function OperationalHealthDashboard() {
     try {
       setLoading(true);
       
-      // Fetch health summary
-      const summaryRes = await fetch('/api/control/v1/operations/health/summary', { credentials: 'include' });
-      if (summaryRes.ok) {
-        const data = await summaryRes.json();
-        setSummary(data.data);
+      const [summaryData, alertsData] = await Promise.all([
+        fetchHealthSummary().catch((err) => {
+          console.warn("Failed to fetch health summary:", err);
+          return null;
+        }),
+        fetchOperationalAlerts({ severity: 'critical', status: 'active', limit: 10 }).catch((err) => {
+          console.warn("Failed to fetch critical alerts:", err);
+          return null;
+        }),
+      ]);
+
+      if (summaryData) {
+        setSummary(summaryData);
       }
-      
-      // Fetch critical alerts
-      const alertsRes = await fetch('/api/control/v1/operations/alerts?severity=critical&status=active&limit=10', { credentials: 'include' });
-      if (alertsRes.ok) {
-        const data = await alertsRes.json();
-        setCriticalAlerts(data.data.alerts || []);
+      if (alertsData) {
+        setCriticalAlerts(alertsData.alerts || []);
       }
       
       setLastRefresh(new Date());

@@ -78,11 +78,21 @@ export function BranchHealthMosaic({
 
     try {
       setError(null);
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-sentinel-session"] = token;
+        headers["Authorization"] = `Bearer ${token}`;
+      }
       const loaded = await loadAllBranchHealth(async (offset, limit) => {
         const pageParams = new URLSearchParams(params);
         pageParams.set("limit", String(limit));
         pageParams.set("offset", String(offset));
-        const response = await fetch(`/api/control/v1/operations/health/branches?${pageParams}`, { cache: "no-store" });
+        const response = await fetch(`/api/control/v1/operations/health/branches?${pageParams}`, {
+          cache: "no-store",
+          credentials: "include",
+          headers,
+        });
         if (!response.ok) throw new Error("branch_health_unavailable");
         const body = await response.json();
         return body.data as BranchHealthPage;

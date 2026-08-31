@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { Camera, Network, Shield, Battery, Server, ArrowRight } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
+import { fetchCamerasHealth } from "@/lib/api/operational-health";
 
 interface InfrastructureDevice {
   deviceType: 'camera' | 'recorder' | 'switch' | 'firewall' | 'router' | 'sdwan' | 'network' | 'ups' | 'generator' | 'edge-agent' | 'disk' | 'environment' | 'sensor';
@@ -19,19 +20,17 @@ interface InfrastructureDevice {
 
 interface InfrastructurePathVisualizationProps {
   branchId?: string;
-  refreshKey: number;
+  refreshKey?: number;
+  className?: string;
 }
 
-export function InfrastructurePathVisualization({ 
-  branchId,
-  refreshKey 
-}: InfrastructurePathVisualizationProps) {
+export function InfrastructurePathVisualization({ branchId, refreshKey, className = "" }: InfrastructurePathVisualizationProps) {
   const [cameras, setCameras] = useState<any[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState<string>("");
+  const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
   const [path, setPath] = useState<InfrastructureDevice[]>([]);
   const [graphCoverage, setGraphCoverage] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (branchId) {
@@ -48,10 +47,7 @@ export function InfrastructurePathVisualization({
   const loadCameras = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/control/v1/operations/health/cameras?branchId=${encodeURIComponent(branchId!)}&limit=500`, { cache: "no-store" });
-      if (!response.ok) throw new Error("Failed to load cameras");
-      
-      const { data } = await response.json();
+      const data = await fetchCamerasHealth({ branchId: branchId || undefined, limit: 500 });
       const cameraList = data?.cameras ?? [];
       setCameras(cameraList);
       
@@ -176,7 +172,7 @@ export function InfrastructurePathVisualization({
             )}
             {cameras.length > 0 && (
               <select
-                value={selectedCamera}
+                value={selectedCamera ?? ""}
                 onChange={(e) => setSelectedCamera(e.target.value)}
                 className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >

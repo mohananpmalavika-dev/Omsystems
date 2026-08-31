@@ -59,12 +59,26 @@ export function InfrastructureHealthScoreWidget({
     }
   }, [branchId, refreshKey]);
 
+  const getHeaders = () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["x-sentinel-session"] = token;
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return headers;
+  };
+
   const loadHealthScore = async () => {
     try {
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch(`/api/control/v1/infrastructure/health/${branchId}`, { cache: "no-store" });
+      const response = await fetch(`/api/control/v1/infrastructure/health/${branchId}`, {
+        cache: "no-store",
+        credentials: "include",
+        headers: getHeaders(),
+      });
       if (!response.ok) throw new Error("Failed to load health score");
       
       const { data } = await response.json();
@@ -81,7 +95,11 @@ export function InfrastructureHealthScoreWidget({
       setLoading(true);
       setError(undefined);
       
-      const response = await fetch("/api/control/v1/infrastructure/health/tenant/summary", { cache: "no-store" });
+      const response = await fetch("/api/control/v1/infrastructure/health/tenant/summary", {
+        cache: "no-store",
+        credentials: "include",
+        headers: getHeaders(),
+      });
       if (!response.ok) throw new Error("Failed to load tenant summary");
       
       const { data } = await response.json();

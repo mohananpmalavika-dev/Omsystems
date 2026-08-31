@@ -54,7 +54,14 @@ export function ActiveInfrastructureIncidentsWidget({
         url += `?branchId=${branchId}`;
       }
       
-      const response = await fetch(url);
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-sentinel-session"] = token;
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, { credentials: "include", headers });
       if (!response.ok) throw new Error("Failed to load incidents");
       
       const { data } = await response.json();

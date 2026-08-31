@@ -4,6 +4,7 @@ import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { BranchHealth, HealthStatus } from "@/lib/types/operational-health";
+import { fetchBranchesHealth } from "@/lib/api/operational-health";
 import { useOperationalHealthStream } from "@/hooks/useOperationalHealthStream";
 
 type ComponentKey = "camera" | "recording" | "storage" | "network" | "ups" | "edgeAgent";
@@ -14,10 +15,10 @@ export function ComponentDetailPage({ title, component }: { title: string; compo
   const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     try {
-      const response = await fetch("/api/control/v1/operations/health/branches?limit=500", { cache: "no-store" });
-      if (!response.ok) throw new Error("health_unavailable");
-      const body = await response.json();
-      setBranches(body.data.branches ?? []);
+      const data = await fetchBranchesHealth({ limit: 500 });
+      setBranches((data.branches as Projection[]) ?? []);
+    } catch {
+      // ignore
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
