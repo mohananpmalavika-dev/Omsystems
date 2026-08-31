@@ -86,6 +86,7 @@ services:
   # 3. Fastify Control Plane API & WebSocket Gateway
   # -------------------------------------------------------------
   control-plane:
+    image: sentinel-aws-control-plane:latest
     build:
       context: ../..
       dockerfile: Dockerfile
@@ -133,6 +134,7 @@ services:
   # 4. Next.js Management Web Dashboard
   # -------------------------------------------------------------
   dashboard:
+    image: sentinel-aws-dashboard:latest
     build:
       context: ../..
       dockerfile: dashboard/Dockerfile
@@ -160,6 +162,7 @@ services:
   # 5. Media Gateway (RTSP, HLS, WebRTC Streaming)
   # -------------------------------------------------------------
   media-gateway:
+    image: sentinel-aws-media-gateway:latest
     build:
       context: ../..
       dockerfile: media-gateway/Dockerfile
@@ -188,6 +191,7 @@ services:
   # 6. Recording Engine (Continuous Archival Buffer)
   # -------------------------------------------------------------
   recording-engine:
+    image: sentinel-aws-recording-engine:latest
     build:
       context: ../..
       dockerfile: recording-engine/Dockerfile
@@ -216,6 +220,7 @@ services:
   # 7. Analytics Engine (AI Detection & Alarm Pipeline)
   # -------------------------------------------------------------
   analytics-engine:
+    image: sentinel-aws-analytics-engine:latest
     build:
       context: ../..
       dockerfile: analytics-engine/Dockerfile.aws
