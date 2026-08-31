@@ -79,6 +79,395 @@ function invalidInput(reply: FastifyReply, error: z.ZodError) {
   });
 }
 
+type UnknownRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): UnknownRecord | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as UnknownRecord
+    : undefined;
+}
+
+function recordArray(value: unknown): UnknownRecord[] {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+      const record = asRecord(item);
+      return record ? [record] : [];
+    })
+    : [];
+}
+
+function firstString(record: UnknownRecord | undefined, ...keys: string[]) {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function firstNumber(record: UnknownRecord | undefined, ...keys: string[]) {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    const number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+    if (Number.isFinite(number)) return number;
+  }
+  return undefined;
+}
+
+function firstBoolean(record: UnknownRecord | undefined, ...keys: string[]) {
+  if (!record) return undefined;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "boolean") return value;
+  }
+  return undefined;
+}
+
+function isoValue(value: unknown) {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") return value;
+  return "";
+}
+
+function normalizedPlate(value: string) {
+  return value.replace(/\s+/g, "").toUpperCase();
+}
+
+function activeLocalItem(item: UnknownRecord) {
+  return !item.archivedAt && (!item.expiresAt || Date.parse(String(item.expiresAt)) > Date.now());
+}
+
+async function cameraNameMap(store: ControlPlaneStore, cameraIds: string[]) {
+  const cameras = await store.listCamerasByIds([...new Set(cameraIds)]);
+  return new Map(cameras.map((camera) => [camera.id, camera.name]));
+}
+
+async function genericFaceEvents(
+  store: ControlPlaneStore,
+  tenantId: string,
+  filters: {
+    cameraIds: string[];
+    from?: string;
+    to?: string;
+    watchlistId?: string;
+    personId?: string;
+    minSimilarity: number;
+  },
+) {
+  const events = await store.listAnalyticsEvents(tenantId, {
+    cameraIds: filters.cameraIds,
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+    detectionTypes: ["face-recognition"],
+    limit: 10_000,
+  });
+  const names = await cameraNameMap(store, events.map((event) => event.cameraId));
+  const candidates = events.flatMap((event) => {
+    const metadata = asRecord(event.metadata);
+    const matches = recordArray(metadata?.watchlistMatches ?? metadata?.matches);
+    return matches.flatMap((match, index) => {
+      const similarityScore = firstNumber(match, "similarity", "similarityScore", "score") ?? event.confidence;
+      const watchlistId = firstString(match, "watchlistId", "watchlist_id");
+      const personId = firstString(match, "personId", "person_id");
+      if (similarityScore < filters.minSimilarity) return [];
+      if (filters.watchlistId && watchlistId && watchlistId !== filters.watchlistId) return [];
+      if (filters.personId && personId !== filters.personId) return [];
+      return [{
+        id: `${event.id}:${index}`,
+        analyticsEventId: event.id,
+        cameraId: event.cameraId,
+        cameraName: names.get(event.cameraId) ?? null,
+        watchlistId: watchlistId ?? null,
+        personId: personId ?? null,
+        personName: firstString(match, "personName", "person_name", "displayName") ?? null,
+        similarityScore,
+        faceQuality: firstNumber(match, "faceQuality", "quality") ?? null,
+        snapshotReference: event.snapshotReference ?? null,
+        occurredAt: event.occurredAt,
+      }];
+    });
+  });
+
+  const watchlistIds = [...new Set(candidates.flatMap((event) => event.watchlistId ? [event.watchlistId] : []))];
+  const personIds = [...new Set(candidates.flatMap((event) => event.personId ? [event.personId] : []))];
+  const watchlistNames = new Map<string, string>();
+  const personNames = new Map<string, string>();
+  const personWatchlists = new Map<string, string>();
+  if (!hasPool(store)) {
+    const state = localState(store);
+    for (const watchlist of state.faceWatchlists as UnknownRecord[]) {
+      if (watchlist.tenantId === tenantId && !watchlist.archivedAt && typeof watchlist.id === "string") {
+        const name = firstString(watchlist, "name");
+        if (name) watchlistNames.set(watchlist.id, name);
+      }
+    }
+    for (const person of state.facePersons as UnknownRecord[]) {
+      if (person.tenantId === tenantId && !person.archivedAt && typeof person.id === "string") {
+        const name = firstString(person, "fullName", "full_name");
+        if (name) personNames.set(person.id, name);
+        const watchlistId = firstString(person, "watchlistId", "watchlist_id");
+        if (watchlistId) personWatchlists.set(person.id, watchlistId);
+      }
+    }
+  } else if (watchlistIds.length || personIds.length) {
+    const identities = await store.db.query(
+      `SELECT w.id::text AS watchlist_id, w.name AS watchlist_name,
+              p.id::text AS person_id, p.full_name AS person_name
+       FROM face_watchlists w
+       LEFT JOIN face_watchlist_persons p
+         ON p.watchlist_id = w.id AND p.archived_at IS NULL
+       WHERE w.tenant_id = $1 AND w.archived_at IS NULL
+         AND (w.id::text = ANY($2::text[]) OR p.id::text = ANY($3::text[]))`,
+      [tenantId, watchlistIds, personIds],
+    );
+    for (const row of identities.rows as UnknownRecord[]) {
+      const watchlistId = firstString(row, "watchlist_id");
+      const watchlistName = firstString(row, "watchlist_name");
+      const personId = firstString(row, "person_id");
+      const personName = firstString(row, "person_name");
+      if (watchlistId && watchlistName) watchlistNames.set(watchlistId, watchlistName);
+      if (personId) {
+        if (personName) personNames.set(personId, personName);
+        if (watchlistId) personWatchlists.set(personId, watchlistId);
+      }
+    }
+  }
+
+  return candidates.flatMap((event) => {
+    const watchlistId = event.watchlistId ??
+      (event.personId ? personWatchlists.get(event.personId) ?? null : null);
+    if (filters.watchlistId && watchlistId !== filters.watchlistId) return [];
+    return [{
+      ...event,
+      watchlistId,
+      watchlistName: watchlistId ? watchlistNames.get(watchlistId) ?? null : null,
+      personName: event.personName ?? (event.personId ? personNames.get(event.personId) ?? null : null),
+    }];
+  });
+}
+
+type PlateRegistryEntry = {
+  plateId: string;
+  plateNumber: string;
+  watchlistId: string;
+  watchlistName: string | null;
+  reason: string | null;
+};
+
+async function activePlateRegistry(
+  store: ControlPlaneStore,
+  tenantId: string,
+  plateNumbers: string[],
+) {
+  const requested = new Set(plateNumbers.map(normalizedPlate));
+  const registry = new Map<string, PlateRegistryEntry[]>();
+  const add = (entry: PlateRegistryEntry) => {
+    const key = normalizedPlate(entry.plateNumber);
+    registry.set(key, [...registry.get(key) ?? [], entry]);
+  };
+  if (requested.size === 0) return registry;
+
+  if (!hasPool(store)) {
+    const state = localState(store);
+    const watchlists = new Map(
+      (state.anprWatchlists as UnknownRecord[])
+        .filter((item) => item.tenantId === tenantId && !item.archivedAt && item.enabled !== false)
+        .flatMap((item) => typeof item.id === "string" ? [[item.id, firstString(item, "name") ?? null] as const] : []),
+    );
+    for (const plate of state.anprPlates as UnknownRecord[]) {
+      const plateNumber = firstString(plate, "plateNumber", "plate_number");
+      const plateId = firstString(plate, "id");
+      const watchlistId = firstString(plate, "watchlistId", "watchlist_id");
+      if (!plateNumber || !plateId || !watchlistId || plate.tenantId !== tenantId ||
+          !requested.has(normalizedPlate(plateNumber)) || !activeLocalItem(plate) || !watchlists.has(watchlistId)) continue;
+      add({
+        plateId, plateNumber, watchlistId,
+        watchlistName: watchlists.get(watchlistId) ?? null,
+        reason: firstString(plate, "reason") ?? null,
+      });
+    }
+    return registry;
+  }
+
+  const result = await store.db.query(
+    `SELECT p.id::text AS plate_id, p.plate_number,
+            w.id::text AS watchlist_id, w.name AS watchlist_name, p.reason
+     FROM anpr_watchlist_plates p
+     JOIN anpr_watchlists w ON w.id = p.watchlist_id
+     WHERE p.tenant_id = $1 AND p.archived_at IS NULL
+       AND w.tenant_id = $1 AND w.archived_at IS NULL AND w.enabled
+       AND (p.expires_at IS NULL OR p.expires_at > now())
+       AND upper(regexp_replace(p.plate_number, '\\s+', '', 'g')) = ANY($2::text[])`,
+    [tenantId, [...requested]],
+  );
+  for (const row of result.rows as UnknownRecord[]) {
+    const plateId = firstString(row, "plate_id");
+    const plateNumber = firstString(row, "plate_number");
+    const watchlistId = firstString(row, "watchlist_id");
+    if (!plateId || !plateNumber || !watchlistId) continue;
+    add({
+      plateId, plateNumber, watchlistId,
+      watchlistName: firstString(row, "watchlist_name") ?? null,
+      reason: firstString(row, "reason") ?? null,
+    });
+  }
+  return registry;
+}
+
+async function genericAnprEvents(
+  store: ControlPlaneStore,
+  tenantId: string,
+  filters: {
+    cameraIds: string[];
+    from?: string;
+    to?: string;
+    plateNumber?: string;
+    watchlistId?: string;
+    entryDirection?: "entry" | "exit" | "unknown";
+  },
+) {
+  const events = await store.listAnalyticsEvents(tenantId, {
+    cameraIds: filters.cameraIds,
+    ...(filters.from ? { from: filters.from } : {}),
+    ...(filters.to ? { to: filters.to } : {}),
+    detectionTypes: ["anpr", "watchlist-match"],
+    limit: 10_000,
+  });
+  const names = await cameraNameMap(store, events.map((event) => event.cameraId));
+  const plateQuery = filters.plateNumber ? normalizedPlate(filters.plateNumber) : undefined;
+  const candidates = events.flatMap((event) => {
+    const metadata = asRecord(event.metadata);
+    const matchRows = recordArray(metadata?.matches);
+    const readingRows = recordArray(metadata?.readings);
+    const legacyPlates = Array.isArray(metadata?.plates)
+      ? metadata.plates.filter((item): item is string => typeof item === "string")
+      : [];
+    const observations = readingRows.length
+      ? readingRows
+      : matchRows.length
+        ? matchRows
+        : legacyPlates.map((plateNumber) => ({ plateNumber }));
+
+    return observations.flatMap((reading, index) => {
+      const plateNumber = firstString(reading, "plateNumber", "plate_number");
+      if (!plateNumber || (plateQuery && !normalizedPlate(plateNumber).includes(plateQuery))) return [];
+      const match = matchRows.find((row) => {
+        const value = firstString(row, "plateNumber", "plate_number");
+        return value && normalizedPlate(value) === normalizedPlate(plateNumber);
+      });
+      const direction = firstString(reading, "entryDirection", "entry_direction") ??
+        firstString(metadata, "entryDirection", "entry_direction", "direction") ?? "unknown";
+      if (filters.entryDirection && direction !== filters.entryDirection) return [];
+      const explicitWatchlistId = firstString(match, "watchlistId", "watchlist_id") ??
+        firstString(reading, "watchlistId", "watchlist_id");
+      if (filters.watchlistId && explicitWatchlistId && explicitWatchlistId !== filters.watchlistId) return [];
+      return [{
+        id: `${event.id}:${index}`,
+        analyticsEventId: event.id,
+        cameraId: event.cameraId,
+        cameraName: names.get(event.cameraId) ?? null,
+        plateNumber: normalizedPlate(plateNumber),
+        plateConfidence: firstNumber(reading, "confidence", "plateConfidence", "plate_confidence") ?? event.confidence,
+        countryCode: firstString(reading, "countryCode", "country_code", "country") ?? null,
+        regionCode: firstString(reading, "regionCode", "region_code", "region") ?? null,
+        vehicleType: firstString(reading, "vehicleType", "vehicle_type") ?? null,
+        vehicleColor: firstString(reading, "vehicleColor", "vehicle_color") ?? null,
+        vehicleMake: firstString(reading, "vehicleMake", "vehicle_make") ?? null,
+        vehicleModel: firstString(reading, "vehicleModel", "vehicle_model") ?? null,
+        plateBoundingBox: asRecord(reading.plateBoundingBox ?? reading.plate_bbox) ?? null,
+        entryDirection: ["entry", "exit", "unknown"].includes(direction) ? direction : "unknown",
+        watchlistId: explicitWatchlistId ?? null,
+        plateId: firstString(match, "plateId", "plate_id") ?? null,
+        watchlistReason: firstString(match, "reason") ?? null,
+        snapshotReference: event.snapshotReference ?? null,
+        occurredAt: event.occurredAt,
+      }];
+    });
+  });
+
+  const registry = await activePlateRegistry(store, tenantId, candidates.map((event) => event.plateNumber));
+  return candidates.flatMap((event) => {
+    const registered = registry.get(normalizedPlate(event.plateNumber)) ?? [];
+    const registration = filters.watchlistId
+      ? registered.find((item) => item.watchlistId === filters.watchlistId)
+      : registered.find((item) => item.watchlistId === event.watchlistId) ?? registered[0];
+    if (filters.watchlistId && event.watchlistId !== filters.watchlistId && !registration) return [];
+    return [{
+      ...event,
+      watchlistId: event.watchlistId ?? registration?.watchlistId ?? null,
+      watchlistName: registration?.watchlistName ?? null,
+      plateId: event.plateId ?? registration?.plateId ?? null,
+      watchlistReason: event.watchlistReason ?? registration?.reason ?? null,
+    }];
+  });
+}
+
+function normalizedFaceRow(row: UnknownRecord) {
+  return {
+    id: firstString(row, "id") ?? randomUUID(),
+    analyticsEventId: firstString(row, "analyticsEventId", "analytics_event_id") ?? null,
+    cameraId: firstString(row, "cameraId", "camera_id") ?? "",
+    cameraName: firstString(row, "cameraName", "camera_name") ?? null,
+    watchlistId: firstString(row, "watchlistId", "watchlist_id") ?? null,
+    watchlistName: firstString(row, "watchlistName", "watchlist_name") ?? null,
+    personId: firstString(row, "personId", "person_id") ?? null,
+    personName: firstString(row, "personName", "person_name") ?? null,
+    similarityScore: firstNumber(row, "similarityScore", "similarity_score") ?? 0,
+    faceQuality: firstNumber(row, "faceQuality", "face_quality") ?? null,
+    ageEstimate: firstNumber(row, "ageEstimate", "age_estimate") ?? null,
+    genderEstimate: firstString(row, "genderEstimate", "gender_estimate") ?? null,
+    wearingMask: firstBoolean(row, "wearingMask", "wearing_mask") ?? null,
+    snapshotReference: firstString(row, "snapshotReference", "snapshot_reference") ?? null,
+    occurredAt: isoValue(row.occurredAt ?? row.occurred_at),
+  };
+}
+
+function normalizedAnprRow(row: UnknownRecord) {
+  return {
+    id: firstString(row, "id") ?? randomUUID(),
+    analyticsEventId: firstString(row, "analyticsEventId", "analytics_event_id") ?? null,
+    cameraId: firstString(row, "cameraId", "camera_id") ?? "",
+    cameraName: firstString(row, "cameraName", "camera_name") ?? null,
+    plateNumber: normalizedPlate(firstString(row, "plateNumber", "plate_number") ?? ""),
+    plateConfidence: firstNumber(row, "plateConfidence", "plate_confidence") ?? 0,
+    countryCode: firstString(row, "countryCode", "country_code") ?? null,
+    regionCode: firstString(row, "regionCode", "region_code") ?? null,
+    vehicleType: firstString(row, "vehicleType", "vehicle_type") ?? null,
+    vehicleColor: firstString(row, "vehicleColor", "vehicle_color") ?? null,
+    entryDirection: firstString(row, "entryDirection", "entry_direction") ?? "unknown",
+    watchlistId: firstString(row, "watchlistId", "watchlist_id") ?? null,
+    watchlistName: firstString(row, "watchlistName", "watchlist_name") ?? null,
+    watchlistReason: firstString(row, "watchlistReason", "watchlist_reason") ?? null,
+    plateId: firstString(row, "plateId", "plate_id") ?? null,
+    snapshotReference: firstString(row, "snapshotReference", "snapshot_reference") ?? null,
+    occurredAt: isoValue(row.occurredAt ?? row.occurred_at),
+  };
+}
+
+function recentUniqueRows<T extends { analyticsEventId: string | null; occurredAt: string }>(
+  specialized: T[],
+  generic: T[],
+  limit: number,
+  genericKey?: (row: T) => string,
+) {
+  const specializedEventIds = new Set(
+    specialized.flatMap((row) => row.analyticsEventId ? [row.analyticsEventId] : []),
+  );
+  const combined = [
+    ...specialized,
+    ...generic.filter((row) => !row.analyticsEventId || !specializedEventIds.has(row.analyticsEventId)),
+  ].sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+  if (!genericKey) return combined.slice(0, limit);
+  const seen = new Set<string>();
+  return combined.filter((row) => {
+    const key = genericKey(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, limit);
+}
+
 const faceWatchlistSchema = z.object({
   name: z.string().min(2).max(160),
   description: z.string().optional(),
@@ -482,8 +871,9 @@ export async function registerAnalyticsPhase2Routes(
     const cameraIds = query.cameraId ? [query.cameraId] : [...permittedCameraIds];
     if (cameraIds.length === 0) return { data: [] };
 
+    let specializedEvents: ReturnType<typeof normalizedFaceRow>[] = [];
     if (!hasPool(store)) {
-      const data = localState(store).faceEvents
+      specializedEvents = localState(store).faceEvents
         .filter((event) => event.tenantId === request.currentUser.tenantId)
         .filter((event) => cameraIds.includes(event.cameraId))
         .filter((event) => event.similarityScore >= query.minSimilarity)
@@ -491,69 +881,69 @@ export async function registerAnalyticsPhase2Routes(
         .filter((event) => !query.to || event.occurredAt <= query.to)
         .filter((event) => !query.watchlistId || event.watchlistId === query.watchlistId)
         .filter((event) => !query.personId || event.personId === query.personId)
-        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
-        .slice(0, query.limit);
-      await store.writeAudit({
-        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
-        action: "face.events_searched", resourceNodeId: null, outcome: "success",
-        details: { ...query, resultCount: data.length },
-      });
-      return { data };
+        .map((event) => normalizedFaceRow(event));
+    } else {
+      const conditions = [
+        "fe.tenant_id = $1",
+        "fe.similarity_score >= $2",
+        "fe.camera_id::text = ANY($3::text[])",
+      ];
+      const params: any[] = [request.currentUser.tenantId, query.minSimilarity, cameraIds];
+      let paramIndex = 4;
+
+      if (query.from) {
+        conditions.push(`fe.occurred_at >= $${paramIndex++}`);
+        params.push(query.from);
+      }
+      if (query.to) {
+        conditions.push(`fe.occurred_at <= $${paramIndex++}`);
+        params.push(query.to);
+      }
+      if (query.watchlistId) {
+        conditions.push(`fe.watchlist_id = $${paramIndex++}`);
+        params.push(query.watchlistId);
+      }
+      if (query.personId) {
+        conditions.push(`fe.person_id = $${paramIndex++}`);
+        params.push(query.personId);
+      }
+
+      const events = await store.db.query(
+        `SELECT fe.id, fe.analytics_event_id, fe.camera_id, fe.watchlist_id, fe.person_id,
+                fe.similarity_score, fe.face_quality, fe.age_estimate,
+                fe.gender_estimate, fe.wearing_mask, fe.snapshot_reference,
+                fe.occurred_at, p.full_name as person_name,
+                w.name as watchlist_name, rn.name as camera_name
+         FROM face_recognition_events fe
+         LEFT JOIN face_watchlist_persons p ON p.id = fe.person_id
+         LEFT JOIN face_watchlists w ON w.id = fe.watchlist_id
+         LEFT JOIN cameras c ON c.id = fe.camera_id
+         LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY fe.occurred_at DESC
+         LIMIT $${paramIndex}`,
+        [...params, query.limit],
+      );
+      specializedEvents = (events.rows as UnknownRecord[]).map(normalizedFaceRow);
     }
 
-    const conditions = [
-      "fe.tenant_id = $1",
-      "fe.similarity_score >= $2",
-      "fe.camera_id::text = ANY($3::text[])",
-    ];
-    const params: any[] = [request.currentUser.tenantId, query.minSimilarity, cameraIds];
-    let paramIndex = 4;
-
-    if (query.from) {
-      conditions.push(`fe.occurred_at >= $${paramIndex++}`);
-      params.push(query.from);
-    }
-    if (query.to) {
-      conditions.push(`fe.occurred_at < $${paramIndex++}`);
-      params.push(query.to);
-    }
-    if (query.cameraId) {
-      conditions.push(`fe.camera_id = $${paramIndex++}`);
-      params.push(query.cameraId);
-    }
-    if (query.watchlistId && query.watchlistId.trim() !== "") {
-      conditions.push(`fe.watchlist_id = $${paramIndex++}`);
-      params.push(query.watchlistId);
-    }
-    if (query.personId && query.personId.trim() !== "") {
-      conditions.push(`fe.person_id = $${paramIndex++}`);
-      params.push(query.personId);
-    }
-
-    const events = await store.db.query(
-      `SELECT fe.id, fe.camera_id, fe.watchlist_id, fe.person_id,
-              fe.similarity_score, fe.face_quality, fe.age_estimate,
-              fe.gender_estimate, fe.wearing_mask, fe.snapshot_reference,
-              fe.occurred_at, p.full_name as person_name,
-              w.name as watchlist_name, rn.name as camera_name
-       FROM face_recognition_events fe
-       LEFT JOIN face_watchlist_persons p ON p.id = fe.person_id
-       LEFT JOIN face_watchlists w ON w.id = fe.watchlist_id
-       LEFT JOIN cameras c ON c.id = fe.camera_id
-       LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-       WHERE ${conditions.join(" AND ")}
-       ORDER BY fe.occurred_at DESC
-       LIMIT $${paramIndex}`,
-      [...params, query.limit],
-    );
+    const genericEvents = await genericFaceEvents(store, request.currentUser.tenantId, {
+      cameraIds,
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(query.watchlistId ? { watchlistId: query.watchlistId } : {}),
+      ...(query.personId ? { personId: query.personId } : {}),
+      minSimilarity: query.minSimilarity,
+    });
+    const data = recentUniqueRows(specializedEvents, genericEvents, query.limit);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
       action: "face.events_searched", resourceNodeId: null, outcome: "success",
-      details: { ...query, resultCount: events.rows.length },
+      details: { ...query, resultCount: data.length },
     });
 
-    return { data: events.rows };
+    return { data };
   });
 
   // ==================== ANPR ====================
@@ -801,9 +1191,10 @@ export async function registerAnalyticsPhase2Routes(
     const cameraIds = query.cameraId ? [query.cameraId] : [...permittedCameraIds];
     if (cameraIds.length === 0) return { data: [] };
 
+    let specializedEvents: ReturnType<typeof normalizedAnprRow>[] = [];
     if (!hasPool(store)) {
       const plateQuery = query.plateNumber?.toUpperCase();
-      const data = localState(store).anprEvents
+      specializedEvents = localState(store).anprEvents
         .filter((event) => event.tenantId === request.currentUser.tenantId)
         .filter((event) => cameraIds.includes(event.cameraId))
         .filter((event) => !query.from || event.occurredAt >= query.from)
@@ -811,69 +1202,75 @@ export async function registerAnalyticsPhase2Routes(
         .filter((event) => !plateQuery || event.plateNumber.includes(plateQuery))
         .filter((event) => !query.watchlistId || event.watchlistId === query.watchlistId)
         .filter((event) => !query.entryDirection || event.entryDirection === query.entryDirection)
-        .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
-        .slice(0, query.limit);
-      await store.writeAudit({
-        tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
-        action: "anpr.events_searched", resourceNodeId: null, outcome: "success",
-        details: { ...query, resultCount: data.length },
-      });
-      return { data };
+        .map((event) => normalizedAnprRow(event));
+    } else {
+      const conditions = ["ae.tenant_id = $1", "ae.camera_id::text = ANY($2::text[])"];
+      const params: any[] = [request.currentUser.tenantId, cameraIds];
+      let paramIndex = 3;
+
+      if (query.from) {
+        conditions.push(`ae.occurred_at >= $${paramIndex++}`);
+        params.push(query.from);
+      }
+      if (query.to) {
+        conditions.push(`ae.occurred_at <= $${paramIndex++}`);
+        params.push(query.to);
+      }
+      if (query.plateNumber) {
+        conditions.push(`ae.plate_number ILIKE $${paramIndex++}`);
+        params.push(`%${query.plateNumber.toUpperCase()}%`);
+      }
+      if (query.watchlistId) {
+        conditions.push(`ae.watchlist_id = $${paramIndex++}`);
+        params.push(query.watchlistId);
+      }
+      if (query.entryDirection) {
+        conditions.push(`ae.entry_direction = $${paramIndex++}`);
+        params.push(query.entryDirection);
+      }
+
+      const events = await store.db.query(
+        `SELECT ae.id, ae.analytics_event_id, ae.camera_id, ae.watchlist_id, ae.plate_id,
+                ae.plate_number, ae.plate_confidence, ae.country_code, ae.region_code,
+                ae.vehicle_type, ae.vehicle_color, ae.entry_direction,
+                ae.snapshot_reference, ae.occurred_at,
+                w.name as watchlist_name, wp.reason as watchlist_reason,
+                rn.name as camera_name
+         FROM anpr_events ae
+         LEFT JOIN anpr_watchlist_plates wp ON wp.id = ae.plate_id
+         LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
+         LEFT JOIN cameras c ON c.id = ae.camera_id
+         LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY ae.occurred_at DESC
+         LIMIT $${paramIndex}`,
+        [...params, query.limit],
+      );
+      specializedEvents = (events.rows as UnknownRecord[]).map(normalizedAnprRow);
     }
 
-    const conditions = ["ae.tenant_id = $1", "ae.camera_id::text = ANY($2::text[])"];
-    const params: any[] = [request.currentUser.tenantId, cameraIds];
-    let paramIndex = 3;
-
-    if (query.from) {
-      conditions.push(`ae.occurred_at >= $${paramIndex++}`);
-      params.push(query.from);
-    }
-    if (query.to) {
-      conditions.push(`ae.occurred_at < $${paramIndex++}`);
-      params.push(query.to);
-    }
-    if (query.cameraId && query.cameraId.trim() !== "") {
-      conditions.push(`ae.camera_id = $${paramIndex++}`);
-      params.push(query.cameraId);
-    }
-    if (query.plateNumber) {
-      conditions.push(`ae.plate_number ILIKE $${paramIndex++}`);
-      params.push(`%${query.plateNumber.toUpperCase()}%`);
-    }
-    if (query.watchlistId && query.watchlistId.trim() !== "") {
-      conditions.push(`ae.watchlist_id = $${paramIndex++}`);
-      params.push(query.watchlistId);
-    }
-    if (query.entryDirection) {
-      conditions.push(`ae.entry_direction = $${paramIndex++}`);
-      params.push(query.entryDirection);
-    }
-
-    const events = await store.db.query(
-      `SELECT ae.id, ae.camera_id, ae.plate_number, ae.plate_confidence,
-              ae.country_code, ae.vehicle_type, ae.vehicle_color,
-              ae.entry_direction, ae.snapshot_reference, ae.occurred_at,
-              w.name as watchlist_name, wp.reason as watchlist_reason,
-              rn.name as camera_name
-       FROM anpr_events ae
-       LEFT JOIN anpr_watchlist_plates wp ON wp.id = ae.plate_id
-       LEFT JOIN anpr_watchlists w ON w.id = ae.watchlist_id
-       LEFT JOIN cameras c ON c.id = ae.camera_id
-       LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
-       WHERE ${conditions.join(" AND ")}
-       ORDER BY ae.occurred_at DESC
-       LIMIT $${paramIndex}`,
-      [...params, query.limit],
+    const genericEvents = await genericAnprEvents(store, request.currentUser.tenantId, {
+      cameraIds,
+      ...(query.from ? { from: query.from } : {}),
+      ...(query.to ? { to: query.to } : {}),
+      ...(query.plateNumber ? { plateNumber: query.plateNumber } : {}),
+      ...(query.watchlistId ? { watchlistId: query.watchlistId } : {}),
+      ...(query.entryDirection ? { entryDirection: query.entryDirection } : {}),
+    });
+    const data = recentUniqueRows(
+      specializedEvents,
+      genericEvents,
+      query.limit,
+      (event) => `${event.cameraId}:${normalizedPlate(event.plateNumber)}:${event.occurredAt}`,
     );
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId, actorUserId: request.currentUser.id,
       action: "anpr.events_searched", resourceNodeId: null, outcome: "success",
-      details: { ...query, resultCount: events.rows.length },
+      details: { ...query, resultCount: data.length },
     });
 
-    return { data: events.rows };
+    return { data };
   });
 
   /**

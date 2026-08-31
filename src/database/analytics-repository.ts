@@ -419,7 +419,7 @@ export class AnalyticsRepository {
       `SELECT event.*
        FROM analytics_events event
        WHERE ${conditions.join(" AND ")}
-       ORDER BY event.occurred_at ASC
+       ORDER BY event.occurred_at DESC
        LIMIT $${parameter}`,
       values,
     );

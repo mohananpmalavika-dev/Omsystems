@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -28,7 +28,6 @@ import {
   FileSearch,
   FileText,
   FileVideo2,
-  Fingerprint,
   Gauge,
   Globe2,
   Grid2X2,
@@ -40,7 +39,6 @@ import {
   LayoutDashboard,
   LayoutGrid,
   Library,
-  ListFilter,
   LockKeyhole,
   LogOut,
   Menu,
@@ -71,7 +69,7 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, Suspense, useContext, useEffect, useMemo, useState } from "react";
 import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
 
@@ -270,7 +268,6 @@ const pageMeta = [
   { path: "/terms", section: "Legal", title: "Terms of service" },
 ];
 
-import { ThemeProvider } from "@/components/ui/theme-provider";
 import { ThemeSwitcher } from "@/components/ui/theme-switcher";
 import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
 
@@ -279,19 +276,51 @@ const OPEN_GROUPS_STORAGE_KEY = "sentinel-grid-open-navigation-groups";
 const RECENT_MODULES_STORAGE_KEY = "sentinel-grid-recent-modules";
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "sentinel-grid-sidebar-collapsed";
 
+function routePath(href: string) {
+  return href.split(/[?#]/)[0] || "/";
+}
+
+function routeMatches(
+  href: string,
+  pathname: string,
+  searchParams: Pick<URLSearchParams, "get"> | null,
+) {
+  const path = routePath(href);
+  const pathMatches = path === "/"
+    ? pathname === "/"
+    : pathname === path || pathname.startsWith(`${path}/`);
+  if (!pathMatches) return false;
+
+  const query = href.split("?")[1]?.split("#")[0];
+  if (!query) return true;
+  let matches = true;
+  new URLSearchParams(query).forEach((value, key) => {
+    if (searchParams?.get(key) !== value) matches = false;
+  });
+  return matches;
+}
+
+function routeSpecificity(href: string) {
+  const query = href.split("?")[1]?.split("#")[0];
+  return routePath(href).length + (query ? 10_000 + query.length : 0);
+}
+
 export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const alreadyInsideAppLayout = useContext(AppLayoutContext);
   if (alreadyInsideAppLayout) return <>{children}</>;
 
   return (
     <AppLayoutContext.Provider value>
-      <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+      <Suspense fallback={children}>
+        <AppLayoutFrame incidentCount={incidentCount} cameraCount={cameraCount}>{children}</AppLayoutFrame>
+      </Suspense>
     </AppLayoutContext.Provider>
   );
 }
 
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { branding } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -309,17 +338,16 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   } | null>(null);
   const pathname = usePathname() || "/";
   const currentPage = pageMeta
-    .filter((item) => item.path === "/" ? pathname === "/" : pathname === item.path || pathname.startsWith(`${item.path}/`))
-    .sort((left, right) => right.path.length - left.path.length)[0]
+    .filter((item) => routeMatches(item.path, pathname, searchParams))
+    .sort((left, right) => routeSpecificity(right.path) - routeSpecificity(left.path))[0]
     ?? { path: pathname, section: "Workspace", title: "Sentinel Grid" };
 
-  const normalizedRoute = (href: string) => href.split(/[?#]/)[0] || "/";
   const activeRoute = navigation
     .flatMap((group) => group.items)
-    .map((item) => normalizedRoute(item.href))
-    .filter((route) => route === "/" ? pathname === "/" : pathname === route || pathname.startsWith(`${route}/`))
-    .sort((left, right) => right.length - left.length)[0];
-  const isActive = (href: string) => normalizedRoute(href) === activeRoute;
+    .map((item) => item.href)
+    .filter((href) => routeMatches(href, pathname, searchParams))
+    .sort((left, right) => routeSpecificity(right) - routeSpecificity(left))[0];
+  const isActive = (href: string) => href === activeRoute;
   const activeGroup = navigation.find((group) => group.items.some((item) => isActive(item.href)));
   const moduleCount = navigation.reduce((total, group) => total + group.items.length, 0);
   const allGroupsOpen = openGroups.size === navigation.length;
@@ -390,7 +418,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       const validRecents = Array.isArray(storedRecents)
         ? storedRecents.filter((href): href is string => searchableModules.some((item) => item.href === href))
         : [];
-      const currentHref = searchableModules.find((item) => normalizedRoute(item.href) === activeRoute)?.href;
+      const currentHref = searchableModules.find((item) => item.href === activeRoute)?.href;
       const next = currentHref
         ? [currentHref, ...validRecents.filter((href) => href !== currentHref)].slice(0, 5)
         : validRecents.slice(0, 5);
@@ -477,14 +505,16 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const closeSidebar = () => setSidebarOpen(false);
   const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
     closeSidebar();
-    if (activeRoute === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
+    if (routePath(activeRoute ?? "") === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
       e.preventDefault();
       window.location.assign(href);
     }
   };
   const persistOpenGroups = (next: Set<string>) => {
     setOpenGroups(next);
-    window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+    try {
+      window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+    } catch {}
   };
   const toggleAllGroups = () => {
     persistOpenGroups(allGroupsOpen
@@ -495,7 +525,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     setCommandOpen(false);
     setCommandQuery("");
     closeSidebar();
-    if (activeRoute === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
+    if (routePath(activeRoute ?? "") === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
       window.location.assign(href);
       return;
     }

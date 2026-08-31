@@ -147,44 +147,39 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     }
   });
 
-  // Register detection API routes
-  void import("./routes/detection-api.js").then(module => {
-    module.registerDetectionApiRoutes(app, pipeline).catch((error) => {
-      app.log.error({ err: error }, "Failed to register detection API routes");
-    });
+  // Register lazily loaded route modules through Fastify's plugin lifecycle so
+  // app.ready()/listen() cannot complete before their routes exist.
+  app.register(async (instance) => {
+    const module = await import("./routes/detection-api.js");
+    await module.registerDetectionApiRoutes(instance, pipeline);
   });
-
-  // Register advanced analytics API routes
-  void import("./routes/advanced-analytics-api.js").then(module => {
-    module.registerAdvancedAnalyticsRoutes(app, pipeline).catch((error) => {
-      app.log.error({ err: error }, "Failed to register advanced analytics API routes");
-    });
+  app.register(async (instance) => {
+    const module = await import("./routes/advanced-analytics-api.js");
+    await module.registerAdvancedAnalyticsRoutes(instance, pipeline);
   });
-
-  // Register analog camera health and aging APIs against this app's pipeline.
-  void import("./routes/analog-camera-api.js").then(module => {
-    module.registerAnalogCameraApiRoutes(app, pipeline).catch((error) => {
-      app.log.error({ err: error }, "Failed to register analog camera API routes");
-    });
+  app.register(async (instance) => {
+    const module = await import("./routes/analog-camera-api.js");
+    await module.registerAnalogCameraApiRoutes(instance, pipeline);
   });
-
-  // Register Digital Twin API routes
-  void import("./digital-twin/api/index.js").then(module => {
-    module.registerDigitalTwinRoutes(app).catch((error) => {
-      app.log.error({ err: error }, "Failed to register Digital Twin API routes");
-    });
+  app.register(async (instance) => {
+    const module = await import("./digital-twin/api/index.js");
+    await module.registerDigitalTwinRoutes(instance);
   });
 
   app.addHook("preHandler", async (request, reply) => {
-    if (request.url === "/health" || request.url.startsWith("/v1/detectors") || request.url.startsWith("/v1/analytics")) {
-      return; // Allow public access to monitoring endpoints
-    }
+    if (request.url === "/health") return;
+
     const key = request.headers["x-analytics-source-key"];
     const trustedSource = typeof key === "string" && same(key, options.sourceSharedKey);
-    const trustedControlPlaneFrame = typeof key === "string" &&
-      request.url.startsWith("/internal/frames") &&
-      same(key, options.controlPlaneSharedKey);
-    if (!trustedSource && !trustedControlPlaneFrame) {
+    const trustedControlPlane = typeof key === "string" && same(key, options.controlPlaneSharedKey);
+    const isFrameIngest = request.url.startsWith("/internal/frames");
+    const isDetectionIngest = request.url.startsWith("/internal/detections");
+    const allowed = isFrameIngest
+      ? trustedSource || trustedControlPlane
+      : isDetectionIngest
+        ? trustedSource
+        : trustedControlPlane;
+    if (!allowed) {
       return reply.code(401).send({ error: "invalid_analytics_source_identity" });
     }
   });

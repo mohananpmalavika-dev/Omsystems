@@ -100,6 +100,44 @@ describe("analytics engine adapter", () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it("keeps analytics operations private and separates source from control-plane access", async () => {
+    const app = buildAnalyticsEngine({
+      sourceSharedKey: sourceKey,
+      controlPlaneSharedKey: controlPlaneKey,
+      submit: async () => ({}),
+    });
+    apps.push(app);
+
+    const unauthenticated = await app.inject({
+      method: "GET", url: "/v1/analytics/cameras/camera-1/status",
+    });
+    expect(unauthenticated.statusCode).toBe(401);
+
+    const unauthenticatedDynamicRoute = await app.inject({
+      method: "GET", url: "/v1/detectors/health",
+    });
+    expect(unauthenticatedDynamicRoute.statusCode).toBe(401);
+
+    const sourceOnly = await app.inject({
+      method: "GET", url: "/v1/analytics/cameras/camera-1/status",
+      headers: { "x-analytics-source-key": sourceKey },
+    });
+    expect(sourceOnly.statusCode).toBe(401);
+
+    const controlPlane = await app.inject({
+      method: "GET", url: "/v1/analytics/cameras/camera-1/status",
+      headers: { "x-analytics-source-key": controlPlaneKey },
+    });
+    expect(controlPlane.statusCode).toBe(200);
+    expect(controlPlane.json()).toMatchObject({ cameraId: "camera-1" });
+
+    const lazilyLoadedRoute = await app.inject({
+      method: "GET", url: "/v1/detectors/health",
+      headers: { "x-analytics-source-key": controlPlaneKey },
+    });
+    expect(lazilyLoadedRoute.statusCode).toBe(200);
+  });
+
   it("accepts control-plane-authenticated frames without granting detection-source access", async () => {
     const app = buildAnalyticsEngine({
       sourceSharedKey: sourceKey,

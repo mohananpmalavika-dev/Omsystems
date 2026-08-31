@@ -177,6 +177,160 @@ describe("identity analytics routes without PostgreSQL", () => {
     expect(invalidZone.statusCode).toBe(400);
   });
 
+  it("returns persisted face and ANPR engine detections in identity searches", async () => {
+    const faceWatchlist = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/face-watchlists",
+      headers: superadmin,
+      payload: {
+        name: "Persisted face matches",
+        listType: "security",
+        alertOnMatch: true,
+        alertSeverity: "P1",
+      },
+    });
+    const faceWatchlistId = faceWatchlist.json().data.id as string;
+    const person = await app.inject({
+      method: "POST",
+      url: `/v1/analytics/face-watchlists/${faceWatchlistId}/persons`,
+      headers: superadmin,
+      payload: { fullName: "Approved Person", metadata: {} },
+    });
+    const personId = person.json().data.id as string;
+
+    const anprWatchlist = await app.inject({
+      method: "POST",
+      url: "/v1/analytics/anpr-watchlists",
+      headers: superadmin,
+      payload: {
+        name: "Persisted vehicle matches",
+        listType: "alert",
+        alertOnMatch: true,
+        alertSeverity: "P2",
+        alertAuthorities: false,
+      },
+    });
+    const anprWatchlistId = anprWatchlist.json().data.id as string;
+    const plate = await app.inject({
+      method: "POST",
+      url: `/v1/analytics/anpr-watchlists/${anprWatchlistId}/plates`,
+      headers: superadmin,
+      payload: {
+        plateNumber: "KL07AB1234",
+        countryCode: "IN",
+        vehicleType: "car",
+        reason: "Approved security review",
+      },
+    });
+    const plateId = plate.json().data.id as string;
+    const occurredAt = "2026-08-31T10:30:00.000Z";
+
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems",
+      cameraId: "cam-001",
+      sourceEventId: "phase2-face-engine-1",
+      detectionType: "face-recognition",
+      occurredAt,
+      confidence: 0.93,
+      durationSeconds: 0,
+      modelVersion: "free-face-model-1",
+      objects: [],
+      snapshotReference: "evidence://face/1",
+      metadata: {
+        watchlistMatches: [{
+          watchlistId: faceWatchlistId,
+          personId,
+          personName: "Approved Person",
+          similarity: 0.93,
+        }],
+      },
+    });
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems",
+      cameraId: "cam-001",
+      sourceEventId: "phase2-anpr-engine-1",
+      detectionType: "anpr",
+      occurredAt,
+      confidence: 0.94,
+      durationSeconds: 0,
+      modelVersion: "free-anpr-model-1",
+      objects: [],
+      snapshotReference: "evidence://anpr/1",
+      metadata: {
+        readings: [{
+          plateNumber: "KL 07 AB 1234",
+          confidence: 0.94,
+          countryCode: "IN",
+          regionCode: "KL",
+          vehicleType: "car",
+          vehicleColor: "white",
+          plateBoundingBox: { x: 0.1, y: 0.2, width: 0.3, height: 0.1 },
+        }],
+      },
+    });
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems",
+      cameraId: "cam-001",
+      sourceEventId: "phase2-anpr-watchlist-1",
+      detectionType: "watchlist-match",
+      occurredAt,
+      confidence: 1,
+      durationSeconds: 0,
+      modelVersion: "free-anpr-model-1",
+      objects: [],
+      metadata: {
+        matches: [{
+          plateNumber: "KL07AB1234",
+          watchlistId: anprWatchlistId,
+          plateId,
+          reason: "Approved security review",
+        }],
+      },
+    });
+
+    const faceEvents = await app.inject({
+      method: "GET",
+      url: `/v1/analytics/face-events?watchlistId=${faceWatchlistId}&minSimilarity=0.9`,
+      headers: superadmin,
+    });
+    expect(faceEvents.statusCode).toBe(200);
+    expect(faceEvents.json().data).toEqual([
+      expect.objectContaining({
+        analyticsEventId: expect.any(String),
+        cameraId: "cam-001",
+        cameraName: "Main Entrance Camera",
+        watchlistId: faceWatchlistId,
+        watchlistName: "Persisted face matches",
+        personId,
+        personName: "Approved Person",
+        similarityScore: 0.93,
+        snapshotReference: "evidence://face/1",
+      }),
+    ]);
+
+    const anprEvents = await app.inject({
+      method: "GET",
+      url: `/v1/analytics/anpr-events?watchlistId=${anprWatchlistId}&plateNumber=KL07AB`,
+      headers: superadmin,
+    });
+    expect(anprEvents.statusCode).toBe(200);
+    expect(anprEvents.json().data).toHaveLength(1);
+    expect(anprEvents.json().data[0]).toMatchObject({
+      cameraId: "cam-001",
+      cameraName: "Main Entrance Camera",
+      plateNumber: "KL07AB1234",
+      plateConfidence: 0.94,
+      countryCode: "IN",
+      regionCode: "KL",
+      vehicleType: "car",
+      vehicleColor: "white",
+      watchlistId: anprWatchlistId,
+      watchlistName: "Persisted vehicle matches",
+      watchlistReason: "Approved security review",
+      snapshotReference: "evidence://anpr/1",
+    });
+  });
+
   it("accepts authenticated dashboard telemetry and persists each item", async () => {
     const timestamp = new Date().toISOString();
     const response = await app.inject({

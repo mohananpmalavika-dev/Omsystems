@@ -3441,7 +3441,7 @@ export class MemoryStore {
       .filter((event) => !filters.from || event.occurredAt >= filters.from)
       .filter((event) => !filters.to || event.occurredAt <= filters.to)
       .filter((event) => !detectionTypes || detectionTypes.has(event.detectionType))
-      .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt))
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
       .slice(0, filters.limit)
       .map((event) => structuredClone(event));
   }
