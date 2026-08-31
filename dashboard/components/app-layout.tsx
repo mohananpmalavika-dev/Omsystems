@@ -105,7 +105,6 @@ export const navigation: NavGroup[] = [
       { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Media Pipeline & Scheduler", href: "/operations/media-pipeline", icon: Layers },
       { label: "HA Failover Cluster", href: "/operations/ha-failover", icon: Server },
-      { label: "Edge Fleet Management", href: "/operations/edge-fleet", icon: Cpu },
       { label: "Fleet Observability & SLO", href: "/operations/observability", icon: BarChart3 },
     ],
   },
