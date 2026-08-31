@@ -189,13 +189,33 @@ export function EnhancedCameraGrid({
     setActiveCount(activeDecoderCount);
   }, [activeDecoderCount, setActiveCount]);
 
-  useEffect(() => onActiveStreamsChange?.(activeDecoderCount), [activeDecoderCount, onActiveStreamsChange]);
-
+  const prevActiveDecoderCountRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    onMonitoredCamerasChange?.(
-      [...gridPositions.values()].map((entry) => entry.camera.id).sort(),
-    );
+    if (prevActiveDecoderCountRef.current !== activeDecoderCount) {
+      prevActiveDecoderCountRef.current = activeDecoderCount;
+      onActiveStreamsChange?.(activeDecoderCount);
+    }
+  }, [activeDecoderCount, onActiveStreamsChange]);
+
+  const prevMonitoredIdsRef = useRef<string>("");
+  useEffect(() => {
+    const ids = [...gridPositions.values()].map((entry) => entry.camera.id).sort().join("|");
+    if (prevMonitoredIdsRef.current !== ids) {
+      prevMonitoredIdsRef.current = ids;
+      onMonitoredCamerasChange?.(
+        [...gridPositions.values()].map((entry) => entry.camera.id).sort(),
+      );
+    }
   }, [gridPositions, onMonitoredCamerasChange]);
+
+  const handleTileVideoElementChange = useCallback((cameraId: string, videoElement: HTMLVideoElement | null) => {
+    attachVideoElement(cameraId, videoElement);
+  }, [attachVideoElement]);
+
+  const handleTilePlaybackError = useCallback((cameraId: string, reason?: string) => {
+    setLiveErrors((current) => new Map(current).set(cameraId, reason ?? "HLS playback failed"));
+    reportPlaybackFailure(cameraId, reason);
+  }, [reportPlaybackFailure]);
 
   const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
@@ -907,11 +927,8 @@ export function EnhancedCameraGrid({
                   degradationReason={viewerReason}
                   snapshotUrl={snapshotUrls.get(camera.id)}
                   liveError={liveErrors.get(camera.id)}
-                  onVideoElementChange={(videoElement) => attachVideoElement(camera.id, videoElement)}
-                  onPlaybackError={(reason) => {
-                    setLiveErrors((current) => new Map(current).set(camera.id, reason ?? "HLS playback failed"));
-                    reportPlaybackFailure(camera.id, reason);
-                  }}
+                  onVideoElementChange={(videoElement) => handleTileVideoElementChange(camera.id, videoElement)}
+                  onPlaybackError={(reason) => handleTilePlaybackError(camera.id, reason)}
                   index={i}
                 />
               </div>

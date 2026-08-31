@@ -334,7 +334,7 @@ export default function ControlRoomPage() {
   }
 
   return (
-    <main className="control-room">
+    <div className="control-room">
       <header className="control-room-header">
         <div className="header-title">
           <Video size={28} aria-hidden="true" />
@@ -484,6 +484,6 @@ export default function ControlRoomPage() {
           .control-room-content { padding: 12px 16px 18px; }
         }
       `}</style>
-    </main>
+    </div>
   );
 }

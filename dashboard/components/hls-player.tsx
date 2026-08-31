@@ -46,12 +46,17 @@ export function HlsPlayer({
     video.volume = volume;
   }, [muted, volume]);
 
+  const onVideoElementChangeRef = useRef(onVideoElementChange);
+  useEffect(() => {
+    onVideoElementChangeRef.current = onVideoElementChange;
+  }, [onVideoElementChange]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    onVideoElementChange?.(video);
-    return () => onVideoElementChange?.(null);
-  }, [onVideoElementChange]);
+    onVideoElementChangeRef.current?.(video);
+    return () => onVideoElementChangeRef.current?.(null);
+  }, []);
 
   useEffect(() => {
     let hls: Hls | null = null;
