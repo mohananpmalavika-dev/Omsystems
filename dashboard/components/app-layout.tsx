@@ -296,6 +296,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
@@ -436,6 +437,26 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   useEffect(() => {
     setActiveCommandIndex(0);
   }, [commandOpen, commandQuery]);
+
+  useEffect(() => {
+    setCreateMenuOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      const createMenu = document.querySelector(".create-menu");
+      if (createMenu && !createMenu.contains(target)) {
+        setCreateMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [createMenuOpen]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -662,14 +683,19 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
             <ThemeSwitcher />
-            <details className="create-menu">
-              <summary><Plus size={15} /><span>Create</span><ChevronDown size={13} /></summary>
+            <details className="create-menu" open={createMenuOpen} onToggle={(event) => setCreateMenuOpen(event.currentTarget.open)}>
+              <summary onClick={(event) => {
+                event.preventDefault();
+                setCreateMenuOpen((open) => !open);
+              }}>
+                <Plus size={15} /><span>Create</span><ChevronDown size={13} />
+              </summary>
               <div className="create-menu-panel">
                 <p>Quick actions</p>
                 {quickActions.map((action) => {
                   const Icon = action.icon;
                   return (
-                    <Link href={action.href} key={action.href}>
+                    <Link href={action.href} key={action.href} onClick={() => setCreateMenuOpen(false)}>
                       <span><Icon size={15} /></span>
                       <strong>{action.label}</strong>
                       <ChevronRight size={13} />
