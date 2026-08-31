@@ -12,9 +12,6 @@ const isSitesBuild = process.env.SITES_BUILD === "true";
 const nextConfig: NextConfig = {
   // Lets CI and local verification builds avoid colliding with a running dev server.
   distDir: process.env.NEXT_DIST_DIR?.trim() || ".next",
-  turbopack: {
-    root: __dirname,
-  },
   ...(!isVercel && !isSitesBuild ? { output: "standalone" as const } : {}),
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1"],
