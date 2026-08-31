@@ -524,9 +524,8 @@ authHTTPExclude:
   - action: pprof
 hls: yes
 hlsAddress: 127.0.0.1:8888
-# Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
-# blocking playlist/partial-segment requests.
-hlsVariant: mpegts
+# Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
+hlsVariant: fmp4
 hlsAllowOrigins: ['*']
 rtsp: no
 rtmp: no

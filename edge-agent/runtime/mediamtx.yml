@@ -9,7 +9,7 @@ authHTTPExclude:
   - action: pprof
 hls: yes
 hlsAddress: 127.0.0.1:8888
-hlsVariant: lowLatency
+hlsVariant: fmp4
 hlsAllowOrigins: ['*']
 webrtc: no
 pathDefaults:
