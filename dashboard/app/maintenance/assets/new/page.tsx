@@ -18,6 +18,7 @@ export default function NewAssetPage() {
   const [vendorId, setVendorId] = useState("");
   const [branchNodeId, setBranchNodeId] = useState("");
   const [location, setLocation] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
   const [installationDate, setInstallationDate] = useState("");
   const [warrantyExpiresAt, setWarrantyExpiresAt] = useState("");
   const [notes, setNotes] = useState("");
@@ -66,6 +67,7 @@ export default function NewAssetPage() {
         vendorId: vendorId || undefined,
         branchNodeId: branchNodeId || undefined,
         location: location.trim() || undefined,
+        purchaseDate: purchaseDate || undefined,
         installationDate: installationDate || undefined,
         warrantyExpiresAt: warrantyExpiresAt || undefined,
         notes: notes.trim() || undefined,
@@ -179,6 +181,10 @@ export default function NewAssetPage() {
               <option value="offline">Offline</option>
               <option value="retired">Retired</option>
             </select>
+          </label>
+          <label className="work-order-field">
+            <span>Purchase date <em>Optional</em></span>
+            <input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} />
           </label>
           <label className="work-order-field">
             <span>Installation date <em>Optional</em></span>
