@@ -454,6 +454,13 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, []);
 
   const closeSidebar = () => setSidebarOpen(false);
+  const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    closeSidebar();
+    if (activeRoute === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
+      e.preventDefault();
+      window.location.assign(href);
+    }
+  };
   const persistOpenGroups = (next: Set<string>) => {
     setOpenGroups(next);
     window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
@@ -467,6 +474,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     setCommandOpen(false);
     setCommandQuery("");
     closeSidebar();
+    if (activeRoute === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
+      window.location.assign(href);
+      return;
+    }
     router.push(href);
   };
 
@@ -511,19 +522,19 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </button>
 
         <div className="nav-shortcuts" aria-label="Quick access">
-          <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
             <LayoutDashboard size={15} /><span>Overview</span>
           </Link>
-          <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
             <MonitorPlay size={15} /><span>Live</span>
           </Link>
-          <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
             <Radar size={15} /><span>Alerts</span>
           </Link>
         </div>
 
         <div className="nav-utility">
-          <Link href="/modules" prefetch={true} className={isActive("/modules") ? "active" : ""} onClick={closeSidebar}>
+          <Link href="/modules" prefetch={true} className={isActive("/modules") ? "active" : ""} onClick={handleNavClick("/modules")}>
             <LayoutGrid size={14} />
             <span>All modules</span>
             <small>{moduleCount}</small>
@@ -568,7 +579,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                     href={item.href}
                     prefetch={true}
                     className={isActive(item.href) ? "active" : ""}
-                    onClick={closeSidebar}
+                    onClick={handleNavClick(item.href)}
                     aria-current={isActive(item.href) ? "page" : undefined}
                   >
                     <Icon size={17} />
@@ -588,23 +599,23 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </nav>
 
         <div className="sidebar-footer">
-          <Link href="/support" className="sidebar-help" onClick={closeSidebar}>
+          <Link href="/support" className="sidebar-help" onClick={handleNavClick("/support")}>
             <HelpCircle size={16} />
             <span>Help &amp; support</span>
             <ChevronRight size={15} />
           </Link>
           <div className="sidebar-legal" aria-label="Legal links">
-            <Link href="/privacy" onClick={closeSidebar}>Privacy</Link>
+            <Link href="/privacy" onClick={handleNavClick("/privacy")}>Privacy</Link>
             <span aria-hidden="true">•</span>
-            <Link href="/terms" onClick={closeSidebar}>Terms</Link>
+            <Link href="/terms" onClick={handleNavClick("/terms")}>Terms</Link>
           </div>
-          <Link href="/maintenance/health" className="sidebar-status" onClick={closeSidebar}>
+          <Link href="/maintenance/health" className="sidebar-status" onClick={handleNavClick("/maintenance/health")}>
             <div className="pulse-icon"><Wifi size={16} /></div>
             <div><strong>Platform status</strong><span>Open infrastructure health</span></div>
             <ChevronRight size={15} />
           </Link>
           <div className="sidebar-user-menu">
-            <Link href="/account/security" className="sidebar-user" onClick={closeSidebar}>
+            <Link href="/account/security" className="sidebar-user" onClick={handleNavClick("/account/security")}>
               <div className="avatar" aria-hidden="true">{operatorInitials}</div>
               <div><strong>{operatorName}</strong><span>{operatorRole}</span></div>
               <Settings size={16} />

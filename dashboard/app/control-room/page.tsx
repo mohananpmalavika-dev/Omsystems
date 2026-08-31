@@ -356,12 +356,15 @@ export default function ControlRoomPage() {
           </div>
         </div>
         <div className="header-actions">
-          <Link href="/" className="exit-button" title="Back to Overview dashboard">
+          <a href="/" className="exit-button" title="Back to Overview dashboard">
             ← Overview
-          </Link>
-          <Link href="/operations/branches" className="exit-button" title="Go to Branches">
+          </a>
+          <a href="/operations/branches" className="exit-button" title="Go to Branches">
             Branches
-          </Link>
+          </a>
+          <a href="/operations/alerts" className="exit-button" title="Go to Alerts">
+            Alerts
+          </a>
           <span className={`data-status ${dataMode}`}>
             <i />
             {dataMode === "live" ? "Live data" : dataMode === "partial" ? "Partially connected" : "Data unavailable"}
