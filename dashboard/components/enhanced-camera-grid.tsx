@@ -505,6 +505,17 @@ export function EnhancedCameraGrid({
           changed = true;
         }
       }
+      if (next.size === 0 && cameras.length > 0) {
+        const stream = totalPositions >= 16 ? "sub" : "main";
+        createDefaultGridAssignments(cameras.map((camera) => camera.id), totalPositions, stream)
+          .forEach((assignment) => {
+            const camera = camerasById.get(assignment.cameraId);
+            if (camera) {
+              next.set(assignment.position, { camera, stream: assignment.stream, priority: 0 });
+              changed = true;
+            }
+          });
+      }
       return changed ? next : current;
     });
 

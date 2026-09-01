@@ -13,6 +13,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { HlsPlayer } from "@/components/hls-player";
+import { CctvVisualCanvas } from "@/components/cctv-visual-canvas";
 import { startLiveFromBrowser } from "@/lib/live-client";
 import type { LiveSessionResponse } from "@/lib/types";
 import { CameraDiagnosticModal } from "./camera-diagnostic-modal";
@@ -151,21 +152,25 @@ export function CameraTile({
               cameraId={camera.cameraId}
             />
           ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-950 px-5 text-center">
-              <CameraIcon className="h-7 w-7 text-slate-600" />
-              <span className="text-xs font-medium text-slate-400">
-                {streamError || (isDecoderAllocated ? "Live stream not started" : "Waiting for decoder capacity")}
-              </span>
+            <div className="relative w-full h-full">
+              <CctvVisualCanvas
+                cameraName={camera.name || `CAM-${camera.channelNumber}`}
+                branchName="BRANCH STREAM"
+                zone={`CH-${camera.channelNumber}`}
+                status={isOffline ? "offline" : "online"}
+              />
               {isDecoderAllocated && (
-                <button
-                  type="button"
-                  onClick={startLive}
-                  disabled={starting}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-60"
-                >
-                  {starting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
-                  {starting ? "Authorizing…" : "Watch live"}
-                </button>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                  <button
+                    type="button"
+                    onClick={startLive}
+                    disabled={starting}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-blue-500 disabled:opacity-60"
+                  >
+                    {starting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
+                    {starting ? "Authorizing…" : "Full Stream"}
+                  </button>
+                </div>
               )}
             </div>
           )}

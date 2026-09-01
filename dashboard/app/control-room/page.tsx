@@ -125,7 +125,8 @@ async function requestJson(url: string, signal: AbortSignal): Promise<unknown> {
 function parseCameras(body: unknown): CameraType[] {
   if (Array.isArray(body)) return body as CameraType[];
   if (!body || typeof body !== "object") return [];
-  const data = (body as { data?: unknown }).data;
+  const obj = body as Record<string, unknown>;
+  const data = obj.data ?? obj.cameras ?? (obj.result as any)?.cameras;
   return Array.isArray(data) ? (data as CameraType[]) : [];
 }
 

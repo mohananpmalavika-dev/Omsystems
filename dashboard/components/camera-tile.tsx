@@ -24,6 +24,7 @@ import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
+import { CctvVisualCanvas } from "./cctv-visual-canvas";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -240,16 +241,19 @@ function CameraTileComponent({
               className="live-video"
             />
           ) : (
-            <div className={`camera-feed-placeholder${liveError ? " has-error" : ""}`}>
-              <span>{camera.status === "offline" ? "Camera offline" : liveError ? "Live feed unavailable" : "Live feed ready"}</span>
-              {liveError && <small>{formatLiveError(liveError)}</small>}
-              {showCredentialUpdate && (
-                <Link
-                  className="camera-login-link"
-                  href={`/admin/branch-onboarding?branchId=${encodeURIComponent(camera.branchId)}&cameraId=${encodeURIComponent(camera.id)}&action=camera-login`}
-                >
-                  Configure credentials
-                </Link>
+            <div className="relative w-full h-full">
+              <CctvVisualCanvas
+                cameraName={camera.name}
+                branchName={(camera as any).branchName || (camera as any).branchCode || camera.branchId || "Branch Main"}
+                zone={camera.model || "CASH / MAIN"}
+                status={camera.status}
+              />
+              {liveError && (
+                <div className="absolute inset-x-0 bottom-2 text-center pointer-events-none">
+                  <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-[10px] text-rose-300">
+                    {formatLiveError(liveError)}
+                  </span>
+                </div>
               )}
             </div>
           )}
