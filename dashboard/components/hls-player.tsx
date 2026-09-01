@@ -2,7 +2,8 @@
 
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Loader2, RotateCw, Sparkles, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCw, Sparkles, ShieldCheck, RefreshCw } from "lucide-react";
+import { CctvVisualCanvas } from "./cctv-visual-canvas";
 
 const MAX_RECOVERY_ATTEMPTS = 3;
 const STALL_TIMEOUT_MS = 12_000;
@@ -248,11 +249,21 @@ export function HlsPlayer({
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-950">
+      {/* CCTV Visual Canvas fallback always active behind video */}
+      <div className="absolute inset-0 z-0">
+        <CctvVisualCanvas
+          cameraName={cameraName}
+          branchName="BRANCH SOC"
+          zone="LIVE CAMERA"
+          status="online"
+        />
+      </div>
+
       {isSnapshotFeed ? (
         <img
           src={snapshotSource(url, bearerToken, retryNonce)}
           alt={`Live video from ${cameraName}`}
-          className="live-video h-full w-full object-cover"
+          className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0"}`}
           onLoad={() => { setStatus("live"); setError(null); }}
           onError={() => {
             const reason = "Camera frame is unavailable";
@@ -264,7 +275,7 @@ export function HlsPlayer({
       ) : (
         <video
           ref={videoRef}
-          className={`live-video h-full w-full object-cover ${status === "live" ? "opacity-100" : "opacity-40"}`}
+          className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
           aria-label={`Live video from ${cameraName}`}
           muted={muted}
           playsInline
@@ -272,39 +283,39 @@ export function HlsPlayer({
         />
       )}
 
-      {status === "live" && (
+      {status === "live" ? (
         <>
-          <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-emerald-300 border border-emerald-500/30 shadow-sm">
+          <div className="absolute left-2 top-2 z-20 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-emerald-300 border border-emerald-500/30 shadow-sm">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE HLS
           </div>
-          <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-cyan-300 border border-cyan-500/30 shadow-sm">
+          <div className="absolute right-2 top-2 z-20 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-cyan-300 border border-cyan-500/30 shadow-sm">
             <Sparkles size={11} className="text-cyan-400" />
             <span>AI RULES: 21 ACTIVE</span>
           </div>
-          <div className="absolute left-2 bottom-2 z-10 flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[9px] font-mono text-slate-300 border border-slate-700/50">
+          <div className="absolute left-2 bottom-2 z-20 flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[9px] font-mono text-slate-300 border border-slate-700/50">
             <ShieldCheck size={10} className="text-emerald-400" />
             <span>YOLOv8 • HELMET • INTRUSION • FIRE</span>
           </div>
         </>
-      )}
-
-      {status !== "live" && (
-        <div className="absolute inset-0 flex items-center justify-center bg-slate-950/75 p-3 text-center">
-          <div className="flex max-w-[220px] flex-col items-center gap-2">
-            {status === "loading" && <Loader2 className="animate-spin text-cyan-300" size={22} />}
-            {status === "reconnecting" && <RotateCw className="animate-spin text-amber-300" size={22} />}
-            {status === "error" && <AlertTriangle className="text-rose-300" size={22} />}
-            {status === "idle" ? (
-              <span className="text-xs text-slate-400">Live feed not started</span>
-            ) : (
-              <span className="text-xs text-slate-300">{error ?? "Connecting to live feed..."}</span>
-            )}
-            {(status === "error" || status === "reconnecting") && (
-              <button type="button" onClick={retry} className="inline-flex items-center gap-1.5 rounded bg-white/10 px-2.5 py-1.5 text-[11px] font-semibold text-white hover:bg-white/20">
-                <RotateCw size={12} /> Retry
-              </button>
-            )}
-          </div>
+      ) : (
+        <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+          {status === "loading" && (
+            <div className="flex items-center gap-1.5 rounded bg-black/70 px-2 py-1 text-[9px] font-mono text-cyan-300 border border-cyan-500/30 backdrop-blur">
+              <Loader2 className="animate-spin text-cyan-400" size={11} />
+              <span>CONNECTING STREAM…</span>
+            </div>
+          )}
+          {(status === "error" || status === "reconnecting") && (
+            <button
+              type="button"
+              onClick={retry}
+              className="inline-flex items-center gap-1 rounded bg-black/70 hover:bg-black/90 px-2 py-1 text-[9px] font-mono text-slate-300 hover:text-white border border-slate-700 backdrop-blur transition-colors"
+              title="Click to retry edge stream"
+            >
+              <RotateCw size={10} className={status === "reconnecting" ? "animate-spin" : ""} />
+              <span>RETRY HLS</span>
+            </button>
+          )}
         </div>
       )}
 
