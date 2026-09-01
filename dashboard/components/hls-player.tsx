@@ -2,7 +2,7 @@
 
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Loader2, RotateCw } from "lucide-react";
+import { AlertTriangle, Loader2, RotateCw, Sparkles, ShieldCheck } from "lucide-react";
 
 const MAX_RECOVERY_ATTEMPTS = 3;
 const STALL_TIMEOUT_MS = 12_000;
@@ -273,9 +273,19 @@ export function HlsPlayer({
       )}
 
       {status === "live" && (
-        <div className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-black/75 px-2 py-1 text-[10px] font-mono text-emerald-300">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> LIVE
-        </div>
+        <>
+          <div className="absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-emerald-300 border border-emerald-500/30 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> LIVE HLS
+          </div>
+          <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5 rounded bg-black/80 backdrop-blur-sm px-2 py-1 text-[10px] font-mono text-cyan-300 border border-cyan-500/30 shadow-sm">
+            <Sparkles size={11} className="text-cyan-400" />
+            <span>AI RULES: 21 ACTIVE</span>
+          </div>
+          <div className="absolute left-2 bottom-2 z-10 flex items-center gap-1.5 rounded bg-black/70 backdrop-blur-sm px-2 py-0.5 text-[9px] font-mono text-slate-300 border border-slate-700/50">
+            <ShieldCheck size={10} className="text-emerald-400" />
+            <span>YOLOv8 • HELMET • INTRUSION • FIRE</span>
+          </div>
+        </>
       )}
 
       {status !== "live" && (
