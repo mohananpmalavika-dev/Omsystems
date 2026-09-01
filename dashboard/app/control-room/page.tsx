@@ -225,7 +225,7 @@ function inferHierarchy(branchName: string, cameraName: string = ""): { zone: st
 
   // Region Detection
   let region = "Kerala";
-  if (combined.includes("kerala") || combined.includes("kochi") || combined.includes("ernakulam") || combined.includes("trivandrum") || combined.includes("calicut") || combined.includes("thrissur") || combined.includes("kannur") || combined.includes("kollam") || combined.includes("palakkad") || combined.includes("alappuzha") || combined.includes("kottayam")) {
+  if (combined.includes("kerala") || combined.includes("kochi") || combined.includes("ernakulam") || combined.includes("trivandrum") || combined.includes("calicut") || combined.includes("thrissur") || combined.includes("kannur") || combined.includes("kollam") || combined.includes("palakkad") || combined.includes("alappuzha") || combined.includes("kottayam") || combined.includes("krypton")) {
     region = "Kerala";
   } else if (combined.includes("karnataka") || combined.includes("bangalore") || combined.includes("bengaluru") || combined.includes("mysore") || combined.includes("mangalore") || combined.includes("hubli")) {
     region = "Karnataka";
@@ -245,7 +245,7 @@ function inferHierarchy(branchName: string, cameraName: string = ""): { zone: st
 
   // Area / District Detection
   let area = "Main Area";
-  if (combined.includes("ernakulam") || combined.includes("kochi") || combined.includes("edapally") || combined.includes("aluva") || combined.includes("kakkanad") || combined.includes("mg road") || combined.includes("marine drive")) {
+  if (combined.includes("ernakulam") || combined.includes("kochi") || combined.includes("edapally") || combined.includes("aluva") || combined.includes("kakkanad") || combined.includes("mg road") || combined.includes("marine drive") || combined.includes("krypton")) {
     area = "Ernakulam / Kochi";
   } else if (combined.includes("trivandrum") || combined.includes("thiruvananthapuram") || combined.includes("technopark") || combined.includes("kazhakoottam")) {
     area = "Trivandrum Metro";
@@ -458,10 +458,13 @@ export default function ControlRoomPage() {
       const { zone, region, area } = inferHierarchy(bName, camera.name);
 
       // Hierarchy filters
-      if (selectedZone !== "ALL" && zone !== selectedZone) return false;
-      if (selectedRegion !== "ALL" && region !== selectedRegion) return false;
-      if (selectedArea !== "ALL" && area !== selectedArea) return false;
-      if (selectedBranchId !== "ALL" && bId !== selectedBranchId) return false;
+      if (selectedBranchId !== "ALL") {
+        if (bId !== selectedBranchId) return false;
+      } else {
+        if (selectedZone !== "ALL" && zone !== selectedZone) return false;
+        if (selectedRegion !== "ALL" && region !== selectedRegion) return false;
+        if (selectedArea !== "ALL" && area !== selectedArea) return false;
+      }
 
       // Status filter
       if (statusFilter === "ONLINE" && camera.status === "offline") return false;

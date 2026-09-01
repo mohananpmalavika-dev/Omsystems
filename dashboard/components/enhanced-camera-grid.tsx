@@ -448,77 +448,24 @@ export function EnhancedCameraGrid({
   // Initialize from a saved layout. If its camera IDs are no longer present
   // in the current API response, populate the wall with available cameras.
   useEffect(() => {
-    if (cameras.length === 0 || initialLayoutApplied.current) return;
-    initialLayoutApplied.current = true;
+    if (cameras.length === 0) {
+      setGridPositions(new Map());
+      return;
+    }
 
     const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
     const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
+    const stream = totalPositions >= 16 ? "sub" : "main";
 
-    initialLayout?.positions.forEach((position) => {
-      const camera = camerasById.get(position.cameraId);
-      if (camera && position.position < totalPositions) {
-        posMap.set(position.position, { camera, stream: position.stream, priority: 0 });
-      }
+    cameras.slice(0, totalPositions).forEach((camera, index) => {
+      posMap.set(index, { camera, stream, priority: 0 });
     });
-
-    if (posMap.size === 0) {
-      const stream = totalPositions >= 16 ? "sub" : "main";
-      createDefaultGridAssignments(cameras.map((camera) => camera.id), totalPositions, stream)
-        .forEach((assignment) => {
-          const camera = camerasById.get(assignment.cameraId);
-          if (camera) {
-            posMap.set(assignment.position, { camera, stream: assignment.stream, priority: 0 });
-          }
-        });
-    }
 
     setGridPositions(posMap);
-
-    // Auto-start live stream for primary visible online cameras with staggered scheduling ONCE
-    const initialBatch = Array.from(posMap.values()).slice(0, 16);
-    initialBatch.forEach((entry, idx) => {
-      if (entry.camera.status !== "offline") {
-        setTimeout(() => {
-          void handleStartLive(entry.camera.id, entry.stream);
-        }, idx * 60);
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameras, totalPositions]);
 
-  // Inventory polling returns fresh camera objects. Keep assigned tiles in
-  // sync with current status/capabilities, and remove sessions for cameras
-  // that are no longer authorized for this operator.
   useEffect(() => {
-    if (!initialLayoutApplied.current) return;
     const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
-    setGridPositions((current) => {
-      let changed = false;
-      const next = new Map(current);
-      for (const [position, entry] of current) {
-        const camera = camerasById.get(entry.camera.id);
-        if (!camera) {
-          next.delete(position);
-          changed = true;
-        } else if (camera !== entry.camera) {
-          next.set(position, { ...entry, camera });
-          changed = true;
-        }
-      }
-      if (next.size === 0 && cameras.length > 0) {
-        const stream = totalPositions >= 16 ? "sub" : "main";
-        createDefaultGridAssignments(cameras.map((camera) => camera.id), totalPositions, stream)
-          .forEach((assignment) => {
-            const camera = camerasById.get(assignment.cameraId);
-            if (camera) {
-              next.set(assignment.position, { camera, stream: assignment.stream, priority: 0 });
-              changed = true;
-            }
-          });
-      }
-      return changed ? next : current;
-    });
-
     let sessionsChanged = false;
     for (const cameraId of sessionsRef.current.keys()) {
       if (camerasById.has(cameraId)) continue;
