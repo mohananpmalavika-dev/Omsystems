@@ -916,9 +916,8 @@ export function EnhancedCameraGrid({
               >
                 <div className="slot-controls">
                   <TileStateIndicator
-                    streamState={viewerStreamState}
-                    degraded={Boolean(viewerReason && viewerReason !== "DEVICE_OFFLINE")}
-                    error={viewerReason?.replaceAll("_", " ").toLowerCase() || tileStates.get(camera.id)?.lastError}
+                    streamState={sessions.has(camera.id) ? (activeStreamTypesRef.current.get(camera.id) === "main" ? "LIVE_MAINSTREAM" : "LIVE_SUBSTREAM") : "LIVE_SUBSTREAM"}
+                    degraded={false}
                     compact
                   />
                   <button

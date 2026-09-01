@@ -277,11 +277,7 @@ function CameraTileComponent({
             </button>
           </div>
         )}
-        {!session?.hls && deferredDescription && (
-          <span className="viewer-playback-status" title={`Viewer state: ${deferredDescription}`}>
-            {playbackMode === "SUSPENDED" ? `Live deferred: ${deferredDescription}` : deferredDescription}
-          </span>
-        )}
+
 
         <div className="tile-actions">
           {onBookmark && (
