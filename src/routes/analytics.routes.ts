@@ -345,6 +345,44 @@ export async function registerAnalyticsRoutes(
     });
   });
 
+  app.post("/v1/analytics/enable-all-fleet-cameras", async (request, reply) => {
+    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:configure", "branch");
+    const allCameras = (await Promise.all(
+      branches.map((b) => store.listCamerasByBranch(request.currentUser, b.id, "analytics:configure"))
+    )).flat();
+
+    const results = [];
+    for (const camera of allCameras) {
+      results.push(await ensureCameraAiBundle(
+        store,
+        request.currentUser.tenantId,
+        camera.id,
+        request.currentUser.id,
+      ));
+    }
+    const summary = results.reduce((total, result) => ({
+      created: total.created + result.created,
+      enabled: total.enabled + result.enabled,
+      unchanged: total.unchanged + result.unchanged,
+    }), { created: 0, enabled: 0, unchanged: 0 });
+
+    await audit(request, store, "analytics.all_fleet_bundles_enabled", request.currentUser.tenantId, {
+      branchCount: branches.length,
+      cameraCount: allCameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+    });
+
+    return reply.send({
+      success: true,
+      branchCount: branches.length,
+      cameraCount: allCameras.length,
+      capabilityCount: CAMERA_AI_RULE_BUNDLE.length,
+      ...summary,
+      results,
+    });
+  });
+
   app.post("/v1/cameras/:id/analytics/rules", async (request, reply) => {
     const { id } = cameraParams.parse(request.params);
     const parsedInput = ruleSchema.parse(request.body);

@@ -47,6 +47,7 @@ import { registerOrganizationRoutes } from "./routes/organization.routes.js";
 import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.js";
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
+import { ensureCameraAiBundle } from "./analytics/camera-ai-bundle.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerMediaSessionRoutes } from "./routes/media-session.routes.js";
@@ -1515,6 +1516,11 @@ export async function buildApp(options?: {
       return reply.code(parsed.discoveryId ? 404 : 400).send({ error: parsed.discoveryId ? "discovery_not_found" : "manual_registration_failed" });
     }
     await store.upsertRecordingJob(camera.id, initialRecordingJobForSource(parsed.sourceType));
+    try {
+      await ensureCameraAiBundle(store, request.currentUser.tenantId, camera.id, request.currentUser.id);
+    } catch {
+      // Best effort AI bundle initialization
+    }
     await audit(request, store, "camera.approved", camera.nodeId, "success", {
       cameraId: camera.id,
       registrationMethod: parsed.discoveryId ? "discovery" : "manual",
@@ -1547,7 +1553,14 @@ export async function buildApp(options?: {
         rtspPort: row.port,
         streamProfile: row.streamProfile,
       });
-      if (camera) created.push(camera);
+      if (camera) {
+        created.push(camera);
+        try {
+          await ensureCameraAiBundle(store, request.currentUser.tenantId, camera.id, request.currentUser.id);
+        } catch {
+          // Best effort AI bundle initialization
+        }
+      }
     }
     await audit(request, store, "camera.bulk_imported", branchId, "success", {
       count: created.length,

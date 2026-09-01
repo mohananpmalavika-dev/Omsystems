@@ -22,23 +22,23 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
   { name: "AI - Fire detection", detectionType: "fire", objectClasses: ["fire"], severity: "P1", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 30 },
   { name: "AI - Smoke detection", detectionType: "smoke", objectClasses: ["smoke"], severity: "P1", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 30 },
   { name: "AI - Fall detection", detectionType: "fall", objectClasses: ["person"], severity: "P1", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 30 },
-  { name: "AI - Missing helmet", detectionType: "no-helmet", objectClasses: ["person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
+  { name: "AI - Helmet / Face cover detection", detectionType: "helmet", objectClasses: ["helmet", "person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
+  { name: "AI - Missing helmet (PPE)", detectionType: "no-helmet", objectClasses: ["person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
+  { name: "AI - Polygon intrusion", detectionType: "intrusion", objectClasses: ["person", "vehicle"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  { name: "AI - Line crossing", detectionType: "line-crossing", objectClasses: ["person", "vehicle"], severity: "P2", minDurationSeconds: 0, cooldownSeconds: 30 },
+  { name: "AI - Loitering detection", detectionType: "loitering", objectClasses: ["person"], severity: "P3", minDurationSeconds: 5, cooldownSeconds: 60 },
   { name: "AI - Crowd density", detectionType: "crowd-density", objectClasses: ["person"], severity: "P2", minDurationSeconds: 4, cooldownSeconds: 120 },
   { name: "AI - Tailgating", detectionType: "tailgating", objectClasses: ["person"], severity: "P2", minDurationSeconds: 0, cooldownSeconds: 60 },
   { name: "AI - Queue analysis", detectionType: "queue", objectClasses: ["person"], severity: "P3", minDurationSeconds: 5, cooldownSeconds: 120 },
   { name: "AI - Camera tampering", detectionType: "camera-tampering", objectClasses: [], severity: "P1", minDurationSeconds: 1, cooldownSeconds: 30 },
   { name: "AI - Video loss", detectionType: "video-loss", objectClasses: [], severity: "P1", minDurationSeconds: 1, cooldownSeconds: 30 },
   { name: "AI - Face detection", detectionType: "face", objectClasses: ["face"], severity: "P4", minDurationSeconds: 0, minConfidence: 0.75, cooldownSeconds: 300 },
+  { name: "AI - Face recognition match", detectionType: "face-recognition", objectClasses: ["face"], severity: "P2", minDurationSeconds: 0, minConfidence: 0.75, cooldownSeconds: 60 },
   { name: "AI - Number plate recognition", detectionType: "anpr", objectClasses: ["license-plate"], severity: "P4", minDurationSeconds: 0, minConfidence: 0.75, cooldownSeconds: 300 },
+  { name: "AI - Watchlist match", detectionType: "watchlist-match", objectClasses: ["face", "license-plate"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
 ];
 
-export const CAMERA_AI_SETUP_REQUIRED = [
-  "line-crossing",
-  "intrusion",
-  "loitering",
-  "face-recognition",
-  "watchlist-match",
-] as const;
+export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = [];
 
 export function cameraAiRuleInput(
   definition: CameraAiRuleDefinition,

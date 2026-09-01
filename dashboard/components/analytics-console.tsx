@@ -3,7 +3,7 @@
 import {
   Activity, AlertTriangle, ArrowLeft, BellRing, BrainCircuit, Camera,
   Check, ChevronRight, CircleDot, Clock3, ExternalLink, Plus, RefreshCw,
-  Save, ShieldAlert, ShieldCheck, Siren, Trash2, UsersRound, X,
+  Save, ShieldAlert, ShieldCheck, Siren, Sparkles, Trash2, UsersRound, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
@@ -199,7 +199,7 @@ export function AnalyticsConsole() {
       await Promise.all([refreshRules(), refreshAlerts()]);
       setMessage({
         kind: "success",
-        text: `Enabled ${result.capabilityCount} camera-ready AI capabilities on ${result.cameraCount} camera${result.cameraCount === 1 ? "" : "s"}. ${result.setupRequired?.length ?? 0} zone or identity capabilities still require camera-specific setup.`,
+        text: `Enabled ${result.capabilityCount} camera-ready AI capabilities on ${result.cameraCount} camera${result.cameraCount === 1 ? "" : "s"}.`,
       });
     } catch (error) {
       setMessage({ kind: "error", text: readable(error) });
@@ -207,6 +207,24 @@ export function AnalyticsConsole() {
       setSaving(false);
     }
   }, [branchId, refreshAlerts, refreshRules]);
+
+  const enableAllFleetCameraAi = useCallback(async () => {
+    if (!window.confirm("Enable all AI analytics rules & alerts across ALL cameras in all branches?")) return;
+    setSaving(true);
+    setMessage(undefined);
+    try {
+      const result = await analyticsApi.enableAllFleetCameras();
+      await Promise.all([refreshRules(), refreshAlerts()]);
+      setMessage({
+        kind: "success",
+        text: `Successfully enabled ${result.capabilityCount} AI detection rules across ${result.cameraCount} cameras in ${result.branchCount} branches!`,
+      });
+    } catch (error) {
+      setMessage({ kind: "error", text: readable(error) });
+    } finally {
+      setSaving(false);
+    }
+  }, [refreshAlerts, refreshRules]);
 
   return (
     <>
@@ -306,8 +324,12 @@ export function AnalyticsConsole() {
           </select>
         </div>
         <button className="primary-action" disabled={!branchId || cameras.length === 0 || saving}
-          onClick={() => void enableAllCameraAi()}>
-          <ShieldCheck size={14} /> Enable all camera AI ({automaticCapabilityCount})
+          onClick={() => void enableAllCameraAi()} title="Enable all AI rules on this branch's cameras">
+          <ShieldCheck size={14} /> Enable branch AI ({automaticCapabilityCount})
+        </button>
+        <button className="primary-action bg-indigo-600 hover:bg-indigo-500 border-indigo-400" disabled={saving}
+          onClick={() => void enableAllFleetCameraAi()} title="Enable all AI rules on all cameras across the entire fleet">
+          <Sparkles size={14} /> Enable 100% Fleet AI ({automaticCapabilityCount})
         </button>
         <button className="secondary-button" onClick={() => void Promise.all([refreshRules(), refreshAlerts()])}>
           <RefreshCw size={14} /> Refresh

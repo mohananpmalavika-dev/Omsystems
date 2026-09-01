@@ -1129,6 +1129,10 @@ export const analyticsApi = {
     `/v1/branches/${encodeURIComponent(branchId)}/analytics/enable-all-cameras`,
     { method: 'POST', body: JSON.stringify({}) },
   ),
+  enableAllFleetCameras: () => fetchApi<any>(
+    '/v1/analytics/enable-all-fleet-cameras',
+    { method: 'POST', body: JSON.stringify({}) },
+  ),
   askAssistant: (query: string) => fetchApi<any>('/v1/analytics/assistant/query', {
     method: 'POST', body: JSON.stringify({ query }),
   }),
