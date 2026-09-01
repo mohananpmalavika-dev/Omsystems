@@ -248,13 +248,6 @@ function CameraTileComponent({
                 zone={camera.model || "CASH / MAIN"}
                 status={camera.status}
               />
-              {liveError && (
-                <div className="absolute inset-x-0 bottom-2 text-center pointer-events-none">
-                  <span className="px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500/50 text-[10px] text-rose-300">
-                    {formatLiveError(liveError)}
-                  </span>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -262,7 +255,7 @@ function CameraTileComponent({
         <div className="tile-topline">
           <span className={`status-pill ${camera.status}`}>
             <i />
-            {session?.hls ? "Live" : camera.status === "online" ? "Online" : camera.status}
+            {session?.hls ? "Live HLS" : camera.status === "online" ? "Live Feed" : camera.status}
           </span>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
@@ -273,14 +266,16 @@ function CameraTileComponent({
         </div>
 
         {!session?.hls && (
-          <button type="button" className={`watch-button${liveError ? " has-live-error" : ""}`} onClick={onStart} disabled={loading || !isActive}>
-            {loading ? (
-              <LoaderCircle size={17} className="spin" />
-            ) : (
-              <Radio size={17} />
-            )}
-            {loading ? "Authorizing…" : !isActive ? "Camera offline" : liveError ? "Retry live" : "Watch live"}
-          </button>
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+            <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading || !isActive}>
+              {loading ? (
+                <LoaderCircle size={15} className="spin" />
+              ) : (
+                <Radio size={15} />
+              )}
+              {loading ? "Connecting Edge Stream…" : !isActive ? "Camera offline" : "Connect Edge HLS"}
+            </button>
+          </div>
         )}
         {!session?.hls && deferredDescription && (
           <span className="viewer-playback-status" title={`Viewer state: ${deferredDescription}`}>
