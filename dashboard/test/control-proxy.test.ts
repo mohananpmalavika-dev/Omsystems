@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET, POST } from "../app/api/control/[...path]/route";
+import { POST as POST_API_V1 } from "../app/api/v1/[...path]/route";
 
 const originalControlUrl = process.env.CONTROL_PLANE_INTERNAL_URL;
 const originalBridgeKey = process.env.EDGE_BRIDGE_SHARED_KEY;
@@ -356,6 +357,37 @@ describe("dashboard control-plane BFF", () => {
     expect(body.user.id).toBe("employee-1");
     const cookies = response.headers.get("set-cookie") ?? "";
     expect(cookies).toContain("sentinel_access=access-secret");
+    expect(cookies).toContain("HttpOnly");
+    expect(cookies).toContain("SameSite=strict");
+  });
+
+  it("keeps the compatibility v1 login proxy token-free too", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({
+        accessToken: "compat-access-secret",
+        refreshToken: "compat-refresh-secret",
+        expiresIn: 3600,
+        tokenType: "Bearer",
+        user: { id: "employee-compat" },
+      })
+    ));
+
+    const response = await POST_API_V1(
+      new NextRequest("https://sentinel.example/api/v1/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "employee", password: "secret" }),
+      }),
+      { params: Promise.resolve({ path: ["auth", "login"] }) },
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.accessToken).toBeUndefined();
+    expect(body.refreshToken).toBeUndefined();
+    expect(body.user.id).toBe("employee-compat");
+    const cookies = response.headers.get("set-cookie") ?? "";
+    expect(cookies).toContain("sentinel_access=compat-access-secret");
     expect(cookies).toContain("HttpOnly");
     expect(cookies).toContain("SameSite=strict");
   });

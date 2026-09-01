@@ -2220,6 +2220,7 @@ export async function buildApp(options?: {
   // Core maintenance routes depend only on ControlPlaneStore and must be
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
+  await registerMaintenanceExportRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
   await registerBranchCommandCenterRoutes(app, store);
   await registerEnterpriseInfrastructureRoutes(app, store);
@@ -2265,7 +2266,6 @@ export async function buildApp(options?: {
     await registerMaintenanceAdvancedRoutes(app, extendedStore);
     await registerMaintenanceHealthRoutes(app, extendedStore);
     await registerMaintenanceReportsRoutes(app, extendedStore);
-    await registerMaintenanceExportRoutes(app, extendedStore);
     await registerFirmwareManagementRoutes(app, extendedStore);
     await registerEmployeeActivityTrackingRoutes(app, extendedStore);
     

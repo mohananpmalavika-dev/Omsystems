@@ -6,7 +6,10 @@ import {
   socOperatorAnalyticsService,
   SocOperatorAnalyticsService,
 } from '../services/soc-operator-analytics.service.js';
-import type { SocAnalyticsFilter } from '../domain/soc-analytics.types.js';
+import type {
+  IncidentLifecycleRecord,
+  SocAnalyticsFilter,
+} from '../domain/soc-analytics.types.js';
 
 const shiftSchema = z.enum(['MORNING', 'EVENING', 'NIGHT']);
 const prioritySchema = z.enum(['P1', 'P2', 'P3']);
@@ -172,15 +175,33 @@ export async function registerSocAnalyticsRoutes(
     const parsed = incidentLifecycleSchema.safeParse(req.body);
     if (!parsed.success) return invalidRequest(reply, parsed.error);
     const body = parsed.data;
-    const { triggeredAt, acknowledgedAt, investigationStartedAt, resolvedAt, ...details } = body;
-    await service.recordIncidentLifecycle({
-      ...details,
+    const record: IncidentLifecycleRecord = {
       tenantId: req.currentUser.tenantId,
-      triggeredAt: new Date(triggeredAt),
-      ...(acknowledgedAt ? { acknowledgedAt: new Date(acknowledgedAt) } : {}),
-      ...(investigationStartedAt ? { investigationStartedAt: new Date(investigationStartedAt) } : {}),
-      ...(resolvedAt ? { resolvedAt: new Date(resolvedAt) } : {}),
-    });
+      incidentId: body.incidentId!,
+      priority: body.priority!,
+      alertType: body.alertType!,
+      branchId: body.branchId!,
+      regionId: body.regionId!,
+      stateId: body.stateId!,
+      operatorId: body.operatorId!,
+      shift: body.shift!,
+      triggeredAt: new Date(body.triggeredAt!),
+      isEscalated: body.isEscalated ?? false,
+      isFalsePositive: body.isFalsePositive ?? false,
+      isRepeatIncident: body.isRepeatIncident ?? false,
+      isSlaBreached: body.isSlaBreached ?? false,
+      isSopCompliant: body.isSopCompliant ?? true,
+      ...(body.operatorName ? { operatorName: body.operatorName } : {}),
+      ...(body.operatorRole ? { operatorRole: body.operatorRole } : {}),
+      ...(body.branchName ? { branchName: body.branchName } : {}),
+      ...(body.regionName ? { regionName: body.regionName } : {}),
+      ...(body.acknowledgedAt ? { acknowledgedAt: new Date(body.acknowledgedAt) } : {}),
+      ...(body.investigationStartedAt
+        ? { investigationStartedAt: new Date(body.investigationStartedAt) }
+        : {}),
+      ...(body.resolvedAt ? { resolvedAt: new Date(body.resolvedAt) } : {}),
+    };
+    await service.recordIncidentLifecycle(record);
 
     return reply.code(201).send({ success: true, message: 'Incident lifecycle record ingested' });
   });

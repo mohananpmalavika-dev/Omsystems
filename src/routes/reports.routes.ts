@@ -123,7 +123,10 @@ export async function registerReportsRoutes(
     const parsed = activityQuerySchema.safeParse(request.query);
     if (!parsed.success) return invalidInput(reply, "invalid_report_query", parsed.error);
     const params = parsed.data;
-    const report = await buildActivityReport(store, request.currentUser, params);
+    const report = await buildActivityReport(store, request.currentUser, {
+      ...params,
+      limit: params.limit ?? 100,
+    });
     if (!report) return reply.code(404).send({ error: "branch_not_found_or_forbidden" });
     return report;
   });

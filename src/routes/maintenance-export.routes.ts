@@ -3,10 +3,118 @@
  * CSV and data export endpoints for alerts, reports, and health data
  */
 
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
+import type { Action, Camera, User } from '../domain/models.js';
 import Papa from 'papaparse';
+
+const MAX_EXPORT_ROWS = 50_000;
+const branchIdSchema = z.string().trim().min(1).max(200);
+const dateRangeFields = {
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+};
+
+function dateRangeSchema<T extends z.ZodRawShape>(shape: T) {
+  return z.object({ ...dateRangeFields, ...shape }).refine(
+    ({ startDate, endDate }) => !startDate || !endDate || startDate <= endDate,
+    { message: 'startDate must be before or equal to endDate', path: ['endDate'] },
+  );
+}
+
+type ExportScope = {
+  nodes: Awaited<ReturnType<ControlPlaneStore['listAccessibleNodes']>>;
+  nodeIds: Set<string>;
+  branchIds: Set<string>;
+  tenantWide: boolean;
+};
+
+async function exportScope(
+  store: ControlPlaneStore,
+  user: User,
+  action: Action,
+): Promise<ExportScope> {
+  const nodes = await store.listAccessibleNodes(user, action);
+  return {
+    nodes,
+    nodeIds: new Set(nodes.map((node) => node.id)),
+    branchIds: new Set(nodes.filter((node) => node.type === 'branch').map((node) => node.id)),
+    tenantWide: nodes.some((node) => node.type === 'company'),
+  };
+}
+
+function canAccessBranch(scope: ExportScope, branchId: string) {
+  return scope.tenantWide || scope.nodeIds.has(branchId);
+}
+
+function invalidInput(reply: FastifyReply, error: z.ZodError) {
+  return reply.code(400).send({
+    error: 'invalid_export_request',
+    issues: error.issues.map((issue) => ({
+      path: issue.path.join('.'),
+      message: issue.message,
+    })),
+  });
+}
+
+function forbidden(reply: FastifyReply) {
+  return reply.code(403).send({ error: 'forbidden' });
+}
+
+function toCsv(rows: Array<Record<string, unknown>>) {
+  return Papa.unparse(rows, { escapeFormulae: true });
+}
+
+function setCsvHeaders(reply: FastifyReply, filename: string) {
+  reply.header('Content-Type', 'text/csv; charset=utf-8');
+  reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+}
+
+function exportFilename(prefix: string) {
+  return `${prefix}_${new Date().toISOString().slice(0, 10)}.csv`;
+}
+
+function sanitizeFilename(value: string) {
+  const leaf = value.split(/[\\/]/).pop() ?? 'export.csv';
+  const cleaned = leaf.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '').slice(0, 120);
+  const filename = cleaned || 'export.csv';
+  return filename.toLowerCase().endsWith('.csv') ? filename : `${filename}.csv`;
+}
+
+function isoOrEmpty(value: unknown) {
+  if (typeof value !== 'string' && !(value instanceof Date)) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
+function numericMetric(metrics: Record<string, unknown> | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = metrics?.[key];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return undefined;
+}
+
+function textMetric(metrics: Record<string, unknown> | undefined, ...keys: string[]) {
+  for (const key of keys) {
+    const value = metrics?.[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function cameraHealthStatus(camera: Camera, metrics?: Record<string, unknown>) {
+  const reported = textMetric(metrics, 'healthStatus', 'overallStatus', 'status')?.toLowerCase();
+  if (reported && ['healthy', 'warning', 'critical', 'offline'].includes(reported)) return reported;
+  if (camera.status === 'online') return 'healthy';
+  if (camera.status === 'offline') return 'offline';
+  return 'warning';
+}
 
 export async function registerMaintenanceExportRoutes(
   app: FastifyInstance,
@@ -17,43 +125,74 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.get('/v1/maintenance/export/alerts', async (request, reply) => {
-    const query = z.object({
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
+    const parsed = dateRangeSchema({
       severity: z.enum(['critical', 'warning', 'info']).optional(),
-      category: z.string().optional(),
+      category: z.string().trim().min(1).max(100).optional(),
       status: z.enum(['active', 'acknowledged', 'resolved']).optional(),
-    }).parse(request.query);
+    }).safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
-      // TODO: Implement getAlerts method on store interface
-      const alerts: any[] = []; // Placeholder
+      const scope = await exportScope(store, request.currentUser, 'analytics:export');
+      if (scope.nodes.length === 0) return forbidden(reply);
+      const cameraPage = await store.listAccessibleCameras(
+        request.currentUser,
+        'analytics:export',
+        { limit: MAX_EXPORT_ROWS, offset: 0 },
+      );
+      const cameraById = new Map(cameraPage.cameras.map((camera) => [camera.id, camera]));
+      const severityMatches = (severity: string) => {
+        if (!query.severity) return true;
+        if (query.severity === 'critical') return severity === 'P1';
+        if (query.severity === 'warning') return severity === 'P2' || severity === 'P3';
+        return severity === 'P4' || severity === 'P5';
+      };
+      const statusMatches = (status: string) => {
+        if (!query.status) return true;
+        if (query.status === 'acknowledged') return status === 'acknowledged';
+        if (query.status === 'resolved') return status === 'resolved';
+        return ['new', 'investigating', 'escalated'].includes(status);
+      };
+      const category = query.category?.toLowerCase();
+      const alerts = (await store.listAnalyticsAlerts(tenantId, {
+        from: query.startDate,
+        to: query.endDate,
+        limit: MAX_EXPORT_ROWS,
+      }))
+        .filter((alert) => cameraById.has(alert.cameraId))
+        .filter((alert) => severityMatches(alert.severity))
+        .filter((alert) => statusMatches(alert.status))
+        .filter((alert) => !category ||
+          alert.title.toLowerCase().includes(category) ||
+          alert.objectClasses.some((item) => item.toLowerCase().includes(category))
+        );
 
       // Format data for CSV
-      const csvData = alerts.map((alert: any) => ({
-        'Alert ID': alert.id.slice(0, 8),
+      const csvData = alerts.map((alert) => ({
+        'Alert ID': alert.id,
         'Severity': alert.severity,
-        'Category': alert.category,
-        'Message': alert.message,
-        'Source': alert.source,
+        'Category': alert.objectClasses.join(', '),
+        'Message': alert.description ? `${alert.title}: ${alert.description}` : alert.title,
+        'Source': cameraById.get(alert.cameraId)?.name ?? alert.cameraId,
         'Status': alert.status,
-        'Created At': new Date(alert.createdAt).toLocaleString(),
-        'Acknowledged At': alert.acknowledgedAt ? new Date(alert.acknowledgedAt).toLocaleString() : '',
+        'Created At': isoOrEmpty(alert.createdAt),
+        'Acknowledged At': isoOrEmpty(alert.acknowledgedAt),
         'Acknowledged By': alert.acknowledgedBy || '',
-        'Resolved At': alert.resolvedAt ? new Date(alert.resolvedAt).toLocaleString() : '',
-        'Resolved By': alert.resolvedBy || '',
-        'Notes': alert.notes || '',
+        'Resolved At': isoOrEmpty(alert.resolvedAt),
+        'Assigned To': alert.assignedTo || '',
+        'Occurrences': alert.occurrenceCount,
+        'Notes': alert.falseAlarmReason || '',
       }));
 
       // Generate CSV
-      const csv = Papa.unparse(csvData);
+      const csv = toCsv(csvData);
 
       // Set response headers
-      const filename = `alerts_export_${new Date().toISOString().split('T')[0]}.csv`;
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      const filename = exportFilename('alerts_export');
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -77,24 +216,38 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.get('/v1/maintenance/export/work-orders', async (request, reply) => {
-    const query = z.object({
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
-      status: z.string().optional(),
-      severity: z.string().optional(),
-      branchNodeId: z.string().uuid().optional(),
-    }).parse(request.query);
+    const parsed = dateRangeSchema({
+      status: z.enum(['open', 'assigned', 'in_progress', 'resolved', 'closed']).optional(),
+      severity: z.enum(['critical', 'high', 'medium', 'low']).optional(),
+      branchNodeId: branchIdSchema.optional(),
+    }).safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
+      const scope = await exportScope(store, request.currentUser, 'device:configure');
+      if (scope.nodes.length === 0 ||
+          (query.branchNodeId && !canAccessBranch(scope, query.branchNodeId))) {
+        return forbidden(reply);
+      }
       // Fetch work orders
-      const workOrders = await store.listWorkOrders(tenantId, query.status as any);
-      const filteredWorkOrders = workOrders.filter((wo: any) => {
+      const workOrders = await store.listWorkOrders(tenantId);
+      const filteredWorkOrders = workOrders.filter((wo) => {
+        if (query.status && wo.status !== query.status) {
+          return false;
+        }
         if (query.severity && wo.severity !== query.severity) {
           return false;
         }
         if (query.branchNodeId && wo.branchNodeId !== query.branchNodeId) {
+          return false;
+        }
+        if (!query.branchNodeId && wo.branchNodeId && !canAccessBranch(scope, wo.branchNodeId)) {
+          return false;
+        }
+        if (!wo.branchNodeId && !scope.tenantWide) {
           return false;
         }
         if (query.startDate && new Date(wo.createdAt) < new Date(query.startDate)) {
@@ -107,25 +260,24 @@ export async function registerMaintenanceExportRoutes(
       });
 
       // Format data for CSV
-      const csvData = workOrders.map((wo: any) => ({
+      const csvData = filteredWorkOrders.map((wo) => ({
         'WO Number': wo.workOrderNumber,
-        'Asset ID': wo.assetId?.slice(0, 8) || '',
+        'Asset ID': wo.assetId || '',
         'Problem': wo.problem,
         'Severity': wo.severity,
         'Status': wo.status,
-        'Created': new Date(wo.createdAt).toLocaleString(),
-        'Assigned To': wo.assignedTo || '',
-        'SLA Due': wo.slaDueAt ? new Date(wo.slaDueAt).toLocaleString() : '',
-        'Resolved': wo.resolvedAt ? new Date(wo.resolvedAt).toLocaleString() : '',
+        'Created': isoOrEmpty(wo.createdAt),
+        'Assigned To': wo.technician || '',
+        'SLA Due': isoOrEmpty(wo.slaDueAt),
+        'Resolved': ['resolved', 'closed'].includes(wo.status) ? isoOrEmpty(wo.updatedAt) : '',
         'Cost ($)': wo.cost || 0,
         'Root Cause': wo.rootCause || '',
       }));
 
-      const csv = Papa.unparse(csvData);
-      const filename = `work_orders_${new Date().toISOString().split('T')[0]}.csv`;
+      const csv = toCsv(csvData);
+      const filename = exportFilename('work_orders');
 
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -149,37 +301,71 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.get('/v1/maintenance/export/camera-health', async (request, reply) => {
-    const query = z.object({
-      branchNodeId: z.string().uuid().optional(),
+    const parsed = z.object({
+      branchNodeId: branchIdSchema.optional(),
       status: z.enum(['healthy', 'warning', 'critical', 'offline']).optional(),
-    }).parse(request.query);
+    }).safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
-      // Fetch camera health data
-      // TODO: Implement getCameraHealth method on store interface
-      const cameras: any[] = []; // Placeholder
+      const scope = await exportScope(store, request.currentUser, 'device:configure');
+      if (scope.nodes.length === 0 ||
+          (query.branchNodeId && !canAccessBranch(scope, query.branchNodeId))) {
+        return forbidden(reply);
+      }
+      const cameraPage = await store.listAccessibleCameras(
+        request.currentUser,
+        'device:configure',
+        {
+          ...(query.branchNodeId ? { branchId: query.branchNodeId } : {}),
+          limit: MAX_EXPORT_ROWS,
+          offset: 0,
+        },
+      );
+      const branchIds = [...new Set(cameraPage.cameras.map((camera) => camera.branchId))];
+      const [branches, telemetry] = await Promise.all([
+        store.listNodesByIds(branchIds),
+        store.listLatestOperationalTelemetry(tenantId, branchIds),
+      ]);
+      const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+      const cameraTelemetry = new Map(
+        telemetry
+          .filter((item) => item.deviceType === 'camera')
+          .map((item) => [item.deviceId, item]),
+      );
+      const cameras = cameraPage.cameras.filter((camera) => {
+        const health = cameraHealthStatus(camera, cameraTelemetry.get(camera.id)?.metrics);
+        return !query.status || health === query.status;
+      });
 
       // Format data for CSV
-      const csvData = cameras.map((camera: any) => ({
-        'Camera ID': camera.id.slice(0, 8),
+      const csvData = cameras.map((camera) => {
+        const observation = cameraTelemetry.get(camera.id);
+        const profile = camera.profiles.find((item) => item.role === 'main') ?? camera.profiles[0];
+        const metrics = observation?.metrics as Record<string, unknown> | undefined;
+        const resolution = textMetric(metrics, 'resolution') ??
+          (profile ? `${profile.width}x${profile.height}` : '');
+        return {
+        'Camera ID': camera.id,
         'Camera Name': camera.name,
-        'Branch': camera.branchName || '',
-        'Status': camera.status,
-        'Uptime (%)': camera.uptime?.toFixed(2) || '0',
-        'Last Seen': camera.lastSeen ? new Date(camera.lastSeen).toLocaleString() : '',
-        'Frame Rate (fps)': camera.frameRate || 0,
-        'Bitrate (kbps)': camera.bitrate || 0,
-        'Resolution': camera.resolution || '',
-        'Disk Usage (GB)': camera.diskUsage?.toFixed(2) || '0',
-      }));
+        'Branch': branchNames.get(camera.branchId) ?? camera.branchId,
+        'Status': cameraHealthStatus(camera, metrics),
+        'Uptime (%)': numericMetric(metrics, 'uptimePercent') ?? '',
+        'Last Seen': isoOrEmpty(observation?.observedAt ?? camera.lastSeenAt),
+        'Frame Rate (fps)': numericMetric(metrics, 'fps', 'frameRate') ?? profile?.frameRate ?? '',
+        'Bitrate (kbps)': numericMetric(metrics, 'bitrateKbps', 'bitrate') ?? profile?.bitrateKbps ?? '',
+        'Resolution': resolution,
+        'Packet Loss (%)': numericMetric(metrics, 'packetLossPercent', 'packetLoss') ?? '',
+        };
+      });
 
-      const csv = Papa.unparse(csvData);
-      const filename = `camera_health_${new Date().toISOString().split('T')[0]}.csv`;
+      const csv = toCsv(csvData);
+      const filename = exportFilename('camera_health');
 
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -203,35 +389,49 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.get('/v1/maintenance/export/storage-health', async (request, reply) => {
-    const query = z.object({
-      branchNodeId: z.string().uuid().optional(),
-      status: z.enum(['healthy', 'warning', 'critical']).optional(),
-    }).parse(request.query);
+    const parsed = z.object({
+      branchNodeId: branchIdSchema.optional(),
+      status: z.enum(['healthy', 'warning', 'critical', 'offline']).optional(),
+    }).safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
-      // TODO: Implement getStorageHealth method on store interface
-      const storage: any[] = []; // Placeholder
+      const scope = await exportScope(store, request.currentUser, 'device:configure');
+      if (scope.nodes.length === 0 ||
+          (query.branchNodeId && !canAccessBranch(scope, query.branchNodeId))) {
+        return forbidden(reply);
+      }
+      const storage = (await store.listRecordingStorageNodes(tenantId))
+        .filter((node) => query.branchNodeId
+          ? node.scopeNodeId === query.branchNodeId
+          : node.scopeNodeId ? scope.nodeIds.has(node.scopeNodeId) : scope.tenantWide
+        )
+        .filter((node) => !query.status || node.status === query.status);
+      const scopeNames = new Map(scope.nodes.map((node) => [node.id, node.name]));
+      const gigabyte = 1024 ** 3;
 
-      const csvData = storage.map((s: any) => ({
-        'Storage ID': s.id.slice(0, 8),
+      const csvData = storage.map((s) => ({
+        'Storage ID': s.id,
         'Storage Name': s.name,
-        'Branch': s.branchName || '',
-        'Total Capacity (GB)': s.totalCapacity?.toFixed(2) || '0',
-        'Used (GB)': s.usedCapacity?.toFixed(2) || '0',
-        'Available (GB)': s.availableCapacity?.toFixed(2) || '0',
-        'Usage (%)': s.usagePercent?.toFixed(2) || '0',
+        'Branch': s.scopeNodeId ? scopeNames.get(s.scopeNodeId) ?? s.scopeNodeId : '',
+        'Total Capacity (GB)': (s.capacityBytes / gigabyte).toFixed(2),
+        'Used (GB)': (s.usedBytes / gigabyte).toFixed(2),
+        'Available (GB)': (s.availableBytes / gigabyte).toFixed(2),
+        'Usage (%)': s.capacityBytes > 0 ? ((s.usedBytes / s.capacityBytes) * 100).toFixed(2) : '0.00',
         'Status': s.status,
-        'Days Left': s.estimatedDaysLeft || '',
-        'Last Checked': s.lastChecked ? new Date(s.lastChecked).toLocaleString() : '',
+        'SMART Status': s.smart?.overallStatus ?? '',
+        'RAID Status': s.raid?.status ?? '',
+        'Last Write Probe': s.lastWriteProbe?.status ?? '',
+        'Last Checked': isoOrEmpty(s.lastSeenAt),
       }));
 
-      const csv = Papa.unparse(csvData);
-      const filename = `storage_health_${new Date().toISOString().split('T')[0]}.csv`;
+      const csv = toCsv(csvData);
+      const filename = exportFilename('storage_health');
 
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -255,41 +455,58 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.get('/v1/maintenance/export/visits', async (request, reply) => {
-    const query = z.object({
-      startDate: z.string().datetime().optional(),
-      endDate: z.string().datetime().optional(),
-      status: z.string().optional(),
-      branchNodeId: z.string().uuid().optional(),
-    }).parse(request.query);
+    const parsed = dateRangeSchema({
+      status: z.string().trim().min(1).max(50).optional(),
+      branchNodeId: branchIdSchema.optional(),
+    }).safeParse(request.query);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const query = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
-      const visits = await store.listMaintenanceVisits(tenantId, {
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-        status: query.status,
-        branchNodeId: query.branchNodeId,
+      const scope = await exportScope(store, request.currentUser, 'device:configure');
+      if (scope.nodes.length === 0 ||
+          (query.branchNodeId && !canAccessBranch(scope, query.branchNodeId))) {
+        return forbidden(reply);
+      }
+      const [visitCandidates, assets] = await Promise.all([
+        store.listMaintenanceVisits(tenantId),
+        store.listMaintenanceAssets(tenantId),
+      ]);
+      const assetBranches = new Map(assets.map((asset) => [asset.id, asset.branchNodeId]));
+      const scopeNames = new Map(scope.nodes.map((node) => [node.id, node.name]));
+      const visits = visitCandidates.filter((visit: any) => {
+        const branchId = visit.branchNodeId ?? assetBranches.get(visit.assetId);
+        if (query.branchNodeId && branchId !== query.branchNodeId) return false;
+        if (!query.branchNodeId && branchId && !canAccessBranch(scope, branchId)) return false;
+        if (!branchId && !scope.tenantWide) return false;
+        if (query.status && visit.status !== query.status) return false;
+        const dueAt = isoOrEmpty(visit.dueAt);
+        if (query.startDate && dueAt < query.startDate) return false;
+        if (query.endDate && dueAt > query.endDate) return false;
+        return true;
       });
 
       const csvData = visits.map((visit: any) => ({
-        'Visit ID': visit.id.slice(0, 8),
-        'Plan': visit.maintenancePlanName || '',
-        'Branch': visit.branchName || '',
-        'Due Date': new Date(visit.dueAt).toLocaleString(),
-        'Completed Date': visit.visitedAt ? new Date(visit.visitedAt).toLocaleString() : '',
+        'Visit ID': visit.id,
+        'Plan': visit.maintenancePlanName || visit.planId || visit.scheduleId || '',
+        'Branch': visit.branchName || scopeNames.get(
+          visit.branchNodeId ?? assetBranches.get(visit.assetId) ?? '',
+        ) || '',
+        'Due Date': isoOrEmpty(visit.dueAt),
+        'Completed Date': isoOrEmpty(visit.visitedAt),
         'Status': visit.status,
-        'Technician': visit.assignedTo || '',
+        'Technician': visit.assignedTo || visit.technician || '',
         'Duration (min)': visit.duration || '',
         'Findings': visit.findings || '',
         'Notes': visit.notes || '',
       }));
 
-      const csv = Papa.unparse(csvData);
-      const filename = `maintenance_visits_${new Date().toISOString().split('T')[0]}.csv`;
+      const csv = toCsv(csvData);
+      const filename = exportFilename('maintenance_visits');
 
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${filename}"`);
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -313,15 +530,19 @@ export async function registerMaintenanceExportRoutes(
   // ============================================================================
 
   app.post('/v1/maintenance/export/custom', async (request, reply) => {
-    const body = z.object({
-      data: z.array(z.record(z.any())),
-      filename: z.string().min(1),
-      headers: z.record(z.string()).optional(),
-    }).parse(request.body);
+    const parsed = z.object({
+      data: z.array(z.record(z.string(), z.unknown())).max(MAX_EXPORT_ROWS),
+      filename: z.string().trim().min(1).max(200),
+      headers: z.record(z.string(), z.string().trim().min(1).max(200)).optional(),
+    }).safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const body = parsed.data;
 
     const tenantId = request.currentUser.tenantId;
 
     try {
+      const scope = await exportScope(store, request.currentUser, 'device:configure');
+      if (scope.nodes.length === 0) return forbidden(reply);
       // Apply custom headers if provided
       const csvData = body.headers
         ? body.data.map(row => {
@@ -334,10 +555,10 @@ export async function registerMaintenanceExportRoutes(
           })
         : body.data;
 
-      const csv = Papa.unparse(csvData);
+      const csv = toCsv(csvData);
+      const filename = sanitizeFilename(body.filename);
 
-      reply.header('Content-Type', 'text/csv');
-      reply.header('Content-Disposition', `attachment; filename="${body.filename}"`);
+      setCsvHeaders(reply, filename);
 
       // Write audit log
       await store.writeAudit({
@@ -346,7 +567,7 @@ export async function registerMaintenanceExportRoutes(
         action: 'maintenance.custom_data_exported',
         resourceNodeId: null,
         outcome: 'success',
-        details: { count: body.data.length, filename: body.filename },
+        details: { count: body.data.length, filename },
       });
 
       return csv;

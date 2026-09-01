@@ -131,8 +131,6 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         user?: unknown;
       };
       const publicPayload = {
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken,
         expiresIn: payload.expiresIn,
         tokenType: payload.tokenType,
         ...(payload.user ? { user: payload.user } : {}),
@@ -149,18 +147,16 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         request.headers.get("referer")?.startsWith("https:");
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
-        sameSite: isHttps ? "none" : "lax",
+        sameSite: "strict",
         secure: isHttps,
-        partitioned: isHttps,
         path: "/",
         maxAge: payload.expiresIn || 86400,
       });
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
           httpOnly: true,
-          sameSite: isHttps ? "none" : "lax",
+          sameSite: "strict",
           secure: isHttps,
-          partitioned: isHttps,
           path: "/",
           maxAge: 30 * 24 * 60 * 60,
         });

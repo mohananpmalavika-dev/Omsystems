@@ -100,7 +100,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     if (contentType) responseHeaders.set("content-type", contentType);
 
     const bodyBuffer = await upstreamRes.arrayBuffer();
-    const outgoing = new NextResponse(bodyBuffer, {
+    let outgoing = new NextResponse(bodyBuffer, {
       status: upstreamRes.status,
       headers: responseHeaders,
     });
@@ -108,34 +108,50 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     if (upstreamRes.ok && (pathString === "auth/login" || pathString === "auth/refresh")) {
       try {
         const text = new TextDecoder().decode(bodyBuffer);
-        const payload = JSON.parse(text) as { accessToken?: string; refreshToken?: string; expiresIn?: number };
+        const payload = JSON.parse(text) as Record<string, unknown> & {
+          accessToken?: string;
+          refreshToken?: string;
+          expiresIn?: number;
+        };
+        if (!payload.accessToken) {
+          return NextResponse.json(
+            { error: "invalid_auth_response" },
+            { status: 502, headers: { "cache-control": "no-store" } },
+          );
+        }
+        const { accessToken, refreshToken, ...publicPayload } = payload;
+        outgoing = NextResponse.json(publicPayload, {
+          status: upstreamRes.status,
+          headers: { "cache-control": "no-store" },
+        });
         const isHttps =
           process.env.NODE_ENV === "production" ||
           request.nextUrl.protocol === "https:" ||
           request.headers.get("x-forwarded-proto") === "https" ||
           request.headers.get("origin")?.startsWith("https:") ||
           request.headers.get("referer")?.startsWith("https:");
-        if (payload.accessToken) {
-          outgoing.cookies.set("sentinel_access", payload.accessToken, {
+        outgoing.cookies.set("sentinel_access", accessToken, {
+          httpOnly: true,
+          sameSite: "strict",
+          secure: isHttps,
+          path: "/",
+          maxAge: payload.expiresIn || 86400,
+        });
+        if (refreshToken) {
+          outgoing.cookies.set("sentinel_refresh", refreshToken, {
             httpOnly: true,
-            sameSite: isHttps ? "none" : "lax",
+            sameSite: "strict",
             secure: isHttps,
-            partitioned: isHttps,
-            path: "/",
-            maxAge: payload.expiresIn || 86400,
-          });
-        }
-        if (payload.refreshToken) {
-          outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
-            httpOnly: true,
-            sameSite: isHttps ? "none" : "lax",
-            secure: isHttps,
-            partitioned: isHttps,
             path: "/",
             maxAge: 30 * 24 * 60 * 60,
           });
         }
-      } catch {}
+      } catch {
+        return NextResponse.json(
+          { error: "invalid_auth_response" },
+          { status: 502, headers: { "cache-control": "no-store" } },
+        );
+      }
     }
 
     return outgoing;
