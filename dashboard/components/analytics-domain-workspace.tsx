@@ -98,7 +98,7 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
       setBranches(nextBranches);
       setBranchId(nextBranches[0]?.id ?? "");
       setDomain((catalog.domains as CapabilityDomain[] | undefined)?.find((item) => item.id === domainId));
-      setEngineState(health.status === "ok" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline");
+      setEngineState(health.status === "ok" || health.status === "degraded" || health.status === "online" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline");
     }).catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
   }, [domainId]);

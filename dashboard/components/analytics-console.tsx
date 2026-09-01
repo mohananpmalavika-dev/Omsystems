@@ -92,7 +92,7 @@ export function AnalyticsConsole() {
 
   useEffect(() => {
     void analyticsApi.engineHealth()
-      .then((health) => setEngineState(health.status === "ok" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline"))
+      .then((health) => setEngineState(health.status === "ok" || health.status === "degraded" || health.status === "online" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline"))
       .catch((error) => setEngineState(error instanceof Error && error.message.includes("unconfigured") ? "unconfigured" : "offline"));
   }, []);
 
@@ -241,7 +241,7 @@ export function AnalyticsConsole() {
         </div>
         <div className={`analytics-engine-state ${engineState}`}>
           <i /> AI engine {engineState}
-          <small>Independent from live view and recording</small>
+          <small>{engineState === "online" ? "Real-time edge & cloud ingestion active" : "Independent from live view and recording"}</small>
         </div>
       </header>
 
