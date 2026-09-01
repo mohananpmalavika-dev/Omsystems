@@ -50,18 +50,23 @@ export class QuickTunnelSupervisor {
   private child: QuickTunnelChild | undefined;
   private publicUrl: string | undefined;
   private retryTimer: NodeJS.Timeout | undefined;
+  private livenessTimer: NodeJS.Timeout | undefined;
+  private consecutiveFailures = 0;
   private stopped = false;
 
   constructor(private readonly options: QuickTunnelSupervisorOptions) {}
 
   async start() {
+    this.startLivenessLoop();
     return await this.launch();
   }
 
   stop() {
     this.stopped = true;
     if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.livenessTimer) clearInterval(this.livenessTimer);
     this.retryTimer = undefined;
+    this.livenessTimer = undefined;
     this.child?.kill();
     this.child = undefined;
     this.publicUrl = undefined;
@@ -76,6 +81,35 @@ export class QuickTunnelSupervisor {
     child.kill();
     this.scheduleRestart();
     return true;
+  }
+
+  private startLivenessLoop() {
+    if (this.livenessTimer) clearInterval(this.livenessTimer);
+    this.livenessTimer = setInterval(async () => {
+      if (this.stopped || !this.publicUrl || !this.child) return;
+      const current = this.publicUrl;
+      try {
+        const response = await fetch(new URL("/health", current), {
+          signal: AbortSignal.timeout(6_000),
+        });
+        if (response.ok) {
+          this.consecutiveFailures = 0;
+          return;
+        }
+      } catch {
+        // probe failed
+      }
+      this.consecutiveFailures++;
+      if (this.consecutiveFailures >= 2) {
+        logger.warn("Quick tunnel is unhealthy over consecutive probes; rotating tunnel", {
+          publicUrl: current,
+          consecutiveFailures: this.consecutiveFailures,
+        });
+        this.consecutiveFailures = 0;
+        this.rotateIfCurrent(current);
+      }
+    }, 20_000);
+    this.livenessTimer.unref();
   }
 
   private async launch(): Promise<string | undefined> {
@@ -553,14 +587,26 @@ async function startQuickTunnel(executable: string, origin: string, cwd: string)
     const publicUrl = await new Promise<string>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
       let output = "";
+      let resolved = false;
       const inspect = (chunk: Buffer) => {
-        output = `${output}${chunk.toString("utf8")}`.slice(-8_192);
-        const publicUrl = extractQuickTunnelUrl(output);
-        if (publicUrl) { clearTimeout(timeout); resolve(publicUrl); }
+        const text = chunk.toString("utf8");
+        output = `${output}${text}`.slice(-8_192);
+        if (/Unauthorized: Tunnel not found/i.test(text) || /failed to serve incoming request/i.test(text)) {
+          logger.warn("Cloudflare quick tunnel was invalidated by edge server; triggering restart");
+          child.kill();
+        }
+        if (!resolved) {
+          const publicUrl = extractQuickTunnelUrl(output);
+          if (publicUrl) {
+            resolved = true;
+            clearTimeout(timeout);
+            resolve(publicUrl);
+          }
+        }
       };
       child.stdout.on("data", inspect); child.stderr.on("data", inspect);
-      child.once("error", (error) => { clearTimeout(timeout); reject(error); });
-      child.once("exit", (code) => { clearTimeout(timeout); reject(new Error(`Cloudflare quick tunnel exited (${code})`)); });
+      child.once("error", (error) => { if (!resolved) { clearTimeout(timeout); reject(error); } });
+      child.once("exit", (code) => { if (!resolved) { clearTimeout(timeout); reject(new Error(`Cloudflare quick tunnel exited (${code})`)); } });
     });
     return { process: child, publicUrl };
   } catch (error) {
