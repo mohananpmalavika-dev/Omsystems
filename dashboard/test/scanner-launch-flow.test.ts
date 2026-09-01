@@ -12,21 +12,22 @@ describe("website scanner launch flow", () => {
     expect(source).toContain('gateways.length > 0 ? "Agent Commands" : "Install Scanner"');
   });
 
-  it("asks the installed local edge to start after each successful login", async () => {
+  it("does not launch a native Windows protocol as a side effect of web login", async () => {
     const sessionProvider = await readFile("dashboard/components/session-provider.tsx", "utf8");
     const loginForm = await readFile("dashboard/components/login-form.tsx", "utf8");
     const autostart = await readFile("dashboard/lib/local-edge-autostart.ts", "utf8");
 
-    expect(sessionProvider).toContain("requestLocalEdgeAutostart()");
-    expect(loginForm).toContain("resetLocalEdgeAutostart()");
-    expect(loginForm).toContain("requestLocalEdgeAutostart()");
+    expect(sessionProvider).not.toContain("requestLocalEdgeAutostart");
+    expect(loginForm).not.toContain("requestLocalEdgeAutostart");
+    expect(loginForm).not.toContain("requestInstalledEdgeStart");
     expect(autostart).toContain('launcher.src = "sentinel-grid-scanner://start"');
-    expect(autostart).toContain("window.sessionStorage.setItem");
+    expect(autostart).not.toContain("sessionStorage");
   });
 
   it("reuses the installed edge agent from the activation button before offering repair", async () => {
     const provisioningRun = await readFile("dashboard/components/provisioning-run.tsx", "utf8");
     const autostart = await readFile("dashboard/lib/local-edge-autostart.ts", "utf8");
+    const windowsLauncher = await readFile("edge-agent/installer/windows/open-dashboard-scan.ps1", "utf8");
 
     expect(provisioningRun).toContain("requestInstalledEdgeStart()");
     expect(provisioningRun).toContain("cameraInventoryApi.listGateways(branchId)");
@@ -35,6 +36,9 @@ describe("website scanner launch flow", () => {
     expect(provisioningRun).toContain("Use Repair only if the installed task cannot start");
     expect(provisioningRun).not.toContain("downloadInstallerFromActivation");
     expect(autostart).toContain("export function requestInstalledEdgeStart()");
+    expect(windowsLauncher).toContain("Register-EdgeStartupTask");
+    expect(windowsLauncher).toContain("-RepairStartupTask");
+    expect(windowsLauncher).toContain("-Verb RunAs");
   });
 
   it("opens a login prompt for discovered devices that reject saved credentials", async () => {

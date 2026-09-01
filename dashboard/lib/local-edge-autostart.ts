@@ -1,13 +1,7 @@
-const autostartKey = "sentinel-grid:local-edge-autostart-requested";
-
-export function resetLocalEdgeAutostart() {
-  try {
-    window.sessionStorage.removeItem(autostartKey);
-  } catch {
-    return;
-  }
-}
-
+// Starting a native Windows process must remain an explicit operator action.
+// Calling this protocol during web login produces a browser/application prompt
+// (or opens a legacy batch launcher) on every workstation, including machines
+// that are not the branch gateway.
 export function requestInstalledEdgeStart() {
   const launcher = document.createElement("iframe");
   launcher.setAttribute("aria-hidden", "true");
@@ -15,15 +9,4 @@ export function requestInstalledEdgeStart() {
   launcher.src = "sentinel-grid-scanner://start";
   document.body.appendChild(launcher);
   window.setTimeout(() => launcher.remove(), 1_000);
-}
-
-export function requestLocalEdgeAutostart() {
-  try {
-    if (window.sessionStorage.getItem(autostartKey)) return;
-    window.sessionStorage.setItem(autostartKey, "1");
-  } catch {
-    return;
-  }
-
-  requestInstalledEdgeStart();
 }

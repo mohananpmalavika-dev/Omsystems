@@ -254,7 +254,11 @@ let lastCameraConfigSyncAt = 0;
 // any operator-requested work. A scan button click must not wait behind a
 // second, implicit startup scan.
 let lastDiscoveryAt = Date.now();
-await syncCameraHeartbeatConfig();
+await syncCameraHeartbeatConfig().catch((error) => {
+  logger.warn("Initial camera monitoring sync failed; retrying after the control plane reconnects", {
+    error: error instanceof Error ? error.message : String(error),
+  });
+});
 cameraHeartbeat.start(config.CAMERA_HEARTBEAT_INTERVAL_MS, config.CAMERA_ANALYTICS_INTERVAL_MS);
 if (config.EDGE_MEDIA_SHARED_KEY) {
   await startSecretProvider({
@@ -267,7 +271,14 @@ if (config.EDGE_MEDIA_SHARED_KEY) {
 }
 
 logger.info(`Edge agent ${agentId} registered; waiting for branch commands`, { branchId, version: config.EDGE_AGENT_VERSION });
-await heartbeatAndReport();
+await heartbeatAndReport().catch((error) => {
+  // A branch gateway is a long-running appliance. A transient ISP or control-
+  // plane outage during boot must not terminate it and leave camera monitoring
+  // dependent on a later dashboard login. The main poll loop retries every 5s.
+  logger.warn("Initial edge heartbeat failed; continuing in offline retry mode", {
+    error: error instanceof Error ? error.message : String(error),
+  });
+});
 const presenceHeartbeat = startAgentPresenceHeartbeat({
   intervalMs: config.EDGE_HEARTBEAT_INTERVAL_MS,
   heartbeat: () => control.heartbeat(

@@ -21,7 +21,7 @@ interface LiveSessionConsumer {
 }
 
 export interface EdgeMediaRuntime {
-  publicUrl: string;
+  publicUrl: string | undefined;
   stop(): Promise<void>;
 }
 
@@ -347,47 +347,49 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
   const { config } = input;
   const tunnelMode = resolveMediaTunnelMode(config);
   const runtimeDirectory = join(process.env.EDGE_AGENT_HOME ?? process.cwd(), "runtime");
-  await mkdir(runtimeDirectory, { recursive: true });
-  const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
-  await writeFile(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
-
-  const mediaMtx = config.MEDIA_RUNTIME_MANAGED
-    ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory)
-    : undefined;
-  await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
-
-  const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
-  let resolvedPublicUrl = resolvePrivateMediaGatewayUrl(
-    config.PUBLIC_MEDIA_GATEWAY_URL,
-    config.EDGE_LIVE_GATEWAY_PORT,
-  );
-  const currentPublicUrl = () => {
-    if (config.PUBLIC_MEDIA_GATEWAY_URL === "auto" && tunnelMode === "disabled") {
-      try {
-        resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
-      } catch {
-        // Keep the last known URL until the network becomes available again.
-      }
-    }
-    return resolvedPublicUrl;
-  };
-  const liveGateway = buildEdgeLiveGateway({
-    consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
-    router,
-    resolveSecret: (reference) => input.secrets.get(reference),
-    ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
-    publicBaseUrl: currentPublicUrl,
-    mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
-    accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
-    onTalkComplete: async (completion) => {
-      await input.gateway.completeTalkSession(input.agentId, completion.sessionId, completion);
-    },
-  });
-  await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
-
+  let mediaMtx: ChildProcessWithoutNullStreams | undefined;
+  let liveGateway: EdgeLiveGateway | undefined;
   let tunnel: ChildProcessWithoutNullStreams | undefined;
   let quickTunnel: QuickTunnelSupervisor | undefined;
+
   try {
+    await mkdir(runtimeDirectory, { recursive: true });
+    const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
+    await writeFile(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
+
+    mediaMtx = config.MEDIA_RUNTIME_MANAGED
+      ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory)
+      : undefined;
+    await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
+
+    const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
+    let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL === "auto"
+      ? resolvePrivateMediaGatewayUrlIfAvailable(config.EDGE_LIVE_GATEWAY_PORT)
+      : config.PUBLIC_MEDIA_GATEWAY_URL;
+    const currentPublicUrl = () => {
+      if (config.PUBLIC_MEDIA_GATEWAY_URL === "auto" && tunnelMode === "disabled") {
+        resolvedPublicUrl = resolvePrivateMediaGatewayUrlIfAvailable(config.EDGE_LIVE_GATEWAY_PORT)
+          ?? resolvedPublicUrl;
+      }
+      // A request can only arrive through loopback while a quick tunnel is
+      // still obtaining its hostname. Do not advertise this fallback in edge
+      // heartbeats; it is only used to build a response for that local request.
+      return resolvedPublicUrl ?? mediaTunnelOrigin(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT);
+    };
+    liveGateway = buildEdgeLiveGateway({
+      consumer: { consume: (token) => input.gateway.consumeLiveSession(input.agentId, token) },
+      router,
+      resolveSecret: (reference) => input.secrets.get(reference),
+      ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
+      publicBaseUrl: currentPublicUrl,
+      mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
+      accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
+      onTalkComplete: async (completion) => {
+        await input.gateway.completeTalkSession(input.agentId, completion.sessionId, completion);
+      },
+    });
+    await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
+
     if (tunnelMode === "quick") {
       if (config.MEDIA_TUNNEL_MODE === "named") {
         logger.warn("Managed media tunnel is not provisioned; using a protected temporary tunnel");
@@ -397,7 +399,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
           mediaTunnelOrigin(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT), runtimeDirectory),
         onPublicUrl: (publicUrl) => {
           if (!publicUrl) {
-            resolvedPublicUrl = resolvePrivateMediaGatewayUrl("auto", config.EDGE_LIVE_GATEWAY_PORT);
+            resolvedPublicUrl = resolvePrivateMediaGatewayUrlIfAvailable(config.EDGE_LIVE_GATEWAY_PORT);
             return;
           }
           resolvedPublicUrl = publicUrl;
@@ -421,7 +423,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       const publicUrl = await quickTunnel.start();
       if (!publicUrl) {
         logger.warn("Temporary internet tunnel is unavailable; LAN/VPN live media remains active and tunnel retries will continue", {
-          privateUrl: resolvedPublicUrl,
+          privateUrl: resolvedPublicUrl ?? "unavailable",
         });
       }
     } else if (tunnelMode === "named") {
@@ -434,15 +436,23 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       await waitForPublicGateway(new URL("/health", resolvedPublicUrl), 30_000);
       logger.info("Edge live media is reachable", { publicUrl: resolvedPublicUrl, tunnelMode });
     }
-  } catch (error) {
-    quickTunnel?.stop(); tunnel?.kill();
-    await liveGateway.close(); mediaMtx?.kill(); throw error;
-  }
 
-  return {
-    get publicUrl() { return currentPublicUrl(); },
-    async stop() { quickTunnel?.stop(); tunnel?.kill(); await liveGateway.close().catch(() => undefined); mediaMtx?.kill(); },
-  };
+    return {
+      get publicUrl() { return resolvedPublicUrl; },
+      async stop() {
+        quickTunnel?.stop();
+        tunnel?.kill();
+        await liveGateway?.close().catch(() => undefined);
+        mediaMtx?.kill();
+      },
+    };
+  } catch (error) {
+    quickTunnel?.stop();
+    tunnel?.kill();
+    await liveGateway?.close().catch(() => undefined);
+    mediaMtx?.kill();
+    throw error;
+  }
 }
 
 export function resolveMediaTunnelMode(config: Pick<EdgeConfig,
@@ -482,6 +492,17 @@ export function resolvePrivateMediaGatewayUrl(
   const selected = candidates.sort((left, right) => left.priority - right.priority || left.order - right.order)[0];
   if (!selected) throw new Error("No private LAN or VPN IPv4 address is available for live media");
   return `http://${selected.address}:${port}`;
+}
+
+export function resolvePrivateMediaGatewayUrlIfAvailable(
+  port: number,
+  interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces(),
+) {
+  try {
+    return resolvePrivateMediaGatewayUrl("auto", port, interfaces);
+  } catch {
+    return undefined;
+  }
 }
 
 function privateInterfacePriority(name: string, address: string) {

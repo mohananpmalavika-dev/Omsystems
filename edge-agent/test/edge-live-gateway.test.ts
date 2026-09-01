@@ -7,6 +7,7 @@ import {
   quickTunnelArgs,
   QuickTunnelSupervisor,
   resolvePrivateMediaGatewayUrl,
+  resolvePrivateMediaGatewayUrlIfAvailable,
   resolveMediaTunnelMode,
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
@@ -137,6 +138,7 @@ describe("all-in-one edge live gateway", () => {
     })).toBe("http://192.168.29.101:8090");
     expect(resolvePrivateMediaGatewayUrl("https://private-media.example.test", 8090, {}))
       .toBe("https://private-media.example.test");
+    expect(resolvePrivateMediaGatewayUrlIfAvailable(8090, {})).toBeUndefined();
   });
 
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {
