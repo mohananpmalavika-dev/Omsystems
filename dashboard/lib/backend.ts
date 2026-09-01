@@ -149,9 +149,10 @@ export async function startLive(
     // the browser. Prefer the mapped/configured HTTPS tunnel and otherwise
     // use the dashboard's server-to-server gateway. This also replaces stale
     // quick-tunnel hostnames advertised by an older edge heartbeat.
+    const defaultMediaGateway = isProduction ? "http://media-gateway:8090" : "http://localhost:8090";
     const mediaGatewayUrl = routePreference === "public"
-      ? publicMediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090")
-      : controlSession.mediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", "http://localhost:8090");
+      ? publicMediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway)
+      : controlSession.mediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway);
 
     if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
         isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
