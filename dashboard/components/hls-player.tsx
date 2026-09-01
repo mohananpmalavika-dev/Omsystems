@@ -248,16 +248,14 @@ export function HlsPlayer({
   const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-950">
+    <div className="relative h-full w-full overflow-hidden bg-slate-950" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
       {/* CCTV Visual Canvas fallback always active behind video */}
-      <div className="absolute inset-0 z-0">
-        <CctvVisualCanvas
-          cameraName={cameraName}
-          branchName="BRANCH SOC"
-          zone="LIVE CAMERA"
-          status="online"
-        />
-      </div>
+      <CctvVisualCanvas
+        cameraName={cameraName}
+        branchName="BRANCH SOC"
+        zone="LIVE CAMERA"
+        status="online"
+      />
 
       {isSnapshotFeed ? (
         <img

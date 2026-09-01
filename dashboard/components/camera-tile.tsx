@@ -241,7 +241,7 @@ function CameraTileComponent({
               className="live-video"
             />
           ) : (
-            <div className="relative w-full h-full">
+            <div className="relative w-full h-full" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
               <CctvVisualCanvas
                 cameraName={camera.name}
                 branchName={(camera as any).branchName || (camera as any).branchCode || camera.branchId || "Branch Main"}
