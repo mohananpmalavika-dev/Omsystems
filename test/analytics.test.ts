@@ -284,6 +284,39 @@ describe("video analytics and alert workflow", () => {
     expect(store.analyticsEscalations).toHaveLength(1);
   });
 
+  it("returns a batched, permission-filtered live-wall AI snapshot", async () => {
+    const rule = await store.createAnalyticsRule(
+      "omsystems", "cam-001", "user-global-admin",
+      {
+        name: "Live wall person", detectionType: "person", enabled: true,
+        objectClasses: ["person"], minConfidence: 0.5, minDurationSeconds: 0,
+        direction: "any", severity: "P2", cooldownSeconds: 0,
+        recipients: [], recordingPolicy: "none",
+        preRollSeconds: 30, postRollSeconds: 120,
+      },
+    );
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "wall-event",
+      detectionType: "person", occurredAt: new Date().toISOString(),
+      confidence: 0.92, durationSeconds: 1, modelVersion: "people-v1",
+      objects: [{ label: "person", confidence: 0.92 }],
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/analytics/live-wall?cameraIds=cam-001,cam-a006-01&limit=50",
+      headers: { "x-user-id": "user-south-operator" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      cameraIds: ["cam-001"],
+      rules: [expect.objectContaining({ id: rule.id, cameraId: "cam-001" })],
+      alerts: [expect.objectContaining({ cameraId: "cam-001", confidence: 0.92 })],
+      summary: { total: 1, open: 1, highPriority: 1 },
+    });
+  });
+
   it("protects fleetwide SOC metrics and validates lifecycle ingestion", async () => {
     const denied = await app.inject({
       method: "GET",

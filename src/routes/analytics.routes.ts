@@ -122,6 +122,12 @@ const alertListQuery = z.object({
   from: z.string().datetime().optional(), to: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(100),
 });
+const liveWallQuery = z.object({
+  cameraIds: z.string().trim().min(1).max(20_000).transform((value) =>
+    [...new Set(value.split(",").map((item) => item.trim()).filter(Boolean))].slice(0, 144)
+  ),
+  limit: z.coerce.number().int().min(1).max(500).default(200),
+});
 
 async function enrichAnprMetadata(
   store: ControlPlaneStore,
@@ -302,6 +308,45 @@ export async function registerAnalyticsRoutes(
     const camera = await authorizedCamera(request, reply, store, id, "analytics:view");
     if (!camera) return;
     return { data: await store.listAnalyticsRules(id) };
+  });
+
+  /**
+   * One permission-filtered snapshot for the browser video wall. Keeping this
+   * batched avoids one rules request per tile on large (up to 12x12) walls.
+   */
+  app.get("/v1/analytics/live-wall", async (request) => {
+    const query = liveWallQuery.parse(request.query);
+    const requestedCameras = await store.listCamerasByIds(query.cameraIds);
+    const authorizedCameraIds: string[] = [];
+
+    for (const camera of requestedCameras) {
+      if (await hasCameraAccess(request, store, camera, "analytics:view")) {
+        authorizedCameraIds.push(camera.id);
+      }
+    }
+
+    const authorizedSet = new Set(authorizedCameraIds);
+    const [rules, candidateAlerts] = await Promise.all([
+      authorizedCameraIds.length > 0
+        ? store.listAnalyticsRulesByCameraIds(authorizedCameraIds)
+        : Promise.resolve([]),
+      store.listAnalyticsAlerts(request.currentUser.tenantId, {
+        limit: Math.min(1_000, query.limit * 5),
+      }),
+    ]);
+    const alerts = candidateAlerts
+      .filter((alert) => authorizedSet.has(alert.cameraId))
+      .slice(0, query.limit);
+
+    return {
+      data: {
+        cameraIds: authorizedCameraIds,
+        rules,
+        alerts,
+        summary: summarize(alerts),
+        sampledAt: new Date().toISOString(),
+      },
+    };
   });
 
   app.post("/v1/branches/:branchId/analytics/enable-all-cameras", async (request, reply) => {

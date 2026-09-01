@@ -6,6 +6,7 @@ import {
   Activity,
   AlertTriangle,
   Bell,
+  BrainCircuit,
   Building2,
   Camera,
   CheckCircle2,
@@ -21,12 +22,15 @@ import {
   Play,
   RefreshCw,
   Search,
+  Sparkles,
   SlidersHorizontal,
   Video,
   X,
   XCircle,
 } from "lucide-react";
 import { EnhancedCameraGrid, type GridLayout, type GridSize } from "@/components/enhanced-camera-grid";
+import { LiveAiWallPanel } from "@/components/live-ai-wall-panel";
+import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
 import {
   endControlRoomActivity,
@@ -294,6 +298,10 @@ export default function ControlRoomPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
+  const [showAiOverlays, setShowAiOverlays] = useState(true);
+  const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(true);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();
   
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
@@ -377,6 +385,22 @@ export default function ControlRoomPage() {
     };
   }, [loadData]);
 
+  const liveAi = useLiveAiWall(cameras, true);
+  const combinedPriorityCameraIds = useMemo(
+    () => [...new Set([...priorityCameraIds, ...liveAi.priorityCameraIds])],
+    [liveAi.priorityCameraIds, priorityCameraIds],
+  );
+  const aiByCamera = useMemo(() => {
+    const result = new Map();
+    for (const camera of cameras) {
+      result.set(camera.id, {
+        rules: liveAi.rulesByCamera.get(camera.id) ?? [],
+        alerts: liveAi.alertsByCamera.get(camera.id) ?? [],
+      });
+    }
+    return result;
+  }, [cameras, liveAi.alertsByCamera, liveAi.rulesByCamera]);
+
   // Extract all Branches with Hierarchy
   const branchesList = useMemo<HierarchyBranchInfo[]>(() => {
     const branchMap = new Map<string, HierarchyBranchInfo>();
@@ -449,7 +473,7 @@ export default function ControlRoomPage() {
 
   // Filtered Cameras based on all criteria
   const filteredCameras = useMemo(() => {
-    const prioritySet = new Set(priorityCameraIds);
+    const prioritySet = new Set(combinedPriorityCameraIds);
     const query = searchQuery.trim().toLowerCase();
 
     return cameras.filter((camera) => {
@@ -494,7 +518,7 @@ export default function ControlRoomPage() {
     selectedBranchId,
     statusFilter,
     searchQuery,
-    priorityCameraIds,
+    combinedPriorityCameraIds,
   ]);
 
   // Active filter count
@@ -523,17 +547,26 @@ export default function ControlRoomPage() {
 
   // Initial layout for filtered cameras
   const initialLayout = useMemo<GridLayout>(() => {
-    let size: GridSize = "4x4";
+    let size: GridSize;
     if (filteredCameras.length <= 1) size = "1x1";
     else if (filteredCameras.length <= 4) size = "2x2";
     else if (filteredCameras.length <= 9) size = "3x3";
     else if (filteredCameras.length <= 16) size = "4x4";
+    else if (filteredCameras.length <= 25) size = "5x5";
     else if (filteredCameras.length <= 36) size = "6x6";
+    else if (filteredCameras.length <= 49) size = "7x7";
+    else if (filteredCameras.length <= 64) size = "8x8";
+    else if (filteredCameras.length <= 81) size = "9x9";
+    else if (filteredCameras.length <= 100) size = "10x10";
+    else if (filteredCameras.length <= 121) size = "11x11";
+    else size = "12x12";
+
+    const positionLimit = Number(size.split("x")[0]) ** 2;
 
     return {
       name: "Video Wall",
       gridSize: size,
-      positions: filteredCameras.slice(0, 36).map((camera, position) => ({
+      positions: filteredCameras.slice(0, positionLimit).map((camera, position) => ({
         position,
         cameraId: camera.id,
         stream: "sub" as const,
@@ -847,7 +880,7 @@ export default function ControlRoomPage() {
               onClick={() => setStatusFilter("ALERT")}
             >
               <span className="dot amber" />
-              Alerts ({priorityCameraIds.length})
+              Alerts ({combinedPriorityCameraIds.length})
             </button>
           </div>
 
@@ -877,6 +910,30 @@ export default function ControlRoomPage() {
                 Showing all <strong>{cameras.length}</strong> cameras across {branchesList.length} branches
               </span>
             )}
+          </div>
+          <div className="ai-wall-controls" aria-label="Live AI controls">
+            <span className={`ai-engine-chip ${liveAi.engineState}`} title={liveAi.error ?? "Live analytics engine status"}>
+              <BrainCircuit size={12} /><i /> AI {liveAi.engineState}
+            </span>
+            <button
+              type="button"
+              className={showAiOverlays ? "active" : ""}
+              onClick={() => setShowAiOverlays((current) => !current)}
+              aria-pressed={showAiOverlays}
+            >
+              <Sparkles size={12} /> Overlays {showAiOverlays ? "on" : "off"}
+            </button>
+            <button
+              type="button"
+              className={prioritizeAiAlerts ? "active" : ""}
+              onClick={() => setPrioritizeAiAlerts((current) => !current)}
+              aria-pressed={prioritizeAiAlerts}
+            >
+              <Activity size={12} /> AI priority {prioritizeAiAlerts ? "on" : "off"}
+            </button>
+            <button type="button" className="open-ai-panel" onClick={() => setAiPanelOpen(true)}>
+              {liveAi.summary.open} detection{liveAi.summary.open === 1 ? "" : "s"} <ChevronRight size={12} />
+            </button>
           </div>
         </div>
       </section>
@@ -964,6 +1021,13 @@ export default function ControlRoomPage() {
             <span>Storage used</span>
           </div>
         </div>
+        <button type="button" className="stat-card ai-stat" onClick={() => setAiPanelOpen(true)}>
+          <BrainCircuit size={20} className="stat-icon cyan" aria-hidden="true" />
+          <div>
+            <strong>{liveAi.rules.filter((rule) => rule.enabled).length}</strong>
+            <span>AI rules · {liveAi.summary.open} open</span>
+          </div>
+        </button>
       </section>
 
       {storageIssueCount > 0 && (
@@ -987,9 +1051,16 @@ export default function ControlRoomPage() {
             cameras={filteredCameras}
             initialLayout={initialLayout}
             maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
-            priorityCameraIds={priorityCameraIds}
+            priorityCameraIds={prioritizeAiAlerts ? combinedPriorityCameraIds : priorityCameraIds}
+            adaptiveLayout={prioritizeAiAlerts}
             enableVirtualScrolling={false}
             enableGPUAcceleration
+            aiByCamera={aiByCamera}
+            showAiOverlay={showAiOverlays}
+            onOpenCameraAi={(cameraId) => {
+              setSelectedAiCameraId(cameraId);
+              setAiPanelOpen(true);
+            }}
             onActiveStreamsChange={setActiveStreams}
             onMonitoredCamerasChange={handleMonitoredCamerasChange}
           />
@@ -1027,6 +1098,24 @@ export default function ControlRoomPage() {
           </div>
         )}
       </section>
+
+      {aiPanelOpen && (
+        <LiveAiWallPanel
+          cameras={cameras.slice(0, 144)}
+          rules={liveAi.rules}
+          alerts={liveAi.alerts}
+          engineState={liveAi.engineState}
+          capabilityDomains={liveAi.capabilityDomains}
+          capabilityCount={liveAi.capabilityCount}
+          selectedCameraId={selectedAiCameraId}
+          loading={liveAi.loading}
+          error={liveAi.error}
+          lastUpdatedAt={liveAi.lastUpdatedAt}
+          onSelectCamera={setSelectedAiCameraId}
+          onClose={() => setAiPanelOpen(false)}
+          onRefresh={liveAi.refresh}
+        />
+      )}
 
       <style jsx>{`
         .control-room {
@@ -1289,6 +1378,48 @@ export default function ControlRoomPage() {
           font-size: 12px;
           color: #94a3b8;
         }
+        .ai-wall-controls {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+        .ai-wall-controls button,
+        .ai-engine-chip {
+          min-height: 27px;
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 0 8px;
+          color: #94a3b8;
+          border: 1px solid #334155;
+          border-radius: 6px;
+          background: #111c2e;
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: capitalize;
+        }
+        .ai-wall-controls button { cursor: pointer; }
+        .ai-wall-controls button.active {
+          color: #a5f3fc;
+          border-color: #0e7490;
+          background: #083344;
+        }
+        .ai-wall-controls .open-ai-panel {
+          color: #e0e7ff;
+          border-color: #4338ca;
+          background: #312e81;
+        }
+        .ai-engine-chip i {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #64748b;
+        }
+        .ai-engine-chip.online i { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+        .ai-engine-chip.degraded i { background: #f59e0b; }
+        .ai-engine-chip.offline i,
+        .ai-engine-chip.unavailable i { background: #ef4444; }
         .active-pill {
           display: inline-flex;
           align-items: center;
@@ -1402,7 +1533,7 @@ export default function ControlRoomPage() {
         /* Stats Bar */
         .stats-bar {
           display: grid;
-          grid-template-columns: repeat(6, minmax(110px, 1fr));
+          grid-template-columns: repeat(7, minmax(110px, 1fr));
           gap: 10px;
           padding: 12px 20px;
           background: #090e17;
@@ -1417,7 +1548,11 @@ export default function ControlRoomPage() {
           background: #131d2e;
           border: 1px solid #1e293b;
           border-radius: 8px;
+          color: inherit;
+          text-align: left;
         }
+        button.stat-card { cursor: pointer; }
+        button.stat-card:hover { border-color: #0e7490; background: #102538; }
         .stat-card div {
           display: flex;
           min-width: 0;
@@ -1455,6 +1590,7 @@ export default function ControlRoomPage() {
         .stat-icon.purple {
           color: #a855f7;
         }
+        .stat-icon.cyan { color: #22d3ee; }
         .storage-warning {
           margin: 10px 20px 0;
           padding: 8px 12px;

@@ -16,7 +16,7 @@ import { useDecoderBudgetManager } from "./decoderBudgetManager";
 import { useMediaOrchestrator } from "@/hooks/use-media-orchestrator";
 import { VisibilityTracker } from "./visibility-tracker";
 import { TileStateIndicator } from "./tile-state-indicator";
-import type { Camera, LiveSessionResponse } from "@/lib/types";
+import type { AnalyticsAlert, AnalyticsRule, Camera, LiveSessionResponse } from "@/lib/types";
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
@@ -47,6 +47,9 @@ export interface EnhancedCameraGridProps {
   onActiveStreamsChange?: (count: number) => void;
   onMonitoredCamerasChange?: (cameraIds: string[]) => void;
   presentationMode?: PresentationMode;
+  aiByCamera?: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
+  showAiOverlay?: boolean;
+  onOpenCameraAi?: (cameraId: string) => void;
 }
 
 interface VisibleRange {
@@ -71,6 +74,9 @@ interface GridTileProps {
   onStart: (cameraId: string) => void;
   onVideoElementChange: (cameraId: string, videoElement: HTMLVideoElement | null) => void;
   onPlaybackError: (cameraId: string, reason?: string) => void;
+  aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
+  showAiOverlay: boolean;
+  onOpenAi?: (cameraId: string) => void;
 }
 
 const GridTile = memo(function GridTile({
@@ -86,6 +92,9 @@ const GridTile = memo(function GridTile({
   onStart,
   onVideoElementChange,
   onPlaybackError,
+  aiOverlay,
+  showAiOverlay,
+  onOpenAi,
 }: GridTileProps) {
   const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -108,6 +117,9 @@ const GridTile = memo(function GridTile({
       liveError={liveError}
       onVideoElementChange={handleVideoElementChange}
       onPlaybackError={handlePlaybackError}
+      aiOverlay={aiOverlay}
+      showAiOverlay={showAiOverlay}
+      onOpenAi={onOpenAi ? () => onOpenAi(camera.id) : undefined}
       index={index}
     />
   );
@@ -125,6 +137,9 @@ export function EnhancedCameraGrid({
   onActiveStreamsChange,
   onMonitoredCamerasChange,
   presentationMode = "LIVE_MONITORING",
+  aiByCamera,
+  showAiOverlay = true,
+  onOpenCameraAi,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -245,11 +260,12 @@ export function EnhancedCameraGrid({
 
   const prevActiveDecoderCountRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    if (prevActiveDecoderCountRef.current !== activeDecoderCount) {
-      prevActiveDecoderCountRef.current = activeDecoderCount;
-      onActiveStreamsChange?.(activeDecoderCount);
+    const activeSessionCount = sessions.size;
+    if (prevActiveDecoderCountRef.current !== activeSessionCount) {
+      prevActiveDecoderCountRef.current = activeSessionCount;
+      onActiveStreamsChange?.(activeSessionCount);
     }
-  }, [activeDecoderCount, onActiveStreamsChange]);
+  }, [onActiveStreamsChange, sessions.size]);
 
   const prevMonitoredIdsRef = useRef<string>("");
   useEffect(() => {
@@ -489,11 +505,12 @@ export function EnhancedCameraGrid({
 
       // Keep alerting cameras first. Offline cameras stay last because they
       // cannot provide a useful live view.
+      const prioritySet = new Set(priorityCameraIds);
       const sortedEntries = Array.from(newPositions.entries()).sort((a, b) => {
         const priorityA = a[1].camera.status === "offline" ? 0 :
-                         a[1].camera.status === "alert" ? 3 : 1;
+                         prioritySet.has(a[1].camera.id) || a[1].camera.status === "alert" ? 3 : 1;
         const priorityB = b[1].camera.status === "offline" ? 0 :
-                         b[1].camera.status === "alert" ? 3 : 1;
+                         prioritySet.has(b[1].camera.id) || b[1].camera.status === "alert" ? 3 : 1;
         return priorityB - priorityA;
       });
 
@@ -515,7 +532,7 @@ export function EnhancedCameraGrid({
 
     const interval = setInterval(updatePriorities, 5000);
     return () => clearInterval(interval);
-  }, [adaptiveLayout, gridPositions, totalPositions]);
+  }, [adaptiveLayout, gridPositions, priorityCameraIds, totalPositions]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
     const newTotalPositions = gridSizeMap[newSize];
@@ -612,11 +629,27 @@ export function EnhancedCameraGrid({
         ]),
     );
 
+    // Older camera records do not advertise streamProfiles even though their
+    // gateway can start HLS. Admit those visible cameras into the remaining
+    // decoder budget so the wall starts real video instead of stopping at a
+    // metadata placeholder.
+    let fallbackSlots = Math.max(0, decoderLimit - desiredLive.size);
+    if (fallbackSlots > 0) {
+      const cameraById = new Map(cameras.map((camera) => [camera.id, camera]));
+      const orderedVisibleEntries = [...schedulerGridPositions.entries()]
+        .filter(([position]) => position >= visibleRange.start && position < visibleRange.end)
+        .sort(([left], [right]) => left - right);
+      for (const [, entry] of orderedVisibleEntries) {
+        if (fallbackSlots <= 0 || desiredLive.has(entry.cameraId)) continue;
+        const camera = cameraById.get(entry.cameraId);
+        const scheduled = schedule.get(entry.cameraId);
+        if (!camera || camera.status === "offline" || scheduled?.streamProfile) continue;
+        desiredLive.set(entry.cameraId, entry.stream);
+        fallbackSlots -= 1;
+      }
+    }
+
     for (const [cameraId] of sessions) {
-      const scheduled = schedule.get(cameraId);
-      // Keep an explicitly authorized legacy session alive when the camera
-      // has no advertised profile for the capacity scheduler to select.
-      if (!scheduled || !scheduled.streamProfile) continue;
       const desiredStream = desiredLive.get(cameraId);
       if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
       activeStreamTypesRef.current.delete(cameraId);
@@ -636,12 +669,17 @@ export function EnhancedCameraGrid({
     closeSession,
     handleStartLive,
     isInitialized,
+    cameras,
+    decoderLimit,
     loading,
     markPlaybackDeferred,
     schedule,
+    schedulerGridPositions,
     sessions,
     updateStreamState,
     visibleGridCameraIds,
+    visibleRange.end,
+    visibleRange.start,
   ]);
 
   const loadSavedLayouts = () => {
@@ -916,8 +954,8 @@ export function EnhancedCameraGrid({
               >
                 <div className="slot-controls">
                   <TileStateIndicator
-                    streamState={sessions.has(camera.id) ? (activeStreamTypesRef.current.get(camera.id) === "main" ? "LIVE_MAINSTREAM" : "LIVE_SUBSTREAM") : "LIVE_SUBSTREAM"}
-                    degraded={false}
+                    streamState={viewerStreamState}
+                    degraded={Boolean(viewerReason)}
                     compact
                   />
                   <button
@@ -950,6 +988,9 @@ export function EnhancedCameraGrid({
                   onStart={handleRequestLive}
                   onVideoElementChange={handleTileVideoElementChange}
                   onPlaybackError={handleTilePlaybackError}
+                  aiOverlay={aiByCamera?.get(camera.id)}
+                  showAiOverlay={showAiOverlay}
+                  onOpenAi={onOpenCameraAi}
                   index={i}
                 />
               </div>

@@ -3,6 +3,9 @@
 import type {
   AlertNotificationPolicy,
   AlertNotificationPolicyInput,
+  AnalyticsAlert,
+  AnalyticsAlertSummary,
+  AnalyticsRule,
   MaintenanceAsset,
   MaintenanceVendor,
   ProvisioningRun,
@@ -1160,6 +1163,21 @@ export const analyticsApi = {
       if (value !== undefined && value !== '') params.set(key, String(value));
     });
     return fetchApi<{ data: any[]; summary: any }>(`/v1/analytics/alerts?${params}`);
+  },
+  liveWall: (cameraIds: string[], limit = 200) => {
+    const params = new URLSearchParams({
+      cameraIds: cameraIds.slice(0, 144).join(','),
+      limit: String(limit),
+    });
+    return fetchApi<{
+      data: {
+        cameraIds: string[];
+        rules: AnalyticsRule[];
+        alerts: AnalyticsAlert[];
+        summary: AnalyticsAlertSummary;
+        sampledAt: string;
+      };
+    }>(`/v1/analytics/live-wall?${params}`);
   },
   acknowledge: (alertId: string, notes?: string) =>
     fetchApi<any>(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/acknowledge`, {

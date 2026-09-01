@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   BookmarkPlus,
+  BrainCircuit,
   Camera as CameraIcon,
   Expand,
   LoaderCircle,
@@ -17,9 +18,17 @@ import {
   Volume2,
   VolumeX,
   SlidersHorizontal,
+  AlertTriangle,
 } from "lucide-react";
 import { memo, useCallback, useRef, useState } from "react";
-import type { Camera, LiveSessionResponse, RecordingJob, RecordingMode } from "@/lib/types";
+import type {
+  AnalyticsAlert,
+  AnalyticsRule,
+  Camera,
+  LiveSessionResponse,
+  RecordingJob,
+  RecordingMode,
+} from "@/lib/types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
@@ -81,6 +90,9 @@ function CameraTileComponent({
   liveError,
   onVideoElementChange,
   onPlaybackError,
+  aiOverlay,
+  showAiOverlay = true,
+  onOpenAi,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -101,6 +113,9 @@ function CameraTileComponent({
   liveError?: string;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
   onPlaybackError?: (reason?: string) => void;
+  aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
+  showAiOverlay?: boolean;
+  onOpenAi?: () => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
@@ -130,6 +145,11 @@ function CameraTileComponent({
       : null;
   const canPlayLive = isActive && Boolean(session?.hls);
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
+  const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
+  const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
+    !["resolved", "false_alarm", "suppressed"].includes(alert.status)
+  ) ?? [];
+  const latestAiAlert = activeAiAlerts[0];
 
   const scheduleDayOptions = [
     { label: "Sun", value: 0 },
@@ -255,7 +275,7 @@ function CameraTileComponent({
         <div className="tile-topline">
           <span className={`status-pill ${camera.status}`}>
             <i />
-            {session?.hls ? "Live HLS" : camera.status === "online" ? "Live Feed" : camera.status}
+            {session?.hls ? "Live HLS" : camera.status === "online" ? "Ready" : camera.status}
           </span>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
@@ -264,6 +284,27 @@ function CameraTileComponent({
             </button>
           )}
         </div>
+
+        {showAiOverlay && activeAiRules.length > 0 && (
+          <button
+            type="button"
+            className={`camera-ai-overlay ${latestAiAlert ? `alert ${latestAiAlert.severity.toLowerCase()}` : ""}`}
+            onClick={onOpenAi}
+            title={latestAiAlert ? `Open ${latestAiAlert.title}` : "Open live AI details"}
+          >
+            <span className="camera-ai-status">
+              <BrainCircuit size={12} />
+              AI · {activeAiRules.length} rule{activeAiRules.length === 1 ? "" : "s"}
+            </span>
+            {latestAiAlert && (
+              <span className="camera-ai-detection">
+                <b>{latestAiAlert.severity}</b>
+                <em>{latestAiAlert.title}</em>
+                <strong>{Math.round(latestAiAlert.confidence * 100)}%</strong>
+              </span>
+            )}
+          </button>
+        )}
 
         {!session?.hls && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
@@ -276,6 +317,22 @@ function CameraTileComponent({
               {loading ? "Connecting Edge Stream…" : !isActive ? "Camera offline" : "Connect Edge HLS"}
             </button>
           </div>
+        )}
+
+        {liveError && !loading && (
+          <div className="camera-live-error" role="status">
+            <AlertTriangle size={13} />
+            <span>{formatLiveError(liveError)}</span>
+            {showCredentialUpdate && (
+              <Link href={`/maintenance/device-management?cameraId=${encodeURIComponent(camera.id)}`}>
+                Update credentials
+              </Link>
+            )}
+          </div>
+        )}
+
+        {!session?.hls && !liveError && deferredDescription && (
+          <span className="viewer-playback-status">{deferredDescription}</span>
         )}
 
 
