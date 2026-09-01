@@ -28,8 +28,9 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
     ? incomingAuthorization.slice(7).trim()
     : undefined;
-  const employeeSession = request.cookies.get("sentinel_access")?.value ??
-    request.headers.get("x-sentinel-session") ?? bearerSession;
+  const employeeSession = request.headers.get("x-sentinel-session") ??
+    bearerSession ??
+    request.cookies.get("sentinel_access")?.value;
   const edgeAgentToken = request.headers.get("x-edge-agent-token");
   const isEdgeEnrollment = routePath === "/v1/edge-enrollment/activate";
   const isEdgeAgentRequest = Boolean(edgeAgentToken) || isEdgeEnrollment;

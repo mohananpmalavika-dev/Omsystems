@@ -47,6 +47,31 @@ describe("dashboard control-plane BFF", () => {
     expect(headers.has("x-user-id")).toBe(false);
   });
 
+  it("prefers a supplied session over a stale access cookie", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", upstream);
+
+    const request = new NextRequest(
+      "https://sentinel.example/api/control/v1/auth/me",
+      {
+        headers: {
+          cookie: "sentinel_access=stale-cookie-token",
+          "x-sentinel-session": "refreshed-session-token",
+        },
+      },
+    );
+    await GET(request, {
+      params: Promise.resolve({ path: ["v1", "auth", "me"] }),
+    });
+
+    const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("authorization")).toBe("Bearer refreshed-session-token");
+  });
+
   it("uses the configured development identity when no session is present", async () => {
     process.env.NODE_ENV = "test";
     process.env.DASHBOARD_DEV_USER_ID = "user-global-admin";

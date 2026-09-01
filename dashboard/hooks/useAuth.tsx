@@ -66,7 +66,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const fetchCurrentUser = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/auth/me', {
+      const response = await fetch('/api/control/v1/auth/me', {
         credentials: 'include',
       });
 
