@@ -6,6 +6,10 @@ echo "=== 1. Pulling latest code ==="
 git fetch origin main
 git reset --hard origin/main
 
+echo "=== 1.5. Freeing build cache to prevent ENOSPC ==="
+docker builder prune -af --filter until=2h || true
+docker image prune -f || true
+
 echo "=== 2. Building services sequentially ==="
 cd /opt/sentinel-grid/deploy/aws
 
