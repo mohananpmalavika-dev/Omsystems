@@ -446,7 +446,21 @@ export function DeviceManager() {
   const onlineGateway = gateways.find(isGatewayReady);
   const patchCapableGateway = onlineGateway && supportsPatchUpdates(onlineGateway.version) ? onlineGateway : undefined;
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
-    const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (camera.duplicateStatus === "duplicate" ? "duplicate" : camera.duplicateStatus === "review-required" ? "review-required" : (camera.status === "approved" ? "approved" : "pending"));
+    const isEnrolledInCameras = cameras.some((c) =>
+      (c.ipAddress && camera.ipAddress && c.ipAddress === camera.ipAddress &&
+       (c.recorderChannel ?? c.channel ?? 0) === (camera.recorderChannel ?? 0)) ||
+      (c.serialNumber && camera.serialNumber && c.serialNumber.trim().length > 0 &&
+       c.serialNumber.trim().toLowerCase() === camera.serialNumber.trim().toLowerCase())
+    );
+    const reviewStatus = discoveryReviewState[camera.id]?.reviewStatus ?? (
+      camera.status === "approved"
+        ? "approved"
+        : isEnrolledInCameras || camera.duplicateStatus === "duplicate"
+          ? "duplicate"
+          : camera.duplicateStatus === "review-required"
+            ? "review-required"
+            : "pending"
+    );
     return {
       ...camera,
       reviewStatus,
@@ -458,10 +472,25 @@ export function DeviceManager() {
             ? "Approved"
             : "Pending",
     };
-  }), [discoveredCameras, discoveryReviewState]);
+  }), [discoveredCameras, discoveryReviewState, cameras]);
   const pendingDiscoveryQueueItems = useMemo(() => {
-    return discoveryQueueItems.filter((item) => item.reviewStatus !== "approved" && item.status !== "approved");
-  }, [discoveryQueueItems]);
+    const seen = new Set<string>();
+    return discoveryQueueItems.filter((item) => {
+      if (item.reviewStatus === "approved" || item.status === "approved") return false;
+      if (item.reviewStatus === "duplicate" || item.duplicateStatus === "duplicate") return false;
+      const isEnrolled = cameras.some((c) =>
+        (c.ipAddress && item.ipAddress && c.ipAddress === item.ipAddress &&
+         (c.recorderChannel ?? c.channel ?? 0) === (item.recorderChannel ?? 0)) ||
+        (c.serialNumber && item.serialNumber && item.serialNumber.trim().length > 0 &&
+         c.serialNumber.trim().toLowerCase() === item.serialNumber.trim().toLowerCase())
+      );
+      if (isEnrolled) return false;
+      const key = `${item.ipAddress}:${item.recorderChannel ?? 0}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [discoveryQueueItems, cameras]);
   const filteredInventoryRecords = useMemo(() => {
     const query = inventorySearch.trim().toLowerCase();
     return inventoryRecords.filter((record) => {
@@ -490,7 +519,7 @@ export function DeviceManager() {
   }, [inventoryRecords, inventoryDeviceTypeFilter, inventoryHealthFilter, inventoryLifecycleFilter, inventorySearch, inventorySort]);
   const pendingReviewCount = pendingDiscoveryQueueItems.length;
   const approvedReviewCount = discoveryQueueItems.filter((item) => item.reviewStatus === "approved" || item.status === "approved").length;
-  const approvableDiscoveryCount = discoveryQueueItems.filter((item) =>
+  const approvableDiscoveryCount = pendingDiscoveryQueueItems.filter((item) =>
     item.streamVerified === true && item.credentialsRequired !== true && item.reviewStatus === "pending" && item.status !== "approved"
   ).length;
 
@@ -1086,13 +1115,13 @@ export function DeviceManager() {
     setAutoProvisionResults([]);
     scanAbortedRef.current = false;
     try {
-      const unauthenticatedCount = discoveryQueueItems.filter((item) =>
+      const unauthenticatedCount = pendingDiscoveryQueueItems.filter((item) =>
         item.credentialsRequired || !item.streamVerified
       ).length;
       let approvedCount = 0;
       let batchSucceeded = false;
       let batchFailure: unknown;
-      const batchDiscoveryIds = discoveryQueueItems
+      const batchDiscoveryIds = pendingDiscoveryQueueItems
         .filter((item) => item.streamVerified && !item.credentialsRequired && item.reviewStatus === "pending")
         .map((item) => item.id);
 
@@ -1125,7 +1154,7 @@ export function DeviceManager() {
       // camera may be created twice from stale client state.
       if (!batchSucceeded) {
         const fallbackErrors: string[] = [];
-        for (const item of discoveryQueueItems) {
+        for (const item of pendingDiscoveryQueueItems) {
           if (scanAbortedRef.current) break;
           if (item.credentialsRequired || !item.streamVerified || item.reviewStatus !== "pending") continue;
           const name = item.displayName || item.model || `${item.vendor || "IP"} Camera (${item.ipAddress})`;
@@ -1609,7 +1638,7 @@ export function DeviceManager() {
             </div>
           </div>
           <div className="discovery-status-metrics">
-            <div><span>Found</span><strong>{discoveryQueueItems.length}</strong></div>
+            <div><span>Found</span><strong>{pendingDiscoveryQueueItems.length + approvedReviewCount}</strong></div>
             <div><span>Pending</span><strong>{pendingDiscoveryQueueItems.length}</strong></div>
             <div><span>Approved</span><strong>{approvedReviewCount}</strong></div>
           </div>
