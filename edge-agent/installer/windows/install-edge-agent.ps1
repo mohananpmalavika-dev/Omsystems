@@ -102,20 +102,16 @@ function Get-InstalledAgentProcesses([string]$Root) {
 
 function Stop-InstalledAgentProcesses([string]$Root) {
   Write-Host "Terminating any previous Sentinel Grid Edge Agent processes..." -ForegroundColor Yellow
-  
-  # 1. Kill by specific process names
-  Get-Process -Name "edge-agent", "mediamtx", "ffmpeg", "cloudflared" -ErrorAction SilentlyContinue |
-    Where-Object { $_.Id -ne $PID } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
 
-  # 2. Kill by Root directory path matching
-  try {
-    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-      Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($Root, [System.StringComparison]::OrdinalIgnoreCase) -and $_.ProcessId -ne $PID } |
-      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  } catch { }
+  # Stop only processes launched from this installation. Name-based matching
+  # can terminate unrelated ffmpeg or cloudflared workloads on the same host.
+  foreach ($process in Get-InstalledAgentProcesses $Root) {
+    if ($process.Id -ne $PID) {
+      Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+    }
+  }
 
-  # 3. Clean stale lock files
+  # Clean the lock only after the installed process tree has been drained.
   $lockFile = Join-Path $Root "data\edge-agent.lock"
   if (Test-Path -LiteralPath $lockFile) {
     Remove-Item -LiteralPath $lockFile -Force -ErrorAction SilentlyContinue
@@ -135,6 +131,7 @@ $DataDirectory = Join-Path $InstallDirectory "data"
 New-Item -ItemType Directory -Path $InstallDirectory, $ConfigDirectory, $LogDirectory, $DataDirectory -Force | Out-Null
 $existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($existingTask) {
+  $RestoreExistingTaskOnFailure = $true
   Disable-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
