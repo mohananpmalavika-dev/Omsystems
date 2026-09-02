@@ -14,32 +14,36 @@ $commands = @(
 )
 
 
-$paramJson = @{
-    commands = $commands
-} | ConvertTo-Json -Compress
+$paramFile = [System.IO.Path]::GetTempFileName()
+@{ commands = $commands } | ConvertTo-Json | Set-Content -Path $paramFile -Encoding UTF8
 
 $cmd = aws ssm send-command `
     --instance-ids $instanceId `
     --document-name "AWS-RunShellScript" `
-    --parameters "$paramJson" `
+    --parameters "file://$paramFile" `
     --query "Command.CommandId" `
     --output text
+
+Remove-Item -Path $paramFile -Force -ErrorAction SilentlyContinue
+
+if ([string]::IsNullOrWhiteSpace($cmd)) {
+    throw "Failed to dispatch SSM command to instance $instanceId."
+}
 
 Write-Host "SSM Command dispatched: $cmd" -ForegroundColor Green
 Write-Host "Waiting for execution to complete..." -ForegroundColor Yellow
 
-Start-Sleep -Seconds 10
+Start-Sleep -Seconds 5
 
-for ($i = 0; $i -lt 60; $i++) {
+for ($i = 0; $i -lt 90; $i++) {
     $status = aws ssm get-command-invocation `
         --command-id $cmd `
         --instance-id $instanceId `
         --query "Status" `
         --output text
 
-
     Write-Host "Current Status: $status" -ForegroundColor DarkGray
-    if ($status -eq "Success" -or $status -eq "Failed" -or $status -eq "Cancelled") {
+    if ($status -eq "Success" -or $status -eq "Failed" -or $status -eq "Cancelled" -or $status -eq "TimedOut") {
         break
     }
     Start-Sleep -Seconds 5
