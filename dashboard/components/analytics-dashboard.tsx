@@ -275,7 +275,7 @@ export function AnalyticsDashboard() {
                     No persisted footfall, dwell-time, or queue detector events were recorded for this camera in the selected period.
                   </p>
                 )}
-                
+
                 {footfallData.length > 0 && (
                   <div className="metric-chart">
                     <h3>
