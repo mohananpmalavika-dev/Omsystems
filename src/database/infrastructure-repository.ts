@@ -1330,12 +1330,17 @@ export class InfrastructureRepository {
   }
 
   async listUserSessions(userId: string) {
+    let resolvedUserId = userId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      const user = await this.getUserById(userId);
+      resolvedUserId = user?.id ?? userId;
+    }
     const result = await this.pool.query(
       `SELECT id::text,user_id::text,ip_address::text,user_agent,
               access_expires_at,expires_at,last_activity_at,created_at
        FROM user_sessions WHERE user_id=$1 AND expires_at>now()
        ORDER BY last_activity_at DESC`,
-      [userId],
+      [resolvedUserId],
     );
     return camelRows(result.rows);
   }
@@ -1345,7 +1350,12 @@ export class InfrastructureRepository {
   }
 
   async deleteAllUserSessions(userId: string) {
-    await this.pool.query("DELETE FROM user_sessions WHERE user_id=$1", [userId]);
+    let resolvedUserId = userId;
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+      const user = await this.getUserById(userId);
+      resolvedUserId = user?.id ?? userId;
+    }
+    await this.pool.query("DELETE FROM user_sessions WHERE user_id=$1", [resolvedUserId]);
   }
 
   async createPasswordResetToken(userId: string, tokenHash: string) {

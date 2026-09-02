@@ -101,4 +101,22 @@ describe("Session Revocation and Security Endpoints", () => {
     expect(revokeRes.statusCode).toBe(204);
     expect(store.userSessions.has(customSession.id)).toBe(false);
   });
+
+  it("allows a super admin to revoke a session after identity normalization", async () => {
+    const session = await store.createUserSession(
+      "user-global-admin",
+      "tenant-default",
+      "access-hash-super-admin",
+      "refresh-hash-super-admin",
+    );
+
+    const revokeRes = await app.inject({
+      method: "DELETE",
+      url: `/v1/auth/sessions/${session.id}`,
+      headers: { "x-user-id": "user-global-admin" },
+    });
+
+    expect(revokeRes.statusCode).toBe(204);
+    expect(store.userSessions.has(session.id)).toBe(false);
+  });
 });

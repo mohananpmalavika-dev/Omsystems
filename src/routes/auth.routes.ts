@@ -788,11 +788,26 @@ export async function registerAuthRoutes(
         ? await store.getUserSession(params.id)
         : undefined;
 
+    const currentDetails =
+      typeof store.getUserDetails === "function"
+        ? await store.getUserDetails(request.currentUser.id).catch(() => undefined)
+        : undefined;
+    const currentUserIds = new Set(
+      [request.currentUser.id, currentDetails?.id, currentDetails?.identitySubject]
+        .filter((value): value is string => Boolean(value)),
+    );
     const isAdmin = Boolean(
       request.currentUser?.role &&
-      ["superadmin", "global_admin", "admin"].includes(request.currentUser.role),
+      ["super_admin", "superadmin", "company_admin", "hq_admin", "global_admin", "admin"].includes(request.currentUser.role),
     );
-    if (session && session.userId !== request.currentUser.id && !isAdmin) {
+    if (
+      session &&
+      session.tenantId !== request.currentUser.tenantId &&
+      !isAdmin
+    ) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    if (session && !currentUserIds.has(session.userId) && !isAdmin) {
       return reply.code(403).send({
         error: "forbidden",
         message: "Cannot revoke another user's session",
