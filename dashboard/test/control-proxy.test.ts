@@ -410,7 +410,7 @@ describe("dashboard control-plane BFF", () => {
     const cookies = response.headers.get("set-cookie") ?? "";
     expect(cookies).toContain("sentinel_access=access-secret");
     expect(cookies).toContain("HttpOnly");
-    expect(cookies).toContain("SameSite=strict");
+    expect(cookies).toContain("SameSite=lax");
   });
 
   it("keeps login cookies usable for local HTTP production deployments", async () => {

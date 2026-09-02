@@ -138,8 +138,6 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         user?: unknown;
       };
       const publicPayload = {
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken,
         expiresIn: payload.expiresIn,
         tokenType: payload.tokenType,
         ...(payload.user ? { user: payload.user } : {}),
