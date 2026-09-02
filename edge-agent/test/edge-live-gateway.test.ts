@@ -9,6 +9,7 @@ import {
   resolvePrivateMediaGatewayUrl,
   resolvePrivateMediaGatewayUrlIfAvailable,
   resolveMediaTunnelMode,
+  shouldReuseExistingMediaMtx,
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
 } from "../src/streaming/edge-live-gateway.js";
@@ -128,6 +129,12 @@ describe("all-in-one edge live gateway", () => {
       throw new Error("public media tunnel unavailable");
     });
     expect(runtime).toBeUndefined();
+  });
+
+  it("reuses a healthy local MediaMTX instance rather than colliding with its fixed ports", () => {
+    expect(shouldReuseExistingMediaMtx(true, true)).toBe(true);
+    expect(shouldReuseExistingMediaMtx(true, false)).toBe(false);
+    expect(shouldReuseExistingMediaMtx(false, true)).toBe(false);
   });
 
   it("advertises the physical private network for LAN and routed VPN viewers", () => {

@@ -47,7 +47,7 @@ describe("dashboard control-plane BFF", () => {
     expect(headers.has("x-user-id")).toBe(false);
   });
 
-  it("prefers a supplied session over a stale access cookie", async () => {
+  it("prefers the HttpOnly browser session over a stale compatibility header", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     const upstream = vi.fn(async (
       _input: RequestInfo | URL,
@@ -69,7 +69,34 @@ describe("dashboard control-plane BFF", () => {
     });
 
     const headers = new Headers(upstream.mock.calls[0]?.[1]?.headers);
-    expect(headers.get("authorization")).toBe("Bearer refreshed-session-token");
+    expect(headers.get("authorization")).toBe("Bearer stale-cookie-token");
+  });
+
+  it("refreshes with the HttpOnly refresh cookie without forwarding an expired access token", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ accessToken: "fresh-access", expiresIn: 3600 }));
+    vi.stubGlobal("fetch", upstream);
+
+    await POST(
+      new NextRequest("https://sentinel.example/api/control/v1/auth/refresh", {
+        method: "POST",
+        headers: {
+          cookie: "sentinel_access=expired-access; sentinel_refresh=refresh-cookie",
+          authorization: "Bearer stale-browser-token",
+          "content-type": "application/json",
+        },
+        body: "{}",
+      }),
+      { params: Promise.resolve({ path: ["v1", "auth", "refresh"] }) },
+    );
+
+    const [, init] = upstream.mock.calls[0]!;
+    const headers = new Headers(init?.headers);
+    expect(headers.has("authorization")).toBe(false);
+    expect(init?.body).toBe(JSON.stringify({ refreshToken: "refresh-cookie" }));
   });
 
   it("uses the configured development identity when no session is present", async () => {
@@ -415,6 +442,32 @@ describe("dashboard control-plane BFF", () => {
     expect(cookies).toContain("sentinel_access=compat-access-secret");
     expect(cookies).toContain("HttpOnly");
     expect(cookies).toContain("SameSite=strict");
+  });
+
+  it("forwards the compatibility refresh cookie without an expired bearer token", async () => {
+    const upstream = vi.fn(async (
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) => Response.json({ accessToken: "fresh-compat-access", expiresIn: 3600 }));
+    vi.stubGlobal("fetch", upstream);
+
+    await POST_API_V1(
+      new NextRequest("https://sentinel.example/api/v1/auth/refresh", {
+        method: "POST",
+        headers: {
+          cookie: "sentinel_access=expired-access; sentinel_refresh=compat-refresh-cookie",
+          authorization: "Bearer expired-browser-token",
+          "content-type": "application/json",
+        },
+        body: "{}",
+      }),
+      { params: Promise.resolve({ path: ["auth", "refresh"] }) },
+    );
+
+    const [, init] = upstream.mock.calls[0]!;
+    const headers = new Headers(init?.headers);
+    expect(headers.has("authorization")).toBe(false);
+    expect(init?.body).toBe(JSON.stringify({ refreshToken: "compat-refresh-cookie" }));
   });
 
   it("logs upstream fetch failures with route details and returns 502", async () => {

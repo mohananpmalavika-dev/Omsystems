@@ -28,13 +28,17 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
     ? incomingAuthorization.slice(7).trim()
     : undefined;
-  const employeeSession = request.headers.get("x-sentinel-session") ??
-    bearerSession ??
-    request.cookies.get("sentinel_access")?.value;
+  // The BFF-owned HttpOnly cookie is the authoritative browser session. A
+  // legacy JavaScript-readable header is used only by non-browser clients;
+  // allowing it to win would let a stale localStorage value override a newly
+  // refreshed cookie and produce repeated 401 responses after sign-in.
+  const employeeSession = request.cookies.get("sentinel_access")?.value ??
+    request.headers.get("x-sentinel-session") ??
+    bearerSession;
   const edgeAgentToken = request.headers.get("x-edge-agent-token");
   const isEdgeEnrollment = routePath === "/v1/edge-enrollment/activate";
   const isEdgeAgentRequest = Boolean(edgeAgentToken) || isEdgeEnrollment;
-  const isPublicControlRoute = routePath.startsWith("/v1/auth/") ||
+  const isPublicControlRoute = isPublicControlPath(routePath) ||
     routePath.startsWith("/v1/edge-updates/artifacts/");
   const bridgeKey = runtimeEnv("EDGE_BRIDGE_SHARED_KEY", "");
   // Preserve incoming headers so upstream can honor Accept and other request metadata.
@@ -51,11 +55,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   if (isEdgeAgentRequest) {
     headers.delete("authorization");
     headers.delete("x-user-id");
+  } else if (isPublicControlRoute) {
+    // Login and refresh must not inherit an expired access cookie/header.
+    // The refresh token is copied into the request body below instead.
+    headers.delete("authorization");
+    headers.delete("x-user-id");
   } else if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
-    headers.delete("x-user-id");
-  } else if (isPublicControlRoute) {
-    headers.delete("authorization");
     headers.delete("x-user-id");
   } else {
     // Render's optional dashboard Basic Auth also arrives in this header. It
@@ -242,6 +248,18 @@ function runtimeEnv(name: string | string[], fallback: string) {
 
 function normalizeHttpOrigin(value: string) {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}
+
+function isPublicControlPath(routePath: string) {
+  return new Set([
+    "/v1/auth/login",
+    "/v1/auth/refresh",
+    "/v1/auth/forgot-password",
+    "/v1/auth/request-password-reset",
+    "/v1/auth/verify-otp",
+    "/v1/auth/reset-password",
+    "/v1/auth/reset-password-otp",
+  ]).has(routePath);
 }
 
 function publicControlApiBase(request: NextRequest) {

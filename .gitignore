@@ -36,6 +36,10 @@ edge-agent/installation-keys*.txt
 *.exe
 edge-agent/release/edge-agent.exe
 edge-agent/release/updates/
+edge-agent/release/config/
+edge-agent/release/data/
+edge-agent/release/logs/
+edge-agent/release/runtime/
 
 # Ignore environment files (examples only checked into repo)
 .env*

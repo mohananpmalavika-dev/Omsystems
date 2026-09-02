@@ -10,6 +10,15 @@ type RouteContext = {
 async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   const pathString = path.join("/");
+  const isPublicAuthPath = new Set([
+    "auth/login",
+    "auth/refresh",
+    "auth/forgot-password",
+    "auth/request-password-reset",
+    "auth/verify-otp",
+    "auth/reset-password",
+    "auth/reset-password-otp",
+  ]).has(pathString);
 
   // 1. Direct handling for telemetry analytics ingestion
   if (pathString === "analytics") {
@@ -43,18 +52,23 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
     ? incomingAuthorization.slice(7).trim()
     : undefined;
+  // Prefer the BFF's HttpOnly cookie over compatibility headers so a stale
+  // browser-local token cannot override a fresh cookie-backed session.
   const employeeSession = request.cookies.get("sentinel_access")?.value ??
     request.headers.get("x-sentinel-session") ?? bearerSession;
-  if (employeeSession) {
-    headers.set("authorization", `Bearer ${employeeSession}`);
-    headers.delete("x-user-id");
-  } else if (pathString.startsWith("auth/")) {
+  if (isPublicAuthPath) {
+    // Refresh and login are public backend routes. Do not forward a stale
+    // access cookie as a bearer token; refresh receives its dedicated cookie
+    // payload from the compatibility proxy's caller.
     headers.delete("authorization");
+    headers.delete("x-user-id");
+  } else if (employeeSession) {
+    headers.set("authorization", `Bearer ${employeeSession}`);
     headers.delete("x-user-id");
   } else if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
     headers.delete("authorization");
   }
-  if (!employeeSession && !pathString.startsWith("auth/") && process.env.NODE_ENV === "production") {
+  if (!employeeSession && !isPublicAuthPath && process.env.NODE_ENV === "production") {
     return NextResponse.json(
       { success: false, error: "unauthenticated", message: "Sign in to continue" },
       { status: 401, headers: { "cache-control": "no-store" } },
@@ -65,7 +79,11 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   }
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
-  const requestBody = methodHasPotentialBody ? await request.text() : undefined;
+  let requestBody = methodHasPotentialBody ? await request.text() : undefined;
+  if (pathString === "auth/refresh") {
+    const refreshToken = request.cookies.get("sentinel_refresh")?.value;
+    if (refreshToken) requestBody = JSON.stringify({ refreshToken });
+  }
   const willSendBody = typeof requestBody === "string" && requestBody.length > 0;
 
   if (willSendBody) {

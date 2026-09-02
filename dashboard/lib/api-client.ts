@@ -13,6 +13,8 @@ import type {
 } from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
+let cookieRefreshPromise: Promise<boolean> | null = null;
+let loginRedirectInProgress = false;
 
 function startNativeDownload(endpoint: string, values: Record<string, string>) {
   if (typeof document === "undefined") {
@@ -53,16 +55,14 @@ class ApiError extends Error {
  */
 function redirectToLogin() {
   if (typeof window !== 'undefined') {
-    // If login occurred recently, protect session from startup race condition
-    const loginTimestamp = parseInt(localStorage.getItem('sentinel_login_time') || '0', 10);
-    if (Date.now() - loginTimestamp < 45000) {
-      return;
-    }
+    if (loginRedirectInProgress) return;
+    loginRedirectInProgress = true;
 
     // Clear all session data
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
+    localStorage.removeItem('sentinel_login_time');
     
     // Redirect to login
     const currentPath = window.location.pathname;
@@ -70,6 +70,35 @@ function redirectToLogin() {
       window.location.href = '/login?reason=expired';
     }
   }
+}
+
+function isPublicAuthEndpoint(endpoint: string) {
+  return endpoint.includes('/auth/login') ||
+    endpoint.includes('/auth/refresh') ||
+    endpoint.includes('/auth/forgot-password') ||
+    endpoint.includes('/auth/verify-otp') ||
+    endpoint.includes('/auth/reset-password');
+}
+
+/**
+ * Refresh the BFF's HttpOnly employee session once for every concurrent 401.
+ * The refresh token deliberately never reaches JavaScript; the proxy reads it
+ * from the sentinel_refresh cookie and returns a replacement access cookie.
+ */
+export function refreshCookieBackedSession(): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (cookieRefreshPromise) return cookieRefreshPromise;
+
+  cookieRefreshPromise = fetch(`${API_BASE}/v1/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+    .then((response) => response.ok)
+    .catch(() => false)
+    .finally(() => { cookieRefreshPromise = null; });
+  return cookieRefreshPromise;
 }
 
 async function fetchApi<T>(
@@ -94,23 +123,22 @@ async function fetchApi<T>(
     }
   }
 
+  const isAuthEndpoint = isPublicAuthEndpoint(endpoint);
+  const send = () => fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+
   let response: Response;
   
   try {
-    response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      credentials: "include",
-      headers,
-    });
+    response = await send();
+    if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
+      response = await send();
+    }
   } catch (error: any) {
     // Network error - API not reachable
-    const isAuthEndpoint =
-      endpoint.includes('/auth/login') ||
-      endpoint.includes('/auth/refresh') ||
-      endpoint.includes('/auth/forgot-password') ||
-      endpoint.includes('/auth/verify-otp') ||
-      endpoint.includes('/auth/reset-password');
-
     // Only redirect to login if this isn't already an auth attempt
     if (!isAuthEndpoint) {
       redirectToLogin();
@@ -128,13 +156,6 @@ async function fetchApi<T>(
       error: 'unknown_error',
       message: 'An unexpected error occurred',
     }));
-
-    const isAuthEndpoint =
-      endpoint.includes('/auth/login') ||
-      endpoint.includes('/auth/refresh') ||
-      endpoint.includes('/auth/forgot-password') ||
-      endpoint.includes('/auth/verify-otp') ||
-      endpoint.includes('/auth/reset-password');
 
     // Handle authentication errors
     if (response.status === 401) {
@@ -180,14 +201,20 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
     }
   }
 
+  const isAuthEndpoint = isPublicAuthEndpoint(endpoint);
+  const send = () => fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    credentials: 'include',
+    headers,
+  });
+
   let response: Response;
   
   try {
-    response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      credentials: 'include',
-      headers,
-    });
+    response = await send();
+    if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
+      response = await send();
+    }
   } catch (error: any) {
     // Network error - API not reachable
     console.error('API connection failed:', error);
@@ -250,7 +277,15 @@ export const authApi = {
     });
 
     if (typeof window !== 'undefined') {
+      // Browser sessions are cookie-backed. Never carry an old legacy token
+      // into a new login where it could be sent by compatibility callers.
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      sessionStorage.removeItem('activitySessionId');
+      sessionStorage.removeItem('activityAccessToken');
+      sessionStorage.removeItem('currentPageVisitId');
       localStorage.setItem('sentinel_login_time', Date.now().toString());
+      loginRedirectInProgress = false;
       if (response.accessToken) {
         localStorage.setItem('accessToken', response.accessToken);
       }

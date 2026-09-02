@@ -4,9 +4,11 @@
  */
 
 import { logout as authManagerLogout } from './auth-manager';
+import { refreshCookieBackedSession } from './api-client';
 
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
+let sessionGuardCleanup: (() => void) | null = null;
 
 /**
  * Check if user is authenticated
@@ -24,12 +26,6 @@ export function isAuthenticated(): boolean {
 export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'expired') {
   if (typeof window === 'undefined') return;
 
-  // Protect recently authenticated users from startup race conditions
-  const loginTimestamp = parseInt(localStorage.getItem('sentinel_login_time') || '0', 10);
-  if (Date.now() - loginTimestamp < 45000) {
-    return;
-  }
-  
   // End activity session before clearing data
   try {
     const sessionId = sessionStorage.getItem('activitySessionId');
@@ -53,12 +49,13 @@ export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' 
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
+  localStorage.removeItem('sentinel_login_time');
   sessionStorage.removeItem('activitySessionId');
   sessionStorage.removeItem('activityAccessToken');
   sessionStorage.removeItem('currentPageVisitId');
   
   // Stop session checking
-  stopSessionCheck();
+  teardownSessionGuard();
   
   // Redirect to login with reason
   const currentPath = window.location.pathname;
@@ -94,30 +91,9 @@ async function checkSession() {
     });
     
     if (response.status === 401 || response.status === 403) {
-      // Try refresh token first
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          const refreshRes = await fetch('/api/control/v1/auth/refresh', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refreshToken }),
-          });
-          if (refreshRes.ok) {
-            const data = await refreshRes.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-            }
-            if (data.refreshToken) {
-              localStorage.setItem('refreshToken', data.refreshToken);
-            }
-            return;
-          }
-        } catch {
-          // Ignore refresh attempt error
-        }
-      }
+      // Current browser sessions are intentionally cookie-backed. The BFF
+      // owns the refresh token, so refresh even when localStorage has none.
+      if (await refreshCookieBackedSession()) return;
 
       console.warn('Session expired or invalid');
       redirectToLogin('expired');
@@ -168,24 +144,39 @@ export function stopSessionCheck() {
  */
 export function setupSessionGuard() {
   if (typeof window === 'undefined') return;
-  
+  if (sessionGuardCleanup) {
+    startSessionCheck(60000);
+    return;
+  }
+
   // Start session checking every minute
   startSessionCheck(60000);
-  
+
   // Check session on page visibility change
-  document.addEventListener('visibilitychange', () => {
+  const onVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       checkSession();
     }
-  });
-  
+  };
+
   // Check session on page focus
-  window.addEventListener('focus', () => {
-    checkSession();
-  });
-  
+  const onFocus = () => { checkSession(); };
+
   // Cleanup on page unload
-  window.addEventListener('beforeunload', () => {
-    stopSessionCheck();
-  });
+  const onBeforeUnload = () => { stopSessionCheck(); };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('focus', onFocus);
+  window.addEventListener('beforeunload', onBeforeUnload);
+  sessionGuardCleanup = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('focus', onFocus);
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    sessionGuardCleanup = null;
+  };
+}
+
+/** Remove session checks when the app enters a public route or signs out. */
+export function teardownSessionGuard() {
+  stopSessionCheck();
+  sessionGuardCleanup?.();
 }

@@ -357,10 +357,19 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     const mediaConfigPath = join(runtimeDirectory, "mediamtx.yml");
     await writeFile(mediaConfigPath, mediaMtxConfiguration(config), "utf8");
 
-    mediaMtx = config.MEDIA_RUNTIME_MANAGED
-      ? startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory)
-      : undefined;
-    await waitForHttp(new URL("/v3/config/global/get", config.MEDIAMTX_API_URL), mediaMtx, 30_000);
+    const mediaMtxApi = new URL("/v3/config/global/get", config.MEDIAMTX_API_URL);
+    // A prior agent can leave MediaMTX running while the process that owned it
+    // has exited. Reuse the loopback-only API when it is healthy: the new
+    // gateway will become its authentication endpoint and retains control of
+    // every per-session path. Starting a second instance would only fail on
+    // MediaMTX's fixed HLS/API ports and take live video offline.
+    const reusableMediaMtx = await isHttpReady(mediaMtxApi);
+    if (config.MEDIA_RUNTIME_MANAGED && !shouldReuseExistingMediaMtx(config.MEDIA_RUNTIME_MANAGED, reusableMediaMtx)) {
+      mediaMtx = startManagedProcess("MediaMTX", config.MEDIAMTX_PATH, [mediaConfigPath], runtimeDirectory);
+    } else if (config.MEDIA_RUNTIME_MANAGED) {
+      logger.warn("Reusing an already-running local MediaMTX instance", { apiUrl: config.MEDIAMTX_API_URL });
+    }
+    await waitForHttp(mediaMtxApi, mediaMtx, 30_000);
 
     const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
     let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL === "auto"
@@ -492,6 +501,10 @@ export function resolvePrivateMediaGatewayUrl(
   const selected = candidates.sort((left, right) => left.priority - right.priority || left.order - right.order)[0];
   if (!selected) throw new Error("No private LAN or VPN IPv4 address is available for live media");
   return `http://${selected.address}:${port}`;
+}
+
+export function shouldReuseExistingMediaMtx(mediaRuntimeManaged: boolean, mediaMtxApiReady: boolean) {
+  return mediaRuntimeManaged && mediaMtxApiReady;
 }
 
 export function resolvePrivateMediaGatewayUrlIfAvailable(
@@ -671,6 +684,13 @@ async function waitForHttp(url: URL, child: ChildProcessWithoutNullStreams | und
     await delay(250);
   }
   throw new Error(`Timed out waiting for ${url}`);
+}
+async function isHttpReady(url: URL) {
+  try {
+    return (await fetch(url, { signal: AbortSignal.timeout(1_000) })).ok;
+  } catch {
+    return false;
+  }
 }
 async function waitForPublicGateway(url: URL, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
