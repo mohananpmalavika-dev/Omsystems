@@ -7,10 +7,7 @@ $commands = @(
     "cd /opt/sentinel-grid",
     "git fetch origin main",
     "git reset --hard origin/main",
-    "cd /opt/sentinel-grid/deploy/aws",
-    "docker compose -f docker-compose.aws.yml up -d",
-    "sleep 5",
-    "docker ps -a"
+    "bash /opt/sentinel-grid/scripts/deploy-aws-ec2.sh"
 )
 
 
