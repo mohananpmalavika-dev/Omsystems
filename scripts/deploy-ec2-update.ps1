@@ -15,7 +15,8 @@ $commands = @(
 
 
 $paramFile = [System.IO.Path]::GetTempFileName()
-@{ commands = $commands } | ConvertTo-Json | Set-Content -Path $paramFile -Encoding UTF8
+$json = @{ commands = $commands } | ConvertTo-Json -Compress
+[System.IO.File]::WriteAllText($paramFile, $json, [System.Text.Encoding]::ASCII)
 
 $cmd = aws ssm send-command `
     --instance-ids $instanceId `
