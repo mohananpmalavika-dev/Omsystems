@@ -183,7 +183,7 @@ function forwardMediaHeaders(headers: Record<string, unknown>) {
   // Origin to MediaMTX makes its static hlsAllowOrigins setting decide whether
   // a playlist is usable, which breaks as soon as the dashboard hostname
   // changes (for example, when Render assigns a new service suffix).
-  for (const name of ["accept", "range", "user-agent"]) {
+  for (const name of ["accept", "authorization", "range", "user-agent"]) {
     const value = headers[name];
     if (typeof value === "string") forwarded[name] = value;
   }

@@ -727,7 +727,7 @@ function forwardMediaHeaders(headers: IncomingHttpHeaders) {
   const forwarded: Record<string, string> = {};
   // CORS is handled by the edge gateway for the browser-facing request. Do
   // not let MediaMTX's static allow-list reject a renamed dashboard origin.
-  for (const name of ["accept", "range", "user-agent"]) {
+  for (const name of ["accept", "authorization", "range", "user-agent"]) {
     const value = headers[name]; if (typeof value === "string") forwarded[name] = value;
   }
   return forwarded;
