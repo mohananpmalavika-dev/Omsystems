@@ -510,6 +510,7 @@ export class EdgeAgentRepository {
              status = CASE
                WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
                WHEN camera_discoveries.status = 'approved' THEN camera_discoveries.status
+               WHEN EXCLUDED.duplicate_status = 'duplicate' THEN 'rejected'::discovery_status
                ELSE 'pending'::discovery_status
              END,
              discovered_at = now()
@@ -529,7 +530,7 @@ export class EdgeAgentRepository {
          duplicateStatus, input.compatibilityStatus ?? null,
          input.hardwareId ?? null, existingAssociation, statusReason,
          input.timeSynchronization ?? null, JSON.stringify(discoveryLayers),
-         "pending"],
+         duplicateStatus === "duplicate" || identity.cameraId ? "rejected" : "pending"],
       );
       const row = result.rows[0];
       if (!row) throw new Error("invalid_branch");
@@ -538,15 +539,41 @@ export class EdgeAgentRepository {
         id: row.id,
         deviceIdentityId: identity.deviceIdentityId,
         branchId,
-        ...input,
-        ...(credentialsRequired !== null ? { credentialsRequired } : {}),
+        edgeAgentId: input.edgeAgentId,
+        discoveryMethod: normalizeCameraDiscoveryMethod(input.discoveryMethod),
+        manufacturer: input.manufacturer ?? input.vendor ?? 'Unknown',
+        vendor: input.vendor,
+        model: input.model,
+        ipAddress: input.ipAddress,
+        ...(normalizedMac ? { macAddress: normalizedMac } : {}),
+        ...(input.onvifEndpointReference ? { onvifEndpointReference: input.onvifEndpointReference } : {}),
         ...(onvifUuid ? { onvifUuid } : {}),
-        ...(duplicateStatus ? { duplicateStatus } : {}),
+        ...(input.certificateRef ? { certificateRef: input.certificateRef } : {}),
+        ...(input.certificateFingerprint ? { certificateFingerprint: input.certificateFingerprint } : {}),
+        onvifPort: input.onvifPort,
+        rtspPort: input.rtspPort,
+        profiles: input.profiles,
+        capabilities: input.capabilities,
+        sourceType: input.sourceType ?? "ip-camera",
+        ...(input.recorderId ? { recorderId: input.recorderId } : {}),
+        ...(input.recorderChannel && input.recorderChannel > 0 ? { recorderChannel: input.recorderChannel } : {}),
+        ...(input.recorderSerialNumber ? { recorderSerialNumber: input.recorderSerialNumber } : {}),
+        ...(input.serialNumber ? { serialNumber: input.serialNumber } : {}),
+        ...(input.firmwareVersion ? { firmwareVersion: input.firmwareVersion } : {}),
+        ...(input.displayName ? { displayName: input.displayName } : {}),
+        ...(credentialsRequired !== undefined ? { credentialsRequired } : {}),
+        ...(input.streamVerified !== undefined ? { streamVerified: input.streamVerified } : {}),
+        ...(input.rtspValidated !== undefined ? { rtspValidated: input.rtspValidated } : {}),
+        ...(input.compatibility ? { compatibility: input.compatibility } : {}),
+        ...(duplicateStatus ? { duplicateStatus: duplicateStatus as DiscoveredCamera["duplicateStatus"] } : {}),
+        ...(input.compatibilityStatus ? { compatibilityStatus: input.compatibilityStatus } : {}),
+        ...(input.hardwareId ? { hardwareId: input.hardwareId } : {}),
         ...(existingAssociation ? { existingDeviceAssociation: existingAssociation } : {}),
         ...(statusReason ? { statusReason } : {}),
+        ...(input.timeSynchronization ? { timeSynchronization: input.timeSynchronization } : {}),
         discoveryLayers,
-        status: row.status,
         discoveredAt: row.discovered_at.toISOString(),
+        status: row.status,
       };
     } catch (error) {
       await client.query("ROLLBACK");
@@ -556,7 +583,7 @@ export class EdgeAgentRepository {
     }
   }
 
-  async listDiscoveries(branchId: string): Promise<DiscoveredCamera[]> {
+  async listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]> {
     const result = await this.pool.query<{
       id: string;
       device_identity_id: string;
@@ -574,11 +601,11 @@ export class EdgeAgentRepository {
       certificate_fingerprint: string | null;
       onvif_port: number;
       rtsp_port: number;
-      profiles: string;
-      capabilities: string;
+      profiles: DiscoveredCamera["profiles"] | string;
+      capabilities: DiscoveredCamera["capabilities"] | string;
       discovered_at: Date;
-      status: string;
-      source_type: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+      status: DiscoveredCamera["status"];
+      source_type: DiscoveredCamera["sourceType"];
       recorder_id: string | null;
       recorder_channel: number;
       recorder_serial_number: string | null;
@@ -610,57 +637,88 @@ export class EdgeAgentRepository {
               compatibility_status, hardware_id, existing_device_association,
               status_reason, time_synchronization, discovery_layers
        FROM camera_discoveries
-       WHERE branch_node_id = $1 AND status = 'pending'
+       WHERE branch_node_id = $1
+         AND status = 'pending'
+         AND (duplicate_status IS NULL OR duplicate_status <> 'duplicate')
+         AND NOT EXISTS (
+           SELECT 1
+           FROM cameras c
+           WHERE c.branch_node_id = camera_discoveries.branch_node_id
+             AND (
+               (c.ip_address IS NOT NULL AND camera_discoveries.ip_address IS NOT NULL
+                AND c.ip_address = camera_discoveries.ip_address
+                AND COALESCE(c.recorder_channel, c.channel, 0) = camera_discoveries.recorder_channel)
+               OR (
+                 c.serial_number IS NOT NULL AND camera_discoveries.serial_number IS NOT NULL
+                 AND NULLIF(BTRIM(c.serial_number), '') IS NOT NULL
+                 AND NULLIF(BTRIM(camera_discoveries.serial_number), '') IS NOT NULL
+                 AND LOWER(BTRIM(c.serial_number)) = LOWER(BTRIM(camera_discoveries.serial_number))
+               )
+             )
+         )
        ORDER BY discovered_at DESC`,
       [branchId],
     );
 
-    return result.rows.map((row) => ({
-      id: row.id,
-      deviceIdentityId: row.device_identity_id,
-      branchId: row.branch_node_id,
-      edgeAgentId: row.edge_agent_id,
-      discoveryMethod: row.discovery_method as any,
-      manufacturer: row.manufacturer || 'Unknown',
-      vendor: row.vendor as "hikvision" | "cp-plus" | "other",
-      model: row.model,
-      ipAddress: row.ip_address,
-      ...(row.mac_address ? { macAddress: row.mac_address } : {}),
-      ...(row.onvif_endpoint_reference ? { onvifEndpointReference: row.onvif_endpoint_reference } : {}),
-      ...(row.onvif_uuid ? { onvifUuid: row.onvif_uuid } : {}),
-      ...(row.certificate_ref ? { certificateRef: row.certificate_ref } : {}),
-      ...(row.certificate_fingerprint ? { certificateFingerprint: row.certificate_fingerprint } : {}),
-      onvifPort: row.onvif_port,
-      rtspPort: row.rtsp_port,
-      profiles: typeof row.profiles === "string"
-        ? JSON.parse(row.profiles)
-        : row.profiles,
-      capabilities: typeof row.capabilities === "string"
-        ? JSON.parse(row.capabilities)
-        : row.capabilities,
-      sourceType: row.source_type,
-      ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
-      ...(row.recorder_channel > 0 ? { recorderChannel: row.recorder_channel } : {}),
-      ...(row.recorder_serial_number ? { recorderSerialNumber: row.recorder_serial_number } : {}),
-      ...(row.serial_number ? { serialNumber: row.serial_number } : {}),
-      ...(row.firmware_version ? { firmwareVersion: row.firmware_version } : {}),
-      ...(row.display_name ? { displayName: row.display_name } : {}),
-      ...(row.credentials_required !== null ? { credentialsRequired: row.credentials_required } : {}),
-      ...(row.stream_verified !== null ? { streamVerified: row.stream_verified } : {}),
-      ...(row.rtsp_validated !== null ? { rtspValidated: row.rtsp_validated } : {}),
-      ...(row.compatibility ? { compatibility: row.compatibility } : {}),
-      ...(row.duplicate_status ? { duplicateStatus: row.duplicate_status as DiscoveredCamera["duplicateStatus"] } : {}),
-      ...(row.compatibility_status ? { compatibilityStatus: row.compatibility_status as DiscoveredCamera["compatibilityStatus"] } : {}),
-      ...(row.hardware_id ? { hardwareId: row.hardware_id } : {}),
-      ...(row.existing_device_association ? { existingDeviceAssociation: row.existing_device_association } : {}),
-      ...(row.status_reason ? { statusReason: row.status_reason } : {}),
-      ...(row.time_synchronization ? { timeSynchronization: row.time_synchronization } : {}),
-      discoveryLayers: typeof row.discovery_layers === "string"
-        ? JSON.parse(row.discovery_layers)
-        : row.discovery_layers,
-      discoveredAt: row.discovered_at.toISOString(),
-      status: row.status as "pending" | "approved" | "rejected",
-    }));
+    const seen = new Set<string>();
+    const deduplicated: DiscoveredCamera[] = [];
+
+    for (const row of result.rows) {
+      const item: DiscoveredCamera = {
+        id: row.id,
+        deviceIdentityId: row.device_identity_id,
+        branchId: row.branch_node_id,
+        edgeAgentId: row.edge_agent_id,
+        discoveryMethod: row.discovery_method as any,
+        manufacturer: row.manufacturer || 'Unknown',
+        vendor: row.vendor as "hikvision" | "cp-plus" | "other",
+        model: row.model,
+        ipAddress: row.ip_address,
+        ...(row.mac_address ? { macAddress: row.mac_address } : {}),
+        ...(row.onvif_endpoint_reference ? { onvifEndpointReference: row.onvif_endpoint_reference } : {}),
+        ...(row.onvif_uuid ? { onvifUuid: row.onvif_uuid } : {}),
+        ...(row.certificate_ref ? { certificateRef: row.certificate_ref } : {}),
+        ...(row.certificate_fingerprint ? { certificateFingerprint: row.certificate_fingerprint } : {}),
+        onvifPort: row.onvif_port,
+        rtspPort: row.rtsp_port,
+        profiles: typeof row.profiles === "string"
+          ? JSON.parse(row.profiles)
+          : row.profiles,
+        capabilities: typeof row.capabilities === "string"
+          ? JSON.parse(row.capabilities)
+          : row.capabilities,
+        sourceType: row.source_type,
+        ...(row.recorder_id ? { recorderId: row.recorder_id } : {}),
+        ...(row.recorder_channel > 0 ? { recorderChannel: row.recorder_channel } : {}),
+        ...(row.recorder_serial_number ? { recorderSerialNumber: row.recorder_serial_number } : {}),
+        ...(row.serial_number ? { serialNumber: row.serial_number } : {}),
+        ...(row.firmware_version ? { firmwareVersion: row.firmware_version } : {}),
+        ...(row.display_name ? { displayName: row.display_name } : {}),
+        ...(row.credentials_required !== null ? { credentialsRequired: row.credentials_required } : {}),
+        ...(row.stream_verified !== null ? { streamVerified: row.stream_verified } : {}),
+        ...(row.rtsp_validated !== null ? { rtspValidated: row.rtsp_validated } : {}),
+        ...(row.compatibility ? { compatibility: row.compatibility } : {}),
+        ...(row.duplicate_status ? { duplicateStatus: row.duplicate_status as DiscoveredCamera["duplicateStatus"] } : {}),
+        ...(row.compatibility_status ? { compatibilityStatus: row.compatibility_status as DiscoveredCamera["compatibilityStatus"] } : {}),
+        ...(row.hardware_id ? { hardwareId: row.hardware_id } : {}),
+        ...(row.existing_device_association ? { existingDeviceAssociation: row.existing_device_association } : {}),
+        ...(row.status_reason ? { statusReason: row.status_reason } : {}),
+        ...(row.time_synchronization ? { timeSynchronization: row.time_synchronization } : {}),
+        discoveryLayers: typeof row.discovery_layers === "string"
+          ? JSON.parse(row.discovery_layers)
+          : row.discovery_layers,
+        discoveredAt: row.discovered_at.toISOString(),
+        status: row.status,
+      };
+
+      const key = `${item.ipAddress}:${item.recorderChannel ?? 0}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(item);
+      }
+    }
+
+    return deduplicated;
   }
 }
 

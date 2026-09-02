@@ -2133,11 +2133,15 @@ export class MemoryStore {
       });
       return existing;
     }
+    const isDuplicate = Boolean(
+      (identity.cameraId && !recorderPlaceholderUpgrade) ||
+      normalized.duplicateStatus === "duplicate"
+    );
     const discovery: DiscoveredCamera = {
       id: randomUUID(),
       deviceIdentityId: identity.deviceId,
       branchId,
-      status: "pending", 
+      status: isDuplicate ? "rejected" : "pending", 
       discoveredAt: new Date().toISOString(),
       manufacturer: normalized.manufacturer || normalized.vendor || 'Unknown',
       ...(normalized.displayName ? { displayName: normalized.displayName } : {}),
@@ -2161,11 +2165,33 @@ export class MemoryStore {
   }
 
   async listDiscoveredCameras(branchId: string) {
-    return [...this.discoveries.values()]
+    const branchCameras = [...this.cameras.values()].filter((c) => c.branchId === branchId);
+    const seen = new Set<string>();
+    const deduplicated: DiscoveredCamera[] = [];
+
+    const candidates = [...this.discoveries.values()]
       .filter((discovery) =>
-        discovery.branchId === branchId && discovery.status === "pending"
+        discovery.branchId === branchId &&
+        discovery.status === "pending" &&
+        discovery.duplicateStatus !== "duplicate" &&
+        !branchCameras.some((c) =>
+          (c.ipAddress && discovery.ipAddress && c.ipAddress === discovery.ipAddress &&
+           (c.recorderChannel ?? c.channel ?? 0) === (discovery.recorderChannel ?? 0)) ||
+          (c.serialNumber && discovery.serialNumber && c.serialNumber.trim().length > 0 &&
+           c.serialNumber.trim().toLowerCase() === discovery.serialNumber.trim().toLowerCase())
+        )
       )
       .sort((left, right) => right.discoveredAt.localeCompare(left.discoveredAt));
+
+    for (const d of candidates) {
+      const key = `${d.ipAddress}:${d.recorderChannel ?? 0}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        deduplicated.push(d);
+      }
+    }
+
+    return deduplicated;
   }
 
   async rejectDiscovery(discoveryId: string, reason?: string) {
