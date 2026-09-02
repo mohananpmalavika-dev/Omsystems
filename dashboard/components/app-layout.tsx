@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -367,7 +367,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
 
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [searchParams, setSearchParams] = useState<Pick<URLSearchParams, "get"> | null>(null);
   const { branding } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -402,7 +402,14 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       }
     } catch {}
   }, []);
+
   const pathname = usePathname() || "/";
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setSearchParams(new URLSearchParams(window.location.search));
+    }
+  }, [pathname]);
   const visibleNavigation = getVisibleNavigation(operator);
   const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
   const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
