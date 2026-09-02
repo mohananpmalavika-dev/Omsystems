@@ -72,7 +72,9 @@ export interface AnalyticsEngineOptions {
     url: string;
     apiKey: string;
   };
+  pipeline?: AnalyticsPipeline;
   submit: (event: z.infer<typeof detectionSchema>) => Promise<unknown>;
+
   logger?: boolean;
 }
 
@@ -93,6 +95,8 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     controlPlaneUrl: controlPlaneUrl || "http://127.0.0.1:3000",
     sharedKey: options.controlPlaneSharedKey,
   });
+
+  const pipeline = options.pipeline ?? new AnalyticsPipeline();
 
 
   // Create incident integration hook if configured

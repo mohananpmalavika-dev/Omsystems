@@ -23,10 +23,11 @@ export interface BehaviorConfig {
 interface TrackedPerson {
   trackId: string;
   positions: Array<{ x: number; y: number; timestamp: Date }>;
-  poses: Array<{ keypoints: any[]; timestamp: Date }>;
+  poses: Array<{ keypoints: any; timestamp: Date }>;
   lastSeen: Date;
   behaviorHistory: string[];
 }
+
 
 export class BehaviorDetector extends BaseDetector {
   private config: BehaviorConfig;

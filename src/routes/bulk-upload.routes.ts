@@ -36,6 +36,27 @@ const employeeCsvSchema = z.object({
   designation: z.string().optional(),
 });
 
+const cameraCsvSchema = z.object({
+  name: z.string().min(1),
+  ip_address: z.string().min(1),
+  username: z.string().default("admin"),
+  password: z.string().optional(),
+  branch_id: z.string().optional(),
+  vendor: z.string().optional(),
+  model: z.string().optional(),
+  onvif_port: z.number().optional().default(80),
+  rtsp_port: z.number().optional().default(554),
+  rtsp_path: z.string().optional(),
+  sub_stream_path: z.string().optional(),
+  channel: z.number().optional().default(1),
+  location_zone: z.string().optional(),
+  resolution: z.string().optional(),
+  fps: z.number().optional().default(25),
+  ptz: z.boolean().optional().default(false),
+  audio: z.boolean().optional().default(false),
+});
+
+
 export async function registerBulkUploadRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
@@ -336,4 +357,171 @@ export async function registerBulkUploadRoutes(
       ready: validation.invalid === 0,
     };
   });
+
+  // Bulk create / register cameras
+  app.post<{
+    Body: {
+      cameras: Array<{
+        name: string;
+        ip_address: string;
+        username?: string;
+        password?: string;
+        branch_id?: string;
+        vendor?: string;
+        model?: string;
+        onvif_port?: number;
+        rtsp_port?: number;
+        rtsp_path?: string;
+        sub_stream_path?: string;
+        channel?: number;
+        location_zone?: string;
+        resolution?: string;
+        fps?: number;
+        ptz?: boolean;
+        audio?: boolean;
+      }>;
+    };
+  }>("/api/bulk/cameras", async (request, reply) => {
+    const { cameras } = request.body;
+
+    if (!Array.isArray(cameras) || cameras.length === 0) {
+      return reply.code(400).send({
+        error: "cameras array is required and must not be empty",
+      });
+    }
+
+    const results = {
+      created: 0,
+      failed: 0,
+      errors: [] as Array<{ index: number; name: string; error: string }>,
+      created_cameras: [] as Array<{ index: number; id: string; name: string; ip_address: string }>,
+    };
+
+    for (let i = 0; i < cameras.length; i++) {
+      const camera = cameras[i];
+      if (!camera) continue;
+
+      try {
+        const validated = cameraCsvSchema.parse(camera);
+        const branchId = validated.branch_id || "branch-01";
+        const vendor = (validated.vendor || "other").toLowerCase();
+        const channel = validated.channel || 1;
+        const rtspPort = validated.rtsp_port || 554;
+        const onvifPort = validated.onvif_port || 80;
+
+        const mainPath = validated.rtsp_path || `/Streaming/Channels/${channel}01`;
+        const subPath = validated.sub_stream_path || `/Streaming/Channels/${channel}02`;
+
+        const authPrefix = validated.password
+          ? `${encodeURIComponent(validated.username)}:${encodeURIComponent(validated.password)}@`
+          : `${encodeURIComponent(validated.username)}@`;
+
+        const cameraPayload = {
+          name: validated.name,
+          vendor,
+          model: validated.model || "IP Camera",
+          ipAddress: validated.ip_address,
+          channel,
+          onvifPort,
+          rtspPort,
+          protocol: "onvif-t" as const,
+          connectionTransport: "vpn" as const,
+          sourceType: "ip-camera" as const,
+          profiles: [
+            {
+              role: "main" as const,
+              streamUri: `rtsp://${authPrefix}${validated.ip_address}:${rtspPort}${mainPath}`,
+              codec: "H264" as const,
+              resolution: { width: 1920, height: 1080 },
+              fps: validated.fps || 25,
+            },
+            {
+              role: "sub" as const,
+              streamUri: `rtsp://${authPrefix}${validated.ip_address}:${rtspPort}${subPath}`,
+              codec: "H264" as const,
+              resolution: { width: 640, height: 360 },
+              fps: 15,
+            },
+          ],
+          capabilities: {
+            ptz: Boolean(validated.ptz),
+            audio: Boolean(validated.audio),
+            motion: true,
+          },
+          connectionSecretRef: `vault://branches/${branchId}/cameras/${validated.name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+        };
+
+        let createdCamId = `cam-${Date.now()}-${i}`;
+        if (typeof (store as any).createCamera === "function") {
+          const created = await (store as any).createCamera(branchId, cameraPayload);
+          if (created && created.id) createdCamId = created.id;
+        }
+
+        results.created++;
+        results.created_cameras.push({
+          index: i,
+          id: createdCamId,
+          name: validated.name,
+          ip_address: validated.ip_address,
+        });
+      } catch (error: any) {
+        results.failed++;
+        results.errors.push({
+          index: i,
+          name: camera.name || "Unknown",
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
+  });
+
+  // Validate camera CSV before upload
+  app.post<{
+    Body: { cameras: any[] };
+  }>("/api/bulk/cameras/validate", async (request, reply) => {
+    const { cameras } = request.body;
+
+    const validation = {
+      valid: 0,
+      invalid: 0,
+      errors: [] as Array<{ index: number; name: string; errors: string[] }>,
+      duplicates: [] as Array<{ index: number; ip_address: string }>,
+    };
+
+    const ipsSeen = new Set<string>();
+
+    for (let i = 0; i < (cameras || []).length; i++) {
+      const camera = cameras[i];
+      try {
+        const validated = cameraCsvSchema.parse(camera);
+
+        if (ipsSeen.has(validated.ip_address)) {
+          validation.duplicates.push({
+            index: i,
+            ip_address: validated.ip_address,
+          });
+          validation.invalid++;
+        } else {
+          ipsSeen.add(validated.ip_address);
+          validation.valid++;
+        }
+      } catch (error: any) {
+        validation.invalid++;
+        validation.errors.push({
+          index: i,
+          name: camera.name || "Unknown",
+          errors: error.errors?.map((e: any) => `${e.path.join(".")}: ${e.message}`) || [error.message],
+        });
+      }
+    }
+
+    return {
+      total: (cameras || []).length,
+      ...validation,
+      ready: validation.invalid === 0,
+    };
+  });
 }
+

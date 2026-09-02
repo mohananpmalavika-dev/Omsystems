@@ -11,6 +11,7 @@ import {
   Download,
   ExternalLink,
   Network,
+  FileSpreadsheet,
   Plus,
   RefreshCw,
   Router,
@@ -30,6 +31,8 @@ import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel"
 import { ProvisioningRun } from "@/components/provisioning-run";
 import { QRCredentialScanner } from "@/components/qr-credential-scanner";
 import { DefaultCredentialSuggester } from "@/components/default-credential-suggester";
+import { CameraImportExportModal } from "@/components/camera-import-export-modal";
+
 import type {
   Branch,
   Camera as CameraRecord,
@@ -216,6 +219,8 @@ export function DeviceManager() {
   const [showGatewayForm, setShowGatewayForm] = useState(false);
   const [showDiscoveredList, setShowDiscoveredList] = useState(false);
   const [showDirectProbeModal, setShowDirectProbeModal] = useState(false);
+  const [showImportExportModal, setShowImportExportModal] = useState(false);
+
   const [probeTargetMode, setProbeTargetMode] = useState<"single" | "range">("single");
   const [probeCredentialMode, setProbeCredentialMode] = useState<"same" | "different">("same");
   const [probeIp, setProbeIp] = useState("");
@@ -1403,9 +1408,13 @@ export function DeviceManager() {
           <button type="button" className="secondary-button" onClick={() => setShowDirectProbeModal(true)} disabled={!selectedBranch || saving} title="Directly test and connect an IP camera on the configured local subnet">
             <Wifi size={15} /> Direct IP Probe
           </button>
+          <button type="button" className="secondary-button" onClick={() => setShowImportExportModal(true)} title="Import cameras from Excel/CSV with credentials or export current inventory">
+            <FileSpreadsheet size={15} /> Import / Export (Excel)
+          </button>
           <button className="secondary-button" type="button" onClick={() => void refreshBranch(selectedBranch)} disabled={!selectedBranch || loading} title="Refresh this branch inventory">
             <RefreshCw size={15} className={loading ? "spin" : undefined} /> Refresh
           </button>
+
           <button type="button" className="secondary-button" onClick={openScannerInstaller} disabled={saving || !selectedBranch} title="Get 1-line commands or standalone installer">
             <Terminal size={15} /> {gateways.length > 0 ? "Agent Commands" : "Install Scanner"}
           </button>
@@ -2299,11 +2308,21 @@ export function DeviceManager() {
           onClose={() => setShowQRScanner(false)}
         />
       )}
+      {showImportExportModal && (
+        <CameraImportExportModal
+          isOpen={showImportExportModal}
+          onClose={() => setShowImportExportModal(false)}
+          defaultBranchId={selectedBranch}
+          branches={branches}
+          onImportSuccess={() => void refreshBranch(selectedBranch)}
+        />
+      )}
     </div>
   );
 }
 
 function messageOf(reason: unknown, fallback: string) {
+
   return reason instanceof Error && reason.message !== "Request failed"
     ? reason.message
     : fallback;
