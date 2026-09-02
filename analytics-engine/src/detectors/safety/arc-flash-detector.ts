@@ -12,7 +12,9 @@ import type { ZoneEngine } from './zone-engine.js';
 
 export interface ArcFlashEvent {
   id: string;
-  confidence: number;
+  confidence: number | null; // Null because this is heuristic rule-based detection
+  heuristicScore: number;
+  provenance: "HEURISTIC_RULE_ENGINE";
   location: { x: number; y: number };
   boundingBox: {
     x: number;
@@ -37,8 +39,10 @@ export interface ArcFlashEvent {
     currentSpike?: boolean; // If current sensor available
     soundDetected?: boolean; // If audio analysis available
     smokeDetected?: boolean; // Correlation with smoke
+    method?: string;
   };
 }
+
 
 export interface ArcFlashIncident {
   id: string;
@@ -137,21 +141,21 @@ export class ArcFlashDetector {
         const zone = this.findElectricalZone(analysis.flashLocation);
         const isElectricalZone = zone !== undefined;
 
-        // Calculate confidence
-        let confidence = 0.5;
+        // Calculate heuristic score (rule-based brightness & spectral analysis)
+        let heuristicScore = 0.5;
         
         // Brightness contribution
-        confidence += (analysis.maxBrightness / 255) * 0.2;
+        heuristicScore += (analysis.maxBrightness / 255) * 0.2;
         
         // Spectral contribution
-        confidence += analysis.blueWhiteRatio * 0.2;
+        heuristicScore += analysis.blueWhiteRatio * 0.2;
         
         // Electrical zone bonus
         if (isElectricalZone) {
-          confidence += this.electricalZoneBonus;
+          heuristicScore += this.electricalZoneBonus;
         }
         
-        confidence = Math.min(confidence, 1.0);
+        heuristicScore = Math.min(heuristicScore, 1.0);
 
         // Create or update event
         const event = this.createOrUpdateEvent({
@@ -163,7 +167,7 @@ export class ArcFlashDetector {
           zoneId: zone?.id,
           zoneName: zone?.name,
           isElectricalZone,
-          confidence,
+          heuristicScore,
         });
 
         events.push(event);
@@ -374,7 +378,7 @@ export class ArcFlashDetector {
     zoneId?: string;
     zoneName?: string;
     isElectricalZone: boolean;
-    confidence: number;
+    heuristicScore: number;
   }): ArcFlashEvent {
     // Check for nearby existing event
     let existingEvent: ArcFlashEvent | undefined;
@@ -394,6 +398,7 @@ export class ArcFlashDetector {
       existingEvent.duration = 
         existingEvent.lastDetected.getTime() - existingEvent.firstDetected.getTime();
       existingEvent.brightness = Math.max(existingEvent.brightness, params.brightness);
+      existingEvent.heuristicScore = Math.max(existingEvent.heuristicScore, params.heuristicScore);
       return existingEvent;
     }
 
@@ -402,7 +407,9 @@ export class ArcFlashDetector {
     
     const event: ArcFlashEvent = {
       id: `arc_${randomUUID().substring(0, 8)}`,
-      confidence: params.confidence,
+      confidence: null, // Confidence is null for heuristic image analysis
+      heuristicScore: params.heuristicScore,
+      provenance: "HEURISTIC_RULE_ENGINE",
       location: params.location,
       boundingBox: params.boundingBox,
       severity,
@@ -417,7 +424,11 @@ export class ArcFlashDetector {
       isElectricalZone: params.isElectricalZone,
       peopleNearby: 0,
       peopleInDanger: [],
+      metadata: {
+        method: "HEURISTIC_RULE_ENGINE",
+      },
     };
+
 
     this.activeEvents.set(event.id, event);
     this.createIncident(event);

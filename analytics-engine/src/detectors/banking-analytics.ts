@@ -253,16 +253,22 @@ export class BankingAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async detectPersons(frame: DetectionFrame): Promise<any[]> {
+    const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
+    const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
     try {
-      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
-      const detections = await pipeline.detectObjects(frame, ['person', 'vehicle']).catch(() => []);
-      if (!detections) return [];
-      // Return only person detections
-      return detections.filter((d: any) => d.label === 'person');
+      const detections = await pipeline.detectObjects(frame, ['person', 'vehicle']);
+      if (detections && detections.length > 0) {
+        return detections.filter((d: any) => d.label === 'person');
+      }
     } catch (error) {
-      console.warn('detectPersons failed:', error);
-      return [];
+      if (!hasInferenceObjects(frame)) {
+        throw error;
+      }
     }
+    if (hasInferenceObjects(frame)) {
+      return getInferenceObjects(frame, ['person']);
+    }
+    return [];
   }
 
   // ============================================================================

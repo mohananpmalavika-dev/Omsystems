@@ -15,7 +15,7 @@ import {
 export interface HelmetDetection {
   personBoundingBox: { x: number; y: number; width: number; height: number };
   helmetDetected: boolean;
-  confidence: number;
+  confidence: number | null;
   vehicleType?: "motorcycle" | "bicycle";
   riskLevel: "compliant" | "violation" | "uncertain";
 }
@@ -62,9 +62,12 @@ export class HelmetDetector extends BaseDetector {
     const violations = detections.filter(d => d.riskLevel === "violation");
 
     if (violations.length > 0) {
+      const avgConf = this.calculateAverageConfidence(violations);
       results.push({
         detectionType: "no-helmet",
-        confidence: this.calculateAverageConfidence(violations),
+        status: "SUCCESS",
+        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+        confidence: avgConf,
         objects: violations.map(detection => ({
           label: "no-helmet",
           confidence: detection.confidence,
@@ -75,6 +78,14 @@ export class HelmetDetector extends BaseDetector {
           totalChecked: detections.length,
           vehicleTypes: violations.map(v => v.vehicleType).filter(Boolean),
         },
+        executionMetadata: {
+          status: "SUCCESS",
+          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+          modelId: "helmet-classifier",
+          modelVersion: "1.0.0",
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
         requiresAlert: true,
       });
     }
@@ -82,9 +93,12 @@ export class HelmetDetector extends BaseDetector {
     // Also report compliant cases for analytics
     const compliant = detections.filter(d => d.riskLevel === "compliant");
     if (compliant.length > 0) {
+      const avgConf = this.calculateAverageConfidence(compliant);
       results.push({
         detectionType: "helmet-compliant",
-        confidence: this.calculateAverageConfidence(compliant),
+        status: "SUCCESS",
+        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+        confidence: avgConf,
         objects: compliant.map(detection => ({
           label: "helmet-worn",
           confidence: detection.confidence,
@@ -92,6 +106,14 @@ export class HelmetDetector extends BaseDetector {
         })),
         metadata: {
           compliantCount: compliant.length,
+        },
+        executionMetadata: {
+          status: "SUCCESS",
+          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+          modelId: "helmet-classifier",
+          modelVersion: "1.0.0",
+          simulated: false,
+          timestamp: new Date().toISOString(),
         },
         requiresAlert: false,
       });
@@ -110,13 +132,13 @@ export class HelmetDetector extends BaseDetector {
       : [];
     const observations = [...getInferenceObjects(frame), ...local];
     const persons = observations.filter((item) => item.label === "person")
-      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
     const vehicles = observations.filter((item) => item.label === "motorcycle" || item.label === "bicycle")
-      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
     const helmets = observations.filter((item) => item.label === "helmet")
-      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
     const heads = observations.filter((item) => item.label === "head")
-      .filter((item) => item.confidence >= this.MIN_CONFIDENCE);
+      .filter((item) => (item.confidence ?? 0) >= this.MIN_CONFIDENCE);
 
     // A missing helmet alone is not a violation: a high-confidence head
     // observation is required before reporting a rider as unprotected.
@@ -170,36 +192,36 @@ export class HelmetDetector extends BaseDetector {
     for (const helmet of helmets) {
       if (overlapOfCandidate(headRegion, helmet.boundingBox) >= this.HEAD_REGION_OVERLAP_THRESHOLD) {
         helmetDetected = true;
-        maxHelmetConfidence = Math.max(maxHelmetConfidence, helmet.confidence);
+        maxHelmetConfidence = Math.max(maxHelmetConfidence, helmet.confidence ?? 0);
       }
     }
 
     // Determine risk level
     let riskLevel: "compliant" | "violation" | "uncertain";
-    let confidence: number;
+    let confidence: number | null;
 
     if (helmetDetected && maxHelmetConfidence >= this.MIN_CONFIDENCE) {
       riskLevel = "compliant";
       confidence = maxHelmetConfidence;
     } else if (!helmetDetected) {
-      // Check if we can see the head clearly
-      const headVisible = heads.some(head => {
+      // Check if we can see the head clearly from actual observation confidence
+      const visibleHead = heads.find(head => {
         return overlapOfCandidate(headRegion, head.boundingBox) >= this.HEAD_REGION_OVERLAP_THRESHOLD
-          && head.confidence >= 0.6;
+          && (head.confidence ?? 0) >= 0.6;
       });
 
-      if (headVisible) {
+      if (visibleHead) {
         riskLevel = "violation";
-        confidence = 0.85; // High confidence violation if head is clearly visible
+        // Use actual observed head confidence instead of hardcoded 0.85
+        confidence = visibleHead.confidence ?? 0.6;
       } else {
-        // Cannot determine without clear head visibility
-        // Return null confidence to indicate model unavailable for this detection
+        // Cannot determine without clear head visibility - return null confidence
         riskLevel = "uncertain";
-        confidence = 0; // Explicitly 0 - no head visible means no violation evidence
+        confidence = null;
       }
     } else {
       riskLevel = "uncertain";
-      confidence = maxHelmetConfidence;
+      confidence = maxHelmetConfidence > 0 ? maxHelmetConfidence : null;
     }
 
     return {
@@ -238,11 +260,15 @@ export class HelmetDetector extends BaseDetector {
     };
   }
 
-  private calculateAverageConfidence(detections: HelmetDetection[]): number {
-    if (detections.length === 0) return 0;
-    const sum = detections.reduce((acc, d) => acc + d.confidence, 0);
-    return sum / detections.length;
+  private calculateAverageConfidence(detections: HelmetDetection[]): number | null {
+    const validConfidences = detections
+      .map(d => d.confidence)
+      .filter((c): c is number => c !== null && typeof c === "number");
+    if (validConfidences.length === 0) return null;
+    const sum = validConfidences.reduce((acc, c) => acc + c, 0);
+    return sum / validConfidences.length;
   }
+
 
   async cleanup(): Promise<void> {
     this.inference = null;

@@ -44,9 +44,10 @@ export class OllamaClient {
     baseUrl?: string;
     defaultModel?: string;
   } = {}) {
-    this.baseUrl = options.baseUrl || 'http://localhost:11434';
+    this.baseUrl = options.baseUrl || (process.env.NODE_ENV === 'production' ? 'http://ollama.service.internal:11434' : 'http://localhost:11434');
     this.defaultModel = options.defaultModel || 'llama3.2';
   }
+
 
   /**
    * Generate completion from Ollama

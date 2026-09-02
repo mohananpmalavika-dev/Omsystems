@@ -60,24 +60,69 @@ export class BehaviorDetector extends BaseDetector {
     //   poseDetection.SupportedModels.MoveNet
     // );
 
-    console.log("BehaviorDetector initialized (simulation mode)");
+    console.log("BehaviorDetector initialized");
     this.isInitialized = true;
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     if (!this.isInitialized) {
-      throw new Error("BehaviorDetector not initialized");
+      return [{
+        detectionType: "behavior",
+        status: "NOT_CONFIGURED",
+        provenance: "HEURISTIC_RULE_ENGINE",
+        confidence: null,
+        objects: [],
+        metadata: {
+          error: "BehaviorDetector not initialized",
+        },
+        executionMetadata: {
+          status: "NOT_CONFIGURED",
+          provenance: "HEURISTIC_RULE_ENGINE",
+          reason: "BehaviorDetector not initialized",
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
+        requiresAlert: false,
+      }];
     }
 
     try {
-      const { getInferenceObjects } = await import("./base-detector.js");
+      const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
       const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
 
       // Prefer pipeline object detector if available
-      let persons = await pipeline.detectObjects(frame, ['person']).catch(() => undefined);
+      let persons: any[] | undefined;
+      let pipelineError: string | null = null;
+      try {
+        persons = await pipeline.detectObjects(frame, ['person']);
+      } catch (err) {
+        pipelineError = err instanceof Error ? err.message : String(err);
+      }
+
       if (!persons) {
-        // Fallback to using metadata detections
-        persons = getInferenceObjects(frame, ['person']);
+        if (hasInferenceObjects(frame)) {
+          // Fallback to normalized metadata detections
+          persons = getInferenceObjects(frame, ['person']);
+        } else if (pipelineError) {
+          return [{
+            detectionType: "behavior",
+            status: "INFERENCE_FAILED",
+            provenance: "LIVE_INFERENCE",
+            confidence: null,
+            objects: [],
+            metadata: {
+              error: `Inference pipeline failed: ${pipelineError}`,
+            },
+            executionMetadata: {
+              status: "INFERENCE_FAILED",
+              provenance: "LIVE_INFERENCE",
+              reason: pipelineError,
+              simulated: false,
+              timestamp: new Date().toISOString(),
+            },
+            requiresAlert: false,
+          }];
+        }
       }
 
       // Normalize to DetectedObject shape
@@ -91,10 +136,14 @@ export class BehaviorDetector extends BaseDetector {
       // Optionally run pose estimation for each person
       for (const person of detected) {
         if (!person.trackId) continue;
-        const pose = await pipeline.estimatePose(frame, person.boundingBox).catch(() => null);
-        const tracked = this.trackedPersons.get(person.trackId);
-        if (pose && tracked) {
-          tracked.poses.push({ keypoints: pose, timestamp: frame.timestamp });
+        try {
+          const pose = await pipeline.estimatePose(frame, person.boundingBox);
+          const tracked = this.trackedPersons.get(person.trackId);
+          if (pose && tracked) {
+            tracked.poses.push({ keypoints: pose, timestamp: frame.timestamp });
+          }
+        } catch {
+          // Pose estimation is optional enhancement over bounding box tracking
         }
       }
 
@@ -103,7 +152,25 @@ export class BehaviorDetector extends BaseDetector {
       return results;
     } catch (error) {
       console.warn('BehaviorDetector detect failed:', error);
-      return [];
+      const reason = error instanceof Error ? error.message : String(error);
+      return [{
+        detectionType: "behavior",
+        status: "INFERENCE_FAILED",
+        provenance: "HEURISTIC_RULE_ENGINE",
+        confidence: null,
+        objects: [],
+        metadata: {
+          error: reason,
+        },
+        executionMetadata: {
+          status: "INFERENCE_FAILED",
+          provenance: "HEURISTIC_RULE_ENGINE",
+          reason,
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
+        requiresAlert: false,
+      }];
     }
   }
 

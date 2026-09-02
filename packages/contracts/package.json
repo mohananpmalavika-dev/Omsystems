@@ -1,0 +1,19 @@
+{
+  "name": "@sentinel/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./capabilities": "./src/capabilities/index.ts",
+    "./execution": "./src/execution/index.ts",
+    "./storage": "./src/storage/index.ts",
+    "./security/tls": "./src/security/tls/index.ts",
+    "./config": "./src/config/index.ts"
+  }
+}
+
+
+
+

@@ -1,0 +1,22 @@
+{
+  "version": "1.0.0",
+  "description": "Approved production loopback exceptions (colocated sidecars only)",
+  "exceptions": [
+    {
+      "file": "edge-agent/src/local-mediamtx.ts",
+      "endpoint": "127.0.0.1:8554",
+      "service": "LOCAL_MEDIAMTX",
+      "purpose": "Local MediaMTX sidecar colocated on Edge Gateway hardware",
+      "productionAllowed": true,
+      "owner": "edge-team"
+    },
+    {
+      "file": "edge-agent/src/talkback/rtsp-backchannel.ts",
+      "endpoint": "127.0.0.1",
+      "service": "LOCAL_LOOPBACK_TEST_TALKBACK",
+      "purpose": "Local talkback testing when specifically configured",
+      "productionAllowed": false,
+      "owner": "media-team"
+    }
+  ]
+}

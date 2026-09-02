@@ -331,20 +331,40 @@ export class CertificateValidationService {
       return null;
     }
   }
-  
+
   /**
    * Validate certificate chain
    */
-  async validateChain(
+  private async inspectCertificateChain(
     hostname: string,
     port: number = 443
   ): Promise<ChainValidationResult> {
+
     return new Promise((resolve) => {
+      try {
+        const { defaultTlsScannerPolicy } = require('../../../../src/security/tls/index');
+        defaultTlsScannerPolicy.assertTargetAllowed(hostname, port);
+      } catch (policyErr: any) {
+        return resolve({
+          valid: false,
+          chainLength: 0,
+          chain: [],
+          errors: [`SSRF Policy blocked scan: ${policyErr.message}`],
+          warnings: [],
+        });
+      }
+
       const options: tls.ConnectionOptions = {
         host: hostname,
         port,
         servername: hostname,
-        rejectUnauthorized: false, // We want to inspect even invalid certs
+        /**
+         * SECURITY EXCEPTION:
+         * id=CERTIFICATE_INSPECTION
+         * reason=Must inspect invalid/untrusted peer certificates to report posture findings.
+         * scope=Certificate Validation Service only. Must not be used for application traffic.
+         */
+        rejectUnauthorized: false,
       };
       
       const socket = tls.connect(options, () => {

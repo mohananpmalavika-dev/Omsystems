@@ -116,14 +116,20 @@ export class QueueDetector extends BaseDetector {
    * Detect persons in frame
    */
   private async detectPersonsInFrame(frame: DetectionFrame): Promise<any[]> {
+    const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
+    const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
     try {
-      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
-      const persons = await pipeline.detectObjects(frame, ['person']).catch(() => []);
-      return persons || [];
+      const persons = await pipeline.detectObjects(frame, ['person']);
+      if (persons && persons.length > 0) return persons;
     } catch (error) {
-      console.warn('detectPersonsInFrame failed:', error);
-      return [];
+      if (!hasInferenceObjects(frame)) {
+        throw error;
+      }
     }
+    if (hasInferenceObjects(frame)) {
+      return getInferenceObjects(frame, ['person']);
+    }
+    return [];
   }
 
   /**

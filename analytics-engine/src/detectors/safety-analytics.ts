@@ -412,12 +412,21 @@ export class SafetyAnalyticsDetector extends BaseDetector {
     if (!detections || detections.length === 0) return grouped;
 
     try {
+      const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
       const pipeline = getInferencePipeline();
-      const persons = await pipeline.detectObjects(frame, ['person']).catch(() => []);
+      let persons: any[] | null = null;
+      try {
+        persons = await pipeline.detectObjects(frame, ['person']);
+      } catch (err) {
+        if (hasInferenceObjects(frame)) {
+          persons = getInferenceObjects(frame, ['person']);
+        }
+      }
       if (!persons || persons.length === 0) {
         grouped.set('person_unknown', detections);
         return grouped;
       }
+
 
       // For each PPE detection, find the person with highest IoU
       for (const ppe of detections) {

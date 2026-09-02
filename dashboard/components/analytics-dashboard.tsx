@@ -131,7 +131,7 @@ export function AnalyticsDashboard() {
     if (!isAvailable('analytics.export.csv')) {
       const capabilityId = 'analytics.export.csv';
       const capability = getCapability(capabilityId);
-      setError(capability?.reason || 'CSV export is not currently available');
+      setError(capability?.runtime?.reason || 'CSV export is not currently available');
       return;
     }
 

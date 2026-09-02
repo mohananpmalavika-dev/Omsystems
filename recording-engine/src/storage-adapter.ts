@@ -1206,40 +1206,66 @@ export class S3StorageAdapter implements StorageDestinationAdapter {
 }
 
 export class CloudArchiveStorageAdapter implements StorageDestinationAdapter {
-  constructor(private readonly options: StorageAdapterOptions) {}
+  private readonly s3Backend: S3StorageAdapter;
+
+  constructor(private readonly options: StorageAdapterOptions & { s3Config?: any; cloudArchiveConfig?: any }) {
+    const s3Options = {
+      ...options,
+      s3Config: {
+        bucket: options.cloudArchiveConfig?.bucket || options.s3Config?.bucket || "sentinel-archive",
+        prefix: options.cloudArchiveConfig?.prefix || "archive",
+        region: options.cloudArchiveConfig?.region || "us-east-1",
+        storageClass: options.cloudArchiveConfig?.storageClass || "GLACIER_IR",
+        ...options.s3Config,
+        ...options.cloudArchiveConfig,
+      }
+    };
+    this.s3Backend = new S3StorageAdapter(s3Options);
+  }
+
   async getMetrics(): Promise<StorageMetrics> {
-    throw new Error("Cloud archive storage adapter is not implemented yet");
+    const metrics = await this.s3Backend.getMetrics();
+    return {
+      ...metrics,
+      storageType: "cloud-archive",
+      supportedTiers: ["cold"],
+    };
   }
+
   async runWriteProbe(): Promise<StorageProbeResult> {
-    throw new Error("Cloud archive storage adapter is not implemented yet");
+    return this.s3Backend.runWriteProbe();
   }
+
   async getStagingPath(cameraId: string): Promise<string> {
-    throw new Error("Cloud archive storage adapter is not implemented yet");
+    return this.s3Backend.getStagingPath(cameraId);
   }
+
   resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string {
-    throw new Error("Cloud archive storage adapter is not implemented yet");
+    return this.s3Backend.resolveSegmentTargetPath(cameraId, startedAt, fileName);
   }
+
   async deleteSegmentFile(storagePath: string): Promise<void> {
-    throw new Error("Cloud archive storage adapter is not implemented yet");
+    return this.s3Backend.deleteSegmentFile(storagePath);
   }
 }
 
-export class SanStorageAdapter implements StorageDestinationAdapter {
-  constructor(private readonly options: StorageAdapterOptions) {}
-  async getMetrics(): Promise<StorageMetrics> {
-    throw new Error("SAN storage adapter is not implemented yet");
+export class SanStorageAdapter extends LocalDiskStorageAdapter {
+  constructor(options: StorageAdapterOptions & { sanConfig?: any }) {
+    super({
+      ...options,
+      recordingRoot: options.sanConfig?.mountPath || options.recordingRoot,
+      storageType: "san",
+      supportedProtocols: [options.sanConfig?.protocol || "iscsi", "posix"],
+    });
   }
-  async runWriteProbe(): Promise<StorageProbeResult> {
-    throw new Error("SAN storage adapter is not implemented yet");
-  }
-  async getStagingPath(cameraId: string): Promise<string> {
-    throw new Error("SAN storage adapter is not implemented yet");
-  }
-  resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string {
-    throw new Error("SAN storage adapter is not implemented yet");
-  }
-  async deleteSegmentFile(storagePath: string): Promise<void> {
-    throw new Error("SAN storage adapter is not implemented yet");
+
+  override async getMetrics(): Promise<StorageMetrics> {
+    const metrics = await super.getMetrics();
+    return {
+      ...metrics,
+      storageType: "san",
+      supportedProtocols: ["iscsi", "fibre-channel", "posix"],
+    };
   }
 }
 

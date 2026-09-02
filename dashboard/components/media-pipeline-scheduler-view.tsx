@@ -87,8 +87,12 @@ export function MediaPipelineSchedulerView() {
         }
       }
 
+      const fingerprint = typeof window !== "undefined" && window.crypto?.randomUUID
+        ? `gpu-fp-${window.crypto.randomUUID().slice(0, 8)}`
+        : `gpu-fp-${Date.now().toString(36)}`;
+
       const detected: ClientHardwareProfile = {
-        fingerprint: `gpu-fp-${Math.random().toString(36).slice(2, 10)}`,
+        fingerprint,
         gpuModel: gpu,
         renderer: renderer,
         hardwareDecoder: "NVDEC / Direct3D11 Video Acceleration",
@@ -123,12 +127,41 @@ export function MediaPipelineSchedulerView() {
 
   useEffect(() => {
     detectClientHardware();
+
+    let frameCount = 0;
+    let lastTime = typeof performance !== "undefined" ? performance.now() : Date.now();
+    let animId: number;
+
+    const measureFps = () => {
+      frameCount++;
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      if (now - lastTime >= 1000) {
+        const fps = (frameCount * 1000) / (now - lastTime);
+        setClientFps(Number(fps.toFixed(1)));
+        frameCount = 0;
+        lastTime = now;
+      }
+      animId = requestAnimationFrame(measureFps);
+    };
+    if (typeof window !== "undefined" && typeof requestAnimationFrame !== "undefined") {
+      animId = requestAnimationFrame(measureFps);
+    }
+
+    let lastTick = typeof performance !== "undefined" ? performance.now() : Date.now();
     const interval = setInterval(() => {
-      // Simulate micro jitter variation
-      setClientFps(Number((59.2 + Math.random() * 0.7).toFixed(1)));
-      setEventLoopLag(Number((3.8 + Math.random() * 0.8).toFixed(1)));
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const expectedDelta = 3000;
+      const lag = Math.max(0, now - lastTick - expectedDelta);
+      setEventLoopLag(Number(lag.toFixed(1)));
+      lastTick = now;
     }, 3000);
-    return () => clearInterval(interval);
+
+    return () => {
+      if (animId && typeof cancelAnimationFrame !== "undefined") {
+        cancelAnimationFrame(animId);
+      }
+      clearInterval(interval);
+    };
   }, [detectClientHardware]);
 
   // Compute calculated stream matrix

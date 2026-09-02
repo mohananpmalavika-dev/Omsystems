@@ -32,7 +32,12 @@ export interface MfaRateLimitConfig {
  */
 export function loadMfaRateLimitConfig(): MfaRateLimitConfig {
   // Redis configuration
-  const redisUrl = process.env.MFA_REDIS_URL || process.env.REDIS_URL || 'redis://localhost:6379';
+  const rawRedisUrl = process.env.MFA_REDIS_URL || process.env.REDIS_URL;
+  if (!rawRedisUrl && process.env.NODE_ENV === 'production') {
+    throw new Error('MFA_REDIS_URL or REDIS_URL is required in production');
+  }
+  const redisUrl = rawRedisUrl || 'redis://localhost:6379';
+
   
   // HMAC secret for identifier hashing
   const hmacSecret = process.env.MFA_HMAC_SECRET || process.env.RATE_LIMIT_SECRET;

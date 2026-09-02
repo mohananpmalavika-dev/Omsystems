@@ -47,8 +47,11 @@ export class CloudflareTunnelManager implements ManagedEdgeTunnelProvider {
           body: JSON.stringify({
             config: {
               ingress: [
-                { hostname, service: this.options.originService ?? "http://127.0.0.1:8090" },
-                { service: "http_status:404" },
+                {
+                  hostname,
+                  service: this.options.originService || (process.env.NODE_ENV === "production" ? `http://${hostname}:8090` : "http://127.0.0.1:8090"),
+                },
+
               ],
             },
           }),

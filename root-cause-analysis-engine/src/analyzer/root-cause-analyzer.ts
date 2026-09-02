@@ -47,6 +47,7 @@ Provide structured, actionable insights.`
       const aiAnalysis = completion.choices[0]?.message?.content || '';
 
       // Parse AI response and structure the analysis
+      const dataQualityScore = this.calculateDataQualityScore(incidentData);
       const analysis: RootCauseAnalysis = {
         incidentId,
         timestamp: new Date().toISOString(),
@@ -54,9 +55,13 @@ Provide structured, actionable insights.`
         contributingFactors: this.extractContributingFactors(aiAnalysis),
         remediationSteps: this.extractRemediationSteps(aiAnalysis),
         preventiveMeasures: this.extractPreventiveMeasures(aiAnalysis),
-        confidence: this.calculateConfidence(incidentData),
+        confidence: null, // AI text generation does not provide calibrated probabilistic confidence
+        heuristicScore: dataQualityScore,
+        provenance: 'LIVE_INFERENCE',
+        status: 'SUCCESS',
         rawAnalysis: aiAnalysis
       };
+
 
       // Cache the analysis
       this.analysisCache.set(incidentId, analysis);
@@ -173,33 +178,32 @@ Provide structured, actionable insights.`
     return measures.length > 0 ? measures : ['Implement monitoring and alerting for similar incidents'];
   }
 
-  private calculateConfidence(incidentData: IncidentData): number {
-    // Build confidence based on actual data quality and AI analysis success
-    // Note: This is confidence in the RCA quality, not AI model inference
-    let confidence = 0;
+  private calculateDataQualityScore(incidentData: IncidentData): number {
+    // Build quality score based on actual data completeness
+    let score = 0;
 
-    // Base confidence only if we have meaningful description
+    // Base score only if we have meaningful description
     if (incidentData.description && incidentData.description.length > 20) {
-      confidence = 0.3; // Base confidence for having usable incident data
+      score = 0.3;
     }
 
-    // Increase confidence based on data completeness
+    // Increase score based on data completeness
     if (incidentData.description && incidentData.description.length > 50) {
-      confidence += 0.15; // Detailed description helps analysis
+      score += 0.15;
     }
     
     if (incidentData.metadata && Object.keys(incidentData.metadata).length > 0) {
-      confidence += 0.15; // Structured metadata improves accuracy
+      score += 0.15;
     }
     
     if (incidentData.systemLogs && incidentData.systemLogs.length > 0) {
-      confidence += 0.2; // System logs are highly valuable for RCA
+      score += 0.2;
     }
     
     if (incidentData.relatedIncidents && incidentData.relatedIncidents.length > 0) {
-      confidence += 0.15; // Pattern recognition across incidents
+      score += 0.15;
     }
 
-    return Math.min(confidence, 0.95); // Cap at 95% - never claim 100% certainty in RCA
+    return Math.min(score, 0.95);
   }
 }

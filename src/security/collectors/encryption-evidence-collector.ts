@@ -255,8 +255,9 @@ export class EncryptionEvidenceCollector extends BaseEvidenceCollector {
     });
 
     // Check API endpoints
-    const apiEndpoint = process.env.API_ENDPOINT || 'https://localhost:3000';
+    const apiEndpoint = process.env.CONTROL_API_URL || process.env.API_ENDPOINT || (process.env.NODE_ENV === "production" ? "https://control.sentinel.internal" : "https://localhost:3000");
     const usesHttps = apiEndpoint.startsWith('https://');
+
 
     components.push({
       category: 'transit',

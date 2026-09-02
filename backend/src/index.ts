@@ -8,6 +8,8 @@ import express from 'express';
 import { Pool } from 'pg';
 import { createBranchCommandCenterRoutes } from './routes/branch-command-center.routes';
 
+import { createDatabaseTlsConfig } from '../../src/security/tls/index';
+
 // Initialize database pool
 const pool = new Pool({
   host: process.env.DB_HOST,
@@ -18,7 +20,9 @@ const pool = new Pool({
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
+  ssl: createDatabaseTlsConfig(),
 });
+
 
 const app = express();
 

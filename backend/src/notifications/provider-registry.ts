@@ -10,6 +10,8 @@ import {
   NotificationChannel
 } from './notification.types.js';
 import { logger } from '../utils/logger.js';
+import { ProductionMockForbiddenError } from '../../../packages/contracts/src/execution/index.js';
+
 
 export class ProviderRegistry {
   private providers = new Map<NotificationChannel, NotificationProvider>();
@@ -18,6 +20,11 @@ export class ProviderRegistry {
    * Register a provider for a channel
    */
   register(provider: NotificationProvider): void {
+    const isMock = provider.name.toLowerCase().includes('mock') || provider.constructor.name === 'MockProvider';
+    if (process.env.NODE_ENV === 'production' && isMock) {
+      throw new ProductionMockForbiddenError(`Cannot register mock provider '${provider.name}' in production mode.`);
+    }
+
     if (this.providers.has(provider.channel)) {
       logger.warn('Overwriting existing provider', {
         channel: provider.channel,

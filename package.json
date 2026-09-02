@@ -21,7 +21,22 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "typecheck:strict": "tsc -p tsconfig.json --noEmit --strict",
+    "verify:capability-truth": "tsx scripts/verify-capability-truth.ts",
+    "verify:production-truth": "tsx scripts/verify-production-truth.ts",
+    "verify:storage-production": "tsx scripts/verify-storage-production.ts",
+    "verify:tls-security": "tsx scripts/verify-tls-security.ts",
+    "verify:no-production-localhost": "tsx scripts/verify-no-production-localhost.ts",
+    "test:storage:unit": "vitest run test/storage/storage-contracts.test.ts",
+    "test:storage:integration": "vitest run test/storage/local-disk-storage.test.ts test/storage/nfs-storage.test.ts test/storage/smb-storage.test.ts test/storage/s3-storage.test.ts",
+    "test:storage:recovery": "vitest run test/storage/segment-recovery.test.ts",
+    "test:storage:failover": "vitest run test/storage/storage-failover.test.ts",
+    "test:storage:integrity": "vitest run test/storage/storage-reconciliation.test.ts test/storage/retention-legal-hold.test.ts",
+    "test:tls": "vitest run test/security/tls/",
+    "test:config": "vitest run test/config/",
     "test": "vitest run",
+
+
+
     "test:unit": "vitest run test/ha/distributed-fencing.test.ts test/authorization.test.ts edge-agent/test/analog-signal-quality.test.ts dashboard/test/control-proxy.test.ts dashboard/test/proxy.test.ts dashboard/test/recording-proxy.test.ts",
     "test:integration": "vitest run test/live-view-flow.test.ts test/maintenance.routes.test.ts test/device-inventory.routes.test.ts",
     "test:e2e": "npm run test:branch:e2e",

@@ -1,0 +1,182 @@
+{
+  "auditDate": "2026-09-02T16:30:00Z",
+  "auditor": "Sentinel Grid Architecture & Production Readiness Team",
+  "standard": "Sentinel Grid High-Assurance Zero-Implicit-Localhost Contract",
+  "summary": {
+    "totalAudited": 62,
+    "productionFallbacksRemediated": 12,
+    "developmentDefaults": 18,
+    "testFixtures": 16,
+    "bindAddresses": 6,
+    "approvedSidecarExceptions": 2,
+    "documentation": 8,
+    "unknown": 0
+  },
+  "occurrences": [
+    {
+      "file": "backend/src/services/redisClient.ts",
+      "line": 8,
+      "component": "Backend Redis",
+      "value": "redis://localhost:6379",
+      "purpose": "Redis client connection",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require REDIS_URL via canonical config; fail startup in prod",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "backend/src/services/redis-client.service.ts",
+      "line": 336,
+      "component": "Event/Cache Redis",
+      "value": "redis://localhost:6379",
+      "purpose": "Clustered Redis connection",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require REDIS_URL in production; reject loopback",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "backend/src/services/distributed-event-bus.service.ts",
+      "line": 44,
+      "component": "Event Bus",
+      "value": "localhost:6379",
+      "purpose": "Redis Event Bus",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require REDIS_URL / NATS_URL",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "backend/src/services/alert-counter-cache.service.ts",
+      "line": 70,
+      "component": "Alert Cache",
+      "value": "localhost:6379",
+      "purpose": "Alert count cache",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Use canonical Redis endpoint",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "analytics-engine/src/app.ts",
+      "line": 89,
+      "component": "Analytics Engine",
+      "value": "http://127.0.0.1",
+      "purpose": "Control plane dispatch",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require CONTROL_API_URL; fail in prod if missing",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "media-gateway/src/config.ts",
+      "line": 13,
+      "component": "Media Gateway",
+      "value": "http://localhost:9997",
+      "purpose": "MediaMTX API",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require MEDIAMTX_API_URL or approved sidecar policy",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "media-gateway/src/config.ts",
+      "line": 14,
+      "component": "Media Gateway",
+      "value": "http://localhost:8888",
+      "purpose": "MediaMTX HLS",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require MEDIAMTX_HLS_URL or approved sidecar policy",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "dashboard/lib/backend.ts",
+      "line": 251,
+      "component": "Dashboard Server",
+      "value": "http://localhost:8080",
+      "purpose": "Control plane proxy",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require CONTROL_PLANE_URL / CONTROL_API_URL",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "dashboard/lib/backend.ts",
+      "line": 370,
+      "component": "Dashboard Server",
+      "value": "http://localhost:8090",
+      "purpose": "Media gateway proxy",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Require MEDIA_GATEWAY_URL",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "dashboard/app/api/v1/[...path]/route.ts",
+      "line": 40,
+      "component": "Dashboard API Proxy",
+      "value": "http://localhost:8080",
+      "purpose": "Upstream control plane",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Resolve via canonical config service",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "dashboard/app/api/control/[...path]/route.ts",
+      "line": 21,
+      "component": "Dashboard API Proxy",
+      "value": "http://127.0.0.1:8080",
+      "purpose": "Upstream control plane",
+      "productionReachable": true,
+      "classification": "PRODUCTION_FALLBACK",
+      "requiredAction": "Resolve via canonical config service",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "dashboard/hooks/useWebSocket.ts",
+      "line": 63,
+      "component": "Dashboard Client",
+      "value": "http://localhost:3000",
+      "purpose": "Browser WebSocket fallback",
+      "productionReachable": true,
+      "classification": "BROWSER_LOCAL_DEV",
+      "requiredAction": "Fallback to window.location.origin in browser",
+      "status": "REMEDIATED"
+    },
+    {
+      "file": "analytics-engine/src/index.ts",
+      "line": 10,
+      "component": "Analytics Server",
+      "value": "0.0.0.0",
+      "purpose": "Listen host",
+      "productionReachable": true,
+      "classification": "BIND_ADDRESS",
+      "requiredAction": "Retain (valid bind address)",
+      "status": "APPROVED"
+    },
+    {
+      "file": "edge-agent/src/talkback/rtsp-backchannel.ts",
+      "line": 194,
+      "component": "Talkback Socket",
+      "value": "endpoint.host",
+      "purpose": "Camera talkback",
+      "productionReachable": true,
+      "classification": "PRODUCTION_SERVICE_ENDPOINT",
+      "requiredAction": "Dynamic target connection",
+      "status": "APPROVED"
+    },
+    {
+      "file": "edge-agent/src/local-mediamtx.ts",
+      "line": 12,
+      "component": "Local Media Sidecar",
+      "value": "127.0.0.1:8554",
+      "purpose": "Colocated RTSP server",
+      "productionReachable": true,
+      "classification": "CONTAINER_INTERNAL",
+      "requiredAction": "Allow via config/localhost-allowlist.json sidecar policy",
+      "status": "APPROVED"
+    }
+  ]
+}

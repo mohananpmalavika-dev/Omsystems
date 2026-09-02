@@ -14,8 +14,9 @@ export function createCommanderRoutes(pool: Pool): IRouter {
   // Initialize service and controller
   const commanderService = new SecurityCommanderService(pool, {
     useLLM: process.env.COMMANDER_USE_LLM !== 'false',
-    ollamaUrl: process.env.OLLAMA_URL || 'http://localhost:11434',
+    ollamaUrl: process.env.OLLAMA_URL || (process.env.NODE_ENV === 'production' ? 'http://ollama.service.internal:11434' : 'http://localhost:11434'),
     ollamaModel: process.env.OLLAMA_MODEL || 'llama3.2',
+
     evidenceStoragePath: process.env.EVIDENCE_STORAGE_PATH || './evidence',
   });
 

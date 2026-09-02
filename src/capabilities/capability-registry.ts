@@ -1,289 +1,392 @@
 /**
- * Capability Registry
- * Tracks which features are REAL, READY, or PLANNED
- * Prevents confusion between implemented and simulated capabilities
+ * Authoritative Sentinel Grid Capability Registry
+ * 
+ * Provides truthful, evidence-grounded capability tracking across the platform.
+ * Strictly separates:
+ * 1. Product Maturity (Release Truth): PRODUCTION | BETA | EXPERIMENTAL | NOT_IMPLEMENTED
+ * 2. Runtime State (Operational Health): HEALTHY | DEGRADED | DOWN | NOT_CONFIGURED | DISABLED | UNKNOWN
+ * 3. Device Support: Handled independently by DeviceCapabilityRegistry
  */
 
+import {
+  CapabilityMaturity,
+  CapabilityRuntimeState,
+  type CapabilityCategory,
+  type PlatformCapability,
+  type CapabilitySummary,
+  type CapabilityBlocker,
+  type CapabilityDeploymentPolicy,
+  DEFAULT_STANDARD_DEPLOYMENT_POLICY,
+} from '../../packages/contracts/src/capabilities/capability-types.js';
+import { determineMaximumAllowedMaturity } from '../../packages/contracts/src/capabilities/evidence-rules.js';
+import { PLATFORM_CAPABILITIES } from './platform-capabilities.js';
+
+// ============================================================================
+// BACKWARD COMPATIBILITY ADAPTERS (DEPRECATED)
+// ============================================================================
+
+/** @deprecated Use CapabilityMaturity instead */
 export enum CapabilityTier {
-  REAL = 'REAL',       // Fully implemented, tested, deployed, connected to real data
-  READY = 'READY',     // Code exists, tested, but deployment/configuration pending
-  PLANNED = 'PLANNED', // UI/API exists, but actual backend logic is mock/simulation
+  REAL = 'REAL',
+  READY = 'READY',
+  PLANNED = 'PLANNED',
 }
 
+/** @deprecated Use CapabilityRuntimeState instead */
 export enum CapabilityStatus {
-  ACTIVE = 'active',           // Running and operational
-  INACTIVE = 'inactive',       // Not running (disabled or not started)
-  ERROR = 'error',             // Running but encountering errors
-  NOT_CONFIGURED = 'not_configured', // Missing required configuration
-  UNAVAILABLE = 'unavailable', // Dependencies not available
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+  ERROR = 'error',
+  NOT_CONFIGURED = 'not_configured',
+  UNAVAILABLE = 'unavailable',
 }
 
-export interface CapabilityDefinition {
-  id: string;
-  name: string;
-  category: 'security' | 'analytics' | 'infrastructure' | 'operations' | 'integration';
-  tier: CapabilityTier;
-  status: CapabilityStatus;
-  description: string;
-  requiredCollectors?: string[];
-  requiredServices?: string[];
-  requiredConfig?: string[];
-  healthCheck?: () => Promise<boolean>;
-  metadata?: Record<string, unknown> & {
-    version?: string;
-    deployedAt?: string;
-    lastVerified?: string;
-    confidence?: number; // 0-100
-  };
+/** @deprecated Use PlatformCapability instead */
+export type CapabilityDefinition = PlatformCapability;
+
+/**
+ * Map legacy tier to canonical maturity
+ */
+export function legacyTierToMaturity(tier: CapabilityTier): CapabilityMaturity {
+  switch (tier) {
+    case CapabilityTier.REAL:
+      return CapabilityMaturity.PRODUCTION;
+    case CapabilityTier.READY:
+      return CapabilityMaturity.BETA;
+    case CapabilityTier.PLANNED:
+    default:
+      return CapabilityMaturity.NOT_IMPLEMENTED;
+  }
 }
 
-export interface CapabilityCheck {
-  capabilityId: string;
-  tier: CapabilityTier;
-  status: CapabilityStatus;
-  available: boolean;
-  reason?: string;
-  missingRequirements?: string[];
-  checkedAt: string;
-}
+// ============================================================================
+// CANONICAL CAPABILITY REGISTRY CLASS
+// ============================================================================
 
-export class CapabilityRegistry {
-  private capabilities: Map<string, CapabilityDefinition> = new Map();
-  private lastCheckResults: Map<string, CapabilityCheck> = new Map();
+export class PlatformCapabilityRegistry {
+  private capabilities = new Map<string, PlatformCapability>();
+  private deploymentPolicy: CapabilityDeploymentPolicy = { ...DEFAULT_STANDARD_DEPLOYMENT_POLICY };
+
+  constructor(initialCapabilities: PlatformCapability[] = PLATFORM_CAPABILITIES) {
+    for (const cap of initialCapabilities) {
+      this.capabilities.set(cap.id, { ...cap });
+    }
+  }
 
   /**
-   * Register a capability
+   * Set dynamic deployment policy for the platform
    */
-  register(capability: CapabilityDefinition): void {
+  setDeploymentPolicy(policy: Partial<CapabilityDeploymentPolicy>): void {
+    this.deploymentPolicy = {
+      ...this.deploymentPolicy,
+      ...policy,
+    };
+  }
+
+  /**
+   * Get active deployment policy
+   */
+  getDeploymentPolicy(): CapabilityDeploymentPolicy {
+    return { ...this.deploymentPolicy };
+  }
+
+  /**
+   * Get a capability by its unique machine ID
+   */
+  get(id: string): PlatformCapability | undefined {
+    return this.capabilities.get(id);
+  }
+
+  /**
+   * Get all registered platform capabilities
+   */
+  getAll(): PlatformCapability[] {
+    return Array.from(this.capabilities.values());
+  }
+
+  /**
+   * Get capabilities filtered by product maturity
+   */
+  getByMaturity(maturity: CapabilityMaturity): PlatformCapability[] {
+    return this.getAll().filter((c) => c.maturity === maturity);
+  }
+
+  /**
+   * Get capabilities filtered by domain category
+   */
+  getByCategory(category: CapabilityCategory | string): PlatformCapability[] {
+    const normalized = String(category).toUpperCase();
+    return this.getAll().filter((c) => c.category.toUpperCase() === normalized);
+  }
+
+  /**
+   * Get capabilities filtered by current runtime state
+   */
+  getByRuntimeState(state: CapabilityRuntimeState): PlatformCapability[] {
+    return this.getAll().filter((c) => c.runtime.state === state);
+  }
+
+  /**
+   * Register or update a platform capability definition
+   */
+  register(capability: PlatformCapability): void {
     this.capabilities.set(capability.id, capability);
   }
 
   /**
    * Register multiple capabilities
    */
-  registerMany(capabilities: CapabilityDefinition[]): void {
-    for (const capability of capabilities) {
-      this.register(capability);
+  registerMany(capabilities: PlatformCapability[]): void {
+    for (const cap of capabilities) {
+      this.register(cap);
     }
   }
 
   /**
-   * Get all capabilities
+   * Update dynamic runtime operational state for a capability
    */
-  getAll(): CapabilityDefinition[] {
-    return Array.from(this.capabilities.values());
-  }
-
-  /**
-   * Get capabilities by tier
-   */
-  getByTier(tier: CapabilityTier): CapabilityDefinition[] {
-    return this.getAll().filter(c => c.tier === tier);
-  }
-
-  /**
-   * Get capabilities by category
-   */
-  getByCategory(category: CapabilityDefinition['category']): CapabilityDefinition[] {
-    return this.getAll().filter(c => c.category === category);
-  }
-
-  /**
-   * Get capability by ID
-   */
-  get(id: string): CapabilityDefinition | undefined {
-    return this.capabilities.get(id);
-  }
-
-  /**
-   * Check if capability is available
-   */
-  async checkCapability(id: string): Promise<CapabilityCheck> {
+  updateRuntimeState(
+    id: string,
+    state: CapabilityRuntimeState,
+    reason?: string,
+    errorCode?: string
+  ): boolean {
     const capability = this.capabilities.get(id);
-    
-    if (!capability) {
-      return {
-        capabilityId: id,
-        tier: CapabilityTier.PLANNED,
-        status: CapabilityStatus.UNAVAILABLE,
-        available: false,
-        reason: 'capability_not_registered',
-        checkedAt: new Date().toISOString(),
-      };
-    }
+    if (!capability) return false;
 
-    const missingRequirements: string[] = [];
-
-    // Check required collectors
-    if (capability.requiredCollectors && capability.requiredCollectors.length > 0) {
-      // TODO: Check if collectors are active
-      // For now, assume all collectors are available if specified
-    }
-
-    // Check required services
-    if (capability.requiredServices && capability.requiredServices.length > 0) {
-      // TODO: Check if services are initialized
-    }
-
-    // Check required configuration
-    if (capability.requiredConfig && capability.requiredConfig.length > 0) {
-      for (const configKey of capability.requiredConfig) {
-        if (!process.env[configKey]) {
-          missingRequirements.push(`env:${configKey}`);
-        }
-      }
-    }
-
-    // Run health check if provided
-    let healthy = true;
-    if (capability.healthCheck) {
-      try {
-        healthy = await capability.healthCheck();
-      } catch (error) {
-        healthy = false;
-      }
-    }
-
-    // Determine status and availability
-    let status = capability.status;
-    let available = true;
-    let reason: string | undefined;
-
-    if (missingRequirements.length > 0) {
-      status = CapabilityStatus.NOT_CONFIGURED;
-      available = false;
-      reason = 'missing_required_configuration';
-    } else if (!healthy) {
-      status = CapabilityStatus.ERROR;
-      available = false;
-      reason = 'health_check_failed';
-    } else if (capability.tier === CapabilityTier.PLANNED) {
-      status = CapabilityStatus.UNAVAILABLE;
-      available = false;
-      reason = 'not_implemented';
-    } else if (status === CapabilityStatus.INACTIVE) {
-      available = false;
-      reason = 'capability_disabled';
-    }
-
-    const check: CapabilityCheck = {
-      capabilityId: id,
-      tier: capability.tier,
-      status,
-      available,
+    capability.runtime = {
+      state,
       reason,
-      missingRequirements: missingRequirements.length > 0 ? missingRequirements : undefined,
+      errorCode,
       checkedAt: new Date().toISOString(),
     };
-
-    this.lastCheckResults.set(id, check);
-    return check;
+    return true;
   }
 
   /**
-   * Check all capabilities
+   * Check whether a capability is currently usable
    */
-  async checkAll(): Promise<Map<string, CapabilityCheck>> {
-    const results = new Map<string, CapabilityCheck>();
-
-    await Promise.all(
-      Array.from(this.capabilities.keys()).map(async (id) => {
-        const check = await this.checkCapability(id);
-        results.set(id, check);
-      })
-    );
-
-    return results;
-  }
-
-  /**
-   * Get summary statistics
-   */
-  getSummary(): {
-    total: number;
-    active: number;
-    planned: number;
-    deprecated: number;
-    byTier: Record<CapabilityTier, number>;
-    byCategory: Record<string, number>;
-  } {
-    const all = this.getAll();
-    
-    const byTier = {
-      [CapabilityTier.REAL]: 0,
-      [CapabilityTier.READY]: 0,
-      [CapabilityTier.PLANNED]: 0,
-    };
-
-    const byCategory: Record<string, number> = {};
-
-    for (const capability of all) {
-      byTier[capability.tier]++;
-      byCategory[capability.category] = (byCategory[capability.category] ?? 0) + 1;
+  canUse(id: string): { usable: boolean; reason?: string } {
+    const cap = this.capabilities.get(id);
+    if (!cap) {
+      return { usable: false, reason: 'capability_not_registered' };
     }
 
-    const active = all.filter((capability) => capability.status === CapabilityStatus.ACTIVE).length;
-    const planned = all.filter((capability) => capability.tier === CapabilityTier.PLANNED).length;
-    const deprecated = all.filter((capability) => capability.status === CapabilityStatus.UNAVAILABLE).length;
+    if (cap.maturity === CapabilityMaturity.NOT_IMPLEMENTED) {
+      return { usable: false, reason: 'feature_not_implemented' };
+    }
+
+    if (cap.maturity === CapabilityMaturity.EXPERIMENTAL && !this.deploymentPolicy.allowExperimental) {
+      return { usable: false, reason: 'experimental_features_disabled' };
+    }
+
+    if (cap.maturity === CapabilityMaturity.BETA && !this.deploymentPolicy.allowBeta) {
+      return { usable: false, reason: 'beta_features_disabled' };
+    }
+
+    if (cap.runtime.state === CapabilityRuntimeState.DOWN) {
+      return { usable: false, reason: 'runtime_service_down' };
+    }
+
+    if (cap.runtime.state === CapabilityRuntimeState.DISABLED) {
+      return { usable: false, reason: 'runtime_service_disabled' };
+    }
+
+    if (cap.runtime.state === CapabilityRuntimeState.NOT_CONFIGURED) {
+      return { usable: false, reason: 'runtime_not_configured' };
+    }
+
+    return { usable: true };
+  }
+
+  /**
+   * Calculate summary metrics across all capabilities
+   */
+  getSummary(): CapabilitySummary {
+    const all = this.getAll();
+    const byCategory: Record<CapabilityCategory, number> = {
+      VIDEO: 0,
+      RECORDING: 0,
+      EVIDENCE: 0,
+      ANALYTICS: 0,
+      HA: 0,
+      SECURITY: 0,
+      OPERATIONS: 0,
+      STORAGE: 0,
+      EDGE: 0,
+      INTEGRATION: 0,
+    };
+
+    const byMaturity = {
+      production: 0,
+      beta: 0,
+      experimental: 0,
+      notImplemented: 0,
+    };
+
+    const byRuntimeState = {
+      healthy: 0,
+      degraded: 0,
+      down: 0,
+      notConfigured: 0,
+      disabled: 0,
+      unknown: 0,
+    };
+
+    for (const cap of all) {
+      // By category
+      if (byCategory[cap.category] !== undefined) {
+        byCategory[cap.category]++;
+      }
+
+      // By maturity
+      switch (cap.maturity) {
+        case CapabilityMaturity.PRODUCTION:
+          byMaturity.production++;
+          break;
+        case CapabilityMaturity.BETA:
+          byMaturity.beta++;
+          break;
+        case CapabilityMaturity.EXPERIMENTAL:
+          byMaturity.experimental++;
+          break;
+        case CapabilityMaturity.NOT_IMPLEMENTED:
+          byMaturity.notImplemented++;
+          break;
+      }
+
+      // By runtime state
+      switch (cap.runtime.state) {
+        case CapabilityRuntimeState.HEALTHY:
+          byRuntimeState.healthy++;
+          break;
+        case CapabilityRuntimeState.DEGRADED:
+          byRuntimeState.degraded++;
+          break;
+        case CapabilityRuntimeState.DOWN:
+          byRuntimeState.down++;
+          break;
+        case CapabilityRuntimeState.NOT_CONFIGURED:
+          byRuntimeState.notConfigured++;
+          break;
+        case CapabilityRuntimeState.DISABLED:
+          byRuntimeState.disabled++;
+          break;
+        case CapabilityRuntimeState.UNKNOWN:
+        default:
+          byRuntimeState.unknown++;
+          break;
+      }
+    }
 
     return {
       total: all.length,
-      active,
-      planned,
-      deprecated,
-      byTier,
+      byMaturity,
+      byRuntimeState,
       byCategory,
+      generatedAt: new Date().toISOString(),
     };
   }
 
   /**
-   * Export for API response
+   * Identify all production blockers across capabilities
    */
-  async exportForAPI(): Promise<{
-    capabilities: Array<CapabilityDefinition & { check: CapabilityCheck }>;
-    summary: {
-      total: number;
-      active: number;
-      planned: number;
-      deprecated: number;
-      byTier: Record<CapabilityTier, number>;
-      byCategory: Record<string, number>;
-    };
-  }> {
-    await this.checkAll();
+  getBlockers(): CapabilityBlocker[] {
+    const blockers: CapabilityBlocker[] = [];
 
-    const capabilities = this.getAll().map(capability => ({
-      ...capability,
-      check: this.lastCheckResults.get(capability.id)!,
-    }));
+    for (const cap of this.getAll()) {
+      const items: string[] = [];
 
+      if (cap.maturity === CapabilityMaturity.NOT_IMPLEMENTED) {
+        if (!cap.implementation.backend) items.push('Missing backend implementation');
+        if (!cap.implementation.api) items.push('Missing API routes');
+        if (cap.runtime.reason) items.push(cap.runtime.reason);
+      }
+
+      if (cap.maturity === CapabilityMaturity.EXPERIMENTAL) {
+        items.push('Accuracy and performance validation pending in staging environment');
+        if (cap.limitations) items.push(...cap.limitations);
+      }
+
+      if (cap.maturity === CapabilityMaturity.BETA) {
+        if (!cap.verification.e2eTests) items.push('End-to-end scale / HA tests pending');
+      }
+
+      if (cap.runtime.state === CapabilityRuntimeState.DOWN || cap.runtime.state === CapabilityRuntimeState.DEGRADED) {
+        items.push(`Runtime issue: ${cap.runtime.reason || cap.runtime.state}`);
+      }
+
+      if (items.length > 0) {
+        blockers.push({
+          capabilityId: cap.id,
+          name: cap.name,
+          category: cap.category,
+          maturity: cap.maturity,
+          blockers: items,
+        });
+      }
+    }
+
+    return blockers;
+  }
+
+  /**
+   * Export comprehensive audit payload for administration
+   */
+  getAuditReport(): {
+    total: number;
+    summary: CapabilitySummary;
+    capabilities: PlatformCapability[];
+    blockers: CapabilityBlocker[];
+    generatedAt: string;
+  } {
     return {
-      capabilities,
+      total: this.capabilities.size,
       summary: this.getSummary(),
+      capabilities: this.getAll(),
+      blockers: this.getBlockers(),
+      generatedAt: new Date().toISOString(),
     };
   }
 
   /**
-   * Clear all capabilities (for testing)
+   * Clear all capabilities (for testing purposes)
    */
   clear(): void {
     this.capabilities.clear();
-    this.lastCheckResults.clear();
+  }
+
+  /**
+   * Reset registry to canonical baseline
+   */
+  reset(): void {
+    this.capabilities.clear();
+    for (const cap of PLATFORM_CAPABILITIES) {
+      this.capabilities.set(cap.id, { ...cap });
+    }
   }
 }
 
-/**
- * Singleton instance
- */
-let registryInstance: CapabilityRegistry | null = null;
+// ============================================================================
+// SINGLETON INSTANCE & EXPORTS
+// ============================================================================
 
-export function getCapabilityRegistry(): CapabilityRegistry {
-  if (!registryInstance) {
-    registryInstance = new CapabilityRegistry();
+let platformCapabilityRegistryInstance: PlatformCapabilityRegistry | null = null;
+
+export function getCapabilityRegistry(): PlatformCapabilityRegistry {
+  if (!platformCapabilityRegistryInstance) {
+    platformCapabilityRegistryInstance = new PlatformCapabilityRegistry();
   }
-  return registryInstance;
+  return platformCapabilityRegistryInstance;
 }
 
 export function resetCapabilityRegistry(): void {
-  registryInstance = null;
+  if (platformCapabilityRegistryInstance) {
+    platformCapabilityRegistryInstance.reset();
+  } else {
+    platformCapabilityRegistryInstance = new PlatformCapabilityRegistry();
+  }
 }
+
+/** @deprecated Alias for backward compatibility */
+export const CapabilityRegistry = PlatformCapabilityRegistry;

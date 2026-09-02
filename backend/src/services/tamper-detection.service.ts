@@ -585,15 +585,36 @@ export class TamperDetectionService {
   }
 
   private calculateBrightness(frame: Buffer): number {
-    // Calculate average brightness from frame
-    // In production: analyze actual image data
-    return Math.random() * 100;
+    if (!frame || frame.length === 0) {
+      throw new Error("Invalid frame buffer: cannot compute brightness on empty buffer");
+    }
+    // Calculate average pixel luminance across sample points in the buffer
+    let sum = 0;
+    const step = Math.max(1, Math.floor(frame.length / 1000));
+    let sampleCount = 0;
+    for (let i = 0; i < frame.length; i += step) {
+      sum += frame[i]!;
+      sampleCount++;
+    }
+    const avgByte = sampleCount > 0 ? sum / sampleCount : 0;
+    return (avgByte / 255) * 100;
   }
 
   private calculateFrameSimilarity(frame1: Buffer, frame2: Buffer): number {
-    // Calculate similarity score between frames
-    // In production: use perceptual hashing or feature matching
-    return Math.random();
+    if (!frame1 || frame1.length === 0 || !frame2 || frame2.length === 0) {
+      throw new Error("Invalid frame buffer: cannot compute similarity with empty buffer");
+    }
+    const len = Math.min(frame1.length, frame2.length);
+    if (len === 0) return 0;
+    const step = Math.max(1, Math.floor(len / 1000));
+    let diffSum = 0;
+    let sampleCount = 0;
+    for (let i = 0; i < len; i += step) {
+      diffSum += Math.abs(frame1[i]! - frame2[i]!);
+      sampleCount++;
+    }
+    const avgDiff = sampleCount > 0 ? diffSum / sampleCount : 255;
+    return Math.max(0, Math.min(1, 1 - (avgDiff / 255)));
   }
 
   private compareConfigs(oldConfig: any, newConfig: any): Array<{ field: string; critical: boolean }> {

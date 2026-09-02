@@ -28,11 +28,8 @@ export async function initializeStatisticsService(databaseUrl?: string): Promise
   }
 
   try {
-    // Parse connection string to check if SSL is required
-    const isExternalDatabase =
-      connectionString.includes("render.com") ||
-      connectionString.includes("heroku.com") ||
-      connectionString.includes("aws.com");
+    const { createDatabaseTlsConfig } = await import("../../src/security/tls/index.js");
+    const ssl = createDatabaseTlsConfig();
 
     statisticsPool = new Pool({
       connectionString,
@@ -43,12 +40,9 @@ export async function initializeStatisticsService(databaseUrl?: string): Promise
       statement_timeout: 15_000,
       query_timeout: 20_000,
       application_name: "analytics-engine-statistics",
-      ssl: isExternalDatabase
-        ? {
-            rejectUnauthorized: false,
-          }
-        : false,
+      ssl,
     });
+
 
     // Verify connection
     const client = await statisticsPool.connect();

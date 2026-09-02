@@ -225,6 +225,55 @@ export class RetentionEngineService {
   planSafePurge(segments: RetentionSegmentMetadata[], targetReclaimBytes: number): DeletionPlanResult {
     return DeletionPlannerService.planDeletion(segments, targetReclaimBytes);
   }
+
+  /**
+   * Executes audited deletion for a segment, strictly enforcing legal hold protection.
+   */
+  async executeAuditedDeletion(params: {
+    segmentId: string;
+    cameraId: string;
+    branchId: string;
+    tenantId: string;
+    storageLocator: any;
+    sizeBytes: number;
+    sha256: string;
+    backendDeleteFn: (locator: any) => Promise<void>;
+    actor: string;
+    reason: string;
+  }): Promise<{ success: boolean; auditId: string }> {
+    // 1. Check Legal Hold
+    const activeHolds = this.getLegalHolds(params.cameraId, params.branchId);
+    if (activeHolds.length > 0) {
+      const hold = activeHolds[0]!;
+      const { LegalHoldProtectedError } = await import("../../../packages/contracts/src/storage/storage-errors.js");
+      throw new LegalHoldProtectedError(
+        params.segmentId,
+        hold.id,
+        `Cannot delete segment '${params.segmentId}': protected by active Legal Hold '${hold.id}' (${hold.caseNumber}).`,
+      );
+    }
+
+    // 2. Physical Deletion via Storage Backend
+    await params.backendDeleteFn(params.storageLocator);
+
+    // 3. Record Audit Log
+    const { retentionAuditService } = await import("./retention-audit.service.js");
+    const audit = retentionAuditService.recordEvent({
+      tenantId: params.tenantId,
+      entityType: "CAMERA",
+      entityId: params.cameraId,
+      eventType: "VIOLATION_RESOLVED",
+      actorType: "SYSTEM",
+      actorId: params.actor,
+      notes: `Deleted segment ${params.segmentId}: ${params.reason} (size: ${params.sizeBytes}b, sha256: ${params.sha256})`,
+    });
+
+    return {
+      success: true,
+      auditId: audit.id,
+    };
+  }
 }
 
 export const retentionEngine = new RetentionEngineService();
+

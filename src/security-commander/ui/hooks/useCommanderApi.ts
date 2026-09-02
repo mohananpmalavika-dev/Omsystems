@@ -11,7 +11,8 @@ import type {
 import type { ApiResponse } from '../types/ui-types.js';
 
 // API configuration
-const API_BASE_URL = process.env.REACT_APP_COMMANDER_API_URL || 'http://localhost:3000/api/security-commander';
+const API_BASE_URL = process.env.REACT_APP_COMMANDER_API_URL || '/api/security-commander';
+
 
 // API client hook
 export function useCommanderApi() {

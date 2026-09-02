@@ -1232,21 +1232,6 @@ export const analyticsApi = {
     }),
 };
 
-export const platformCapabilitiesApi = {
-  list: () => fetchApi<{
-    success: boolean;
-    capabilities: Array<{
-      id: string;
-      name: string;
-      state: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'DISABLED';
-      reason?: string;
-      since?: string;
-      dependencies?: string[];
-    }>;
-    timestamp: string;
-  }>('/api/capabilities'),
-};
-
 export const provisioningApi = {
   start: (branchId: string, edgeAgentId?: string) =>
     fetchApi<{ run: ProvisioningRun }>(
@@ -1690,4 +1675,28 @@ export const evidenceApi = {
     fetchApi<any>(`/v1/evidence/verify/${caseId}`, { method: 'POST' }),
 };
 
+export const platformCapabilitiesApi = {
+  list: () =>
+    fetchApi<{ success: boolean; capabilities: any[]; summary: any; timestamp: string }>('/v1/capabilities'),
+
+  getSummary: () =>
+    fetchApi<{ success: boolean; data: any; summary: any; timestamp: string }>('/v1/capabilities/summary'),
+
+  getById: (id: string) =>
+    fetchApi<{ success: boolean; capability: any; canUse: { usable: boolean; reason?: string }; timestamp: string }>(`/v1/capabilities/${id}`),
+
+  getByCategory: (category: string) =>
+    fetchApi<{ success: boolean; category: string; count: number; capabilities: any[]; timestamp: string }>(`/v1/capabilities/category/${category}`),
+
+  getByMaturity: (maturity: string) =>
+    fetchApi<{ success: boolean; maturity: string; count: number; capabilities: any[]; timestamp: string }>(`/v1/capabilities/maturity/${maturity}`),
+
+  getAudit: () =>
+    fetchApi<{ success: boolean; data: any; timestamp: string }>('/v1/admin/capabilities/audit'),
+
+  getBlockers: () =>
+    fetchApi<{ success: boolean; count: number; blockers: any[]; timestamp: string }>('/v1/admin/capabilities/blockers'),
+};
+
 export { ApiError };
+

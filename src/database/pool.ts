@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { createDatabaseTlsConfig, validateDatabaseSecurityConfiguration } from "../security/tls/index.js";
 
 export let pool: Pool | null = null;
 
@@ -7,11 +8,13 @@ export function setPool(databasePool: Pool) {
 }
 
 export function createPool(connectionString: string) {
-  // Parse connection string to check if SSL is required (Render, Heroku, etc.)
-  const isExternalDatabase = connectionString.includes('render.com') || 
-                             connectionString.includes('heroku.com') ||
-                             connectionString.includes('aws.com');
-  
+  const ssl = createDatabaseTlsConfig();
+
+  validateDatabaseSecurityConfiguration({
+    ssl,
+    databaseUrl: connectionString,
+  });
+
   const pgPool = new Pool({
     connectionString,
     max: boundedNumber(process.env.DB_POOL_MAX, 20, 2, 200),
@@ -21,10 +24,7 @@ export function createPool(connectionString: string) {
     statement_timeout: boundedNumber(process.env.DB_STATEMENT_TIMEOUT_MS, 15_000, 1_000, 300_000),
     query_timeout: boundedNumber(process.env.DB_QUERY_TIMEOUT_MS, 20_000, 1_000, 300_000),
     application_name: "sentinel-control-plane",
-    // Enable SSL for external managed databases
-    ssl: isExternalDatabase ? {
-      rejectUnauthorized: false // Render and similar services use self-signed certs
-    } : false,
+    ssl,
   });
   pool = pgPool;
   return pgPool;
@@ -34,3 +34,4 @@ function boundedNumber(value: string | undefined, fallback: number, minimum: num
   const parsed = Number(value ?? fallback);
   return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, Math.trunc(parsed))) : fallback;
 }
+

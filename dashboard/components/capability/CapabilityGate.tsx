@@ -240,3 +240,7 @@ function getCapabilityDisplayName(capability: CapabilityKey): string {
 
   return names[capability] || capability.split(".").pop() || capability;
 }
+
+export const DeviceCapabilityGate = CapabilityGate;
+export { PlatformCapabilityGate } from './PlatformCapabilityGate';
+

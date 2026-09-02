@@ -191,13 +191,20 @@ class RtspControlConnection {
     const socket = await new Promise<Socket | TLSSocket>((resolve, reject) => {
       const connected = () => { client.off("error", reject); resolve(client); };
       const client = endpoint.secure
-        ? connectTls({ host: endpoint.host, port: endpoint.port, servername: endpoint.host, rejectUnauthorized: false }, connected)
+        ? connectTls({
+            host: endpoint.host,
+            port: endpoint.port,
+            servername: endpoint.host,
+            rejectUnauthorized: process.env.NODE_ENV === "production" ? true : false,
+            minVersion: "TLSv1.2",
+          }, connected)
         : connectTcp({ host: endpoint.host, port: endpoint.port }, connected);
       client.setTimeout(8_000, () => client.destroy(new Error("rtsp_timeout")));
       client.once("error", reject);
     });
     return new RtspControlConnection(socket, endpoint);
   }
+
 
   async request(method: string, uri: string, headers: Record<string, string> = {}, body = ""): Promise<RtspResponse> {
     let response = await this.send(method, uri, headers, body);

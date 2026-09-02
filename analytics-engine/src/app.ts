@@ -84,11 +84,16 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   };
 
   // Initialize analytics pipeline
-  const pipeline = new AnalyticsPipeline();
+  const controlPlaneUrl = options.controlPlaneUrl || process.env.CONTROL_API_URL || process.env.CONTROL_PLANE_URL;
+  if (!controlPlaneUrl && process.env.NODE_ENV === "production") {
+    throw new Error("CONTROL_API_URL or CONTROL_PLANE_URL is required in production");
+  }
+
   const notificationEngine = new NotificationEngine({
-    controlPlaneUrl: options.controlPlaneUrl ?? "http://127.0.0.1",
+    controlPlaneUrl: controlPlaneUrl || "http://127.0.0.1:3000",
     sharedKey: options.controlPlaneSharedKey,
   });
+
 
   // Create incident integration hook if configured
   let incidentHook: IncidentIntegrationHook | undefined = undefined;

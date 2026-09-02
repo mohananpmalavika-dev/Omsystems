@@ -1,62 +1,37 @@
-# Capability Status Framework Implementation
+# Sentinel Grid — Canonical Capability Truth System
 
-**Status**: ✅ COMPLETE  
+**Status**: ✅ CONSOLIDATED & AUTHORITATIVE  
 **Priority**: P0  
-**Implemented**: 2024-08-10  
-**Related Task**: Task 7 - Define and implement REAL vs MOCK vs UNAVAILABLE capability status framework
+**Canonical Contracts**: `packages/contracts/src/capabilities/capability-types.ts`  
+**Master Matrix**: `config/capabilities/platform-capabilities.ts`  
+**API Endpoints**: `/v1/capabilities`, `/api/v1/capabilities`  
+**Admin UI**: `/admin/platform/capabilities`  
 
 ---
 
-## Problem Statement
+## 1. Authoritative Separation of Concerns
 
-The system had a major UX problem: **the UI looked like a massive enterprise AI platform, but many capabilities shown weren't actually operational**.
+The Sentinel Grid Capability Truth System cleanly decouples three independent concepts:
 
-Users and evaluators couldn't distinguish between:
-- Features that are **fully implemented and running** (REAL)
-- Features that are **coded but not deployed** (READY)
-- Features that are **UI/API stubs with mock data** (PLANNED)
+1. **Product Maturity** (`CapabilityMaturity`):
+   - `PRODUCTION`: Fully implemented backend, persistence, verified APIs, automated test coverage.
+   - `BETA`: Coded and functional core path, active refinement or partial test automation.
+   - `EXPERIMENTAL`: Early research, prototype models, guarded behind opt-in flags.
+   - `NOT_IMPLEMENTED`: Architectural stub or planned feature; zero production execution paths.
 
-This created confusion about actual system capabilities and made it difficult to assess real implementation progress.
+2. **Runtime State** (`CapabilityRuntimeState`):
+   - `HEALTHY` | `DEGRADED` | `DOWN` | `NOT_CONFIGURED` | `DISABLED` | `UNKNOWN`
 
----
-
-## Solution Overview
-
-Created a comprehensive **Capability Registry** framework that:
-
-1. **Classifies every system capability** into tiers (REAL/READY/PLANNED)
-2. **Tracks runtime status** (active/inactive/error/not_configured/unavailable)
-3. **Performs health checks** to verify actual operational status
-4. **Exposes API endpoints** for UI to display capability badges/indicators
-5. **Provides statistics** on implementation progress
+3. **Device Support** (`DeviceCapabilityState`):
+   - `SUPPORTED` | `UNSUPPORTED` | `DEGRADED` | `UNKNOWN`
 
 ---
 
-## Implementation
+## 2. Fail-Closed Release Invariant
 
-### 1. Capability Tiers
+- **Fail-Closed Rule**: Whenever evidence is ambiguous, incomplete, or unverified: **DOWNGRADE, DO NOT UPGRADE**.
+- **No Deceptive Placeholders**: Features marked `NOT_IMPLEMENTED` fail closed (404 / disabled) and never simulate mock production success.
 
-```typescript
-enum CapabilityTier {
-  REAL = 'REAL',       // Fully implemented, tested, deployed, connected to real data
-  READY = 'READY',     // Code exists, tested, but deployment/configuration pending
-  PLANNED = 'PLANNED', // UI/API exists, but actual backend logic is mock/simulation
-}
-```
-
-### 2. Capability Status
-
-```typescript
-enum CapabilityStatus {
-  ACTIVE = 'active',           // Running and operational
-  INACTIVE = 'inactive',       // Not running (disabled or not started)
-  ERROR = 'error',             // Running but encountering errors
-  NOT_CONFIGURED = 'not_configured', // Missing required configuration
-  UNAVAILABLE = 'unavailable', // Dependencies not available
-}
-```
-
-### 3. Architecture
 
 ```
 CapabilityRegistry

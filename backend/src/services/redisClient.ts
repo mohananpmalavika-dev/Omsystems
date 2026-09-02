@@ -5,8 +5,13 @@ let client: RedisClientType | null = null;
 
 export async function connectRedis(): Promise<RedisClientType> {
   if (client) return client;
-  const url = process.env.REDIS_URL || "redis://localhost:6379";
+  const rawUrl = process.env.REDIS_URL;
+  if (!rawUrl && process.env.NODE_ENV === "production") {
+    throw new Error("REDIS_URL is required in production");
+  }
+  const url = rawUrl || "redis://localhost:6379";
   client = createClient({ url });
+
 
   client.on("error", (err) => {
     logger.error("Redis client error", { error: err });

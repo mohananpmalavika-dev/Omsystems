@@ -1,27 +1,26 @@
 /**
  * Capabilities Module
- * Exposes system capability tiers and status tracking
+ * Exposes canonical platform capabilities, maturity levels, and runtime status tracking
  */
 
+export * from '../../packages/contracts/src/capabilities/index.js';
 export {
+  PlatformCapabilityRegistry,
   CapabilityRegistry,
   CapabilityTier,
   CapabilityStatus,
   getCapabilityRegistry,
   resetCapabilityRegistry,
+  legacyTierToMaturity,
   type CapabilityDefinition,
-  type CapabilityCheck,
 } from './capability-registry.js';
 
 export {
+  PLATFORM_CAPABILITIES,
   SYSTEM_CAPABILITIES,
-  initializeCapabilities,
-  getCapabilitiesByTier,
-  getCapabilitiesByCategory,
-  getCapabilityStats,
 } from './capability-definitions.js';
 
-// Re-export the real security collectors that exist in the project.
+// Re-export the security collectors that exist in the project.
 export { BaseEvidenceCollector, EvidenceSource } from '../security/collectors/base-evidence-collector.js';
 export { CertificateCollector } from '../security/collectors/certificate-collector.js';
 export { PasswordRotationCollector } from '../security/collectors/password-rotation-collector.js';

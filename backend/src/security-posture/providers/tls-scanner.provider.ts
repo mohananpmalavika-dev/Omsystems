@@ -84,12 +84,26 @@ export class TlsScannerProvider {
     const timeout = options.timeout ?? 5000;
     
     return new Promise((resolve, reject) => {
+      try {
+        const { defaultTlsScannerPolicy } = require('../../../../src/security/tls/index');
+        defaultTlsScannerPolicy.assertTargetAllowed(hostname, port);
+      } catch (policyErr: any) {
+        return reject(policyErr);
+      }
+
       const socket = tls.connect({
         host: hostname,
         port,
         servername: options.servername ?? hostname,
-        rejectUnauthorized: false, // We want to inspect even invalid certs
+        /**
+         * SECURITY EXCEPTION:
+         * id=CERTIFICATE_INSPECTION
+         * reason=Must inspect invalid/untrusted peer certificates to report posture findings.
+         * scope=TLS Scanner Provider only. Must not be used for application traffic.
+         */
+        rejectUnauthorized: false,
       });
+
       
       const timeoutHandle = setTimeout(() => {
         socket.destroy();

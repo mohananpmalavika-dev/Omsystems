@@ -78,19 +78,51 @@ export class CrowdDensityDetector extends BaseDetector {
     if (!this.isModelLoaded) {
       return [{
         detectionType: "crowd-density",
-        confidence: 0,
+        status: "MODEL_UNAVAILABLE",
+        provenance: "LIVE_INFERENCE",
+        confidence: null,
         objects: [],
         metadata: {
           status: "MODEL_UNAVAILABLE",
           error: "Person detection model not loaded",
           reason: "Crowd density detection requires person detection model to be initialized",
         },
+        executionMetadata: {
+          status: "MODEL_UNAVAILABLE",
+          provenance: "LIVE_INFERENCE",
+          reason: "Person detection model not loaded",
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
         requiresAlert: false,
       }];
     }
 
     // Detect persons in frame
-    const persons = await this.detectPersonsInFrame(frame);
+    let persons: any[];
+    try {
+      persons = await this.detectPersonsInFrame(frame);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return [{
+        detectionType: "crowd-density",
+        status: "INFERENCE_FAILED",
+        provenance: "LIVE_INFERENCE",
+        confidence: null,
+        objects: [],
+        metadata: {
+          error: reason,
+        },
+        executionMetadata: {
+          status: "INFERENCE_FAILED",
+          provenance: "LIVE_INFERENCE",
+          reason,
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
+        requiresAlert: false,
+      }];
+    }
 
     // Measure density for each zone
     const measurements = this.measureDensityByZone(persons, frame.timestamp);
@@ -115,13 +147,16 @@ export class CrowdDensityDetector extends BaseDetector {
     );
 
     if (crowdedZones.length > 0) {
-      const confidence = this.calculateCrowdConfidence(crowdedZones, persons.length);
+      const heuristicScore = this.calculateCrowdConfidence(crowdedZones, persons.length);
       
       results.push({
         detectionType: "crowd-density",
-        confidence,
+        status: "SUCCESS",
+        provenance: "HEURISTIC_RULE_ENGINE",
+        confidence: null, // Confidence is null for heuristic aggregation
         objects: this.createCrowdObjects(persons, crowdedZones),
         metadata: {
+          heuristicScore,
           zones: crowdedZones.map(z => ({
             zoneId: z.zoneId,
             count: z.personCount,
@@ -137,6 +172,13 @@ export class CrowdDensityDetector extends BaseDetector {
             historicalConsistency: this.crowdHistory.length >= 5 ? 0.95 : 0.7,
           },
         },
+        executionMetadata: {
+          status: "SUCCESS",
+          provenance: "HEURISTIC_RULE_ENGINE",
+          heuristicScore,
+          simulated: false,
+          timestamp: frame.timestamp.toISOString(),
+        },
         requiresAlert: crowdedZones.some(z => z.densityLevel === "dangerous"),
       });
     }
@@ -145,11 +187,19 @@ export class CrowdDensityDetector extends BaseDetector {
     if (measurements.length > 0) {
       results.push({
         detectionType: "crowd-metrics",
-        confidence: 0.90,
+        status: "SUCCESS",
+        provenance: "HEURISTIC_RULE_ENGINE",
+        confidence: null,
         objects: [],
         metadata: {
           totalPersons: measurements.reduce((sum, m) => sum + m.personCount, 0),
           zoneMetrics: measurements,
+          timestamp: frame.timestamp.toISOString(),
+        },
+        executionMetadata: {
+          status: "SUCCESS",
+          provenance: "HEURISTIC_RULE_ENGINE",
+          simulated: false,
           timestamp: frame.timestamp.toISOString(),
         },
         requiresAlert: false,
@@ -163,14 +213,20 @@ export class CrowdDensityDetector extends BaseDetector {
    * Detect persons in frame
    */
   private async detectPersonsInFrame(frame: DetectionFrame): Promise<any[]> {
+    const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
+    const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
     try {
-      const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
-      const persons = await pipeline.detectObjects(frame, ['person']).catch(() => []);
-      return persons || [];
+      const persons = await pipeline.detectObjects(frame, ['person']);
+      if (persons && persons.length > 0) return persons;
     } catch (error) {
-      console.warn('detectPersonsInFrame failed:', error);
-      return [];
+      if (!hasInferenceObjects(frame)) {
+        throw error;
+      }
     }
+    if (hasInferenceObjects(frame)) {
+      return getInferenceObjects(frame, ['person']);
+    }
+    return [];
   }
 
   /**
@@ -335,7 +391,7 @@ export class CrowdDensityDetector extends BaseDetector {
     // Group persons by zone and create bounding boxes
     return persons.slice(0, 50).map(person => ({
       label: "person",
-      confidence: person.confidence || 0.85,
+      confidence: person.confidence !== undefined ? person.confidence : null,
       trackId: person.trackId,
       boundingBox: person.boundingBox,
     }));

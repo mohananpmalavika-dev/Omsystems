@@ -12,9 +12,42 @@ export interface DetectionFrame {
   metadata?: Record<string, unknown>;
 }
 
+export type ExecutionStatus =
+  | "SUCCESS"
+  | "MODEL_UNAVAILABLE"
+  | "INFERENCE_FAILED"
+  | "DEPENDENCY_UNAVAILABLE"
+  | "NOT_CONFIGURED"
+  | "NOT_IMPLEMENTED"
+  | "DISABLED"
+  | "INVALID_INPUT"
+  | "TIMEOUT";
+
+export type ResultProvenance =
+  | "LIVE_INFERENCE"
+  | "HEURISTIC_RULE_ENGINE"
+  | "CACHED_RESULT"
+  | "SIMULATION"
+  | "SYNTHETIC_BENCHMARK"
+  | "HISTORICAL_RECORD"
+  | "MANUAL_OVERRIDE";
+
+export interface AIExecutionMetadata {
+  status: ExecutionStatus;
+  provenance: ResultProvenance;
+  modelId?: string | null;
+  modelVersion?: string | null;
+  inferenceDurationMs?: number | null;
+  reason?: string | null;
+  heuristicScore?: number | null;
+  simulated?: boolean;
+  timestamp?: string;
+  requiresReview?: boolean;
+}
+
 export interface DetectedObject {
   label: string;
-  confidence: number;
+  confidence: number | null;
   boundingBox: {
     x: number;
     y: number;
@@ -44,13 +77,17 @@ export function getInferenceObjects(
     if (!value || typeof value !== "object") return [];
     const item = value as Record<string, unknown>;
     const box = item.boundingBox as Record<string, unknown> | undefined;
-    if (typeof item.label !== "string" || typeof item.confidence !== "number" ||
+    const rawConf = item.confidence;
+    const isNum = typeof rawConf === "number";
+    const isNull = rawConf === null;
+    if (typeof item.label !== "string" || (!isNum && !isNull) ||
         !box || typeof box.x !== "number" || typeof box.y !== "number" ||
         typeof box.width !== "number" || typeof box.height !== "number" ||
         (allowed && !allowed.has(item.label))) return [];
     return [{
       label: item.label,
-      confidence: Math.max(0, Math.min(1, item.confidence)),
+      confidence: isNum ? Math.max(0, Math.min(1, rawConf as number)) : null,
+
       boundingBox: {
         x: Math.max(0, Math.min(1, box.x)),
         y: Math.max(0, Math.min(1, box.y)),
@@ -77,11 +114,15 @@ export function shouldRunLocalSpecialtyInference(frame: DetectionFrame): boolean
 
 export interface DetectionResult {
   detectionType: string;
-  confidence: number;
+  status?: ExecutionStatus;
+  provenance?: ResultProvenance;
+  confidence: number | null;
   objects: DetectedObject[];
   metadata?: Record<string, unknown>;
+  executionMetadata?: AIExecutionMetadata;
   requiresAlert: boolean;
 }
+
 
 export abstract class BaseDetector {
   constructor(

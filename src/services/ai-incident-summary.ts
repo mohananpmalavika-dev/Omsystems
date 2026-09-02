@@ -55,6 +55,8 @@ export interface AlertCluster {
   alertCount: number;
   uniqueCameras: number;
   confidence: number;
+  heuristicScore?: number;
+  provenance?: "HEURISTIC_RULE_ENGINE" | "LIVE_INFERENCE";
   correlationFactors: {
     timeBased: boolean;
     locationBased: boolean;
@@ -62,6 +64,7 @@ export interface AlertCluster {
     rootCauseBased: boolean;
     crossCamera: boolean;
   };
+
   rootCause?: string;
   impactLevel: string;
   autoResolved: boolean;
@@ -345,6 +348,8 @@ export class AIIncidentSummaryService {
       alertCount: alerts.length,
       uniqueCameras,
       confidence,
+      heuristicScore: confidence,
+      provenance: "HEURISTIC_RULE_ENGINE",
       correlationFactors,
       rootCause,
       impactLevel: this.calculateImpactLevel(alerts),

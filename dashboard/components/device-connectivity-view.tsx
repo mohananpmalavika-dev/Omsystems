@@ -166,12 +166,13 @@ export function DeviceConnectivityView() {
             id: c.id,
             name: c.name || `Camera ${c.id.slice(0, 8)}`,
             branchId: c.branch_id || c.branchId,
-            ipAddress: c.ip_address || c.ipAddress || `192.168.${Math.floor(Math.random() * 20) + 1}.${Math.floor(Math.random() * 200) + 10}`,
-            vendor: c.vendor || "CP PLUS",
-            model: c.model || "CP-UNC-TA21L3",
-            status: c.status || "ONLINE",
+            ipAddress: c.ip_address || c.ipAddress || "Unassigned",
+            vendor: c.vendor || "UNKNOWN",
+            model: c.model || "UNKNOWN",
+            status: c.status || "UNKNOWN",
             port: c.port || 554,
           }));
+
           setCameras(cams);
           if (cams.length > 0) {
             setSelectedCameraId(cams[0].id);

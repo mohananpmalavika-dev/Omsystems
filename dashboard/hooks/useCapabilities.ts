@@ -1,174 +1,197 @@
 /**
- * useCapabilities Hook
+ * Authoritative useCapabilities Hook for Sentinel Grid Dashboard
  * 
- * React hook for checking feature availability before rendering UI components.
- * 
- * Usage:
- * ```tsx
- * const { isAvailable, capabilities } = useCapabilities();
- * 
- * // Hide unavailable features
- * {isAvailable('analytics.export.pdf') && (
- *   <button onClick={exportPDF}>Export PDF</button>
- * )}
- * 
- * // Show availability status
- * {capabilities['video.timeline']?.state === 'UNAVAILABLE' && (
- *   <div>Timeline feature coming in next release</div>
- * )}
- * ```
+ * Fetches and manages platform capability truth from the backend.
+ * Provides helper functions to check maturity, runtime health, and usability.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { platformCapabilitiesApi } from '@/lib/api-client';
+import {
+  CapabilityMaturity,
+  CapabilityRuntimeState,
+  type PlatformCapability,
+  type CapabilitySummary,
+} from '@/types/platform-capabilities';
 
-export type CapabilityState = 
-  | 'AVAILABLE'
-  | 'PARTIAL'
-  | 'UNAVAILABLE'
-  | 'DISABLED';
-
-export interface CapabilityInfo {
-  id: string;
-  name: string;
-  state: CapabilityState;
-  reason?: string;
-  since?: string;
-  dependencies?: string[];
-}
-
-interface CapabilitiesResponse {
-  success: boolean;
-  capabilities: CapabilityInfo[];
-  timestamp: string;
-}
-
-interface UseCapabilitiesReturn {
+export interface UseCapabilitiesReturn {
   /** All capabilities indexed by ID */
-  capabilities: Record<string, CapabilityInfo>;
-  
-  /** Check if a capability is available */
+  capabilities: Record<string, PlatformCapability>;
+
+  /** Full array of capabilities */
+  capabilityList: PlatformCapability[];
+
+  /** Summary statistics */
+  summary: CapabilitySummary | null;
+
+  /** Get capability definition by ID */
+  getCapability: (id: string) => PlatformCapability | undefined;
+
+  /** Check if capability is marked PRODUCTION maturity */
+  isProduction: (id: string) => boolean;
+
+  /** Check if capability is marked BETA maturity */
+  isBeta: (id: string) => boolean;
+
+  /** Check if capability is marked EXPERIMENTAL maturity */
+  isExperimental: (id: string) => boolean;
+
+  /** Check if capability is implemented (not NOT_IMPLEMENTED) */
+  isImplemented: (id: string) => boolean;
+
+  /** Check if capability runtime state is HEALTHY */
+  isRuntimeHealthy: (id: string) => boolean;
+
+  /** Check if capability can be actively used by the user */
+  canUse: (id: string) => boolean;
+
+  /** Alias for canUse for backward compatibility */
   isAvailable: (id: string) => boolean;
-  
-  /** Check if capability is partially available */
-  isPartial: (id: string) => boolean;
-  
-  /** Check if capability is unavailable */
-  isUnavailable: (id: string) => boolean;
-  
-  /** Get capability info */
-  getCapability: (id: string) => CapabilityInfo | undefined;
-  
+
   /** Loading state */
   loading: boolean;
-  
-  /** Error state */
+
+  /** Error message if fetch fails */
   error: string | null;
-  
-  /** Refresh capabilities */
+
+  /** Manually refresh capabilities from backend */
   refresh: () => Promise<void>;
 }
 
-/**
- * Fetch capabilities from backend
- */
-async function fetchCapabilities(): Promise<CapabilitiesResponse> {
-  return platformCapabilitiesApi.list();
-}
-
-/**
- * useCapabilities Hook
- * 
- * Fetches and caches capability availability information from backend.
- */
 export function useCapabilities(): UseCapabilitiesReturn {
-  const [capabilities, setCapabilities] = useState<Record<string, CapabilityInfo>>({});
+  const [capabilities, setCapabilities] = useState<Record<string, PlatformCapability>>({});
+  const [capabilityList, setCapabilityList] = useState<PlatformCapability[]>([]);
+  const [summary, setSummary] = useState<CapabilitySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const refresh = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      const response = await fetchCapabilities();
-      
-      // Index capabilities by ID
-      const indexed: Record<string, CapabilityInfo> = {};
-      for (const capability of response.capabilities) {
-        indexed[capability.id] = capability;
+
+      const response = await platformCapabilitiesApi.list();
+
+      if (response && Array.isArray(response.capabilities)) {
+        const indexed: Record<string, PlatformCapability> = {};
+        for (const cap of response.capabilities) {
+          indexed[cap.id] = cap;
+        }
+        setCapabilities(indexed);
+        setCapabilityList(response.capabilities);
+        if (response.summary) {
+          setSummary(response.summary);
+        }
       }
-      
-      setCapabilities(indexed);
-      
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = err instanceof Error ? err.message : 'Failed to fetch platform capabilities';
       setError(message);
-      console.error('Failed to fetch capabilities:', err);
-      
+      console.error('[useCapabilities] Error fetching capabilities:', err);
     } finally {
       setLoading(false);
     }
   }, []);
-  
-  // Fetch on mount
+
   useEffect(() => {
     refresh();
   }, [refresh]);
-  
-  // Helper functions
-  const isAvailable = useCallback((id: string): boolean => {
-    return capabilities[id]?.state === 'AVAILABLE';
-  }, [capabilities]);
-  
-  const isPartial = useCallback((id: string): boolean => {
-    return capabilities[id]?.state === 'PARTIAL';
-  }, [capabilities]);
-  
-  const isUnavailable = useCallback((id: string): boolean => {
-    const state = capabilities[id]?.state;
-    return state === 'UNAVAILABLE' || state === 'DISABLED' || state === undefined;
-  }, [capabilities]);
-  
-  const getCapability = useCallback((id: string): CapabilityInfo | undefined => {
-    return capabilities[id];
-  }, [capabilities]);
-  
+
+  const getCapability = useCallback(
+    (id: string): PlatformCapability | undefined => {
+      return capabilities[id];
+    },
+    [capabilities]
+  );
+
+  const isProduction = useCallback(
+    (id: string): boolean => {
+      return capabilities[id]?.maturity === CapabilityMaturity.PRODUCTION;
+    },
+    [capabilities]
+  );
+
+  const isBeta = useCallback(
+    (id: string): boolean => {
+      return capabilities[id]?.maturity === CapabilityMaturity.BETA;
+    },
+    [capabilities]
+  );
+
+  const isExperimental = useCallback(
+    (id: string): boolean => {
+      return capabilities[id]?.maturity === CapabilityMaturity.EXPERIMENTAL;
+    },
+    [capabilities]
+  );
+
+  const isImplemented = useCallback(
+    (id: string): boolean => {
+      const cap = capabilities[id];
+      return Boolean(cap && cap.maturity !== CapabilityMaturity.NOT_IMPLEMENTED);
+    },
+    [capabilities]
+  );
+
+  const isRuntimeHealthy = useCallback(
+    (id: string): boolean => {
+      return capabilities[id]?.runtime.state === CapabilityRuntimeState.HEALTHY;
+    },
+    [capabilities]
+  );
+
+  const canUse = useCallback(
+    (id: string): boolean => {
+      const capability = capabilities[id];
+      if (!capability) return false;
+
+      // NOT_IMPLEMENTED features can never be used
+      if (capability.maturity === CapabilityMaturity.NOT_IMPLEMENTED) {
+        return false;
+      }
+
+      // Must be healthy or degraded (with warning)
+      const state = capability.runtime.state;
+      return state === CapabilityRuntimeState.HEALTHY || state === CapabilityRuntimeState.DEGRADED;
+    },
+    [capabilities]
+  );
+
   return {
     capabilities,
-    isAvailable,
-    isPartial,
-    isUnavailable,
+    capabilityList,
+    summary,
     getCapability,
+    isProduction,
+    isBeta,
+    isExperimental,
+    isImplemented,
+    isRuntimeHealthy,
+    canUse,
+    isAvailable: canUse,
     loading,
     error,
-    refresh
+    refresh,
   };
 }
 
 /**
- * useCapability Hook
- * 
- * Check a single capability (simplified version).
- * 
- * Usage:
- * ```tsx
- * const { available, partial, info } = useCapability('analytics.export.pdf');
- * 
- * if (!available && !partial) {
- *   return null; // Hide feature
- * }
- * ```
+ * Convenience hook for a single platform capability
  */
 export function useCapability(id: string) {
-  const { capabilities, isAvailable, isPartial, isUnavailable, loading, error } = useCapabilities();
-  
+  const { getCapability, canUse, isProduction, isBeta, isExperimental, isImplemented, isRuntimeHealthy, loading, error } =
+    useCapabilities();
+
+  const capability = useMemo(() => getCapability(id), [getCapability, id]);
+
   return {
-    available: isAvailable(id),
-    partial: isPartial(id),
-    unavailable: isUnavailable(id),
-    info: capabilities[id],
+    capability,
+    usable: canUse(id),
+    isProduction: isProduction(id),
+    isBeta: isBeta(id),
+    isExperimental: isExperimental(id),
+    isImplemented: isImplemented(id),
+    isHealthy: isRuntimeHealthy(id),
     loading,
-    error
+    error,
   };
 }

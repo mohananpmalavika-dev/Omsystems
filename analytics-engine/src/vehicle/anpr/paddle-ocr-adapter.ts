@@ -152,6 +152,9 @@ export class PaddlePlateRecognizer implements PlateRecognizer {
  */
 export class MockPlateRecognizer implements PlateRecognizer {
   async recognize(image: ImageMatrix): Promise<OcrRecognition[]> {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error("MockPlateRecognizer is strictly forbidden in production mode.");
+    }
     // Generate mock plate number for testing
     const mockPlates = [
       'KL01AB1234',
@@ -160,17 +163,18 @@ export class MockPlateRecognizer implements PlateRecognizer {
       'TN03BC4567',
     ];
     
-    const text = mockPlates[Math.floor(Math.random() * mockPlates.length)];
-    const confidence = 0.85 + Math.random() * 0.1;
+    const text = mockPlates[Math.floor(Math.random() * mockPlates.length)] ?? 'KL01AB1234';
+    const confidence = 0.85;
     
     return [{
       text,
       confidence,
-      characterConfidences: text.split('').map(() => 0.8 + Math.random() * 0.15),
+      characterConfidences: text.split('').map(() => 0.85),
       characters: text.split('').map(char => ({
         char,
-        confidence: 0.8 + Math.random() * 0.15,
+        confidence: 0.85,
       })),
     }];
   }
 }
+
