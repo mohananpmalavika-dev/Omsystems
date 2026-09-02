@@ -2,8 +2,9 @@ FROM node:22-alpine
 RUN apk add --no-cache ffmpeg
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
+COPY packages ./packages
 COPY recording-engine/package.json ./recording-engine/package.json
-RUN npm ci
+RUN npm install --legacy-peer-deps
 COPY recording-engine ./recording-engine
 RUN npm run build --workspace @sentinel/recording-engine
 EXPOSE 8091
