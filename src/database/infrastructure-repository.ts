@@ -690,7 +690,7 @@ export class InfrastructureRepository {
       u.profile_photo_url AS face_photo_base64,
       u.custom_role_id::text AS custom_role_id,
       (SELECT cr.name FROM custom_roles cr WHERE cr.id=u.custom_role_id) AS custom_role_name,
-      COALESCE((SELECT cr.menu_access FROM custom_roles cr WHERE cr.id=u.custom_role_id), u.preferences->'menuAccess') AS menu_access,
+      (SELECT cr.menu_access FROM custom_roles cr WHERE cr.id=u.custom_role_id) AS menu_access,
       ((u.preferences->'faceVerification'->>'data') IS NOT NULL) AS face_enrolled,
       u.active, u.created_at, u.updated_at
       ,(SELECT assignment.scope_node_id::text
@@ -1025,6 +1025,15 @@ export class InfrastructureRepository {
       [tenantId],
     );
     return camelRows(result.rows);
+  }
+
+  async getCustomRole(id: string, tenantId: string) {
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access
+       FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`,
+      [id, tenantId],
+    );
+    return result.rows[0] ? camelRow(result.rows[0]) : undefined;
   }
 
   async createCustomRole(tenantId: string, input: any) {

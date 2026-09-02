@@ -20,9 +20,9 @@ export function HaFailoverView() {
     setError(null);
     try {
       const responses = await Promise.all([
-        fetch("/api/ha/status", { credentials: "include", cache: "no-store" }),
-        fetch("/api/ha/leases", { credentials: "include", cache: "no-store" }),
-        fetch("/api/ha/events", { credentials: "include", cache: "no-store" }),
+        fetch("/api/control/api/ha/status", { credentials: "include", cache: "no-store" }),
+        fetch("/api/control/api/ha/leases", { credentials: "include", cache: "no-store" }),
+        fetch("/api/control/api/ha/events", { credentials: "include", cache: "no-store" }),
       ]);
       const payloads = await Promise.all(responses.map(async (response) => {
         const body = await response.json().catch(() => ({}));

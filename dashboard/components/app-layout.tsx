@@ -268,7 +268,7 @@ export function defaultMenuAccessForRole(role?: string) {
 
 export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
   if (!user) return navigation;
-  const configuredValue = user.preferences?.menuAccess ?? user.menuAccess;
+  const configuredValue = user.menuAccess;
   const configured = Array.isArray(configuredValue)
     ? configuredValue.filter((value): value is string => typeof value === "string")
     : null;

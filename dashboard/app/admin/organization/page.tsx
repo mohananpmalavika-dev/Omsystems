@@ -167,9 +167,6 @@ export default function OrganizationHierarchyPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showPermModal, setShowPermModal] = useState(false);
   const [permScopeNodeId, setPermScopeNodeId] = useState("");
-  const [permAction, setPermAction] = useState<"live:view" | "recording:view" | "ptz:operate" | "audio:talk">("live:view");
-  const [permEffect, setPermEffect] = useState<"allow" | "deny">("allow");
-  const [selectedMenuAccess, setSelectedMenuAccess] = useState<string[]>([]);
   const [selectedCustomRoleId, setSelectedCustomRoleId] = useState("");
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [roleName, setRoleName] = useState("");
@@ -472,6 +469,7 @@ export default function OrganizationHierarchyPage() {
     setSaving(true);
     setError(null);
     try {
+      const scopeNodeIds = [...newEmpScopeNodeIds];
       const payload = {
         displayName: newEmpName.trim(),
         email: newEmpEmail.trim(),
@@ -481,7 +479,7 @@ export default function OrganizationHierarchyPage() {
         customRoleId: newEmpCustomRoleId || null,
         designation: newEmpDesignation.trim(),
         department: newEmpDept.trim(),
-        primaryOrgNodeId: newEmpScopeNodeIds[0],
+        primaryOrgNodeId: scopeNodeIds[0],
         facePhotoBase64: empPhotoData || undefined,
         faceEnrolled: true,
       };
@@ -513,7 +511,7 @@ export default function OrganizationHierarchyPage() {
       setNewEmpCustomRoleId("");
       setEmpPhotoData("");
       stopWebcam();
-      for (const scopeNodeId of newEmpScopeNodeIds.slice(1)) {
+      for (const scopeNodeId of scopeNodeIds.slice(1)) {
         await fetchWithAuth(`/api/control/v1/users/${createdEmployee.id}/organizations`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -531,9 +529,6 @@ export default function OrganizationHierarchyPage() {
   function openEmployeePermissions(emp: Employee) {
     setSelectedEmployee(emp);
     setPermScopeNodeId(emp.organizations?.[0]?.nodeId || flatNodes[0]?.id || "");
-    setPermAction("live:view");
-    setPermEffect("allow");
-    setSelectedMenuAccess(emp.menuAccess ?? defaultMenuAccessForRole(emp.role));
     setSelectedCustomRoleId(emp.customRoleId ?? "");
     setShowPermModal(true);
   }
@@ -583,7 +578,12 @@ export default function OrganizationHierarchyPage() {
       const roleResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customRoleId: selectedCustomRoleId || null }),
+        body: JSON.stringify({
+          customRoleId: selectedCustomRoleId || null,
+          ...(roles.find((role) => role.id === selectedCustomRoleId)
+            ? { role: roles.find((role) => role.id === selectedCustomRoleId)?.baseRole }
+            : {}),
+        }),
       });
       if (!roleResponse.ok) throw new Error("Failed to assign role");
 
@@ -1509,7 +1509,12 @@ export default function OrganizationHierarchyPage() {
                     </select>
                     <select
                       value={newEmpCustomRoleId}
-                      onChange={(e) => setNewEmpCustomRoleId(e.target.value)}
+                      onChange={(e) => {
+                        const customRoleId = e.target.value;
+                        setNewEmpCustomRoleId(customRoleId);
+                        const customRole = roles.find((role) => role.id === customRoleId);
+                        if (customRole) setNewEmpRole(customRole.baseRole);
+                      }}
                       className="w-full mt-2 bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs"
                     >
                       <option value="">Use built-in role menu</option>
@@ -1614,38 +1619,6 @@ export default function OrganizationHierarchyPage() {
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Permission Action</label>
-                    <select
-                      value={permAction}
-                      onChange={(e) => setPermAction(e.target.value as any)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
-                    >
-                      <option value="live:view">Live Video View</option>
-                      <option value="recording:view">Recorded Playback</option>
-                      <option value="ptz:operate">PTZ Controls</option>
-                      <option value="audio:talk">2-Way Audio Talk</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Effect Policy</label>
-                    <select
-                      value={permEffect}
-                      onChange={(e) => setPermEffect(e.target.value as any)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-bold text-emerald-400"
-                    >
-                      <option value="allow">ALLOW Access</option>
-                      <option value="deny">DENY / RESTRICT</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-400">
-                  Setting <strong>DENY</strong> on a location zone (e.g. <em>Cash Counter</em> or <em>Vault</em>) overrides all inherited regional allow grants, preventing this employee from opening those cameras.
-                </div>
-
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
                   <button
                     type="button"
@@ -1659,7 +1632,7 @@ export default function OrganizationHierarchyPage() {
                     disabled={saving}
                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-lg text-xs font-bold flex items-center gap-1.5"
                   >
-                    {saving ? "Applying..." : "Apply Location Grant"}
+                    {saving ? "Applying..." : "Apply Role & Location"}
                   </button>
                 </div>
               </form>

@@ -1929,6 +1929,7 @@ export interface UserManagementStore {
   getUserCameraAccessOverview(userId: string): Promise<any>;
   getUserAuditLog(userId: string, limit: number, offset: number): Promise<any>;
   listCustomRoles(tenantId: string): Promise<any[]>;
+  getCustomRole(id: string, tenantId: string): Promise<any | undefined>;
   createCustomRole(tenantId: string, input: any): Promise<any>;
   updateCustomRole(id: string, tenantId: string, input: any): Promise<any>;
   deleteCustomRole(id: string, tenantId: string): Promise<void>;

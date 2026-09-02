@@ -75,7 +75,10 @@ const updateUserSchema = z.object({
   dateOfJoining: z.string().optional(),
   dateOfBirth: z.string().optional(),
   reportingToUserId: z.string().min(1).nullable().optional(),
-  preferences: z.record(z.unknown()).optional(),
+  preferences: z.record(z.unknown()).refine(
+    (preferences) => !Object.prototype.hasOwnProperty.call(preferences, "menuAccess"),
+    "Menu access must be assigned through a role",
+  ).optional(),
   photoUrl: z.string().optional(),
   avatarUrl: z.string().optional(),
   facePhotoBase64: z
@@ -238,6 +241,14 @@ export async function registerUserRoutes(
   app.post("/v1/users", async (request, reply) => {
     const body = createUserSchema.parse(request.body);
 
+    if (body.customRoleId) {
+      const customRole = await store.getCustomRole(body.customRoleId, request.currentUser.tenantId);
+      if (!customRole) return reply.code(400).send({ error: "invalid_custom_role" });
+      if (!canAssignRole(request.currentUser.role, customRole.baseRole)) {
+        return reply.code(403).send({ error: "forbidden", message: "You cannot assign this custom role" });
+      }
+    }
+
     // Check permission
     if (
       !(await hasPermission(
@@ -304,6 +315,14 @@ export async function registerUserRoutes(
   app.patch("/v1/users/:id", async (request, reply) => {
     const { id } = userIdSchema.parse(request.params);
     const body = updateUserSchema.parse(request.body);
+
+    if (body.customRoleId) {
+      const customRole = await store.getCustomRole(body.customRoleId, request.currentUser.tenantId);
+      if (!customRole) return reply.code(400).send({ error: "invalid_custom_role" });
+      if (!canAssignRole(request.currentUser.role, customRole.baseRole)) {
+        return reply.code(403).send({ error: "forbidden", message: "You cannot assign this custom role" });
+      }
+    }
 
     // Check permission
     const isSelf = id === request.currentUser.id;
@@ -427,6 +446,8 @@ export async function registerUserRoutes(
       body.isPrimary,
       request.currentUser.id,
     );
+
+    if (!assignment) return reply.code(400).send({ error: "invalid_organization_assignment" });
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
