@@ -540,7 +540,7 @@ export class EdgeAgentRepository {
         deviceIdentityId: identity.deviceIdentityId,
         branchId,
         edgeAgentId: input.edgeAgentId,
-        discoveryMethod: normalizeCameraDiscoveryMethod(input.discoveryMethod),
+        discoveryMethod: normalizeCameraDiscoveryMethod(input.discoveryMethod) as DiscoveredCamera["discoveryMethod"],
         manufacturer: input.manufacturer ?? input.vendor ?? 'Unknown',
         vendor: input.vendor,
         model: input.model,
@@ -561,7 +561,7 @@ export class EdgeAgentRepository {
         ...(input.serialNumber ? { serialNumber: input.serialNumber } : {}),
         ...(input.firmwareVersion ? { firmwareVersion: input.firmwareVersion } : {}),
         ...(input.displayName ? { displayName: input.displayName } : {}),
-        ...(credentialsRequired !== undefined ? { credentialsRequired } : {}),
+        ...(credentialsRequired !== undefined && credentialsRequired !== null ? { credentialsRequired } : {}),
         ...(input.streamVerified !== undefined ? { streamVerified: input.streamVerified } : {}),
         ...(input.rtspValidated !== undefined ? { rtspValidated: input.rtspValidated } : {}),
         ...(input.compatibility ? { compatibility: input.compatibility } : {}),
@@ -583,7 +583,7 @@ export class EdgeAgentRepository {
     }
   }
 
-  async listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]> {
+  async listDiscoveries(branchId: string): Promise<DiscoveredCamera[]> {
     const result = await this.pool.query<{
       id: string;
       device_identity_id: string;
@@ -719,6 +719,10 @@ export class EdgeAgentRepository {
     }
 
     return deduplicated;
+  }
+
+  async listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]> {
+    return this.listDiscoveries(branchId);
   }
 }
 
