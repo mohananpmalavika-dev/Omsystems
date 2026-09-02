@@ -5,7 +5,11 @@ import dotenv from "dotenv";
 
 const rootEnvironment = dotenv.parse(await readFile(new URL("../.env", import.meta.url)));
 const dashboardEnvironment = dotenv.parse(await readFile(new URL("../dashboard/.env.local", import.meta.url)));
-const baseUrl = process.argv[2] || dashboardEnvironment.CONTROL_PLANE_INTERNAL_URL ||
+const argumentsList = process.argv.slice(2);
+const preferPublicGateway = argumentsList.includes("--public");
+const verifyAllCameras = argumentsList.includes("--all");
+const explicitBaseUrl = argumentsList.find((argument) => !argument.startsWith("--"));
+const baseUrl = explicitBaseUrl || dashboardEnvironment.CONTROL_PLANE_INTERNAL_URL ||
   rootEnvironment.CONTROL_PLANE_PUBLIC_URL;
 
 if (!baseUrl) throw new Error("control_plane_url_unavailable");
@@ -29,7 +33,8 @@ const cameras = (cameraResponse.data ?? [])
 if (cameras.length === 0) throw new Error("krypton_camera_unavailable");
 
 const attempts = [];
-for (const camera of cameras.slice(0, 3)) {
+const successes = [];
+for (const camera of verifyAllCameras ? cameras : cameras.slice(0, 3)) {
   try {
     const permission = await requestJson(
       `/v1/cameras/${encodeURIComponent(camera.id)}/live-sessions`,
@@ -37,7 +42,7 @@ for (const camera of cameras.slice(0, 3)) {
     );
     if (!permission.token) throw new Error("live_token_missing");
 
-    const gatewayOrigin = selectGatewayOrigin(permission);
+    const gatewayOrigin = selectGatewayOrigin(permission, preferPublicGateway);
     const startResponse = await fetch(new URL("/v1/live/start", gatewayOrigin), {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -63,22 +68,41 @@ for (const camera of cameras.slice(0, 3)) {
     if (!playlistResponse.ok) throw new Error(`hls_playlist_${playlistResponse.status}`);
     if (!playlist.includes("#EXTM3U")) throw new Error("invalid_hls_playlist");
 
-    console.log(JSON.stringify({
+    const result = {
       success: true,
       branch: branch.name,
       camera: { id: camera.id, name: camera.name, status: camera.status },
+      route: preferPublicGateway ? "public" : "local-preferred",
       gatewayOrigin: new URL(gatewayOrigin).origin,
       liveStartStatus: startResponse.status,
       playlistStatus: playlistResponse.status,
       contentType: playlistResponse.headers.get("content-type"),
-    }, null, 2));
-    process.exit(0);
+    };
+    if (!verifyAllCameras) {
+      console.log(JSON.stringify(result, null, 2));
+      process.exit(0);
+    }
+    successes.push(result);
   } catch (error) {
     attempts.push({
       camera: { id: camera.id, name: camera.name, status: camera.status },
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+if (verifyAllCameras) {
+  console.log(JSON.stringify({
+    success: attempts.length === 0,
+    branch: branch.name,
+    route: preferPublicGateway ? "public" : "local-preferred",
+    cameraCount: cameras.length,
+    playableCount: successes.length,
+    failedCount: attempts.length,
+    playable: successes.map((result) => result.camera),
+    failed: attempts,
+  }, null, 2));
+  process.exit(attempts.length === 0 ? 0 : 2);
 }
 
 console.error(JSON.stringify({
@@ -105,9 +129,16 @@ async function requestJson(path, init = {}) {
   return body;
 }
 
-function selectGatewayOrigin(permission) {
+function selectGatewayOrigin(permission, preferPublic) {
   const candidates = [permission.localMediaGatewayUrl, permission.mediaGatewayUrl]
     .filter(Boolean);
+  if (preferPublic) {
+    const publicGateway = candidates.find((value) => {
+      try { return new URL(value).protocol === "https:"; } catch { return false; }
+    });
+    if (publicGateway) return new URL(publicGateway).origin;
+    throw new Error("public_media_gateway_url_missing");
+  }
   const local = candidates.find((value) => {
     try { return isPrivateHostname(new URL(value).hostname); } catch { return false; }
   });
