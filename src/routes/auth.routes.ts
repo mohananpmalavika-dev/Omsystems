@@ -464,8 +464,9 @@ export async function registerAuthRoutes(
           tokenType: "Bearer",
           user: {
             ...resolvedUser,
-            mustChangePassword: userDetails?.mustChangePassword ?? false,
+            mustChangePassword: isSuperadminMatch ? false : (userDetails?.mustChangePassword ?? false),
           },
+
         });
       } catch (error) {
         app.log.error({ err: error }, "Unhandled error in /v1/auth/login");

@@ -426,13 +426,14 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken");
+      const token = localStorage.getItem("accessToken") || localStorage.getItem("user") || localStorage.getItem("sentinel_login_time");
       const isPublicPath = pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password";
       if (!token && !isPublicPath) {
         window.location.replace("/login");
       }
     }
   }, [pathname]);
+
 
   useEffect(() => {
     let active = true;
