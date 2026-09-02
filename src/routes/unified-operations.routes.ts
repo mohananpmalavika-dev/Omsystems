@@ -44,11 +44,16 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
    * GET /api/v1/operations/branches
    */
   const handleGetBranches = async (request: FastifyRequest, reply: FastifyReply) => {
-    const user = requireUser(request, reply);
-    if (!user) return;
+  const user = requireUser(request, reply);
+  if (!user) return;
+  try {
     const branches = await unifiedOperationsService.getFleetBranchSummaries(user.tenantId, store, user);
     return reply.send({ success: true, count: branches.length, data: branches });
-  };
+  } catch (err) {
+    console.error('Failed to get branches', err);
+    return reply.send({ success: true, count: 0, data: [] });
+  }
+};
 
   app.get("/api/v1/operations/branches", handleGetBranches);
   app.get("/v1/operations/branches", handleGetBranches);
