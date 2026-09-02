@@ -6,13 +6,11 @@ COPY package*.json ./
 COPY packages ./packages
 COPY dashboard/package.json ./dashboard/package.json
 COPY edge-agent/package.json ./edge-agent/package.json
-COPY media-gateway/package.json ./media-gateway/package.json
+COPY media-gateway ./media-gateway
 COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm install --legacy-peer-deps
-COPY media-gateway/tsconfig.json ./media-gateway/tsconfig.json
-COPY media-gateway/src ./media-gateway/src
-RUN npm run build --workspace @sentinel/media-gateway
+RUN cd media-gateway && npx tsc -p tsconfig.json
 
 FROM node:22-alpine
 ENV NODE_ENV=production
