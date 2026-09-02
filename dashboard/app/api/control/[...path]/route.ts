@@ -151,12 +151,13 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         headers: { "cache-control": "no-store" },
       });
       const isHttps = requestIsHttps(request);
+      // Do NOT set maxAge: browsers treat cookies without maxAge/expires as RFC 6265 Session Cookies
+      // which are automatically destroyed by the browser when the user closes the browser.
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
         sameSite: "lax",
         secure: isHttps,
         path: "/",
-        maxAge: payload.expiresIn || 86400,
       });
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
@@ -164,22 +165,25 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
           sameSite: "lax",
           secure: isHttps,
           path: "/",
-          maxAge: 30 * 24 * 60 * 60,
         });
       }
       return outgoing;
 
     }
-    if ((routePath === "/v1/auth/logout" || routePath === "/v1/auth/logout-all") && response.ok) {
+
+    const isLogout = routePath === "/v1/auth/logout" || routePath === "/v1/auth/logout-all";
+    const isCurrentRevoked = response.headers.get("x-sentinel-current-session-revoked") === "true";
+    if ((isLogout || isCurrentRevoked) && response.ok) {
       const outgoing = new NextResponse(response.body, {
         status: response.status,
         headers: {
           "content-type": response.headers.get("content-type") ?? "application/json",
           "cache-control": "no-store",
+          ...(isCurrentRevoked ? { "x-sentinel-current-session-revoked": "true" } : {}),
         },
       });
-      outgoing.cookies.delete("sentinel_access");
-      outgoing.cookies.delete("sentinel_refresh");
+      outgoing.cookies.set("sentinel_access", "", { path: "/", maxAge: 0 });
+      outgoing.cookies.set("sentinel_refresh", "", { path: "/", maxAge: 0 });
       return outgoing;
     }
 

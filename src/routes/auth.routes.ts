@@ -16,8 +16,12 @@ import {
   bootstrapOnboardingService,
   PERMANENT_SUPERADMIN,
 } from "../identity/services/bootstrap-onboarding.service.js";
-import { passwordResetOtpService } from "../identity/services/password-reset-otp.service.js";
-import { activeInMemorySessions } from "../middleware/auth.middleware.js";
+import {
+  activeInMemorySessions,
+  invalidateInMemorySession,
+  invalidateAllInMemorySessionsForUser,
+  invalidateTokenFromMemory,
+} from "../middleware/auth.middleware.js";
 import { verifyEmployeeFace } from "../security/employee-face-verification.service.js";
 
 const forgotPasswordOtpSchema = z.object({
@@ -459,7 +463,8 @@ export async function registerAuthRoutes(
         // Cache session in memory for immediate and foolproof verification across all proxies
         activeInMemorySessions.set(accessTokenHash, {
           user: resolvedUser,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          sessionId: session.id,
+          expiresAt: Date.now() + 86400 * 1000,
         });
 
         return reply.code(200).send({
@@ -521,9 +526,12 @@ export async function registerAuthRoutes(
           request.headers["user-agent"],
         ).catch(() => {});
 
+        // Invalidate previous session from memory cache and register new one
+        invalidateInMemorySession(session.id);
         activeInMemorySessions.set(newAccessTokenHash, {
           user,
-          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+          sessionId: session.id,
+          expiresAt: Date.now() + 86400 * 1000,
         });
 
         return {
@@ -545,7 +553,15 @@ export async function registerAuthRoutes(
       const sessionId = (request as any).sessionId;
 
       if (sessionId) {
+        invalidateInMemorySession(sessionId);
         await store.deleteUserSession(sessionId);
+      }
+
+      const authHeader = request.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7);
+        const tokenHash = createHash("sha256").update(token).digest("base64");
+        invalidateTokenFromMemory(tokenHash);
       }
 
       await store.writeAudit({
@@ -568,6 +584,7 @@ export async function registerAuthRoutes(
   // Logout all sessions
   app.post("/v1/auth/logout-all", async (request, reply) => {
     try {
+      invalidateAllInMemorySessionsForUser(request.currentUser.id);
       await store.deleteAllUserSessions(request.currentUser.id);
 
       await store.writeAudit({
@@ -775,7 +792,15 @@ export async function registerAuthRoutes(
       typeof store.listUserSessions === "function"
         ? await store.listUserSessions(request.currentUser.id)
         : [];
-    return { data: sessions };
+    const currentSessionId = (request as any).sessionId;
+    const enriched = sessions.map((s: any) => ({
+      ...s,
+      isCurrent: Boolean(
+        currentSessionId &&
+        String(s.id).toLowerCase() === String(currentSessionId).toLowerCase(),
+      ),
+    }));
+    return { data: enriched, currentSessionId: currentSessionId ?? null };
   });
 
   // Revoke specific session
@@ -814,6 +839,15 @@ export async function registerAuthRoutes(
       });
     }
 
+    const currentSessionId = (request as any).sessionId;
+    const isCurrentSession = Boolean(
+      currentSessionId &&
+      String(currentSessionId).toLowerCase() === String(params.id).toLowerCase(),
+    );
+
+    // Invalidate cached in-memory token immediately so any subsequent request gets 401
+    invalidateInMemorySession(params.id);
+
     if (typeof store.deleteUserSession === "function") {
       await store.deleteUserSession(params.id);
     }
@@ -826,12 +860,23 @@ export async function registerAuthRoutes(
           action: "user.session_revoked",
           resourceNodeId: null,
           outcome: "success",
-          details: { sessionId: params.id },
+          details: { sessionId: params.id, isCurrentSession },
         })
         .catch(() => {});
     }
 
-    return reply.code(204).send();
+    if (isCurrentSession) {
+      reply.header("x-sentinel-current-session-revoked", "true");
+    }
+
+    return reply
+      .header("x-sentinel-current-session-revoked", isCurrentSession ? "true" : "false")
+      .code(200)
+      .send({
+        success: true,
+        revokedSessionId: params.id,
+        isCurrentSession,
+      });
   });
 }
 

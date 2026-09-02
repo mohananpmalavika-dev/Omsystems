@@ -1332,7 +1332,7 @@ export class InfrastructureRepository {
     const result = await this.pool.query(
       `SELECT id::text,user_id::text,tenant_id::text,ip_address::text,
               user_agent,access_expires_at,expires_at,last_activity_at,created_at
-       FROM user_sessions WHERE id=$1`,
+       FROM user_sessions WHERE id::text=$1`,
       [sessionId],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
@@ -1347,7 +1347,7 @@ export class InfrastructureRepository {
     const result = await this.pool.query(
       `SELECT id::text,user_id::text,ip_address::text,user_agent,
               access_expires_at,expires_at,last_activity_at,created_at
-       FROM user_sessions WHERE user_id=$1 AND expires_at>now()
+       FROM user_sessions WHERE user_id::text=$1 AND expires_at>now()
        ORDER BY last_activity_at DESC`,
       [resolvedUserId],
     );
@@ -1355,7 +1355,7 @@ export class InfrastructureRepository {
   }
 
   async deleteUserSession(sessionId: string) {
-    await this.pool.query("DELETE FROM user_sessions WHERE id=$1", [sessionId]);
+    await this.pool.query("DELETE FROM user_sessions WHERE id::text=$1", [sessionId]);
   }
 
   async deleteAllUserSessions(userId: string) {
@@ -1364,7 +1364,7 @@ export class InfrastructureRepository {
       const user = await this.getUserById(userId);
       resolvedUserId = user?.id ?? userId;
     }
-    await this.pool.query("DELETE FROM user_sessions WHERE user_id=$1", [resolvedUserId]);
+    await this.pool.query("DELETE FROM user_sessions WHERE user_id::text=$1", [resolvedUserId]);
   }
 
   async createPasswordResetToken(userId: string, tokenHash: string) {

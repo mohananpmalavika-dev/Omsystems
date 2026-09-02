@@ -10,7 +10,41 @@ export interface AuthMiddlewareOptions {
   developmentMode?: boolean;
 }
 
-export const activeInMemorySessions = new Map<string, { user: any; expiresAt: number }>();
+export interface InMemorySessionRecord {
+  user: any;
+  sessionId?: string;
+  expiresAt: number;
+}
+
+export const activeInMemorySessions = new Map<string, InMemorySessionRecord>();
+
+export function invalidateInMemorySession(sessionId: string) {
+  if (!sessionId) return;
+  const target = String(sessionId).toLowerCase();
+  for (const [hash, record] of activeInMemorySessions.entries()) {
+    if (record.sessionId && String(record.sessionId).toLowerCase() === target) {
+      activeInMemorySessions.delete(hash);
+    }
+  }
+}
+
+export function invalidateAllInMemorySessionsForUser(userId: string) {
+  if (!userId) return;
+  const target = String(userId).toLowerCase();
+  for (const [hash, record] of activeInMemorySessions.entries()) {
+    const rUserId = String(record.user?.id || record.user?.userId || "").toLowerCase();
+    const rUsername = String(record.user?.username || "").toLowerCase();
+    if (rUserId === target || rUsername === target) {
+      activeInMemorySessions.delete(hash);
+    }
+  }
+}
+
+export function invalidateTokenFromMemory(tokenHash: string) {
+  if (tokenHash) {
+    activeInMemorySessions.delete(tokenHash);
+  }
+}
 
 function sanitizeCurrentUser(user: any): any {
   if (!user) return user;
@@ -101,6 +135,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     const inMemory = activeInMemorySessions.get(tokenHash);
     if (inMemory && inMemory.expiresAt > Date.now()) {
       request.currentUser = sanitizeCurrentUser(inMemory.user);
+      (request as any).sessionId = inMemory.sessionId;
       return;
     }
 
@@ -154,6 +189,13 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     // Attach session ID for logout functionality
     (request as any).sessionId = session.id;
+
+    // Cache verified session in memory
+    activeInMemorySessions.set(tokenHash, {
+      user,
+      sessionId: session.id,
+      expiresAt: new Date(session.accessExpiresAt ?? session.expiresAt).getTime(),
+    });
   };
 }
 
