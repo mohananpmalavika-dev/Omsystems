@@ -513,6 +513,7 @@ export interface EdgeAgent {
   status: "pending" | "online" | "offline";
   lastSeenAt: string | null;
   publicMediaUrl?: string;
+  credentialStatus?: "active" | "revoked" | string;
 }
 
 export interface EdgeScanJob {
