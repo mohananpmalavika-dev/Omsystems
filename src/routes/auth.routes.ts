@@ -16,6 +16,7 @@ import {
   bootstrapOnboardingService,
   PERMANENT_SUPERADMIN,
 } from "../identity/services/bootstrap-onboarding.service.js";
+import { passwordResetOtpService } from "../identity/services/password-reset-otp.service.js";
 import {
   activeInMemorySessions,
   invalidateInMemorySession,

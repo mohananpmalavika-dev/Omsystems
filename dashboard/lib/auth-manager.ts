@@ -55,6 +55,11 @@ export async function logout(): Promise<void> {
     
     // Redirect to login
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
       window.location.href = '/login?logout=true';
     }
   } catch (error) {
@@ -62,9 +67,11 @@ export async function logout(): Promise<void> {
     
     // Still clear local data even if API call fails
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
       window.location.href = '/login?logout=true';
     }
   }
@@ -85,6 +92,11 @@ export async function logoutAllSessions(): Promise<void> {
     
     // Redirect to login
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
       window.location.href = '/login?logout=true';
     }
   } catch (error) {
@@ -92,9 +104,11 @@ export async function logoutAllSessions(): Promise<void> {
     
     // Still clear local data even if API call fails
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
       window.location.href = '/login?logout=true';
     }
   }

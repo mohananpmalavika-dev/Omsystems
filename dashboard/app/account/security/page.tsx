@@ -160,6 +160,8 @@ export default function AccountSecurityPage() {
 
   const sortedSessions = useMemo(() => {
     return [...sessions].sort((a, b) => {
+      if (a.isCurrent && !b.isCurrent) return -1;
+      if (!a.isCurrent && b.isCurrent) return 1;
       const timeA = new Date(a.lastActivityAt || a.createdAt).getTime();
       const timeB = new Date(b.lastActivityAt || b.createdAt).getTime();
       return timeB - timeA;
@@ -173,22 +175,26 @@ export default function AccountSecurityPage() {
     setSuccess("");
 
     const isCurrentSession =
-      currentUa &&
-      session.userAgent === currentUa &&
-      sessions.length > 0 &&
-      sortedSessions[0]?.id === session.id;
+      Boolean(session.isCurrent) ||
+      Boolean(
+        currentUa &&
+        session.userAgent === currentUa &&
+        sessions.length > 0 &&
+        sortedSessions[0]?.id === session.id,
+      );
 
     try {
       // Optimistic update
       setSessions((prev) => prev.filter((s) => s.id !== session.id));
 
-      await authApi.revokeSession(session.id);
+      const resRevoke = await authApi.revokeSession(session.id);
+      const serverCurrent = Boolean((resRevoke as any)?.isCurrentSession);
 
-      if (isCurrentSession) {
+      if (isCurrentSession || serverCurrent) {
         setSuccess("Current session revoked. Redirecting to login...");
         setTimeout(() => {
           void logout();
-        }, 1200);
+        }, 800);
         return;
       }
 
@@ -374,8 +380,9 @@ export default function AccountSecurityPage() {
               sortedSessions.map((session, index) => {
                 const uaInfo = parseUserAgent(session.userAgent);
                 const isCurrent =
-                  index === 0 &&
-                  Boolean(currentUa && session.userAgent === currentUa);
+                  Boolean(session.isCurrent) ||
+                  (index === 0 &&
+                    Boolean(currentUa && session.userAgent === currentUa));
                 const isRevoking = revokingId === session.id;
                 const isExpanded = expandedSessionId === session.id;
 
