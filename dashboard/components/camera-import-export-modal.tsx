@@ -265,6 +265,9 @@ export function CameraImportExportModal({
     if (exportBranch && exportBranch !== "all") query.set("branchId", exportBranch);
     if (!maskCredentials) query.set("includeCredentials", "true");
 
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (token) query.set("token", token);
+
     const exportUrl = `/api/cameras/export?${query.toString()}`;
     const link = document.createElement("a");
     link.href = exportUrl;

@@ -40,9 +40,31 @@ export default function CameraImportExportPage() {
       setBranches(mappedBranches);
 
       if (mappedBranches.length > 0) {
-        const targetBId = selectedBranch === "all" ? mappedBranches[0].id : selectedBranch;
-        const cRes = await cameraInventoryApi.listByBranch(targetBId, "device:configure");
-        setCameras(cRes?.data || []);
+        if (selectedBranch === "all") {
+          try {
+            const allRes = await cameraInventoryApi.listAll("device:configure", 500);
+            if (allRes?.data && allRes.data.length > 0) {
+              setCameras(allRes.data);
+            } else {
+              const all = await Promise.all(
+                mappedBranches.map((b: any) =>
+                  cameraInventoryApi.listByBranch(b.id, "device:configure").catch(() => ({ data: [] }))
+                )
+              );
+              setCameras(all.flatMap((r) => r.data || []));
+            }
+          } catch {
+            const all = await Promise.all(
+              mappedBranches.map((b: any) =>
+                cameraInventoryApi.listByBranch(b.id, "device:configure").catch(() => ({ data: [] }))
+              )
+            );
+            setCameras(all.flatMap((r) => r.data || []));
+          }
+        } else {
+          const cRes = await cameraInventoryApi.listByBranch(selectedBranch, "device:configure");
+          setCameras(cRes?.data || []);
+        }
       }
     } catch {
       // Fallback
@@ -203,14 +225,24 @@ export default function CameraImportExportPage() {
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
-              <a
-                href="/api/cameras/export"
-                download="sentinel-camera-inventory.csv"
+              <button
+                onClick={() => {
+                  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+                  const query = new URLSearchParams();
+                  if (token) query.set("token", token);
+                  const url = `/api/cameras/export${query.toString() ? `?${query.toString()}` : ""}`;
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = `sentinel-camera-inventory.csv`;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow transition"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export All Cameras (Excel)
-              </a>
+              </button>
 
               <button
                 onClick={() => setModalOpen(true)}

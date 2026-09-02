@@ -604,6 +604,8 @@ export const deviceManagementApi = {
 };
 
 export const cameraInventoryApi = {
+  listAll: (action: 'live:view' | 'device:configure' = 'device:configure', limit = 500) =>
+    fetchApi<{ data: any[] }>(`/v1/cameras?action=${encodeURIComponent(action)}&limit=${limit}`),
   listBranches: (action: 'live:view' | 'device:configure' | 'analytics:view' = 'live:view') =>
     fetchApi<{ data: any[] }>(`/v1/branches?action=${encodeURIComponent(action)}`),
   listByBranch: (branchId: string, action: 'live:view' | 'analytics:view' | 'device:configure' = 'live:view') =>
