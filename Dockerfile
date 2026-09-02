@@ -7,8 +7,11 @@ COPY backend/ ./backend/
 COPY database/migrations/ ./database/migrations/
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY packages/ ./packages/
+COPY config/ ./config/
+COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
+
 ENV npm_config_onnxruntime_node_install_cuda=skip
 
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
@@ -41,7 +44,9 @@ RUN npm install --omit=dev --legacy-peer-deps
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/config ./config
 COPY --from=builder /app/backend ./backend
+
 COPY --from=builder /app/database/migrations ./database/migrations
 COPY --from=builder /app/scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY --from=builder /app/edge-agent/build ./edge-agent/build
