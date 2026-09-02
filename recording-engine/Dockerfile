@@ -4,7 +4,9 @@ COPY package.json package-lock.json tsconfig.json ./
 COPY packages ./packages
 COPY recording-engine ./recording-engine
 RUN npm install --legacy-peer-deps
-RUN cd recording-engine && npx tsc -p tsconfig.json
+RUN npm run build --workspace @sentinel/recording-engine
+
+
 
 FROM node:22-alpine
 RUN apk add --no-cache ffmpeg

@@ -31,7 +31,9 @@ export class MountIdentityVerifier {
         for (const line of lines) {
           const parts = line.trim().split(/\s+/);
           if (parts.length >= 3) {
-            const [device, target, fsType] = parts;
+            const device = parts[0] ?? "";
+            const target = parts[1] ?? "";
+            const fsType = parts[2] ?? "";
             if (target === mountPath) {
               if (expectedFsType && !fsType.toLowerCase().includes(expectedFsType.toLowerCase())) {
                 return {
@@ -52,6 +54,7 @@ export class MountIdentityVerifier {
               return { mounted: true, fsType, remoteSource: device };
             }
           }
+
         }
         return { mounted: false, error: `Mount point '${mountPath}' not found in /proc/mounts` };
       } catch (err: any) {

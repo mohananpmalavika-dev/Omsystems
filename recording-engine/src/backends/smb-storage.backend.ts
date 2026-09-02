@@ -68,10 +68,11 @@ export class SmbStorageBackend extends FilesystemStorageBackend {
 
     this.connectionState = "RECONNECTING";
     const backoffIndex = Math.min(this.reconnectAttempts, this.BACKOFF_INTERVALS_MS.length - 1);
-    const baseDelay = this.BACKOFF_INTERVALS_MS[backoffIndex];
+    const baseDelay = this.BACKOFF_INTERVALS_MS[backoffIndex] ?? 5000;
     const jitter = Math.floor(Math.random() * 500);
     this.nextReconnectTime = now + baseDelay + jitter;
     this.reconnectAttempts++;
+
 
     try {
       // Step 1: Check share readability
