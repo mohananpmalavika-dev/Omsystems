@@ -52,6 +52,7 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-30b7f0b8f7c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5}
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-media-gateway-shared-key-2026}
       RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:-recording-engine-shared-key-2026}
+      ANALYTICS_ENGINE_URL: http://analytics-engine:8092
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-analytics-engine-shared-key-2026}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-analytics-source-shared-key-2026}
       REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-report-download-secret-2026}
