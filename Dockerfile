@@ -9,9 +9,13 @@ COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY packages/ ./packages/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
+ENV npm_config_onnxruntime_node_install_cuda=skip
+
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN npm install --legacy-peer-deps
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
+
 
 # Build the cross-platform edge-agent bundle and the activation-bound
 # Windows self-installer served by the control plane.
