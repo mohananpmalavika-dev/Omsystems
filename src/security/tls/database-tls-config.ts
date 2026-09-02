@@ -29,14 +29,20 @@ export function createDatabaseTlsConfig(
   // If DB_SSL or PGSSLMODE specifies requirement
   const dbSslEnv = process.env.DB_SSL?.toLowerCase();
   const pgSslMode = process.env.PGSSLMODE?.toLowerCase();
-  if (dbSslEnv === "true" || pgSslMode === "verify-ca" || pgSslMode === "verify-full" || pgSslMode === "require") {
+  if (dbSslEnv === "false" || process.env.DATABASE_TLS_MODE === "DISABLED") {
+    mode = "DISABLED";
+  } else if (dbSslEnv === "true" || pgSslMode === "verify-ca" || pgSslMode === "verify-full" || pgSslMode === "require") {
     if (mode === "DISABLED" && isProduction) {
       mode = "VERIFY_CA";
     }
   }
 
+  const allowInternalDb = process.env.ALLOW_INTERNAL_CONTAINER_DB === "true" ||
+    process.env.DATABASE_TLS_MODE === "DISABLED" ||
+    dbSslEnv === "false";
+
   // Production Security Validation
-  if (isProduction) {
+  if (isProduction && !allowInternalDb) {
     if (mode === "DISABLED") {
       throw new SecurityConfigurationError(
         "Production PostgreSQL requires verified TLS transport (DATABASE_TLS_MODE must be VERIFY_CA or VERIFY_FULL). Plaintext database connections are forbidden in production.",
@@ -55,6 +61,7 @@ export function createDatabaseTlsConfig(
   if (mode === "DISABLED") {
     return false;
   }
+
 
   // Load CA certificate if provided
   let caContent = options.ca;

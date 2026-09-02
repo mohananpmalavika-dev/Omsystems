@@ -15,5 +15,5 @@ COPY package.json package-lock.json ./
 COPY recording-engine/package.json ./recording-engine/package.json
 RUN npm install --omit=dev --legacy-peer-deps --workspace @sentinel/recording-engine
 COPY --from=build /app/recording-engine/dist ./recording-engine/dist
-EXPOSE 8091
-CMD ["node", "recording-engine/dist/src/index.js"]
+CMD ["sh", "-c", "node recording-engine/dist/recording-engine/src/index.js || node recording-engine/dist/src/index.js"]
+

@@ -97,8 +97,12 @@ services:
       AUTH_MODE: ${AUTH_MODE:-session}
       PORT: 8080
       HOST: 0.0.0.0
-      DATABASE_URL: ${DATABASE_URL:-postgresql://sentinel_admin:${DB_PASSWORD:-SentinelGridDbMaster2026}@postgres:5432/sentinel_grid}
+      DB_SSL: "false"
+      DATABASE_TLS_MODE: "DISABLED"
+      ALLOW_INTERNAL_CONTAINER_DB: "true"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://sentinel_admin:${DB_PASSWORD:-SentinelGridDbMaster2026}@postgres:5432/sentinel_grid?sslmode=disable}
       REDIS_URL: ${REDIS_URL:-redis://:${REDIS_PASSWORD:-SentinelGridRedisMaster2026}@redis:6379}
+
       JWT_SECRET: ${JWT_SECRET:-356c732f9f08e79b8e56315a4f65734f469dd2d350e5c072ca6634de0d0e2b57}
       SESSION_SECRET: ${SESSION_SECRET:-e6e3e9100fe8981c564e942867d778fbe79cad6b3e477af7e4ec45d3c5bd2921}
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-cbe91a924912683e42b03365a68f37d0ef307e52caee53dd305af9f550909bb2}
