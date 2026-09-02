@@ -60,7 +60,7 @@ describe("Phase 3 HO alert command center", () => {
   it("dispatches and audits the exact P1-P4 notification matrix", async () => {
     const cases = [
       { severity: "P1", detectionType: "person", expected: ["dashboard", "email", "sms", "voice"] },
-      { severity: "P2", detectionType: "vehicle", expected: ["dashboard", "email"] },
+      { severity: "P2", detectionType: "vehicle", expected: ["dashboard", "email", "voice"] },
       { severity: "P3", detectionType: "motion", expected: ["dashboard"] },
       { severity: "P4", detectionType: "object", expected: ["log"] },
     ] as const;
@@ -94,9 +94,9 @@ describe("Phase 3 HO alert command center", () => {
       headers: { "x-alert-worker-key": workerKey },
     });
     await waitFor(() => store.analyticsNotifications.every((item) => item.status === "delivered"));
-    expect(store.analyticsNotifications).toHaveLength(8);
+    expect(store.analyticsNotifications).toHaveLength(9);
     expect(store.analyticsNotifications.every((item) => item.attempts === 1 && item.providerId)).toBe(true);
-    expect(sent).toHaveLength(8);
+    expect(sent).toHaveLength(9);
   });
  
   it("creates a synthetic P1 alert for the HO command center demo endpoint", async () => {

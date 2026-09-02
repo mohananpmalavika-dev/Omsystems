@@ -169,6 +169,7 @@ export default function OrganizationHierarchyPage() {
   const [permScopeNodeId, setPermScopeNodeId] = useState("");
   const [selectedCustomRoleId, setSelectedCustomRoleId] = useState("");
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
   const [roleName, setRoleName] = useState("");
   const [roleDescription, setRoleDescription] = useState("");
   const [roleBaseRole, setRoleBaseRole] = useState("operator");
@@ -539,14 +540,17 @@ export default function OrganizationHierarchyPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetchWithAuth("/api/control/v1/roles", {
-        method: "POST",
+      const res = await fetchWithAuth(editingRole
+        ? `/api/control/v1/roles/${editingRole.id}`
+        : "/api/control/v1/roles", {
+        method: editingRole ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: roleName.trim(), description: roleDescription.trim() || undefined, baseRole: roleBaseRole, menuAccess: roleMenuAccess }),
       });
       if (!res.ok) throw new Error((await res.json()).message || "Failed to create role");
-      setNotice(`Role ${roleName.trim()} created.`);
+      setNotice(editingRole ? `Menus updated for ${roleName.trim()}.` : `Role ${roleName.trim()} created.`);
       setShowRoleModal(false);
+      setEditingRole(null);
       setRoleName("");
       setRoleDescription("");
       setRoleMenuAccess([]);
@@ -556,6 +560,15 @@ export default function OrganizationHierarchyPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function openRoleMenuEditor(role: CustomRole) {
+    setEditingRole(role);
+    setRoleName(role.name);
+    setRoleDescription(role.description ?? "");
+    setRoleBaseRole(role.baseRole);
+    setRoleMenuAccess(role.menuAccess);
+    setShowRoleModal(true);
   }
 
   async function handleAssignPermission(e: React.FormEvent) {
@@ -1065,7 +1078,7 @@ export default function OrganizationHierarchyPage() {
                 <h2 className="text-base font-bold text-slate-100">Role-Based Menu Access</h2>
                 <p className="text-xs text-slate-400">Create a role once, assign its menus, and every employee using it receives the same navigation at login.</p>
               </div>
-              <button onClick={() => { setRoleMenuAccess([]); setShowRoleModal(true); }} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5">
+              <button onClick={() => { setEditingRole(null); setRoleName(""); setRoleDescription(""); setRoleBaseRole("operator"); setRoleMenuAccess([]); setShowRoleModal(true); }} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5">
                 <Plus size={13} /> Create Role
               </button>
             </div>
@@ -1077,7 +1090,12 @@ export default function OrganizationHierarchyPage() {
                     <span className="text-[10px] text-emerald-400 font-mono">{role.userCount ?? 0} users</span>
                   </div>
                   <p className="text-xs text-slate-400 mt-3">{role.description || "No description"}</p>
-                  <p className="text-[11px] text-indigo-300 mt-3">{role.menuAccess.length} menus assigned</p>
+                  <div className="flex items-center justify-between mt-3">
+                    <p className="text-[11px] text-indigo-300">{role.menuAccess.length} menus assigned</p>
+                    <button type="button" onClick={() => openRoleMenuEditor(role)} className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded text-[11px] font-semibold flex items-center gap-1">
+                      <Plus size={12} /> Add Menu
+                    </button>
+                  </div>
                 </div>
               ))}
               {!roles.length && <div className="col-span-full py-10 text-center text-sm text-slate-500">No custom roles yet. Create one to define role-level menus.</div>}
@@ -1088,12 +1106,12 @@ export default function OrganizationHierarchyPage() {
         {showRoleModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3"><h3 className="text-base font-bold text-slate-100 flex items-center gap-2"><Shield size={16} className="text-emerald-400" /> Create Role</h3><button onClick={() => setShowRoleModal(false)} className="text-slate-400 text-sm font-bold">&times;</button></div>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3"><h3 className="text-base font-bold text-slate-100 flex items-center gap-2"><Shield size={16} className="text-emerald-400" /> {editingRole ? `Add Menu: ${editingRole.name}` : "Create Role"}</h3><button onClick={() => { setShowRoleModal(false); setEditingRole(null); }} className="text-slate-400 text-sm font-bold">&times;</button></div>
               <form onSubmit={handleCreateRole} className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2"><input required value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200" /><select value={roleBaseRole} onChange={(e) => setRoleBaseRole(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200"><option value="operator">Operator capability</option><option value="branch_manager">Branch manager capability</option><option value="viewer">Viewer capability</option><option value="auditor">Auditor capability</option></select></div>
+                <div className="grid grid-cols-2 gap-2"><input required disabled={Boolean(editingRole)} value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60" /><select disabled={Boolean(editingRole)} value={roleBaseRole} onChange={(e) => setRoleBaseRole(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"><option value="operator">Operator capability</option><option value="branch_manager">Branch manager capability</option><option value="viewer">Viewer capability</option><option value="auditor">Auditor capability</option></select></div>
                 <input value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} placeholder="Description (optional)" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200" />
                 <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">{navigation.map((group) => <fieldset key={group.label} className="space-y-1"><legend className="text-[10px] font-bold uppercase text-slate-500">{group.label}</legend>{group.items.map((item) => { const key = menuKey(item); return <label key={key} className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={roleMenuAccess.includes(key)} onChange={(event) => setRoleMenuAccess((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} className="accent-emerald-500" /><span>{item.label}</span></label>; })}</fieldset>)}</div>
-                <div className="flex justify-end gap-2 border-t border-slate-800 pt-3"><button type="button" onClick={() => setShowRoleModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg font-semibold">Cancel</button><button type="submit" disabled={saving || !roleMenuAccess.length} className="px-4 py-2 bg-emerald-600 text-slate-950 rounded-lg font-bold">{saving ? "Creating..." : "Create Role"}</button></div>
+                <div className="flex justify-end gap-2 border-t border-slate-800 pt-3"><button type="button" onClick={() => { setShowRoleModal(false); setEditingRole(null); }} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg font-semibold">Cancel</button><button type="submit" disabled={saving || !roleMenuAccess.length} className="px-4 py-2 bg-emerald-600 text-slate-950 rounded-lg font-bold">{saving ? "Saving..." : editingRole ? "Save Menus" : "Create Role"}</button></div>
               </form>
             </div>
           </div>

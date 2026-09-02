@@ -11,7 +11,7 @@ import { alertEvents } from "./event-stream.js";
 
 export const NOTIFICATION_MATRIX: Record<string, AlertNotificationChannel[]> = {
   P1: ["dashboard", "sms", "email", "voice"],
-  P2: ["dashboard", "email"], // Fixed: removed SMS (was incorrectly included)
+  P2: ["dashboard", "email", "voice"],
   P3: ["dashboard"],
   P4: ["log"],
   P5: ["log"],
