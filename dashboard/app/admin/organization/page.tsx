@@ -34,7 +34,7 @@ import {
   Check,
   RotateCcw,
 } from "lucide-react";
-import { AppLayout } from "@/components/app-layout";
+import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/components/app-layout";
 
 type OrgNode = {
   id: string;
@@ -63,6 +63,7 @@ type Employee = {
   displayName: string;
   email: string;
   role: string;
+  menuAccess?: string[];
   designation?: string;
   department?: string;
   status: string;
@@ -154,6 +155,7 @@ export default function OrganizationHierarchyPage() {
   const [permScopeNodeId, setPermScopeNodeId] = useState("");
   const [permAction, setPermAction] = useState<"live:view" | "recording:view" | "ptz:operate" | "audio:talk">("live:view");
   const [permEffect, setPermEffect] = useState<"allow" | "deny">("allow");
+  const [selectedMenuAccess, setSelectedMenuAccess] = useState<string[]>([]);
 
   useEffect(() => {
     loadAllData();
@@ -493,6 +495,7 @@ export default function OrganizationHierarchyPage() {
     setPermScopeNodeId(emp.organizations?.[0]?.nodeId || flatNodes[0]?.id || "");
     setPermAction("live:view");
     setPermEffect("allow");
+    setSelectedMenuAccess(emp.menuAccess ?? defaultMenuAccessForRole(emp.role));
     setShowPermModal(true);
   }
 
@@ -512,6 +515,13 @@ export default function OrganizationHierarchyPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+
+      const menuResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferences: { menuAccess: selectedMenuAccess } }),
+      });
+      if (!menuResponse.ok) throw new Error("Failed to assign menu access");
 
       setNotice(`Permission policy updated for ${selectedEmployee.displayName}!`);
       setShowPermModal(false);
@@ -1365,6 +1375,33 @@ export default function OrganizationHierarchyPage() {
                       onChange={(e) => setNewEmpPassword(e.target.value)}
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Menu Assignment</label>
+                  <div className="max-h-52 overflow-y-auto space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                    {navigation.map((group) => (
+                      <fieldset key={group.label} className="space-y-1">
+                        <legend className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{group.label}</legend>
+                        {group.items.map((item) => {
+                          const key = menuKey(item);
+                          return (
+                            <label key={key} className="flex items-center gap-2 text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={selectedMenuAccess.includes(key)}
+                                onChange={(event) => setSelectedMenuAccess((current) => event.target.checked
+                                  ? [...current, key]
+                                  : current.filter((value) => value !== key))}
+                                className="accent-indigo-500"
+                              />
+                              <span>{item.label}</span>
+                            </label>
+                          );
+                        })}
+                      </fieldset>
+                    ))}
                   </div>
                 </div>
 

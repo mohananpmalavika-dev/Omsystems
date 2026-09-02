@@ -688,6 +688,7 @@ export class InfrastructureRepository {
       u.must_change_password, ${includePreferences ? "u.preferences" : "'{}'::jsonb AS preferences"}, u.profile_photo_url,
       u.profile_photo_url AS photo_url, u.profile_photo_url AS avatar_url,
       u.profile_photo_url AS face_photo_base64,
+      u.preferences->'menuAccess' AS menu_access,
       ((u.preferences->'faceVerification'->>'data') IS NOT NULL) AS face_enrolled,
       u.active, u.created_at, u.updated_at
       ,(SELECT assignment.scope_node_id::text
@@ -993,13 +994,13 @@ export class InfrastructureRepository {
       ["date_of_birth", input.dateOfBirth],
       ["reporting_to_user_id", input.reportingToUserId, "uuid"],
       ["profile_photo_url", input.profilePhotoUrl],
-      ["preferences", input.preferences, "jsonb"],
+      ["preferences", input.preferences, "jsonb_merge"],
     ];
     const supplied = mapping.filter(([, value]) => value !== undefined);
     if (supplied.length > 0) {
       const assignments = supplied.map(
         ([column, , cast], index) =>
-          `${column}=$${index + 2}${cast ? `::${cast}` : ""}`,
+          `${column}=${cast === "jsonb_merge" ? `${column} || ` : ""}$${index + 2}${cast && cast !== "jsonb_merge" ? `::${cast}` : cast === "jsonb_merge" ? "::jsonb" : ""}`,
       );
       const values = supplied.map(([, value, cast]) =>
         cast === "jsonb" ? JSON.stringify(value) : value

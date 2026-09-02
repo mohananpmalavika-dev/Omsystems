@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -10,7 +10,7 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
-import { AppLayout, navigation, quickActions } from "@/components/app-layout";
+import { AppLayout, getVisibleNavigation, menuKey, quickActions } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 
 const groupDescriptions: Record<string, string> = {
@@ -26,10 +26,20 @@ const groupDescriptions: Record<string, string> = {
 
 export default function ModulesPage() {
   const [query, setQuery] = useState("");
+  const [user, setUser] = useState<{ role?: string; preferences?: { menuAccess?: unknown } } | null>(null);
+  useEffect(() => {
+    fetch("/api/control/v1/auth/me", { credentials: "include" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => setUser(data?.user ?? data ?? null))
+      .catch(() => setUser(null));
+  }, []);
+  const visibleNavigation = getVisibleNavigation(user);
+  const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
+  const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
   const filteredGroups = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return navigation;
-    return navigation
+    if (!normalized) return visibleNavigation;
+    return visibleNavigation
       .map((group) => ({
         ...group,
         items: group.items.filter((item) =>
@@ -37,8 +47,8 @@ export default function ModulesPage() {
         ),
       }))
       .filter((group) => group.items.length > 0);
-  }, [query]);
-  const moduleCount = navigation.reduce((total, group) => total + group.items.length, 0);
+  }, [query, visibleNavigation]);
+  const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
   const visibleCount = filteredGroups.reduce((total, group) => total + group.items.length, 0);
 
   return (
@@ -59,8 +69,8 @@ export default function ModulesPage() {
 
         <section className="directory-summary" aria-label="Module directory summary">
           <article><span><LayoutGrid size={18} /></span><div><strong>{moduleCount}</strong><small>Operational modules</small></div></article>
-          <article><span><Workflow size={18} /></span><div><strong>{quickActions.length}</strong><small>Quick-create workflows</small></div></article>
-          <article><span><CheckCircle2 size={18} /></span><div><strong>{navigation.length}</strong><small>Business areas</small></div></article>
+          <article><span><Workflow size={18} /></span><div><strong>{visibleQuickActions.length}</strong><small>Quick-create workflows</small></div></article>
+          <article><span><CheckCircle2 size={18} /></span><div><strong>{visibleNavigation.length}</strong><small>Business areas</small></div></article>
           <article><span><Sparkles size={18} /></span><div><strong>One</strong><small>Unified control plane</small></div></article>
         </section>
 
@@ -72,7 +82,7 @@ export default function ModulesPage() {
         <section className="directory-quick-actions">
           <header><div><span>Start a workflow</span><h2>Quick actions</h2></div><p>Common tasks that create or register operational records.</p></header>
           <div>
-            {quickActions.map((action) => {
+            {visibleQuickActions.map((action) => {
               const Icon = action.icon;
               return <Link href={action.href} key={action.href}><span><Icon size={17} /></span><strong>{action.label}</strong><ArrowUpRight size={14} /></Link>;
             })}

@@ -86,6 +86,12 @@ export type NavItem = {
   badge?: "cameras" | "incidents";
 };
 
+export type MenuAccessUser = {
+  role?: string;
+  menuAccess?: unknown;
+  preferences?: { menuAccess?: unknown };
+};
+
 export type NavGroup = {
   label: string;
   icon: LucideIcon;
@@ -228,6 +234,39 @@ export const navigation: NavGroup[] = [
   },
 ];
 
+const unrestrictedRoles = new Set(["super_admin", "company_admin", "hq_admin", "admin", "superadmin"]);
+const roleGroups: Record<string, string[]> = {
+  zone_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  region_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  area_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  branch_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  operator: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK"],
+  security_officer: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "INVESTIGATE & PLAYBACK"],
+  viewer: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "INVESTIGATE & PLAYBACK"],
+  auditor: ["ASSURANCE & GOVERNANCE", "AUDIT & REPORTING", "INVESTIGATE & PLAYBACK"],
+};
+
+export function menuKey(item: NavItem) {
+  return item.href;
+}
+
+export function defaultMenuAccessForRole(role?: string) {
+  if (role && unrestrictedRoles.has(role)) return navigation.flatMap((group) => group.items.map(menuKey));
+  const groups = new Set(roleGroups[role ?? ""] ?? []);
+  return navigation.filter((group) => groups.has(group.label)).flatMap((group) => group.items.map(menuKey));
+}
+
+export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
+  if (!user) return [];
+  const configuredValue = user.preferences?.menuAccess ?? user.menuAccess;
+  const configured = Array.isArray(configuredValue)
+    ? configuredValue.filter((value): value is string => typeof value === "string")
+    : null;
+  const allowed = new Set(configured ?? defaultMenuAccessForRole(user.role));
+  return navigation.map((group) => ({ ...group, items: group.items.filter((item) => allowed.has(menuKey(item))) }))
+    .filter((group) => group.items.length > 0);
+}
+
 export const quickActions: NavItem[] = [
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
   { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },
@@ -333,24 +372,28 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     username?: string;
     email?: string;
     role?: string;
+    preferences?: { menuAccess?: unknown };
   } | null>(null);
   const pathname = usePathname() || "/";
+  const visibleNavigation = getVisibleNavigation(operator);
+  const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
+  const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
   const currentPage = pageMeta
     .filter((item) => routeMatches(item.path, pathname, searchParams))
     .sort((left, right) => routeSpecificity(right.path) - routeSpecificity(left.path))[0]
     ?? { path: pathname, section: "Workspace", title: "Sentinel Grid" };
 
-  const activeRoute = navigation
+  const activeRoute = visibleNavigation
     .flatMap((group) => group.items)
     .map((item) => item.href)
     .filter((href) => routeMatches(href, pathname, searchParams))
     .sort((left, right) => routeSpecificity(right) - routeSpecificity(left))[0];
   const isActive = (href: string) => href === activeRoute;
-  const activeGroup = navigation.find((group) => group.items.some((item) => isActive(item.href)));
-  const moduleCount = navigation.reduce((total, group) => total + group.items.length, 0);
-  const allGroupsOpen = openGroups.size === navigation.length;
+  const activeGroup = visibleNavigation.find((group) => group.items.some((item) => isActive(item.href)));
+  const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
+  const allGroupsOpen = openGroups.size === visibleNavigation.length;
 
-  const searchableModules = useMemo(() => navigation.flatMap((group) =>
+  const searchableModules = useMemo(() => visibleNavigation.flatMap((group) =>
     group.items.map((item) => ({ ...item, section: group.label }))), []);
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
@@ -404,14 +447,14 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     try {
       const storedGroups = JSON.parse(window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY) || "[]");
       const validGroups = Array.isArray(storedGroups)
-        ? storedGroups.filter((label): label is string => navigation.some((group) => group.label === label))
+        ? storedGroups.filter((label): label is string => visibleNavigation.some((group) => group.label === label))
         : [];
       if (activeGroup && !validGroups.includes(activeGroup.label)) validGroups.push(activeGroup.label);
       setOpenGroups(new Set(validGroups));
     } catch {
       setOpenGroups(new Set(activeGroup ? [activeGroup.label] : []));
     }
-  }, []);
+  }, [visibleNavigation]);
 
   useEffect(() => {
     if (!activeGroup) return;
@@ -530,7 +573,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const toggleAllGroups = () => {
     persistOpenGroups(allGroupsOpen
       ? new Set(activeGroup ? [activeGroup.label] : [])
-      : new Set(navigation.map((group) => group.label)));
+      : new Set(visibleNavigation.map((group) => group.label)));
   };
   const openCommandResult = (href: string) => {
     setCommandOpen(false);
@@ -584,15 +627,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </button>
 
         <div className="nav-shortcuts" aria-label="Quick access">
-          <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
+          {visibleHrefs.has("/") && <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
             <LayoutDashboard size={15} /><span>Overview</span>
-          </Link>
-          <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
+          </Link>}
+          {visibleHrefs.has("/control-room") && <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
             <MonitorPlay size={15} /><span>Live</span>
-          </Link>
-          <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
+          </Link>}
+          {visibleHrefs.has("/operations/alerts") && <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
             <Radar size={15} /><span>Alerts</span>
-          </Link>
+          </Link>}
         </div>
 
         <div className="nav-utility">
@@ -733,7 +776,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               </summary>
               <div className="create-menu-panel">
                 <p>Quick actions</p>
-                {quickActions.map((action) => {
+                {visibleQuickActions.map((action) => {
                   const Icon = action.icon;
                   return (
                     <Link href={action.href} key={action.href} onClick={() => setCreateMenuOpen(false)}>
