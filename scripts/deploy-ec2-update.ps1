@@ -7,15 +7,12 @@ $commands = @(
     "cd /opt/sentinel-grid",
     "git fetch origin main",
     "git reset --hard origin/main",
-    "git log -1 --oneline",
-    "docker system prune -af || true",
-    "df -h",
     "cd /opt/sentinel-grid/deploy/aws",
-    "docker compose -f docker-compose.aws.yml down || true",
-    "docker compose -f docker-compose.aws.yml up -d --build",
-    "docker ps"
-
+    "docker compose -f docker-compose.aws.yml up -d",
+    "sleep 5",
+    "docker ps -a"
 )
+
 
 $paramJson = @{
     commands = $commands
