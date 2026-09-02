@@ -413,6 +413,38 @@ describe("dashboard control-plane BFF", () => {
     expect(cookies).toContain("SameSite=strict");
   });
 
+  it("keeps login cookies usable for local HTTP production deployments", async () => {
+    process.env.NODE_ENV = "production";
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({
+        accessToken: "local-access-secret",
+        refreshToken: "local-refresh-secret",
+        expiresIn: 3600,
+        tokenType: "Bearer",
+      })
+    ));
+
+    const controlResponse = await POST(
+      new NextRequest("http://localhost:3000/api/control/v1/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "employee", password: "secret" }),
+      }),
+      { params: Promise.resolve({ path: ["v1", "auth", "login"] }) },
+    );
+    const compatibilityResponse = await POST_API_V1(
+      new NextRequest("http://localhost:3000/api/v1/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "employee", password: "secret" }),
+      }),
+      { params: Promise.resolve({ path: ["auth", "login"] }) },
+    );
+
+    expect(controlResponse.headers.get("set-cookie") ?? "").not.toContain("Secure");
+    expect(compatibilityResponse.headers.get("set-cookie") ?? "").not.toContain("Secure");
+  });
+
   it("keeps the compatibility v1 login proxy token-free too", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json({
