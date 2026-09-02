@@ -19,19 +19,28 @@ const headers = {
 
 const branches = await getJson("/v1/branches?action=device%3Aconfigure");
 const report = await Promise.all((branches.data ?? []).map(async (branch) => {
-  const [cameraResponse, agentResponse] = await Promise.all([
+  const [cameraResponse, agentResponse, commandResponse] = await Promise.all([
     getJson(`/v1/branches/${encodeURIComponent(branch.id)}/cameras`),
     getJson(`/v1/branches/${encodeURIComponent(branch.id)}/edge-agents`),
+    getJson(`/v1/branches/${encodeURIComponent(branch.id)}/edge-commands?limit=20`),
   ]);
-  const agents = (agentResponse.data ?? []).map((agent) => ({
-    id: agent.id,
-    name: agent.name,
-    status: agent.status,
-    lastSeenAt: agent.lastSeenAt ?? null,
-    publicMediaOrigin: safeOrigin(agent.publicMediaUrl),
-    localMediaOrigin: safeOrigin(agent.localMediaUrl),
+  const agents = await Promise.all((agentResponse.data ?? []).map(async (agent) => {
+    const update = agent.version
+      ? await getJson(`/v1/edge-agents/${encodeURIComponent(agent.id)}/updates/next?version=${encodeURIComponent(agent.version)}`)
+      : null;
+    return {
+      id: agent.id,
+      name: agent.name,
+      version: agent.version ?? null,
+      status: agent.status,
+      lastSeenAt: agent.lastSeenAt ?? null,
+      publicMediaOrigin: safeOrigin(agent.publicMediaUrl),
+      localMediaOrigin: safeOrigin(agent.localMediaUrl),
+      availableUpdateVersion: update?.version ?? null,
+    };
   }));
   const cameras = cameraResponse.data ?? [];
+  const commands = commandResponse.data ?? [];
 
   return {
     branchId: branch.id,
@@ -48,6 +57,15 @@ const report = await Promise.all((branches.data ?? []).map(async (branch) => {
       edgeAgentId: camera.edgeAgentId ?? null,
     })),
     agents,
+    recentCommands: commands.map((command) => ({
+      id: command.id,
+      edgeAgentId: command.edgeAgentId,
+      type: command.type,
+      status: command.status,
+      createdAt: command.createdAt,
+      completedAt: command.completedAt ?? null,
+      error: command.error ?? null,
+    })),
   };
 }));
 

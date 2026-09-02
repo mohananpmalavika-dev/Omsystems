@@ -23,6 +23,7 @@ import {
 import { DeviceSelector, type Device } from "@/components/device-management/device-selector";
 import { CredentialRotationForm } from "@/components/device-management/credential-rotation-form";
 import { JobMonitor } from "@/components/device-management/job-monitor";
+import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { cameraInventoryApi, deviceManagementApi } from "@/lib/api-client";
 
 interface BranchOption {
@@ -196,6 +197,13 @@ export default function DeviceManagementPage() {
               onChange={setSelectedDevice}
             />
           </div>
+        )}
+
+        {selectedBranch && (
+          <BranchConnectivityPanel
+            branchId={selectedBranch}
+            onConfigured={() => setSelectedDevice(null)}
+          />
         )}
 
         {/* Device Info & Operations Tabs */}
