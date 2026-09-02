@@ -688,7 +688,9 @@ export class InfrastructureRepository {
       u.must_change_password, ${includePreferences ? "u.preferences" : "'{}'::jsonb AS preferences"}, u.profile_photo_url,
       u.profile_photo_url AS photo_url, u.profile_photo_url AS avatar_url,
       u.profile_photo_url AS face_photo_base64,
-      u.preferences->'menuAccess' AS menu_access,
+      u.custom_role_id::text AS custom_role_id,
+      (SELECT cr.name FROM custom_roles cr WHERE cr.id=u.custom_role_id) AS custom_role_name,
+      COALESCE((SELECT cr.menu_access FROM custom_roles cr WHERE cr.id=u.custom_role_id), u.preferences->'menuAccess') AS menu_access,
       ((u.preferences->'faceVerification'->>'data') IS NOT NULL) AS face_enrolled,
       u.active, u.created_at, u.updated_at
       ,(SELECT assignment.scope_node_id::text
@@ -957,10 +959,10 @@ export class InfrastructureRepository {
            tenant_id, identity_subject, display_name, email, username,
            password_hash, employee_id, phone_number, role, status, department,
            designation, date_of_joining, date_of_birth, reporting_to_user_id,
-           profile_photo_url, preferences,
+           profile_photo_url, preferences, custom_role_id,
            active
          ) VALUES (
-           $1,$2,$3,$4,$5,$6,$7,$8,$9::user_role,'active',$10,$11,$12,$13,$14,$15,$16::jsonb,true
+           $1,$2,$3,$4,$5,$6,$7,$8,$9::user_role,'active',$10,$11,$12,$13,$14,$15,$16::jsonb,$17::uuid,true
          ) RETURNING id::text`,
         [
           resolvedTenantId, input.username, input.displayName, input.email,
@@ -968,7 +970,7 @@ export class InfrastructureRepository {
            input.phoneNumber ?? null, input.role, input.department ?? null,
            input.designation ?? null, input.dateOfJoining ?? null,
            input.dateOfBirth ?? null, input.reportingToUserId ?? null,
-           input.profilePhotoUrl ?? null, JSON.stringify(input.preferences ?? {}),
+           input.profilePhotoUrl ?? null, JSON.stringify(input.preferences ?? {}), input.customRoleId ?? null,
          ],
       );
       const id = result.rows[0]!.id;
@@ -995,6 +997,7 @@ export class InfrastructureRepository {
       ["reporting_to_user_id", input.reportingToUserId, "uuid"],
       ["profile_photo_url", input.profilePhotoUrl],
       ["preferences", input.preferences, "jsonb_merge"],
+      ["custom_role_id", input.customRoleId, "uuid"],
     ];
     const supplied = mapping.filter(([, value]) => value !== undefined);
     if (supplied.length > 0) {
@@ -1011,6 +1014,57 @@ export class InfrastructureRepository {
       );
     }
     return this.getUserWithPassword(id);
+  }
+
+  async listCustomRoles(tenantId: string) {
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id::text, name, description, base_role,
+              menu_access, created_at, updated_at,
+              (SELECT count(*)::integer FROM users u WHERE u.custom_role_id=cr.id) AS user_count
+       FROM custom_roles cr WHERE tenant_id=$1::uuid ORDER BY name`,
+      [tenantId],
+    );
+    return camelRows(result.rows);
+  }
+
+  async createCustomRole(tenantId: string, input: any) {
+    const result = await this.pool.query(
+      `INSERT INTO custom_roles (tenant_id, name, description, base_role, menu_access, created_by)
+       VALUES ($1::uuid,$2,$3,$4::user_role,$5::jsonb,$6::uuid)
+       RETURNING id::text, tenant_id::text, name, description, base_role, menu_access, created_at, updated_at`,
+      [tenantId, input.name, input.description ?? null, input.baseRole, JSON.stringify(input.menuAccess ?? []), input.createdBy ?? null],
+    );
+    return result.rows[0] ? camelRow(result.rows[0]) : undefined;
+  }
+
+  async updateCustomRole(id: string, tenantId: string, input: any) {
+    const fields: Array<[string, unknown, string?]> = [
+      ["name", input.name], ["description", input.description],
+      ["base_role", input.baseRole, "user_role"], ["menu_access", input.menuAccess, "jsonb"],
+    ];
+    const supplied = fields.filter(([, value]) => value !== undefined);
+    if (supplied.length) {
+      const assignments = supplied.map(([column, , cast], index) =>
+        `${column}=$${index + 3}${cast ? `::${cast}` : ""}`);
+      const values = supplied.map(([, value], index) =>
+        index === supplied.findIndex(([column]) => column === "menu_access") ? JSON.stringify(value) : value);
+      await this.pool.query(
+        `UPDATE custom_roles SET ${assignments.join(", ")}, updated_at=now()
+         WHERE id=$1::uuid AND tenant_id=$2::uuid`,
+        [id, tenantId, ...values],
+      );
+    }
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access, created_at, updated_at
+       FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`, [id, tenantId],
+    );
+    return result.rows[0] ? camelRow(result.rows[0]) : undefined;
+  }
+
+  async deleteCustomRole(id: string, tenantId: string) {
+    await this.pool.query(
+      `DELETE FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`, [id, tenantId],
+    );
   }
 
   async deactivateUser(id: string) {

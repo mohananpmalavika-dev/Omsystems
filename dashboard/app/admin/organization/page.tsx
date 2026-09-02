@@ -63,6 +63,8 @@ type Employee = {
   displayName: string;
   email: string;
   role: string;
+  customRoleId?: string;
+  customRoleName?: string;
   menuAccess?: string[];
   designation?: string;
   department?: string;
@@ -76,6 +78,15 @@ type Employee = {
     nodeName?: string;
     isPrimary: boolean;
   }>;
+};
+
+type CustomRole = {
+  id: string;
+  name: string;
+  description?: string;
+  baseRole: string;
+  menuAccess: string[];
+  userCount?: number;
 };
 
 type CameraItem = {
@@ -104,7 +115,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 }
 
 export default function OrganizationHierarchyPage() {
-  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees">("hierarchy");
+  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "roles">("hierarchy");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -114,6 +125,7 @@ export default function OrganizationHierarchyPage() {
   const [treeData, setTreeData] = useState<OrgNode[]>([]);
   const [flatNodes, setFlatNodes] = useState<OrgNode[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [roles, setRoles] = useState<CustomRole[]>([]);
   const [cameras, setCameras] = useState<CameraItem[]>([]);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
@@ -141,6 +153,8 @@ export default function OrganizationHierarchyPage() {
   const [newEmpDesignation, setNewEmpDesignation] = useState("Security Officer");
   const [newEmpDept, setNewEmpDept] = useState("Surveillance SOC");
   const [newEmpOrgNodeId, setNewEmpOrgNodeId] = useState("");
+  const [newEmpScopeNodeIds, setNewEmpScopeNodeIds] = useState<string[]>([]);
+  const [newEmpCustomRoleId, setNewEmpCustomRoleId] = useState("");
   const [empPhotoData, setEmpPhotoData] = useState<string>("");
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -156,6 +170,12 @@ export default function OrganizationHierarchyPage() {
   const [permAction, setPermAction] = useState<"live:view" | "recording:view" | "ptz:operate" | "audio:talk">("live:view");
   const [permEffect, setPermEffect] = useState<"allow" | "deny">("allow");
   const [selectedMenuAccess, setSelectedMenuAccess] = useState<string[]>([]);
+  const [selectedCustomRoleId, setSelectedCustomRoleId] = useState("");
+  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [roleName, setRoleName] = useState("");
+  const [roleDescription, setRoleDescription] = useState("");
+  const [roleBaseRole, setRoleBaseRole] = useState("operator");
+  const [roleMenuAccess, setRoleMenuAccess] = useState<string[]>([]);
 
   useEffect(() => {
     loadAllData();
@@ -205,6 +225,12 @@ export default function OrganizationHierarchyPage() {
       if (usersRes.ok) {
         const usersJson = await usersRes.json();
         setEmployees(Array.isArray(usersJson) ? usersJson : usersJson.data || []);
+      }
+
+      const rolesRes = await fetchWithAuth("/api/control/v1/roles");
+      if (rolesRes.ok) {
+        const rolesJson = await rolesRes.json();
+        setRoles(Array.isArray(rolesJson) ? rolesJson : rolesJson.data || []);
       }
 
       // 3. Fetch Cameras
@@ -431,7 +457,7 @@ export default function OrganizationHierarchyPage() {
 
   async function handleCreateEmployee(e: React.FormEvent) {
     e.preventDefault();
-    if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpUsername.trim() || !newEmpPassword || !newEmpOrgNodeId) {
+    if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpUsername.trim() || !newEmpPassword || !newEmpScopeNodeIds.length) {
       setError("Please fill all required fields, including login credentials and location scope.");
       return;
     }
@@ -452,9 +478,10 @@ export default function OrganizationHierarchyPage() {
         username: newEmpUsername.trim(),
         password: newEmpPassword,
         role: newEmpRole,
+        customRoleId: newEmpCustomRoleId || null,
         designation: newEmpDesignation.trim(),
         department: newEmpDept.trim(),
-        primaryOrgNodeId: newEmpOrgNodeId,
+        primaryOrgNodeId: newEmpScopeNodeIds[0],
         facePhotoBase64: empPhotoData || undefined,
         faceEnrolled: true,
       };
@@ -469,6 +496,7 @@ export default function OrganizationHierarchyPage() {
         const errJson = await res.json();
         throw new Error(errJson.message || "Failed to create employee");
       }
+      const createdEmployee = await res.json();
 
       setNotice(
         `Employee ${newEmpName} enrolled successfully${
@@ -480,8 +508,18 @@ export default function OrganizationHierarchyPage() {
       setNewEmpEmail("");
       setNewEmpUsername("");
       setNewEmpPassword("");
+      setNewEmpScopeNodeIds([]);
+      setNewEmpOrgNodeId("");
+      setNewEmpCustomRoleId("");
       setEmpPhotoData("");
       stopWebcam();
+      for (const scopeNodeId of newEmpScopeNodeIds.slice(1)) {
+        await fetchWithAuth(`/api/control/v1/users/${createdEmployee.id}/organizations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scopeNodeId, isPrimary: false }),
+        });
+      }
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to create employee");
@@ -496,7 +534,33 @@ export default function OrganizationHierarchyPage() {
     setPermAction("live:view");
     setPermEffect("allow");
     setSelectedMenuAccess(emp.menuAccess ?? defaultMenuAccessForRole(emp.role));
+    setSelectedCustomRoleId(emp.customRoleId ?? "");
     setShowPermModal(true);
+  }
+
+  async function handleCreateRole(e: React.FormEvent) {
+    e.preventDefault();
+    if (!roleName.trim() || !roleMenuAccess.length) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth("/api/control/v1/roles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: roleName.trim(), description: roleDescription.trim() || undefined, baseRole: roleBaseRole, menuAccess: roleMenuAccess }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message || "Failed to create role");
+      setNotice(`Role ${roleName.trim()} created.`);
+      setShowRoleModal(false);
+      setRoleName("");
+      setRoleDescription("");
+      setRoleMenuAccess([]);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to create role");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleAssignPermission(e: React.FormEvent) {
@@ -516,12 +580,12 @@ export default function OrganizationHierarchyPage() {
         body: JSON.stringify(payload),
       });
 
-      const menuResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}`, {
+      const roleResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preferences: { menuAccess: selectedMenuAccess } }),
+        body: JSON.stringify({ customRoleId: selectedCustomRoleId || null }),
       });
-      if (!menuResponse.ok) throw new Error("Failed to assign menu access");
+      if (!roleResponse.ok) throw new Error("Failed to assign role");
 
       setNotice(`Permission policy updated for ${selectedEmployee.displayName}!`);
       setShowPermModal(false);
@@ -799,6 +863,16 @@ export default function OrganizationHierarchyPage() {
             <FolderTree size={15} /> 1. Hierarchy & Location Tree
           </button>
           <button
+            onClick={() => setActiveTab("roles")}
+            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+              activeTab === "roles"
+                ? "border-emerald-500 text-emerald-400"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Shield size={15} /> 3. Roles & Menu Access
+          </button>
+          <button
             onClick={() => setActiveTab("employees")}
             className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
               activeTab === "employees"
@@ -980,6 +1054,47 @@ export default function OrganizationHierarchyPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "roles" && (
+          <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-slate-100">Role-Based Menu Access</h2>
+                <p className="text-xs text-slate-400">Create a role once, assign its menus, and every employee using it receives the same navigation at login.</p>
+              </div>
+              <button onClick={() => { setRoleMenuAccess([]); setShowRoleModal(true); }} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5">
+                <Plus size={13} /> Create Role
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {roles.map((role) => (
+                <div key={role.id} className="border border-slate-800 bg-slate-950/60 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div><h3 className="text-sm font-bold text-slate-100">{role.name}</h3><p className="text-[11px] text-slate-500 mt-1">Base access: {role.baseRole}</p></div>
+                    <span className="text-[10px] text-emerald-400 font-mono">{role.userCount ?? 0} users</span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-3">{role.description || "No description"}</p>
+                  <p className="text-[11px] text-indigo-300 mt-3">{role.menuAccess.length} menus assigned</p>
+                </div>
+              ))}
+              {!roles.length && <div className="col-span-full py-10 text-center text-sm text-slate-500">No custom roles yet. Create one to define role-level menus.</div>}
+            </div>
+          </div>
+        )}
+
+        {showRoleModal && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3"><h3 className="text-base font-bold text-slate-100 flex items-center gap-2"><Shield size={16} className="text-emerald-400" /> Create Role</h3><button onClick={() => setShowRoleModal(false)} className="text-slate-400 text-sm font-bold">&times;</button></div>
+              <form onSubmit={handleCreateRole} className="space-y-3 text-xs">
+                <div className="grid grid-cols-2 gap-2"><input required value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200" /><select value={roleBaseRole} onChange={(e) => setRoleBaseRole(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200"><option value="operator">Operator capability</option><option value="branch_manager">Branch manager capability</option><option value="viewer">Viewer capability</option><option value="auditor">Auditor capability</option></select></div>
+                <input value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} placeholder="Description (optional)" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200" />
+                <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">{navigation.map((group) => <fieldset key={group.label} className="space-y-1"><legend className="text-[10px] font-bold uppercase text-slate-500">{group.label}</legend>{group.items.map((item) => { const key = menuKey(item); return <label key={key} className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={roleMenuAccess.includes(key)} onChange={(event) => setRoleMenuAccess((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} className="accent-emerald-500" /><span>{item.label}</span></label>; })}</fieldset>)}</div>
+                <div className="flex justify-end gap-2 border-t border-slate-800 pt-3"><button type="button" onClick={() => setShowRoleModal(false)} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg font-semibold">Cancel</button><button type="submit" disabled={saving || !roleMenuAccess.length} className="px-4 py-2 bg-emerald-600 text-slate-950 rounded-lg font-bold">{saving ? "Creating..." : "Create Role"}</button></div>
+              </form>
             </div>
           </div>
         )}
@@ -1378,33 +1493,6 @@ export default function OrganizationHierarchyPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-slate-300 font-medium mb-1">Menu Assignment</label>
-                  <div className="max-h-52 overflow-y-auto space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">
-                    {navigation.map((group) => (
-                      <fieldset key={group.label} className="space-y-1">
-                        <legend className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{group.label}</legend>
-                        {group.items.map((item) => {
-                          const key = menuKey(item);
-                          return (
-                            <label key={key} className="flex items-center gap-2 text-slate-300">
-                              <input
-                                type="checkbox"
-                                checked={selectedMenuAccess.includes(key)}
-                                onChange={(event) => setSelectedMenuAccess((current) => event.target.checked
-                                  ? [...current, key]
-                                  : current.filter((value) => value !== key))}
-                                className="accent-indigo-500"
-                              />
-                              <span>{item.label}</span>
-                            </label>
-                          );
-                        })}
-                      </fieldset>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-slate-300 font-medium mb-1">Role</label>
@@ -1418,6 +1506,14 @@ export default function OrganizationHierarchyPage() {
                       <option value="security_officer">Security Officer</option>
                       <option value="auditor">Auditor / Compliance</option>
                       <option value="company_admin">Company Admin</option>
+                    </select>
+                    <select
+                      value={newEmpCustomRoleId}
+                      onChange={(e) => setNewEmpCustomRoleId(e.target.value)}
+                      className="w-full mt-2 bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs"
+                    >
+                      <option value="">Use built-in role menu</option>
+                      {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
                     </select>
                   </div>
 
@@ -1434,19 +1530,23 @@ export default function OrganizationHierarchyPage() {
 
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Assigned Location Scope *</label>
-                  <select
-                    required
-                    value={newEmpOrgNodeId}
-                    onChange={(e) => setNewEmpOrgNodeId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
-                  >
-                    <option value="">-- Choose Branch or Location Group --</option>
-                    {flatNodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        [{n.type.toUpperCase()}] {n.name}
-                      </option>
+                  <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 space-y-1">
+                    {flatNodes.filter((n) => ["company", "zone", "region", "branch"].includes(n.type)).map((n) => (
+                      <label key={n.id} className="flex items-center gap-2 text-slate-300 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={newEmpScopeNodeIds.includes(n.id)}
+                          onChange={(event) => setNewEmpScopeNodeIds((current) => event.target.checked
+                            ? [...current, n.id]
+                            : current.filter((value) => value !== n.id))}
+                          className="accent-emerald-500"
+                        />
+                        <span>[{n.type.toUpperCase()}] {n.name}</span>
+                        {newEmpScopeNodeIds[0] === n.id && <span className="text-emerald-400 ml-auto">Primary</span>}
+                      </label>
                     ))}
-                  </select>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Select branches, zones, or regions. A higher-level scope includes its descendants; nothing outside these scopes is visible.</p>
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
@@ -1491,6 +1591,14 @@ export default function OrganizationHierarchyPage() {
               </div>
 
               <form onSubmit={handleAssignPermission} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Menu Role</label>
+                  <select value={selectedCustomRoleId} onChange={(e) => setSelectedCustomRoleId(e.target.value)} className="w-full bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs">
+                    <option value="">Use built-in role menu ({selectedEmployee.role})</option>
+                    {roles.map((role) => <option key={role.id} value={role.id}>{role.name} ({role.menuAccess.length} menus)</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-500 mt-1">The selected role controls menus shown after the employee logs in.</p>
+                </div>
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Target Location Node</label>
                   <select

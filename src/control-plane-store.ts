@@ -1928,6 +1928,10 @@ export interface UserManagementStore {
   removeUserOrganizationAssignment(userId: string, nodeId: string): Promise<void>;
   getUserCameraAccessOverview(userId: string): Promise<any>;
   getUserAuditLog(userId: string, limit: number, offset: number): Promise<any>;
+  listCustomRoles(tenantId: string): Promise<any[]>;
+  createCustomRole(tenantId: string, input: any): Promise<any>;
+  updateCustomRole(id: string, tenantId: string, input: any): Promise<any>;
+  deleteCustomRole(id: string, tenantId: string): Promise<void>;
 }
 
 export interface AuthenticationStore {

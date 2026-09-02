@@ -447,6 +447,11 @@ export async function registerAuthRoutes(
           email: userDetails?.email ?? user.email,
           displayName: userDetails?.displayName ?? user.displayName,
           role: userDetails?.role ?? user.role,
+          customRoleId: userDetails?.customRoleId ?? user.customRoleId,
+          customRoleName: userDetails?.customRoleName ?? user.customRoleName,
+          menuAccess: userDetails?.menuAccess ?? user.menuAccess,
+          preferences: userDetails?.preferences ?? user.preferences,
+          organizations: userDetails?.organizations ?? user.organizations,
           tenantId: validTenantId,
           status: "active",
         };

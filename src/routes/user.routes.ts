@@ -45,6 +45,7 @@ const createUserSchema = z.object({
     .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
     .optional(),
   faceEnrolled: z.boolean().optional(),
+  customRoleId: z.string().uuid().optional().nullable(),
 });
 
 const updateUserSchema = z.object({
@@ -83,6 +84,17 @@ const updateUserSchema = z.object({
     .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
     .optional(),
   faceEnrolled: z.boolean().optional(),
+  customRoleId: z.string().uuid().optional().nullable(),
+});
+
+const customRoleSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(300).optional(),
+  baseRole: z.enum([
+    "super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager",
+    "area_manager", "branch_manager", "operator", "viewer", "security_officer", "auditor",
+  ]),
+  menuAccess: z.array(z.string().min(1)).max(500),
 });
 
 const assignOrgSchema = z.object({
@@ -105,6 +117,39 @@ export async function registerUserRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore & UserManagementStore & AuthenticationStore,
 ) {
+  app.get("/v1/roles", async (request, reply) => {
+    if (!canManageRoles(request.currentUser.role)) return reply.code(403).send({ error: "forbidden" });
+    return { data: await store.listCustomRoles(request.currentUser.tenantId) };
+  });
+
+  app.post("/v1/roles", async (request, reply) => {
+    const body = customRoleSchema.parse(request.body);
+    if (!canManageRoles(request.currentUser.role) || !canAssignRole(request.currentUser.role, body.baseRole)) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    const role = await store.createCustomRole(request.currentUser.tenantId, {
+      ...body, createdBy: request.currentUser.id,
+    });
+    return reply.code(201).send(role);
+  });
+
+  app.patch("/v1/roles/:id", async (request, reply) => {
+    const { id } = userIdSchema.parse(request.params);
+    const body = customRoleSchema.partial().parse(request.body);
+    if (!canManageRoles(request.currentUser.role) || (body.baseRole && !canAssignRole(request.currentUser.role, body.baseRole))) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+    const role = await store.updateCustomRole(id, request.currentUser.tenantId, body);
+    return role ? role : reply.code(404).send({ error: "role_not_found" });
+  });
+
+  app.delete("/v1/roles/:id", async (request, reply) => {
+    const { id } = userIdSchema.parse(request.params);
+    if (!canManageRoles(request.currentUser.role)) return reply.code(403).send({ error: "forbidden" });
+    await store.deleteCustomRole(id, request.currentUser.tenantId);
+    return reply.code(204).send();
+  });
+
   // List users
   app.get("/v1/users", async (request) => {
     const query = z
@@ -645,4 +690,8 @@ function canManageRole(
   if (!actorRole || !targetRole) return false;
   if (actorRole === "super_admin") return true;
   return roleRank[actorRole] > roleRank[targetRole];
+}
+
+function canManageRoles(actorRole: keyof typeof roleRank | undefined) {
+  return actorRole === "super_admin" || actorRole === "company_admin" || actorRole === "hq_admin";
 }
