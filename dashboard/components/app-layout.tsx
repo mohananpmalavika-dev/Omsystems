@@ -586,12 +586,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   const closeSidebar = () => setSidebarOpen(false);
   const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.stopPropagation();
     closeSidebar();
     if (routePath(activeRoute ?? "") === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
       e.preventDefault();
       window.location.assign(href);
+      return;
     }
   };
+
   const persistOpenGroups = (next: Set<string>) => {
     setOpenGroups(next);
     try {
@@ -655,19 +658,19 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </button>
 
         <div className="nav-shortcuts" aria-label="Quick access">
-          {visibleHrefs.has("/") && <Link href="/" prefetch={true} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
+          {visibleHrefs.has("/") && <Link href="/" prefetch={false} className={isActive("/") ? "active" : ""} onClick={handleNavClick("/")}>
             <LayoutDashboard size={15} /><span>Overview</span>
           </Link>}
-          {visibleHrefs.has("/control-room") && <Link href="/control-room" prefetch={true} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
+          {visibleHrefs.has("/control-room") && <Link href="/control-room" prefetch={false} className={isActive("/control-room") ? "active" : ""} onClick={handleNavClick("/control-room")}>
             <MonitorPlay size={15} /><span>Live</span>
           </Link>}
-          {visibleHrefs.has("/operations/alerts") && <Link href="/operations/alerts" prefetch={true} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
+          {visibleHrefs.has("/operations/alerts") && <Link href="/operations/alerts" prefetch={false} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
             <Radar size={15} /><span>Alerts</span>
           </Link>}
         </div>
 
         <div className="nav-utility">
-          <Link href="/modules" prefetch={true} className={isActive("/modules") ? "active" : ""} onClick={handleNavClick("/modules")}>
+          <Link href="/modules" prefetch={false} className={isActive("/modules") ? "active" : ""} onClick={handleNavClick("/modules")}>
             <LayoutGrid size={14} />
             <span>All modules</span>
             <small>{moduleCount}</small>
@@ -710,7 +713,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                   <Link
                     key={`${group.label}-${item.label}`}
                     href={item.href}
-                    prefetch={true}
+                    prefetch={false}
                     className={isActive(item.href) ? "active" : ""}
                     onClick={handleNavClick(item.href)}
                     aria-current={isActive(item.href) ? "page" : undefined}
@@ -730,6 +733,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             );
           })}
         </nav>
+
 
         <div className="sidebar-footer">
           <Link href="/support" className="sidebar-help" onClick={handleNavClick("/support")}>

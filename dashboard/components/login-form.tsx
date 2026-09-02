@@ -147,18 +147,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        let targetPath = "/";
-        try {
-          const orgTree = await organizationApi.getTree().catch(() => null);
-          const hasOrg = orgTree?.data && Array.isArray(orgTree.data) && orgTree.data.some((n: any) => n.type === "company" || n.nodeType === "company");
-          if (!hasOrg) {
-            targetPath = "/admin";
-          }
-        } catch {
-          targetPath = "/admin";
-        }
-        router.push(targetPath);
+        window.location.href = "/";
       }
+
     } catch (err: any) {
       console.error("Login failed:", err);
       setError(
