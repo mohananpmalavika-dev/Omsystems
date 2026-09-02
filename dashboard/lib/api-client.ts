@@ -59,6 +59,7 @@ function redirectToLogin() {
     loginRedirectInProgress = true;
 
     // Clear all session data
+    sessionStorage.clear();
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
@@ -276,22 +277,23 @@ export const authApi = {
     });
 
     if (typeof window !== 'undefined') {
-      // Browser sessions are cookie-backed. Never carry an old legacy token
-      // into a new login where it could be sent by compatibility callers.
+      // Browser sessions are cookie-backed and session-scoped.
+      sessionStorage.clear();
+      sessionStorage.setItem('sentinel_browser_session', 'active');
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      sessionStorage.removeItem('activitySessionId');
-      sessionStorage.removeItem('activityAccessToken');
-      sessionStorage.removeItem('currentPageVisitId');
       localStorage.setItem('sentinel_login_time', Date.now().toString());
       loginRedirectInProgress = false;
       if (response.accessToken) {
+        sessionStorage.setItem('accessToken', response.accessToken);
         localStorage.setItem('accessToken', response.accessToken);
       }
       if (response.refreshToken) {
+        sessionStorage.setItem('refreshToken', response.refreshToken);
         localStorage.setItem('refreshToken', response.refreshToken);
       }
       if (response.user) {
+        sessionStorage.setItem('user', JSON.stringify(response.user));
         localStorage.setItem('user', JSON.stringify(response.user));
       }
     }
@@ -302,18 +304,22 @@ export const authApi = {
   logout: async () => {
     await fetchApi('/v1/auth/logout', { method: 'POST' });
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
     }
   },
 
   logoutAll: async () => {
     await fetchApi<{ success: boolean }>('/v1/auth/logout-all', { method: 'POST' });
     if (typeof window !== 'undefined') {
+      sessionStorage.clear();
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
     }
   },
 
@@ -361,12 +367,24 @@ export const authApi = {
       method: 'POST', body: JSON.stringify({ token, newPassword }),
     }),
 
-  listSessions: () => fetchApi<{ data: Array<{
-    id: string; ipAddress?: string; userAgent?: string; lastActivityAt: string;
-    createdAt: string; expiresAt: string;
-  }> }>('/v1/auth/sessions'),
+  listSessions: () => fetchApi<{
+    data: Array<{
+      id: string;
+      ipAddress?: string;
+      userAgent?: string;
+      lastActivityAt: string;
+      createdAt: string;
+      expiresAt: string;
+      isCurrent?: boolean;
+    }>;
+    currentSessionId?: string | null;
+  }>('/v1/auth/sessions'),
 
-  revokeSession: (id: string) => fetchApi<void>(`/v1/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  revokeSession: (id: string) =>
+    fetchApi<{ success?: boolean; revokedSessionId?: string; isCurrentSession?: boolean }>(
+      `/v1/auth/sessions/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
 
   changePassword: (userId: string, currentPassword: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/change-password`, {
