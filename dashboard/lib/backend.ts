@@ -154,45 +154,62 @@ export async function startLive(
     // use the dashboard's server-to-server gateway. This also replaces stale
     // quick-tunnel hostnames advertised by an older edge heartbeat.
     const defaultMediaGateway = isProduction ? "http://media-gateway:8090" : "http://localhost:8090";
-    const mediaGatewayUrl = routePreference === "public"
-      ? publicMediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway)
-      : controlSession.mediaGatewayUrl ?? runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway);
+    const internalMediaGateway = runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway);
+    const primaryGateway = routePreference === "public"
+      ? publicMediaGatewayUrl ?? internalMediaGateway
+      : controlSession.mediaGatewayUrl ?? internalMediaGateway;
 
     if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
-        isBrowserDirectMediaUrl(mediaGatewayUrl) && (!isProduction || isHttpsUrl(mediaGatewayUrl))) {
+        isBrowserDirectMediaUrl(primaryGateway) && (!isProduction || isHttpsUrl(primaryGateway))) {
       return {
         cameraId,
         direct: {
-          url: new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+          url: new URL("/v1/live/start", normalizeHttpOrigin(primaryGateway)).toString(),
           controlPlaneToken: controlSession.token,
         },
       };
     }
 
-    let mediaResponse: Response;
-    try {
-      mediaResponse = await fetch(
-        new URL("/v1/live/start", normalizeHttpOrigin(mediaGatewayUrl)),
-        {
-          method: "POST",
-          headers: bridgeHeaders(),
-          body: JSON.stringify({ controlPlaneToken: controlSession.token }),
-          cache: "no-store",
-          signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
-        },
-      );
-    } catch (error) {
-      throw new Error("media_gateway_unavailable", { cause: error });
+    const gatewayCandidates = [
+      primaryGateway,
+      ...(primaryGateway !== internalMediaGateway ? [internalMediaGateway] : []),
+    ];
+
+    let mediaResponse: Response | undefined;
+    let chosenGatewayUrl = primaryGateway;
+    let lastError: Error | undefined;
+
+    for (const gwUrl of gatewayCandidates) {
+      try {
+        const res = await fetch(
+          new URL("/v1/live/start", normalizeHttpOrigin(gwUrl)),
+          {
+            method: "POST",
+            headers: bridgeHeaders(),
+            body: JSON.stringify({ controlPlaneToken: controlSession.token }),
+            cache: "no-store",
+            signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS),
+          },
+        );
+        if (res.ok) {
+          mediaResponse = res;
+          chosenGatewayUrl = gwUrl;
+          break;
+        }
+        const body = await res.json().catch(() => ({})) as { error?: unknown };
+        lastError = new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
+      } catch (error) {
+        lastError = new Error("media_gateway_unavailable", { cause: error });
+      }
     }
 
-    if (!mediaResponse.ok) {
-      const body = await mediaResponse.json().catch(() => ({})) as { error?: unknown };
-      throw new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
+    if (!mediaResponse) {
+      throw lastError ?? new Error("media_gateway_unavailable");
     }
 
     return rewriteLiveMediaUrls(
       await mediaResponse.json() as LiveSessionResponse,
-      mediaGatewayUrl,
+      chosenGatewayUrl,
     );
   } catch (error) {
     throw error;

@@ -100,7 +100,7 @@ export class QuickTunnelSupervisor {
         // probe failed
       }
       this.consecutiveFailures++;
-      if (this.consecutiveFailures >= 2) {
+      if (this.consecutiveFailures >= 5) {
         logger.warn("Quick tunnel is unhealthy over consecutive probes; rotating tunnel", {
           publicUrl: current,
           consecutiveFailures: this.consecutiveFailures,
@@ -619,13 +619,13 @@ async function startQuickTunnel(executable: string, origin: string, cwd: string)
   const child = startManagedProcess("Cloudflare Tunnel", executable, quickTunnelArgs(origin), cwd);
   try {
     const publicUrl = await new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 30 seconds")), 30_000);
+      const timeout = setTimeout(() => reject(new Error("Cloudflare quick tunnel did not provide a URL within 60 seconds")), 60_000);
       let output = "";
       let resolved = false;
       const inspect = (chunk: Buffer) => {
         const text = chunk.toString("utf8");
         output = `${output}${text}`.slice(-8_192);
-        if (/Unauthorized: Tunnel not found/i.test(text) || /failed to serve incoming request/i.test(text)) {
+        if (/Unauthorized: Tunnel not found/i.test(text)) {
           logger.warn("Cloudflare quick tunnel was invalidated by edge server; triggering restart");
           child.kill();
         }
@@ -695,8 +695,8 @@ async function isHttpReady(url: URL) {
 async function waitForPublicGateway(url: URL, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    try { if ((await fetch(url, { signal: AbortSignal.timeout(2_000) })).ok) return; } catch { /* retry */ }
-    await delay(500);
+    try { if ((await fetch(url, { signal: AbortSignal.timeout(6_000) })).ok) return; } catch { /* retry */ }
+    await delay(1000);
   }
   throw new Error(`Public media tunnel is not reachable at ${url.origin}`);
 }

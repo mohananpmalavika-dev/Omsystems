@@ -642,6 +642,39 @@ export class CameraRepository {
   }
 
   async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
+    const route = await this.pool.query<{
+      edge_agent_id: string | null;
+      agent_id: string | null;
+      public_media_url: string | null;
+      local_media_url: string | null;
+      agent_status: string | null;
+      last_seen_at: Date | null;
+    }>(
+      `SELECT
+         camera.edge_agent_id,
+         agent.id AS agent_id,
+         agent.public_media_url,
+         agent.local_media_url,
+         agent.status AS agent_status,
+         agent.last_seen_at
+       FROM cameras camera
+       LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
+       WHERE camera.id = $1
+       LIMIT 1`,
+      [cameraId],
+    );
+    const row = route.rows[0];
+    if (row?.edge_agent_id) {
+      if (!row.agent_id) {
+        throw new Error("edge_agent_not_found");
+      }
+      const lastSeenMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
+      const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
+      if (row.agent_status === "offline" || isStale) {
+        throw new Error("edge_agent_offline");
+      }
+    }
+
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
     const tokenHash = createHash("sha256").update(token).digest();
@@ -652,19 +685,8 @@ export class CameraRepository {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, cameraId, userId, tokenHash, expiresAt, purpose],
     );
-    const route = await this.pool.query<{
-      public_media_url: string | null;
-      local_media_url: string | null;
-    }>(
-      `SELECT agent.public_media_url, agent.local_media_url
-       FROM cameras camera
-       LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
-       WHERE camera.id = $1
-       LIMIT 1`,
-      [cameraId],
-    );
-    const mediaGatewayUrl = route.rows[0]?.public_media_url ?? undefined;
-    const localMediaGatewayUrl = route.rows[0]?.local_media_url ?? undefined;
+    const mediaGatewayUrl = row?.public_media_url ?? undefined;
+    const localMediaGatewayUrl = row?.local_media_url ?? undefined;
     return {
       id,
       cameraId,

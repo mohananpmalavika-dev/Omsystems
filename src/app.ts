@@ -1587,11 +1587,19 @@ export async function buildApp(options?: {
       await audit(request, store, "live_session.created", camera.nodeId, "denied");
       return;
     }
-    const session = await store.createLiveSession(id, request.currentUser.id);
-    await audit(request, store, "live_session.created", camera.nodeId, "success", {
-      sessionId: session.id,
-    });
-    return reply.code(201).send(session);
+    try {
+      const session = await store.createLiveSession(id, request.currentUser.id);
+      await audit(request, store, "live_session.created", camera.nodeId, "success", {
+        sessionId: session.id,
+      });
+      return reply.code(201).send(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "edge_agent_not_found" || message === "edge_agent_offline") {
+        return reply.code(503).send({ error: message });
+      }
+      throw error;
+    }
   });
 
   app.post("/v1/cameras/:id/talk-sessions", async (request, reply) => {
@@ -1609,15 +1617,23 @@ export async function buildApp(options?: {
         reason: camera.capabilities.talkback?.reason ?? "device_does_not_advertise_two_way_audio",
       });
     }
-    const session = await store.createLiveSession(id, request.currentUser.id, "talk");
-    await audit(request, store, "talk_session.created", camera.nodeId, "success", {
-      sessionId: session.id,
-      cameraId: camera.id,
-      branchId: camera.branchId,
-      sourceType: camera.sourceType ?? "ip-camera",
-      recorderChannel: camera.recorderChannel ?? camera.channel,
-    });
-    return reply.code(201).send(session);
+    try {
+      const session = await store.createLiveSession(id, request.currentUser.id, "talk");
+      await audit(request, store, "talk_session.created", camera.nodeId, "success", {
+        sessionId: session.id,
+        cameraId: camera.id,
+        branchId: camera.branchId,
+        sourceType: camera.sourceType ?? "ip-camera",
+        recorderChannel: camera.recorderChannel ?? camera.channel,
+      });
+      return reply.code(201).send(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "edge_agent_not_found" || message === "edge_agent_offline") {
+        return reply.code(503).send({ error: message });
+      }
+      throw error;
+    }
   });
 
   app.get("/v1/cameras/:id/recording", async (request, reply) => {

@@ -47,6 +47,7 @@ function formatLiveError(reason: string) {
     resource_not_found: "The camera resource was not found",
     control_plane_unavailable: "The control plane is unreachable",
     edge_agent_not_found: "The camera edge agent is unavailable",
+    edge_agent_offline: "Branch edge gateway is offline",
     invalid_bridge_identity: "The media bridge identity is invalid",
     internal_error: "The control plane failed to create a live session",
     local_media_gateway_requires_https: "The camera gateway needs an HTTPS tunnel",

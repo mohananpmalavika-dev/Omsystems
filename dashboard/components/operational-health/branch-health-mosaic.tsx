@@ -29,6 +29,7 @@ import {
   type BranchSequence,
 } from "./branch-mosaic-model";
 import type { BranchSummaryFilter } from "./branch-summary-model";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 const MIN_VIEWPORT_HEIGHT = 280;
 
@@ -197,7 +198,8 @@ export function BranchHealthMosaic({
   const visible = sequencedBranches.slice(startRow * metrics.columns, endRow * metrics.columns);
 
   return (
-    <section id="branch-health-mosaic" className={`branch-mosaic card mb-6 scroll-mt-4 ${fullscreen ? "branch-mosaic-fullscreen" : ""}`} aria-label="Enterprise branch health mosaic">
+    <ErrorBoundary fallback={<div className="p-4 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-sm">Enterprise Branch Mosaic is currently unavailable.</div>}>
+      <section id="branch-health-mosaic" className={`branch-mosaic card mb-6 scroll-mt-4 ${fullscreen ? "branch-mosaic-fullscreen" : ""}`} aria-label="Enterprise branch health mosaic">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-gray-900 tracking-tight">Enterprise Branch Mosaic</h3>
@@ -330,15 +332,25 @@ export function BranchHealthMosaic({
               gridTemplateColumns: `repeat(${metrics.columns}, minmax(0, 1fr))`,
             }}
           >
-            {visible.map((branch) => (
-              <BranchTile
-                key={branch.id}
-                branch={branch}
-                height={metrics.rowHeight}
-                compact={metrics.compact}
-                ultraCompact={metrics.ultraCompact}
-                statusOnly={metrics.statusOnly}
-              />
+            {visible.map((branch, index) => (
+              branch && branch.id ? (
+                <BranchTile
+                  key={branch.id}
+                  branch={branch}
+                  height={metrics.rowHeight}
+                  compact={metrics.compact}
+                  ultraCompact={metrics.ultraCompact}
+                  statusOnly={metrics.statusOnly}
+                />
+              ) : (
+                <div
+                  key={branch?.id ?? `branch-placeholder-${index}`}
+                  style={{ height: metrics.rowHeight }}
+                  className="branch-mosaic-tile flex items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50/50 p-2 text-center text-xs text-gray-400"
+                >
+                  Unavailable
+                </div>
+              )
             ))}
           </div>
         </div>
@@ -347,6 +359,7 @@ export function BranchHealthMosaic({
         )}
       </div>
     </section>
+    </ErrorBoundary>
   );
 }
 

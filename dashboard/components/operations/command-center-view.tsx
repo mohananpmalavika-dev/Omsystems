@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
+import { ErrorBoundary } from "../ui/error-boundary";
 
 export function CommandCenterView() {
   const [summary, setSummary] = useState<any | null>(null);
@@ -62,22 +63,29 @@ export function CommandCenterView() {
     setLoadError(null);
     try {
       const [sumRes, branchRes] = await Promise.all([
-        fetch("/api/control/v1/operations/command-center", { credentials: "include" }),
-        fetch("/api/control/v1/operations/branches", { credentials: "include" }),
+        fetch("/api/control/v1/operations/command-center", { credentials: "include" }).catch(() => null),
+        fetch("/api/control/v1/operations/branches", { credentials: "include" }).catch(() => null),
       ]);
-      const sumData = await sumRes.json().catch(() => ({}));
-      const branchData = await branchRes.json().catch(() => ({}));
+      const sumData = sumRes ? await sumRes.json().catch(() => ({})) : {};
+      const branchData = branchRes ? await branchRes.json().catch(() => ({})) : {};
 
-      if (!sumRes.ok || !sumData?.success || !sumData?.data) {
-        throw new Error(sumData?.error || "Command Center summary is unavailable");
-      }
-      if (!branchRes.ok || !branchData?.success || !Array.isArray(branchData?.data)) {
-        throw new Error(branchData?.error || "Branch inventory is unavailable");
+      if (sumData?.success && sumData?.data) {
+        setSummary(sumData.data);
+      } else if (sumRes && !sumRes.ok) {
+        setLoadError(sumData?.error || "Command Center summary is unavailable");
       }
 
-      setSummary(sumData.data);
-      setBranches(branchData.data);
-      setHasBranchData(true);
+      if (branchData?.success && Array.isArray(branchData?.data)) {
+        setBranches(branchData.data);
+        setHasBranchData(true);
+      } else {
+        setBranches([]);
+        setHasBranchData(false);
+      }
+
+      if (!sumData?.data && (!branchData?.data || branchData.data.length === 0) && (!sumRes?.ok || !branchRes?.ok)) {
+        setLoadError("Unable to load live fleet telemetry");
+      }
     } catch (err) {
       console.error("Failed to load command center data:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load live fleet telemetry");
@@ -243,7 +251,8 @@ export function CommandCenterView() {
   const predicted = summary?.predictedFailuresSummary?.nextLikelyFailure;
 
   return (
-    <div className="command-center-page space-y-4 pb-12 text-slate-100 font-sans">
+    <ErrorBoundary fallback={<div className="p-6 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 text-sm">Failed to render Surveillance Command Center. Please refresh or check connection.</div>}>
+      <div className="command-center-page space-y-4 pb-12 text-slate-100 font-sans">
       {/* Top Banner & Header */}
       <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
         <div>
@@ -868,6 +877,7 @@ export function CommandCenterView() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }

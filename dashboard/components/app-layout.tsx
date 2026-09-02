@@ -721,8 +721,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </div>
 
         <nav className="main-nav" aria-label="Main navigation">
-          {navigation.map((group) => {
-            const groupIsActive = group.items.some((item) => isActive(item.href));
+          {(Array.isArray(visibleNavigation) ? visibleNavigation : navigation).map((group) => {
+            if (!group) return null;
+            const items = Array.isArray(group.items) ? group.items : [];
+            const groupIsActive = items.some((item) => item && isActive(item.href));
             const GroupIcon = group.icon;
             return (
             <details
@@ -747,11 +749,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               }}
             >
               <summary>
-                <span className="nav-group-label"><GroupIcon size={14} /><span>{group.label}</span></span>
-                <span className="nav-group-meta"><small>{group.items.length}</small><ChevronRight size={13} /></span>
+                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{group.label}</span></span>
+                <span className="nav-group-meta"><small>{items.length}</small><ChevronRight size={13} /></span>
               </summary>
               <div className="nav-items">
-              {group.items.map((item) => {
+              {items.map((item) => {
+                if (!item) return null;
                 const Icon = item.icon;
                 const count = item.badge === "cameras" ? cameraCount : incidentCount;
                 return (

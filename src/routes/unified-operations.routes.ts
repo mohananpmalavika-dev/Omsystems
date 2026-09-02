@@ -20,8 +20,13 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
   const handleGetCommandCenter = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = requireUser(request, reply);
     if (!user) return;
-    const summary = await unifiedOperationsService.getCommandCenterSummary(user.tenantId, store, user);
-    return reply.send({ success: true, data: summary });
+    try {
+      const summary = await unifiedOperationsService.getCommandCenterSummary(user.tenantId, store, user);
+      return reply.send({ success: true, data: summary });
+    } catch (err) {
+      console.error("Failed to get command center summary", err);
+      return reply.send({ success: false, error: "Failed to get command center summary" });
+    }
   };
 
   app.get("/api/v1/operations/command-center", handleGetCommandCenter);
@@ -33,8 +38,13 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
   const handleGetAttentionRequired = async (request: FastifyRequest, reply: FastifyReply) => {
     const user = requireUser(request, reply);
     if (!user) return;
-    const summary = await unifiedOperationsService.getCommandCenterSummary(user.tenantId, store, user);
-    return reply.send({ success: true, count: summary.attentionRequired.length, data: summary.attentionRequired });
+    try {
+      const summary = await unifiedOperationsService.getCommandCenterSummary(user.tenantId, store, user);
+      return reply.send({ success: true, count: summary.attentionRequired?.length ?? 0, data: summary.attentionRequired ?? [] });
+    } catch (err) {
+      console.error("Failed to get attention required", err);
+      return reply.send({ success: true, count: 0, data: [] });
+    }
   };
 
   app.get("/api/v1/operations/attention-required", handleGetAttentionRequired);

@@ -58,6 +58,7 @@ function publicLiveError(error: unknown) {
     "resource_not_found",
     "control_plane_unavailable",
     "edge_agent_not_found",
+    "edge_agent_offline",
     "invalid_bridge_identity",
     "unauthenticated",
     "internal_error",
@@ -75,6 +76,6 @@ function publicLiveStatus(code: string) {
   if (code === "unauthenticated") return 401;
   if (code === "forbidden" || code === "approval_required") return 403;
   if (code === "camera_not_found" || code === "resource_not_found") return 404;
-  if (code === "control_plane_unavailable" || code === "media_gateway_unavailable" || code === "edge_agent_not_found") return 503;
+  if (code === "control_plane_unavailable" || code === "media_gateway_unavailable" || code === "edge_agent_not_found" || code === "edge_agent_offline") return 503;
   return 502;
 }

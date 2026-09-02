@@ -184,15 +184,16 @@ export class UnifiedOperationsService {
   }
 
   async getFleetBranchSummaries(tenantId: string, store?: ControlPlaneStore, user?: User): Promise<BranchOperationalView[]> {
-    if (!store) return [];
-    const nodes = user
-      ? await store.listAccessibleNodes(user, "live:view", "branch")
-      : typeof (store as { listOrganizationNodes?: unknown }).listOrganizationNodes === "function"
-        ? await (store as unknown as { listOrganizationNodes: (tenantId: string, type: string, parent?: string, recursive?: boolean) => Promise<Array<{ id: string }>> }).listOrganizationNodes(tenantId, "branch", undefined, true)
-        : [];
-    const snapshots = new BranchOperationalSnapshotService(store);
-    const incidents = await alertIncidentRepository.list();
-    const views: BranchOperationalView[] = [];
+    try {
+      if (!store) return [];
+      const nodes = user
+        ? await store.listAccessibleNodes(user, "live:view", "branch")
+        : typeof (store as { listOrganizationNodes?: unknown }).listOrganizationNodes === "function"
+          ? await (store as unknown as { listOrganizationNodes: (tenantId: string, type: string, parent?: string, recursive?: boolean) => Promise<Array<{ id: string }>> }).listOrganizationNodes(tenantId, "branch", undefined, true)
+          : [];
+      const snapshots = new BranchOperationalSnapshotService(store);
+      const incidents = await alertIncidentRepository.list();
+      const views: BranchOperationalView[] = [];
     for (const node of nodes) {
       const snapshot = await snapshots.getBranchSnapshot(tenantId, node.id, false, user);
       if (!snapshot) continue;
@@ -253,7 +254,11 @@ export class UnifiedOperationsService {
         openIncidents: incidents.filter((incident) => incident.branchId === snapshot.branchId && incident.status !== "RESOLVED").length,
       });
     }
-    return views;
+      return views;
+    } catch (err) {
+      console.error("Failed to get fleet branch summaries:", err);
+      return [];
+    }
   }
 
   async getBranch360Workspace(branchId: string, tenantId: string, store?: ControlPlaneStore, user?: User): Promise<Branch360Workspace | null> {
