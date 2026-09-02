@@ -1,15 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
-import { StreamProfileSelector } from "../../../../../src/media/services/stream-profile-selector.js";
-import type { StreamQuality } from "../../../../../src/media/domain/media-session.types.js";
+
+export type StreamQuality = "MAINSTREAM" | "SUBSTREAM" | "AUTO";
+
+let globalPreference: StreamQuality =
+  (process.env.ADMIN_STREAM_PREFERENCE as StreamQuality) || "AUTO";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const currentPreference = StreamProfileSelector.getGlobalAdminPreference();
   return NextResponse.json({
-    preference: currentPreference,
+    preference: globalPreference,
     description:
-      currentPreference === "MAINSTREAM"
+      globalPreference === "MAINSTREAM"
         ? "Global Main Stream Enforced (High Definition 1080p/4K across all cameras)"
-        : currentPreference === "SUBSTREAM"
+        : globalPreference === "SUBSTREAM"
         ? "Global Sub Stream Enforced (Low Bandwidth 640x480 across all cameras)"
         : "Adaptive Dynamic (Auto-switches between Main and Sub Stream based on grid size & network)",
     availableOptions: ["MAINSTREAM", "SUBSTREAM", "AUTO"],
@@ -29,7 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    StreamProfileSelector.setGlobalAdminPreference(preference);
+    globalPreference = preference;
 
     return NextResponse.json({
       success: true,
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { error: error.message || "Failed to update stream preference" },
+      { error: error?.message || "Failed to update stream preference" },
       { status: 500 }
     );
   }

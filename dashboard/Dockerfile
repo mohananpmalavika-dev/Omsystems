@@ -3,6 +3,7 @@ WORKDIR /app
 COPY package*.json ./
 COPY dashboard/package*.json ./dashboard/
 RUN npm install --legacy-peer-deps && cd dashboard && npm install --legacy-peer-deps
+COPY packages/ ./packages/
 COPY src/ ./src/
 COPY backend/ ./backend/
 COPY dashboard/ ./dashboard/
@@ -11,8 +12,10 @@ ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ARG MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
 ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN npm run build
+
 
 FROM node:22-alpine
 ENV NODE_ENV=production
