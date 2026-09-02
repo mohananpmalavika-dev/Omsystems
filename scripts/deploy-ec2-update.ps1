@@ -36,7 +36,7 @@ Write-Host "Waiting for execution to complete..." -ForegroundColor Yellow
 
 Start-Sleep -Seconds 5
 
-for ($i = 0; $i -lt 90; $i++) {
+for ($i = 0; $i -lt 180; $i++) {
     $status = aws ssm get-command-invocation `
         --command-id $cmd `
         --instance-id $instanceId `
