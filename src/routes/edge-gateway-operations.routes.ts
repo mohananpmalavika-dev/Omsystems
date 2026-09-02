@@ -280,6 +280,9 @@ export async function registerEdgeGatewayOperationsRoutes(
       username: z.string().trim().min(1).max(128),
       password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
       cameraIp: z.string().ip(),
+      cameraId: z.string().min(1).optional(),
+      channel: z.number().int().positive().optional(),
+      recorderId: z.string().min(1).optional(),
     }).safeParse(request.body);
     if (!parsedBody.success) {
       return reply.code(400).send({
@@ -288,6 +291,15 @@ export async function registerEdgeGatewayOperationsRoutes(
       });
     }
     const body = parsedBody.data;
+    if (body.cameraId) {
+      const camera = await store.getCamera(body.cameraId);
+      if (!camera || camera.branchId !== branchId || (camera.edgeAgentId && camera.edgeAgentId !== id)) {
+        return reply.code(404).send({ error: "camera_not_found", message: "The selected device is not assigned to this branch gateway." });
+      }
+      if (camera.ipAddress && camera.ipAddress !== body.cameraIp) {
+        return reply.code(409).send({ error: "camera_identity_mismatch", message: "The selected device number does not match its saved IP address." });
+      }
+    }
     const commandPublicKey = await store.getEdgeAgentCommandPublicKey(id);
     if (!commandPublicKey) {
       return reply.code(409).send({
@@ -304,7 +316,12 @@ export async function registerEdgeGatewayOperationsRoutes(
     const command = await store.createEdgeCommand({
       edgeAgentId: id,
       type: "update-credentials",
-      payload: { envelope, target: { ipAddress: body.cameraIp } },
+      payload: { envelope, target: {
+        ipAddress: body.cameraIp,
+        ...(body.cameraId ? { cameraId: body.cameraId } : {}),
+        ...(body.channel ? { channel: body.channel } : {}),
+        ...(body.recorderId ? { recorderId: body.recorderId } : {}),
+      } },
       requestedBy: request.currentUser.id,
     });
     await writeGatewayAudit(request, store, branchId, "edge_gateway.camera_credentials_requested", {
