@@ -41,7 +41,7 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider>
           <OrgBrandingProvider>
             <SessionProvider>

@@ -1,4 +1,7 @@
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$env:PYTHONIOENCODING = "utf-8"
 $instanceId = "i-03fda9a80e75865fd"
 
 Write-Host "Triggering deployment update on AWS EC2 ($instanceId)..." -ForegroundColor Cyan
