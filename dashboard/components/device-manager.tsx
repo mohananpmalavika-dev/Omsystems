@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
-import { expandDirectProbeTargets } from "@/lib/direct-ip-probe";
+import { expandDirectProbeTargets, isPrivateIpv4 } from "@/lib/direct-ip-probe";
 import { discoveryDeviceTypeLabel, discoveryModelLabel } from "@/lib/discovery-display";
 import { BranchConnectivityPanel } from "@/components/branch-connectivity-panel";
 import { ProvisioningRun } from "@/components/provisioning-run";
@@ -242,39 +242,39 @@ export function DeviceManager() {
     setNotice("Camera scanning was stopped.");
   }
 
-  async function publishDirectProbeDiscoveries(results: DirectProbeResult[]) {
+  async function publishDirectProbeDiscoveries(results: DirectProbeResult[], allowPrivateOffline = false) {
     if (!selectedBranch) throw new Error("Select a branch before sending devices to discovery.");
     const gateway = onlineGateway ?? gateways[0];
     if (!gateway) {
       throw new Error("A Branch Gateway or local scanner is required to place devices in Device discovery.");
     }
 
-    const devices = results.filter((result) => result.online).map((result) => ({
-      edgeAgentId: gateway.id,
-      discoveryMethod: "direct-ip-range-probe",
-      vendor: result.vendor || "other",
-      manufacturer: result.manufacturer || result.vendor || "Unknown",
-      model: result.model || `Camera ${result.ipAddress}`,
-      ipAddress: result.ipAddress,
-      onvifPort: result.onvifPort || 80,
-      rtspPort: result.rtspPort || Number(probePort) || 554,
-      sourceType: "ip-camera",
-      // A control-plane socket probe proves reachability only. The assigned
-      // gateway must persist and verify the login before approval/live view.
-      credentialsRequired: result.authRequired === true,
-      streamVerified: false,
-      rtspValidated: false,
-      compatibilityStatus: "unknown",
-      statusReason: result.authRequired
-        ? "direct_probe_gateway_credentials_pending"
-        : "direct_probe_gateway_profile_pending",
-      capabilities: {
-        ptz: Boolean(result.capabilities?.ptz),
-        audio: Boolean(result.capabilities?.audio),
-        events: Boolean(result.capabilities?.motion),
-      },
-      profiles: [],
-    }));
+    const devices = results
+      .filter((result) => result.online || allowPrivateOffline || isPrivateIpv4(result.ipAddress))
+      .map((result) => ({
+        edgeAgentId: gateway.id,
+        discoveryMethod: "direct-ip-range-probe",
+        vendor: result.vendor || "other",
+        manufacturer: result.manufacturer || result.vendor || "Unknown",
+        model: result.model || `Camera ${result.ipAddress}`,
+        ipAddress: result.ipAddress,
+        onvifPort: result.onvifPort || 80,
+        rtspPort: result.rtspPort || Number(probePort) || 554,
+        sourceType: "ip-camera",
+        credentialsRequired: result.authRequired === true || Boolean(probeUsername.trim()),
+        streamVerified: false,
+        rtspValidated: false,
+        compatibilityStatus: "unknown",
+        statusReason: result.authRequired || Boolean(probeUsername.trim())
+          ? "direct_probe_gateway_credentials_pending"
+          : "direct_probe_gateway_profile_pending",
+        capabilities: {
+          ptz: Boolean(result.capabilities?.ptz),
+          audio: Boolean(result.capabilities?.audio),
+          events: Boolean(result.capabilities?.motion),
+        },
+        profiles: [],
+      }));
 
     if (devices.length === 0) return [];
     const response = await cameraInventoryApi.submitDiscovery(selectedBranch, { edgeAgentId: gateway.id, devices });
@@ -299,6 +299,102 @@ export function DeviceManager() {
       }
     }
     return queued;
+  }
+
+  async function addDirectCameraToBranch(targetResult?: DirectProbeResult | null) {
+    if (!selectedBranch) {
+      setError("Select a branch first.");
+      return;
+    }
+    const ip = (targetResult?.ipAddress || probeIp).trim();
+    if (!ip) {
+      setError("Enter a valid camera IP address.");
+      return;
+    }
+    const port = Number(targetResult?.rtspPort || probePort || 554);
+    const username = probeUsername.trim() || "admin";
+    const password = probePassword || "";
+
+    setSaving(true);
+    setError(undefined);
+    try {
+      const preferred = gateways.find(isGatewayReady) ?? gateways[0];
+      const transport = preferred ? "edge-gateway" : "vpn";
+      const secretRef = preferred
+        ? `edge://gateway/${encodeURIComponent(ip)}`
+        : `vpn://${selectedBranch}/${encodeURIComponent(ip)}`;
+
+      // 1. If an edge gateway is available and username provided, queue credentials to the gateway
+      if (preferred && username) {
+        try {
+          await cameraInventoryApi.updateGatewayCameraCredentials(selectedBranch, preferred.id, {
+            cameraIp: ip,
+            username,
+            password: password || null,
+          });
+        } catch {
+          // If public key encryption fails or legacy gateway, proceed
+        }
+      }
+
+      // 2. Directly create the camera in the branch inventory
+      await cameraInventoryApi.approveCamera(selectedBranch, {
+        name: `Camera ${ip}`,
+        channel: 1,
+        protocol: "rtsp",
+        connectionTransport: transport,
+        connectionSecretRef: secretRef,
+        sourceType: "ip-camera",
+        manufacturer: targetResult?.vendor && targetResult.vendor !== "other" ? targetResult.vendor : "Generic RTSP",
+        model: targetResult?.model || `Camera ${ip}`,
+        ipAddress: ip,
+        onvifPort: 80,
+        rtspPort: port,
+        streamProfile: "main",
+      });
+
+      closeDirectProbe();
+      setNotice(`✓ Camera at ${ip} added successfully to ${activeBranch?.name ?? "branch"}. Local Branch Gateway will connect to this local IP on the branch LAN.`);
+      await refreshBranch(selectedBranch);
+    } catch (err: any) {
+      // If direct camera creation failed, fall back to adding to discovery
+      try {
+        const preferred = gateways.find(isGatewayReady) ?? gateways[0];
+        if (preferred) {
+          const disc = await cameraInventoryApi.submitDiscovery(selectedBranch, {
+            edgeAgentId: preferred.id,
+            devices: [{
+              edgeAgentId: preferred.id,
+              discoveryMethod: "direct-ip-range-probe",
+              vendor: targetResult?.vendor || "other",
+              model: `Camera ${ip}`,
+              ipAddress: ip,
+              onvifPort: 80,
+              rtspPort: port,
+              sourceType: "ip-camera",
+              credentialsRequired: Boolean(username),
+              streamVerified: false,
+              rtspValidated: false,
+              compatibilityStatus: "unknown",
+              capabilities: { ptz: false, audio: true, events: true },
+              profiles: [],
+            }],
+          });
+          const discItems = Array.isArray(disc?.data) ? disc.data : disc?.id ? [disc] : [];
+          if (username) {
+            await queueDirectProbeCredentialVerification(discItems, username, password);
+          }
+          closeDirectProbe();
+          setShowDiscoveredList(true);
+          setNotice(`✓ Camera at ${ip} added to Device Discovery. You can approve it from the discovery list.`);
+          await refreshBranch(selectedBranch);
+          return;
+        }
+      } catch {}
+      setError(messageOf(err, "Failed to add camera with local IP."));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function runDirectProbe() {
@@ -345,18 +441,20 @@ export function DeviceManager() {
         setProbeResult(result);
         if (result.online) {
           setNotice(`Camera at ${result.ipAddress} responded (${result.server || "RTSP"}).`);
+        } else if (isPrivateIpv4(result.ipAddress)) {
+          setNotice(`Local branch LAN IP (${result.ipAddress}). The AWS cloud server cannot reach local private IPs directly over the public internet. Use "Add Camera with this Local IP" or "Add to Device Discovery" below.`);
         } else {
           setError(`Camera at ${result.ipAddress} is unreachable: ${result.error || "Connection error"}`);
         }
         return;
       }
 
-      const reachable = results.filter((result) => result.online);
+      const reachable = results.filter((result) => result.online || isPrivateIpv4(result.ipAddress));
       let discoveries: any[] = [];
       let verificationQueued = 0;
       if (reachable.length > 0) {
         setSaving(true);
-        discoveries = await publishDirectProbeDiscoveries(reachable);
+        discoveries = await publishDirectProbeDiscoveries(reachable, true);
         if (probeCredentialMode === "same" && username) {
           verificationQueued = await queueDirectProbeCredentialVerification(discoveries, username, password);
         }
@@ -367,9 +465,9 @@ export function DeviceManager() {
 
       const offline = results.length - reachable.length;
       setNotice(
-        `Range probe finished: ${reachable.length} reachable, ${discoveries.length} sent to Device discovery` +
+        `Range probe finished: ${reachable.length} processed (${results.filter((r) => r.online).length} online / ${reachable.length} queued to discovery)` +
         `${verificationQueued ? `, ${verificationQueued} secure gateway verification command(s) queued` : ""}` +
-        `${offline ? `, ${offline} unreachable` : ""}.`,
+        `${offline ? `, ${offline} external unreachable` : ""}.`,
       );
     } catch (err: any) {
       setError(err.message || "Failed to probe the IP range.");
@@ -380,23 +478,29 @@ export function DeviceManager() {
     }
   }
 
-  async function queueProbedCameraForCredentials() {
-    if (!probeResult?.online || !selectedBranch) return;
+  async function queueProbedCameraForCredentials(targetResultOverride?: DirectProbeResult | null) {
+    if (!selectedBranch) return;
+    const targetResult: DirectProbeResult = targetResultOverride ?? probeResult ?? {
+      online: false,
+      ipAddress: probeIp.trim(),
+      rtspPort: Number(probePort || 554),
+      vendor: "Generic ONVIF / RTSP",
+      model: `Camera ${probeIp.trim()}`,
+      authRequired: Boolean(probeUsername.trim()),
+    };
     setSaving(true);
     setError(undefined);
     try {
-      const discoveries = await publishDirectProbeDiscoveries([probeResult]);
-      const verificationQueued = probeResult.authenticated === true && probeUsername.trim()
+      const discoveries = await publishDirectProbeDiscoveries([targetResult], true);
+      const verificationQueued = probeUsername.trim()
         ? await queueDirectProbeCredentialVerification(discoveries, probeUsername.trim(), probePassword)
         : 0;
       await refreshBranch(selectedBranch);
       closeDirectProbe();
       setShowDiscoveredList(true);
       setNotice(verificationQueued > 0
-        ? `Camera at ${probeResult.ipAddress} was added to Device discovery. Secure gateway verification is queued; approve it after the gateway confirms the stream.`
-        : probeResult.authRequired
-        ? `Camera at ${probeResult.ipAddress} was added to Device discovery. Enter its own login there to verify the stream.`
-        : `Camera at ${probeResult.ipAddress} was added to Device discovery. Run Branch Gateway discovery to detect its model-specific stream profile.`);
+        ? `✓ Camera at ${targetResult.ipAddress} was added to Device discovery. Secure gateway verification is queued; approve it once the gateway confirms the stream.`
+        : `✓ Camera at ${targetResult.ipAddress} was added to Device discovery.`);
     } catch (reason) {
       setError(messageOf(reason, "Unable to send this camera to Device discovery."));
     } finally {
@@ -2256,6 +2360,17 @@ export function DeviceManager() {
                 {probeTargetMode === "range" && probeCredentialMode === "different" ? <p className="field-help">The range is checked without a shared login. Reachable cameras are added to Device discovery so each address can be verified with its own credentials.</p> : null}
 
                 <div className="modal-actions">
+                  {probeTargetMode === "single" && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void addDirectCameraToBranch()}
+                      disabled={saving || !probeIp.trim() || !probeUsername.trim()}
+                      title="Directly add this camera to branch monitoring using this local IP"
+                    >
+                      <Plus size={14} /> {saving ? "Adding…" : "Add Camera with this Local IP"}
+                    </button>
+                  )}
                   <button
                     type="submit"
                     className="primary-button"
@@ -2276,34 +2391,95 @@ export function DeviceManager() {
                     {probeResults.map((result) => (
                       <div className="flex items-center justify-between gap-3 border-b border-blue-500/10 py-1 last:border-0" key={result.ipAddress}>
                         <span className="font-mono">{result.ipAddress}</span>
-                        <span>{result.online ? result.authenticated === true ? "✅ Stream verified" : result.authRequired ? "⚠️ Login required" : `⚠️ ${result.error || "Stream profile not verified"}` : `🔴 ${result.error || "Unreachable"}`}</span>
+                        <span>{result.online ? result.authenticated === true ? "✅ Stream verified" : result.authRequired ? "⚠️ Login required" : `⚠️ ${result.error || "Stream profile not verified"}` : isPrivateIpv4(result.ipAddress) ? "🟡 Local branch LAN (Gateway verification pending)" : `🔴 ${result.error || "Unreachable"}`}</span>
                       </div>
                     ))}
                   </div>
-                  {probeCredentialMode === "different" ? <p className="field-help">Reachable addresses have been added to Device discovery for individual credential verification.</p> : <p className="field-help">Reachable addresses are in Device discovery, and the shared login has been queued securely to the Branch Gateway. Approve each device only after gateway verification succeeds.</p>}
+                  <div className="pt-2 flex gap-2">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={async () => {
+                        const localTargets = probeResults.filter((r) => r.online || isPrivateIpv4(r.ipAddress));
+                        if (localTargets.length === 0) return;
+                        setSaving(true);
+                        try {
+                          const disc = await publishDirectProbeDiscoveries(localTargets, true);
+                          if (probeCredentialMode === "same" && probeUsername.trim()) {
+                            await queueDirectProbeCredentialVerification(disc, probeUsername.trim(), probePassword);
+                          }
+                          await refreshBranch(selectedBranch);
+                          closeDirectProbe();
+                          setShowDiscoveredList(true);
+                          setNotice(`✓ Added ${disc.length} local camera(s) to Device Discovery for gateway verification.`);
+                        } catch (e) {
+                          setError(messageOf(e, "Failed to add range to discovery."));
+                        } finally {
+                          setSaving(false);
+                        }
+                      }}
+                      disabled={saving || !selectedBranch}
+                    >
+                      <Plus size={14} /> {saving ? "Adding…" : `Add All ${probeResults.length} Local IP(s) to Device Discovery`}
+                    </button>
+                  </div>
+                  {probeCredentialMode === "different" ? <p className="field-help">Addresses are in Device discovery for individual credential verification.</p> : <p className="field-help">Addresses are in Device discovery, and the shared login has been queued securely to the Branch Gateway. Approve each device only after gateway verification succeeds.</p>}
                 </div>
               )}
 
               {probeResult && (
-                <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 space-y-2 mt-4 text-xs">
+                <div className={`p-4 rounded-xl border ${
+                  probeResult.online
+                    ? "border-emerald-500/30 bg-emerald-500/10"
+                    : isPrivateIpv4(probeResult.ipAddress)
+                    ? "border-amber-500/30 bg-amber-500/10"
+                    : "border-rose-500/30 bg-rose-500/10"
+                } space-y-3 mt-4 text-xs`}>
                   <div className="flex items-center justify-between">
-                    <strong>Status: {probeResult.online ? probeResult.authenticated === true ? "🟢 Stream verified" : probeResult.authRequired ? "🟠 Camera reachable — login required" : "🟠 Camera reachable — stream profile not verified" : "🔴 Unreachable"}</strong>
+                    <strong>
+                      {probeResult.online
+                        ? probeResult.authenticated === true
+                          ? "🟢 Stream verified"
+                          : probeResult.authRequired
+                          ? "🟠 Camera reachable — login required"
+                          : "🟠 Camera reachable — stream profile not verified"
+                        : isPrivateIpv4(probeResult.ipAddress)
+                        ? "🟡 Local Branch LAN Device (Private IP)"
+                        : "🔴 Unreachable"}
+                    </strong>
                     <span className="font-mono text-[11px] bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded">
                       {probeResult.server || "RTSP 554"}
                     </span>
                   </div>
 
-                  {probeResult.online && (
-                    <>
-                      <div><strong>Identified Device:</strong> {probeResult.vendor} • {probeResult.model}</div>
-                      <div><strong>Stream endpoint:</strong> <code className="font-mono text-[11px]">{probeResult.streamUrl || `rtsp://${probeResult.ipAddress}:${probeResult.rtspPort || 554}`}</code></div>
-                      <div><strong>Verification:</strong> {probeResult.authenticated ? "✅ Stream and login verified" : probeResult.authRequired ? `⚠️ ${probeResult.authType || "Camera"} login required (${probeResult.error || "Enter the camera password"})` : `⚠️ ${probeResult.error || "Stream profile was not verified"}`}</div>
-
-                      <div className="pt-2 flex gap-2">
-                        <button type="button" className="primary-button" onClick={() => void queueProbedCameraForCredentials()} disabled={saving || !selectedBranch}><Plus size={14} /> {saving ? "Adding…" : probeResult.authenticated === true ? "Send to gateway for final verification" : probeResult.authRequired ? "Add to discovery & enter login" : "Add to discovery for profile detection"}</button>
-                      </div>
-                    </>
+                  {isPrivateIpv4(probeResult.ipAddress) && !probeResult.online && (
+                    <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/40 text-amber-200 text-xs">
+                      <strong>Branch Local Network Camera:</strong> This IP is on a local private subnet ({probeResult.ipAddress}). The AWS cloud server cannot reach local private IPs directly over the public internet, but the local Branch Gateway / Edge Agent inside your branch connects to it. Click below to add this camera using its local IP.
+                    </div>
                   )}
+
+                  <div><strong>Identified Device:</strong> {probeResult.vendor || "ONVIF / RTSP Device"} • {probeResult.model || `Camera ${probeResult.ipAddress}`}</div>
+                  <div><strong>Stream endpoint:</strong> <code className="font-mono text-[11px]">{probeResult.streamUrl || `rtsp://${probeResult.ipAddress}:${probeResult.rtspPort || Number(probePort) || 554}/stream1`}</code></div>
+                  <div><strong>Verification:</strong> {probeResult.authenticated ? "✅ Stream and login verified" : probeResult.authRequired ? `⚠️ ${probeResult.authType || "Camera"} login required (${probeResult.error || "Enter the camera password"})` : isPrivateIpv4(probeResult.ipAddress) && !probeResult.online ? "⚠️ Local branch LAN — gateway stream verification queued on add" : `⚠️ ${probeResult.error || "Stream profile was not verified"}`}</div>
+
+                  <div className="pt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() => void addDirectCameraToBranch(probeResult)}
+                      disabled={saving || !selectedBranch}
+                    >
+                      <Plus size={14} /> {saving ? "Adding to branch…" : "Add Camera to Branch (Direct Enrollment)"}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => void queueProbedCameraForCredentials(probeResult)}
+                      disabled={saving || !selectedBranch}
+                    >
+                      <Network size={14} /> {saving ? "Sending…" : "Add to Device Discovery (for Scanner Verification)"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

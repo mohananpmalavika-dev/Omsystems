@@ -3,6 +3,19 @@ const MAX_IPV4 = 0xffff_ffff;
 
 export type DirectProbeTargetMode = "single" | "range";
 
+/** Checks whether an IPv4 address is within private RFC 1918 / CGNAT / loopback subnets. */
+export function isPrivateIpv4(value: string): boolean {
+  const parts = value.trim().split(".");
+  if (parts.length !== IPV4_PARTS || parts.some((part) => !/^\d+$/.test(part))) return false;
+  const first = Number(parts[0]);
+  const second = Number(parts[1]);
+  return first === 10 ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    first === 127;
+}
+
 function ipv4ToNumber(value: string): number | undefined {
   const parts = value.trim().split(".");
   if (parts.length !== IPV4_PARTS || parts.some((part) => !/^\d+$/.test(part))) return undefined;

@@ -608,7 +608,22 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(400).send({ error: "direct_probe_requires_private_or_vpn_address" });
     }
 
-    const results = await probeNetworkCameras(body.ipAddresses, body.rtspPort, body.username, body.password);
+    const rawResults = await probeNetworkCameras(body.ipAddresses, body.rtspPort, body.username, body.password);
+    const results = rawResults.map((result) => {
+      if (!result.online && isPrivateProbeAddress(result.ipAddress)) {
+        return {
+          ...result,
+          isPrivateLan: true,
+          vendor: result.vendor || "ONVIF / RTSP Device",
+          model: result.model || `IP Camera (${result.ipAddress})`,
+          rtspPort: body.rtspPort,
+          streamUrl: result.streamUrl || `rtsp://${result.ipAddress}:${body.rtspPort}/stream1`,
+          substreamUrl: result.substreamUrl || `rtsp://${result.ipAddress}:${body.rtspPort}/stream2`,
+          server: "RTSP (Branch LAN)",
+        };
+      }
+      return result;
+    });
     return {
       results,
       scanned: results.length,
@@ -634,6 +649,19 @@ export async function registerCameraDiscoveryRoutes(
     }
 
     const result = await probeNetworkCamera(body.ipAddress, body.rtspPort, body.username, body.password);
+    if (!result.online && isPrivateProbeAddress(body.ipAddress)) {
+      return {
+        ...result,
+        isPrivateLan: true,
+        vendor: result.vendor || "ONVIF / RTSP Device",
+        model: result.model || `IP Camera (${body.ipAddress})`,
+        rtspPort: body.rtspPort,
+        streamUrl: result.streamUrl || `rtsp://${body.ipAddress}:${body.rtspPort}/stream1`,
+        substreamUrl: result.substreamUrl || `rtsp://${body.ipAddress}:${body.rtspPort}/stream2`,
+        server: "RTSP (Branch LAN)",
+        error: "Private branch LAN address — direct cloud probe cannot reach branch LAN without local gateway.",
+      };
+    }
     return result;
   });
 
