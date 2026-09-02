@@ -138,12 +138,10 @@ async function fetchApi<T>(
       response = await send();
     }
   } catch (error: any) {
-    // Network error - API not reachable
-    // Only redirect to login if this isn't already an auth attempt
-    if (!isAuthEndpoint) {
-      redirectToLogin();
-    }
-    
+    // A transport failure does not invalidate an existing cookie-backed
+    // session. Clearing browser state here caused a login loop whenever the
+    // control plane was restarting or briefly unreachable immediately after
+    // sign-in. Preserve the session and let the caller/session guard retry.
     throw new ApiError(
       'Cannot connect to server. Please check your connection.',
       0,
@@ -218,8 +216,9 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
   } catch (error: any) {
     // Network error - API not reachable
     console.error('API connection failed:', error);
-    redirectToLogin();
-    
+    // Downloads must follow the same authentication policy as JSON requests:
+    // an unavailable server is recoverable and is not proof that the employee
+    // session expired.
     throw new ApiError(
       'Cannot connect to server. Please check your connection.',
       0,

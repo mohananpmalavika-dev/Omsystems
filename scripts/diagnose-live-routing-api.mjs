@@ -39,6 +39,14 @@ const report = await Promise.all((branches.data ?? []).map(async (branch) => {
     cameraCount: cameras.length,
     camerasByStatus: Object.groupBy(cameras, (camera) => camera.status ?? "unknown"),
     cameraAssignments: Object.groupBy(cameras, (camera) => camera.edgeAgentId ?? "unassigned"),
+    cameras: cameras.map((camera) => ({
+      id: camera.id,
+      name: camera.name || camera.model || "Unnamed camera",
+      status: camera.status ?? "unknown",
+      sourceType: camera.sourceType ?? "ip-camera",
+      channel: camera.recorderChannel ?? camera.channel ?? null,
+      edgeAgentId: camera.edgeAgentId ?? null,
+    })),
     agents,
   };
 }));

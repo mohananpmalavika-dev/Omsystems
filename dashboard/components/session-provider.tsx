@@ -27,27 +27,39 @@ export function SessionProvider({ children }: SessionProviderProps) {
 
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     if (isPublicRoute) {
       teardownSessionGuard();
       setHasValidatedSession(false);
-      return () => { cancelled = true; };
+      return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
+      };
     }
 
     setHasValidatedSession(false);
-    void authApi.getCurrentUser()
-      .then(() => {
+    const validateSession = async () => {
+      try {
+        await authApi.getCurrentUser();
         if (cancelled) return;
         setupSessionGuard();
         setHasValidatedSession(true);
-      })
-      .catch(() => {
+      } catch {
+        if (cancelled) return;
         // api-client has already attempted the HttpOnly refresh and redirects
-        // only when it cannot restore the session. Keep app content unmounted
-        // while that redirect is in flight so child fetches cannot spam 401s.
-        if (!cancelled) setHasValidatedSession(false);
-      });
+        // only for a real authentication failure. A transport/server outage is
+        // recoverable, so keep the app protected and retry without erasing the
+        // successful login.
+        setHasValidatedSession(false);
+        retryTimer = setTimeout(() => { void validateSession(); }, 3_000);
+      }
+    };
+    void validateSession();
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [isPublicRoute]);
 
   // This check is deliberately synchronous. When Login routes to a protected
