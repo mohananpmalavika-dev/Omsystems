@@ -54,9 +54,10 @@ function activityHeaders(json = false): HeadersInit {
   const headers: Record<string, string> = {};
   const token = getAccessToken();
   if (json) headers['Content-Type'] = 'application/json';
-  // Legacy deployments still accept this header. Current deployments use the
-  // HttpOnly session cookie, so a JavaScript-readable token is not required.
-  if (token) headers['x-sentinel-session'] = token;
+  if (token) {
+    headers['x-sentinel-session'] = token;
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   return headers;
 }
 
@@ -94,6 +95,11 @@ async function startSession(): Promise<string | null> {
   if (sessionStartPromise) return sessionStartPromise;
   
   sessionStartPromise = (async () => { try {
+    const token = getAccessToken();
+    if (!token) {
+      return null;
+    }
+
     const response = await fetch(`${getApiBase()}/v1/activity/sessions/start`, {
       method: 'POST',
       headers: activityHeaders(true),
