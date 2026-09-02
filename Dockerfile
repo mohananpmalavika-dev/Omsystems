@@ -2,6 +2,11 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
+
+ENV npm_config_onnxruntime_node_install_cuda=skip
+ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
+RUN npm install --legacy-peer-deps
+
 COPY src/ ./src/
 COPY backend/ ./backend/
 COPY database/migrations/ ./database/migrations/
@@ -12,10 +17,6 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 
-ENV npm_config_onnxruntime_node_install_cuda=skip
-
-ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
-RUN npm install --legacy-peer-deps
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 

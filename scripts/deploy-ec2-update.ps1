@@ -50,17 +50,29 @@ for ($i = 0; $i -lt 90; $i++) {
     Start-Sleep -Seconds 5
 }
 
-$output = aws ssm get-command-invocation `
-    --command-id $cmd `
-    --instance-id $instanceId `
-    --query "StandardOutputContent" `
-    --output text
+$tempOut = [System.IO.Path]::GetTempFileName()
+$tempErr = [System.IO.Path]::GetTempFileName()
+$env:PYTHONUTF8 = "1"
 
-$errorOutput = aws ssm get-command-invocation `
-    --command-id $cmd `
-    --instance-id $instanceId `
-    --query "StandardErrorContent" `
-    --output text
+try {
+    aws ssm get-command-invocation `
+        --command-id $cmd `
+        --instance-id $instanceId `
+        --query "StandardOutputContent" `
+        --output text | Out-File -FilePath $tempOut -Encoding utf8
+} catch {}
+
+try {
+    aws ssm get-command-invocation `
+        --command-id $cmd `
+        --instance-id $instanceId `
+        --query "StandardErrorContent" `
+        --output text | Out-File -FilePath $tempErr -Encoding utf8
+} catch {}
+
+$output = if (Test-Path $tempOut) { Get-Content -Path $tempOut -Raw -Encoding utf8 } else { "" }
+$errorOutput = if (Test-Path $tempErr) { Get-Content -Path $tempErr -Raw -Encoding utf8 } else { "" }
+Remove-Item $tempOut, $tempErr -Force -ErrorAction SilentlyContinue
 
 Write-Host "================ Deployment Output ================" -ForegroundColor Cyan
 Write-Host $output
