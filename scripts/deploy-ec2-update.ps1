@@ -8,11 +8,13 @@ $commands = @(
     "git fetch origin main",
     "git reset --hard origin/main",
     "git log -1 --oneline",
-    "docker system prune -af --volumes || true",
+    "docker system prune -af || true",
     "df -h",
-    "docker compose -f deploy/aws/docker-compose.aws.yml down || true",
-    "docker compose -f deploy/aws/docker-compose.aws.yml up -d --build",
+    "cd /opt/sentinel-grid/deploy/aws",
+    "docker compose -f docker-compose.aws.yml down || true",
+    "docker compose -f docker-compose.aws.yml up -d --build",
     "docker ps"
+
 )
 
 $paramJson = @{
