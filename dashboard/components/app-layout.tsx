@@ -266,7 +266,7 @@ export function defaultMenuAccessForRole(role?: string) {
 }
 
 export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
-  if (!user) return [];
+  if (!user) return navigation;
   const configuredValue = user.preferences?.menuAccess ?? user.menuAccess;
   const configured = Array.isArray(configuredValue)
     ? configuredValue.filter((value): value is string => typeof value === "string")
@@ -275,6 +275,7 @@ export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
   return navigation.map((group) => ({ ...group, items: group.items.filter((item) => allowed.has(menuKey(item))) }))
     .filter((group) => group.items.length > 0);
 }
+
 
 export const quickActions: NavItem[] = [
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
@@ -374,7 +375,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
+        if (stored) return new Set(JSON.parse(stored));
+      } catch {}
+    }
+    return new Set(navigation.map((g) => g.label));
+  });
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
   const [operator, setOperator] = useState<{
     displayName?: string;
@@ -382,7 +391,14 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     email?: string;
     role?: string;
     preferences?: { menuAccess?: unknown };
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch {
+      return null;
+    }
+  });
   const pathname = usePathname() || "/";
   const visibleNavigation = getVisibleNavigation(operator);
   const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
@@ -403,7 +419,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const allGroupsOpen = openGroups.size === visibleNavigation.length;
 
   const searchableModules = useMemo(() => visibleNavigation.flatMap((group) =>
-    group.items.map((item) => ({ ...item, section: group.label }))), []);
+    group.items.map((item) => ({ ...item, section: group.label }))), [visibleNavigation]);
+
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
     if (!query) {
@@ -456,15 +473,16 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   useEffect(() => {
     try {
       const storedGroups = JSON.parse(window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY) || "[]");
-      const validGroups = Array.isArray(storedGroups)
+      const validGroups = Array.isArray(storedGroups) && storedGroups.length > 0
         ? storedGroups.filter((label): label is string => visibleNavigation.some((group) => group.label === label))
-        : [];
+        : visibleNavigation.map((group) => group.label);
       if (activeGroup && !validGroups.includes(activeGroup.label)) validGroups.push(activeGroup.label);
       setOpenGroups(new Set(validGroups));
     } catch {
-      setOpenGroups(new Set(activeGroup ? [activeGroup.label] : []));
+      setOpenGroups(new Set(visibleNavigation.map((group) => group.label)));
     }
   }, [visibleNavigation]);
+
 
   useEffect(() => {
     if (!activeGroup) return;

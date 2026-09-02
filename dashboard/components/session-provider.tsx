@@ -16,7 +16,10 @@ interface SessionProviderProps {
 
 export function SessionProvider({ children }: SessionProviderProps) {
   const pathname = usePathname();
-  const [hasValidatedSession, setHasValidatedSession] = useState(false);
+  const [hasValidatedSession, setHasValidatedSession] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("user") || localStorage.getItem("accessToken") || localStorage.getItem("sentinel_login_time"));
+  });
 
   const isPublicRoute = pathname?.startsWith('/login') ||
     pathname?.startsWith('/forgot-password') ||
@@ -37,7 +40,6 @@ export function SessionProvider({ children }: SessionProviderProps) {
       };
     }
 
-    setHasValidatedSession(false);
     const validateSession = async () => {
       try {
         await authApi.getCurrentUser();
@@ -46,15 +48,15 @@ export function SessionProvider({ children }: SessionProviderProps) {
         setHasValidatedSession(true);
       } catch {
         if (cancelled) return;
-        // api-client has already attempted the HttpOnly refresh and redirects
-        // only for a real authentication failure. A transport/server outage is
-        // recoverable, so keep the app protected and retry without erasing the
-        // successful login.
-        setHasValidatedSession(false);
-        retryTimer = setTimeout(() => { void validateSession(); }, 3_000);
+        // If there's no stored session at all, clear validated session
+        if (typeof window !== "undefined" && !localStorage.getItem("user") && !localStorage.getItem("accessToken")) {
+          setHasValidatedSession(false);
+        }
+        retryTimer = setTimeout(() => { void validateSession(); }, 5_000);
       }
     };
     void validateSession();
+
 
     return () => {
       cancelled = true;
