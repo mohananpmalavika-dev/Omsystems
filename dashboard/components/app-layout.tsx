@@ -375,15 +375,9 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
-        if (stored) return new Set(JSON.parse(stored));
-      } catch {}
-    }
-    return new Set(navigation.map((g) => g.label));
-  });
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () => new Set(navigation.map((g) => g.label))
+  );
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
   const [operator, setOperator] = useState<{
     displayName?: string;
@@ -391,14 +385,23 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     email?: string;
     role?: string;
     preferences?: { menuAccess?: unknown };
-  } | null>(() => {
-    if (typeof window === "undefined") return null;
+  } | null>(null);
+
+  useEffect(() => {
     try {
-      return JSON.parse(localStorage.getItem("user") || "null");
-    } catch {
-      return null;
-    }
-  });
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) setOperator(JSON.parse(storedUser));
+    } catch {}
+    try {
+      const stored = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOpenGroups(new Set(parsed));
+        }
+      }
+    } catch {}
+  }, []);
   const pathname = usePathname() || "/";
   const visibleNavigation = getVisibleNavigation(operator);
   const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
@@ -586,13 +589,31 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   const closeSidebar = () => setSidebarOpen(false);
   const handleNavClick = (href: string) => (e: React.MouseEvent<HTMLAnchorElement>) => {
-    e.stopPropagation();
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+      return; // Allow opening in new tab
+    }
+    e.preventDefault();
     closeSidebar();
-    if (routePath(activeRoute ?? "") === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
-      e.preventDefault();
+
+    const targetPath = routePath(href);
+    const currentPath = routePath(pathname);
+    if (targetPath === currentPath && href === activeRoute) {
+      return; // Already on this exact page
+    }
+
+    try {
+      router.push(href);
+    } catch {
       window.location.assign(href);
       return;
     }
+
+    // High-reliability watchdog: if Next client router did not navigate within 120ms, force navigation
+    setTimeout(() => {
+      if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
+        window.location.assign(href);
+      }
+    }, 120);
   };
 
   const persistOpenGroups = (next: Set<string>) => {
@@ -610,11 +631,18 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     setCommandOpen(false);
     setCommandQuery("");
     closeSidebar();
-    if (routePath(activeRoute ?? "") === "/control-room" || (typeof window !== "undefined" && window.location.pathname.startsWith("/control-room"))) {
+    const targetPath = routePath(href);
+    try {
+      router.push(href);
+    } catch {
       window.location.assign(href);
       return;
     }
-    router.push(href);
+    setTimeout(() => {
+      if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
+        window.location.assign(href);
+      }
+    }, 120);
   };
 
   return (
@@ -693,12 +721,22 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <details
               className="nav-group"
               key={group.label}
-              open={groupIsActive || openGroups.has(group.label)}
+              open={openGroups.has(group.label)}
+              suppressHydrationWarning
               onToggle={(event) => {
-                const next = new Set(openGroups);
-                if (event.currentTarget.open) next.add(group.label);
-                else if (!groupIsActive) next.delete(group.label);
-                persistOpenGroups(next);
+                const isOpen = event.currentTarget.open;
+                setOpenGroups((prev) => {
+                  const next = new Set(prev);
+                  if (isOpen) {
+                    next.add(group.label);
+                  } else {
+                    next.delete(group.label);
+                  }
+                  try {
+                    window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+                  } catch {}
+                  return next;
+                });
               }}
             >
               <summary>
