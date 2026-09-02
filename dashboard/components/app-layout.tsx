@@ -73,9 +73,10 @@ import {
   Wrench,
   X,
 } from "lucide-react";
-import { createContext, Suspense, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
+import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -623,6 +624,67 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     }, 120);
   };
 
+  const createMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (createMenuRef.current && !createMenuRef.current.contains(event.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    }
+    if (createMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [createMenuOpen]);
+
+  useEffect(() => {
+    const handleGlobalLinkClick = (event: MouseEvent) => {
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+        return;
+      }
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest<HTMLAnchorElement>("a[href]");
+      if (!anchor) return;
+
+      const rawHref = anchor.getAttribute("href");
+      if (
+        !rawHref ||
+        rawHref.startsWith("#") ||
+        rawHref.startsWith("javascript:") ||
+        rawHref.startsWith("mailto:") ||
+        rawHref.startsWith("tel:") ||
+        rawHref.startsWith("blob:") ||
+        rawHref.startsWith("data:")
+      ) {
+        return;
+      }
+
+      try {
+        const targetUrl = new URL(anchor.href, window.location.origin);
+        if (targetUrl.origin !== window.location.origin) return;
+
+        const targetPath = targetUrl.pathname;
+        const currentPath = window.location.pathname;
+        if (targetPath === currentPath && targetUrl.search === window.location.search) {
+          return;
+        }
+
+        const timer = window.setTimeout(() => {
+          if (window.location.pathname !== targetPath) {
+            window.location.assign(anchor.href);
+          }
+        }, 150);
+
+        const clearTimer = () => window.clearTimeout(timer);
+        window.addEventListener("beforeunload", clearTimer, { once: true });
+      } catch {}
+    };
+
+    document.addEventListener("click", handleGlobalLinkClick, true);
+    return () => document.removeEventListener("click", handleGlobalLinkClick, true);
+  }, []);
+
   const persistOpenGroups = (next: Set<string>) => {
     setOpenGroups(next);
     try {
@@ -847,33 +909,59 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           <div className="topbar-actions">
             <div className="live-state"><i /> Live operations <span>IST</span></div>
             <ThemeSwitcher />
-            <details className="create-menu" open={createMenuOpen} onToggle={(event) => setCreateMenuOpen(event.currentTarget.open)}>
-              <summary onClick={(event) => {
-                event.preventDefault();
-                setCreateMenuOpen((open) => !open);
-              }}>
+            <AlertAudioIndicator />
+            <div className={`create-menu relative ${createMenuOpen ? "open" : ""}`} ref={createMenuRef}>
+              <button
+                type="button"
+                className="create-menu-trigger"
+                onClick={() => setCreateMenuOpen((open) => !open)}
+                aria-expanded={createMenuOpen}
+                aria-haspopup="true"
+                aria-label="Create quick action"
+              >
                 <Plus size={15} /><span>Create</span><ChevronDown size={13} />
-              </summary>
-              <div className="create-menu-panel">
-                <p>Quick actions</p>
-                {visibleQuickActions.map((action) => {
-                  const Icon = action.icon;
-                  return (
-                    <Link href={action.href} key={action.href} onClick={() => setCreateMenuOpen(false)}>
-                      <span><Icon size={15} /></span>
-                      <strong>{action.label}</strong>
-                      <ChevronRight size={13} />
-                    </Link>
-                  );
-                })}
-              </div>
-            </details>
+              </button>
+              {createMenuOpen && (
+                <div className="create-menu-panel">
+                  <p>Quick actions</p>
+                  {(visibleQuickActions.length > 0 ? visibleQuickActions : quickActions).map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <Link
+                        href={action.href}
+                        key={action.href}
+                        onClick={(e) => {
+                          setCreateMenuOpen(false);
+                          handleNavClick(action.href)(e);
+                        }}
+                      >
+                        <span><Icon size={15} /></span>
+                        <strong>{action.label}</strong>
+                        <ChevronRight size={13} />
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             <button type="button" className="topbar-icon" aria-label="Search modules" onClick={() => setCommandOpen(true)}><Search size={18} /></button>
-            <Link href="/operations/alerts" aria-label="Notifications" className="notification topbar-icon">
+            <Link
+              href="/operations/alerts"
+              aria-label="Notifications"
+              className="notification topbar-icon"
+              onClick={handleNavClick("/operations/alerts")}
+            >
               <Bell size={18} />
               {incidentCount > 0 && <i />}
             </Link>
-            <Link href="/account/security" className="top-avatar" aria-label="Operator profile and session security"><CircleUserRound size={20} /></Link>
+            <Link
+              href="/account/security"
+              className="top-avatar"
+              aria-label="Operator profile and session security"
+              onClick={handleNavClick("/account/security")}
+            >
+              <CircleUserRound size={20} />
+            </Link>
           </div>
         </header>
         <div className="route-surface" data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>

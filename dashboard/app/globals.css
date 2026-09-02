@@ -5335,7 +5335,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 .create-menu { position: relative; }
-.create-menu > summary {
+.create-menu > summary,
+.create-menu-trigger {
   height: 36px;
   display: flex;
   align-items: center;
@@ -5352,8 +5353,10 @@ button, a { -webkit-tap-highlight-color: transparent; }
   list-style: none;
 }
 .create-menu > summary::-webkit-details-marker { display: none; }
-.create-menu > summary > svg:last-child { transition: transform .16s ease; }
-.create-menu[open] > summary > svg:last-child { transform: rotate(180deg); }
+.create-menu > summary > svg:last-child,
+.create-menu-trigger > svg:last-child { transition: transform .16s ease; }
+.create-menu[open] > summary > svg:last-child,
+.create-menu.open > .create-menu-trigger > svg:last-child { transform: rotate(180deg); }
 .create-menu-panel {
   position: absolute;
   top: calc(100% + 10px);
@@ -5518,8 +5521,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 @media (max-width: 760px) {
-  .create-menu > summary { width: 36px; justify-content: center; padding: 0; }
-  .create-menu > summary span, .create-menu > summary > svg:last-child { display: none; }
+  .create-menu > summary,
+  .create-menu-trigger { width: 36px; justify-content: center; padding: 0; }
+  .create-menu > summary span,
+  .create-menu-trigger span,
+  .create-menu > summary > svg:last-child,
+  .create-menu-trigger > svg:last-child { display: none; }
   .create-menu-panel { position: fixed; top: 65px; right: 12px; width: min(270px, calc(100vw - 24px)); }
   .command-overlay { padding: 18px 10px; }
   .command-dialog { max-height: calc(100vh - 36px); border-radius: 15px; }
@@ -6311,6 +6318,7 @@ body {
 .command-results > a small,
 .command-dialog > footer,
 .create-menu > summary,
+.create-menu-trigger,
 .create-menu-panel > p,
 .create-menu-panel > a strong {
   font-size: 11px;

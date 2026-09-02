@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ShieldAlert,
   Building2,
@@ -57,6 +58,23 @@ export function CommandCenterView() {
   const [askSentinelResponse, setAskSentinelResponse] = useState<string | null>(null);
   const [executingAction, setExecutingAction] = useState<string | null>(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const router = useRouter();
+
+  const navigateTo = (href: string) => (e: React.MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    try {
+      router.push(href);
+    } catch {
+      window.location.assign(href);
+      return;
+    }
+    setTimeout(() => {
+      if (typeof window !== "undefined" && window.location.pathname !== href) {
+        window.location.assign(href);
+      }
+    }, 120);
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -279,7 +297,8 @@ export function CommandCenterView() {
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/admin/branch-onboarding"
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-900/30 transition-all"
+            onClick={navigateTo("/admin/branch-onboarding")}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-900/30 transition-all cursor-pointer"
           >
             <PlusCircle className="w-3.5 h-3.5" />
             <span>Onboard Branch</span>
@@ -287,7 +306,8 @@ export function CommandCenterView() {
 
           <Link
             href="/control-room"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all"
+            onClick={navigateTo("/control-room")}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
           >
             <Play className="w-3.5 h-3.5" />
             <span>Live Wall</span>
