@@ -145,7 +145,11 @@ export function validateDatabaseSecurityConfiguration(config: {
     ? config.isProduction
     : process.env.NODE_ENV === "production";
 
-  if (!isProduction) return;
+  const allowInternalDb = process.env.ALLOW_INTERNAL_CONTAINER_DB === "true" ||
+    process.env.DATABASE_TLS_MODE === "DISABLED" ||
+    process.env.DB_SSL?.toLowerCase() === "false";
+
+  if (!isProduction || allowInternalDb) return;
 
   if (config.ssl === false || !config.ssl) {
     throw new SecurityConfigurationError(
@@ -153,6 +157,7 @@ export function validateDatabaseSecurityConfiguration(config: {
       TlsErrorCode.INSECURE_OVERRIDE_FORBIDDEN,
     );
   }
+
 
   if (typeof config.ssl === "object" && config.ssl.rejectUnauthorized === false) {
     throw new SecurityConfigurationError(
