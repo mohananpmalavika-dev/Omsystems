@@ -409,7 +409,9 @@ export async function registerOperationalHealthRoutes(
     if (!projection) return reply.code(404).send({ error: "branch_not_found" });
     const agents = await store.listEdgeAgentsByBranch(branchId);
     const latest = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [branchId]);
-    const agent = agents[0];
+    const agent = agents.find((a) => a.status === "online" && a.credentialStatus !== "revoked")
+      ?? agents.find((a) => a.credentialStatus !== "revoked")
+      ?? agents[0];
     const agentTelemetry = latest
       .filter((item) => item.deviceType === "edge-agent" && (!agent || item.deviceId === agent.id))
       .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0];
@@ -420,7 +422,7 @@ export async function registerOperationalHealthRoutes(
       ...projection,
       edgeAgent: {
         id: agent?.id ?? "unavailable",
-        status: projection.edgeAgentStatus,
+        status: agent?.status === "online" ? "online" : projection.edgeAgentStatus,
         version: agent?.version ?? "unknown",
         cpuUsage: metric("cpuUsedPercent"),
         memoryUsage: metric("memoryUsedPercent"),

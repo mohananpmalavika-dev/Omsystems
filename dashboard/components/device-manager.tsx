@@ -547,7 +547,10 @@ export function DeviceManager() {
   const [inventorySort, setInventorySort] = useState<"updated" | "deviceId">("updated");
 
   const activeBranch = branches.find((branch) => branch.id === selectedBranch);
-  const onlineGateway = gateways.find(isGatewayReady);
+  const activeGateways = useMemo(() => {
+    return gateways.filter((g) => g.credentialStatus !== "revoked" && (g.status as string) !== "revoked");
+  }, [gateways]);
+  const onlineGateway = activeGateways.find(isGatewayReady);
   const patchCapableGateway = onlineGateway && supportsPatchUpdates(onlineGateway.version) ? onlineGateway : undefined;
   const discoveryQueueItems = useMemo(() => discoveredCameras.map((camera) => {
     const isEnrolledInCameras = cameras.some((c) =>
@@ -1610,13 +1613,13 @@ export function DeviceManager() {
         </div>
       </details>
 
-      {loading && gateways.length === 0 && cameras.length === 0 && discoveredCameras.length === 0 && inventoryRecords.length === 0 ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
+      {loading && activeGateways.length === 0 && cameras.length === 0 && discoveredCameras.length === 0 && inventoryRecords.length === 0 ? <div className="loading-state"><Activity className="spin" />Loading branch devices…</div> : (
         <div className="device-columns">
           <section className="device-card">
-            <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{gateways.length} appliance{gateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
-            {gateways.length === 0 ? (
+            <div className="device-card-heading"><Router size={18} /><div><h3>Branch Gateway status</h3><p>{activeGateways.length} appliance{activeGateways.length !== 1 ? "s" : ""} enrolled</p></div></div>
+            {activeGateways.length === 0 ? (
               <div className="device-empty"><Router size={25} /><strong>No Branch Gateway enrolled</strong><span>That is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.</span></div>
-            ) : gateways.map((gateway) => {
+            ) : activeGateways.map((gateway) => {
               const gatewayReady = isGatewayReady(gateway);
               const displayStatus = gateway.status === "pending" ? "pending" : gatewayReady ? "online" : "offline";
               return <article className="gateway-row" key={gateway.id}>

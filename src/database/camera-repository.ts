@@ -664,14 +664,51 @@ export class CameraRepository {
       [cameraId],
     );
     const row = route.rows[0];
+    let activeAgent = row;
     if (row?.edge_agent_id) {
-      if (!row.agent_id) {
-        throw new Error("edge_agent_not_found");
-      }
       const lastSeenMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
       const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
-      if (row.agent_status === "offline" || isStale) {
-        throw new Error("edge_agent_offline");
+      if (row.agent_status === "offline" || isStale || !row.agent_id) {
+        // Auto-heal: Check if the camera's branch has an active online gateway
+        const fallbackAgent = await this.pool.query<{
+          id: string;
+          public_media_url: string | null;
+          local_media_url: string | null;
+          status: string;
+          last_seen_at: Date | null;
+        }>(
+          `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
+           FROM edge_agents agent
+           JOIN cameras c ON c.branch_node_id = agent.branch_node_id
+           WHERE c.id = $1
+             AND agent.credential_revoked_at IS NULL
+             AND agent.last_seen_at >= now() - interval '5 minutes'
+           ORDER BY agent.last_seen_at DESC
+           LIMIT 1`,
+          [cameraId],
+        );
+        if (fallbackAgent.rows[0]) {
+          const fb = fallbackAgent.rows[0];
+          activeAgent = {
+            ...row,
+            edge_agent_id: fb.id,
+            agent_id: fb.id,
+            public_media_url: fb.public_media_url,
+            local_media_url: fb.local_media_url,
+            agent_status: fb.status,
+            last_seen_at: fb.last_seen_at,
+          };
+          // Persist the healed edge_agent_id so subsequent requests route directly
+          await this.pool.query(
+            `UPDATE cameras SET edge_agent_id = $1 WHERE id = $2`,
+            [fb.id, cameraId],
+          ).catch(() => undefined);
+        } else {
+          if (!row.agent_id) {
+            throw new Error("edge_agent_not_found");
+          }
+          throw new Error("edge_agent_offline");
+        }
       }
     }
 
@@ -685,8 +722,8 @@ export class CameraRepository {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, cameraId, userId, tokenHash, expiresAt, purpose],
     );
-    const mediaGatewayUrl = row?.public_media_url ?? undefined;
-    const localMediaGatewayUrl = row?.local_media_url ?? undefined;
+    const mediaGatewayUrl = activeAgent?.public_media_url ?? undefined;
+    const localMediaGatewayUrl = activeAgent?.local_media_url ?? undefined;
     return {
       id,
       cameraId,

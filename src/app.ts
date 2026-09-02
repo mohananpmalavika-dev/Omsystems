@@ -963,7 +963,8 @@ export async function buildApp(options?: {
   app.get("/v1/branches/:branchId/edge-agents", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     if (!(await requireAccess(request, reply, store, "device:configure", branchId))) return;
-    const agents = await store.listEdgeAgentsByBranch(branchId);
+    const rawAgents = await store.listEdgeAgentsByBranch(branchId);
+    const agents = rawAgents.filter((agent) => agent.credentialStatus !== "revoked");
     if (!edgePresenceCache) return { data: agents };
     const data = await Promise.all(agents.map(async (agent) => {
       try {

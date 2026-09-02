@@ -396,7 +396,13 @@ function aggregateDeviceType(
   policy: OperationalHealthPolicy,
   now: number,
 ) {
-  return aggregateStatuses(telemetry.filter((item) => item.deviceType === type).map((item) => telemetryStatus(item, policy, now)));
+  const items = telemetry.filter((item) => item.deviceType === type);
+  if (items.length === 0) return "unknown";
+  const statuses = items.map((item) => telemetryStatus(item, policy, now));
+  if (type === "edge-agent" && statuses.some((status) => status === "healthy")) {
+    return "healthy";
+  }
+  return aggregateStatuses(statuses);
 }
 
 function aggregateNetworkLinks(telemetry: OperationalTelemetryEnvelope[], policy: OperationalHealthPolicy, now: number): HealthStatus {
