@@ -373,7 +373,20 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, [commandQuery, recentHrefs, searchableModules]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const token = localStorage.getItem("accessToken");
+      const isPublicPath = pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password";
+      if (!token && !isPublicPath) {
+        window.location.replace("/login");
+      }
+    }
+  }, [pathname]);
+
+  useEffect(() => {
     let active = true;
+    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+    if (!token) return;
+
     authApi.getCurrentUser()
       .then((user) => {
         if (active && user) setOperator(user);
