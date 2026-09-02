@@ -31,8 +31,7 @@ import {
 } from "@/lib/alert-command-center";
 import { HlsPlayer } from "@/components/hls-player";
 import { alertAudioService } from "@/services/alert-audio/alert-audio.service";
-import type { AlertSeverity, AlertAudioStatus } from "@/services/alert-audio/alert-audio.types";
-import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
+import type { AlertAudioStatus, AlertSeverity } from "@/services/alert-audio/alert-audio.types";
 import { CriticalAudioWarningBanner } from "@/components/alerts/critical-audio-warning-banner";
 import { AlertAudioActivationModal } from "@/components/alerts/alert-audio-activation-modal";
 
@@ -239,17 +238,14 @@ export function GlobalAlertCenter() {
 
   return (
     <>
-      {/* Top Floating Alert Banner / Warning */}
-      <div className="fixed top-4 right-4 z-40 space-y-2 max-w-lg w-full pointer-events-none">
-        <div className="pointer-events-auto">
-          <CriticalAudioWarningBanner activeP1Count={activeP1Count} />
+      {/* Top Floating Alert Banner / Warning (Only when active P1 alerts exist) */}
+      {activeP1Count > 0 && (
+        <div className="fixed top-24 right-4 z-40 space-y-2 max-w-lg w-full pointer-events-none">
+          <div className="pointer-events-auto">
+            <CriticalAudioWarningBanner activeP1Count={activeP1Count} />
+          </div>
         </div>
-      </div>
-
-      {/* Persistent Audio Indicator Pill (Fixed Top-Right) */}
-      <div className="fixed top-3 right-20 z-40">
-        <AlertAudioIndicator />
-      </div>
+      )}
 
       {/* Main Popup Modal */}
       {current && (

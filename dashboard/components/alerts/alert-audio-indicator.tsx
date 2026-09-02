@@ -19,10 +19,23 @@ export function AlertAudioIndicator() {
   const [status, setStatus] = useState<AlertAudioStatus>(alertAudioService.getAudioStatus());
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     return alertAudioService.onStatusChange(setStatus);
   }, []);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [open]);
 
   const handleTest = async (sev: AlertSeverity) => {
     setTesting(sev);
@@ -39,9 +52,10 @@ export function AlertAudioIndicator() {
   const isFailed = status.state === "FAILED";
 
   return (
-    <div className="relative font-sans">
+    <div className="relative font-sans" ref={dropdownRef}>
       {/* Permanent Header Pill Button */}
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-bold border transition-all ${
           isReady
