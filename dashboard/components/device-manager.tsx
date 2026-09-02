@@ -1092,6 +1092,9 @@ export function DeviceManager() {
           username: activationUsername,
           password: activationPassword || null,
           cameraIp: targetIpAddress,
+          cameraId: credentialActivation.id,
+          channel: credentialActivation.recorderChannel ?? credentialActivation.channel,
+          recorderId: credentialActivation.recorderId,
         });
         setActivationPassword("");
         setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and refresh its stream route…");
@@ -2094,7 +2097,7 @@ export function DeviceManager() {
                 <Camera size={16} />
                 <div className="credential-device-summary">
                   <strong>{credentialActivation.displayName || credentialActivation.model || "Detected device"}</strong>
-                  <span><b>IP address:</b> {credentialActivation.ipAddress} · <b>Model:</b> {discoveryModelLabel(credentialActivation)} · <b>Type:</b> {discoveryDeviceTypeLabel(credentialActivation)}</span>
+                  <span><b>Device no:</b> {credentialActivation.id || credentialActivation.serialNumber || "unavailable"} · <b>Channel:</b> {credentialActivation.recorderChannel ?? credentialActivation.channel ?? "1"} · <b>IP address:</b> {credentialActivation.ipAddress} · <b>Model:</b> {discoveryModelLabel(credentialActivation)} · <b>Type:</b> {discoveryDeviceTypeLabel(credentialActivation)}</span>
                   <small>{credentialActivation.existingCamera
                     ? "Update the login for this active camera. Sentinel Grid will encrypt it for this gateway only, re-verify this IP address, and refresh its live-stream route."
                     : "Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device."}</small>

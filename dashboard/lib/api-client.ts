@@ -746,7 +746,7 @@ export const cameraInventoryApi = {
   updateGatewayCameraCredentials: (
     branchId: string,
     edgeAgentId: string,
-    data: { username: string; password: string | null; cameraIp: string },
+    data: { username: string; password: string | null; cameraIp: string; cameraId?: string; channel?: number; recorderId?: string },
   ) => fetchApi<{ commandId: string; status: string; scope: string; message: string }>(
     `/v1/branches/${encodeURIComponent(branchId)}/edge-agents/${encodeURIComponent(edgeAgentId)}/camera-credentials`,
     { method: "POST", body: JSON.stringify(data) },
