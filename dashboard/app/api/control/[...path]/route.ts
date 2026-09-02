@@ -146,12 +146,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         status: response.status,
         headers: { "cache-control": "no-store" },
       });
-      const isHttps =
-        process.env.NODE_ENV === "production" ||
-        request.nextUrl.protocol === "https:" ||
-        request.headers.get("x-forwarded-proto") === "https" ||
-        request.headers.get("origin")?.startsWith("https:") ||
-        request.headers.get("referer")?.startsWith("https:");
+      const isHttps = requestIsHttps(request);
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
         sameSite: "strict",
@@ -284,6 +279,19 @@ function publicControlApiBase(request: NextRequest) {
 
 function firstForwardedValue(value: string | null) {
   return value?.split(",", 1)[0]?.trim();
+}
+
+/**
+ * Mark session cookies Secure only when this request actually arrived over
+ * HTTPS. A production Next build can also run on an on-premise HTTP address;
+ * forcing Secure there causes browsers to discard the login cookies and every
+ * subsequent protected request to return 401.
+ */
+function requestIsHttps(request: NextRequest) {
+  return request.nextUrl.protocol === "https:" ||
+    firstForwardedValue(request.headers.get("x-forwarded-proto")) === "https" ||
+    request.headers.get("origin")?.startsWith("https:") ||
+    request.headers.get("referer")?.startsWith("https:");
 }
 
 function validPublicOrigin(value: string | undefined) {

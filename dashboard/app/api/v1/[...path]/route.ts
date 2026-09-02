@@ -142,12 +142,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
           status: upstreamRes.status,
           headers: { "cache-control": "no-store" },
         });
-        const isHttps =
-          process.env.NODE_ENV === "production" ||
-          request.nextUrl.protocol === "https:" ||
-          request.headers.get("x-forwarded-proto") === "https" ||
-          request.headers.get("origin")?.startsWith("https:") ||
-          request.headers.get("referer")?.startsWith("https:");
+        const isHttps = requestIsHttps(request);
         outgoing.cookies.set("sentinel_access", accessToken, {
           httpOnly: true,
           sameSite: "strict",
@@ -199,4 +194,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(request: NextRequest, context: RouteContext) {
   return proxyApiV1Request(request, context);
+}
+
+function requestIsHttps(request: NextRequest) {
+  const forwardedProtocol = request.headers.get("x-forwarded-proto")?.split(",", 1)[0]?.trim();
+  return request.nextUrl.protocol === "https:" ||
+    forwardedProtocol === "https" ||
+    request.headers.get("origin")?.startsWith("https:") ||
+    request.headers.get("referer")?.startsWith("https:");
 }

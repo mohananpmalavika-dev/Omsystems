@@ -95,11 +95,6 @@ async function startSession(): Promise<string | null> {
   if (sessionStartPromise) return sessionStartPromise;
   
   sessionStartPromise = (async () => { try {
-    const token = getAccessToken();
-    if (!token) {
-      return null;
-    }
-
     const response = await fetch(`${getApiBase()}/v1/activity/sessions/start`, {
       method: 'POST',
       headers: activityHeaders(true),
