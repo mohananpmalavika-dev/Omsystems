@@ -15,17 +15,40 @@ export interface StreamContext {
 }
 
 export class StreamProfileSelector {
+  private static globalAdminPreference: StreamQuality = 
+    (process.env.ADMIN_STREAM_PREFERENCE as StreamQuality) || "AUTO";
+
+  /**
+   * Configure global admin stream quality preference
+   */
+  static setGlobalAdminPreference(preference: StreamQuality): void {
+    StreamProfileSelector.globalAdminPreference = preference;
+  }
+
+  /**
+   * Get current global admin stream quality preference
+   */
+  static getGlobalAdminPreference(): StreamQuality {
+    return StreamProfileSelector.globalAdminPreference;
+  }
+
   static select(context: StreamContext): { resolvedQuality: "SUBSTREAM" | "MAINSTREAM"; mediaMode: "DIRECT" | "REMUX" | "TRANSCODE" } {
-    // 1. If explicit quality requested
-    if (context.requestedQuality === "MAINSTREAM") {
-      // Check if network or gateway cannot support main stream
-      if (context.network?.mode === "FAILOVER" || (context.gateway && context.gateway.cpuPct > 85)) {
+    // 0. Effective requested quality incorporating Admin Global Preference
+    const effectiveQuality = context.requestedQuality && context.requestedQuality !== "AUTO"
+      ? context.requestedQuality
+      : StreamProfileSelector.globalAdminPreference;
+
+    // 1. If Admin or Client explicitly requested MAINSTREAM
+    if (effectiveQuality === "MAINSTREAM") {
+      // Check if network is in extreme LTE failover with less than 0.5 Mbps upload
+      if (context.network?.mode === "FAILOVER" && context.network.uploadMbps < 0.5) {
         return { resolvedQuality: "SUBSTREAM", mediaMode: "REMUX" };
       }
       return { resolvedQuality: "MAINSTREAM", mediaMode: "REMUX" };
     }
 
-    if (context.requestedQuality === "SUBSTREAM") {
+
+    if (effectiveQuality === "SUBSTREAM") {
       return { resolvedQuality: "SUBSTREAM", mediaMode: "REMUX" };
     }
 
@@ -44,3 +67,4 @@ export class StreamProfileSelector {
     return { resolvedQuality: "SUBSTREAM", mediaMode: "REMUX" };
   }
 }
+

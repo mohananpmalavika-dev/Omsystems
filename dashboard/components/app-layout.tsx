@@ -64,7 +64,9 @@ import {
   Truck,
   UserRoundCog,
   Users,
+  Video,
   Wifi,
+
   Workflow,
   Wrench,
   X,
@@ -228,7 +230,9 @@ export const navigation: NavGroup[] = [
       { label: "Device Registry & ONVIF", href: "/maintenance/device-management", icon: SlidersHorizontal },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Notification Policies", href: "/operations/alert-notification-policy", icon: Bell },
+      { label: "Stream Quality (Main/Sub Stream)", href: "/admin/stream-settings", icon: Video },
       { label: "System Management & OTA", href: "/admin/system", icon: Settings },
+
       { label: "Mobile Operations View", href: "/mobile", icon: Truck },
       { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
     ],

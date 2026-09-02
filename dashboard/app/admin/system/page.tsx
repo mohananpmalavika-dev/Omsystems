@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { ArrowLeft, Server, Camera, Building2, RefreshCw, AlertTriangle } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
+import { AdminStreamPreferenceCard } from "@/components/admin/AdminStreamPreferenceCard";
+
 
 type Gateway = {
   id: string;
@@ -237,6 +239,11 @@ export default function SystemManagementPage() {
             </div>
           </div>
         )}
+
+        <div style={{ margin: '1rem' }}>
+          <AdminStreamPreferenceCard />
+        </div>
+
 
         {statsError && (
           <div className="admin-panel" role="alert" style={{ margin: '1rem', color: 'var(--red)' }}>
