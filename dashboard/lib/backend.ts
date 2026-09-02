@@ -116,8 +116,12 @@ export async function startLive(
       isBrowserDirectMediaUrl(sessionMediaGatewayUrl)
       ? sessionMediaGatewayUrl
       : undefined;
-    const localMediaGatewayUrl = configuredLocalMediaGatewayUrl ??
-      advertisedLocalGatewayUrl ?? legacyLocalGatewayUrl;
+    // A configured local URL is only a development/legacy fallback. In a
+    // multi-branch wall every camera must use the gateway advertised by its
+    // own edge agent; otherwise one workstation-wide localhost/LAN setting
+    // routes cameras from every other branch to the wrong appliance.
+    const localMediaGatewayUrl = advertisedLocalGatewayUrl ??
+      legacyLocalGatewayUrl ?? configuredLocalMediaGatewayUrl;
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
     if (routePreference === "auto" && localMediaGatewayUrl) {
@@ -279,8 +283,12 @@ function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
   if (mappedUrl) return mappedUrl;
 
   const candidates = [
-    runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", ""),
     sourceGatewayUrl ?? "",
+    // This singleton setting is a fallback for legacy/single-gateway
+    // deployments. A camera-specific public route always wins in a
+    // multi-branch deployment. Replacements for stale origins belong in
+    // MEDIA_GATEWAY_PUBLIC_URLS, which is keyed by the advertised origin.
+    runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", ""),
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", ""),
   ];
   return candidates.find((candidate) => {

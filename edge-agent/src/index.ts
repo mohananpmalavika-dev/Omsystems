@@ -49,6 +49,8 @@ import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
 
+const MEDIA_RUNTIME_RETRY_INTERVAL_MS = 30_000;
+
 export async function runEdgeAgent() {
 const argv = process.argv.slice(2);
 const scanOnce = hasArgument(argv, "--scan-once");
@@ -209,6 +211,7 @@ const networkCounterSampler = new NetworkCounterSampler();
 const networkPathTracker = new NetworkPathTracker(config.INTERNET_PATH_WINDOW_MS);
 const edgeResourceSampler = new EdgeResourceSampler();
 let edgeMediaRuntime: EdgeMediaRuntime | undefined;
+let lastMediaRuntimeStartAttemptAt = 0;
 let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
 const activeRecorders = new Map<string, RecorderConfig>(
@@ -228,6 +231,7 @@ if (scanOnce) {
   process.exit(0);
 }
 if (config.LIVE_MEDIA_ENABLED) {
+  lastMediaRuntimeStartAttemptAt = Date.now();
   edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId, secrets });
 }
 const cameraHeartbeat = initializeCameraHeartbeat(
@@ -298,6 +302,7 @@ process.once("SIGTERM", () => { stopping = true; });
 
 while (!stopping) {
   try {
+    await recoverEdgeMediaRuntimeIfNeeded();
     await heartbeatAndReport();
     const replay = await control.flushOutbox();
     if (replay.delivered > 0) logger.info("Replayed offline telemetry", replay);
@@ -963,6 +968,25 @@ function delay(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function recoverEdgeMediaRuntimeIfNeeded() {
+  if (!config.LIVE_MEDIA_ENABLED || edgeMediaRuntime) return;
+  if (Date.now() - lastMediaRuntimeStartAttemptAt < MEDIA_RUNTIME_RETRY_INTERVAL_MS) return;
+
+  lastMediaRuntimeStartAttemptAt = Date.now();
+  const recoveredRuntime = await startEdgeMediaRuntimeIfAvailable({
+    config,
+    gateway: control,
+    agentId,
+    secrets,
+  });
+  if (!recoveredRuntime) return;
+
+  edgeMediaRuntime = recoveredRuntime;
+  logger.info("Live media runtime recovered automatically", {
+    publicUrl: recoveredRuntime.publicUrl,
+  });
+}
+
 async function heartbeatAndReport() {
   const startedAt = Date.now();
   await control.heartbeat(
@@ -1382,5 +1406,9 @@ if (!importedAsApplicationPatch && process.env.SENTINEL_EDGE_IMPORT_ONLY !== "1"
   const message = error instanceof Error ? error.message : String(error);
   logger.error("Edge agent stopped after an unrecoverable startup error", { error: message });
   process.stderr.write(`Edge agent failed to start: ${message}\n`);
-  process.exitCode = 1;
+  // A non-zero exit must be observable by the Windows scheduled task. Merely
+  // setting exitCode can leave the process alive forever when a managed child
+  // (MediaMTX/Cloudflared) still owns an open handle, preventing automatic
+  // restart after networking returns.
+  process.exit(1);
 });
