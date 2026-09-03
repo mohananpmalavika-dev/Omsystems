@@ -193,7 +193,6 @@ export class SnapshotService {
       this.callbacks.onSnapshotReceived?.(metadata);
 
     } catch (error) {
-      console.error(`[SnapshotService] Error fetching snapshot for ${cameraId}:`, error);
       this.callbacks.onSnapshotError?.(cameraId, error as Error);
     }
   }

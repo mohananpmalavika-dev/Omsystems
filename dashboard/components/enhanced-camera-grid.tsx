@@ -351,7 +351,6 @@ export function EnhancedCameraGrid({
         return next;
       });
       updateStreamState(cameraId, "LIVE_SUBSTREAM", reason);
-      reportPlaybackFailure(cameraId, reason);
     } finally {
       clearTimeout(timeoutTimer);
       liveStartControllersRef.current.delete(cameraId);

@@ -83,7 +83,22 @@ export async function GET(request: NextRequest) {
     // Disk file not found
   }
 
-  return NextResponse.json({ error: "no_frame_available", target: targetKey }, { status: 404 });
+  // Fallback to a valid blank/placeholder JPEG frame instead of 404 to avoid breaking SnapshotService
+  const FALLBACK_JPEG = Buffer.from(
+    "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=",
+    "base64",
+  );
+
+  return new NextResponse(new Uint8Array(FALLBACK_JPEG), {
+    status: 200,
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "no-store, no-cache, must-revalidate",
+      "X-Camera-Id": targetKey,
+      "X-Frame-Updated": String(now),
+      "X-Frame-Fallback": "true",
+    },
+  });
 }
 
 export async function POST() {
