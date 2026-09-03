@@ -100,9 +100,7 @@ export async function startLive(
     let controlSession = await requestControlSession();
 
     const rawMediaGatewayUrl = controlSession.mediaGatewayUrl;
-    const sessionMediaGatewayUrl = rawMediaGatewayUrl && !rawMediaGatewayUrl.includes(".trycloudflare.com")
-      ? rawMediaGatewayUrl
-      : undefined;
+    const sessionMediaGatewayUrl = rawMediaGatewayUrl || undefined;
     const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
     const configuredLocalMediaGatewayUrl = resolveConfiguredLocalMediaGatewayUrl();
     const advertisedLocalGatewayUrl = advertisedLocalMediaGatewayUrl &&
@@ -299,7 +297,7 @@ function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
   const mappedUrl = resolveMappedPublicMediaGatewayUrl(sourceGatewayUrl);
   if (mappedUrl) return mappedUrl;
 
-  const validSource = sourceGatewayUrl && !sourceGatewayUrl.includes(".trycloudflare.com") ? sourceGatewayUrl : "";
+  const validSource = sourceGatewayUrl || "";
   const candidates = [
     validSource,
     runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", ""),
@@ -308,7 +306,6 @@ function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
   return candidates.find((candidate) => {
     try {
       const u = new URL(candidate);
-      if (u.hostname.endsWith(".trycloudflare.com")) return false;
       return u.protocol === "https:";
     } catch {
       return false;
@@ -317,7 +314,7 @@ function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
 }
 
 function resolveMappedPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
-  if (!sourceGatewayUrl || sourceGatewayUrl.includes(".trycloudflare.com")) return undefined;
+  if (!sourceGatewayUrl) return undefined;
   const raw = runtimeEnv("MEDIA_GATEWAY_PUBLIC_URLS", "");
   if (!raw) return undefined;
 

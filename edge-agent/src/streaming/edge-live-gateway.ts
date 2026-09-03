@@ -218,27 +218,31 @@ export class EdgeLiveGateway {
       return this.proxyHls(request, response);
     }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
-      const body = await readJsonBody(request);
-      if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
-        return sendJson(response, 400, { error: "invalid_request" });
+      try {
+        const body = await readJsonBody(request);
+        if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
+          return sendJson(response, 400, { error: "invalid_request" });
+        }
+        const consumed = await this.options.consumer.consume(body.controlPlaneToken);
+        if (consumed.purpose === "talk") return sendJson(response, 403, { error: "invalid_live_session" });
+        const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+        if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
+        const path = `camera-${safeIdentifier(consumed.cameraId)}`;
+        await this.options.router.ensurePath(path, sourceUri);
+        const session = this.access.issue(path);
+        return sendJson(response, 201, {
+          sessionId: session.id,
+          cameraId: consumed.cameraId,
+          path,
+          expiresAt: session.expiresAt,
+          hls: {
+            url: `${stripSlash(this.options.publicBaseUrl())}/hls/${path}/index.m3u8`,
+            bearerToken: session.token,
+          },
+        });
+      } catch (error) {
+        return sendJson(response, 500, { error: "edge_live_start_failed", message: error instanceof Error ? error.message : "Unknown error" });
       }
-      const consumed = await this.options.consumer.consume(body.controlPlaneToken);
-      if (consumed.purpose === "talk") return sendJson(response, 403, { error: "invalid_live_session" });
-      const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
-      if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
-      const path = `camera-${safeIdentifier(consumed.cameraId)}`;
-      await this.options.router.ensurePath(path, sourceUri);
-      const session = this.access.issue(path);
-      return sendJson(response, 201, {
-        sessionId: session.id,
-        cameraId: consumed.cameraId,
-        path,
-        expiresAt: session.expiresAt,
-        hls: {
-          url: `${stripSlash(this.options.publicBaseUrl())}/hls/${path}/index.m3u8`,
-          bearerToken: session.token,
-        },
-      });
     }
     if (request.method === "POST" && url.pathname === "/v1/talk/start") {
       const body = await readJsonBody(request);

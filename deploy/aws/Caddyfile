@@ -24,6 +24,10 @@ http://3-7-216-169.sslip.io, http://3.7.216.169.sslip.io, http://3.7.216.169, :8
         }
     }
 
+    handle /hls/* {
+        reverse_proxy media-gateway:8090
+    }
+
     handle /ready {
         reverse_proxy control-plane:8080
     }
@@ -67,6 +71,10 @@ https://3-7-216-169.sslip.io, https://3.7.216.169.sslip.io {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
         }
+    }
+
+    handle /hls/* {
+        reverse_proxy media-gateway:8090
     }
 
     handle /ready {

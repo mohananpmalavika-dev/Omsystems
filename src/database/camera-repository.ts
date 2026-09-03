@@ -721,11 +721,10 @@ export class CameraRepository {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, cameraId, userId, tokenHash, expiresAt, purpose],
     );
-    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 3 * 60 * 1000);
-    const isValidPublicMediaUrl = activeAgent?.public_media_url && !activeAgent.public_media_url.includes(".trycloudflare.com")
-      ? activeAgent.public_media_url
-      : (isAgentRecent && activeAgent?.agent_status === "online" ? activeAgent?.public_media_url : undefined);
-    const mediaGatewayUrl = isValidPublicMediaUrl ?? undefined;
+    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 5 * 60 * 1000);
+    const mediaGatewayUrl = (isAgentRecent && activeAgent?.agent_status === "online")
+      ? (activeAgent.public_media_url || undefined)
+      : undefined;
     const localMediaGatewayUrl = activeAgent?.local_media_url ?? undefined;
     return {
       id,

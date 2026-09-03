@@ -8,9 +8,11 @@ export class MediaMtxRouter implements MediaRouter {
     const payload = {
       source: sourceUri,
       rtspTransport: "tcp",
-      sourceOnDemand: true,
-      sourceOnDemandStartTimeout: "10s",
-      sourceOnDemandCloseAfter: "10s",
+      ...(sourceUri !== "publisher" ? {
+        sourceOnDemand: true,
+        sourceOnDemandStartTimeout: "10s",
+        sourceOnDemandCloseAfter: "10s",
+      } : {}),
     };
     const add = await fetch(
       new URL(`/v3/config/paths/add/${encodedPath}`, this.apiUrl),
