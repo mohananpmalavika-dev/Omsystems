@@ -277,7 +277,6 @@ export function EnhancedCameraGrid({
     maxDecoderLimit: decoderLimit,
     rotationEnabled: sequencing,
     tileGeometry: schedulerTileGeometry,
-    enableSnapshots: false,
   });
 
   useEffect(() => {

@@ -33,6 +33,8 @@ import { registerRecorderProfileRoutes } from "./routes/recorder-profile.routes.
 import { registerRetentionRoutes } from "./retention/routes/retention.routes.js";
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
+
+const latestAnalyticsFrames = new Map<string, { buffer: Buffer; capturedAt: string }>();
 import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
@@ -1178,6 +1180,10 @@ export async function buildApp(options?: {
     const camera = (await store.listCamerasByEdgeAgent(id))
       .find((candidate) => candidate.id === input.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found_for_edge_agent" });
+    latestAnalyticsFrames.set(input.cameraId, {
+      buffer: Buffer.from(input.imageBase64, "base64"),
+      capturedAt: input.capturedAt,
+    });
     const branch = await store.getNode(agent.branchId);
     if (!branch) return reply.code(404).send({ error: "branch_not_found" });
     const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
@@ -1217,6 +1223,20 @@ export async function buildApp(options?: {
       request.log.warn({ error, cameraId: camera.id }, "Analytics engine frame delivery failed");
       return reply.code(502).send({ error: "analytics_engine_unavailable" });
     }
+  });
+
+  app.get("/v1/cameras/:id/snapshot", async (request, reply) => {
+    const { id } = edgeAgentParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraAccess(request, reply, store, camera))) return;
+    const frame = latestAnalyticsFrames.get(id);
+    if (!frame || frame.buffer.length === 0) return reply.code(404).send({ error: "no_frame_available" });
+    return reply
+      .type("image/jpeg")
+      .header("cache-control", "no-store")
+      .header("x-frame-captured-at", frame.capturedAt)
+      .send(frame.buffer);
   });
 
   app.post("/v1/branches/:branchId/device-scans", async (request, reply) => {

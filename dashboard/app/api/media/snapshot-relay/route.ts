@@ -47,6 +47,27 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "camera_authorization_unavailable" }, { status: 503 });
   }
 
+  const controlPlaneUrl = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL;
+  if (controlPlaneUrl) {
+    try {
+      const upstream = await fetch(
+        new URL(`/v1/cameras/${encodeURIComponent(targetKey)}/snapshot`, controlPlaneUrl),
+        { headers: { authorization: `Bearer ${sessionToken}` }, cache: "no-store" },
+      );
+      if (upstream.ok) {
+        return new NextResponse(await upstream.arrayBuffer(), {
+          status: 200,
+          headers: {
+            "Content-Type": upstream.headers.get("content-type") ?? "image/jpeg",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+          },
+        });
+      }
+    } catch {
+      // Fall through to the local compatibility cache.
+    }
+  }
+
   const now = Date.now();
 
   // Try memory first
