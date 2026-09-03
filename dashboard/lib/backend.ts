@@ -118,8 +118,11 @@ export async function startLive(
       legacyLocalGatewayUrl ?? configuredLocalMediaGatewayUrl;
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
-    // When running in production in the cloud, remote browsers cannot reach branch private IPs
-    if (routePreference === "auto" && localMediaGatewayUrl && !isProduction) {
+    // Only the operator's browser can know whether it is on the branch LAN or
+    // VPN. Give it the camera-specific local route first; the browser client
+    // enforces HTTPS/mixed-content policy and requests a fresh public route
+    // when that address is not usable from its current network.
+    if (routePreference === "auto" && localMediaGatewayUrl) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
@@ -189,28 +192,14 @@ export async function startLive(
       }
     }
 
-    if (!mediaResponse) {
-      return {
-        sessionId: `standby-${cameraId}`,
-        cameraId,
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        isStandby: true,
-        status: "standby",
-      };
-    }
+    if (!mediaResponse) throw lastError ?? new Error("media_gateway_unavailable");
 
     return rewriteLiveMediaUrls(
       await mediaResponse.json() as LiveSessionResponse,
       chosenGatewayUrl,
     );
-  } catch {
-    return {
-      sessionId: `standby-${cameraId}`,
-      cameraId,
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      isStandby: true,
-      status: "standby",
-    };
+  } catch (error) {
+    throw error;
   }
 }
 
@@ -352,17 +341,15 @@ function isHttpsUrl(value?: string): boolean {
 }
 
 function rewriteLiveMediaUrls(session: LiveSessionResponse, mediaGatewayUrl: string): LiveSessionResponse {
-  const publicMediaBase = runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", "http://3.7.216.169:8090");
+  let gateway: URL;
+  try { gateway = new URL(mediaGatewayUrl); } catch { return session; }
+  if (gateway.protocol !== "https:") return session;
+
   const rewrite = (value: string) => {
     try {
       const source = new URL(value);
-      if (source.hostname === "media-gateway" || source.hostname === "localhost" || source.hostname === "127.0.0.1") {
-        const target = new URL(publicMediaBase);
-        source.protocol = target.protocol;
-        source.host = target.host;
-        return source.toString();
-      }
-      return value;
+      if (source.protocol !== "http:") return value;
+      return new URL(`${source.pathname}${source.search}`, gateway).toString();
     } catch {
       return value;
     }

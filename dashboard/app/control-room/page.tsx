@@ -32,6 +32,7 @@ import { EnhancedCameraGrid, type GridLayout, type GridSize } from "@/components
 import { LiveAiWallPanel } from "@/components/live-ai-wall-panel";
 import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
+import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
 import {
   endControlRoomActivity,
   startControlRoomActivity,
@@ -127,11 +128,15 @@ async function requestJson(url: string, signal: AbortSignal): Promise<unknown> {
 }
 
 function parseCameras(body: unknown): CameraType[] {
-  if (Array.isArray(body)) return body as CameraType[];
+  if (Array.isArray(body)) {
+    return body.map((camera) => normalizeCameraStreamProfiles(camera as CameraType & { profiles?: unknown }));
+  }
   if (!body || typeof body !== "object") return [];
   const obj = body as Record<string, unknown>;
   const data = obj.data ?? obj.cameras ?? (obj.result as any)?.cameras;
-  return Array.isArray(data) ? (data as CameraType[]) : [];
+  return Array.isArray(data)
+    ? data.map((camera) => normalizeCameraStreamProfiles(camera as CameraType & { profiles?: unknown }))
+    : [];
 }
 
 function parsePriorityCameraIds(body: unknown): string[] {

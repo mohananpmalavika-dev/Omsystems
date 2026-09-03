@@ -135,6 +135,39 @@ describe("authorized media startup", () => {
     expect(denied.json().error).toBe("invalid_bridge_identity");
   });
 
+  it("rejects a live session when no real camera source can be resolved", async () => {
+    app = await buildMediaGateway({
+      controlPlane: {
+        consumeLiveSession: vi.fn(async () => ({
+          id: "control-session",
+          cameraId: "cam-001",
+          cameraNodeId: "camera-entrance",
+          userId: "user-global-admin",
+          tenantId: "omsystems",
+          connectionSecretRef: "edge://offline/cam-001",
+          profiles: [],
+        })),
+      },
+      router: {
+        ensurePath: vi.fn(async () => undefined),
+        removePath: vi.fn(async () => undefined),
+      },
+      secrets: { resolve: vi.fn(async () => undefined) },
+      publicHlsBaseUrl: "https://media.example/hls",
+      publicWebRtcBaseUrl: "https://media.example/webrtc",
+      accessTtlMs: 60_000,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/live/start",
+      payload: { controlPlaneToken: "a".repeat(43) },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ error: "stream_secret_unavailable" });
+  });
+
   it("proxies HLS playlists through the gateway public port", async () => {
     const upstream = await import("node:http").then(({ createServer }) =>
       createServer((request, response) => {

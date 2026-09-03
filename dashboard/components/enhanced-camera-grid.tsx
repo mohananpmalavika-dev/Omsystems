@@ -350,7 +350,8 @@ export function EnhancedCameraGrid({
         next.set(cameraId, reason);
         return next;
       });
-      updateStreamState(cameraId, "LIVE_SUBSTREAM", reason);
+      updateStreamState(cameraId, "ERROR", reason);
+      reportPlaybackFailure(cameraId, reason);
     } finally {
       clearTimeout(timeoutTimer);
       liveStartControllersRef.current.delete(cameraId);
@@ -642,7 +643,12 @@ export function EnhancedCameraGrid({
         if (fallbackSlots <= 0 || desiredLive.has(entry.cameraId)) continue;
         const camera = cameraById.get(entry.cameraId);
         const scheduled = schedule.get(entry.cameraId);
-        if (!camera || camera.status === "offline" || scheduled?.streamProfile) continue;
+        if (
+          !camera ||
+          camera.status === "offline" ||
+          scheduled?.streamProfile ||
+          (scheduled?.mode !== "SNAPSHOT" && scheduled?.mode !== "ROTATING")
+        ) continue;
         desiredLive.set(entry.cameraId, entry.stream);
         fallbackSlots -= 1;
       }

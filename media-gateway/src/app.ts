@@ -87,16 +87,17 @@ export async function buildMediaGateway(options: {
     const sourceUri = await options.secrets.resolve(
       consumed.connectionSecretRef,
     );
+    if (!sourceUri) {
+      throw new GatewayError(503, "stream_secret_unavailable");
+    }
     const path = `camera-${safeIdentifier(consumed.cameraId)}`;
-    const effectiveSource = sourceUri || "publisher";
-    await options.router.ensurePath(path, effectiveSource).catch(() => undefined);
+    await options.router.ensurePath(path, sourceUri);
     const session = access.issue(path);
     return reply.code(201).send({
       sessionId: session.id,
       cameraId: consumed.cameraId,
       path,
       expiresAt: session.expiresAt,
-      isStandby: !sourceUri,
       hls: {
         url: `${stripSlash(options.publicHlsBaseUrl)}/${path}/index.m3u8`,
         bearerToken: session.token,

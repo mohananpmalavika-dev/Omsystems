@@ -3,7 +3,6 @@
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw } from "lucide-react";
-import { CctvVisualCanvas } from "./cctv-visual-canvas";
 
 const MAX_RECOVERY_ATTEMPTS = 3;
 const STALL_TIMEOUT_MS = 12_000;
@@ -19,6 +18,7 @@ export function HlsPlayer({
   muted = true,
   volume = 1,
   onPlaybackError,
+  onPlaybackStateChange,
   onVideoElementChange,
 }: {
   url: string;
@@ -28,10 +28,12 @@ export function HlsPlayer({
   muted?: boolean;
   volume?: number;
   onPlaybackError?: (reason?: string) => void;
+  onPlaybackStateChange?: (playing: boolean) => void;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
+  const playbackStateChangeRef = useRef(onPlaybackStateChange);
   const [status, setStatus] = useState<PlayerStatus>(url ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
@@ -39,6 +41,10 @@ export function HlsPlayer({
   useEffect(() => {
     playbackErrorRef.current = onPlaybackError;
   }, [onPlaybackError]);
+
+  useEffect(() => {
+    playbackStateChangeRef.current = onPlaybackStateChange;
+  }, [onPlaybackStateChange]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -67,6 +73,15 @@ export function HlsPlayer({
     let recoveryAttempts = 0;
     let lastProgressAt = Date.now();
     let playbackStarted = false;
+    let reportedPlaying = false;
+
+    const reportPlaying = (playing: boolean) => {
+      if (reportedPlaying === playing) return;
+      reportedPlaying = playing;
+      playbackStateChangeRef.current?.(playing);
+    };
+
+    playbackStateChangeRef.current?.(false);
 
     if (!url) {
       setStatus("idle");
@@ -84,6 +99,7 @@ export function HlsPlayer({
       return () => {
         disposed = true;
         clearInterval(refreshTimer);
+        playbackStateChangeRef.current?.(false);
       };
     }
 
@@ -98,6 +114,7 @@ export function HlsPlayer({
       }
       setError(reason);
       setStatus("error");
+      reportPlaying(false);
       playbackErrorRef.current?.(reason);
     };
 
@@ -108,6 +125,7 @@ export function HlsPlayer({
       recoveryAttempts = 0;
       setError(null);
       setStatus("live");
+      reportPlaying(true);
     };
 
     const recover = (reason: string) => {
@@ -119,6 +137,7 @@ export function HlsPlayer({
 
       recoveryAttempts += 1;
       setStatus("reconnecting");
+      reportPlaying(false);
       setError(`Stream stalled, reconnecting (${recoveryAttempts}/${MAX_RECOVERY_ATTEMPTS})`);
       recoveryTimer = setTimeout(() => {
         recoveryTimer = undefined;
@@ -233,6 +252,7 @@ export function HlsPlayer({
         hls.destroy();
         hls = null;
       }
+      reportPlaying(false);
       video.pause();
       video.removeAttribute("src");
       video.load();
@@ -249,24 +269,21 @@ export function HlsPlayer({
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-950" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-      {/* CCTV Visual Canvas fallback always active behind video */}
-      <CctvVisualCanvas
-        cameraName={cameraName}
-        branchName="BRANCH SOC"
-        zone="LIVE CAMERA"
-        status="online"
-      />
-
       {isSnapshotFeed ? (
         <img
           src={snapshotSource(url, bearerToken, retryNonce)}
           alt={`Live video from ${cameraName}`}
           className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0"}`}
-          onLoad={() => { setStatus("live"); setError(null); }}
+          onLoad={() => {
+            setStatus("live");
+            setError(null);
+            playbackStateChangeRef.current?.(true);
+          }}
           onError={() => {
             const reason = "Camera frame is unavailable";
             setStatus("error");
             setError(reason);
+            playbackStateChangeRef.current?.(false);
             playbackErrorRef.current?.(reason);
           }}
         />

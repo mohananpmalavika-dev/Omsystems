@@ -20,7 +20,7 @@ import {
   SlidersHorizontal,
   AlertTriangle,
 } from "lucide-react";
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
   AnalyticsAlert,
   AnalyticsRule,
@@ -33,33 +33,32 @@ import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
-import { CctvVisualCanvas } from "./cctv-visual-canvas";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
-    invalid_live_session: "Live authorization refreshed",
-    media_gateway_failure: "Edge gateway standby · Live feed active",
-    media_gateway_unavailable: "Edge gateway standby · Live feed active",
-    stream_secret_unavailable: "Edge camera standby · Live feed active",
-    forbidden: "Camera access restricted",
+    invalid_live_session: "Live authorization expired",
+    media_gateway_failure: "The media gateway rejected the stream",
+    media_gateway_unavailable: "The media gateway is unavailable",
+    stream_secret_unavailable: "The camera stream source is not configured",
+    forbidden: "You do not have live camera access",
     approval_required: "Live camera access requires approval",
     camera_not_found: "Camera is no longer registered",
-    resource_not_found: "Camera resource not found",
-    control_plane_unavailable: "Reconnecting control plane…",
-    edge_agent_not_found: "Edge gateway standby · Live feed active",
-    edge_agent_offline: "Branch edge gateway offline · Live feed active",
-    invalid_bridge_identity: "Edge stream synchronizing",
-    internal_error: "Reconnecting live session…",
-    local_media_gateway_requires_https: "Live stream standby",
-    local_media_gateway_unavailable: "Local gateway standby · Live feed active",
-    live_session_unavailable: "Live feed active · Edge stream standby",
-    live_session_timeout: "Reconnecting live stream…",
-    "Failed to fetch": "Reconnecting gateway…",
-    "TypeError: Failed to fetch": "Reconnecting gateway…",
-    "HLS playback failed": "Live feed active",
-    "Live session timed out": "Reconnecting live feed…",
+    resource_not_found: "The camera resource was not found",
+    control_plane_unavailable: "The control plane is unreachable",
+    edge_agent_not_found: "The camera edge agent is unavailable",
+    edge_agent_offline: "The branch edge gateway is offline",
+    invalid_bridge_identity: "The media bridge identity is invalid",
+    internal_error: "The control plane failed to create a live session",
+    local_media_gateway_requires_https: "The camera gateway needs an HTTPS tunnel",
+    local_media_gateway_unavailable: "The local camera gateway is unreachable",
+    live_session_unavailable: "Live authorization is unavailable",
+    live_session_timeout: "Live authorization timed out",
+    "Failed to fetch": "The live gateway could not be reached",
+    "TypeError: Failed to fetch": "The live gateway could not be reached",
+    "HLS playback failed": "The stream could not be played",
+    "Live session timed out": "Live authorization timed out",
   };
-  return labels[reason] ?? "Live feed active";
+  return labels[reason] ?? "Unable to start the live feed";
 }
 
 function shouldOfferCredentialUpdate(reason?: string) {
@@ -122,6 +121,7 @@ function CameraTileComponent({
   const isActive = camera.status !== "offline";
   const [zoom, setZoom] = useState(1);
   const [isMuted, setIsMuted] = useState(true);
+  const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showPtzControl, setShowPtzControl] = useState(false);
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
   const [settingsPreRollSeconds, setSettingsPreRollSeconds] = useState(recording?.preRollSeconds ?? 30);
@@ -137,6 +137,12 @@ function CameraTileComponent({
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
     onVideoElementChange?.(videoElement);
   }, [onVideoElementChange]);
+  const handlePlaybackStateChange = useCallback((playing: boolean) => {
+    setHasLiveFrame(playing);
+  }, []);
+  useEffect(() => {
+    setHasLiveFrame(false);
+  }, [session?.sessionId, session?.hls?.url]);
   const deferredDescription = degradationReason
     ? degradationReason.replaceAll("_", " ").toLowerCase()
     : desiredPlaybackMode === "SNAPSHOT"
@@ -144,7 +150,7 @@ function CameraTileComponent({
       : desiredPlaybackMode === "ROTATING"
         ? "rotation queue"
       : null;
-  const canPlayLive = isActive && Boolean(session?.hls);
+  const canPlayLive = isActive && hasLiveFrame;
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
   const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
@@ -253,6 +259,7 @@ function CameraTileComponent({
               cameraId={camera.id}
               muted={isMuted}
               onPlaybackError={onPlaybackError}
+              onPlaybackStateChange={handlePlaybackStateChange}
               onVideoElementChange={handleVideoElementChange}
             />
           ) : snapshotUrl ? (
@@ -262,21 +269,18 @@ function CameraTileComponent({
               className="live-video"
             />
           ) : (
-            <div className="relative w-full h-full" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
-              <CctvVisualCanvas
-                cameraName={camera.name}
-                branchName={(camera as any).branchName || (camera as any).branchCode || camera.branchId || "Branch Main"}
-                zone={camera.model || "CASH / MAIN"}
-                status={camera.status}
-              />
+            <div className={`camera-feed-placeholder ${liveError ? "has-error" : ""}`}>
+              <CameraIcon size={26} />
+              <span>{camera.status === "offline" ? "Camera offline" : "No live video"}</span>
+              <small>{camera.status === "offline" ? "Waiting for the edge camera to reconnect" : "Connect the edge stream to start viewing"}</small>
             </div>
           )}
         </div>
 
         <div className="tile-topline">
-          <span className={`status-pill ${session?.hls ? "online" : camera.status === "offline" ? "offline" : "online"}`}>
+          <span className={`status-pill ${hasLiveFrame ? "online" : liveError ? "offline" : camera.status}`}>
             <i />
-            {session?.hls ? "Live HLS" : "Live Feed"}
+            {hasLiveFrame ? "Live HLS" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
           </span>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
@@ -309,21 +313,27 @@ function CameraTileComponent({
 
         {!session?.hls && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
-            <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading}>
+            <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading || !isActive}>
               {loading ? (
                 <LoaderCircle size={15} className="spin" />
               ) : (
                 <Radio size={15} />
               )}
-              {loading ? "Connecting Edge Stream…" : "Connect Edge HLS"}
+              {loading ? "Connecting Edge Stream…" : !isActive ? "Camera offline" : "Connect Edge HLS"}
             </button>
           </div>
         )}
 
-        {liveError && !loading && !session?.hls && (
-          <span className="viewer-playback-status" style={{ background: "rgba(15, 23, 42, 0.85)", color: "#bae6fd", border: "1px solid rgba(56, 189, 248, 0.3)" }}>
-            {formatLiveError(liveError)}
-          </span>
+        {liveError && !loading && (
+          <div className="camera-live-error" role="status">
+            <AlertTriangle size={13} />
+            <span>{formatLiveError(liveError)}</span>
+            {showCredentialUpdate && (
+              <Link href={`/maintenance/device-management?cameraId=${encodeURIComponent(camera.id)}`}>
+                Update credentials
+              </Link>
+            )}
+          </div>
         )}
 
         {!session?.hls && !liveError && deferredDescription && (
@@ -379,7 +389,7 @@ function CameraTileComponent({
           </button>
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
-          <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!session?.hls}><SnapshotIcon size={15} /></button>
+          <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
         </div>
         {zoom > 1 && <button type="button" className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
         {showPtzControl && isActive && session?.sessionId && (

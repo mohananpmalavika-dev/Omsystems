@@ -704,9 +704,8 @@ export class CameraRepository {
             [fb.id, cameraId],
           ).catch(() => undefined);
         } else {
-          // Do not fail live session creation when branch edge agent is offline.
-          // Allow control plane to issue session token so cloud media-gateway can serve standby video.
-          activeAgent = undefined;
+          if (!row.agent_id) throw new Error("edge_agent_not_found");
+          throw new Error("edge_agent_offline");
         }
       }
     }
