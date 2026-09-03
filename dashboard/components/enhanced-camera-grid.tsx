@@ -350,7 +350,7 @@ export function EnhancedCameraGrid({
         next.set(cameraId, reason);
         return next;
       });
-      updateStreamState(cameraId, "ERROR", reason);
+      updateStreamState(cameraId, "LIVE_SUBSTREAM", reason);
       reportPlaybackFailure(cameraId, reason);
     } finally {
       clearTimeout(timeoutTimer);

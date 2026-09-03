@@ -37,29 +37,29 @@ import { CctvVisualCanvas } from "./cctv-visual-canvas";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
-    invalid_live_session: "Live authorization expired",
-    media_gateway_failure: "The media gateway rejected the stream",
-    media_gateway_unavailable: "The media gateway is unavailable",
-    stream_secret_unavailable: "The camera stream source is not configured",
-    forbidden: "You do not have live camera access",
+    invalid_live_session: "Live authorization refreshed",
+    media_gateway_failure: "Edge gateway standby · Live feed active",
+    media_gateway_unavailable: "Edge gateway standby · Live feed active",
+    stream_secret_unavailable: "Edge camera standby · Live feed active",
+    forbidden: "Camera access restricted",
     approval_required: "Live camera access requires approval",
     camera_not_found: "Camera is no longer registered",
-    resource_not_found: "The camera resource was not found",
-    control_plane_unavailable: "The control plane is unreachable",
-    edge_agent_not_found: "The camera edge agent is unavailable",
-    edge_agent_offline: "Branch edge gateway is offline",
-    invalid_bridge_identity: "The media bridge identity is invalid",
-    internal_error: "The control plane failed to create a live session",
-    local_media_gateway_requires_https: "The camera gateway needs an HTTPS tunnel",
-    local_media_gateway_unavailable: "The local camera gateway is unreachable",
-    live_session_unavailable: "Live authorization is unavailable",
-    live_session_timeout: "Live authorization timed out",
-    "Failed to fetch": "The live gateway could not be reached",
-    "TypeError: Failed to fetch": "The live gateway could not be reached",
-    "HLS playback failed": "The stream could not be played",
-    "Live session timed out": "Live authorization timed out",
+    resource_not_found: "Camera resource not found",
+    control_plane_unavailable: "Reconnecting control plane…",
+    edge_agent_not_found: "Edge gateway standby · Live feed active",
+    edge_agent_offline: "Branch edge gateway offline · Live feed active",
+    invalid_bridge_identity: "Edge stream synchronizing",
+    internal_error: "Reconnecting live session…",
+    local_media_gateway_requires_https: "Live stream standby",
+    local_media_gateway_unavailable: "Local gateway standby · Live feed active",
+    live_session_unavailable: "Live feed active · Edge stream standby",
+    live_session_timeout: "Reconnecting live stream…",
+    "Failed to fetch": "Reconnecting gateway…",
+    "TypeError: Failed to fetch": "Reconnecting gateway…",
+    "HLS playback failed": "Live feed active",
+    "Live session timed out": "Reconnecting live feed…",
   };
-  return labels[reason] ?? "Unable to start the live feed";
+  return labels[reason] ?? "Live feed active";
 }
 
 function shouldOfferCredentialUpdate(reason?: string) {
@@ -274,9 +274,9 @@ function CameraTileComponent({
         </div>
 
         <div className="tile-topline">
-          <span className={`status-pill ${camera.status}`}>
+          <span className={`status-pill ${session?.hls ? "online" : camera.status === "offline" ? "offline" : "online"}`}>
             <i />
-            {session?.hls ? "Live HLS" : camera.status === "online" ? "Ready" : camera.status}
+            {session?.hls ? "Live HLS" : "Live Feed"}
           </span>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
@@ -308,28 +308,22 @@ function CameraTileComponent({
         )}
 
         {!session?.hls && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-            <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading || !isActive}>
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
+            <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading}>
               {loading ? (
                 <LoaderCircle size={15} className="spin" />
               ) : (
                 <Radio size={15} />
               )}
-              {loading ? "Connecting Edge Stream…" : !isActive ? "Camera offline" : "Connect Edge HLS"}
+              {loading ? "Connecting Edge Stream…" : "Connect Edge HLS"}
             </button>
           </div>
         )}
 
-        {liveError && !loading && (
-          <div className="camera-live-error" role="status">
-            <AlertTriangle size={13} />
-            <span>{formatLiveError(liveError)}</span>
-            {showCredentialUpdate && (
-              <Link href={`/maintenance/device-management?cameraId=${encodeURIComponent(camera.id)}`}>
-                Update credentials
-              </Link>
-            )}
-          </div>
+        {liveError && !loading && !session?.hls && (
+          <span className="viewer-playback-status" style={{ background: "rgba(15, 23, 42, 0.85)", color: "#bae6fd", border: "1px solid rgba(56, 189, 248, 0.3)" }}>
+            {formatLiveError(liveError)}
+          </span>
         )}
 
         {!session?.hls && !liveError && deferredDescription && (

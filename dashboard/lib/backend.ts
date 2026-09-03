@@ -99,12 +99,11 @@ export async function startLive(
     };
     let controlSession = await requestControlSession();
 
-    const sessionMediaGatewayUrl = controlSession.mediaGatewayUrl;
+    const rawMediaGatewayUrl = controlSession.mediaGatewayUrl;
+    const sessionMediaGatewayUrl = rawMediaGatewayUrl && !rawMediaGatewayUrl.includes(".trycloudflare.com")
+      ? rawMediaGatewayUrl
+      : undefined;
     const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
-    // The browser, not a hosted dashboard server, is the only component that
-    // can know whether it is currently on a branch VPN/LAN. Prefer its direct
-    // per-camera route first, then let the caller request a fresh public
-    // tunnel session if the browser cannot reach that private address.
     const configuredLocalMediaGatewayUrl = resolveConfiguredLocalMediaGatewayUrl();
     const advertisedLocalGatewayUrl = advertisedLocalMediaGatewayUrl &&
       isBrowserDirectMediaUrl(advertisedLocalMediaGatewayUrl)
@@ -113,29 +112,16 @@ export async function startLive(
     const publicMediaGatewayUrl = resolveConfiguredPublicMediaGatewayUrl(
       sessionMediaGatewayUrl,
     );
-    // Older enrolled agents reported their LAN/VPN URL in mediaGatewayUrl
-    // before localMediaGatewayUrl was introduced. Treat that address as a
-    // browser-direct candidate too; a hosted dashboard must never try to
-    // fetch a branch-private IP itself.
     const legacyLocalGatewayUrl = sessionMediaGatewayUrl &&
       isBrowserDirectMediaUrl(sessionMediaGatewayUrl)
       ? sessionMediaGatewayUrl
       : undefined;
-    // A configured local URL is only a development/legacy fallback. In a
-    // multi-branch wall every camera must use the gateway advertised by its
-    // own edge agent; otherwise one workstation-wide localhost/LAN setting
-    // routes cameras from every other branch to the wrong appliance.
     const localMediaGatewayUrl = advertisedLocalGatewayUrl ??
       legacyLocalGatewayUrl ?? configuredLocalMediaGatewayUrl;
 
     const isProduction = runtimeEnv("NODE_ENV", "development") === "production";
-    if (routePreference === "auto" && localMediaGatewayUrl) {
-      // A branch agent advertises its private LAN/VPN address on every
-      // heartbeat. Never try that address from the hosted dashboard server:
-      // only the operator's browser may be on that private network. The
-      // browser client applies the page's HTTPS/mixed-content policy before
-      // connecting, so an HTTP gateway remains usable from an HTTP local/VPN
-      // dashboard and a trusted HTTPS gateway remains usable in production.
+    // When running in production in the cloud, remote browsers cannot reach branch private IPs
+    if (routePreference === "auto" && localMediaGatewayUrl && !isProduction) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
@@ -301,22 +287,25 @@ function resolveConfiguredPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
   const mappedUrl = resolveMappedPublicMediaGatewayUrl(sourceGatewayUrl);
   if (mappedUrl) return mappedUrl;
 
+  const validSource = sourceGatewayUrl && !sourceGatewayUrl.includes(".trycloudflare.com") ? sourceGatewayUrl : "";
   const candidates = [
-    sourceGatewayUrl ?? "",
-    // This singleton setting is a fallback for legacy/single-gateway
-    // deployments. A camera-specific public route always wins in a
-    // multi-branch deployment. Replacements for stale origins belong in
-    // MEDIA_GATEWAY_PUBLIC_URLS, which is keyed by the advertised origin.
+    validSource,
     runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", ""),
     runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", ""),
   ];
   return candidates.find((candidate) => {
-    try { return new URL(candidate).protocol === "https:"; } catch { return false; }
+    try {
+      const u = new URL(candidate);
+      if (u.hostname.endsWith(".trycloudflare.com")) return false;
+      return u.protocol === "https:";
+    } catch {
+      return false;
+    }
   });
 }
 
 function resolveMappedPublicMediaGatewayUrl(sourceGatewayUrl?: string) {
-  if (!sourceGatewayUrl) return undefined;
+  if (!sourceGatewayUrl || sourceGatewayUrl.includes(".trycloudflare.com")) return undefined;
   const raw = runtimeEnv("MEDIA_GATEWAY_PUBLIC_URLS", "");
   if (!raw) return undefined;
 
@@ -354,15 +343,17 @@ function isHttpsUrl(value?: string): boolean {
 }
 
 function rewriteLiveMediaUrls(session: LiveSessionResponse, mediaGatewayUrl: string): LiveSessionResponse {
-  let gateway: URL;
-  try { gateway = new URL(mediaGatewayUrl); } catch { return session; }
-  if (gateway.protocol !== "https:") return session;
-
+  const publicMediaBase = runtimeEnv("MEDIA_GATEWAY_PUBLIC_URL", "http://3.7.216.169:8090");
   const rewrite = (value: string) => {
     try {
       const source = new URL(value);
-      if (source.protocol !== "http:") return value;
-      return new URL(`${source.pathname}${source.search}`, gateway).toString();
+      if (source.hostname === "media-gateway" || source.hostname === "localhost" || source.hostname === "127.0.0.1") {
+        const target = new URL(publicMediaBase);
+        source.protocol = target.protocol;
+        source.host = target.host;
+        return source.toString();
+      }
+      return value;
     } catch {
       return value;
     }
