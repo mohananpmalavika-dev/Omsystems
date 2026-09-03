@@ -211,7 +211,7 @@ export class EdgeLiveGateway {
       setCorsHeaders(request, response);
       if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     }
-    if (request.method === "GET" && url.pathname === "/health") {
+    if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok", service: "sentinel-edge-media-gateway" });
     }
     if (["GET", "HEAD", "OPTIONS"].includes(request.method ?? "") && url.pathname.startsWith("/hls/")) {

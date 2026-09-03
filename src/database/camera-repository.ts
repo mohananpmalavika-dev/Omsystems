@@ -674,11 +674,10 @@ export class CameraRepository {
     );
     const row = route.rows[0];
     let activeAgent = row;
-    if (row?.edge_agent_id) {
-      const lastSeenMs = row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
-      const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
-      if (row.agent_status === "offline" || isStale || !row.agent_id) {
-        // Auto-heal: Check if the camera's branch has an active online gateway
+    const lastSeenMs = row?.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
+    const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
+    if (!row?.edge_agent_id || row.agent_status === "offline" || isStale || !row.agent_id) {
+      // Auto-heal: Check if the camera's branch has an active online gateway
         const fallbackAgent = await this.pool.query<{
           id: string;
           public_media_url: string | null;
@@ -718,7 +717,6 @@ export class CameraRepository {
           activeAgent = undefined;
         }
       }
-    }
 
     const id = randomUUID();
     const token = randomBytes(32).toString("base64url");
