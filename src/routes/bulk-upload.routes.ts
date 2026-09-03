@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import type { ControlPlaneStore, UserManagementStore } from "../control-plane-store.js";
 import { z } from "zod";
 import { randomBytes } from "crypto";
+import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 
 // CSV Schema Validators
 const branchCsvSchema = z.object({
@@ -454,7 +455,13 @@ export async function registerBulkUploadRoutes(
         let createdCamId = `cam-${Date.now()}-${i}`;
         if (typeof (store as any).createCamera === "function") {
           const created = await (store as any).createCamera(branchId, cameraPayload);
-          if (created && created.id) createdCamId = created.id;
+          if (created && created.id) {
+            createdCamId = created.id;
+            const branch = await store.getNode(branchId);
+            if (branch?.tenantId) {
+              await ensureCameraAiBundle(store, branch.tenantId, created.id, request.currentUser.id).catch(() => undefined);
+            }
+          }
         }
 
         results.created++;

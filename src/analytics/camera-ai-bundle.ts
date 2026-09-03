@@ -62,8 +62,13 @@ export function cameraAiRuleInput(
   };
 }
 
+export type CameraAiBundleStore = Pick<
+  ControlPlaneStore,
+  "listAnalyticsRules" | "createAnalyticsRule" | "updateAnalyticsRule"
+>;
+
 export async function ensureCameraAiBundle(
-  store: ControlPlaneStore,
+  store: CameraAiBundleStore,
   tenantId: string,
   cameraId: string,
   createdBy?: string,
