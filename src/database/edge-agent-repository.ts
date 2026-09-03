@@ -508,6 +508,14 @@ export class EdgeAgentRepository {
              time_synchronization = EXCLUDED.time_synchronization,
              discovery_layers = EXCLUDED.discovery_layers,
              status = CASE
+               WHEN camera_discoveries.status = 'approved' AND NOT EXISTS (
+                 SELECT 1 FROM cameras c
+                 WHERE c.branch_node_id = camera_discoveries.branch_node_id
+                   AND (
+                     (c.ip_address IS NOT NULL AND camera_discoveries.ip_address IS NOT NULL AND c.ip_address = camera_discoveries.ip_address AND COALESCE(c.recorder_channel, c.channel, 0) = camera_discoveries.recorder_channel)
+                     OR (c.serial_number IS NOT NULL AND camera_discoveries.serial_number IS NOT NULL AND LOWER(BTRIM(c.serial_number)) = LOWER(BTRIM(camera_discoveries.serial_number)))
+                   )
+               ) THEN 'pending'::discovery_status
                WHEN camera_discoveries.status = 'rejected' THEN camera_discoveries.status
                WHEN camera_discoveries.status = 'approved' THEN camera_discoveries.status
                WHEN EXCLUDED.duplicate_status = 'duplicate' THEN 'rejected'::discovery_status

@@ -20,6 +20,7 @@ import type { AnalyticsAlert, AnalyticsRule, Camera, LiveSessionResponse } from 
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
+import { cameraInventoryApi } from "@/lib/api-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
@@ -50,6 +51,7 @@ export interface EnhancedCameraGridProps {
   aiByCamera?: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
   showAiOverlay?: boolean;
   onOpenCameraAi?: (cameraId: string) => void;
+  onDeleteCamera?: (cameraId: string) => Promise<void>;
 }
 
 interface VisibleRange {
@@ -77,6 +79,7 @@ interface GridTileProps {
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay: boolean;
   onOpenAi?: (cameraId: string) => void;
+  onDeleteCamera?: (cameraId: string) => Promise<void> | void;
 }
 
 const GridTile = memo(function GridTile({
@@ -95,6 +98,7 @@ const GridTile = memo(function GridTile({
   aiOverlay,
   showAiOverlay,
   onOpenAi,
+  onDeleteCamera,
 }: GridTileProps) {
   const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -120,6 +124,7 @@ const GridTile = memo(function GridTile({
       aiOverlay={aiOverlay}
       showAiOverlay={showAiOverlay}
       onOpenAi={onOpenAi ? () => onOpenAi(camera.id) : undefined}
+      onDeleteCamera={onDeleteCamera}
       index={index}
     />
   );
@@ -140,6 +145,7 @@ export function EnhancedCameraGrid({
   aiByCamera,
   showAiOverlay = true,
   onOpenCameraAi,
+  onDeleteCamera,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -173,6 +179,25 @@ export function EnhancedCameraGrid({
   const [sequencing, setSequencing] = useState(true);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
+
+  const handleDeleteCamera = useCallback(async (cameraId: string) => {
+    if (onDeleteCamera) {
+      await onDeleteCamera(cameraId);
+    } else {
+      await cameraInventoryApi.deleteCamera(cameraId);
+    }
+    setGridPositions((prev) => {
+      const next = new Map(prev);
+      for (const [pos, entry] of next.entries()) {
+        if (entry.camera.id === cameraId) {
+          next.delete(pos);
+        }
+      }
+      return next;
+    });
+    closeSession(cameraId);
+  }, [onDeleteCamera, closeSession]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
@@ -996,6 +1021,7 @@ export function EnhancedCameraGrid({
                   aiOverlay={aiByCamera?.get(camera.id)}
                   showAiOverlay={showAiOverlay}
                   onOpenAi={onOpenCameraAi}
+                  onDeleteCamera={handleDeleteCamera}
                   index={i}
                 />
               </div>

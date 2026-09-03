@@ -255,7 +255,12 @@ export class CameraRepository {
         source.device_identity_id = identity.deviceIdentityId;
         source.linked_camera_id = identity.cameraId ?? null;
       }
-      const camera = source.linked_camera_id
+      let existingCameraExists = false;
+      if (source.linked_camera_id) {
+        const check = await client.query(`SELECT 1 FROM cameras WHERE id = $1::uuid`, [source.linked_camera_id]);
+        existingCameraExists = (check.rowCount ?? 0) > 0;
+      }
+      const camera = (source.linked_camera_id && existingCameraExists)
         ? await this.updateLinkedCamera(client, source.linked_camera_id, source, input)
         : await this.insertApprovedCamera(client, branchId, source, input);
       await client.query(
@@ -548,7 +553,15 @@ export class CameraRepository {
     try {
       await client.query("BEGIN");
       const identity = await this.deviceIdentities.resolveManual(client, branchId, input);
+      let existingCameraRow: CameraRow | undefined;
       if (identity.cameraId) {
+        const existing = await client.query<CameraRow>(
+          `${selectCamera} WHERE cameras.id = $1::uuid`,
+          [identity.cameraId],
+        );
+        existingCameraRow = existing.rows[0];
+      }
+      if (existingCameraRow) {
         await client.query(
           `UPDATE cameras
            SET connection_secret_ref = $2,
@@ -557,16 +570,12 @@ export class CameraRepository {
                profiles = COALESCE($5::jsonb, profiles),
                identity_last_seen_at = now()
            WHERE id = $1::uuid`,
-          [identity.cameraId, input.connectionSecretRef,
+          [existingCameraRow.id, input.connectionSecretRef,
            input.connectionTransport ?? null, input.ipAddress ?? null,
            input.profile ? JSON.stringify([input.profile]) : null],
         );
-        const existing = await client.query<CameraRow>(
-          `${selectCamera} WHERE cameras.id = $1::uuid`,
-          [identity.cameraId],
-        );
         await client.query("COMMIT");
-        return existing.rows[0] ? mapCamera(existing.rows[0]) : undefined;
+        return mapCamera(existingCameraRow);
       }
       const nodeId = randomUUID();
       const ltreeId = nodeId.replaceAll("-", "_");

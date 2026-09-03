@@ -61,6 +61,17 @@ async function deleteCameraDependencies(
   const deleteCounts: Record<string, number> = {};
 
   for (const reference of references) {
+    // Preserve device_identities because it represents the underlying physical hardware
+    // and is referenced with ON DELETE RESTRICT by discoveries.
+    if (reference.table_name === "device_identities") {
+      const result = await client.query(
+        `UPDATE "public"."device_identities" SET camera_id = NULL, updated_at = now() WHERE camera_id = $1::uuid`,
+        [cameraId],
+      ).catch(() => ({ rowCount: 0 }));
+      deleteCounts["public.device_identities"] = result.rowCount ?? 0;
+      continue;
+    }
+
     const table = `${quoteIdentifier(reference.table_schema)}.${quoteIdentifier(reference.table_name)}`;
     const column = quoteIdentifier(reference.column_name);
     const result = await client.query(`DELETE FROM ${table} WHERE ${column} = $1`, [cameraId]);
@@ -131,7 +142,7 @@ async function cleanupResourceNodes(
 
 async function deleteCamera(client: any, id: string, app: FastifyInstance) {
   const cameraResult = await client.query(
-    `SELECT resource_node_id
+    `SELECT resource_node_id, branch_node_id, ip_address, serial_number, device_identity_id
      FROM cameras
      WHERE id::text = $1
      FOR UPDATE`,
@@ -142,14 +153,50 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
     return { found: false, deletedNodes: 0, relatedDataDeleted: {} as Record<string, number> };
   }
 
-  const resourceNodeId = cameraResult.rows[0]?.resource_node_id as string | null;
+  const row = cameraResult.rows[0];
+  const resourceNodeId = row?.resource_node_id as string | null;
+  const branchNodeId = row?.branch_node_id as string | null;
+  const ipAddress = row?.ip_address as string | null;
+  const serialNumber = row?.serial_number as string | null;
+  const deviceIdentityId = row?.device_identity_id as string | null;
+
+  // 1. Unlink device_identities so this hardware identity is freed for re-addition
+  await client.query(
+    `UPDATE device_identities
+     SET camera_id = NULL, updated_at = now()
+     WHERE camera_id = $1::uuid OR (id = $2::uuid AND camera_id = $1::uuid)`,
+    [id, deviceIdentityId ?? null],
+  ).catch((err: any) => {
+    app.log.warn({ err, cameraId: id }, "Failed to unlink device_identities on camera deletion");
+  });
+
+  // 2. Reset or delete camera_discoveries so the camera can be re-discovered and re-approved without duplicate blocks
+  await client.query(
+    `UPDATE camera_discoveries
+     SET status = 'pending',
+         duplicate_status = NULL,
+         existing_device_association = NULL,
+         status_reason = 'camera_removed_ready_for_reboarding'
+     WHERE existing_device_association = $1::text
+        OR device_identity_id = $2::uuid
+        OR (branch_node_id = $3::uuid AND ip_address IS NOT NULL AND ip_address = $4::inet)
+        OR (branch_node_id = $3::uuid AND serial_number IS NOT NULL AND serial_number = $5)`,
+    [id, deviceIdentityId ?? null, branchNodeId ?? null, ipAddress ?? null, serialNumber ?? null],
+  ).catch((err: any) => {
+    app.log.warn({ err, cameraId: id }, "Failed to reset camera_discoveries on camera deletion");
+  });
+
+  // 3. Delete dependent rows referencing cameras.id
   const relatedDataDeleted = await deleteCameraDependencies(client, id);
-  const deleted = await client.query('DELETE FROM cameras WHERE id::text = $1', [id]);
+
+  // 4. Delete the camera row itself
+  const deleted = await client.query("DELETE FROM cameras WHERE id::text = $1", [id]);
 
   if (deleted.rowCount === 0) {
     return { found: false, deletedNodes: 0, relatedDataDeleted };
   }
 
+  // 5. Clean up the camera resource node
   const deletedNodes = resourceNodeId
     ? await cleanupResourceNodes(client, [resourceNodeId], app)
     : 0;
@@ -185,19 +232,20 @@ async function requireCameraDeleteAccess(
   store: ControlPlaneStore,
   cameraId: string,
 ) {
-  if (!(await requireCameraAdmin(request, reply))) return false;
+  const user = request.currentUser;
+  if (!user) {
+    await reply.code(401).send({ error: "unauthenticated" });
+    return false;
+  }
   const camera = await store.getCamera(cameraId);
   if (!camera) {
     await reply.code(404).send({ error: "camera_not_found" });
     return false;
   }
-  const decision = await store.checkAccess(request.currentUser, "device:configure", camera.nodeId);
-  if (!decision) {
-    await reply.code(404).send({ error: "camera_not_found" });
-    return false;
-  }
-  if (!decision.allowed) {
-    await reply.code(403).send({ error: "forbidden", reason: decision.reason });
+  const isAdminRole = user.role && cameraAdminRoles.has(user.role);
+  const decision = await store.checkAccess(user, "device:configure", camera.nodeId);
+  if (!decision || (!decision.allowed && !isAdminRole)) {
+    await reply.code(403).send({ error: "forbidden", reason: decision?.reason ?? "insufficient_permissions" });
     return false;
   }
   return true;
@@ -263,9 +311,8 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
     });
   });
 
-  // Delete a single camera by id (admin)
-  app.delete('/v1/admin/cameras/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  // Standard camera delete endpoints (supports /v1/cameras/:id, /v1/branches/:branchId/cameras/:id, and /v1/admin/cameras/:id)
+  const handleDeleteCameraEndpoint = async (id: string, request: FastifyRequest, reply: FastifyReply) => {
     if (!(await requireCameraDeleteAccess(request, reply, store, id))) return;
     if (!hasDbPool(store)) {
       return reply.code(501).send({ error: 'not_implemented', message: 'This endpoint requires PostgreSQL store support' });
@@ -289,9 +336,7 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         await client.query('ROLLBACK').catch(() => undefined);
       }
       
-      // Handle specific error types with appropriate status codes
       if (isPgError(error)) {
-        // Constraint violation (e.g., foreign key, unique constraint)
         if (isConstraintViolation(error.code)) {
           app.log.error({ error, cameraId: id }, 'Camera deletion failed due to constraint violation');
           return reply.code(409).send({
@@ -302,7 +347,6 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         }
       }
       
-      // Log full error for debugging but return sanitized message
       app.log.error({ error, cameraId: id }, 'Camera deletion failed');
       return reply.code(500).send({ 
         error: 'camera_deletion_failed', 
@@ -313,6 +357,21 @@ export async function adminCameraManagementRoutes(app: FastifyInstance, store: C
         client.release();
       }
     }
+  };
+
+  app.delete('/v1/admin/cameras/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return handleDeleteCameraEndpoint(id, request, reply);
+  });
+
+  app.delete('/v1/cameras/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return handleDeleteCameraEndpoint(id, request, reply);
+  });
+
+  app.delete('/v1/branches/:branchId/cameras/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    return handleDeleteCameraEndpoint(id, request, reply);
   });
 
   // New: delete camera by POST with JSON body { id }

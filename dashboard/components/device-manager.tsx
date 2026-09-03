@@ -21,6 +21,7 @@ import {
   X,
   QrCode,
   Square,
+  Trash2,
   Wifi,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -235,6 +236,24 @@ export function DeviceManager() {
   const credentialDeepLinkHandledRef = useRef(false);
   const selectedBranchRef = useRef("");
   const refreshRequestRef = useRef(0);
+  const [cameraToDelete, setCameraToDelete] = useState<CameraRecord | null>(null);
+  const [deletingCamera, setDeletingCamera] = useState(false);
+
+  async function confirmDeleteCamera() {
+    if (!cameraToDelete || deletingCamera) return;
+    setDeletingCamera(true);
+    setError(undefined);
+    try {
+      await cameraInventoryApi.deleteCamera(cameraToDelete.id, selectedBranch);
+      setNotice(`Camera "${cameraToDelete.name}" was removed. You can re-add it at any time using Automatic Scan, Direct IP Probe, or Manual Add.`);
+      setCameraToDelete(null);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, `Failed to remove camera "${cameraToDelete.name}".`));
+    } finally {
+      setDeletingCamera(false);
+    }
+  }
 
   function stopScanning() {
     scanAbortedRef.current = true;
@@ -1696,15 +1715,27 @@ export function DeviceManager() {
                 <span className="camera-device-icon"><Camera size={15} /></span>
                 <div><strong>{camera.name}</strong><small>{camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : `${camera.vendor} · ${camera.model} · channel ${camera.channel}`}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => openActiveCameraCredentialUpdate(camera)}
-                  disabled={saving || !camera.ipAddress}
-                  title={camera.ipAddress ? "Update login and verify this active camera" : "This camera has no saved IP address"}
-                >
-                  Update login
-                </button>
+                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => openActiveCameraCredentialUpdate(camera)}
+                    disabled={saving || deletingCamera || !camera.ipAddress}
+                    title={camera.ipAddress ? "Update login and verify this active camera" : "This camera has no saved IP address"}
+                  >
+                    Update login
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => setCameraToDelete(camera)}
+                    disabled={saving || deletingCamera}
+                    title={`Remove ${camera.name} from monitoring`}
+                    style={{ color: "#ef4444", borderColor: "rgba(239, 68, 68, 0.4)", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                  >
+                    <Trash2 size={13} /> Remove
+                  </button>
+                </div>
               </article>
             ))}
           </section>
@@ -2535,6 +2566,67 @@ export function DeviceManager() {
           branches={branches}
           onImportSuccess={() => void refreshBranch(selectedBranch)}
         />
+      )}
+      {cameraToDelete && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="delete-camera-modal-title">
+            <div className="modal-header">
+              <h2 id="delete-camera-modal-title" style={{ color: "#ef4444" }}>
+                Remove Camera
+              </h2>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close remove dialog"
+                onClick={() => setCameraToDelete(null)}
+                disabled={deletingCamera}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ padding: "16px 20px" }}>
+              <div className="form-info-banner" style={{ background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}>
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>Are you sure you want to remove &quot;{cameraToDelete.name}&quot;?</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "0.85rem", opacity: 0.9 }}>
+                    This camera will be stopped and removed from active monitoring.
+                  </p>
+                </div>
+              </div>
+              <div style={{ margin: "16px 0", fontSize: "0.9rem", color: "var(--text-secondary, #94a3b8)" }}>
+                <p><b>Camera Details:</b></p>
+                <ul style={{ listStyle: "none", padding: 0, margin: "6px 0", fontSize: "0.85rem" }}>
+                  <li>• <b>IP Address:</b> {cameraToDelete.ipAddress || "Not configured"}</li>
+                  <li>• <b>Channel:</b> {cameraToDelete.channel}</li>
+                  <li>• <b>Model:</b> {cameraToDelete.model || "Standard RTSP/ONVIF"}</li>
+                </ul>
+                <div style={{ marginTop: "12px", padding: "10px", borderRadius: "6px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.2)", color: "#a5b4fc" }}>
+                  💡 <b>Need to add this camera back later?</b> You can re-add it at any time using <b>Scan cameras</b>, <b>Direct IP Probe</b>, or <b>Add camera manually</b>. All duplicate locks are cleared automatically.
+                </div>
+              </div>
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setCameraToDelete(null)}
+                  disabled={deletingCamera}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={() => void confirmDeleteCamera()}
+                  disabled={deletingCamera}
+                  style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff" }}
+                >
+                  {deletingCamera ? "Removing…" : "Remove Camera"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
