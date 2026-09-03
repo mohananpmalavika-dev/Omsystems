@@ -6,10 +6,11 @@ interface BrowserDirectLiveStart {
     url: string;
     controlPlaneToken: string;
   };
-  directFallbacks?: Array<{
-    url: string;
-    controlPlaneToken: string;
-  }>;
+}
+
+interface DirectSessionAttempt {
+  session?: LiveSessionResponse;
+  error?: string;
 }
 
 const LIVE_START_TIMEOUT_MS = 30_000;
@@ -24,7 +25,7 @@ export async function startLiveFromBrowser(
   if (!isBrowserDirectLiveStart(authorization)) return authorization;
 
   const direct = await startDirectSession(authorization, signal);
-  if (direct) return direct;
+  if (direct.session) return direct.session;
 
   // A private branch address is reachable only from an operator on that
   // branch LAN/VPN. Ask for a new, single-use session before trying the
@@ -33,14 +34,15 @@ export async function startLiveFromBrowser(
     const publicRoute = await requestLiveAuthorization(cameraId, profile, "public", signal);
     if (!isBrowserDirectLiveStart(publicRoute)) return publicRoute;
     const publicDirect = await startDirectSession(publicRoute, signal);
-    if (publicDirect) return publicDirect;
+    if (publicDirect.session) return publicDirect.session;
+    if (publicDirect.error) throw new Error(publicDirect.error);
   } catch (error) {
     if (signal.aborted) throw timeoutError(signal.reason ?? error);
     if (error instanceof Error) throw error;
     throw new Error("media_gateway_unavailable");
   }
 
-  throw new Error("media_gateway_unavailable");
+  throw new Error(direct.error ?? "media_gateway_unavailable");
 }
 
 async function requestLiveAuthorization(
@@ -76,41 +78,36 @@ async function requestLiveAuthorization(
 async function startDirectSession(
   authorization: BrowserDirectLiveStart,
   signal: AbortSignal,
-): Promise<LiveSessionResponse | undefined> {
-  const candidates = [authorization.direct, ...(authorization.directFallbacks ?? [])]
-    .filter((candidate) => isAllowedGatewayForCurrentPage(candidate.url));
+): Promise<DirectSessionAttempt> {
+  const candidate = authorization.direct;
+  if (!isAllowedGatewayForCurrentPage(candidate.url)) return {};
 
-  if (candidates.length === 0) {
-    return undefined;
+  let localResponse: Response;
+  try {
+    const attemptSignal = AbortSignal.any([
+      signal,
+      AbortSignal.timeout(DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS),
+    ]);
+    localResponse = await fetch(candidate.url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ controlPlaneToken: candidate.controlPlaneToken }),
+      cache: "no-store",
+      signal: attemptSignal,
+    });
+  } catch (error) {
+    // A branch-local gateway can be offline or unreachable from the current
+    // network. Keep enough of the overall startup budget to request a fresh,
+    // single-use authorization for its secure tunnel.
+    if (signal.aborted) throw timeoutError(signal.reason ?? error);
+    return {};
   }
 
-  for (const candidate of candidates) {
-    let localResponse: Response;
-    try {
-      const attemptSignal = AbortSignal.any([
-        signal,
-        AbortSignal.timeout(DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS),
-      ]);
-      localResponse = await fetch(candidate.url, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ controlPlaneToken: candidate.controlPlaneToken }),
-        cache: "no-store",
-        signal: attemptSignal,
-      });
-    } catch (error) {
-      // A branch-local gateway can be offline or unreachable from the current
-      // network. Keep enough of the overall startup budget to try its secure
-      // tunnel. Only the caller's deadline/cancellation stops the sequence.
-      if (signal.aborted) throw timeoutError(signal.reason ?? error);
-      continue;
-    }
-
-    const localBody = await readJson(localResponse);
-    if (!localResponse.ok) continue;
-    return rewriteLiveMediaUrls(localBody as LiveSessionResponse, candidate.url);
+  const localBody = await readJson(localResponse);
+  if (!localResponse.ok) {
+    return { error: errorCode(localBody, "media_gateway_failure") };
   }
-  return undefined;
+  return { session: rewriteLiveMediaUrls(localBody as LiveSessionResponse, candidate.url) };
 }
 
 function isBrowserDirectLiveStart(value: unknown): value is BrowserDirectLiveStart {

@@ -27,25 +27,35 @@ describe("browser live startup", () => {
     await expect(startLiveFromBrowser("camera-1")).rejects.toThrow("live_session_timeout");
   });
 
-  it("uses a secure direct fallback without spending another live authorization", async () => {
+  it("requests a fresh live authorization before using the secure route", async () => {
     vi.stubGlobal("window", { location: { protocol: "https:" } });
     vi.stubGlobal("localStorage", { getItem: vi.fn(() => null) });
+    let authorizationCount = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/live") {
+        authorizationCount += 1;
+        if (authorizationCount === 1) {
+          return Response.json({
+            cameraId: "camera-1",
+            direct: {
+              url: "http://192.168.29.101:8090/v1/live/start",
+              controlPlaneToken: "t".repeat(43),
+            },
+          }, { status: 201 });
+        }
         return Response.json({
           cameraId: "camera-1",
           direct: {
-            url: "http://192.168.29.101:8090/v1/live/start",
-            controlPlaneToken: "t".repeat(43),
-          },
-          directFallbacks: [{
             url: "https://branch-media.example/v1/live/start",
-            controlPlaneToken: "t".repeat(43),
-          }],
+            controlPlaneToken: "u".repeat(43),
+          },
         }, { status: 201 });
       }
       expect(url).toBe("https://branch-media.example/v1/live/start");
+      expect(JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body))).toEqual({
+        controlPlaneToken: "u".repeat(43),
+      });
       return Response.json({
         sessionId: "session-1",
         cameraId: "camera-1",
@@ -61,25 +71,32 @@ describe("browser live startup", () => {
     await expect(startLiveFromBrowser("camera-1")).resolves.toMatchObject({
       hls: { url: "https://branch-media.example/hls/camera-1/index.m3u8" },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("continues to the secure route when a reachable-looking LAN route times out", async () => {
     vi.stubGlobal("window", { location: { protocol: "https:" } });
     vi.stubGlobal("localStorage", { getItem: vi.fn(() => null) });
+    let authorizationCount = 0;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/api/live") {
+        authorizationCount += 1;
+        if (authorizationCount > 1) {
+          return Response.json({
+            cameraId: "camera-1",
+            direct: {
+              url: "https://branch-media.example/v1/live/start",
+              controlPlaneToken: "u".repeat(43),
+            },
+          }, { status: 201 });
+        }
         return Response.json({
           cameraId: "camera-1",
           direct: {
             url: "https://media.branch.lan/v1/live/start",
             controlPlaneToken: "t".repeat(43),
           },
-          directFallbacks: [{
-            url: "https://branch-media.example/v1/live/start",
-            controlPlaneToken: "t".repeat(43),
-          }],
         }, { status: 201 });
       }
       if (url.includes("media.branch.lan")) {
@@ -100,7 +117,7 @@ describe("browser live startup", () => {
     await expect(startLiveFromBrowser("camera-1")).resolves.toMatchObject({
       hls: { url: "https://branch-media.example/hls/camera-1/index.m3u8" },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
   it("reports an unavailable gateway instead of manufacturing a snapshot feed", async () => {

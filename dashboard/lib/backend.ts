@@ -13,7 +13,6 @@ type DirectLiveGateway = {
 type DirectLiveStart = {
   cameraId: string;
   direct: DirectLiveGateway;
-  directFallbacks?: DirectLiveGateway[];
 };
 
 export type LiveRoutePreference = "auto" | "public";
@@ -77,22 +76,28 @@ export async function startLive(
     const dashboardUserId = employeeSession || runtimeEnv("NODE_ENV", "development") === "production"
       ? undefined
       : runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
-    const permission = await controlFetch(
-      `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
-      { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
-      employeeSession,
-      dashboardUserId,
-    );
-    const controlSession = await permission.json() as {
-      token?: string;
+    const requestControlSession = async (): Promise<{
+      token: string;
       mediaGatewayUrl?: string;
       localMediaGatewayUrl?: string;
       expiresAt?: string;
+    }> => {
+      const permission = await controlFetch(
+        `/v1/cameras/${encodeURIComponent(cameraId)}/live-sessions`,
+        { method: "POST", body: "{}", signal: AbortSignal.timeout(LIVE_START_TIMEOUT_MS) },
+        employeeSession,
+        dashboardUserId,
+      );
+      const session = await permission.json() as {
+        token?: string;
+        mediaGatewayUrl?: string;
+        localMediaGatewayUrl?: string;
+        expiresAt?: string;
+      };
+      if (!session.token) throw new Error("stream_secret_unavailable");
+      return { ...session, token: session.token };
     };
-
-    if (!controlSession.token) {
-      throw new Error("stream_secret_unavailable");
-    }
+    let controlSession = await requestControlSession();
 
     const sessionMediaGatewayUrl = controlSession.mediaGatewayUrl;
     const advertisedLocalMediaGatewayUrl = controlSession.localMediaGatewayUrl;
@@ -135,17 +140,9 @@ export async function startLive(
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
       };
-      const publicFallback = publicMediaGatewayUrl &&
-        !sameOrigin(publicMediaGatewayUrl, localMediaGatewayUrl)
-        ? [{
-            url: new URL("/v1/live/start", normalizeHttpOrigin(publicMediaGatewayUrl)).toString(),
-            controlPlaneToken: controlSession.token,
-          }]
-        : undefined;
       return {
         cameraId,
         direct,
-        ...(publicFallback ? { directFallbacks: publicFallback } : {}),
       };
     }
 
@@ -179,7 +176,12 @@ export async function startLive(
     let chosenGatewayUrl = primaryGateway;
     let lastError: Error | undefined;
 
-    for (const gwUrl of gatewayCandidates) {
+    for (let index = 0; index < gatewayCandidates.length; index += 1) {
+      const gwUrl = gatewayCandidates[index]!;
+      // Live authorizations are single-use. A gateway can consume a token
+      // before failing later while resolving a secret or starting MediaMTX,
+      // so every fallback must receive a fresh control-plane grant.
+      if (index > 0) controlSession = await requestControlSession();
       try {
         const res = await fetch(
           new URL("/v1/live/start", normalizeHttpOrigin(gwUrl)),
@@ -346,14 +348,6 @@ function isHttpsUrl(value?: string): boolean {
   if (!value) return false;
   try {
     return new URL(value).protocol === "https:";
-  } catch {
-    return false;
-  }
-}
-
-function sameOrigin(left: string, right: string): boolean {
-  try {
-    return new URL(normalizeHttpOrigin(left)).origin === new URL(normalizeHttpOrigin(right)).origin;
   } catch {
     return false;
   }

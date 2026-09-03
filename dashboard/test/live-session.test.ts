@@ -79,6 +79,46 @@ describe("dashboard live session startup", () => {
     await expect(startLive("camera-1")).rejects.toThrow("stream_secret_unavailable");
   });
 
+  it("uses a fresh single-use authorization for a server-side gateway fallback", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    process.env.MEDIA_GATEWAY_INTERNAL_URL = "http://media.internal:8090";
+    delete process.env.MEDIA_GATEWAY_PUBLIC_URL;
+    delete process.env.MEDIA_GATEWAY_PUBLIC_URLS;
+    let authorizationCount = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("control.internal")) {
+        authorizationCount += 1;
+        return Response.json({
+          token: (authorizationCount === 1 ? "a" : "b").repeat(43),
+          mediaGatewayUrl: "https://branch-media.example",
+        }, { status: 201 });
+      }
+      const token = JSON.parse(String(init?.body)).controlPlaneToken;
+      if (url.includes("branch-media.example")) {
+        expect(token).toBe("a".repeat(43));
+        return Response.json({ error: "media_gateway_unavailable" }, { status: 503 });
+      }
+      expect(url).toBe("http://media.internal:8090/v1/live/start");
+      expect(token).toBe("b".repeat(43));
+      return Response.json({
+        cameraId: "camera-1",
+        sessionId: "session-1",
+        expiresAt: new Date(Date.now() + 300_000).toISOString(),
+        hls: { url: "http://media.internal:8888/hls/camera-1/index.m3u8", bearerToken: "stream-token" },
+      }, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(startLive("camera-1", "employee-session", "public")).resolves.toMatchObject({
+      cameraId: "camera-1",
+      hls: { bearerToken: "stream-token" },
+    });
+    expect(authorizationCount).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
   it("uses the configured local gateway as a fallback when the agent does not advertise one", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
@@ -102,9 +142,6 @@ describe("dashboard live session startup", () => {
       direct: {
         url: "http://192.168.29.101:8090/v1/live/start",
       },
-      directFallbacks: [{
-        url: "https://expired-tunnel.example/v1/live/start",
-      }],
     });
   });
 
@@ -124,7 +161,6 @@ describe("dashboard live session startup", () => {
     await expect(startLive("camera-1")).resolves.toMatchObject({
       cameraId: "camera-1",
       direct: { url: "http://192.168.50.25:8090/v1/live/start" },
-      directFallbacks: [{ url: "https://branch-public.example/v1/live/start" }],
     });
   });
 
@@ -232,7 +268,7 @@ describe("dashboard live session startup", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns both LAN and secure public routes when both are advertised", async () => {
+  it("returns only the LAN route so a secure fallback gets a fresh authorization", async () => {
     process.env.DASHBOARD_DEMO_MODE = "false";
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     delete process.env.MEDIA_GATEWAY_LOCAL_URL;
@@ -255,7 +291,6 @@ describe("dashboard live session startup", () => {
     await expect(startLive("camera-1")).resolves.toMatchObject({
       cameraId: "camera-1",
       direct: { url: "http://192.168.29.101:8090/v1/live/start" },
-      directFallbacks: [{ url: "https://public.example/v1/live/start" }],
     });
   });
 });
