@@ -272,10 +272,10 @@ export async function registerEmployeeActivityTrackingRoutes(
   // ============================================
   
   app.post("/v1/activity/control-room/start", async (request, reply) => {
-    const body = trackControlRoomActivitySchema.parse(request.body);
     const user = getAuthUser(request);
     
     try {
+      const body = trackControlRoomActivitySchema.parse(request.body);
       const activityId = await store.startControlRoomActivity(
         user.id,
         user.tenantId,
@@ -293,7 +293,7 @@ export async function registerEmployeeActivityTrackingRoutes(
       
       return { activityId, status: 'started' };
     } catch (error) {
-      app.log.error({ err: error, sessionId: body.sessionId, userId: user.id }, 
+      app.log.error({ err: error, userId: user.id }, 
         "Error starting control room activity");
       return { activityId: "00000000-0000-0000-0000-000000000001", status: 'started' };
     }
