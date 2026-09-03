@@ -385,6 +385,8 @@ export interface LiveSessionResponse {
   sessionId?: string;
   cameraId: string;
   expiresAt?: string;
+  isStandby?: boolean;
+  status?: string;
   hls?: {
     url: string;
     bearerToken: string;
