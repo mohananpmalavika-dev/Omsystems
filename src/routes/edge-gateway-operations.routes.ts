@@ -21,7 +21,7 @@ const agentParams = z.object({ id: z.string().min(1) });
 const commandParams = z.object({ id: z.string().min(1), commandId: z.string().min(1) });
 const commandTypes = [
   "rediscover", "restart-media", "restart-agent", "probe-camera",
-  "recover-camera", "probe-recorder", "collect-logs", "apply-update",
+  "recover-camera", "probe-recorder", "collect-logs", "trigger-siren", "apply-update",
 ] as const;
 const patchRuntimeMinimumVersion = "0.1.16";
 const credentialUpdateMinimumAgentVersion = "0.1.7";
@@ -385,6 +385,15 @@ export async function registerEdgeGatewayOperationsRoutes(
           message: `No application patch is available for scanner v${agent.version}.`,
         });
       }
+      const requestedVersion = typeof body.payload.releaseVersion === "string"
+        ? body.payload.releaseVersion
+        : undefined;
+      if (requestedVersion && release.version !== requestedVersion) {
+        return reply.code(409).send({
+          error: "edge_update_version_not_available",
+          message: `The requested scanner update v${requestedVersion} is not available for scanner v${agent.version}.`,
+        });
+      }
     }
     const command = await store.createEdgeCommand({
       edgeAgentId: id, type: body.type, payload: body.payload, requestedBy: request.currentUser.id,
@@ -515,6 +524,84 @@ export async function registerEdgeGatewayOperationsRoutes(
       });
     }
     return reply.code(201).send(release);
+  });
+
+  /**
+   * Queues one signed application update for every branch gateway that the
+   * caller is allowed to configure. Offline gateways are intentionally queued
+   * too: the command stays pending and is collected as soon as the branch
+   * reconnects. This is how a nationwide fleet is updated without visiting
+   * every branch.
+   */
+  app.post("/v1/edge-updates/fleet-rollout", async (request, reply) => {
+    const body = z.object({
+      version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
+    }).parse(request.body);
+    const branches = await store.listAccessibleNodes(request.currentUser, "device:configure", "branch");
+    if (branches.length === 0) return reply.code(403).send({ error: "forbidden" });
+
+    const summary = {
+      targetVersion: body.version,
+      branches: branches.length,
+      agents: 0,
+      queued: 0,
+      alreadyCurrent: 0,
+      legacyBaseRepairRequired: 0,
+      updateUnavailable: 0,
+      commandAlreadyPending: 0,
+    };
+    const legacyAgents: Array<{ edgeAgentId: string; branchId: string; version: string }> = [];
+
+    for (const branch of branches) {
+      const [agents, commands] = await Promise.all([
+        store.listEdgeAgentsByBranch(branch.id),
+        store.listEdgeCommands(branch.id, 500),
+      ]);
+      const pendingAgentIds = new Set(commands
+        .filter((command) => command.type === "apply-update" &&
+          (command.status === "queued" || command.status === "running"))
+        .map((command) => command.edgeAgentId));
+
+      for (const agent of agents) {
+        if (agent.credentialStatus === "revoked") continue;
+        summary.agents += 1;
+        if (compareVersions(agent.version, body.version) >= 0) {
+          summary.alreadyCurrent += 1;
+          continue;
+        }
+        if (compareVersions(agent.version, patchRuntimeMinimumVersion) < 0) {
+          summary.legacyBaseRepairRequired += 1;
+          legacyAgents.push({ edgeAgentId: agent.id, branchId: branch.id, version: agent.version });
+          continue;
+        }
+        if (pendingAgentIds.has(agent.id)) {
+          summary.commandAlreadyPending += 1;
+          continue;
+        }
+        const release = await updateForAgent(agent.id, agent.version);
+        if (!release || release.version !== body.version) {
+          summary.updateUnavailable += 1;
+          continue;
+        }
+        await store.createEdgeCommand({
+          edgeAgentId: agent.id,
+          type: "apply-update",
+          payload: { releaseVersion: body.version },
+          requestedBy: request.currentUser.id,
+        });
+        summary.queued += 1;
+      }
+
+      await writeGatewayAudit(request, store, branch.id, "edge_gateway.fleet_update_queued", {
+        targetVersion: body.version,
+      });
+    }
+
+    return reply.code(202).send({
+      ...summary,
+      offlineGatewaysWillUpdateWhenTheyReconnect: true,
+      legacyAgents,
+    });
   });
 
   app.get("/v1/edge-agents/:id/updates/next", async (request) => {

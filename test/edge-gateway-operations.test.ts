@@ -441,6 +441,60 @@ describe("secure edge gateway operations", () => {
     expect(queued.json()).toMatchObject({ type: "apply-update", status: "queued" });
   });
 
+  it("queues a requested signed update across every accessible branch gateway", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+    const store = testStore();
+    store.nodes.set("branch-kochi-001", {
+      id: "branch-kochi-001", parentId: "company-1", tenantId: "omsystems",
+      type: "branch", name: "Kochi branch", path: ["company-1", "branch-kochi-001"],
+    });
+    store.nodes.set("branch-legacy-001", {
+      id: "branch-legacy-001", parentId: "company-1", tenantId: "omsystems",
+      type: "branch", name: "Legacy branch", path: ["company-1", "branch-legacy-001"],
+    });
+    const eligible = await store.registerEdgeAgent("branch-blr-001", "Eligible gateway", "0.1.17");
+    const current = await store.registerEdgeAgent("branch-kochi-001", "Current gateway", "0.1.18");
+    const legacy = await store.registerEdgeAgent("branch-legacy-001", "Legacy gateway", "0.1.15");
+    await store.heartbeatEdgeAgent(eligible.id, "0.1.17");
+    await store.heartbeatEdgeAgent(current.id, "0.1.18");
+
+    const app = await buildApp({ store, edgeUpdateSigningPrivateKey: privatePem });
+    apps.push(app);
+    const release = await app.inject({
+      method: "POST", url: "/v1/edge-updates/releases",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: {
+        version: "0.1.18", artifactUrl: "https://updates.example/edge-agent.bundle",
+        sha256: "a".repeat(64), notes: "Physical siren fleet update", rolloutPercentage: 100, enabled: true,
+      },
+    });
+    expect(release.statusCode).toBe(201);
+
+    const rollout = await app.inject({
+      method: "POST", url: "/v1/edge-updates/fleet-rollout",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { version: "0.1.18" },
+    });
+    expect(rollout.statusCode).toBe(202);
+    expect(rollout.json()).toMatchObject({
+      targetVersion: "0.1.18", agents: 3, queued: 1, alreadyCurrent: 1,
+      legacyBaseRepairRequired: 1, offlineGatewaysWillUpdateWhenTheyReconnect: true,
+      legacyAgents: [{ edgeAgentId: legacy.id, branchId: "branch-legacy-001", version: "0.1.15" }],
+    });
+    expect(await store.listEdgeCommands("branch-blr-001")).toEqual([
+      expect.objectContaining({ edgeAgentId: eligible.id, type: "apply-update", payload: { releaseVersion: "0.1.18" } }),
+    ]);
+
+    const repeated = await app.inject({
+      method: "POST", url: "/v1/edge-updates/fleet-rollout",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: { version: "0.1.18" },
+    });
+    expect(repeated.statusCode).toBe(202);
+    expect(repeated.json()).toMatchObject({ queued: 0, commandAlreadyPending: 1 });
+  });
+
   it("publishes the packaged application patch on demand without a full installer", async () => {
     const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-packaged-edge-update-"));
     temporaryRoots.push(artifactRoot);

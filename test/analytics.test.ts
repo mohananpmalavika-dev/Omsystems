@@ -113,6 +113,59 @@ describe("video analytics and alert workflow", () => {
     expect(store.recordingLegalHolds).toHaveLength(1);
   });
 
+  it("queues exactly one physical-siren command for a new analytics alert, regardless of severity", async () => {
+    const agent = await store.registerEdgeAgent("A005", "Branch siren gateway", "0.1.18");
+    await store.heartbeatEdgeAgent(agent.id, "0.1.18");
+    const rule = await store.createAnalyticsRule(
+      "omsystems", "cam-001", "user-global-admin",
+      {
+        name: "Any-alert siren rule", detectionType: "person", enabled: true,
+        objectClasses: ["person"], minConfidence: 0.5, minDurationSeconds: 0,
+        direction: "any", severity: "P4", cooldownSeconds: 60,
+        recipients: [], recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120,
+      },
+    );
+
+    const first = await app.inject({
+      method: "POST", url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "siren-event-1",
+        detectionType: "person", occurredAt: "2026-09-04T10:00:00.000Z",
+        confidence: 0.91, durationSeconds: 0, modelVersion: "people-v1",
+        objects: [{ label: "person", confidence: 0.91 }],
+      },
+    });
+    expect(first.statusCode).toBe(202);
+    expect(first.json().event.status).toBe("accepted");
+    expect([...store.edgeCommands.values()]).toEqual([
+      expect.objectContaining({
+        edgeAgentId: agent.id,
+        type: "trigger-siren",
+        requestedBy: "system:alert-siren",
+        payload: expect.objectContaining({
+          branchId: "A005",
+          severity: "P4",
+          detectionType: rule.detectionType,
+        }),
+      }),
+    ]);
+
+    const repeated = await app.inject({
+      method: "POST", url: "/internal/analytics/events",
+      headers: { "x-analytics-engine-key": engineKey },
+      payload: {
+        tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "siren-event-2",
+        detectionType: "person", occurredAt: "2026-09-04T10:00:20.000Z",
+        confidence: 0.95, durationSeconds: 0, modelVersion: "people-v1",
+        objects: [{ label: "person", confidence: 0.95 }],
+      },
+    });
+    expect(repeated.statusCode).toBe(202);
+    expect(repeated.json().event.status).toBe("suppressed");
+    expect(store.edgeCommands).toHaveLength(1);
+  });
+
   it("correlates generic ANPR readings with the central plate registry", async () => {
     const watchlistResponse = await app.inject({
       method: "POST",

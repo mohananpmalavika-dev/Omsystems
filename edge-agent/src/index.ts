@@ -48,6 +48,7 @@ import { identifyVendorFamily, probeVendorStream } from "./devices/vendor-stream
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
+import { PhysicalSirenController, physicalSirenTriggerFromPayload } from "./alerts/physical-siren.js";
 
 const MEDIA_RUNTIME_RETRY_INTERVAL_MS = 30_000;
 
@@ -66,11 +67,20 @@ if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.17\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.18\n");
   process.exit(0);
 }
 
 const config = loadConfigOrExit();
+const physicalSiren = new PhysicalSirenController({
+  enabled: config.PHYSICAL_SIREN_ENABLED,
+  onUrl: config.PHYSICAL_SIREN_ON_URL,
+  offUrl: config.PHYSICAL_SIREN_OFF_URL,
+  method: config.PHYSICAL_SIREN_HTTP_METHOD,
+  authToken: config.PHYSICAL_SIREN_AUTH_TOKEN,
+  pulseMs: config.PHYSICAL_SIREN_PULSE_MS,
+  timeoutMs: config.PHYSICAL_SIREN_TIMEOUT_MS,
+});
 if (!scanOnce && !isDiagnostic && process.env.SENTINEL_EDGE_PATCH_RUNTIME !== "1") {
   const patchIdentity = await new DeviceIdentityStore(
     config.EDGE_IDENTITY_PATH,
@@ -108,6 +118,7 @@ if (hasArgument(argv, "--check-config")) {
     branchId: config.BRANCH_ID,
     edgeAgentId: config.EDGE_AGENT_ID ?? null,
     edgeAgentName: config.EDGE_AGENT_NAME,
+    physicalSirenEnabled: config.PHYSICAL_SIREN_ENABLED,
     onvifEndpointCount: config.ONVIF_ENDPOINTS.split(",").filter(Boolean).length,
     recorderCount: config.RECORDERS_JSON.length,
   }, null, 2)}\n`);
@@ -1201,6 +1212,8 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const tail = redactDiagnosticText(data.slice(-64 * 1024));
       return { result: { collectedAt: new Date().toISOString(), bytes: Buffer.byteLength(tail), tail } };
     }
+    case "trigger-siren":
+      return { result: await physicalSiren.trigger(physicalSirenTriggerFromPayload(payload)) };
     case "update-credentials": {
       if (!identity?.commandPrivateKey) throw new Error("gateway_secure_command_key_unavailable");
       const envelope = payload.envelope as SealedCommandEnvelope | undefined;
@@ -1229,6 +1242,12 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
     case "apply-update": {
       const release = await control.getUpdate(agentId, config.EDGE_AGENT_VERSION);
       if (!release) throw new Error("no_update_assigned");
+      const requestedVersion = typeof payload.releaseVersion === "string"
+        ? payload.releaseVersion
+        : undefined;
+      if (requestedVersion && release.version !== requestedVersion) {
+        throw new Error("assigned_update_version_mismatch");
+      }
       const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
       if (!publicKey) throw new Error("edge_update_public_key_unavailable");
       const staged = await stageSignedUpdate(release, publicKey, config.EDGE_UPDATE_STAGING_PATH);

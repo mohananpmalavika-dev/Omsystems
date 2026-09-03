@@ -6,7 +6,7 @@ const schema = z.object({
   EDGE_AGENT_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   EDGE_ACTIVATION_CODE: z.preprocess((value) => value === "" ? undefined : value, z.string().startsWith("sgact_").min(40).optional()),
   EDGE_AGENT_NAME: z.string().min(2),
-  EDGE_AGENT_VERSION: z.string().default("0.1.17"),
+  EDGE_AGENT_VERSION: z.string().default("0.1.18"),
   EDGE_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(60_000).default(15_000),
   DEV_USER_ID: z.preprocess((value) => value === "" ? undefined : value, z.string().min(1).optional()),
   CAMERA_USERNAME: z.string().default(""),
@@ -84,6 +84,13 @@ const schema = z.object({
   EDGE_UPDATE_STAGING_PATH: z.string().default("./data/updates"),
   CONTROL_PLANE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(15_000),
   EDGE_LOG_PATH: z.string().min(1).default("./logs/edge-agent.log"),
+  PHYSICAL_SIREN_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  PHYSICAL_SIREN_ON_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  PHYSICAL_SIREN_OFF_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().optional()),
+  PHYSICAL_SIREN_HTTP_METHOD: z.enum(["GET", "POST"]).default("POST"),
+  PHYSICAL_SIREN_AUTH_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(8).optional()),
+  PHYSICAL_SIREN_PULSE_MS: z.coerce.number().int().min(500).max(120_000).default(5_000),
+  PHYSICAL_SIREN_TIMEOUT_MS: z.coerce.number().int().min(250).max(30_000).default(5_000),
   INTERNET_LINKS_JSON: z.string().default("[]").transform((value, context) => {
     try { return JSON.parse(value) as unknown; } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: "INTERNET_LINKS_JSON must be valid JSON" }); return z.NEVER; }
   }).pipe(z.array(z.object({
@@ -150,6 +157,13 @@ const schema = z.object({
     context.addIssue({
       code: z.ZodIssueCode.custom, path: ["EDGE_ACTIVATION_CODE"],
       message: "Provide a one-time EDGE_ACTIVATION_CODE, or an existing legacy/development identity",
+    });
+  }
+  if (value.PHYSICAL_SIREN_ENABLED && (!value.PHYSICAL_SIREN_ON_URL || !value.PHYSICAL_SIREN_OFF_URL)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["PHYSICAL_SIREN_ON_URL"],
+      message: "PHYSICAL_SIREN_ON_URL and PHYSICAL_SIREN_OFF_URL are required when the physical siren is enabled",
     });
   }
   if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {

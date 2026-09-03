@@ -2,6 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { AlertOperationsService } from "../alerts/services/alert-operations.service.js";
+import type { OperationalAlert } from "../alerts/domain/operational-alert.types.js";
+import { queuePhysicalSiren } from "../alerts/physical-siren-dispatcher.js";
 
 const alertIdParamSchema = z.object({ id: z.string().min(1) });
 
@@ -11,6 +13,27 @@ export async function registerAlertOperationsRoutes(
   customService?: AlertOperationsService,
 ) {
   const service = customService ?? new AlertOperationsService();
+  if (store) {
+    service.subscribe((event) => {
+      if (event.type !== "ALERT_CREATED") return;
+      const alert = event.payload as OperationalAlert;
+      void queuePhysicalSiren(store, {
+        alertId: alert.id,
+        tenantId: alert.tenantId,
+        branchId: alert.branch.id,
+        cameraId: alert.camera?.id,
+        severity: alert.severity,
+        detectionType: alert.detection.type,
+        occurredAt: alert.occurredAt.toISOString(),
+      }).then((result) => {
+        if (!result.queued) {
+          app.log.warn({ alertId: alert.id, reason: result.reason }, "Physical siren command was not queued");
+        }
+      }).catch((error) => {
+        app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");
+      });
+    });
+  }
 
   const registerEndpoints = (prefix: string) => {
     // 1. List Alerts with Query Filters

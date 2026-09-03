@@ -37,6 +37,7 @@ export function EdgeFleetManager() {
   const [digitalTwin, setDigitalTwin] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const fetchFleetData = async () => {
     try {
@@ -137,19 +138,24 @@ export function EdgeFleetManager() {
     }
   };
 
-  const handleStagedRollout = async () => {
+  const handleFleetSirenUpdate = async () => {
     setActionLoading("fleet-rollout");
+    setActionError(null);
     try {
-      const res = await fetch("/api/control/v1/edge/deployments/staged-rollout", {
+      const res = await fetch("/api/control/v1/edge-updates/fleet-rollout", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ version: "0.1.18" }),
       });
       const data = await res.json();
-      if (data.success) {
-        setActionSuccessMsg("Stage 1 Canary Rollout (5% - 20 Branches) deployed with 100% health gate passing.");
-        await fetchFleetData();
-      }
-    } catch {
-      // ignore
+      if (!res.ok) throw new Error(data?.message || data?.error || "Fleet update could not be queued.");
+      setActionSuccessMsg(
+        `v0.1.18 queued for ${data.queued} of ${data.agents} gateways. ` +
+        `${data.alreadyCurrent} already current; ${data.legacyBaseRepairRequired} legacy gateways need base repair.`,
+      );
+      await fetchFleetData();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Fleet update could not be queued.");
     } finally {
       setActionLoading(null);
     }
@@ -188,18 +194,18 @@ export function EdgeFleetManager() {
               400-Branch Edge Fleet Management & Digital Twin
             </h1>
             <p className="text-xs text-slate-400 mt-1">
-              Desired vs Actual State Reconciliation • Cryptographic Signed Upgrades • Blast Radius Assessment • 5% Canary Health Gates
+              Desired vs Actual State Reconciliation • Cryptographic Signed Upgrades • Fleet-wide update queue
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={handleStagedRollout}
+              onClick={handleFleetSirenUpdate}
               disabled={actionLoading !== null}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-blue-900/30 flex items-center gap-2 transition-all"
             >
               <ArrowUpCircle className="w-4 h-4" />
-              <span>{actionLoading === "fleet-rollout" ? "Deploying Canary..." : "🚀 Launch 5% Canary Rollout"}</span>
+              <span>{actionLoading === "fleet-rollout" ? "Queuing Fleet Update..." : "🚀 Deploy v0.1.18 to Fleet"}</span>
             </button>
           </div>
         </div>
@@ -212,6 +218,18 @@ export function EdgeFleetManager() {
             <span>{actionSuccessMsg}</span>
           </div>
           <button onClick={() => setActionSuccessMsg(null)} className="text-slate-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {actionError && (
+        <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs font-medium flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <span>{actionError}</span>
+          </div>
+          <button onClick={() => setActionError(null)} className="text-slate-400 hover:text-white">
             <X className="w-4 h-4" />
           </button>
         </div>

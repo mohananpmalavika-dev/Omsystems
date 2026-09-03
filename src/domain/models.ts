@@ -637,6 +637,7 @@ export type EdgeCommandType =
   | "probe-recorder"
   | "collect-logs"
   | "update-credentials"
+  | "trigger-siren"
   | "apply-update";
 
 export interface EdgeCommand {

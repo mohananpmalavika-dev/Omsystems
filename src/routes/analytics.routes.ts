@@ -20,6 +20,7 @@ import {
 } from "../analytics/capability-catalog.js";
 import { enqueueAlertMatrix, type AlertNotificationDispatcher } from "../alerts/notification-dispatcher.js";
 import { alertEvents } from "../alerts/event-stream.js";
+import { queuePhysicalSiren } from "../alerts/physical-siren-dispatcher.js";
 import {
   managedAlertEvidenceReferences,
   type AlertEvidenceClient,
@@ -688,6 +689,21 @@ export async function registerAnalyticsRoutes(
         }
         await enqueueAlertMatrix(store, alert, rule);
         publishAlert(alert, "alert.created");
+        try {
+          const siren = await queuePhysicalSiren(store, {
+            alertId: alert.id,
+            tenantId: alert.tenantId,
+            cameraId: alert.cameraId,
+            severity: alert.severity,
+            detectionType: rule.detectionType,
+            occurredAt: alert.firstDetectedAt,
+          });
+          if (!siren.queued) {
+            app.log.warn({ alertId: alert.id, reason: siren.reason }, "Physical siren command was not queued");
+          }
+        } catch (error) {
+          app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");
+        }
         const camera = await store.getCamera(alert.cameraId);
         if (camera) {
           digitalTwinEvents.publish({

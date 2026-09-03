@@ -155,7 +155,7 @@ export interface ConsumedLiveSession {
 
 export interface EdgeCommand {
   id: string;
-  type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "recover-camera" | "probe-recorder" | "collect-logs" | "update-credentials" | "apply-update";
+  type: "rediscover" | "restart-media" | "restart-agent" | "probe-camera" | "recover-camera" | "probe-recorder" | "collect-logs" | "update-credentials" | "trigger-siren" | "apply-update";
   payload: Record<string, unknown>;
 }
 

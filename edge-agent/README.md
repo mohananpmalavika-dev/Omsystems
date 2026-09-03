@@ -49,6 +49,32 @@ The generated executable is branch-specific. Do not copy one branch's EXE to a
 different branch and do not send it by unsecured email because it contains the
 edge bridge credential.
 
+## Physical siren for every alert
+
+Edge Agent 0.1.18 and later can pulse an HTTP-controlled dry-contact/network
+relay for every newly-created alert (P1 through P5). Connect the siren through
+a correctly rated, normally-open relay; do not power a siren directly from the
+branch PC or a low-voltage controller output.
+
+Add these settings to the installed `config\edge-agent.env` file, then restart
+the **Sentinel Grid Edge Agent** scheduled task:
+
+```dotenv
+PHYSICAL_SIREN_ENABLED=true
+PHYSICAL_SIREN_ON_URL=http://192.168.1.50/relay/on
+PHYSICAL_SIREN_OFF_URL=http://192.168.1.50/relay/off
+PHYSICAL_SIREN_HTTP_METHOD=POST
+PHYSICAL_SIREN_AUTH_TOKEN=replace-with-relay-token
+PHYSICAL_SIREN_PULSE_MS=5000
+PHYSICAL_SIREN_TIMEOUT_MS=5000
+```
+
+For POST relays, each request contains `action`, `state`, `pulseMs`, `alertId`,
+`branchId`, `severity`, `detectionType`, and `occurredAt`. GET relays receive no
+body, so their ON and OFF action must be encoded in the two URLs. The controller
+always sends OFF after the configured pulse and suppresses a repeated command
+for the same alert ID.
+
 ## One-time discovery from a connected laptop
 
 When an operator connects a Windows laptop to the same LAN/VLAN as a branch's
