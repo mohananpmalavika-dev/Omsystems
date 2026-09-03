@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
     // Disk file not found
   }
 
-  return NextResponse.json({ error: "no_frame_available", target: targetKey }, { status: 404 });
+  return new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST() {

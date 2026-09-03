@@ -599,14 +599,17 @@ hlsAddress: 127.0.0.1:8888
 # Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
+hlsSegmentCount: 20
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
 rtsp: no
 rtmp: no
 webrtc: no
 srt: no
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 10s
-  sourceOnDemandCloseAfter: 10s
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 30s
 paths: {}
 `;
 }
