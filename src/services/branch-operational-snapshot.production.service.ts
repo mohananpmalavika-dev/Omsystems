@@ -3,6 +3,7 @@ import type { User } from "../domain/models.js";
 import type { OperationalTelemetryEnvelope } from "../operational-health/types.js";
 import { defaultOperationalHealthPolicy } from "../operational-health/types.js";
 import { telemetryStatus } from "../operational-health/service.js";
+import { isFreshEdgeAgent } from "../edge-agent/presence.js";
 
 export type HealthState = "HEALTHY" | "WARNING" | "CRITICAL" | "UNKNOWN";
 export type ConnectivityState = "ONLINE" | "DEGRADED" | "FAILOVER" | "OFFLINE" | "UNKNOWN";
@@ -386,7 +387,7 @@ export class BranchOperationalSnapshotService {
       code: "NETWORK_UNAVAILABLE", severity: "CRITICAL", component: "NETWORK",
       message: "Observed branch network telemetry is offline", impactLevel: "HIGH",
     });
-    const onlineEdge = edgeAgents.find((agent) => agent.status === "online");
+    const onlineEdge = edgeAgents.find(isFreshEdgeAgent);
 
     const retentionObserved = cameraList.filter((camera) => camera.retentionDays !== undefined);
     const retentionState: RetentionState = retentionObserved.length === 0 ? "UNKNOWN"
