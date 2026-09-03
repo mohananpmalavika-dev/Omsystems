@@ -46,6 +46,10 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   headers.delete("host");
   headers.delete("cookie");
   headers.delete("content-length");
+  headers.delete("transfer-encoding");
+  headers.delete("connection");
+  headers.delete("keep-alive");
+  headers.delete("te");
   headers.set("x-sentinel-public-api-base", publicControlApiBase(request));
 
   if (bridgeKey) headers.set("x-edge-bridge-key", bridgeKey);
