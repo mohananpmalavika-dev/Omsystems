@@ -4,9 +4,9 @@ import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw } from "lucide-react";
 
-const MAX_RECOVERY_ATTEMPTS = 3;
-const STALL_TIMEOUT_MS = 12_000;
-const RECOVERY_DELAY_MS = 750;
+const MAX_RECOVERY_ATTEMPTS = 5;
+const STALL_TIMEOUT_MS = 15_000;
+const RECOVERY_DELAY_MS = 1_500;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 

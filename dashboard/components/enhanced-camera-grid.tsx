@@ -667,13 +667,7 @@ export function EnhancedCameraGrid({
       for (const [, entry] of orderedVisibleEntries) {
         if (fallbackSlots <= 0 || desiredLive.has(entry.cameraId)) continue;
         const camera = cameraById.get(entry.cameraId);
-        const scheduled = schedule.get(entry.cameraId);
-        if (
-          !camera ||
-          camera.status === "offline" ||
-          scheduled?.streamProfile ||
-          (scheduled?.mode !== "SNAPSHOT" && scheduled?.mode !== "ROTATING")
-        ) continue;
+        if (!camera) continue;
         desiredLive.set(entry.cameraId, entry.stream);
         fallbackSlots -= 1;
       }
@@ -682,6 +676,11 @@ export function EnhancedCameraGrid({
     for (const [cameraId] of sessions) {
       const desiredStream = desiredLive.get(cameraId);
       if (desiredStream && activeStreamTypesRef.current.get(cameraId) === desiredStream) continue;
+      // Do not aggressively tear down an active live session for a camera currently on the visible grid
+      // unless there is an unrecoverable playback error or it was removed from the grid.
+      if (visibleGridCameraIds.has(cameraId) && !liveErrors.has(cameraId)) {
+        continue;
+      }
       activeStreamTypesRef.current.delete(cameraId);
       markPlaybackDeferred(cameraId);
       updateStreamState(cameraId, "PAUSED");

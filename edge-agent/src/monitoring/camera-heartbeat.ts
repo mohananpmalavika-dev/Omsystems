@@ -193,7 +193,7 @@ export class CameraHeartbeatService {
     this.analyticsCycleRunning = true;
     try {
       const cameras = [...this.cameras.values()].filter((camera) =>
-        camera.enabled && camera.analyticsEnabled !== false && Boolean(camera.rtspUrl),
+        camera.enabled && camera.analyticsEnabled === true && Boolean(camera.rtspUrl),
       );
       // FFmpeg process startup is CPU intensive. Two concurrent captures keep
       // inference fresh without allowing a large branch to exhaust the host.
@@ -284,13 +284,21 @@ export class CameraHeartbeatService {
     const stream = await measureRtspStream(rtspUrl, { ffprobePath: this.ffprobePath });
     const responseTimeMs = Date.now() - startedAt;
     if (!stream.reachable) {
+      const failures = (this.consecutiveFailures.get(camera.id) ?? 0) + 1;
+      this.consecutiveFailures.set(camera.id, failures);
+      const isActuallyOffline = failures >= 3;
       return {
-        cameraId: camera.id, status: "offline", responseTimeMs,
-        streamActive: false, videoLoss: true, quality: "verified",
+        cameraId: camera.id,
+        status: isActuallyOffline ? "offline" : "degraded",
+        responseTimeMs,
+        streamActive: false,
+        videoLoss: isActuallyOffline,
+        quality: "verified",
         errorMessage: stream.error ?? "Camera RTSP stream is unreachable",
-        reasonCodes: ["rtsp_unreachable"],
+        reasonCodes: isActuallyOffline ? ["rtsp_unreachable"] : ["rtsp_probe_timeout"],
       };
     }
+    this.consecutiveFailures.delete(camera.id);
 
     const analyticsWidth = 320;
     const analyticsHeight = 180;

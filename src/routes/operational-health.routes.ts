@@ -162,7 +162,15 @@ export async function registerOperationalHealthRoutes(
       if (!camera || camera.branchId !== branch.id || (camera.edgeAgentId && camera.edgeAgentId !== id)) {
         return reply.code(403).send({ error: "camera_edge_scope_mismatch" });
       }
-      const reported = input.metrics.status;
+      let reported = input.metrics.status;
+      if (reported === "offline") {
+        // Prevent state flapping: If the camera was seen recently (< 60s) and is currently online/degraded,
+        // treat transient probe timeouts as degraded so active live streams are not needlessly interrupted.
+        const lastSeenMs = camera.lastSeenAt ? new Date(camera.lastSeenAt).getTime() : 0;
+        if (camera.status !== "offline" && (Date.now() - lastSeenMs < 60_000)) {
+          reported = "degraded";
+        }
+      }
       if (reported === "online" || reported === "offline" || reported === "degraded" || reported === "unknown") {
         await store.updateCameraStatus(input.deviceId, reported);
       }
