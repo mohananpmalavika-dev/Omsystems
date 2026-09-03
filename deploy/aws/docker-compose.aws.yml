@@ -227,7 +227,10 @@ services:
     image: sentinel-aws-analytics-engine:latest
     build:
       context: ../..
-      dockerfile: analytics-engine/Dockerfile.aws
+      # Use the production multi-stage image so the checksum-verified local
+      # inference models are provisioned. Dockerfile.aws built the service
+      # without models, leaving every camera in AI_DEGRADED.
+      dockerfile: analytics-engine/Dockerfile
     container_name: sentinel-aws-analytics-engine
     restart: always
     environment:
