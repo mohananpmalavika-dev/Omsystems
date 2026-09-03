@@ -437,7 +437,7 @@ export class AlertCorrelationEngine {
   private categorizeAlert(detectionType: string): AlertCategory {
     const safetyTypes = ['fire', 'smoke', 'fall', 'fighting-detected', 'person-down'];
     const securityTypes = ['intrusion', 'loitering', 'tailgating', 'watchlist-match', 'unknown-person'];
-    const complianceTypes = ['no-helmet', 'no-vest', 'vehicle-overspeeding', 'vehicle-wrong-way'];
+    const complianceTypes = ['no-helmet', 'helmet-worn', 'no-vest', 'vehicle-overspeeding', 'vehicle-wrong-way'];
     const operationalTypes = ['crowd-density-high', 'queue-length-exceeded', 'parking-overstay'];
 
     if (safetyTypes.some(t => detectionType.includes(t))) return 'safety';

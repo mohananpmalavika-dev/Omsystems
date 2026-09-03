@@ -341,7 +341,7 @@ export class AnalyticsPipeline {
 
       // Helmet detection (if scheduled)
       if ((schedule.modelsToRun.includes('helmet') ||
-          (!localInferenceRequested && this.needsDetection(rules, ['helmet', 'no-helmet']))) &&
+          (!localInferenceRequested && this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet']))) &&
           (persons.length > 0 || vehicles.length > 0)) {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
@@ -547,6 +547,7 @@ export class AnalyticsPipeline {
       "tailgating",
       "queue",
       "helmet",
+      "helmet-worn",
       "no-helmet",
       "loitering",
       "intrusion",

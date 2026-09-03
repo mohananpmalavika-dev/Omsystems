@@ -90,12 +90,13 @@ export class HelmetDetector extends BaseDetector {
       });
     }
 
-    // Also report compliant cases for analytics
+    // Report helmet presence as an alertable event so restricted indoor areas
+    // can flag helmeted entrants through the camera rule configuration.
     const compliant = detections.filter(d => d.riskLevel === "compliant");
     if (compliant.length > 0) {
       const avgConf = this.calculateAverageConfidence(compliant);
       results.push({
-        detectionType: "helmet-compliant",
+        detectionType: "helmet-worn",
         status: "SUCCESS",
         provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
         confidence: avgConf,
@@ -115,7 +116,7 @@ export class HelmetDetector extends BaseDetector {
           simulated: false,
           timestamp: new Date().toISOString(),
         },
-        requiresAlert: false,
+        requiresAlert: true,
       });
     }
 
@@ -142,11 +143,33 @@ export class HelmetDetector extends BaseDetector {
 
     // A missing helmet alone is not a violation: a high-confidence head
     // observation is required before reporting a rider as unprotected.
-    return Promise.all(this.matchPersonsToVehicles(persons, vehicles)
+    const riderDetections = await Promise.all(this.matchPersonsToVehicles(persons, vehicles)
       .map(async (match) => {
         if (runLocal && this.classifier) return this.classifyHelmetCompliance(frame, match);
         return this.checkHelmetCompliance(match, helmets, heads);
       }));
+
+    const riderIds = new Set(this.matchPersonsToVehicles(persons, vehicles).map((match) => match.person));
+    const indoorHelmetDetections = persons
+      .filter((person) => !riderIds.has(person))
+      .map((person) => this.detectHelmetPresence(person, helmets))
+      .filter((detection): detection is HelmetDetection => Boolean(detection));
+
+    return [...riderDetections, ...indoorHelmetDetections];
+  }
+
+  private detectHelmetPresence(person: any, helmets: any[]): HelmetDetection | undefined {
+    const headRegion = this.headRegion(person.boundingBox);
+    const helmet = helmets
+      .filter((candidate) => overlapOfCandidate(headRegion, candidate.boundingBox) >= this.HEAD_REGION_OVERLAP_THRESHOLD)
+      .sort((left, right) => (right.confidence ?? 0) - (left.confidence ?? 0))[0];
+    if (!helmet) return undefined;
+    return {
+      personBoundingBox: person.boundingBox,
+      helmetDetected: true,
+      confidence: helmet.confidence ?? null,
+      riskLevel: "compliant",
+    };
   }
 
   /**
