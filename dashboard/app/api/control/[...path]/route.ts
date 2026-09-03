@@ -103,6 +103,8 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   const willSendBody = typeof requestBody === "string" && requestBody.length > 0;
   if (willSendBody) {
     headers.set("content-type", "application/json");
+  } else {
+    headers.delete("content-type");
   }
 
   try {
