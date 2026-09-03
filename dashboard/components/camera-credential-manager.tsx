@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, LockKeyhole, X } from "lucide-react";
+import { isCameraIp, normalizeCameraIp } from "@/lib/camera-address";
 
 interface CameraCredentialManagerProps {
   branchId: string;
@@ -30,6 +31,11 @@ export function CameraCredentialManager({
       setResult({ kind: "error", message: "This branch does not have an enrolled gateway." });
       return;
     }
+    const normalizedCameraIp = normalizeCameraIp(cameraIp);
+    if (!isCameraIp(normalizedCameraIp)) {
+      setResult({ kind: "error", message: "Enter a valid camera or recorder IP address, for example 192.168.1.20. Do not include the RTSP URL or port." });
+      return;
+    }
     setSaving(true);
     setResult(undefined);
     try {
@@ -42,7 +48,7 @@ export function CameraCredentialManager({
           body: JSON.stringify({
             username: username.trim(),
             password,
-            cameraIp: cameraIp.trim(),
+            cameraIp: normalizedCameraIp,
           }),
         },
       );
@@ -102,7 +108,7 @@ export function CameraCredentialManager({
 
               <label className="block text-sm font-semibold text-slate-800">
                 Camera / recorder private IP address
-                <input required inputMode="decimal" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder="192.168.1.20" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                <input required inputMode="url" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder="192.168.1.20 or rtsp://192.168.1.20:554" className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
                 <span className="mt-2 block text-xs font-normal text-slate-500">This login is used only for this address. Other discovered devices will ask for their own login.</span>
               </label>
 

@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { isIP } from "node:net";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,17 @@ const commandTypes = [
   "recover-camera", "probe-recorder", "collect-logs", "apply-update",
 ] as const;
 const patchRuntimeMinimumVersion = "0.1.16";
+
+function normalizeCameraIp(value: string) {
+  const input = value.trim();
+  if (!input) return "";
+  try {
+    const parsed = input.includes("://") ? new URL(input) : new URL(`rtsp://${input}`);
+    return parsed.hostname;
+  } catch {
+    return input.split(/[/?#]/, 1)[0]?.replace(/:\d+$/, "") ?? "";
+  }
+}
 
 export async function registerEdgeGatewayOperationsRoutes(
   app: FastifyInstance,
@@ -279,7 +291,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     const parsedBody = z.object({
       username: z.string().trim().min(1).max(128),
       password: z.string().max(1_024).nullable().transform((value) => value ?? ""),
-      cameraIp: z.string().ip(),
+      cameraIp: z.string().trim().transform(normalizeCameraIp).refine((value) => isIP(value) > 0, "Invalid camera or recorder IP address"),
       cameraId: z.string().min(1).optional(),
       channel: z.number().int().positive().optional(),
       recorderId: z.string().min(1).optional(),
@@ -296,7 +308,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       if (!camera || camera.branchId !== branchId || (camera.edgeAgentId && camera.edgeAgentId !== id)) {
         return reply.code(404).send({ error: "camera_not_found", message: "The selected device is not assigned to this branch gateway." });
       }
-      if (camera.ipAddress && camera.ipAddress !== body.cameraIp) {
+      if (camera.ipAddress && normalizeCameraIp(camera.ipAddress) !== body.cameraIp) {
         return reply.code(409).send({ error: "camera_identity_mismatch", message: "The selected device number does not match its saved IP address." });
       }
     }

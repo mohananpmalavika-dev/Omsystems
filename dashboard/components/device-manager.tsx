@@ -32,6 +32,7 @@ import { ProvisioningRun } from "@/components/provisioning-run";
 import { QRCredentialScanner } from "@/components/qr-credential-scanner";
 import { DefaultCredentialSuggester } from "@/components/default-credential-suggester";
 import { CameraImportExportModal } from "@/components/camera-import-export-modal";
+import { normalizeCameraIp } from "@/lib/camera-address";
 
 import type {
   Branch,
@@ -1083,7 +1084,7 @@ export function DeviceManager() {
     try {
       const targetName = credentialActivation.displayName || credentialActivation.model || "IP Camera";
       const targetAgentId = credentialActivation.edgeAgentId;
-      const targetIpAddress = credentialActivation.ipAddress;
+      const targetIpAddress = normalizeCameraIp(credentialActivation.ipAddress || "");
       if (!targetAgentId || !targetIpAddress) {
         throw new Error("The selected device is missing its gateway or IP address.");
       }
