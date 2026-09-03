@@ -23,6 +23,15 @@ The files in this folder are only the safe fallback repair kit for one of
 those legacy branches. They preserve the existing branch identity and camera
 credentials; they are not tied to any particular branch.
 
+The ZIP is generated at runtime and is deliberately not kept in Git. From the
+repository root, create it with:
+
+powershell -ExecutionPolicy Bypass -File .\scripts\build-edge-agent-fleet-rollout.ps1
+
+The script builds and verifies v0.1.18, packages this folder with the Windows
+executable, and prints a SHA-256 checksum. Use -SkipBuild only when the
+verified edge-agent\release\edge-agent.exe already exists.
+
 1. Extract the complete ZIP file on the affected branch computer.
 2. Double-click Run-Sentinel-Edge-Repair.cmd.
 3. Approve the Windows Administrator prompt.
