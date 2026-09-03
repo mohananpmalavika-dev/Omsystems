@@ -316,23 +316,36 @@ export class DeviceIdentityRepository {
     }
 
     if (match?.camera_id) {
-      await client.query(
-        `UPDATE cameras
-         SET edge_agent_id = COALESCE($2::uuid, edge_agent_id),
-             serial_number = COALESCE($3, serial_number),
-             mac_address = COALESCE($4::macaddr, mac_address),
-             firmware_version = COALESCE($5, firmware_version),
-             ip_address = COALESCE($6::inet, ip_address),
-             onvif_uuid = COALESCE($7, onvif_uuid),
-             certificate_ref = COALESCE($8, certificate_ref),
-             certificate_fingerprint = COALESCE($9, certificate_fingerprint),
-             identity_last_seen_at = now(), last_seen_at = now()
-         WHERE id = $1::uuid`,
-        [match.camera_id, observation.agentId ?? null, observation.hardwareSerial ?? null,
-         databaseMac(observation.macAddress), observation.firmwareVersion ?? null,
-         observation.ipAddress ?? null, observation.onvifUuid ?? null,
-         observation.certificateRef ?? null, observation.certificateFingerprint ?? null],
+      const cameraExists = await client.query(
+        `SELECT 1 FROM cameras WHERE id = $1::uuid`,
+        [match.camera_id],
       );
+      if (cameraExists.rowCount === 0) {
+        // The camera was previously deleted; unlink it from device_identities so it can be cleanly re-added
+        await client.query(
+          `UPDATE device_identities SET camera_id = NULL, updated_at = now() WHERE id = $1::uuid`,
+          [identityId],
+        );
+        match.camera_id = null;
+      } else {
+        await client.query(
+          `UPDATE cameras
+           SET edge_agent_id = COALESCE($2::uuid, edge_agent_id),
+               serial_number = COALESCE($3, serial_number),
+               mac_address = COALESCE($4::macaddr, mac_address),
+               firmware_version = COALESCE($5, firmware_version),
+               ip_address = COALESCE($6::inet, ip_address),
+               onvif_uuid = COALESCE($7, onvif_uuid),
+               certificate_ref = COALESCE($8, certificate_ref),
+               certificate_fingerprint = COALESCE($9, certificate_fingerprint),
+               identity_last_seen_at = now(), last_seen_at = now()
+           WHERE id = $1::uuid`,
+          [match.camera_id, observation.agentId ?? null, observation.hardwareSerial ?? null,
+           databaseMac(observation.macAddress), observation.firmwareVersion ?? null,
+           observation.ipAddress ?? null, observation.onvifUuid ?? null,
+           observation.certificateRef ?? null, observation.certificateFingerprint ?? null],
+        );
+      }
     }
 
     return {

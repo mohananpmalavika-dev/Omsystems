@@ -19,6 +19,7 @@ import {
   VolumeX,
   SlidersHorizontal,
   AlertTriangle,
+  Trash2,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -93,6 +94,7 @@ function CameraTileComponent({
   aiOverlay,
   showAiOverlay = true,
   onOpenAi,
+  onDeleteCamera,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -116,12 +118,15 @@ function CameraTileComponent({
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay?: boolean;
   onOpenAi?: () => void;
+  onDeleteCamera?: (cameraId: string) => Promise<void> | void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
   const [zoom, setZoom] = useState(1);
   const [isMuted, setIsMuted] = useState(true);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [showPtzControl, setShowPtzControl] = useState(false);
   const [showRecordingSettings, setShowRecordingSettings] = useState(false);
   const [settingsPreRollSeconds, setSettingsPreRollSeconds] = useState(recording?.preRollSeconds ?? 30);
@@ -390,6 +395,17 @@ function CameraTileComponent({
           <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
           <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
           <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
+          {onDeleteCamera && (
+            <button
+              type="button"
+              aria-label="Remove camera"
+              title="Remove camera from monitoring"
+              onClick={() => setShowDeleteModal(true)}
+              style={{ color: "#f87171" }}
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
         </div>
         {zoom > 1 && <button type="button" className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
         {showPtzControl && isActive && session?.sessionId && (
@@ -536,6 +552,55 @@ function CameraTileComponent({
               <div className="modal-actions">
                 <button type="button" className="secondary-button" onClick={closeRecordingSettings}>Cancel</button>
                 <button type="button" className="primary-button" onClick={saveRecordingSettings}>Save settings</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {showDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="tile-delete-camera-title">
+            <div className="modal-header">
+              <h2 id="tile-delete-camera-title" style={{ color: "#ef4444" }}>Remove Camera</h2>
+              <button type="button" className="icon-button" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>×</button>
+            </div>
+            <div className="modal-body" style={{ padding: "16px 20px" }}>
+              <div className="form-info-banner" style={{ background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}>
+                <AlertTriangle size={18} />
+                <div>
+                  <strong>Are you sure you want to remove &quot;{camera.name}&quot;?</strong>
+                  <p style={{ margin: "4px 0 0", fontSize: "0.85rem", opacity: 0.9 }}>
+                    This camera stream will be removed from the video wall and active monitoring.
+                  </p>
+                </div>
+              </div>
+              <div style={{ marginTop: "12px", padding: "10px", borderRadius: "6px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.2)", color: "#a5b4fc", fontSize: "0.85rem" }}>
+                💡 <b>Need this camera back later?</b> You can easily re-add it at any time from <b>Device Manager</b> via <b>Scan cameras</b>, <b>Direct IP Probe</b>, or <b>Add camera manually</b>.
+              </div>
+              <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
+                <button type="button" className="secondary-button" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={async () => {
+                    if (!onDeleteCamera) return;
+                    setIsDeleting(true);
+                    try {
+                      await onDeleteCamera(camera.id);
+                      setShowDeleteModal(false);
+                    } catch (err) {
+                      console.error("Failed to delete camera", err);
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  disabled={isDeleting}
+                  style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff" }}
+                >
+                  {isDeleting ? "Removing…" : "Remove Camera"}
+                </button>
               </div>
             </div>
           </div>

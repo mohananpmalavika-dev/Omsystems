@@ -839,6 +839,13 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/bulk-import`,
       { method: 'POST', body: JSON.stringify({ csv }) }
     ),
+  deleteCamera: (cameraId: string, branchId?: string) =>
+    fetchApi<void>(
+      branchId
+        ? `/v1/branches/${encodeURIComponent(branchId)}/cameras/${encodeURIComponent(cameraId)}`
+        : `/v1/cameras/${encodeURIComponent(cameraId)}`,
+      { method: 'DELETE' }
+    ),
 };
 
 export const cameraApi = {
