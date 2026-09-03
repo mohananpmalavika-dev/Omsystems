@@ -46,6 +46,17 @@ export function invalidateTokenFromMemory(tokenHash: string) {
   }
 }
 
+export function refreshInMemorySessionsForCustomRole(roleId: string, newMenuAccess: string[], newBaseRole?: string) {
+  if (!roleId) return;
+  const target = String(roleId).toLowerCase();
+  for (const record of activeInMemorySessions.values()) {
+    if (record.user?.customRoleId && String(record.user.customRoleId).toLowerCase() === target) {
+      record.user.menuAccess = newMenuAccess;
+      if (newBaseRole) record.user.role = newBaseRole;
+    }
+  }
+}
+
 function sanitizeCurrentUser(user: any): any {
   if (!user) return user;
   let id = user.id;

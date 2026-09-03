@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowLeft, Building2, Camera, ShieldCheck, Users, Server } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Building2, Camera, Shield, ShieldCheck, Users, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/app-layout";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
@@ -280,6 +280,26 @@ export default function AdminPage() {
         >
           <Camera size={16} /> Branch cameras
         </button>
+        <a
+          href="/admin/organization?tab=roles"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '0.5rem 0.875rem',
+            color: '#a5b4fc',
+            textDecoration: 'none',
+            fontSize: '0.875rem',
+            fontWeight: 500,
+            borderRadius: '6px',
+            background: 'rgba(99, 102, 241, 0.1)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            marginLeft: 'auto',
+            cursor: 'pointer'
+          }}
+        >
+          <Shield size={15} /> Role vs Menu Permissions
+        </a>
       </nav>
 
       <section className="admin-panel">

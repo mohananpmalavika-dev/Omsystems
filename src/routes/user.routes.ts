@@ -10,6 +10,10 @@ import {
   createEmployeeFaceTemplate,
   faceTemplatePreferences,
 } from "../security/employee-face-verification.service.js";
+import {
+  refreshInMemorySessionsForCustomRole,
+  invalidateAllInMemorySessionsForUser,
+} from "../middleware/auth.middleware.js";
 
 const createUserSchema = z.object({
   email: z.string().email(),
@@ -143,6 +147,9 @@ export async function registerUserRoutes(
       return reply.code(403).send({ error: "forbidden" });
     }
     const role = await store.updateCustomRole(id, request.currentUser.tenantId, body);
+    if (role && body.menuAccess) {
+      refreshInMemorySessionsForCustomRole(id, body.menuAccess, body.baseRole);
+    }
     return role ? role : reply.code(404).send({ error: "role_not_found" });
   });
 
@@ -376,6 +383,10 @@ export async function registerUserRoutes(
 
     if (!user || user.tenantId !== request.currentUser.tenantId) {
       return reply.code(404).send({ error: "user_not_found" });
+    }
+
+    if (body.customRoleId !== undefined || body.role !== undefined) {
+      invalidateAllInMemorySessionsForUser(id);
     }
 
     const { facePhotoBase64: _facePhoto, ...safeChanges } = body;

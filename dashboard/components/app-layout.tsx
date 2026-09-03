@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -93,8 +93,11 @@ export type NavItem = {
 
 export type MenuAccessUser = {
   role?: string;
+  customRoleId?: string;
+  customRoleName?: string;
   menuAccess?: unknown;
-  preferences?: { menuAccess?: unknown };
+  menu_access?: unknown;
+  preferences?: { menuAccess?: unknown; menu_access?: unknown };
 };
 
 export type NavGroup = {
@@ -223,8 +226,9 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Organization & Location Hierarchy", href: "/admin/organization", icon: Building2 },
-      { label: "Employees & Location Grants", href: "/admin/organization", icon: Users },
+      { label: "Organization & Location Hierarchy", href: "/admin/organization?tab=hierarchy", icon: Building2 },
+      { label: "Employees & Location Grants", href: "/admin/organization?tab=employees", icon: Users },
+      { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
       { label: "Platform Capability Matrix", href: "/admin/platform/capabilities", icon: ShieldCheck },
       { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
@@ -268,17 +272,30 @@ export function defaultMenuAccessForRole(role?: string) {
 
 export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
   if (!user) return navigation;
-  const configuredValue = user.menuAccess;
+  const configuredValue =
+    user.menuAccess ??
+    (user as any).menu_access ??
+    user.preferences?.menuAccess ??
+    (user.preferences as any)?.menu_access;
   const configured = Array.isArray(configuredValue)
     ? configuredValue.filter((value): value is string => typeof value === "string")
     : null;
   const allowed = new Set(configured ?? defaultMenuAccessForRole(user.role));
-  return navigation.map((group) => ({ ...group, items: group.items.filter((item) => allowed.has(menuKey(item))) }))
+  return navigation
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => {
+        const key = menuKey(item);
+        const path = routePath(item.href);
+        return allowed.has(key) || allowed.has(path);
+      }),
+    }))
     .filter((group) => group.items.length > 0);
 }
 
 
 export const quickActions: NavItem[] = [
+  { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
   { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },
   { label: "Onboard a branch", href: "/admin/branch-onboarding", icon: Building2 },
@@ -343,7 +360,11 @@ function routeMatches(
   if (!query) return true;
   let matches = true;
   new URLSearchParams(query).forEach((value, key) => {
-    if (searchParams?.get(key) !== value) matches = false;
+    const currentVal = searchParams?.get(key);
+    if (key === "tab" && value === "hierarchy" && (!currentVal || currentVal === "hierarchy")) {
+      return;
+    }
+    if (currentVal !== value) matches = false;
   });
   return matches;
 }
@@ -368,7 +389,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
 
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const router = useRouter();
-  const [searchParams, setSearchParams] = useState<Pick<URLSearchParams, "get"> | null>(null);
+  const searchParams = useSearchParams();
   const { branding } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -380,19 +401,28 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     () => new Set(navigation.map((g) => g.label))
   );
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
-  const [operator, setOperator] = useState<{
+  const [operator, setOperator] = useState<(MenuAccessUser & {
     displayName?: string;
     username?: string;
     email?: string;
-    role?: string;
-    preferences?: { menuAccess?: unknown };
-  } | null>(null);
+  }) | null>(null);
 
   useEffect(() => {
     try {
       const storedUser = localStorage.getItem("user");
       if (storedUser) setOperator(JSON.parse(storedUser));
     } catch {}
+    authApi
+      .getCurrentUser()
+      .then((fresh) => {
+        if (fresh) {
+          setOperator(fresh);
+          try {
+            localStorage.setItem("user", JSON.stringify(fresh));
+          } catch {}
+        }
+      })
+      .catch(() => {});
     try {
       const stored = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
       if (stored) {
@@ -405,12 +435,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, []);
 
   const pathname = usePathname() || "/";
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setSearchParams(new URLSearchParams(window.location.search));
-    }
-  }, [pathname]);
   const visibleNavigation = getVisibleNavigation(operator);
   const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
   const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));

@@ -174,10 +174,38 @@ export default function OrganizationHierarchyPage() {
   const [roleDescription, setRoleDescription] = useState("");
   const [roleBaseRole, setRoleBaseRole] = useState("operator");
   const [roleMenuAccess, setRoleMenuAccess] = useState<string[]>([]);
+  const [menuSearchQuery, setMenuSearchQuery] = useState("");
 
   useEffect(() => {
     loadAllData();
   }, []);
+
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "roles" || tabParam === "role-menu" || tabParam === "role-vs-menu") {
+        setActiveTab("roles");
+      } else if (tabParam === "employees" || tabParam === "users") {
+        setActiveTab("employees");
+      } else if (tabParam === "hierarchy") {
+        setActiveTab("hierarchy");
+      }
+    };
+    syncTabFromUrl();
+    window.addEventListener("popstate", syncTabFromUrl);
+    return () => window.removeEventListener("popstate", syncTabFromUrl);
+  }, []);
+
+  const handleTabChange = (tab: "hierarchy" | "employees" | "roles") => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.pushState(null, "", url.toString());
+    }
+  };
 
   useEffect(() => {
     // Cleanup webcam stream when modal closes
@@ -571,6 +599,23 @@ export default function OrganizationHierarchyPage() {
     setShowRoleModal(true);
   }
 
+  async function handleDeleteRole(role: CustomRole) {
+    if (!confirm(`Are you sure you want to delete role "${role.name}"?`)) return;
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth(`/api/control/v1/roles/${role.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete role");
+      setNotice(`Role "${role.name}" deleted successfully.`);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete role");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleAssignPermission(e: React.FormEvent) {
     e.preventDefault();
     if (!selectedEmployee || !permScopeNodeId) return;
@@ -866,7 +911,7 @@ export default function OrganizationHierarchyPage() {
         {/* Tab Navigation */}
         <div className="flex border-b border-slate-800 gap-2">
           <button
-            onClick={() => setActiveTab("hierarchy")}
+            onClick={() => handleTabChange("hierarchy")}
             className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
               activeTab === "hierarchy"
                 ? "border-emerald-500 text-emerald-400"
@@ -876,17 +921,7 @@ export default function OrganizationHierarchyPage() {
             <FolderTree size={15} /> 1. Hierarchy & Location Tree
           </button>
           <button
-            onClick={() => setActiveTab("roles")}
-            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
-              activeTab === "roles"
-                ? "border-emerald-500 text-emerald-400"
-                : "border-transparent text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Shield size={15} /> 3. Roles & Menu Access
-          </button>
-          <button
-            onClick={() => setActiveTab("employees")}
+            onClick={() => handleTabChange("employees")}
             className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
               activeTab === "employees"
                 ? "border-emerald-500 text-emerald-400"
@@ -894,6 +929,16 @@ export default function OrganizationHierarchyPage() {
             }`}
           >
             <Users size={15} /> 2. Employee Directory & Face Biometrics
+          </button>
+          <button
+            onClick={() => handleTabChange("roles")}
+            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+              activeTab === "roles"
+                ? "border-emerald-500 text-emerald-400"
+                : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Shield size={15} /> 3. Role vs Menu Permissions (Roles & Menu Access)
           </button>
         </div>
 
@@ -1073,32 +1118,102 @@ export default function OrganizationHierarchyPage() {
 
         {activeTab === "roles" && (
           <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
               <div>
-                <h2 className="text-base font-bold text-slate-100">Role-Based Menu Access</h2>
-                <p className="text-xs text-slate-400">Create a role once, assign its menus, and every employee using it receives the same navigation at login.</p>
+                <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Shield size={18} className="text-emerald-400" />
+                  Role vs Menu Permissions (Role-Based Menu Access)
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Create roles, assign which navigation menus each role can access, and map employees to roles so only allowed menus appear in their sidebar.
+                </p>
               </div>
-              <button onClick={() => { setEditingRole(null); setRoleName(""); setRoleDescription(""); setRoleBaseRole("operator"); setRoleMenuAccess([]); setShowRoleModal(true); }} className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5">
-                <Plus size={13} /> Create Role
+              <button
+                onClick={() => {
+                  setEditingRole(null);
+                  setRoleName("");
+                  setRoleDescription("");
+                  setRoleBaseRole("operator");
+                  setRoleMenuAccess([]);
+                  setMenuSearchQuery("");
+                  setShowRoleModal(true);
+                }}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition self-start sm:self-auto"
+              >
+                <Plus size={13} /> Create Role & Assign Menus
               </button>
             </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {roles.map((role) => (
-                <div key={role.id} className="border border-slate-800 bg-slate-950/60 rounded-lg p-4">
+                <div key={role.id} className="border border-slate-800 bg-slate-950/70 rounded-lg p-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
-                    <div><h3 className="text-sm font-bold text-slate-100">{role.name}</h3><p className="text-[11px] text-slate-500 mt-1">Base access: {role.baseRole}</p></div>
-                    <span className="text-[10px] text-emerald-400 font-mono">{role.userCount ?? 0} users</span>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                        <Shield size={14} className="text-emerald-400" />
+                        {role.name}
+                      </h3>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Base capability: <span className="text-slate-300 font-mono">{role.baseRole}</span>
+                      </p>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded">
+                      {role.userCount ?? 0} employee(s)
+                    </span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-3">{role.description || "No description"}</p>
-                  <div className="flex items-center justify-between mt-3">
-                    <p className="text-[11px] text-indigo-300">{role.menuAccess.length} menus assigned</p>
-                    <button type="button" onClick={() => openRoleMenuEditor(role)} className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded text-[11px] font-semibold flex items-center gap-1">
-                      <Plus size={12} /> Add Menu
+
+                  <p className="text-xs text-slate-400">{role.description || "No description provided"}</p>
+
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[11px] text-indigo-300 font-semibold flex items-center justify-between">
+                      <span>{role.menuAccess.length} Navigation Menus Assigned</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                      {role.menuAccess.slice(0, 8).map((mKey) => {
+                        const allNavItems = navigation.flatMap((g) => g.items);
+                        const matched = allNavItems.find((item) => menuKey(item) === mKey || item.href === mKey);
+                        return (
+                          <span
+                            key={mKey}
+                            className="text-[10px] bg-slate-900 text-slate-300 border border-slate-800 px-1.5 py-0.5 rounded truncate max-w-[160px]"
+                            title={matched?.label || mKey}
+                          >
+                            {matched?.label || mKey}
+                          </span>
+                        );
+                      })}
+                      {role.menuAccess.length > 8 && (
+                        <span className="text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-800 px-1.5 py-0.5 rounded">
+                          +{role.menuAccess.length - 8} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800/60">
+                    <button
+                      type="button"
+                      onClick={() => openRoleMenuEditor(role)}
+                      className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded text-[11px] font-semibold flex items-center gap-1 transition"
+                    >
+                      <Plus size={12} /> Configure Menus
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRole(role)}
+                      className="px-2 py-1 text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 rounded text-[11px] transition"
+                      title="Delete role"
+                    >
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 </div>
               ))}
-              {!roles.length && <div className="col-span-full py-10 text-center text-sm text-slate-500">No custom roles yet. Create one to define role-level menus.</div>}
+              {!roles.length && (
+                <div className="col-span-full py-10 text-center text-sm text-slate-500">
+                  No custom roles created yet. Click &quot;Create Role & Assign Menus&quot; to configure role vs menu permissions.
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1106,12 +1221,167 @@ export default function OrganizationHierarchyPage() {
         {showRoleModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3"><h3 className="text-base font-bold text-slate-100 flex items-center gap-2"><Shield size={16} className="text-emerald-400" /> {editingRole ? `Add Menu: ${editingRole.name}` : "Create Role"}</h3><button onClick={() => { setShowRoleModal(false); setEditingRole(null); }} className="text-slate-400 text-sm font-bold">&times;</button></div>
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Shield size={16} className="text-emerald-400" />
+                  {editingRole ? `Configure Menus: ${editingRole.name}` : "Create Role & Assign Menus"}
+                </h3>
+                <button
+                  onClick={() => { setShowRoleModal(false); setEditingRole(null); }}
+                  className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
               <form onSubmit={handleCreateRole} className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2"><input required disabled={Boolean(editingRole)} value={roleName} onChange={(e) => setRoleName(e.target.value)} placeholder="Role name" className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60" /><select disabled={Boolean(editingRole)} value={roleBaseRole} onChange={(e) => setRoleBaseRole(e.target.value)} className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"><option value="operator">Operator capability</option><option value="branch_manager">Branch manager capability</option><option value="viewer">Viewer capability</option><option value="auditor">Auditor capability</option></select></div>
-                <input value={roleDescription} onChange={(e) => setRoleDescription(e.target.value)} placeholder="Description (optional)" className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200" />
-                <div className="max-h-64 overflow-y-auto space-y-2 rounded-lg border border-slate-800 bg-slate-950 p-3">{navigation.map((group) => <fieldset key={group.label} className="space-y-1"><legend className="text-[10px] font-bold uppercase text-slate-500">{group.label}</legend>{group.items.map((item) => { const key = menuKey(item); return <label key={key} className="flex items-center gap-2 text-slate-300"><input type="checkbox" checked={roleMenuAccess.includes(key)} onChange={(event) => setRoleMenuAccess((current) => event.target.checked ? [...current, key] : current.filter((value) => value !== key))} className="accent-emerald-500" /><span>{item.label}</span></label>; })}</fieldset>)}</div>
-                <div className="flex justify-end gap-2 border-t border-slate-800 pt-3"><button type="button" onClick={() => { setShowRoleModal(false); setEditingRole(null); }} className="px-4 py-2 bg-slate-800 text-slate-300 rounded-lg font-semibold">Cancel</button><button type="submit" disabled={saving || !roleMenuAccess.length} className="px-4 py-2 bg-emerald-600 text-slate-950 rounded-lg font-bold">{saving ? "Saving..." : editingRole ? "Save Menus" : "Create Role"}</button></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    required
+                    disabled={Boolean(editingRole)}
+                    value={roleName}
+                    onChange={(e) => setRoleName(e.target.value)}
+                    placeholder="Role name (e.g. SOC Watcher, Cash Officer)"
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"
+                  />
+                  <select
+                    disabled={Boolean(editingRole)}
+                    value={roleBaseRole}
+                    onChange={(e) => setRoleBaseRole(e.target.value)}
+                    className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"
+                  >
+                    <option value="operator">Operator capability (Live View)</option>
+                    <option value="branch_manager">Branch Manager capability</option>
+                    <option value="security_officer">Security Officer capability</option>
+                    <option value="viewer">Viewer capability</option>
+                    <option value="auditor">Auditor capability</option>
+                  </select>
+                </div>
+                <input
+                  value={roleDescription}
+                  onChange={(e) => setRoleDescription(e.target.value)}
+                  placeholder="Role description (optional)"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200"
+                />
+
+                {/* Search and Quick Selection Actions */}
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <div className="relative flex-1">
+                    <Search size={13} className="absolute left-2.5 top-2.5 text-slate-500" />
+                    <input
+                      type="text"
+                      value={menuSearchQuery}
+                      onChange={(e) => setMenuSearchQuery(e.target.value)}
+                      placeholder="Search menus (e.g. live wall, branch, report)..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-slate-200 text-xs"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allKeys = navigation.flatMap((g) => g.items.map(menuKey));
+                        setRoleMenuAccess(Array.from(new Set([...roleMenuAccess, ...allKeys])));
+                      }}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-medium"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRoleMenuAccess([])}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded text-[11px] font-medium"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
+                  {navigation.map((group) => {
+                    const groupItems = group.items.filter((item) =>
+                      !menuSearchQuery.trim() ||
+                      item.label.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
+                      group.label.toLowerCase().includes(menuSearchQuery.toLowerCase())
+                    );
+                    if (!groupItems.length) return null;
+
+                    const groupKeys = group.items.map(menuKey);
+                    const allGroupSelected = groupKeys.every((k) => roleMenuAccess.includes(k));
+
+                    return (
+                      <fieldset key={group.label} className="space-y-1.5 pb-2 border-b border-slate-900 last:border-0 last:pb-0">
+                        <div className="flex items-center justify-between">
+                          <legend className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                            {group.label}
+                          </legend>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (allGroupSelected) {
+                                setRoleMenuAccess((curr) => curr.filter((k) => !groupKeys.includes(k)));
+                              } else {
+                                setRoleMenuAccess((curr) => Array.from(new Set([...curr, ...groupKeys])));
+                              }
+                            }}
+                            className="text-[10px] text-slate-500 hover:text-slate-300 font-medium"
+                          >
+                            {allGroupSelected ? "Deselect Group" : "Select Group"}
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {groupItems.map((item) => {
+                            const key = menuKey(item);
+                            const checked = roleMenuAccess.includes(key);
+                            return (
+                              <label
+                                key={key}
+                                className={`flex items-center gap-2 p-1.5 rounded transition cursor-pointer ${
+                                  checked ? "bg-slate-900/90 text-emerald-300" : "text-slate-300 hover:bg-slate-900/40"
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) =>
+                                    setRoleMenuAccess((current) =>
+                                      event.target.checked
+                                        ? [...current, key]
+                                        : current.filter((value) => value !== key)
+                                    )
+                                  }
+                                  className="accent-emerald-500 rounded"
+                                />
+                                <span className="truncate">{item.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </fieldset>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-800 pt-3">
+                  <span className="text-slate-400 text-[11px]">
+                    <strong className="text-emerald-400">{roleMenuAccess.length}</strong> menu(s) selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowRoleModal(false); setEditingRole(null); }}
+                      className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={saving || !roleMenuAccess.length}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 rounded-lg font-bold transition"
+                    >
+                      {saving ? "Saving..." : editingRole ? "Save Menus" : "Create Role"}
+                    </button>
+                  </div>
+                </div>
               </form>
             </div>
           </div>
