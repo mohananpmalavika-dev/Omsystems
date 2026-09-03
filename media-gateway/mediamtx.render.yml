@@ -11,18 +11,24 @@ authHTTPExclude:
   - action: pprof
 
 hls: yes
-hlsAddress: 127.0.0.1:8888
+hlsAddress: :8888
 # Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
 # blocking playlist/partial-segment requests.
 hlsVariant: mpegts
+hlsSegmentCount: 20
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
 hlsAllowOrigins:
   - "*"
 
-webrtc: no
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcAllowOrigins: ["*"]
 
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 10s
-  sourceOnDemandCloseAfter: 10s
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 30s
 
 paths: {}

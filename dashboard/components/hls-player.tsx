@@ -195,11 +195,16 @@ export function HlsPlayer({
           // The public feed crosses a tunnel; a normal buffered HLS window
           // avoids LL-HLS partial-playlist stalls on that path.
           lowLatencyMode: false,
-          backBufferLength: 30,
-          maxBufferLength: 30,
-          liveSyncDurationCount: 4,
-          liveMaxLatencyDurationCount: 10,
-          maxLiveSyncPlaybackRate: 1.2,
+          backBufferLength: 10,
+          maxBufferLength: 20,
+          maxMaxBufferLength: 30,
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 8,
+          maxLiveSyncPlaybackRate: 1.25,
+          fragLoadingTimeOut: 10_000,
+          fragLoadingMaxRetry: 2,
+          manifestLoadingTimeOut: 10_000,
+          manifestLoadingMaxRetry: 3,
           xhrSetup: (xhr, requestUrl) => {
             xhr.withCredentials = true;
             if (bearerToken) {
@@ -214,7 +219,27 @@ export function HlsPlayer({
           void video.play().catch(() => undefined);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
-          if (!data.fatal) return;
+          if (!data.fatal) {
+            // Non-fatal error: If a segment 404s/slid past buffer, catch up to live edge
+            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
+              hls?.startLoad(-1);
+            }
+            return;
+          }
+
+          // Fatal network error (e.g. fragment 404 after max retries):
+          // Official Hls.js pattern: call startLoad(-1) to refresh playlist and skip past the missing segment to live edge
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
+              if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                recoveryAttempts += 1;
+                lastProgressAt = Date.now();
+                hls?.startLoad(-1);
+                return;
+              }
+            }
+          }
+
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
             recover("media_error");
             return;

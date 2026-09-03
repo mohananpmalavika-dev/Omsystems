@@ -11,9 +11,12 @@ hls: yes
 hlsAddress: 127.0.0.1:8888
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
+hlsSegmentCount: 20
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
 webrtc: no
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 10s
-  sourceOnDemandCloseAfter: 10s
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 30s
 paths: {}
