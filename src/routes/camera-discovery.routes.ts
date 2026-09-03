@@ -9,6 +9,7 @@ import {
   isRecorderBacked,
 } from "../services/camera-auto-provision.js";
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
+import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -364,6 +365,13 @@ export async function registerCameraDiscoveryRoutes(
       camera.id,
       defaultRecordingJob("continuous", 180, recorderBacked),
     ).catch(() => undefined);
+
+    await ensureCameraAiBundle(
+      store,
+      branch.tenantId,
+      camera.id,
+      request.currentUser.id,
+    ).catch((err) => request.log.warn({ err }, "Auto-enable AI bundle deferred for newly approved camera"));
 
     return {
       success: true,

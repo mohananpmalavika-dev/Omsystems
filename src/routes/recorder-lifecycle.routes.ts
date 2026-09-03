@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { buildRecorderReplacementPlan } from "../services/recorder-replacement.js";
+import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 
 const paramsSchema = z.object({ branchId: z.string().min(1) });
 const replacementSchema = z.object({
@@ -66,6 +67,11 @@ export async function registerRecorderLifecycleRoutes(app: FastifyInstance, stor
           updatedCameraIds: result.updatedCameraIds,
         },
       });
+      if (result.updatedCameraIds?.length) {
+        for (const cameraId of result.updatedCameraIds) {
+          await ensureCameraAiBundle(store, context.branch!.tenantId, cameraId, request.currentUser.id).catch(() => undefined);
+        }
+      }
       return reply.code(201).send(result);
     } catch (error) {
       const code = error instanceof Error ? error.message : "recorder_replacement_failed";

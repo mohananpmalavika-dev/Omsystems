@@ -39,6 +39,7 @@ import { OperationalReportRepository } from "./operational-report-repository.js"
 import { ActivityTrackingRepository } from "./activity-tracking-repository.js";
 import { hashPassword } from "../security/password.js";
 import { PERMANENT_SUPERADMIN } from "../identity/services/bootstrap-onboarding.service.js";
+import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
 import type {
   OperationalHealthPolicy,
   OperationalTelemetryEnvelope,
@@ -470,13 +471,45 @@ export class PostgresStore
     return this.agents.listDiscoveries(branchId);
   }
   async approveCamera(branchId: string, input: CameraApprovalInput) {
-    return this.cameras.approve(branchId, input);
+    const camera = await this.cameras.approve(branchId, input);
+    if (camera) {
+      void this.autoProvisionAiBundleForCamera(camera, branchId).catch(() => undefined);
+    }
+    return camera;
   }
   async createCameraFromManualRegistration(branchId: string, input: CameraApprovalInput) {
-    return this.cameras.createManual(branchId, input);
+    const camera = await this.cameras.createManual(branchId, input);
+    if (camera) {
+      void this.autoProvisionAiBundleForCamera(camera, branchId).catch(() => undefined);
+    }
+    return camera;
   }
   async replaceRecorderChannels(input: Parameters<CameraRepository["replaceRecorderChannels"]>[0]) {
-    return this.cameras.replaceRecorderChannels(input);
+    const result = await this.cameras.replaceRecorderChannels(input);
+    if (result?.updatedCameraIds?.length) {
+      void (async () => {
+        try {
+          const branch = await this.getNode(input.branchId);
+          if (branch?.tenantId) {
+            for (const cameraId of result.updatedCameraIds) {
+              await ensureCameraAiBundle(this, branch.tenantId, cameraId);
+            }
+          }
+        } catch {}
+      })();
+    }
+    return result;
+  }
+
+  private async autoProvisionAiBundleForCamera(camera: { id: string }, branchId: string) {
+    try {
+      const branch = await this.getNode(branchId);
+      if (branch?.tenantId) {
+        await ensureCameraAiBundle(this, branch.tenantId, camera.id);
+      }
+    } catch {
+      // Best effort AI bundle auto-enable
+    }
   }
   async updateCameraStatus(id: string, status: CameraStatus) {
     return this.cameras.updateStatus(id, status);
