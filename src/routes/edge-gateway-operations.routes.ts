@@ -24,6 +24,7 @@ const commandTypes = [
   "recover-camera", "probe-recorder", "collect-logs", "apply-update",
 ] as const;
 const patchRuntimeMinimumVersion = "0.1.16";
+const credentialUpdateMinimumAgentVersion = "0.1.7";
 
 function normalizeCameraIp(value: string) {
   const input = value.trim();
@@ -288,6 +289,13 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
     const agent = (await store.listEdgeAgentsByBranch(branchId)).find((item) => item.id === id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
+    if (compareVersions(agent.version, credentialUpdateMinimumAgentVersion) < 0) {
+      return reply.code(409).send({
+        error: "edge_agent_update_required",
+        minimumVersion: credentialUpdateMinimumAgentVersion,
+        message: `Repair the Sentinel Grid Scanner before updating credentials. This gateway is running v${agent.version}; v${credentialUpdateMinimumAgentVersion} or newer is required.`,
+      });
+    }
     const parsedBody = z.object({
       username: z.string().trim().min(1).max(128),
       password: z.string().max(1_024).nullable().transform((value) => value ?? ""),

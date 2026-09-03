@@ -1030,7 +1030,8 @@ export function DeviceManager() {
 
   async function waitForCredentialCommand(commandId: string) {
     if (!selectedBranch) throw new Error("Select a branch before verifying device credentials.");
-    const deadline = Date.now() + 180_000;
+    const deadline = Date.now() + 60_000;
+    let lastStatus = "queued";
     while (Date.now() < deadline) {
       if (scanAbortedRef.current) {
         throw new Error("Credential verification was stopped. The queued gateway command may still complete on the branch appliance.");
@@ -1041,9 +1042,15 @@ export function DeviceManager() {
       if (command?.status === "failed") {
         throw new Error(command.error || "The branch scanner could not verify these credentials.");
       }
+      if (command?.status && command.status !== lastStatus) {
+        lastStatus = command.status;
+        setCredentialVerificationStatus(command.status === "running"
+          ? "The scanner is verifying this device login and refreshing its stream route…"
+          : "Credential update queued. Waiting for the branch scanner to claim it…");
+      }
       await wait(1_500);
     }
-    throw new Error("Credential verification timed out. Confirm the branch scanner remains online, then retry.");
+    throw new Error("The branch scanner did not complete this credential update within 60 seconds. Confirm the scanner is running and online, then retry.");
   }
 
   async function openPendingCredentials() {
