@@ -92,7 +92,6 @@ export async function registerOrganizationRoutes(
     const isSuperOrAdmin =
       role === "super_admin" ||
       role === "company_admin" ||
-      role === "admin" ||
       role === "superadmin" ||
       role === "hq_admin";
 

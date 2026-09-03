@@ -32,7 +32,7 @@ BEGIN
   END IF;
 
   -- Super admins have unconditional access to all cameras across all branches and tenants
-  IF v_user.role IN ('super_admin', 'superadmin')
+  IF v_user.role::text IN ('super_admin', 'superadmin')
      OR v_user.identity_subject = 'user-global-admin'
      OR LOWER(COALESCE(v_user.username, '')) IN ('user-global-admin', 'mgdhanyamohan')
      OR v_user.id = '00000000-0000-4000-8000-000000000001'::uuid THEN

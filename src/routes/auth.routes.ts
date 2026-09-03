@@ -156,7 +156,6 @@ export async function registerAuthRoutes(
           "kryptonlogic",
           "krypton@kryptonlogic.com",
           "krypton@kryptonlogin.com",
-          "admin",
           "superadmin",
           "user-global-admin",
         ];

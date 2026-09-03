@@ -778,7 +778,7 @@ export class InfrastructureRepository {
       `${this.userSelect(true, true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE (lower(u.username)=lower($1) OR lower(u.email)=lower($1) OR u.identity_subject=$1 OR 'user-' || lower(u.username)=lower($1))
-         AND ($2::text IS NULL OR t.slug=$2 OR u.role='super_admin' OR u.role='company_admin' OR lower(u.username) IN ('mgdhanyamohan', 'krypton', 'kryptonlogic', 'admin', 'superadmin'))
+         AND ($2::text IS NULL OR t.slug=$2 OR u.role='super_admin' OR u.role='company_admin' OR lower(u.username) IN ('mgdhanyamohan', 'krypton', 'kryptonlogic', 'superadmin'))
        ORDER BY CASE WHEN u.role='super_admin' THEN 0 WHEN u.role='company_admin' THEN 1 ELSE 2 END, u.created_at ASC
        LIMIT 1`,
       [clean, tenantSlug ?? null],
