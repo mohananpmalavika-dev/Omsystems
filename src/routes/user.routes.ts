@@ -107,6 +107,7 @@ const customRoleSchema = z.object({
 const assignOrgSchema = z.object({
   scopeNodeId: z.string().min(1),
   isPrimary: z.boolean().default(false),
+  replaceExisting: z.boolean().optional(),
 });
 
 const changePasswordSchema = z.object({
@@ -456,6 +457,7 @@ export async function registerUserRoutes(
       body.scopeNodeId,
       body.isPrimary,
       request.currentUser.id,
+      body.replaceExisting ?? body.isPrimary,
     );
 
     if (!assignment) return reply.code(400).send({ error: "invalid_organization_assignment" });

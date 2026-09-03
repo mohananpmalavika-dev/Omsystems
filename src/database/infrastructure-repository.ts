@@ -1012,6 +1012,23 @@ export class InfrastructureRepository {
         `UPDATE users SET ${assignments.join(", ")}, updated_at=now() WHERE id=$1`,
         [id, ...values],
       );
+      if (input.role) {
+        await this.pool.query(
+          `DELETE FROM access_grants WHERE user_id=$1::uuid AND grant_source='role'`,
+          [id],
+        );
+        await this.pool.query(
+          `INSERT INTO access_grants (
+             tenant_id, user_id, scope_node_id, action, effect, grant_source
+           )
+           SELECT u.tenant_id, u.id, uoa.scope_node_id, rp.action, 'allow', 'role'
+           FROM users u
+           JOIN user_organizational_assignments uoa ON uoa.user_id = u.id
+           JOIN role_permissions rp ON rp.role = u.role
+           WHERE u.id = $1::uuid`,
+          [id],
+        );
+      }
     }
     return this.getUserWithPassword(id);
   }
@@ -1105,6 +1122,7 @@ export class InfrastructureRepository {
     scopeNodeId: string,
     isPrimary: boolean,
     assignedBy: string | null,
+    replaceExisting: boolean = true,
   ) {
     let resolvedUserId = userId;
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
@@ -1133,9 +1151,15 @@ export class InfrastructureRepository {
       }
     }
 
-    if (isPrimary) {
+    if (isPrimary || replaceExisting) {
+      // Clear out previous organizational assignments and role-based access grants for this user
+      // so users assigned to a branch/zone do NOT retain company-wide access
       await client.query(
-        "UPDATE user_organizational_assignments SET is_primary=false WHERE user_id=$1::uuid",
+        "DELETE FROM access_grants WHERE user_id=$1::uuid AND grant_source='role'",
+        [resolvedUserId],
+      );
+      await client.query(
+        "DELETE FROM user_organizational_assignments WHERE user_id=$1::uuid",
         [resolvedUserId],
       );
     }
@@ -1172,12 +1196,13 @@ export class InfrastructureRepository {
     scopeNodeId: string,
     isPrimary: boolean,
     assignedBy: string,
+    replaceExisting: boolean = true,
   ) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       const assignment = await this.assignOrganization(
-        client, userId, scopeNodeId, isPrimary, assignedBy,
+        client, userId, scopeNodeId, isPrimary, assignedBy, replaceExisting,
       );
       await client.query("COMMIT");
       return assignment;

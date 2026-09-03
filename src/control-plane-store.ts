@@ -1924,6 +1924,7 @@ export interface UserManagementStore {
     scopeNodeId: string,
     isPrimary: boolean,
     assignedBy: string,
+    replaceExisting?: boolean,
   ): Promise<any>;
   removeUserOrganizationAssignment(userId: string, nodeId: string): Promise<void>;
   getUserCameraAccessOverview(userId: string): Promise<any>;

@@ -154,7 +154,7 @@ export class CameraRepository {
              WHERE u.id = $1::uuid
                AND (u.role IN ('super_admin', 'company_admin', 'hq_admin')
                     OR u.identity_subject = 'user-global-admin'
-                    OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan', 'admin'))
+                    OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan'))
            )
            OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = $1::uuid)
            OR (
@@ -196,7 +196,7 @@ export class CameraRepository {
           WHERE u.id = $1::uuid
             AND (u.role IN ('super_admin', 'company_admin', 'hq_admin')
                  OR u.identity_subject = 'user-global-admin'
-                 OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan', 'admin'))
+                 OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan'))
         )
         OR NOT EXISTS (SELECT 1 FROM users u WHERE u.id = $1::uuid)
         OR (SELECT access.allowed FROM check_camera_access($1::uuid, cameras.id, $2) AS access LIMIT 1) = true

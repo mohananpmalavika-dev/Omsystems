@@ -621,29 +621,32 @@ export default function OrganizationHierarchyPage() {
     if (!selectedEmployee || !permScopeNodeId) return;
     setSaving(true);
     try {
-      const payload = {
-        userId: selectedEmployee.id,
-        scopeNodeId: permScopeNodeId,
-        isPrimary: false,
+      const rolePayload = {
+        customRoleId: selectedCustomRoleId || null,
+        ...(roles.find((role) => role.id === selectedCustomRoleId)
+          ? { role: roles.find((role) => role.id === selectedCustomRoleId)?.baseRole }
+          : {}),
       };
-
-      await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
 
       const roleResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customRoleId: selectedCustomRoleId || null,
-          ...(roles.find((role) => role.id === selectedCustomRoleId)
-            ? { role: roles.find((role) => role.id === selectedCustomRoleId)?.baseRole }
-            : {}),
-        }),
+        body: JSON.stringify(rolePayload),
       });
       if (!roleResponse.ok) throw new Error("Failed to assign role");
+
+      const orgPayload = {
+        scopeNodeId: permScopeNodeId,
+        isPrimary: true,
+        replaceExisting: true,
+      };
+
+      const orgResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orgPayload),
+      });
+      if (!orgResponse.ok) throw new Error("Failed to assign location scope");
 
       setNotice(`Permission policy updated for ${selectedEmployee.displayName}!`);
       setShowPermModal(false);

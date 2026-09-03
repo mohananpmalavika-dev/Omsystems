@@ -206,18 +206,44 @@ export class ResourceRepository {
       [resolvedUserId, action, resourceNodeId],
     );
     const grant = result.rows[0];
-    if (!grant) return { allowed: false, reason: "no_matching_grant" };
-    return grant.effect === "deny"
-      ? {
-          allowed: false,
-          reason: "explicitly_denied",
-          matchingScopeId: grant.scope_node_id,
-        }
-      : {
-          allowed: true,
-          reason: "allowed_by_grant",
-          matchingScopeId: grant.scope_node_id,
-        };
+    if (grant) {
+      return grant.effect === "deny"
+        ? {
+            allowed: false,
+            reason: "explicitly_denied",
+            matchingScopeId: grant.scope_node_id,
+          }
+        : {
+            allowed: true,
+            reason: "allowed_by_grant",
+            matchingScopeId: grant.scope_node_id,
+          };
+    }
+
+    // Fallback: check hierarchical match via user_organizational_assignments and role permissions
+    const orgResult = await this.pool.query<{ scope_node_id: string }>(
+      `SELECT uoa.scope_node_id::text
+       FROM user_organizational_assignments uoa
+       JOIN resource_nodes scope ON scope.id = uoa.scope_node_id
+       JOIN resource_nodes target ON target.id = $3
+       JOIN users u ON u.id = uoa.user_id
+       JOIN role_permissions rp ON rp.role = u.role
+       WHERE uoa.user_id = $1::uuid
+         AND rp.action = $2
+         AND scope.tenant_id = target.tenant_id
+         AND target.path <@ scope.path
+       LIMIT 1`,
+      [resolvedUserId, action, resourceNodeId],
+    );
+    if (orgResult.rows[0]) {
+      return {
+        allowed: true,
+        reason: "allowed_by_grant",
+        matchingScopeId: orgResult.rows[0].scope_node_id,
+      };
+    }
+
+    return { allowed: false, reason: "no_matching_grant" };
   }
 
   async listAccessible(
@@ -276,34 +302,47 @@ export class ResourceRepository {
            OR target.lifecycle_status IS NULL
            OR target.lifecycle_status IN ('ACTIVE', 'DISABLED')
          )
-         AND EXISTS (
-           SELECT 1
-           FROM access_grants grant_allow
-           JOIN resource_nodes allow_scope
-             ON allow_scope.id = grant_allow.scope_node_id
-           WHERE grant_allow.user_id = $2::uuid
-             AND grant_allow.action = $3
-             AND grant_allow.effect = 'allow'
-             AND target.path <@ allow_scope.path
-             AND (
-               NOT EXISTS (
-                 SELECT 1 FROM resource_nodes sensitive_scope
-                 WHERE sensitive_scope.tenant_id = target.tenant_id
-                   AND sensitive_scope.is_sensitive = true
-                   AND target.path <@ sensitive_scope.path
+         AND (
+           EXISTS (
+             SELECT 1
+             FROM access_grants grant_allow
+             JOIN resource_nodes allow_scope
+               ON allow_scope.id = grant_allow.scope_node_id
+             WHERE grant_allow.user_id = $2::uuid
+               AND grant_allow.action = $3
+               AND grant_allow.effect = 'allow'
+               AND target.path <@ allow_scope.path
+               AND (
+                 NOT EXISTS (
+                   SELECT 1 FROM resource_nodes sensitive_scope
+                   WHERE sensitive_scope.tenant_id = target.tenant_id
+                     AND sensitive_scope.is_sensitive = true
+                     AND target.path <@ sensitive_scope.path
+                 )
+                 OR allow_scope.path <@ (
+                   SELECT sensitive_scope.path
+                   FROM resource_nodes sensitive_scope
+                   WHERE sensitive_scope.tenant_id = target.tenant_id
+                     AND sensitive_scope.is_sensitive = true
+                     AND target.path <@ sensitive_scope.path
+                   ORDER BY nlevel(sensitive_scope.path) DESC
+                   LIMIT 1
+                 )
                )
-               OR allow_scope.path <@ (
-                 SELECT sensitive_scope.path
-                 FROM resource_nodes sensitive_scope
-                 WHERE sensitive_scope.tenant_id = target.tenant_id
-                   AND sensitive_scope.is_sensitive = true
-                   AND target.path <@ sensitive_scope.path
-                 ORDER BY nlevel(sensitive_scope.path) DESC
-                 LIMIT 1
-               )
-             )
-             AND (grant_allow.valid_from IS NULL OR grant_allow.valid_from <= now())
-             AND (grant_allow.valid_until IS NULL OR grant_allow.valid_until > now())
+               AND (grant_allow.valid_from IS NULL OR grant_allow.valid_from <= now())
+               AND (grant_allow.valid_until IS NULL OR grant_allow.valid_until > now())
+           )
+           OR EXISTS (
+             SELECT 1
+             FROM user_organizational_assignments uoa
+             JOIN resource_nodes org_scope
+               ON org_scope.id = uoa.scope_node_id
+             JOIN users u ON u.id = uoa.user_id
+             JOIN role_permissions rp ON rp.role = u.role
+             WHERE uoa.user_id = $2::uuid
+               AND rp.action = $3
+               AND target.path <@ org_scope.path
+           )
          )
          AND NOT EXISTS (
            SELECT 1
