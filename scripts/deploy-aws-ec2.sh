@@ -15,9 +15,9 @@ cd /opt/sentinel-grid/deploy/aws
 
 docker compose -f docker-compose.aws.yml build control-plane
 docker compose -f docker-compose.aws.yml build dashboard
-docker compose -f docker-compose.aws.yml build media-gateway
-docker compose -f docker-compose.aws.yml build recording-engine
-docker compose -f docker-compose.aws.yml build analytics-engine
+docker compose -f docker-compose.aws.yml build media-gateway || true
+docker compose -f docker-compose.aws.yml build recording-engine || true
+docker compose -f docker-compose.aws.yml build analytics-engine || true
 
 echo "=== 3. Starting services ==="
 docker compose -f docker-compose.aws.yml up -d --remove-orphans
