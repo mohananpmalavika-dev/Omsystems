@@ -115,6 +115,25 @@ async function run() {
   const camList = Array.isArray(basanthCameras.body) ? basanthCameras.body : (basanthCameras.body?.data || basanthCameras.body?.cameras || []);
   console.log("Total cameras visible to BASANTH:", camList.length);
   camList.forEach(c => console.log(` - Camera: ${c.name} (${c.id}) at branch: ${c.branchId || c.resourceNodeId}`));
+
+  console.log("\n=== 10. Login as admin (Role: security_officer assigned strictly to 'south' branch) ===");
+  const userAdminLogin = await post('/v1/auth/login', {
+    username: 'admin',
+    password: 'SentinelMasterAdmin2026!'
+  });
+  const adminUserToken = userAdminLogin.body?.accessToken;
+  console.log("admin login success:", Boolean(adminUserToken), "role:", userAdminLogin.body?.user?.role);
+
+  console.log("\n=== 11. admin Branches (via /v1/organization/nodes?type=branch) ===");
+  const adminUserBranches = await get('/v1/organization/nodes?type=branch', adminUserToken);
+  console.log("Total branches visible to admin:", adminUserBranches.body?.data?.length);
+  adminUserBranches.body?.data?.forEach(b => console.log(` - ${b.name} (${b.id})`));
+
+  console.log("\n=== 12. admin Cameras (via /v1/cameras) ===");
+  const adminUserCameras = await get('/v1/cameras', adminUserToken);
+  const adminCamList = Array.isArray(adminUserCameras.body) ? adminUserCameras.body : (adminUserCameras.body?.data || adminUserCameras.body?.cameras || []);
+  console.log("Total cameras visible to admin:", adminCamList.length);
+  adminCamList.forEach(c => console.log(` - Camera: ${c.name} (${c.id}) at branch: ${c.branchId || c.resourceNodeId}`));
 }
 
 run().catch(console.error);
