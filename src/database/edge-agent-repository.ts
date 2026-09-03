@@ -208,9 +208,9 @@ export class EdgeAgentRepository {
     const result = await this.pool.query<AgentRow>(
       `UPDATE edge_agents
        SET version = $2, status = 'online', last_seen_at = now(),
-           public_media_url = $3,
-           local_media_url = COALESCE($4, local_media_url)
-       WHERE id = $1
+            public_media_url = COALESCE($3, public_media_url),
+            local_media_url = COALESCE($4, local_media_url)
+        WHERE id = $1
        RETURNING id::text, branch_node_id::text, name, version, status,
                  last_seen_at, public_media_url, local_media_url, device_uuid,
                  credential_issued_at, credential_revoked_at`,
