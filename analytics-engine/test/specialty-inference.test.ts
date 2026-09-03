@@ -39,6 +39,19 @@ describe("local specialty model adapters", () => {
     expect(detector.getHealth().status).toBe("healthy");
   });
 
+  it("raises an alert when a helmeted person is detected without a vehicle", async () => {
+    const detector = new HelmetDetector();
+    await detector.initialize();
+    const results = await detector.detect(frame([
+      object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+      object("helmet", 0.93, { x: 0.18, y: 0.11, width: 0.24, height: 0.12 }),
+    ]));
+
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detectionType: "helmet-worn", requiresAlert: true }),
+    ]));
+  });
+
   it("classifies a rider head crop with the local safety-helmet model", async () => {
     const run = async () => ({
       wearingHelmet: false,

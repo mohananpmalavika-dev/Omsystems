@@ -463,7 +463,7 @@ export class AlertCorrelationEngine {
     if (highTypes.some(t => detectionType.includes(t))) return 'high';
 
     // Medium severity
-    const mediumTypes = ['loitering', 'tailgating', 'no-helmet', 'vehicle-wrong-way', 'unknown-person'];
+    const mediumTypes = ['loitering', 'tailgating', 'no-helmet', 'helmet-worn', 'vehicle-wrong-way', 'unknown-person'];
     if (mediumTypes.some(t => detectionType.includes(t))) return 'medium';
 
     // Low severity with high confidence

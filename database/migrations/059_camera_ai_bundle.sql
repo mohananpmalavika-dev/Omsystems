@@ -21,6 +21,7 @@ WITH bundle(name, detection_type, object_classes, min_confidence, min_duration_s
     ('AI - Fire detection', 'fire', '["fire"]'::jsonb, 0.70, 1.0, 'P1', 30),
     ('AI - Smoke detection', 'smoke', '["smoke"]'::jsonb, 0.70, 1.0, 'P1', 30),
     ('AI - Fall detection', 'fall', '["person"]'::jsonb, 0.70, 1.0, 'P1', 30),
+    ('AI - Helmet worn inside bank', 'helmet-worn', '["helmet","person"]'::jsonb, 0.70, 1.0, 'P2', 60),
     ('AI - Missing helmet', 'no-helmet', '["person"]'::jsonb, 0.70, 1.0, 'P2', 60),
     ('AI - Crowd density', 'crowd-density', '["person"]'::jsonb, 0.65, 4.0, 'P2', 120),
     ('AI - Tailgating', 'tailgating', '["person"]'::jsonb, 0.65, 0.0, 'P2', 60),
