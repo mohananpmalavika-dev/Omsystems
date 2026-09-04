@@ -632,6 +632,7 @@ export async function buildApp(options?: {
       request.url === "/health" ||
       request.url === "/ready" ||
       request.url === "/metrics" ||
+      request.url.startsWith("/api/ai/") ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
       request.url.startsWith("/internal/analytics/") ||

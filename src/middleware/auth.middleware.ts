@@ -121,21 +121,27 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       return;
     }
 
-    // Extract bearer token from Authorization header
+    // Extract bearer token from Authorization header, x-sentinel-session, or session cookies
+    let token: string | undefined;
     const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return reply.code(401).send({
-        error: "unauthenticated",
-        message: "Missing or invalid authorization header",
-      });
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      token = authHeader.substring(7);
+    } else if (typeof request.headers["x-sentinel-session"] === "string" && request.headers["x-sentinel-session"]) {
+      token = request.headers["x-sentinel-session"];
+    } else if (typeof request.headers.cookie === "string" && request.headers.cookie) {
+      const parsedCookies = Object.fromEntries(
+        request.headers.cookie.split(";").map((c) => {
+          const [k, ...v] = c.trim().split("=");
+          return [k, decodeURIComponent(v.join("="))];
+        })
+      );
+      token = parsedCookies["sentinel_access"] || parsedCookies["sentinel_session"] || parsedCookies["accessToken"];
     }
-
-    const token = authHeader.substring(7); // Remove "Bearer " prefix
 
     if (!token) {
       return reply.code(401).send({
         error: "unauthenticated",
-        message: "No access token provided",
+        message: "Missing or invalid authorization header or session cookie",
       });
     }
 
