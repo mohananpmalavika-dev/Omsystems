@@ -6,6 +6,12 @@ import type { AnalyticsRule } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
 import { createIncidentIntegration, type IncidentIntegrationHook } from './incident-integration.js';
+import {
+  livenessCheckHandler,
+  metricsEndpointHandler,
+  metricsJSONEndpointHandler,
+  registerMonitoringHooks,
+} from "./monitoring/middleware.js";
 
 const objectSchema = z.object({
   label: z.string().trim().min(1).max(100),
@@ -80,10 +86,15 @@ export interface AnalyticsEngineOptions {
 
 export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   const app = Fastify({ logger: options.logger ?? false });
+  registerMonitoringHooks(app);
   const state = {
     received: 0, accepted: 0, failed: 0,
     lastAcceptedAt: undefined as string | undefined,
   };
+
+  app.get("/live", livenessCheckHandler);
+  app.get("/metrics", metricsEndpointHandler);
+  app.get("/metrics/json", metricsJSONEndpointHandler);
 
   // Initialize analytics pipeline
   const controlPlaneUrl = options.controlPlaneUrl || process.env.CONTROL_API_URL || process.env.CONTROL_PLANE_URL;
@@ -176,7 +187,7 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
   });
 
   app.addHook("preHandler", async (request, reply) => {
-    if (request.url === "/health") return;
+    if (request.url === "/health" || request.url === "/live") return;
 
     const key = request.headers["x-analytics-source-key"];
     const trustedSource = typeof key === "string" && same(key, options.sourceSharedKey);

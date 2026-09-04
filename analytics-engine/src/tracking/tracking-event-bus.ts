@@ -200,16 +200,28 @@ export class TrackingEventBus {
                 this.queue.shift(); // Remove oldest
                 this.queue.push(event);
                 this.metrics.dropped++;
-                if (this.config.debug) {
-                    console.warn('[TrackingEventBus] Queue full, dropped oldest event');
-                }
+                this.emitter.emit('queue.overflow', {
+                    eventType,
+                    policy: this.config.overflowPolicy,
+                    dropped: this.metrics.dropped,
+                });
+                console.warn('[TrackingEventBus] Queue full, dropped oldest event', {
+                    eventType,
+                    dropped: this.metrics.dropped,
+                });
                 return true;
 
             case 'drop-newest':
                 this.metrics.dropped++;
-                if (this.config.debug) {
-                    console.warn('[TrackingEventBus] Queue full, dropped newest event');
-                }
+                this.emitter.emit('queue.overflow', {
+                    eventType,
+                    policy: this.config.overflowPolicy,
+                    dropped: this.metrics.dropped,
+                });
+                console.warn('[TrackingEventBus] Queue full, dropped newest event', {
+                    eventType,
+                    dropped: this.metrics.dropped,
+                });
                 return false;
 
             case 'block':

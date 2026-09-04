@@ -46,7 +46,13 @@ export function registerMonitoringHooks(fastify: FastifyInstance): void {
     };
 
     logger.info('Incoming request', context, {
-      headers: request.headers,
+      headers: {
+        ...request.headers,
+        authorization: "[redacted]",
+        cookie: "[redacted]",
+        "x-analytics-source-key": "[redacted]",
+        "x-sentinel-session": "[redacted]",
+      },
       query: request.query
     }, 'http');
 

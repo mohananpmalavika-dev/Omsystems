@@ -5,7 +5,7 @@
  * manager never manufactures an ID, URL, expiry, or successful renewal.
  */
 
-import { startLiveFromBrowser } from "../live-client";
+import { releaseLiveSession, startLiveFromBrowser } from "../live-client";
 import type { LiveSessionResponse } from "../types";
 
 export interface LiveSession {
@@ -27,8 +27,10 @@ export type LiveSessionStarter = (
 
 export class LiveSessionManager {
   private sessions = new Map<string, LiveSession>();
+  private responses = new Map<string, LiveSessionResponse>();
   private consumers = new Map<string, Set<string>>();
   private expiryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private inFlight = new Map<string, Promise<LiveSession>>();
 
   constructor(private readonly startSession: LiveSessionStarter = startLiveFromBrowser) {}
 
@@ -38,16 +40,42 @@ export class LiveSessionManager {
     quality: "SUB" | "MAIN" = "SUB",
     preferredTransport: "WEBRTC" | "HLS" = "WEBRTC",
   ): Promise<LiveSession> {
+    const key = `${cameraId}:${quality}:${preferredTransport}`;
+    const pending = this.inFlight.get(key);
+    if (pending) {
+      const session = await pending;
+      this.addConsumer(cameraId, consumerId);
+      return session;
+    }
+
+    const acquisition = this.acquireOnce(cameraId, consumerId, quality, preferredTransport);
+    this.inFlight.set(key, acquisition);
+    try {
+      return await acquisition;
+    } finally {
+      if (this.inFlight.get(key) === acquisition) this.inFlight.delete(key);
+    }
+  }
+
+  private async acquireOnce(
+    cameraId: string,
+    consumerId: string,
+    quality: "SUB" | "MAIN",
+    preferredTransport: "WEBRTC" | "HLS",
+  ): Promise<LiveSession> {
     const existing = this.sessions.get(cameraId);
-    if (existing?.state === "ACTIVE" && existing.quality === quality) {
+    if (existing?.state === "ACTIVE" && existing.quality === quality && existing.transport === preferredTransport) {
       this.addConsumer(cameraId, consumerId);
       return existing;
     }
+
+    if (existing) this.clearSession(cameraId, "TERMINATED");
 
     const response = await this.startSession(cameraId, quality === "MAIN" ? "main" : "sub");
     const session = toLiveSession(cameraId, quality, preferredTransport, response);
 
     this.sessions.set(cameraId, session);
+    this.responses.set(cameraId, response);
     this.addConsumer(cameraId, consumerId);
     this.scheduleExpiry(cameraId, session.expiresAt);
     return session;
@@ -67,8 +95,8 @@ export class LiveSessionManager {
   }
 
   /**
-   * Releases a local viewer reference. Playback closes when its video element
-   * is detached; no non-existent backend teardown endpoint is called.
+  * Releases a local viewer reference and the corresponding gateway grant
+  * when the final consumer detaches.
    */
   async release(cameraId: string, consumerId = "default-consumer"): Promise<boolean> {
     const consumerSet = this.consumers.get(cameraId);
@@ -123,6 +151,7 @@ export class LiveSessionManager {
     session.state = "FAILED";
     session.error = "live_session_expired";
     this.expiryTimers.delete(cameraId);
+    void releaseLiveSession(this.responses.get(cameraId));
   }
 
   private clearSession(cameraId: string, state: LiveSession["state"]): void {
@@ -131,7 +160,9 @@ export class LiveSessionManager {
     this.expiryTimers.delete(cameraId);
     const session = this.sessions.get(cameraId);
     if (session) session.state = state;
+    void releaseLiveSession(this.responses.get(cameraId));
     this.sessions.delete(cameraId);
+    this.responses.delete(cameraId);
   }
 }
 

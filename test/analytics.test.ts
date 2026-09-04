@@ -599,7 +599,7 @@ describe("video analytics and alert workflow", () => {
     expect(r2.alerts[0]!.occurrenceCount).toBe(2);
 
     // Verify total alerts in store is still exactly 1
-    const allAlerts = await store.listAnalyticsAlerts("omsystems", { cameraId: "cam-001" });
+    const allAlerts = await store.listAnalyticsAlerts("omsystems", { cameraId: "cam-001", limit: 100 });
     expect(allAlerts.filter(a => a.ruleId === rule.id)).toHaveLength(1);
 
     // Now operator resolves the issue
@@ -615,7 +615,7 @@ describe("video analytics and alert workflow", () => {
       confidence: 0.99, durationSeconds: 0, modelVersion: "1.0.0",
       objects: [],
     });
-    const afterSuppressed = await store.listAnalyticsAlerts("omsystems", { cameraId: "cam-001" });
+    const afterSuppressed = await store.listAnalyticsAlerts("omsystems", { cameraId: "cam-001", limit: 100 });
     expect(afterSuppressed.filter(a => a.ruleId === rule.id && a.status === "new")).toHaveLength(0);
 
     // Detection after cooldown (60 seconds later) creates a fresh new alert

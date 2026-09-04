@@ -46,15 +46,16 @@ export async function startLiveFromBrowser(
 }
 
 export async function releaseLiveSession(session: LiveSessionResponse | undefined) {
-  if (!session?.sessionId || !session.hls?.url || !session.hls.bearerToken) return;
+  if (!session?.sessionId) return;
   try {
-    const source = new URL(session.hls.url);
-    const marker = "/hls/";
-    if (!source.pathname.includes(marker)) return;
+    const mediaUrl = session.hls?.url ?? session.webRtc?.whepUrl;
+    const bearerToken = session.hls?.bearerToken ?? session.webRtc?.bearerToken;
+    if (!mediaUrl || !bearerToken) return;
+    const source = new URL(mediaUrl);
     const releaseUrl = `${source.origin}/v1/live/${encodeURIComponent(session.sessionId)}`;
     await fetch(releaseUrl, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${session.hls.bearerToken}` },
+      headers: { Authorization: `Bearer ${bearerToken}` },
       credentials: "include",
       cache: "no-store",
     });

@@ -138,6 +138,15 @@ export async function buildMediaGateway(options: {
     });
   });
 
+  app.delete("/v1/live/:sessionId", async (request, reply) => {
+    const params = z.object({ sessionId: z.string().uuid() }).parse(request.params);
+    const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+    if (!token) throw new GatewayError(401, "invalid_live_session");
+    const released = await access.release(params.sessionId, token);
+    if (!released) throw new GatewayError(404, "invalid_live_session");
+    return reply.code(200).send({ status: "released" });
+  });
+
   app.post("/v1/portable/publish-start", async (request, reply) => {
     const body = z.object({
       controlPlaneToken: z.string().min(10).max(256),

@@ -378,10 +378,11 @@ export class StorageFailoverManager extends EventEmitter {
     item.attempts++;
     
     try {
-      // In production: actual file upload
-      // await tier.adapter.uploadFile(item.localPath, item.targetPath);
+      if (!tier.adapter.uploadFile) {
+        throw new Error(`storage_upload_not_implemented:${item.targetTier}`);
+      }
+      await tier.adapter.uploadFile(item.localPath, item.targetPath);
       
-      // ✅ Success - remove from queue
       this.retryQueue.delete(item.id);
       
       this.emit('retry:success', { item });

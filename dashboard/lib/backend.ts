@@ -193,27 +193,16 @@ export async function startLive(
     }
 
     if (!mediaResponse) {
-      return {
-        sessionId: `standby-${cameraId}`,
-        cameraId,
-        expiresAt: new Date(Date.now() + 60_000).toISOString(),
-        isStandby: true,
-        status: "standby",
-      };
+      throw lastError ?? new Error("media_gateway_unavailable");
     }
 
     return rewriteLiveMediaUrls(
       await mediaResponse.json() as LiveSessionResponse,
       chosenGatewayUrl,
     );
-  } catch {
-    return {
-      sessionId: `standby-${cameraId}`,
-      cameraId,
-      expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      isStandby: true,
-      status: "standby",
-    };
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error("media_gateway_unavailable");
   }
 }
 

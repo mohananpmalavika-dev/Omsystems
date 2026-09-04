@@ -68,6 +68,7 @@ export interface StorageDestinationAdapter {
   resolveSegmentTargetPath(cameraId: string, startedAt: Date, fileName: string): string;
   deleteSegmentFile(storagePath: string): Promise<void>;
   runWriteProbe(): Promise<StorageProbeResult>;
+  uploadFile?(localPath: string, targetPath: string): Promise<unknown>;
 }
 
 export interface StorageAdapterOptions {

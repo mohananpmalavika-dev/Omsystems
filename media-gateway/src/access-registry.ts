@@ -11,6 +11,7 @@ interface AccessSession {
 
 export class AccessRegistry {
   private readonly sessions = new Map<string, AccessSession>();
+  private readonly sessionsByToken = new Map<string, string>();
 
   constructor(
     private readonly router: MediaRouter,
@@ -26,6 +27,7 @@ export class AccessRegistry {
       expiresAt: Date.now() + this.ttlMs,
     };
     this.sessions.set(session.id, session);
+    this.sessionsByToken.set(session.token, session.id);
     const timer = setTimeout(() => void this.expire(session.id), this.ttlMs);
     timer.unref();
     return {
@@ -37,21 +39,24 @@ export class AccessRegistry {
   }
 
   authenticate(token: string, path: string, action: string) {
-    for (const session of this.sessions.values()) {
-      if (
-        session.path === path &&
-        session.expiresAt > Date.now() &&
-        (session.action === "both" || session.action === action) &&
-        secureEqual(session.token, token)
-      ) return true;
-    }
-    return false;
+    const sessionId = this.sessionsByToken.get(token);
+    const session = sessionId ? this.sessions.get(sessionId) : undefined;
+    return Boolean(session && session.path === path && session.expiresAt > Date.now() &&
+      (session.action === "both" || session.action === action) && secureEqual(session.token, token));
+  }
+
+  async release(id: string, token: string): Promise<boolean> {
+    const session = this.sessions.get(id);
+    if (!session || !secureEqual(session.token, token)) return false;
+    await this.expire(id);
+    return true;
   }
 
   private async expire(id: string) {
     const session = this.sessions.get(id);
     if (!session) return;
     this.sessions.delete(id);
+    this.sessionsByToken.delete(session.token);
     const pathStillUsed = [...this.sessions.values()].some(
       (item) => item.path === session.path && item.expiresAt > Date.now(),
     );
