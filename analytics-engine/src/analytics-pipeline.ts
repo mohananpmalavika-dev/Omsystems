@@ -4,9 +4,17 @@
  */
 
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import type { z } from "zod";
 import type { detectionSchema } from "./app.js";
 import { BaseDetector, hasInferenceObjects, type DetectionFrame, type DetectedObject, type InferenceObject } from "./detectors/base-detector.js";
+
+export interface SnapshotRecord {
+  buffer: Buffer;
+  createdAt: number;
+  cameraId: string;
+}
+export const snapshotCache = new Map<string, SnapshotRecord>();
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
@@ -257,7 +265,7 @@ export class AnalyticsPipeline {
     const healthResults = await this.healthDetector.detect(frame);
     for (const result of healthResults) {
       if (this.matchesAnyRule(result.detectionType, rules)) {
-        events.push(this.createEvent(frame, result));
+        events.push(await this.createEvent(frame, result));
       }
     }
 
@@ -280,7 +288,7 @@ export class AnalyticsPipeline {
       );
       for (const result of objectResults) {
         if (this.matchesAnyRule(result.detectionType, rules)) {
-          events.push(this.createEvent(frame, result));
+          events.push(await this.createEvent(frame, result));
         }
       }
     }
@@ -317,7 +325,7 @@ export class AnalyticsPipeline {
         persons = personResults.flatMap((result) => result.objects);
         for (const result of personResults) {
           if (this.matchesAnyRule(result.detectionType, rules)) {
-            events.push(this.createEvent(frame, result));
+            events.push(await this.createEvent(frame, result));
           }
         }
       }
@@ -328,7 +336,7 @@ export class AnalyticsPipeline {
         vehicles = vehicleResults.flatMap((result) => result.objects);
         for (const result of vehicleResults) {
           if (this.matchesAnyRule(result.detectionType, rules)) {
-            events.push(this.createEvent(frame, result));
+            events.push(await this.createEvent(frame, result));
           }
         }
       }
@@ -390,7 +398,7 @@ export class AnalyticsPipeline {
       for (const results of specializedResults) {
         for (const result of results) {
           if (this.matchesAnyRule(result.detectionType, rules)) {
-            events.push(this.createEvent(frame, result));
+            events.push(await this.createEvent(frame, result));
           }
         }
       }
@@ -494,23 +502,64 @@ export class AnalyticsPipeline {
     }
 
     for (const result of results) {
-      events.push(this.createEvent(frame, result));
+      events.push(await this.createEvent(frame, result));
     }
 
     return events;
   }
 
   /**
-   * Create detection event
+   * Create detection event with snapshot image
    */
-  private createEvent(
+  private async createEvent(
     frame: DetectionFrame,
     result: any,
-  ): z.infer<typeof detectionSchema> {
+  ): Promise<z.infer<typeof detectionSchema>> {
+    const eventId = randomUUID();
+    let snapshotBase64: string | undefined;
+
+    if (
+      frame.imageData &&
+      frame.imageData.length === frame.width * frame.height * 3 &&
+      frame.width > 0 &&
+      frame.height > 0
+    ) {
+      try {
+        const jpegBuffer = await sharp(frame.imageData, {
+          raw: {
+            width: frame.width,
+            height: frame.height,
+            channels: 3,
+          },
+        })
+          .resize({ width: Math.min(frame.width, 640), withoutEnlargement: true })
+          .jpeg({ quality: 75 })
+          .toBuffer();
+
+        snapshotBase64 = jpegBuffer.toString("base64");
+        snapshotCache.set(eventId, {
+          buffer: jpegBuffer,
+          createdAt: Date.now(),
+          cameraId: frame.cameraId,
+        });
+        snapshotCache.set(`camera:${frame.cameraId}`, {
+          buffer: jpegBuffer,
+          createdAt: Date.now(),
+          cameraId: frame.cameraId,
+        });
+        if (snapshotCache.size > 300) {
+          const oldestKey = snapshotCache.keys().next().value;
+          if (oldestKey) snapshotCache.delete(oldestKey);
+        }
+      } catch {
+        // Continue without snapshot if sharp encoding fails
+      }
+    }
+
     return {
       tenantId: frame.tenantId,
       cameraId: frame.cameraId,
-      sourceEventId: randomUUID(),
+      sourceEventId: eventId,
       detectionType: result.detectionType,
       occurredAt: frame.timestamp.toISOString(),
       confidence: result.confidence,
@@ -524,7 +573,11 @@ export class AnalyticsPipeline {
         trackId: obj.trackId,
         boundingBox: obj.boundingBox,
       })),
-      metadata: result.metadata ?? {},
+      snapshotReference: `/v1/alerts/${eventId}/evidence/snapshot`,
+      metadata: {
+        ...(result.metadata ?? {}),
+        ...(snapshotBase64 ? { snapshotBase64 } : {}),
+      },
     };
   }
 

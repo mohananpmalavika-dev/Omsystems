@@ -4,7 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
-import { Plus, Siren } from "lucide-react";
+import { Plus, Siren, Camera } from "lucide-react";
+import { IncidentImageModal } from "@/components/incident-image-modal";
 
 type Incident = {
   id: string;
@@ -40,6 +41,7 @@ export default function IncidentsPage() {
   const [stats, setStats] = useState<any>(null);
   const [view, setView] = useState<'all' | 'critical' | 'open' | 'sla-breach'>('all');
   const [error, setError] = useState<string | null>(null);
+  const [selectedIncidentForImage, setSelectedIncidentForImage] = useState<Incident | null>(null);
 
   async function loadIncidents() {
     setLoading(true);
@@ -321,12 +323,15 @@ export default function IncidentsPage() {
                   <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
                     AI
                   </th>
+                  <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
+                    Snapshot
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredIncidents.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
                       No incidents found
                     </td>
                   </tr>
@@ -415,6 +420,32 @@ export default function IncidentsPage() {
                           '—'
                         )}
                       </td>
+                      <td style={{ textAlign: 'center', padding: '12px 16px' }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedIncidentForImage(inc);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '4px 10px',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            backgroundColor: '#f0f9ff',
+                            color: '#0284c7',
+                            border: '1px solid #bae6fd',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                          }}
+                          title="View incident snapshot image"
+                        >
+                          <Camera size={13} />
+                          View Image
+                        </button>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -432,6 +463,20 @@ export default function IncidentsPage() {
         }}>
           Showing {filteredIncidents.length} incident{filteredIncidents.length !== 1 ? 's' : ''}
         </div>
+
+        {selectedIncidentForImage && (
+          <IncidentImageModal
+            isOpen={!!selectedIncidentForImage}
+            onClose={() => setSelectedIncidentForImage(null)}
+            imageUrl={`/api/control/v1/alerts/${selectedIncidentForImage.id}/evidence/snapshot`}
+            title={selectedIncidentForImage.title}
+            cameraName={selectedIncidentForImage.branchId || "Incident Camera"}
+            branchName={selectedIncidentForImage.branchId}
+            timestamp={selectedIncidentForImage.occurredAt || selectedIncidentForImage.createdAt}
+            severity={selectedIncidentForImage.severity}
+            confidence={selectedIncidentForImage.aiConfidence}
+          />
+        )}
       </div>
     </AppLayout>
   );

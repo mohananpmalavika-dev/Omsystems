@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import Fastify from "fastify";
 import { z } from "zod";
-import { AnalyticsPipeline } from "./analytics-pipeline.js";
+import { AnalyticsPipeline, snapshotCache } from "./analytics-pipeline.js";
 import type { AnalyticsRule } from "./analytics-pipeline.js";
 import { NotificationEngine } from "./notification-engine.js";
 import { StreamProcessor } from "./stream-processor.js";
@@ -295,6 +295,17 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
       scheduler: schedulerStats,
       timestamp: new Date().toISOString(),
     });
+  });
+
+  app.get("/internal/analytics/snapshots/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const snapshot = snapshotCache.get(id) ?? snapshotCache.get(`camera:${id}`);
+    if (!snapshot) {
+      return reply.code(404).send({ error: "snapshot_not_found" });
+    }
+    reply.header("content-type", "image/jpeg");
+    reply.header("cache-control", "public, max-age=86400");
+    return reply.send(snapshot.buffer);
   });
 
   app.post("/internal/detections", async (request, reply) => {

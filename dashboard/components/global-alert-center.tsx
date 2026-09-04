@@ -14,6 +14,7 @@ import {
   Volume2,
   VolumeX,
   X,
+  Maximize2,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -34,6 +35,7 @@ import { alertAudioService } from "@/services/alert-audio/alert-audio.service";
 import type { AlertAudioStatus, AlertSeverity } from "@/services/alert-audio/alert-audio.types";
 import { CriticalAudioWarningBanner } from "@/components/alerts/critical-audio-warning-banner";
 import { AlertAudioActivationModal } from "@/components/alerts/alert-audio-activation-modal";
+import { IncidentImageModal } from "@/components/incident-image-modal";
 
 type EvidenceMode = "live" | "snapshot" | "clip";
 
@@ -46,6 +48,7 @@ export function GlobalAlertCenter() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [audioStatus, setAudioStatus] = useState<AlertAudioStatus>(alertAudioService.getAudioStatus());
   const [showActivationModal, setShowActivationModal] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const [session, setSession] = useState<LiveSessionResponse>();
   const [evidenceMode, setEvidenceMode] = useState<EvidenceMode>("live");
   const [evidenceStatus, setEvidenceStatus] = useState<AlertEvidenceCaptureStatus>();
@@ -158,6 +161,7 @@ export function GlobalAlertCenter() {
     setSession(undefined);
     setEvidenceStatus(undefined);
     setError(undefined);
+    setShowImageModal(false);
     setEvidenceMode("live");
   }, [current?.id]);
 
@@ -287,9 +291,27 @@ export function GlobalAlertCenter() {
 
             {/* Content Body */}
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
-              {/* Live Video / Clip Player Display */}
+              {/* Live Video / Snapshot / Clip Player Display */}
               <div className="relative aspect-video rounded-xl bg-black overflow-hidden border border-slate-800 flex items-center justify-center">
-                {session?.hls?.url ? (
+                {evidenceMode === "snapshot" ? (
+                  <div
+                    className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer group select-none"
+                    onClick={() => setShowImageModal(true)}
+                    title="Click to enlarge snapshot image"
+                  >
+                    <img
+                      src={`/api/control/v1/alerts/${current.id}/evidence/snapshot`}
+                      alt={current.title}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/35 transition-all flex items-center justify-center pointer-events-none">
+                      <span className="opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/90 text-slate-100 text-xs px-3.5 py-2 rounded-xl border border-slate-700 flex items-center gap-2 shadow-2xl backdrop-blur-md">
+                        <Maximize2 className="h-4 w-4 text-sky-400" />
+                        <span className="font-semibold">Click to open full image</span>
+                      </span>
+                    </div>
+                  </div>
+                ) : session?.hls?.url ? (
                   <HlsPlayer
                     url={session.hls.url}
                     bearerToken={session.hls.bearerToken ?? ""}
@@ -299,11 +321,20 @@ export function GlobalAlertCenter() {
                   <div className="text-center p-4">
                     <Radio className="h-8 w-8 text-slate-600 animate-pulse mx-auto mb-2" />
                     <span className="text-xs font-mono text-slate-400">Connecting to secure edge media gateway…</span>
+                    <div className="mt-3">
+                      <button
+                        onClick={() => setEvidenceMode("snapshot")}
+                        className="text-xs px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium inline-flex items-center gap-1.5 shadow transition-colors"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        <span>Open Incident Snapshot</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
                 {/* Evidence Mode Switcher Bar */}
-                <div className="absolute top-3 left-3 flex items-center gap-1.5 p-1 rounded-lg bg-black/80 backdrop-blur border border-slate-700 text-xs font-mono">
+                <div className="absolute top-3 left-3 flex items-center gap-1.5 p-1 rounded-lg bg-black/80 backdrop-blur border border-slate-700 text-xs font-mono z-10">
                   <button
                     onClick={() => setEvidenceMode("live")}
                     className={`px-2.5 py-1 rounded ${
@@ -331,6 +362,17 @@ export function GlobalAlertCenter() {
                     20s Clip
                   </button>
                 </div>
+
+                {evidenceMode === "snapshot" && (
+                  <button
+                    onClick={() => setShowImageModal(true)}
+                    className="absolute top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/80 hover:bg-black text-xs font-mono text-slate-300 hover:text-white border border-slate-700 z-10"
+                    title="Open in full-screen modal"
+                  >
+                    <Maximize2 className="h-3.5 w-3.5" />
+                    <span>Enlarge</span>
+                  </button>
+                )}
               </div>
 
               {/* Error Callout if any */}
@@ -375,6 +417,21 @@ export function GlobalAlertCenter() {
         isOpen={showActivationModal}
         onClose={() => setShowActivationModal(false)}
       />
+
+      {/* Incident Snapshot Image Modal */}
+      {current && (
+        <IncidentImageModal
+          isOpen={showImageModal}
+          onClose={() => setShowImageModal(false)}
+          imageUrl={`/api/control/v1/alerts/${current.id}/evidence/snapshot`}
+          title={current.title}
+          cameraName={current.cameraName || current.cameraId}
+          branchName={current.branchName || current.branchId}
+          timestamp={current.firstDetectedAt || current.createdAt}
+          severity={current.severity}
+          confidence={current.confidence}
+        />
+      )}
     </>
   );
 }

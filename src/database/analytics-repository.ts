@@ -379,7 +379,7 @@ export class AnalyticsRepository {
             analyticsAlertTitle(rule), `Rule \"${rule.name}\" matched.`,
             effectiveSeverity, input.confidence,
             JSON.stringify([...new Set(input.objects.map((object) => object.label))]),
-            input.modelVersion, input.snapshotReference ?? null,
+            input.modelVersion, input.snapshotReference ?? `/v1/alerts/${alertId}/evidence/snapshot`,
             input.clipReference ?? null, input.occurredAt,
             rule.escalateAfterSeconds
               ? new Date(Date.parse(input.occurredAt) + rule.escalateAfterSeconds * 1_000).toISOString()

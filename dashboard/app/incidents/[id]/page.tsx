@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { AppLayout } from "@/components/app-layout";
+import { Camera } from "lucide-react";
+import { IncidentImageModal } from "@/components/incident-image-modal";
 
 type Workspace = {
   incident: any;
@@ -30,6 +32,7 @@ export default function IncidentDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'video' | 'evidence' | 'tasks' | 'timeline' | 'report'>('overview');
   const [error, setError] = useState<string | null>(null);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   const incidentId = typeof params?.id === 'string' ? params.id : '';
 
@@ -330,6 +333,63 @@ export default function IncidentDetailPage() {
                   <strong>Created:</strong> {new Date(incident.createdAt).toLocaleString()}
                 </div>
               </div>
+
+              <div style={{ marginTop: '24px', borderTop: '1px solid #f3f4f6', paddingTop: '20px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#111827', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Camera size={16} />
+                    Incident Detection Snapshot
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowImageModal(true)}
+                    style={{
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      backgroundColor: '#eff6ff',
+                      color: '#2563eb',
+                      border: '1px solid #bfdbfe',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Enlarge Image
+                  </button>
+                </div>
+                <div
+                  onClick={() => setShowImageModal(true)}
+                  style={{
+                    position: 'relative',
+                    maxWidth: '480px',
+                    height: '270px',
+                    borderRadius: '8px',
+                    overflow: 'hidden',
+                    border: '1px solid #e2e8f0',
+                    backgroundColor: '#0f172a',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/control/v1/alerts/${incident.id}/evidence/snapshot`}
+                    alt={incident.title || 'Incident snapshot'}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '8px',
+                    left: '8px',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    backgroundColor: 'rgba(0,0,0,0.7)',
+                    color: '#e2e8f0',
+                    fontSize: '11px',
+                  }}>
+                    Click to inspect full resolution
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -548,6 +608,18 @@ export default function IncidentDetailPage() {
             </div>
           )}
         </div>
+
+        <IncidentImageModal
+          isOpen={showImageModal}
+          onClose={() => setShowImageModal(false)}
+          imageUrl={`/api/control/v1/alerts/${incident.id}/evidence/snapshot`}
+          title={incident.title || "Incident Details"}
+          cameraName={incident.branchId || "Incident Camera"}
+          branchName={incident.branchId}
+          timestamp={incident.occurredAt || incident.createdAt}
+          severity={incident.severity}
+          confidence={incident.aiConfidence}
+        />
       </div>
     </AppLayout>
   );
