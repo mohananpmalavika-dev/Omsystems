@@ -54,7 +54,7 @@ const schema = z.object({
     (value) => value === "" ? undefined : value,
     z.string().min(20).optional(),
   ),
-  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
   CAMERA_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(30_000),
   CAMERA_ANALYTICS_INTERVAL_MS: z.coerce.number().int().min(1_000).max(60_000).default(2_000),
   CAMERA_CONFIG_REFRESH_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),

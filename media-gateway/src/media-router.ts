@@ -10,8 +10,8 @@ export class MediaMtxRouter implements MediaRouter {
       rtspTransport: "tcp",
       ...(sourceUri !== "publisher" ? {
         sourceOnDemand: true,
-        sourceOnDemandStartTimeout: "10s",
-        sourceOnDemandCloseAfter: "10s",
+        sourceOnDemandStartTimeout: "15s",
+        sourceOnDemandCloseAfter: "120s",
       } : {}),
     };
     const add = await fetch(

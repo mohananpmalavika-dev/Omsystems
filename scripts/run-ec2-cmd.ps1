@@ -4,9 +4,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+try { chcp 65001 > $null } catch {}
+[Console]::InputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $env:PYTHONIOENCODING = "utf-8"
+$env:PYTHONUTF8 = "1"
 $instanceId = "i-03fda9a80e75865fd"
 
 $paramFile = [System.IO.Path]::GetTempFileName()
@@ -41,10 +44,13 @@ for ($i = 0; $i -lt 180; $i++) {
     }
 }
 
-$output = aws ssm get-command-invocation `
-    --command-id $cmd `
-    --instance-id $instanceId `
-    --query "StandardOutputContent" `
-    --output text
-
-Write-Host $output
+try {
+    $output = aws ssm get-command-invocation `
+        --command-id $cmd `
+        --instance-id $instanceId `
+        --query "StandardOutputContent" `
+        --output text
+    Write-Host $output
+} catch {
+    Write-Host "Completed with status: $status"
+}

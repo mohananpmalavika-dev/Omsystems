@@ -546,7 +546,7 @@ export class MediaMtxRouter implements MediaRouter {
   async ensurePath(path: string, sourceUri: string) {
     const encodedPath = encodeURIComponent(path);
     const payload = { source: sourceUri, rtspTransport: "tcp", sourceOnDemand: true,
-      sourceOnDemandStartTimeout: "10s", sourceOnDemandCloseAfter: "10s" };
+      sourceOnDemandStartTimeout: "15s", sourceOnDemandCloseAfter: "120s" };
     const add = await fetch(new URL(`/v3/config/paths/add/${encodedPath}`, this.apiUrl), {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
     });
@@ -609,7 +609,7 @@ srt: no
 pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s
-  sourceOnDemandCloseAfter: 30s
+  sourceOnDemandCloseAfter: 120s
 paths: {}
 `;
 }

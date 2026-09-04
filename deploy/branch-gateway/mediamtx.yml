@@ -21,7 +21,7 @@ webrtc: no
 
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 10s
-  sourceOnDemandCloseAfter: 10s
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 120s
 
 paths: {}

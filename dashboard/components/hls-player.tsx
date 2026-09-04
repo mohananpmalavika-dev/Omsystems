@@ -4,8 +4,8 @@ import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw } from "lucide-react";
 
-const MAX_RECOVERY_ATTEMPTS = 5;
-const STALL_TIMEOUT_MS = 15_000;
+const MAX_RECOVERY_ATTEMPTS = 8;
+const STALL_TIMEOUT_MS = 25_000;
 const RECOVERY_DELAY_MS = 1_500;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
@@ -195,16 +195,16 @@ export function HlsPlayer({
           // The public feed crosses a tunnel; a normal buffered HLS window
           // avoids LL-HLS partial-playlist stalls on that path.
           lowLatencyMode: false,
-          backBufferLength: 10,
-          maxBufferLength: 20,
-          maxMaxBufferLength: 30,
-          liveSyncDurationCount: 3,
-          liveMaxLatencyDurationCount: 8,
-          maxLiveSyncPlaybackRate: 1.25,
-          fragLoadingTimeOut: 10_000,
-          fragLoadingMaxRetry: 2,
-          manifestLoadingTimeOut: 10_000,
-          manifestLoadingMaxRetry: 3,
+          backBufferLength: 15,
+          maxBufferLength: 30,
+          maxMaxBufferLength: 60,
+          liveSyncDurationCount: 4,
+          liveMaxLatencyDurationCount: 10,
+          maxLiveSyncPlaybackRate: 1.0,
+          fragLoadingTimeOut: 20_000,
+          fragLoadingMaxRetry: 4,
+          manifestLoadingTimeOut: 20_000,
+          manifestLoadingMaxRetry: 4,
           xhrSetup: (xhr, requestUrl) => {
             xhr.withCredentials = true;
             if (bearerToken) {

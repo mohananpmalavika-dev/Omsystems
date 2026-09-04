@@ -15,7 +15,7 @@ const schema = z.object({
   PUBLIC_HLS_BASE_URL: z.string().url().optional(),
   PUBLIC_WEBRTC_BASE_URL: z.string().url().optional(),
   RENDER_EXTERNAL_URL: z.string().url().optional(),
-  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(3600).default(300),
+  MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   STREAM_SECRET_PROVIDER_URL: z.preprocess(
     (value) => value === "" ? undefined : value,

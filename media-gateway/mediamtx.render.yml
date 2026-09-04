@@ -29,6 +29,6 @@ webrtcAllowOrigins: ["*"]
 pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s
-  sourceOnDemandCloseAfter: 30s
+  sourceOnDemandCloseAfter: 120s
 
 paths: {}
