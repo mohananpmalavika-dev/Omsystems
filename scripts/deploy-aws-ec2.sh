@@ -21,7 +21,7 @@ docker compose -f docker-compose.aws.yml build analytics-engine || true
 
 echo "=== 3. Starting services ==="
 docker compose -f docker-compose.aws.yml up -d --remove-orphans
-docker compose -f docker-compose.aws.yml up -d --force-recreate control-plane dashboard
+docker compose -f docker-compose.aws.yml up -d --force-recreate control-plane dashboard media-gateway
 
 echo "=== 4. Waiting for services to initialize ==="
 sleep 5
