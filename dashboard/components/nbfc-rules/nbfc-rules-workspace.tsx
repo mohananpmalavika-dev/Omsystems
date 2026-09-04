@@ -218,6 +218,7 @@ export function NbfcRulesWorkspace() {
   const [feedbackRuleTarget, setFeedbackRuleTarget] = useState<RuleItem | null>(null);
   const [feedbackReason, setFeedbackReason] = useState("reflection");
   const [feedbackComment, setFeedbackComment] = useState("");
+  const [isEnablingAll, setIsEnablingAll] = useState(false);
 
   // Builder form state
   const [builderForm, setBuilderForm] = useState({
@@ -552,6 +553,19 @@ export function NbfcRulesWorkspace() {
     }
   };
 
+  // Bulk enable all 37 NBFC rule templates across all cameras
+  const handleEnableAllRules = async () => {
+    setIsEnablingAll(true);
+    try {
+      await aiFetch("/api/ai/rules/apply-all-templates", { method: "POST" });
+      await fetchData();
+    } catch (e) {
+      console.error("Failed to enable all rules:", e);
+    } finally {
+      setIsEnablingAll(false);
+    }
+  };
+
   // Run test simulation
   const handleRunTest = async (r: RuleItem) => {
     setTestRuleTarget(r);
@@ -705,13 +719,22 @@ export function NbfcRulesWorkspace() {
                 </span>
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">
-                No-code visual rule engine, zone perimeter designer, and 36 pre-configured banking security templates
+                No-code visual rule engine, zone perimeter designer, and 37 pre-configured banking security templates
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <button
+            onClick={handleEnableAllRules}
+            disabled={loading || isEnablingAll}
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-lg shadow-emerald-900/30 transition text-sm disabled:opacity-50"
+            title="Enable all 37 NBFC visual rules across all cameras"
+          >
+            <ShieldCheck className={`w-4 h-4 ${isEnablingAll ? "animate-spin" : ""}`} />
+            {isEnablingAll ? "Enabling All Rules..." : "Enable All to All Cameras"}
+          </button>
           <button
             onClick={fetchData}
             disabled={loading}
@@ -736,7 +759,7 @@ export function NbfcRulesWorkspace() {
           { id: "overview", label: "Overview & Analytics", icon: LayoutDashboard },
           { id: "rules", label: `AI Rules (${filteredRules.length})`, icon: SlidersHorizontal },
           { id: "zones", label: `Zone Manager (${zones.length})`, icon: Layers },
-          { id: "templates", label: `Rule Templates (36)`, icon: Box },
+          { id: "templates", label: `Rule Templates (${templates.length || 37})`, icon: Box },
           { id: "health", label: "AI Health & Capacity", icon: Cpu },
           { id: "history", label: "Detection & Test Simulation", icon: History },
         ].map((tab) => {

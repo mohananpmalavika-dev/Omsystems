@@ -362,7 +362,13 @@ INSERT INTO nbfc_rule_templates (
  'Alerts on server or DVR rack room entry when no active IT maintenance ticket is approved.',
  'person', '{"logical": "AND", "conditions": [{"metric": "person_in_server_room", "operator": "EQUALS", "value": true}, {"metric": "maintenance_ticket_active", "operator": "EQUALS", "value": false}]}'::jsonb,
  3000, 'HIGH', 60000, '["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "NOTIFY_SOC"]'::jsonb,
- '["SERVER_ROOM"]'::jsonb, '24X7', '{}'::jsonb)
+ '["SERVER_ROOM"]'::jsonb, '24X7', '{}'::jsonb),
+
+('tmpl-37-helmet-face-cover', 'Helmet / Face Cover Inside Branch/ATM', 'ACCESS_PERIMETER',
+ 'Detects persons entering branch lobby, ATM kiosk, cash counter, or vault area wearing a motorcycle helmet, full-face visor, or concealment gear.',
+ 'helmet-worn', '{"metric": "helmet_detected", "operator": "EQUALS", "value": true}'::jsonb,
+ 1000, 'HIGH', 60000, '["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "POPUP_LIVE_VIEW"]'::jsonb,
+ '["ENTRANCE", "ATM_AREA", "CASH_COUNTER", "LOCKER", "CUSTOMER_AREA"]'::jsonb, '24X7', '{"threatType": "identity_concealment", "securityMandate": "RBI_NBFC_PHYSICAL_SECURITY"}'::jsonb)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   category = EXCLUDED.category,
