@@ -139,8 +139,8 @@ export class AnalyticsPipeline {
     this.queueDetector = new QueueDetector();
     this.heatMapGenerator = new HeatMapGenerator();
     this.faceDetector = new FaceDetector({
-      detectionConfidence: environmentProbability("FACE_CONFIDENCE_THRESHOLD", 0.75),
-      recognitionEnabled: process.env.FACE_RECOGNITION_ENABLED === "true",
+      detectionConfidence: environmentProbability("FACE_CONFIDENCE_THRESHOLD", 0.65),
+      recognitionEnabled: process.env.FACE_RECOGNITION_ENABLED !== "false",
     });
     this.faceAnalytics = new FaceAnalyticsDetector();
     this.anprDetector = new ANPRDetector({
@@ -322,7 +322,7 @@ export class AnalyticsPipeline {
       // Step 5: Run person detection with tracking if scheduled
       if (schedule.modelsToRun.includes('yolov8n') || this.needsPersonDetection(rules)) {
         const personResults = await this.personDetector.detect(inferenceFrame);
-        persons = personResults.flatMap((result) => result.objects);
+        persons = personResults.find((result) => result.detectionType === "person")?.objects ?? personResults[0]?.objects ?? [];
         for (const result of personResults) {
           if (this.matchesAnyRule(result.detectionType, rules)) {
             events.push(await this.createEvent(frame, result));
@@ -381,8 +381,18 @@ export class AnalyticsPipeline {
       // Heat map (always - lightweight)
       specializedPromises.push(this.heatMapGenerator.detect(trackedFrame));
 
-      // Face detection (if scheduled)
-      if (schedule.modelsToRun.includes('face-detector')) {
+      // Face detection & recognition (if scheduled or active in rules)
+      if (
+        schedule.modelsToRun.includes('face-detector') ||
+        this.needsDetection(rules, [
+          'face',
+          'face-recognition',
+          'unknown-person',
+          'watchlist-match',
+          'vip-detection',
+          'blacklist-detection',
+        ])
+      ) {
         specializedPromises.push(this.faceDetector.detect(trackedFrame));
       }
 
@@ -596,6 +606,10 @@ export class AnalyticsPipeline {
   private needsPersonDetection(rules: AnalyticsRule[]): boolean {
     const personTypes = [
       "person",
+      "person-counting",
+      "occupancy-counting",
+      "footfall",
+      "customer-counting",
       "fall",
       "crowd-density",
       "tailgating",
@@ -606,6 +620,9 @@ export class AnalyticsPipeline {
       "loitering",
       "intrusion",
       "line-crossing",
+      "face",
+      "face-recognition",
+      "watchlist-match",
     ];
     return rules.some(r => r.enabled && personTypes.includes(r.detectionType));
   }
@@ -626,8 +643,10 @@ export class AnalyticsPipeline {
 
   private needsObjectDetection(rules: AnalyticsRule[]): boolean {
     return this.needsDetection(rules, [
-      "object", "person", "vehicle", "helmet", "helmet-worn", "no-helmet", "fall", "fire", "smoke",
+      "object", "person", "person-counting", "occupancy-counting", "footfall", "customer-counting",
+      "vehicle", "helmet", "helmet-worn", "no-helmet", "fall", "fire", "smoke",
       "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
+      "face", "face-recognition", "watchlist-match",
     ]);
   }
 

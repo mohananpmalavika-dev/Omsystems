@@ -18,7 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
 import type { AnalyticsAlert, AnalyticsRule, Branch, Camera as CameraType } from "@/lib/types";
 
-type DomainId = "human" | "vehicle" | "industrial";
+type DomainId = "human" | "vehicle" | "industrial" | "face";
 type Capability = {
   id: string;
   name: string;
@@ -36,12 +36,21 @@ type CapabilityDomain = {
 const presets = {
   human: {
     eyebrow: "PEOPLE INTELLIGENCE",
-    title: "People analytics",
-    description: "Occupancy, behaviour, PPE, dwell time and consent-aware identity workflows.",
+    title: "People analytics & Counting",
+    description: "People counting, occupancy, footfall, behaviour, PPE, and dwell time workflows.",
     icon: UserRoundCog,
     accent: "text-violet-300",
     panel: "border-violet-500/25 bg-violet-500/10",
-    examples: ["Occupancy & crowd", "Behaviour & safety", "Identity continuity"],
+    examples: ["People counting", "Occupancy & crowd", "Footfall analysis"],
+  },
+  face: {
+    eyebrow: "FACIAL RECOGNITION & IDENTITY",
+    title: "Face Recognition Analytics",
+    description: "Face detection, recognition, watchlist matching, and identity intelligence.",
+    icon: ShieldCheck,
+    accent: "text-rose-300",
+    panel: "border-rose-500/25 bg-rose-500/10",
+    examples: ["Face detection", "Face recognition match", "Watchlist matching"],
   },
   vehicle: {
     eyebrow: "VEHICLE INTELLIGENCE",

@@ -243,6 +243,7 @@ services:
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       MODELS_DIR: /app/models
       ANALYTICS_REQUIRE_MODELS: "true"
+      FACE_RECOGNITION_ENABLED: "true"
     ports:
       - "8092:8092"
     depends_on:
