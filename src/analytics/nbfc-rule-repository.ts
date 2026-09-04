@@ -1466,6 +1466,21 @@ export class NbfcRuleRepository {
         recommendedZoneTypes: ["SERVER_ROOM"],
         suggestedSchedule: "24X7",
       },
+      {
+        id: "tmpl-37-helmet-face-cover",
+        name: "Helmet / Face Cover Inside Branch/ATM",
+        category: "ACCESS_PERIMETER",
+        description: "Detects persons entering branch lobby, ATM kiosk, cash counter, or vault area wearing a motorcycle helmet, full-face visor, or concealment gear.",
+        detectorType: "helmet-worn",
+        defaultCondition: { metric: "helmet_detected", operator: "EQUALS", value: true },
+        defaultDurationMs: 1000,
+        defaultSeverity: "HIGH",
+        defaultCooldownMs: 60000,
+        defaultActions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "POPUP_LIVE_VIEW"],
+        recommendedZoneTypes: ["ENTRANCE", "ATM_AREA", "CASH_COUNTER", "LOCKER", "CUSTOMER_AREA"],
+        suggestedSchedule: "24X7",
+        metadata: { threatType: "identity_concealment", securityMandate: "RBI_NBFC_PHYSICAL_SECURITY" },
+      },
     ];
 
     for (const tmpl of defaultTemplates) {

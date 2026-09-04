@@ -59,12 +59,14 @@ export class HelmetDetector extends BaseDetector {
     const detections = await this.detectHelmetsInFrame(frame);
     
     const results: DetectionResult[] = [];
-    const violations = detections.filter(d => d.riskLevel === "violation");
 
-    if (violations.length > 0) {
-      const avgConf = this.calculateAverageConfidence(violations);
+    // 1. Vehicle Rider Traffic / PPE Violations (ONLY riders on motorcycle/bicycle without a helmet)
+    const riderViolations = detections.filter(d => Boolean(d.vehicleType) && d.riskLevel === "violation");
+
+    if (riderViolations.length > 0) {
+      const avgConf = this.calculateAverageConfidence(riderViolations);
       const effectiveConf = Math.max(avgConf ?? 0.8, 0.75);
-      const violationObjects = violations.flatMap(detection => [
+      const violationObjects = riderViolations.flatMap(detection => [
         {
           label: "no-helmet",
           confidence: detection.confidence ?? effectiveConf,
@@ -84,9 +86,9 @@ export class HelmetDetector extends BaseDetector {
         durationSeconds: 1,
         objects: violationObjects,
         metadata: {
-          violationCount: violations.length,
+          violationCount: riderViolations.length,
           totalChecked: detections.length,
-          vehicleTypes: violations.map(v => v.vehicleType).filter(Boolean),
+          vehicleTypes: riderViolations.map(v => v.vehicleType).filter(Boolean),
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -100,13 +102,15 @@ export class HelmetDetector extends BaseDetector {
       });
     }
 
-    // Report helmet presence as an alertable event so restricted indoor areas
-    // can flag helmeted entrants through the camera rule configuration.
-    const compliant = detections.filter(d => d.riskLevel === "compliant");
-    if (compliant.length > 0) {
-      const avgConf = this.calculateAverageConfidence(compliant);
+    // 2. Bank / Indoor Security Violations: Helmet Worn Inside Facility
+    // In banking & NBFC security, entering the branch, ATM kiosk, or vault area with a helmet
+    // or face covering is a critical security threat (identity concealment/robbery risk).
+    // Note: Persons without helmets inside a bank are normal/compliant and must NEVER trigger alerts.
+    const indoorHelmetWearers = detections.filter(d => !d.vehicleType && d.helmetDetected);
+    if (indoorHelmetWearers.length > 0) {
+      const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
       const effectiveConf = Math.max(avgConf ?? 0.8, 0.75);
-      const compliantObjects = compliant.flatMap(detection => [
+      const compliantObjects = indoorHelmetWearers.flatMap(detection => [
         {
           label: "helmet",
           confidence: detection.confidence ?? effectiveConf,
@@ -126,7 +130,8 @@ export class HelmetDetector extends BaseDetector {
         durationSeconds: 1,
         objects: compliantObjects,
         metadata: {
-          compliantCount: compliant.length,
+          compliantCount: indoorHelmetWearers.length,
+          threatType: "helmet_worn_inside_facility",
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -147,7 +152,8 @@ export class HelmetDetector extends BaseDetector {
         durationSeconds: 1,
         objects: compliantObjects,
         metadata: {
-          compliantCount: compliant.length,
+          compliantCount: indoorHelmetWearers.length,
+          threatType: "helmet_face_cover_detected",
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -196,11 +202,23 @@ export class HelmetDetector extends BaseDetector {
       riderMatches.map((match) => this.getPersonIdentifier(match.person))
     );
     const indoorPersons = persons.filter((person) => !riderPersonIds.has(this.getPersonIdentifier(person)));
-    const indoorHelmetDetections = runLocal && this.classifier
-      ? await Promise.all(indoorPersons.map((person) => this.classifyPersonHelmetCompliance(frame, person)))
-      : indoorPersons
-        .map((person) => this.detectHelmetPresence(person, helmets))
-        .filter((detection): detection is HelmetDetection => Boolean(detection));
+    const indoorHelmetDetections: HelmetDetection[] = [];
+
+    for (const person of indoorPersons) {
+      // 1. Check if upstream inference already detected a helmet on this person
+      const presence = this.detectHelmetPresence(person, helmets);
+      if (presence) {
+        indoorHelmetDetections.push(presence);
+        continue;
+      }
+      // 2. If classifier is available, run local safety-helmet model
+      if (runLocal && this.classifier) {
+        const classified = await this.classifyPersonHelmetCompliance(frame, person);
+        if (classified.helmetDetected) {
+          indoorHelmetDetections.push(classified);
+        }
+      }
+    }
 
     if (riderMatches.length === 0 && indoorPersons.length === 0 && runLocal && this.classifier) {
       // Fallback: evaluate frame when safety helmet rules are active but base detector missed seated/occluded person
@@ -210,7 +228,7 @@ export class HelmetDetector extends BaseDetector {
           personBoundingBox: { x: 0, y: 0, width: 1, height: 1 },
           helmetDetected: true,
           confidence: fullFrameClassification.confidence,
-          riskLevel: "compliant",
+          riskLevel: "violation",
         }];
       }
     }
@@ -241,7 +259,7 @@ export class HelmetDetector extends BaseDetector {
       personBoundingBox: person.boundingBox,
       helmetDetected: true,
       confidence: helmet.confidence ?? null,
-      riskLevel: "compliant",
+      riskLevel: "violation",
     };
   }
 
@@ -353,14 +371,12 @@ export class HelmetDetector extends BaseDetector {
   ): Promise<HelmetDetection> {
     const personBox = person.boundingBox;
     const classification = await this.bestHelmetClassification(frame, personBox);
-    const riskLevel = classification.confidence < Math.max(this.MIN_CONFIDENCE, 0.7)
-      ? "uncertain"
-      : classification.wearingHelmet ? "compliant" : "violation";
+    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.7);
     return {
       personBoundingBox: person.boundingBox,
-      helmetDetected: classification.wearingHelmet,
+      helmetDetected,
       confidence: classification.confidence,
-      riskLevel,
+      riskLevel: helmetDetected ? "violation" : "compliant",
     };
   }
 
