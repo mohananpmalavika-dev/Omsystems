@@ -73,6 +73,8 @@ export type DetectorType =
   | "loitering"
   | "LOITERING_DETECTOR"
   | "object"
+  | "helmet"
+  | "helmet-worn"
   | "zone";
 
 export type ScheduleType =
