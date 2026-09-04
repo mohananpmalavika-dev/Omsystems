@@ -169,12 +169,16 @@ export function HlsPlayer({
               manifestLoadingTimeOut: 15_000,
               manifestLoadingMaxRetry: 4,
               xhrSetup: (xhr, requestUrl) => {
-                xhr.withCredentials = true;
-                if (bearerToken) {
+                const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
+                if (isSameOrigin) {
+                  xhr.withCredentials = true;
+                  if (bearerToken) {
+                    xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+                    xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
+                  }
+                } else if (bearerToken) {
                   const authorizedUrl = withToken(requestUrl, bearerToken);
                   if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
-                  xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-                  xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
                 }
               },
             });
@@ -265,12 +269,16 @@ export function HlsPlayer({
           manifestLoadingTimeOut: 15_000,
           manifestLoadingMaxRetry: 4,
           xhrSetup: (xhr, requestUrl) => {
-            xhr.withCredentials = true;
-            if (bearerToken) {
+            const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
+            if (isSameOrigin) {
+              xhr.withCredentials = true;
+              if (bearerToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+                xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
+              }
+            } else if (bearerToken) {
               const authorizedUrl = withToken(requestUrl, bearerToken);
               if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
-              xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-              xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
             }
           },
         });

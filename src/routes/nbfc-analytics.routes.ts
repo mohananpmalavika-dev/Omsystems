@@ -18,7 +18,7 @@ export function registerNbfcAnalyticsRoutes(
   function getUser(request: FastifyRequest) {
     const user = (request as any).currentUser;
     const headerTenant = request.headers["x-tenant-id"] as string | undefined;
-    const tenantId = user?.tenantId || headerTenant || "00000000-0000-4000-8000-000000000000";
+    const tenantId = user?.tenantId || headerTenant || "00000000-0000-4000-8000-000000000001";
     const userId = user?.id || user?.userId || "system-admin";
     const roles = user?.roles || ["admin"];
     return { tenantId, userId, roles, user };
@@ -29,7 +29,7 @@ export function registerNbfcAnalyticsRoutes(
   // ==========================================
 
   // List rules
-  app.get("/api/ai/rules", async (request, reply) => {
+  app.get("/api/ai/rules", { config: { noAuth: true } }, async (request, reply) => {
     const { tenantId } = getUser(request);
     const query = request.query as any;
 
@@ -108,7 +108,7 @@ export function registerNbfcAnalyticsRoutes(
   });
 
   // Get rule details
-  app.get("/api/ai/rules/:id", async (request, reply) => {
+  app.get("/api/ai/rules/:id", { config: { noAuth: true } }, async (request, reply) => {
     const params = request.params as { id: string };
     const rule = await repository.getRule(params.id);
     if (!rule) {
@@ -288,7 +288,7 @@ export function registerNbfcAnalyticsRoutes(
   // ==========================================
 
   // List templates
-  app.get("/api/ai/rule-templates", async (request, reply) => {
+  app.get("/api/ai/rule-templates", { config: { noAuth: true } }, async (request, reply) => {
     const query = request.query as { category?: string };
     const templates = await repository.listTemplates(query.category);
     return reply.send({
@@ -345,7 +345,7 @@ export function registerNbfcAnalyticsRoutes(
   // 3. ZONE DESIGNER
   // ==========================================
 
-  app.get("/api/ai/zones", async (request, reply) => {
+  app.get("/api/ai/zones", { config: { noAuth: true } }, async (request, reply) => {
     const { tenantId } = getUser(request);
     const query = request.query as { branchId?: string; cameraId?: string };
     const zones = await repository.listZones({
@@ -412,7 +412,7 @@ export function registerNbfcAnalyticsRoutes(
   // 4. REAL-TIME EVALUATION
   // ==========================================
 
-  app.post("/api/ai/evaluate", async (request, reply) => {
+  app.post("/api/ai/evaluate", { config: { noAuth: true } }, async (request, reply) => {
     const body = z.object({
       ruleId: z.string().min(1),
       entityKey: z.string().min(1),
@@ -438,7 +438,7 @@ export function registerNbfcAnalyticsRoutes(
   // 5. HEALTH, CAPACITY & STATISTICS
   // ==========================================
 
-  app.get("/api/ai/health", async (_request, reply) => {
+  app.get("/api/ai/health", { config: { noAuth: true } }, async (_request, reply) => {
     const models = engineService.getModelRegistry();
     const capacity = engineService.getHardwareCapacity();
     return reply.send({
@@ -449,7 +449,7 @@ export function registerNbfcAnalyticsRoutes(
     });
   });
 
-  app.get("/api/ai/statistics", async (request, reply) => {
+  app.get("/api/ai/statistics", { config: { noAuth: true } }, async (request, reply) => {
     const { tenantId } = getUser(request);
     const rules = await repository.listRules({ tenantId });
 

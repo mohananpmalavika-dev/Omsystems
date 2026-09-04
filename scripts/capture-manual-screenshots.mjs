@@ -56,7 +56,7 @@ async function capture() {
     await page.fill('#username', 'mgdhanyamohan');
     await page.fill('#password', 'SentinelMasterAdmin2026!');
     await page.click('button[type="submit"]');
-    await page.waitForTimeout(4000);
+    await page.waitForTimeout(5000);
     console.log('Current URL after submit:', page.url());
   } catch (err) {
     console.error('Authentication step failed:', err.message);

@@ -165,6 +165,32 @@ interface StatisticsData {
   };
 }
 
+async function aiFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+  const token = typeof window !== "undefined"
+    ? localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")
+    : null;
+
+  const headers = new Headers(options.headers || {});
+  if (!headers.has("Content-Type") && options.method && options.method !== "GET") {
+    headers.set("Content-Type", "application/json");
+  }
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("x-sentinel-session", token);
+  }
+
+  const res = await fetch(url, {
+    ...options,
+    credentials: "include",
+    headers,
+  });
+
+  if (!res.ok) {
+    throw new Error(`AI API error: ${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export function NbfcRulesWorkspace() {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [loading, setLoading] = useState(false);
@@ -233,11 +259,11 @@ export function NbfcRulesWorkspace() {
     setLoading(true);
     try {
       const [rulesRes, zonesRes, tmplRes, healthRes, statsRes] = await Promise.all([
-        fetch("/api/ai/rules").then(r => r.json()).catch(() => ({ rules: [] })),
-        fetch("/api/ai/zones").then(r => r.json()).catch(() => ({ zones: [] })),
-        fetch("/api/ai/rule-templates").then(r => r.json()).catch(() => ({ templates: [] })),
-        fetch("/api/ai/health").then(r => r.json()).catch(() => ({ models: [] })),
-        fetch("/api/ai/statistics").then(r => r.json()).catch(() => null),
+        aiFetch("/api/ai/rules").catch(() => ({ rules: [] })),
+        aiFetch("/api/ai/zones").catch(() => ({ zones: [] })),
+        aiFetch("/api/ai/rule-templates").catch(() => ({ templates: [] })),
+        aiFetch("/api/ai/health").catch(() => ({ models: [] })),
+        aiFetch("/api/ai/statistics").catch(() => null),
       ]);
 
       if (rulesRes?.rules && rulesRes.rules.length > 0) {
@@ -308,7 +334,7 @@ export function NbfcRulesWorkspace() {
       if (zonesRes?.zones) setZones(zonesRes.zones);
       if (tmplRes?.templates) setTemplates(tmplRes.templates);
       if (healthRes?.models) setModels(healthRes.models);
-      if (statsRes) setStats(statsRes);
+      if (statsRes && statsRes.todayEvents) setStats(statsRes);
     } catch (e) {
       console.error("Failed to load AI rules workspace data:", e);
     } finally {
@@ -467,18 +493,16 @@ export function NbfcRulesWorkspace() {
 
     try {
       if (editingRule) {
-        const res = await fetch(`/api/ai/rules/${editingRule.id}`, {
+        const res = await aiFetch(`/api/ai/rules/${editingRule.id}`, {
           method: "PATCH",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }).then((r) => r.json());
+        });
         setRules((prev) => prev.map((r) => (r.id === editingRule.id ? { ...r, ...res } : r)));
       } else {
-        const res = await fetch("/api/ai/rules", {
+        const res = await aiFetch("/api/ai/rules", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
-        }).then((r) => r.json());
+        });
         setRules((prev) => [res, ...prev]);
       }
       setIsBuilderOpen(false);
@@ -492,7 +516,7 @@ export function NbfcRulesWorkspace() {
     const isCurrentlyActive = r.state === "ACTIVE" || r.state === "SHADOW";
     const endpoint = isCurrentlyActive ? `/api/ai/rules/${r.id}/disable` : `/api/ai/rules/${r.id}/enable`;
     try {
-      await fetch(endpoint, { method: "POST" });
+      await aiFetch(endpoint, { method: "POST" });
       setRules((prev) =>
         prev.map((item) =>
           item.id === r.id
@@ -508,7 +532,7 @@ export function NbfcRulesWorkspace() {
   // Toggle shadow mode
   const handleToggleShadow = async (r: RuleItem) => {
     try {
-      const res = await fetch(`/api/ai/rules/${r.id}/shadow`, { method: "POST" }).then((res) => res.json());
+      const res = await aiFetch(`/api/ai/rules/${r.id}/shadow`, { method: "POST" });
       setRules((prev) =>
         prev.map((item) => (item.id === r.id ? { ...item, state: res.state } : item))
       );
@@ -521,7 +545,7 @@ export function NbfcRulesWorkspace() {
   const handleDeleteRule = async (r: RuleItem) => {
     if (!window.confirm(`Are you sure you want to delete rule "${r.name}"?`)) return;
     try {
-      await fetch(`/api/ai/rules/${r.id}`, { method: "DELETE" });
+      await aiFetch(`/api/ai/rules/${r.id}`, { method: "DELETE" });
       setRules((prev) => prev.filter((item) => item.id !== r.id));
     } catch (e) {
       console.error(e);
@@ -534,11 +558,10 @@ export function NbfcRulesWorkspace() {
     setIsTestModalOpen(true);
     setIsTesting(true);
     try {
-      const res = await fetch(`/api/ai/rules/${r.id}/test`, {
+      const res = await aiFetch(`/api/ai/rules/${r.id}/test`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ days: 7, simulatedSamples: 150 }),
-      }).then((res) => res.json());
+      });
       setTestResults(res);
     } catch (e) {
       console.error("Test rule error:", e);
@@ -552,9 +575,8 @@ export function NbfcRulesWorkspace() {
     e.preventDefault();
     if (!feedbackRuleTarget) return;
     try {
-      await fetch("/api/ai/feedback", {
+      await aiFetch("/api/ai/feedback", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ruleId: feedbackRuleTarget.id,
           cameraId: feedbackRuleTarget.cameraIds?.[0],
@@ -642,9 +664,8 @@ export function NbfcRulesWorkspace() {
       return;
     }
     try {
-      const res = await fetch("/api/ai/zones", {
+      const res = await aiFetch("/api/ai/zones", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           branchId: selectedBranch === "ALL" ? "Kollam" : selectedBranch,
           cameraId: zoneCameraId,
@@ -652,7 +673,7 @@ export function NbfcRulesWorkspace() {
           type: zoneType,
           polygon: drawnPoints,
         }),
-      }).then((r) => r.json());
+      });
 
       setZones((prev) => [res, ...prev]);
       setDrawnPoints([]);
@@ -779,9 +800,9 @@ export function NbfcRulesWorkspace() {
                 <span>Today's Critical Alerts</span>
                 <AlertOctagon className="w-4 h-4 text-red-400" />
               </div>
-              <p className="text-2xl font-bold text-red-400 mt-2">{stats?.todayEvents.critical ?? 7}</p>
+              <p className="text-2xl font-bold text-red-400 mt-2">{stats?.todayEvents?.critical ?? 7}</p>
               <p className="text-xs text-yellow-400 mt-1">
-                {stats?.todayEvents.high ?? 19} high, {stats?.todayEvents.warning ?? 63} warning
+                {stats?.todayEvents?.high ?? 19} high, {stats?.todayEvents?.warning ?? 63} warning
               </p>
             </div>
           </div>
@@ -1220,7 +1241,7 @@ export function NbfcRulesWorkspace() {
                       </div>
                       <button
                         onClick={async () => {
-                          await fetch(`/api/ai/zones/${z.id}`, { method: "DELETE" });
+                          await aiFetch(`/api/ai/zones/${z.id}`, { method: "DELETE" });
                           setZones((prev) => prev.filter((item) => item.id !== z.id));
                         }}
                         className="text-gray-500 hover:text-red-400 p-1"
