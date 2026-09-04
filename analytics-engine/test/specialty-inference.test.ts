@@ -52,6 +52,23 @@ describe("local specialty model adapters", () => {
     ]));
   });
 
+  it("classifies a helmeted person without requiring a vehicle", async () => {
+    const detector = new HelmetDetector(null, 0.7, {
+      run: async () => ({
+        wearingHelmet: true,
+        confidence: 0.94,
+        wearingHelmetConfidence: 0.94,
+        unwearingHelmetConfidence: 0.06,
+      }),
+    });
+    await detector.initialize();
+    const results = await detector.detect(frame([object("person", 0.95)]));
+
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detectionType: "helmet-worn", requiresAlert: true }),
+    ]));
+  });
+
   it("classifies a rider head crop with the local safety-helmet model", async () => {
     const run = async () => ({
       wearingHelmet: false,

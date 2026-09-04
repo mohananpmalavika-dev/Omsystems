@@ -143,17 +143,20 @@ export class HelmetDetector extends BaseDetector {
 
     // A missing helmet alone is not a violation: a high-confidence head
     // observation is required before reporting a rider as unprotected.
-    const riderDetections = await Promise.all(this.matchPersonsToVehicles(persons, vehicles)
+    const riderMatches = this.matchPersonsToVehicles(persons, vehicles);
+    const riderDetections = await Promise.all(riderMatches
       .map(async (match) => {
         if (runLocal && this.classifier) return this.classifyHelmetCompliance(frame, match);
         return this.checkHelmetCompliance(match, helmets, heads);
       }));
 
-    const riderIds = new Set(this.matchPersonsToVehicles(persons, vehicles).map((match) => match.person));
-    const indoorHelmetDetections = persons
-      .filter((person) => !riderIds.has(person))
-      .map((person) => this.detectHelmetPresence(person, helmets))
-      .filter((detection): detection is HelmetDetection => Boolean(detection));
+    const riderIds = new Set(riderMatches.map((match) => match.person));
+    const indoorPersons = persons.filter((person) => !riderIds.has(person));
+    const indoorHelmetDetections = runLocal && this.classifier
+      ? await Promise.all(indoorPersons.map((person) => this.classifyPersonHelmetCompliance(frame, person)))
+      : indoorPersons
+        .map((person) => this.detectHelmetPresence(person, helmets))
+        .filter((detection): detection is HelmetDetection => Boolean(detection));
 
     return [...riderDetections, ...indoorHelmetDetections];
   }
@@ -270,6 +273,22 @@ export class HelmetDetector extends BaseDetector {
       helmetDetected: classification.wearingHelmet,
       confidence: classification.confidence,
       vehicleType: match.vehicle.label as HelmetDetection["vehicleType"],
+      riskLevel,
+    };
+  }
+
+  private async classifyPersonHelmetCompliance(
+    frame: DetectionFrame,
+    person: any,
+  ): Promise<HelmetDetection> {
+    const classification = await this.classifier!.run(frame, this.headRegion(person.boundingBox));
+    const riskLevel = classification.confidence < this.MIN_CONFIDENCE
+      ? "uncertain"
+      : classification.wearingHelmet ? "compliant" : "violation";
+    return {
+      personBoundingBox: person.boundingBox,
+      helmetDetected: classification.wearingHelmet,
+      confidence: classification.confidence,
       riskLevel,
     };
   }
