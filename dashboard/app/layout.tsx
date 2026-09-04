@@ -8,7 +8,7 @@ import { OrgBrandingProvider } from "@/components/ui/org-branding-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Sentinel Grid | Security Operations",
+  title: "KryptonVision | Security Operations",
   description: "Multi-branch CCTV monitoring and security operations",
 };
 

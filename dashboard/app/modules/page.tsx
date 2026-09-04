@@ -56,7 +56,7 @@ export default function ModulesPage() {
       <div className="module-directory-page">
         <PageHero
           eyebrow="Product directory"
-          title="Every Sentinel Grid module"
+          title="Every KryptonVision module"
           description="Find any operational workflow from one organized directory. Search by task, device, report or business function."
           icon={LayoutGrid}
           actions={(

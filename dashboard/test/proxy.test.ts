@@ -23,7 +23,7 @@ describe("dashboard proxy authentication", () => {
 
     const denied = proxy(request());
     expect(denied.status).toBe(401);
-    expect(denied.headers.get("www-authenticate")).toContain("Sentinel Grid");
+    expect(denied.headers.get("www-authenticate")).toContain("KryptonVision");
 
     const authorization = `Basic ${
       Buffer.from("sentinel-admin:temporary-secret").toString("base64")

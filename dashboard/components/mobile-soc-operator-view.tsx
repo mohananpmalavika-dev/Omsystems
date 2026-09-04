@@ -505,7 +505,7 @@ export function MobileSocOperatorView() {
 
       {/* Footer Branding */}
       <div className="p-3 text-center text-[10px] text-slate-500 font-mono border-t border-slate-900">
-        Sentinel Grid Mobile PWA • Milestone/Nx Class Emergency Response Surface
+        KryptonVision Mobile PWA • Milestone/Nx Class Emergency Response Surface
       </div>
     </div>
   );

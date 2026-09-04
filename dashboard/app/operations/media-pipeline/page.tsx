@@ -2,7 +2,7 @@ import React from "react";
 import { MediaPipelineSchedulerView } from "@/components/media-pipeline-scheduler-view";
 
 export const metadata = {
-  title: "Media Pipeline & Intelligent Stream Scheduler | Sentinel Grid",
+  title: "Media Pipeline & Intelligent Stream Scheduler | KryptonVision",
   description: "GPU-Accelerated Video Decode Pipelines, Dynamic Stream Scheduling, and Adaptive WAN Degradation Matrix",
 };
 

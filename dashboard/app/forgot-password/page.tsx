@@ -245,7 +245,7 @@ function ForgotPasswordInner() {
             ) : (
               <ShieldCheck size={32} className="brand-icon" />
             )}
-            <h1>{branding.orgName || "Sentinel Grid"}</h1>
+            <h1>{branding.orgName || "KryptonVision"}</h1>
           </div>
 
           <p className="login-subtitle">

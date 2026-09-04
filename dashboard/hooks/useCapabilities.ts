@@ -1,5 +1,5 @@
 /**
- * Authoritative useCapabilities Hook for Sentinel Grid Dashboard
+ * Authoritative useCapabilities Hook for KryptonVision Dashboard
  * 
  * Fetches and manages platform capability truth from the backend.
  * Provides helper functions to check maturity, runtime health, and usability.

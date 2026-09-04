@@ -316,7 +316,7 @@ export function NotificationPolicyEditor() {
           severity: 'P2',
           channels: policy.p2Rule.channels,
           recipientGroupIds: policy.p2Rule.recipientGroupIds,
-          customMessage: 'This is a test notification from Sentinel Grid',
+          customMessage: 'This is a test notification from KryptonVision',
         }),
       });
 

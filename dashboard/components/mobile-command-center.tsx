@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Sentinel Grid Mobile Command Center
+ * KryptonVision Mobile Command Center
  * Production-ready mobile operations interface
  */
 

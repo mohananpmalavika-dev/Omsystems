@@ -2,7 +2,7 @@ import React from "react";
 import { MaintenanceCommandCenter } from "@/components/maintenance-command-center";
 
 export const metadata = {
-  title: "Field Service & Maintenance Command Center | Sentinel Grid",
+  title: "Field Service & Maintenance Command Center | KryptonVision",
   description: "Enterprise Surveillance Maintenance, Automated Diagnostics, Field Work Orders & Spare Management",
 };
 

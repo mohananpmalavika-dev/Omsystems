@@ -24,13 +24,18 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
+interface BranchOption {
+  id: string;
+  name: string;
+}
+
 interface DiscoveryJob {
   id: string;
   branchId: string;
   branchName?: string;
   networkRanges: string[];
   protocols: string[];
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   devicesFound: number;
   devicesEnrolled: number;
   startedAt: string;
@@ -64,18 +69,30 @@ export default function DeviceDiscoveryPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [visibleDeviceLimit, setVisibleDeviceLimit] = useState(25);
 
   useEffect(() => {
-    loadDiscoveryData();
-    const interval = setInterval(loadDiscoveryData, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    void loadDiscoveryData(controller.signal);
+    const interval = setInterval(() => void loadDiscoveryData(controller.signal), 10000);
+    void fetch('/api/branches', { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Failed to load branches')))
+      .then((payload) => setBranches(payload.data || []))
+      .catch((loadError) => {
+        if ((loadError as Error).name !== 'AbortError') setError('Branch list is unavailable');
+      });
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, []);
 
-  const loadDiscoveryData = async () => {
+  const loadDiscoveryData = async (signal?: AbortSignal) => {
     try {
       const [jobsRes, devicesRes] = await Promise.all([
-        fetch('/api/security-devices/discovery'),
-        fetch('/api/security-devices/discovery/devices?status=pending')
+        fetch('/api/security-devices/discovery', { signal }),
+        fetch('/api/security-devices/discovery/devices?status=pending', { signal })
       ]);
 
       if (jobsRes.ok) {
@@ -99,6 +116,26 @@ export default function DeviceDiscoveryPage() {
       console.error('Failed to load discovery data:', error);
       setError(error instanceof Error ? error.message : 'Device discovery data is unavailable');
       setLoading(false);
+    }
+  };
+
+  const handleJobAction = async (job: DiscoveryJob, action: 'cancel' | 'retry') => {
+    setActionBusy(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/security-devices/discovery/${job.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || `Failed to ${action} discovery job`);
+      setNotice(action === 'cancel' ? 'Discovery job cancelled.' : 'Discovery job retried.');
+      await loadDiscoveryData();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : `Failed to ${action} discovery job`);
+    } finally {
+      setActionBusy(false);
     }
   };
 
@@ -203,6 +240,7 @@ export default function DeviceDiscoveryPage() {
 
   const runningJobs = jobs.filter(j => j.status === 'running').length;
   const pendingDevices = discoveredDevices.length;
+  const visibleDevices = discoveredDevices.slice(0, visibleDeviceLimit);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -291,7 +329,7 @@ export default function DeviceDiscoveryPage() {
           </div>
 
           <div className="space-y-3">
-            {discoveredDevices.map((device) => (
+            {visibleDevices.map((device) => (
               <div
                 key={device.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200"
@@ -340,6 +378,12 @@ export default function DeviceDiscoveryPage() {
               </div>
             ))}
           </div>
+          {visibleDeviceLimit < discoveredDevices.length && (
+            <button type="button" onClick={() => setVisibleDeviceLimit((limit) => limit + 25)}
+              className="mt-4 text-sm text-blue-600 hover:text-blue-700 font-semibold">
+              Show 25 more
+            </button>
+          )}
         </div>
       )}
 
@@ -404,6 +448,17 @@ export default function DeviceDiscoveryPage() {
                     <div className="text-sm text-gray-500">
                       {new Date(job.startedAt).toLocaleString()}
                     </div>
+                    {job.status === 'running' || job.status === 'pending' ? (
+                      <button type="button" onClick={(event) => { event.stopPropagation(); void handleJobAction(job, 'cancel'); }} disabled={actionBusy}
+                        className="px-3 py-1.5 text-sm text-red-700 border border-red-200 rounded hover:bg-red-50 disabled:opacity-50">
+                        Cancel
+                      </button>
+                    ) : (job.status === 'failed' || job.status === 'cancelled') ? (
+                      <button type="button" onClick={(event) => { event.stopPropagation(); void handleJobAction(job, 'retry'); }} disabled={actionBusy}
+                        className="px-3 py-1.5 text-sm text-blue-700 border border-blue-200 rounded hover:bg-blue-50 disabled:opacity-50">
+                        Retry
+                      </button>
+                    ) : null}
                     {expandedJobId === job.id ? (
                       <ChevronUp className="w-5 h-5 text-gray-400" />
                     ) : (
@@ -452,6 +507,7 @@ export default function DeviceDiscoveryPage() {
       {/* New Job Modal */}
       {showNewJobModal && (
         <NewDiscoveryJobModal
+          branches={branches}
           onClose={() => setShowNewJobModal(false)}
           onCreated={loadDiscoveryData}
         />
@@ -462,9 +518,11 @@ export default function DeviceDiscoveryPage() {
 
 // New Discovery Job Modal
 function NewDiscoveryJobModal({
+  branches,
   onClose,
   onCreated,
 }: {
+  branches: BranchOption[];
   onClose: () => void;
   onCreated: () => void;
 }) {
@@ -474,9 +532,23 @@ function NewDiscoveryJobModal({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!branchId && branches.length > 0) setBranchId(branches[0].id);
+  }, [branchId, branches]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !creating) onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [creating, onClose]);
+
   const handleCreate = async () => {
-    if (!branchId || !networkRanges) {
-      setError('Branch and network ranges are required');
+    const ranges = networkRanges.split(',').map((range) => range.trim()).filter(Boolean);
+    const validCidr = /^(?:\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
+    if (!branchId || ranges.length === 0 || ranges.some((range) => !validCidr.test(range)) || protocols.length === 0) {
+      setError('Select a branch, enter valid CIDR ranges, and choose at least one protocol');
       return;
     }
 
@@ -489,7 +561,7 @@ function NewDiscoveryJobModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           branchId,
-          networkRanges: networkRanges.split(',').map(r => r.trim()),
+          networkRanges: ranges,
           protocols,
         }),
       });
@@ -509,22 +581,21 @@ function NewDiscoveryJobModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50" role="dialog" aria-modal="true" aria-labelledby="discovery-dialog-title">
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">Start Discovery Job</h3>
+        <h3 id="discovery-dialog-title" className="text-xl font-semibold text-gray-900 mb-4">Start Discovery Job</h3>
 
         <div className="space-y-4 mb-6">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Branch ID
             </label>
-            <input
-              type="text"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              placeholder="e.g., branch-001"
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            >
+              <option value="">Select a branch</option>
+              {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+            </select>
           </div>
 
           <div>
@@ -573,7 +644,7 @@ function NewDiscoveryJobModal({
         )}
 
         <div className="flex items-center gap-3">
-          <button
+            <button
             onClick={onClose}
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
             disabled={creating}
@@ -583,7 +654,7 @@ function NewDiscoveryJobModal({
           <button
             onClick={handleCreate}
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
-            disabled={creating}
+            disabled={creating || protocols.length === 0}
           >
             {creating ? 'Starting...' : 'Start Discovery'}
           </button>

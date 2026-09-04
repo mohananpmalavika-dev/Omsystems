@@ -2,7 +2,7 @@ import React from "react";
 import { DeviceConnectivityView } from "@/components/device-connectivity-view";
 
 export const metadata = {
-  title: "Device Connectivity & 8-Factor Verification | Sentinel Grid",
+  title: "Device Connectivity & 8-Factor Verification | KryptonVision",
   description: "Enterprise Device Adapters, Progressive Fingerprinting, 0-100 Connectivity Scoring, and Hardware Model Certifications",
 };
 

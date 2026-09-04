@@ -309,24 +309,24 @@ export function ZeroTouchOnboardingView() {
     const content = `<# :
 @echo off
 setlocal
-title Sentinel Grid Edge Agent - 1-Click Auto Setup
+title KryptonVision Edge Agent - 1-Click Auto Setup
 color 0B
 cls
 powershell -NoProfile -ExecutionPolicy Bypass -Command "[ScriptBlock]::Create([IO.File]::ReadAllText('%~f0')).Invoke()"
 echo.
 echo ================================================================
-echo  Sentinel Grid Edge Process Terminated.
+echo  KryptonVision Edge Process Terminated.
 echo ================================================================
 pause
 goto :eof
 #>
 
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "         SENTINEL GRID CCTV SECURITY - 1-CLICK AUTO SETUP" -ForegroundColor Cyan
+Write-Host "         KRYPTONVISION CCTV SECURITY - 1-CLICK AUTO SETUP" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "Target Branch: ${cleanBranchName} (${branchId})" -ForegroundColor White
 Write-Host ""
-Write-Host "[*] Connecting to Sentinel Grid Cloud Control Plane..." -ForegroundColor Yellow
+Write-Host "[*] Connecting to KryptonVision Cloud Control Plane..." -ForegroundColor Yellow
 Write-Host "[*] Downloading and configuring Edge Agent background service..." -ForegroundColor Yellow
 Write-Host "[*] Probing local network for ONVIF IP cameras, RTSP streams, and DVRs..." -ForegroundColor Yellow
 Write-Host ""
@@ -343,7 +343,7 @@ try {
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  SUCCESS: Sentinel Grid Edge Agent is installed and running!" -ForegroundColor Green
+Write-Host "  SUCCESS: KryptonVision Edge Agent is installed and running!" -ForegroundColor Green
 Write-Host "  It will continuously monitor this branch 24/7 in the background." -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 `;

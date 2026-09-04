@@ -2,7 +2,7 @@ import React from "react";
 import { HAClusterView } from "@/components/ha-cluster-view";
 
 export const metadata = {
-  title: "HA Architecture & Chaos Engineering | Sentinel Grid",
+  title: "HA Architecture & Chaos Engineering | KryptonVision",
   description: "Nx Witness & Milestone XProtect Corporate Class Multi-Node HA Topology & Chaos Engineering Console",
 };
 

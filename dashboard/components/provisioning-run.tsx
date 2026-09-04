@@ -120,7 +120,7 @@ export function ProvisioningRun({
         await new Promise((resolve) => window.setTimeout(resolve, 1_000));
       }
 
-      throw new Error("The installed Sentinel Grid Edge Agent did not come online. Approve the browser's Open Sentinel Grid Scanner prompt, then retry. Use Repair only if the installed task cannot start.");
+      throw new Error("The installed KryptonVision Edge Agent did not come online. Approve the browser's Open KryptonVision Scanner prompt, then retry. Use Repair only if the installed task cannot start.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Failed to activate Edge Agent online.");
     } finally {

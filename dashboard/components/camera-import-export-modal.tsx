@@ -574,7 +574,7 @@ export function CameraImportExportModal({
                       ) : (
                         <>
                           <ShieldCheck className="w-4 h-4" />
-                          Import {validCount} Cameras to Sentinel Grid
+                          Import {validCount} Cameras to KryptonVision
                         </>
                       )}
                     </button>
@@ -796,7 +796,7 @@ export function CameraImportExportModal({
         {/* Modal Footer */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-slate-800 bg-slate-950/80">
           <div className="text-xs text-slate-500">
-            Sentinel Grid Camera Ingestion Engine v2.0
+            KryptonVision Camera Ingestion Engine v2.0
           </div>
           <button
             onClick={onClose}

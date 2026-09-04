@@ -444,7 +444,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const currentPage = pageMeta
     .filter((item) => routeMatches(item.path, pathname, searchParams))
     .sort((left, right) => routeSpecificity(right.path) - routeSpecificity(left.path))[0]
-    ?? { path: pathname, section: "Workspace", title: "Sentinel Grid" };
+    ?? { path: pathname, section: "Workspace", title: "KryptonVision" };
 
   const activeRoute = visibleNavigation
     .flatMap((group) => group.items)
@@ -758,7 +758,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <div className="brand-mark"><ShieldCheck size={22} /></div>
           )}
           <div className="brand-copy">
-            <strong>{branding.orgName || "Sentinel Grid"}</strong>
+            <strong>{branding.orgName || "KryptonVision"}</strong>
             <span>{branding.tagline || "Enterprise operations"}</span>
           </div>
           <button
@@ -928,7 +928,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
-              <Link href="/">Sentinel Grid</Link><ChevronRight size={12} />
+              <Link href="/">KryptonVision</Link><ChevronRight size={12} />
               {activeGroup ? <Link href={activeGroup.items[0].href}>{currentPage.section}</Link> : <span>{currentPage.section}</span>}
             </div>
             <p className="topbar-title">{currentPage.title}</p>

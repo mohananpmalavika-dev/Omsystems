@@ -1,7 +1,7 @@
 import { BranchEdgeProductView } from "@/components/branch-edge-product-view";
 
 export const metadata = {
-  title: "400-Branch Enterprise Edge Appliance & Fleet Control | Sentinel Grid",
+  title: "400-Branch Enterprise Edge Appliance & Fleet Control | KryptonVision",
   description: "Enterprise 400-Branch Edge Appliance: Multi-Protocol Device Discovery, WAN Outage Store-and-Forward Buffering, Network Diagnostics, and Local Credential Rotation",
 };
 

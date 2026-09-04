@@ -103,7 +103,7 @@ export function CameraCredentialManager({
 
             <div className="space-y-5 px-6 py-6">
               <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm leading-5 text-blue-900">
-                The password is optional for passwordless devices and is encrypted for this gateway before it enters the command queue. Sentinel Grid never stores a readable copy in the cloud.
+                The password is optional for passwordless devices and is encrypted for this gateway before it enters the command queue. KryptonVision never stores a readable copy in the cloud.
               </div>
 
               <label className="block text-sm font-semibold text-slate-800">

@@ -943,7 +943,7 @@ export function DeviceManager() {
     if (!selectedBranch) return;
     if (gateways.length === 0) {
       openScannerInstaller();
-      setNotice("Install the Sentinel Grid Scanner once on this PC to enable automatic branch scans.");
+      setNotice("Install the KryptonVision Scanner once on this PC to enable automatic branch scans.");
       return;
     }
     scanAbortedRef.current = false;
@@ -1185,7 +1185,7 @@ export function DeviceManager() {
         setCredentialVerificationStatus(undefined);
         setCredentialVerificationError(undefined);
         openScannerInstaller();
-        setError("Repair the Sentinel Grid Scanner once before verifying credentials. This safety update guarantees that only the selected device is probed.");
+        setError("Repair the KryptonVision Scanner once before verifying credentials. This safety update guarantees that only the selected device is probed.");
         return;
       }
       setActivationPassword("");
@@ -2010,7 +2010,7 @@ export function DeviceManager() {
           <div className="modal-container modal-large" role="dialog" aria-modal="true" aria-labelledby="gateway-modal-title">
             <div className="modal-header">
               <div>
-                <h2 id="gateway-modal-title">{gateways.length > 0 ? "Repair / Connect Edge Agent" : "Deploy Sentinel Grid Edge Agent"}</h2>
+                <h2 id="gateway-modal-title">{gateways.length > 0 ? "Repair / Connect Edge Agent" : "Deploy KryptonVision Edge Agent"}</h2>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Target Branch: <strong>{activeBranch?.name ?? "Selected Branch"}</strong> ({selectedBranch})
                 </p>
@@ -2138,8 +2138,8 @@ export function DeviceManager() {
                   <strong>{credentialActivation.displayName || credentialActivation.model || "Detected device"}</strong>
                   <span><b>Device no:</b> {credentialActivation.id || credentialActivation.serialNumber || "unavailable"} · <b>Channel:</b> {credentialActivation.recorderChannel ?? credentialActivation.channel ?? "1"} · <b>IP address:</b> {credentialActivation.ipAddress} · <b>Model:</b> {discoveryModelLabel(credentialActivation)} · <b>Type:</b> {discoveryDeviceTypeLabel(credentialActivation)}</span>
                   <small>{credentialActivation.existingCamera
-                    ? "Update the login for this active camera. Sentinel Grid will encrypt it for this gateway only, re-verify this IP address, and refresh its live-stream route."
-                    : "Its saved login did not match. Enter the device username and password; Sentinel Grid will probe only this IP address and discover channels belonging to this device."}</small>
+                    ? "Update the login for this active camera. KryptonVision will encrypt it for this gateway only, re-verify this IP address, and refresh its live-stream route."
+                    : "Its saved login did not match. Enter the device username and password; KryptonVision will probe only this IP address and discover channels belonging to this device."}</small>
                 </div>
               </div>
               

@@ -319,7 +319,7 @@ export default function IntegrationsPage() {
                 External systems, under one operational lens.
               </h1>
               <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-slate-300">
-                Live connector runtimes connecting Sentinel Grid to CP PLUS fleets, Physical Access Control (PACS),
+                Live connector runtimes connecting KryptonVision to CP PLUS fleets, Physical Access Control (PACS),
                 ServiceNow, Syslog/CEF SIEMs, Splunk, and SMTP alert notification pipelines.
               </p>
             </div>
@@ -1369,7 +1369,7 @@ function AddConnectorWizardDialog({
                   <Wifi size={36} className="mx-auto text-cyan-600" />
                   <h3 className="mt-3 text-base font-bold text-slate-900">Verify Device Reachability</h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    Sentinel Grid will execute a deep diagnostic handshake against {endpoint}.
+                    KryptonVision will execute a deep diagnostic handshake against {endpoint}.
                   </p>
                   <button
                     type="button"

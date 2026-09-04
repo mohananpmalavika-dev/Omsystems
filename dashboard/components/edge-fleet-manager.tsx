@@ -469,7 +469,7 @@ export function EdgeFleetManager() {
         </div>
         <div className="p-3 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between font-mono">
           <span>Showing {Math.min(50, filteredAgents.length)} of {filteredAgents.length} gateways</span>
-          <span>Sentinel Grid Enterprise Fleet Orchestrator</span>
+          <span>KryptonVision Enterprise Fleet Orchestrator</span>
         </div>
       </div>
 

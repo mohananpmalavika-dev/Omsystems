@@ -25,7 +25,7 @@ export interface DiscoveryJob {
   scanType: 'QUICK' | 'DEEP' | 'SCHEDULED';
   includeDeviceTypes?: SecurityDeviceType[];
   excludeDeviceTypes?: SecurityDeviceType[];
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   progressPercent: number;
   devicesDiscovered: number;
   devicesEnrolled: number;
@@ -67,6 +67,13 @@ export class SecurityDeviceDiscoveryService {
     options: DiscoveryOptions,
     createdBy: string
   ): Promise<DiscoveryJob> {
+    if (!networkRange.trim() || !isValidNetworkRange(networkRange)) {
+      throw new Error('invalid_network_range');
+    }
+    const supportedProtocols = new Set(['ONVIF', 'SNMP', 'REST', 'MQTT']);
+    if (!options.protocols?.length || options.protocols.some((protocol) => !supportedProtocols.has(protocol.toUpperCase()))) {
+      throw new Error('at_least_one_protocol_required');
+    }
     // Create discovery job record
     const result = await this.pool.query(
       `INSERT INTO security_device_discovery_jobs (
@@ -148,6 +155,7 @@ export class SecurityDeviceDiscoveryService {
 
       // Save discovered devices to staging table
       for (const device of filteredDevices) {
+        if (await this.isJobCancelled(job.id)) return;
         await this.saveDiscoveredDevice(job.tenantId, job.branchId ?? null, job.id, device);
       }
 
@@ -162,7 +170,7 @@ export class SecurityDeviceDiscoveryService {
              devices_discovered = $1,
              completed_at = NOW(),
              duration_seconds = $2
-         WHERE id = $3`,
+        WHERE id = $3 AND status <> 'CANCELLED'`,
         [filteredDevices.length, durationSeconds, job.id]
       );
 
@@ -181,6 +189,44 @@ export class SecurityDeviceDiscoveryService {
         [String(error), job.id]
       );
     }
+  }
+
+  async cancelDiscovery(tenantId: string, jobId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `UPDATE security_device_discovery_jobs
+       SET status = 'CANCELLED', completed_at = COALESCE(completed_at, NOW()), error_message = 'Cancelled by operator'
+       WHERE id = $1 AND tenant_id = $2 AND status IN ('PENDING', 'RUNNING')
+       RETURNING id`,
+      [jobId, tenantId],
+    );
+    return result.rowCount === 1;
+  }
+
+  async retryDiscovery(tenantId: string, jobId: string, createdBy: string): Promise<DiscoveryJob> {
+    const original = await this.getDiscoveryJob(tenantId, jobId);
+    if (!original) throw new Error('discovery_job_not_found');
+    if (!['FAILED', 'CANCELLED', 'COMPLETED'].includes(original.status)) {
+      throw new Error('only_finished_discovery_jobs_can_be_retried');
+    }
+    const metadata = original.metadata ?? {};
+    return this.startDiscovery(
+      tenantId,
+      original.branchId ?? null,
+      original.networkRange,
+      {
+        deepScan: original.scanType === 'DEEP',
+        protocols: Array.isArray(metadata.protocols) ? metadata.protocols : [],
+      },
+      createdBy,
+    );
+  }
+
+  private async isJobCancelled(jobId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `SELECT status = 'CANCELLED' AS cancelled FROM security_device_discovery_jobs WHERE id = $1`,
+      [jobId],
+    );
+    return result.rows[0]?.cancelled === true;
   }
 
   /**
@@ -648,6 +694,14 @@ export class SecurityDeviceDiscoveryService {
 
     return uniqueDevices;
   }
+}
+
+function isValidNetworkRange(value: string): boolean {
+  const [address, prefix] = value.trim().split('/');
+  const octets = address?.split('.').map(Number);
+  const prefixLength = Number(prefix);
+  return octets?.length === 4 && octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255)
+    && Number.isInteger(prefixLength) && prefixLength >= 0 && prefixLength <= 32;
 }
 
 /**

@@ -3028,7 +3028,7 @@ select, textarea { font: inherit; }
 }
 
 /* ===========================================================================
-   Sentinel Grid 2026 product design system
+  KryptonVision 2026 product design system
    ========================================================================== */
 :root {
   --navy: #07162b;
@@ -5306,7 +5306,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ===========================================================================
-   Sentinel Grid professional workspace shell
+  KryptonVision professional workspace shell
    ========================================================================== */
 .command-search {
   width: 100%;
@@ -5936,7 +5936,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .watch-button.has-live-error { top: calc(50% + 38px); }
 
 /* ===========================================================================
-   Sentinel Grid visual refresh
+  KryptonVision visual refresh
    A single, quieter product language for every route: editorial type, soft
    surfaces, strong operational color, and a command-grade navigation shell.
    ========================================================================== */

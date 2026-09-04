@@ -2,7 +2,7 @@ import React from "react";
 import { EdgeFleetManager } from "@/components/edge-fleet-manager";
 
 export const metadata = {
-  title: "Edge Fleet Lifecycle & Digital Twin | Sentinel Grid",
+  title: "Edge Fleet Lifecycle & Digital Twin | KryptonVision",
   description: "Enterprise 400-Branch Edge Gateway Lifecycle, Signed Staged Rollouts, and Blast Radius Analysis",
 };
 

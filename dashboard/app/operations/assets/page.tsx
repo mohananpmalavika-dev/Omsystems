@@ -2,7 +2,7 @@ import React from "react";
 import { AssetReplacementManager } from "@/components/asset-replacement-manager";
 
 export const metadata = {
-  title: "Asset Lifecycle & Spare Replacement | Sentinel Grid",
+  title: "Asset Lifecycle & Spare Replacement | KryptonVision",
   description: "Enterprise Asset Lifecycle, Zero-Downtime Spare Replacement & Digital Twin Hardware Lineage",
 };
 

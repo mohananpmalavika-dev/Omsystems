@@ -14,7 +14,7 @@ export default function SupportPage() {
     <main className="support-page">
       <PageHero
         eyebrow="Help center"
-        title="Sentinel Grid support"
+        title="KryptonVision support"
         description="Troubleshoot common operational issues, find the right workspace, and collect useful context for your administrator."
         icon={HelpCircle}
         actions={<div className="page-hero-status"><ShieldCheck size={17} /><div><span>Recommended first step</span><strong>Check platform health</strong></div></div>}

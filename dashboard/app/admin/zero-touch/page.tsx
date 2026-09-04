@@ -3,7 +3,7 @@ import { ZeroTouchOnboardingView } from "@/components/zero-touch-onboarding-view
 import { ErrorBoundary } from "@/components/error-boundary";
 
 export const metadata = {
-  title: "Zero-Touch Provisioning (ZTP) Control Plane | Sentinel Grid",
+  title: "Zero-Touch Provisioning (ZTP) Control Plane | KryptonVision",
   description: "Provision branch edge agents, discover devices, validate video streams, and activate monitoring from one control plane.",
 };
 

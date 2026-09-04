@@ -1,5 +1,5 @@
 /**
- * Platform Capability Types for Sentinel Grid Dashboard
+ * Platform Capability Types for KryptonVision Dashboard
  * 
  * Re-exports the canonical contracts defined in @sentinel/contracts
  */

@@ -58,9 +58,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { branchId, networkRanges, protocols } = body;
 
-    if (!branchId || !networkRanges) {
+    if (!branchId || !Array.isArray(networkRanges) || networkRanges.length === 0 ||
+      networkRanges.some((range) => typeof range !== 'string' || !/^\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}$/.test(range.trim())) ||
+      !Array.isArray(protocols) || protocols.length === 0) {
       return NextResponse.json(
-        { error: 'validation_error', message: 'branchId and networkRanges are required' },
+        { error: 'validation_error', message: 'A branch, valid CIDR network range, and at least one protocol are required' },
         { status: 400 }
       );
     }

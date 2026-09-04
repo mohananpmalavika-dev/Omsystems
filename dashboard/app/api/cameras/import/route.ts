@@ -234,7 +234,7 @@ export async function GET() {
   ];
 
   return NextResponse.json({
-    title: "Sentinel Grid - Camera Import Specification",
+    title: "KryptonVision - Camera Import Specification",
     version: "1.0.0",
     fields: fieldSpecs,
     supportedFormats: ["CSV (.csv)", "Excel (.xlsx, .xls)", "Tab Separated (.tsv)", "JSON (.json)"],

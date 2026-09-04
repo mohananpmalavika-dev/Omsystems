@@ -292,7 +292,7 @@ function publicControlApiBase(request: NextRequest) {
     const publicOrigin = validPublicOrigin(candidate);
     if (publicOrigin) return new URL("/api/control", publicOrigin).toString();
   }
-  throw new Error("Unable to determine the public Sentinel Grid URL");
+  throw new Error("Unable to determine the public KryptonVision URL");
 }
 
 function firstForwardedValue(value: string | null) {

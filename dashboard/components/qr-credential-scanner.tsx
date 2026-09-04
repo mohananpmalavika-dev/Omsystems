@@ -391,7 +391,7 @@ export function QRCredentialScanner({ onCredentialsExtracted, onDeviceIdentified
                   : `Claim this code in the authenticated TrueCloud app${scanResult.expiresAt ? ` before ${scanResult.expiresAt.toLocaleString()}` : ""}.`}
               </p>
               <p>
-                To add the camera to Sentinel Grid, enable ONVIF or RTSP on the camera's local network, then enter its private IP address and device credentials in this form.
+                To add the camera to KryptonVision, enable ONVIF or RTSP on the camera's local network, then enter its private IP address and device credentials in this form.
               </p>
               <button type="button" className="secondary-button" onClick={() => setScanResult(undefined)}>
                 Scan another QR code

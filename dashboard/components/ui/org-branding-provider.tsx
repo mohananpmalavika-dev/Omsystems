@@ -17,7 +17,7 @@ interface OrgBrandingContextValue {
 }
 
 const DEFAULT_BRANDING: OrgBranding = {
-  orgName: "Sentinel Grid",
+  orgName: "KryptonVision",
   orgCode: "SENTINEL-CORP",
   logoUrl: null,
   tagline: "Enterprise Surveillance OS",

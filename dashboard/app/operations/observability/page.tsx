@@ -2,7 +2,7 @@ import React from "react";
 import { VmsObservabilityView } from "@/components/vms-observability-view";
 
 export const metadata = {
-  title: "VMS-Grade Observability & Prometheus Metrics | Sentinel Grid",
+  title: "VMS-Grade Observability & Prometheus Metrics | KryptonVision",
   description: "Enterprise Prometheus / OpenTelemetry instrumentation for Cameras, Recording Engine, Media Nodes, Storage, and Digital Twin",
 };
 

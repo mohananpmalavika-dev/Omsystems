@@ -21,7 +21,7 @@ export function proxy(request: NextRequest) {
     status: 401,
     headers: {
       "cache-control": "no-store",
-      "www-authenticate": 'Basic realm="Sentinel Grid", charset="UTF-8"',
+      "www-authenticate": 'Basic realm="KryptonVision", charset="UTF-8"',
     },
   });
 }

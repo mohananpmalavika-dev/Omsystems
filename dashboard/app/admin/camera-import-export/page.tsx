@@ -185,7 +185,7 @@ export default function CameraImportExportPage() {
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              If your cameras are already deployed on specific static IPs with established passwords, you do not need to scan the network. Upload your Excel or CSV spreadsheet and Sentinel Grid will automatically configure all RTSP stream profiles, ONVIF ports, and encrypted vault references.
+              If your cameras are already deployed on specific static IPs with established passwords, you do not need to scan the network. Upload your Excel or CSV spreadsheet and KryptonVision will automatically configure all RTSP stream profiles, ONVIF ports, and encrypted vault references.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">
