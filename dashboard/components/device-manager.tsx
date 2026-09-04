@@ -23,7 +23,12 @@ import {
   Square,
   Trash2,
   Wifi,
+  Video,
+  Smartphone,
+  Laptop,
+  StopCircle,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { cameraInventoryApi, deviceInventoryApi } from "@/lib/api-client";
 import { expandDirectProbeTargets, isPrivateIpv4 } from "@/lib/direct-ip-probe";
@@ -53,7 +58,16 @@ type CameraForm = {
   channel: string;
   protocol: "onvif-t" | "onvif-s" | "rtsp" | "vendor-adapter";
   connectionTransport: "vpn" | "cloudflare-tunnel" | "edge-gateway";
-  sourceType: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  sourceType:
+    | "ip-camera"
+    | "analog-dvr-channel"
+    | "nvr-channel"
+    | "laptop-camera"
+    | "usb-webcam"
+    | "usb-capture-card"
+    | "android-camera"
+    | "ios-camera"
+    | "browser-camera";
   recorderId: string;
   recorderChannel: string;
   recorderSerialNumber: string;
@@ -238,6 +252,87 @@ export function DeviceManager() {
   const refreshRequestRef = useRef(0);
   const [cameraToDelete, setCameraToDelete] = useState<CameraRecord | null>(null);
   const [deletingCamera, setDeletingCamera] = useState(false);
+
+  // Portable Camera Subsystem State
+  const [portableDevices, setPortableDevices] = useState<any[]>([]);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>("");
+  const [qrToken, setQrToken] = useState<string>("");
+  const [qrExpiresAt, setQrExpiresAt] = useState<string>("");
+  const [qrEnrollmentUrl, setQrEnrollmentUrl] = useState<string>("");
+  const [qrLoading, setQrLoading] = useState(false);
+  const [selectedPortableDevice, setSelectedPortableDevice] = useState<any | null>(null);
+  const [stoppingSession, setStoppingSession] = useState(false);
+  const [revokingDevice, setRevokingDevice] = useState(false);
+
+  async function loadPortableDevices() {
+    try {
+      const res = await fetch("/api/portable-camera/devices");
+      if (res.ok) {
+        const data = await res.json();
+        setPortableDevices(data.devices || []);
+      }
+    } catch {}
+  }
+
+  async function generateEnrollmentQr() {
+    setQrLoading(true);
+    try {
+      const res = await fetch("/api/portable-camera/enrollments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ branchId: selectedBranch || undefined }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setQrToken(data.token);
+        setQrExpiresAt(data.expiresAt);
+        setQrEnrollmentUrl(data.enrollmentUrl);
+        const url = await QRCode.toDataURL(data.enrollmentUrl, { width: 280, margin: 2 });
+        setQrDataUrl(url);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setQrLoading(false);
+    }
+  }
+
+  async function handleRevokeDevice(deviceId: string) {
+    if (!confirm("Are you sure you want to revoke this portable device? It will be disconnected immediately.")) return;
+    setRevokingDevice(true);
+    try {
+      await fetch(`/api/portable-camera/devices/${deviceId}/revoke`, { method: "POST" });
+      await loadPortableDevices();
+      setSelectedPortableDevice(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRevokingDevice(false);
+    }
+  }
+
+  async function handleStopSession(sessionId: string) {
+    setStoppingSession(true);
+    try {
+      await fetch(`/api/portable-camera/sessions/${sessionId}/stop`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "operator_stopped_from_device_manager" }),
+      });
+      await loadPortableDevices();
+      if (selectedPortableDevice?.activeSession) {
+        setSelectedPortableDevice({
+          ...selectedPortableDevice,
+          activeSession: null,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStoppingSession(false);
+    }
+  }
 
   async function confirmDeleteCamera() {
     if (!cameraToDelete || deletingCamera) return;
@@ -702,7 +797,12 @@ export function DeviceManager() {
     );
     setInventoryForm((form) => ({ ...form, branch: selectedBranch }));
     void refreshBranch(selectedBranch);
+    void loadPortableDevices();
   }, [selectedBranch]);
+
+  useEffect(() => {
+    void loadPortableDevices();
+  }, []);
 
   // Periodic background polling for discoveries and online edge agent status
   useEffect(() => {
@@ -721,6 +821,7 @@ export function DeviceManager() {
         setDiscoveredCameras(discResp.value.data);
         updateDiscoveryReviewState(discResp.value.data);
       }
+      void loadPortableDevices();
     }, 4_000);
 
     return () => window.clearInterval(interval);
@@ -758,6 +859,7 @@ export function DeviceManager() {
         setDiscoveredCameras(discoveredResult.value.data);
         updateDiscoveryReviewState(discoveredResult.value.data);
       }
+      void loadPortableDevices();
 
       const failedResult = [gatewayResult, cameraResult, discoveredResult, inventoryResult]
         .find((result) => result.status === "rejected");
@@ -1580,6 +1682,18 @@ export function DeviceManager() {
           <button className="secondary-button" type="button" onClick={() => void refreshBranch(selectedBranch)} disabled={!selectedBranch || loading} title="Refresh this branch inventory">
             <RefreshCw size={15} className={loading ? "spin" : undefined} /> Refresh
           </button>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => {
+              setShowQrModal(true);
+              void generateEnrollmentQr();
+            }}
+            disabled={saving}
+            title="Enroll a mobile phone, laptop, or browser camera as a temporary or permanent CCTV source"
+          >
+            <Smartphone size={15} /> Enroll Portable Camera
+          </button>
 
           <button type="button" className="secondary-button" onClick={openScannerInstaller} disabled={saving || !selectedBranch} title="Get 1-line commands or standalone installer">
             <Terminal size={15} /> {gateways.length > 0 ? "Agent Commands" : "Install Scanner"}
@@ -1637,6 +1751,18 @@ export function DeviceManager() {
             </button>
             <button type="button" className="secondary-button" onClick={openCameraForm} disabled={!selectedBranch}>
               <Plus size={15} /> Add camera manually
+            </button>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => {
+                setShowQrModal(true);
+                void generateEnrollmentQr();
+              }}
+              disabled={!selectedBranch}
+              title="Generate single-use QR code for mobile, laptop, or browser camera onboarding"
+            >
+              <QrCode size={15} /> Generate Enrollment QR
             </button>
           </div>
           <BranchConnectivityPanel branchId={selectedBranch} onConfigured={() => void refreshBranch(selectedBranch)} />
@@ -1738,6 +1864,137 @@ export function DeviceManager() {
                 </div>
               </article>
             ))}
+          </section>
+
+          <section className="device-card" style={{ gridColumn: "1 / -1", marginTop: "12px" }}>
+            <div className="device-card-heading">
+              <Smartphone size={18} />
+              <div>
+                <h3>Portable &amp; Software Cameras</h3>
+                <p>{portableDevices.length} registered device{portableDevices.length !== 1 ? "s" : ""} (Laptop, Android, iPhone, Browser)</p>
+              </div>
+              <div style={{ marginLeft: "auto" }}>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ fontSize: "11px", padding: "4px 8px" }}
+                  onClick={() => {
+                    setShowQrModal(true);
+                    void generateEnrollmentQr();
+                  }}
+                >
+                  <QrCode size={13} /> Enroll Device
+                </button>
+              </div>
+            </div>
+            {portableDevices.length === 0 ? (
+              <div className="device-empty">
+                <Smartphone size={25} />
+                <strong>No portable cameras enrolled</strong>
+                <span>Convert a mobile phone, laptop webcam, USB capture card, or browser tab into a temporary CCTV source with QR enrollment.</span>
+              </div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="portable-camera-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", textAlign: "left" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e2e8f0", color: "#64748b" }}>
+                      <th style={{ padding: "8px 6px" }}>Name</th>
+                      <th style={{ padding: "8px 6px" }}>Type</th>
+                      <th style={{ padding: "8px 6px" }}>Assigned User</th>
+                      <th style={{ padding: "8px 6px" }}>Branch</th>
+                      <th style={{ padding: "8px 6px" }}>Status</th>
+                      <th style={{ padding: "8px 6px" }}>Camera</th>
+                      <th style={{ padding: "8px 6px" }}>Resolution</th>
+                      <th style={{ padding: "8px 6px" }}>FPS</th>
+                      <th style={{ padding: "8px 6px" }}>Network</th>
+                      <th style={{ padding: "8px 6px" }}>Battery</th>
+                      <th style={{ padding: "8px 6px" }}>Recording</th>
+                      <th style={{ padding: "8px 6px" }}>Started</th>
+                      <th style={{ padding: "8px 6px" }}>Duration</th>
+                      <th style={{ padding: "8px 6px", textAlign: "right" }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {portableDevices.map((dev) => {
+                      const session = dev.activeSession;
+                      const isLive = session && (session.state === "LIVE" || session.state === "CONNECTING" || session.state === "DEGRADED");
+                      const branchName = branches.find((b) => b.id === (session?.branchId || dev.metadata?.branchId))?.name || "Kollam / Default";
+                      const startedDate = session?.startedAt ? new Date(session.startedAt) : null;
+                      const durationStr = startedDate
+                        ? Math.floor((Date.now() - startedDate.getTime()) / 60000) + "m " + (Math.floor((Date.now() - startedDate.getTime()) / 1000) % 60) + "s"
+                        : "UNKNOWN";
+
+                      return (
+                        <tr key={dev.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "8px 6px", fontWeight: 600 }}>{dev.deviceName}</td>
+                          <td style={{ padding: "8px 6px" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              {dev.type === "WINDOWS" ? <Laptop size={13} /> : <Smartphone size={13} />}
+                              {dev.type}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 6px" }}>{dev.enrolledBy || "Operator"}</td>
+                          <td style={{ padding: "8px 6px" }}>{branchName}</td>
+                          <td style={{ padding: "8px 6px" }}>
+                            <span className={`inventory-status ${isLive ? "online" : dev.state === "REVOKED" ? "offline" : "degraded"}`}>
+                              {isLive ? "LIVE" : dev.state}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 6px" }}>{session?.health?.facingMode || "Rear / Default"}</td>
+                          <td style={{ padding: "8px 6px" }}>{session?.resolution ? `${session.resolution.width}x${session.resolution.height}` : "1080p"}</td>
+                          <td style={{ padding: "8px 6px" }}>{session?.fps ?? "25"}</td>
+                          <td style={{ padding: "8px 6px" }}>{session?.health?.connectivity === "HEALTHY" ? "GOOD" : session?.health?.connectivity || "UNKNOWN"}</td>
+                          <td style={{ padding: "8px 6px" }}>{session?.health?.batteryPercent != null ? `${session.health.batteryPercent}%` : "UNKNOWN"}</td>
+                          <td style={{ padding: "8px 6px" }}>
+                            <span style={{ color: session?.recordingPolicy !== "NO_RECORDING" && isLive ? "#16a34a" : "#64748b", fontWeight: 600 }}>
+                              {isLive && session?.recordingPolicy !== "NO_RECORDING" ? "ON" : "OFF"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 6px" }}>{startedDate ? startedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "UNKNOWN"}</td>
+                          <td style={{ padding: "8px 6px" }}>{durationStr}</td>
+                          <td style={{ padding: "8px 6px", textAlign: "right" }}>
+                            <div style={{ display: "inline-flex", gap: "4px" }}>
+                              <button
+                                type="button"
+                                className="secondary-button"
+                                style={{ fontSize: "10px", padding: "2px 6px" }}
+                                onClick={() => setSelectedPortableDevice(dev)}
+                              >
+                                Details
+                              </button>
+                              {isLive && (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  style={{ fontSize: "10px", padding: "2px 6px", color: "#ef4444" }}
+                                  onClick={() => void handleStopSession(session.id)}
+                                  disabled={stoppingSession}
+                                  title="Stop stream session"
+                                >
+                                  <StopCircle size={11} /> Stop
+                                </button>
+                              )}
+                              {dev.state !== "REVOKED" && (
+                                <button
+                                  type="button"
+                                  className="secondary-button"
+                                  style={{ fontSize: "10px", padding: "2px 6px", color: "#dc2626" }}
+                                  onClick={() => void handleRevokeDevice(dev.id)}
+                                  disabled={revokingDevice}
+                                  title="Revoke device access"
+                                >
+                                  Revoke
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </div>
       )}
@@ -2293,13 +2550,27 @@ export function DeviceManager() {
 
               <div className="form-section"><h3>Connection and camera type</h3><div className="form-row">
                 <div className="form-group"><label htmlFor="cameraTransport">Branch connection</label><select id="cameraTransport" value={cameraForm.connectionTransport} onChange={(event) => { const connectionTransport = event.target.value as CameraForm["connectionTransport"]; setCameraForm((form) => ({ ...form, connectionTransport, connectionSecretRef: connectionTransport === "vpn" ? "" : form.connectionSecretRef })); }}><option value="edge-gateway">Installed Branch Gateway (recommended)</option><option value="vpn">Existing branch VPN</option><option value="cloudflare-tunnel">Managed Cloudflare Tunnel</option></select></div>
-                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value !== "ip-camera"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "onvif-t" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}><option value="ip-camera">IP camera</option><option value="analog-dvr-channel">Analog camera through DVR</option><option value="nvr-channel">IP camera through NVR</option></select></div>
+                <div className="form-group"><label htmlFor="cameraSourceType">Camera type</label><select id="cameraSourceType" value={cameraForm.sourceType} onChange={(event) => setCameraForm((form) => { const recorderBacked = event.target.value === "analog-dvr-channel" || event.target.value === "nvr-channel"; return { ...form, sourceType: event.target.value as CameraForm["sourceType"], protocol: recorderBacked ? "onvif-t" : form.protocol, streamRole: recorderBacked ? "sub" : "main", width: recorderBacked ? "640" : "1920", height: recorderBacked ? "360" : "1080", frameRate: recorderBacked ? "5" : "15", bitrateKbps: recorderBacked ? "256" : "2048" }; })}>
+                  <optgroup label="Fixed CCTV Sources">
+                    <option value="ip-camera">IP camera</option>
+                    <option value="analog-dvr-channel">Analog camera through DVR</option>
+                    <option value="nvr-channel">IP camera through NVR</option>
+                  </optgroup>
+                  <optgroup label="Portable &amp; Software Camera Sources">
+                    <option value="laptop-camera">Laptop / PC Camera</option>
+                    <option value="usb-webcam">USB Webcam</option>
+                    <option value="usb-capture-card">USB Capture Card</option>
+                    <option value="android-camera">Android Phone Camera</option>
+                    <option value="ios-camera">iPhone Camera</option>
+                    <option value="browser-camera">Browser Camera</option>
+                  </optgroup>
+                </select></div>
                 <div className="form-group"><label htmlFor="cameraIp">Private IP address <span className="required">*</span></label><input id="cameraIp" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder="192.168.1.20" /></div>
                 <div className="form-group"><label htmlFor="cameraProtocol">Protocol</label><select id="cameraProtocol" value={cameraForm.protocol} onChange={(event) => setCameraForm((form) => ({ ...form, protocol: event.target.value as CameraForm["protocol"] }))}><option value="onvif-t">Standard ONVIF Profile T (preferred)</option><option value="onvif-s">Standard ONVIF Profile S</option><option value="rtsp">Standard RTSP stream</option><option value="vendor-adapter">Vendor adapter (only if standard protocol is unavailable)</option></select></div>
                 <div className="form-group"><label htmlFor="onvifPort">ONVIF port</label><input id="onvifPort" type="number" min="1" max="65535" value={cameraForm.onvifPort} onChange={(event) => setCameraForm((form) => ({ ...form, onvifPort: event.target.value }))} required /></div>
                 <div className="form-group"><label htmlFor="rtspPort">RTSP port</label><input id="rtspPort" type="number" min="1" max="65535" value={cameraForm.rtspPort} onChange={(event) => setCameraForm((form) => ({ ...form, rtspPort: event.target.value }))} required /></div>
               </div>
-              {cameraForm.sourceType !== "ip-camera" ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
+              {(cameraForm.sourceType === "analog-dvr-channel" || cameraForm.sourceType === "nvr-channel") ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
               <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>
 
               <div className="form-section"><h3>Remote monitoring stream and capabilities</h3><p className="field-help">DVR/NVR main streams remain recorded locally. Use a low-bitrate substream for central live view and analytics over VPN.</p><div className="form-row form-row-three">
@@ -2624,6 +2895,261 @@ export function DeviceManager() {
                   {deletingCamera ? "Removing…" : "Remove Camera"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showQrModal && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" style={{ maxWidth: "480px" }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <QrCode size={20} />
+                <h2>Portable Camera Enrollment</h2>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close QR modal"
+                onClick={() => setShowQrModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ textAlign: "center", padding: "16px" }}>
+              <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
+                Scan this QR code with any mobile device camera (Android / iPhone) or open the enrollment link in a browser/laptop to convert it into a CCTV source.
+              </p>
+
+              {qrLoading ? (
+                <div style={{ padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
+                  <Activity className="spin" size={28} />
+                  <span>Generating secure single-use enrollment token…</span>
+                </div>
+              ) : qrDataUrl ? (
+                <div style={{ display: "inline-block", background: "#ffffff", padding: "12px", borderRadius: "12px", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.06)" }}>
+                  <img src={qrDataUrl} alt="Portable Camera Enrollment QR Code" style={{ width: "240px", height: "240px", display: "block" }} />
+                </div>
+              ) : (
+                <div style={{ padding: "20px", color: "#ef4444" }}>Failed to generate QR. Please try again.</div>
+              )}
+
+              {qrToken && (
+                <div style={{ marginTop: "16px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", textAlign: "left", fontSize: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <strong style={{ color: "#334155" }}>Enrollment Token (Single-Use)</strong>
+                    <span style={{ fontSize: "11px", color: "#e11d48", fontWeight: 600 }}>
+                      Expires: {qrExpiresAt ? new Date(qrExpiresAt).toLocaleTimeString() : "5 mins"}
+                    </span>
+                  </div>
+                  <div style={{ fontFamily: "monospace", fontSize: "11px", wordBreak: "break-all", background: "#ffffff", padding: "6px 8px", borderRadius: "4px", border: "1px solid #cbd5e1" }}>
+                    {qrToken}
+                  </div>
+                  <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ flex: 1, justifyContent: "center", fontSize: "11px" }}
+                      onClick={() => {
+                        if (qrEnrollmentUrl) {
+                          navigator.clipboard.writeText(qrEnrollmentUrl);
+                          alert("Enrollment URL copied to clipboard!");
+                        }
+                      }}
+                    >
+                      Copy Enrollment Link
+                    </button>
+                    {qrEnrollmentUrl && (
+                      <a
+                        href={qrEnrollmentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="secondary-button"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", textDecoration: "none", fontSize: "11px" }}
+                      >
+                        <ExternalLink size={12} /> Open in New Tab
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ marginTop: "14px", fontSize: "11px", color: "#94a3b8", textAlign: "left" }}>
+                🔒 <b>Zero Trust Safeguard:</b> This token expires in 5 minutes and is single-use. Private cameras will only stream after user grants browser camera consent. A prominent live banner is displayed while streaming.
+              </div>
+            </div>
+            <div className="modal-actions" style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px" }}>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void generateEnrollmentQr()}
+                disabled={qrLoading}
+              >
+                Regenerate New QR
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setShowQrModal(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedPortableDevice && (
+        <div className="modal-overlay">
+          <div className="modal-container" role="dialog" aria-modal="true" style={{ maxWidth: "560px" }}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {selectedPortableDevice.type === "WINDOWS" ? <Laptop size={20} /> : <Smartphone size={20} />}
+                <div>
+                  <h2 style={{ fontSize: "16px", margin: 0 }}>{selectedPortableDevice.deviceName}</h2>
+                  <small style={{ color: "#64748b" }}>Device ID: {selectedPortableDevice.id}</small>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close portable camera details"
+                onClick={() => setSelectedPortableDevice(null)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", background: "#f8fafc", padding: "12px", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "12px" }}>
+                <div>
+                  <span style={{ color: "#64748b" }}>Device Type</span>
+                  <div style={{ fontWeight: 600 }}>{selectedPortableDevice.type}</div>
+                </div>
+                <div>
+                  <span style={{ color: "#64748b" }}>Status</span>
+                  <div>
+                    <span className={`inventory-status ${selectedPortableDevice.activeSession ? "online" : selectedPortableDevice.state === "REVOKED" ? "offline" : "degraded"}`}>
+                      {selectedPortableDevice.activeSession ? "LIVE" : selectedPortableDevice.state}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: "#64748b" }}>Enrolled By</span>
+                  <div style={{ fontWeight: 600 }}>{selectedPortableDevice.enrolledBy || "Operator"}</div>
+                </div>
+                <div>
+                  <span style={{ color: "#64748b" }}>Enrolled At</span>
+                  <div>{new Date(selectedPortableDevice.enrolledAt).toLocaleString()}</div>
+                </div>
+                <div>
+                  <span style={{ color: "#64748b" }}>Credential ID</span>
+                  <div style={{ fontFamily: "monospace", fontSize: "11px" }}>{selectedPortableDevice.credentialId}</div>
+                </div>
+                <div>
+                  <span style={{ color: "#64748b" }}>Last Known IP</span>
+                  <div>{selectedPortableDevice.lastKnownIp || "UNKNOWN"}</div>
+                </div>
+              </div>
+
+              {selectedPortableDevice.activeSession ? (
+                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", padding: "12px", fontSize: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <strong style={{ color: "#166534", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <Video size={14} /> Active Session Live Stream
+                    </strong>
+                    <span style={{ color: "#15803d", fontWeight: 700 }}>
+                      ● STREAMING TO VMS
+                    </span>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", fontSize: "11px" }}>
+                    <div>
+                      <span style={{ color: "#166534" }}>Session ID</span>
+                      <div style={{ fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {selectedPortableDevice.activeSession.id}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: "#166534" }}>Resolution</span>
+                      <div style={{ fontWeight: 600 }}>
+                        {selectedPortableDevice.activeSession.resolution ? `${selectedPortableDevice.activeSession.resolution.width}x${selectedPortableDevice.activeSession.resolution.height}` : "1080p"}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: "#166534" }}>FPS / Bitrate</span>
+                      <div style={{ fontWeight: 600 }}>
+                        {selectedPortableDevice.activeSession.fps ?? 25} FPS · {selectedPortableDevice.activeSession.bitrateKbps ? `${(selectedPortableDevice.activeSession.bitrateKbps / 1000).toFixed(1)}M` : "Auto"}
+                      </div>
+                    </div>
+                    <div>
+                      <span style={{ color: "#166534" }}>Network</span>
+                      <div>{selectedPortableDevice.activeSession.health?.connectivity || "GOOD"}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: "#166534" }}>Battery</span>
+                      <div>{selectedPortableDevice.activeSession.health?.batteryPercent != null ? `${selectedPortableDevice.activeSession.health.batteryPercent}%` : "UNKNOWN"}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: "#166534" }}>Recording</span>
+                      <div style={{ fontWeight: 700, color: "#15803d" }}>
+                        {selectedPortableDevice.activeSession.recordingPolicy}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
+                    <Link
+                      href="/live"
+                      className="primary-button"
+                      style={{ fontSize: "11px", padding: "4px 10px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
+                    >
+                      <Video size={13} /> View in Live Monitor
+                    </Link>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      style={{ fontSize: "11px", padding: "4px 10px", color: "#dc2626" }}
+                      onClick={() => void handleStopSession(selectedPortableDevice.activeSession.id)}
+                      disabled={stoppingSession}
+                    >
+                      <StopCircle size={13} /> Stop Live Session
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "8px", padding: "16px", textAlign: "center", fontSize: "12px", color: "#64748b" }}>
+                  Device is currently standby / offline. No active stream session.
+                </div>
+              )}
+
+              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                  Remote revocation disconnects device and prevents future publishing.
+                </span>
+                {selectedPortableDevice.state !== "REVOKED" && (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    style={{ color: "#dc2626", borderColor: "rgba(220, 38, 38, 0.4)", fontSize: "11px" }}
+                    onClick={() => void handleRevokeDevice(selectedPortableDevice.id)}
+                    disabled={revokingDevice}
+                  >
+                    <Trash2 size={13} /> Revoke Device
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", padding: "12px 16px" }}>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => setSelectedPortableDevice(null)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

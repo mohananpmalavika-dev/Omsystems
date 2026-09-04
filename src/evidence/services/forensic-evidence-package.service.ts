@@ -43,6 +43,15 @@ export interface CreatePackageInput {
   serverTime?: string;
   capturedBy: string;
   reason: string;
+  sourceType?: string;
+  deviceId?: string;
+  sessionId?: string;
+  location?: {
+    available: boolean;
+    latitude?: number;
+    longitude?: number;
+    accuracyMeters?: number;
+  };
   media: {
     snapshotBuffer?: Buffer;
     clipBuffer?: Buffer;
@@ -88,9 +97,13 @@ export class ForensicEvidencePackageService {
       serialNumber: input.serialNumber || 'SN-CPP-2026-88129',
       channel: input.recorderChannel,
       streamProfile: 'main',
-      captureMethod: 'RECORDER_PLAYBACK',
+      captureMethod: input.sourceType && input.sourceType.includes("CAMERA") ? 'PORTABLE_PUBLISH' : 'RECORDER_PLAYBACK',
       adapter: input.adapter || 'CPPLUS_DAHUA_CGI',
       adapterVersion: '2.4.1',
+      sourceType: input.sourceType,
+      deviceId: input.deviceId,
+      sessionId: input.sessionId,
+      location: input.location,
     };
 
     // 2. Time Synchronization & Clock Drift Integration

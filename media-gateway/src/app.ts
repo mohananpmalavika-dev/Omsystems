@@ -16,6 +16,7 @@ export async function buildMediaGateway(options: {
   publicHlsBaseUrl: string;
   publicWebRtcBaseUrl: string;
   mediaMtxHlsUrl?: string;
+  mediaMtxWebRtcUrl?: string;
   accessTtlMs: number;
   edgeBridgeSharedKey?: string;
   logger?: boolean;
@@ -76,6 +77,34 @@ export async function buildMediaGateway(options: {
     });
   }
 
+  // WebRTC WHEP / WHIP listener proxy
+  const mediaMtxWebRtcUrl = options.mediaMtxWebRtcUrl || "http://127.0.0.1:8889";
+  app.route({
+    method: ["GET", "POST", "OPTIONS", "PATCH", "DELETE", "HEAD"],
+    url: "/webrtc/*",
+    handler: async (request, reply) => {
+      setWebRtcCorsHeaders(request.headers.origin, reply);
+      if (request.method === "OPTIONS") {
+        return reply.code(204).send();
+      }
+      const suffix = request.raw.url?.slice("/webrtc".length) || "/";
+      const target = new URL(suffix, mediaMtxWebRtcUrl);
+      const upstream = await fetch(target, {
+        method: request.method,
+        headers: forwardWebRtcHeaders(request.headers),
+        body: ["POST", "PATCH", "PUT"].includes(request.method) ? (request.body as any) : undefined,
+      });
+      reply.code(upstream.status);
+      for (const [name, value] of upstream.headers.entries()) {
+        if (["content-type", "location", "access-control-expose-headers", "etag", "id"].includes(name.toLowerCase())) {
+          reply.header(name, value);
+        }
+      }
+      const responseData = await upstream.text();
+      return reply.send(responseData);
+    },
+  });
+
   app.post("/v1/live/start", async (request, reply) => {
     const body = z.object({
       controlPlaneToken: z.string().min(32).max(200),
@@ -106,6 +135,26 @@ export async function buildMediaGateway(options: {
         whepUrl: `${stripSlash(options.publicWebRtcBaseUrl)}/${path}/whep`,
         bearerToken: session.token,
       },
+    });
+  });
+
+  app.post("/v1/portable/publish-start", async (request, reply) => {
+    const body = z.object({
+      controlPlaneToken: z.string().min(10).max(256),
+      cameraId: z.string().min(1),
+    }).parse(request.body);
+
+    const path = `camera-${safeIdentifier(body.cameraId)}`;
+    await options.router.ensurePath(path, "publisher");
+    const session = access.issue(path, "publish");
+    return reply.code(201).send({
+      sessionId: session.id,
+      cameraId: body.cameraId,
+      path,
+      expiresAt: session.expiresAt,
+      whipUrl: `${stripSlash(options.publicWebRtcBaseUrl)}/${path}/whip`,
+      whepUrl: `${stripSlash(options.publicWebRtcBaseUrl)}/${path}/whep`,
+      publishToken: session.token,
     });
   });
 
@@ -209,4 +258,29 @@ function setHlsCorsHeaders(
   if (requestsPrivateNetwork) {
     reply.header("access-control-allow-private-network", "true");
   }
+}
+
+function setWebRtcCorsHeaders(
+  origin: string | undefined,
+  reply: { header(name: string, value: string): unknown },
+) {
+  if (origin) {
+    reply.header("access-control-allow-origin", origin);
+    reply.header("access-control-allow-credentials", "true");
+    reply.header("vary", "Origin");
+  } else {
+    reply.header("access-control-allow-origin", "*");
+  }
+  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range, Id");
+  reply.header("access-control-expose-headers", "Location, ETag, Id");
+  reply.header("access-control-allow-methods", "GET, POST, OPTIONS, PATCH, DELETE, HEAD");
+}
+
+function forwardWebRtcHeaders(headers: Record<string, unknown>) {
+  const forwarded: Record<string, string> = {};
+  for (const name of ["accept", "authorization", "content-type", "id", "range", "user-agent"]) {
+    const value = headers[name];
+    if (typeof value === "string") forwarded[name] = value;
+  }
+  return forwarded;
 }

@@ -36,6 +36,14 @@ http://3-7-216-169.sslip.io, http://3.7.216.169.sslip.io, http://3.7.216.169, :8
         reverse_proxy control-plane:8080
     }
 
+    handle /webrtc/* {
+        reverse_proxy media-gateway:8090
+    }
+
+    handle /api/portable-camera/* {
+        reverse_proxy control-plane:8080
+    }
+
     handle /ws/* {
         reverse_proxy control-plane:8080 {
             header_up Upgrade {>Upgrade}
@@ -82,6 +90,14 @@ https://3-7-216-169.sslip.io, https://3.7.216.169.sslip.io {
     }
 
     handle /health {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /webrtc/* {
+        reverse_proxy media-gateway:8090
+    }
+
+    handle /api/portable-camera/* {
         reverse_proxy control-plane:8080
     }
 

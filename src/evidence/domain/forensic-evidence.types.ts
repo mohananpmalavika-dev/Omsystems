@@ -53,9 +53,18 @@ export interface EvidenceProvenance {
   serialNumber?: string;
   channel: number;
   streamProfile: 'main' | 'sub' | 'snapshot';
-  captureMethod: 'RECORDER_PLAYBACK' | 'RTSP_LIVE' | 'EDGE_BUFFER';
+  captureMethod: 'RECORDER_PLAYBACK' | 'RTSP_LIVE' | 'EDGE_BUFFER' | 'PORTABLE_PUBLISH';
   adapter: string;
   adapterVersion: string;
+  sourceType?: string;
+  deviceId?: string;
+  sessionId?: string;
+  location?: {
+    available: boolean;
+    latitude?: number;
+    longitude?: number;
+    accuracyMeters?: number;
+  };
 }
 
 export interface EvidenceTimeSync {

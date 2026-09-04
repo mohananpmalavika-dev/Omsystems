@@ -21,7 +21,8 @@ export type AuditEventCategory =
   | "USER_CREATED"
   | "USER_DEACTIVATED"
   | "POLICY_VIOLATION"
-  | "SECURITY_INCIDENT";
+  | "SECURITY_INCIDENT"
+  | "PORTABLE_CAMERA_EVENT";
 
 export interface AuditEvent {
   id: string;

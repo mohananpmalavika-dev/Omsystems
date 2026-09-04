@@ -3,7 +3,7 @@ import type { MediaRouter } from "./contracts.js";
 export class MediaMtxRouter implements MediaRouter {
   constructor(private readonly apiUrl: string) {}
 
-  async ensurePath(path: string, sourceUri: string) {
+  async ensurePath(path: string, sourceUri: string = "publisher") {
     const encodedPath = encodeURIComponent(path);
     const payload = {
       source: sourceUri,
