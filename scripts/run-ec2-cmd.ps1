@@ -28,7 +28,7 @@ if ([string]::IsNullOrWhiteSpace($cmd)) {
 
 Write-Host "Dispatched SSM Command $cmd..." -ForegroundColor Cyan
 
-for ($i = 0; $i -lt 30; $i++) {
+for ($i = 0; $i -lt 180; $i++) {
     Start-Sleep -Seconds 2
     $status = aws ssm get-command-invocation `
         --command-id $cmd `
