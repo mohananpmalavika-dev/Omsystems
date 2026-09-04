@@ -163,8 +163,12 @@ services:
         value: http://127.0.0.1:9997
       - key: MEDIAMTX_HLS_URL
         value: http://127.0.0.1:8888
+      - key: STREAM_SECRET_PROVIDER_URL
+        sync: false
+      - key: STREAM_SECRET_PROVIDER_KEY
+        sync: false
       - key: STREAM_SECRETS_JSON
-        value: "{}"
+        sync: false
 
   - type: pserv
     name: sentinel-grid-recording-engine

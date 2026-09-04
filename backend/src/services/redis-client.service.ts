@@ -9,7 +9,11 @@
  * - Graceful degradation
  */
 
-import Redis, { RedisOptions } from 'ioredis';
+import * as IORedis from 'ioredis';
+
+type RedisConnection = any;
+type RedisOptions = Record<string, unknown>;
+const RedisConstructor = ((IORedis as any).default ?? IORedis) as new (options?: RedisOptions) => RedisConnection;
 
 export interface RedisConfig {
   url?: string;
@@ -34,8 +38,8 @@ export interface RedisHealth {
 }
 
 export class RedisClientService {
-  private client: Redis | null = null;
-  private subscriber: Redis | null = null;
+  private client: RedisConnection | null = null;
+  private subscriber: RedisConnection | null = null;
   private readonly config: RedisConfig;
   private connectionStartTime: number = 0;
   private lastError: string | null = null;
@@ -54,7 +58,7 @@ export class RedisClientService {
     try {
       const options = this.buildOptions();
       
-      this.client = new Redis(options);
+      this.client = new RedisConstructor(options);
       this.connectionStartTime = Date.now();
 
       // Setup event handlers
@@ -77,7 +81,7 @@ export class RedisClientService {
   /**
    * Get main Redis client
    */
-  getClient(): Redis {
+  getClient(): RedisConnection {
     if (!this.client) {
       throw new Error('Redis client not initialized. Call connect() first.');
     }
@@ -87,10 +91,10 @@ export class RedisClientService {
   /**
    * Get subscriber client (for pub/sub)
    */
-  async getSubscriber(): Promise<Redis> {
+  async getSubscriber(): Promise<RedisConnection> {
     if (!this.subscriber) {
       const options = this.buildOptions();
-      this.subscriber = new Redis(options);
+      this.subscriber = new RedisConstructor(options);
       this.setupEventHandlers(this.subscriber, 'subscriber');
       await this.waitForReady(this.subscriber);
     }
@@ -229,7 +233,7 @@ export class RedisClientService {
   /**
    * Setup event handlers
    */
-  private setupEventHandlers(client: Redis, name: string): void {
+  private setupEventHandlers(client: RedisConnection, name: string): void {
     client.on('connect', () => {
       console.log(`[Redis:${name}] Connected`);
       this.lastError = null;
@@ -239,7 +243,7 @@ export class RedisClientService {
       console.log(`[Redis:${name}] Ready`);
     });
 
-    client.on('error', (error) => {
+    client.on('error', (error: Error) => {
       this.lastError = error.message;
       console.error(`[Redis:${name}] Error:`, error.message);
     });
@@ -248,7 +252,7 @@ export class RedisClientService {
       console.warn(`[Redis:${name}] Connection closed`);
     });
 
-    client.on('reconnecting', (delay) => {
+    client.on('reconnecting', (delay: number) => {
       console.log(`[Redis:${name}] Reconnecting in ${delay}ms...`);
     });
 
@@ -260,7 +264,7 @@ export class RedisClientService {
   /**
    * Wait for Redis to be ready
    */
-  private async waitForReady(client: Redis, timeoutMs: number = 10000): Promise<void> {
+  private async waitForReady(client: RedisConnection, timeoutMs: number = 10000): Promise<void> {
     if (client.status === 'ready') {
       return;
     }
@@ -275,7 +279,7 @@ export class RedisClientService {
         resolve();
       });
 
-      client.once('error', (error) => {
+      client.once('error', (error: Error) => {
         clearTimeout(timeout);
         reject(error);
       });

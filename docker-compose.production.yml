@@ -91,11 +91,13 @@ services:
       dockerfile: media-gateway/Dockerfile
     container_name: sentinel-media-gateway
     environment:
+      NODE_ENV: production
       PORT: 8090
       CONTROL_PLANE_URL: http://control-plane:8080
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:-media-gateway-shared-key-2026}
       MEDIAMTX_API_URL: http://127.0.0.1:9997
       MEDIAMTX_HLS_URL: http://127.0.0.1:8888
+      STREAM_SECRETS_JSON: ${STREAM_SECRETS_JSON:?STREAM_SECRETS_JSON is required}
     ports:
       - "8090:8090"
       - "8888:8888"

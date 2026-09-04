@@ -14,11 +14,12 @@
  * - Consistent state across control plane nodes
  */
 
-import { Redis } from 'ioredis';
 import { RedisClientService, initializeRedisFromEnv } from './redis-client.service.js';
 import { RedisRateLimiter, createLoginRateLimiter, createApiRateLimiter, createAlertRateLimiter } from './redis-rate-limiter.service.js';
 import { RedisLockService, getRedisLockService } from './redis-lock.service.js';
 import { RedisAlertDeduplicationService, getAlertDeduplicationService } from './redis-alert-deduplication.service.js';
+
+type Redis = any;
 
 export interface RedisServiceConfig {
   enabled: boolean;
@@ -65,14 +66,15 @@ export class RedisService {
       // Connect to Redis
       await this.clientService.connect();
       this.client = this.clientService.getClient();
+      const client = this.client;
       this.available = true;
 
       // Initialize services
-      this._rateLimiters.login = createLoginRateLimiter(this.client);
-      this._rateLimiters.api = createApiRateLimiter(this.client);
-      this._rateLimiters.alerts = createAlertRateLimiter(this.client);
-      this._lockService = getRedisLockService(this.client);
-      this._deduplicationService = getAlertDeduplicationService(this.client);
+      this._rateLimiters.login = createLoginRateLimiter(client);
+      this._rateLimiters.api = createApiRateLimiter(client);
+      this._rateLimiters.alerts = createAlertRateLimiter(client);
+      this._lockService = getRedisLockService(client);
+      this._deduplicationService = getAlertDeduplicationService(client);
 
       this.initialized = true;
       console.log('[RedisService] ✅ Initialized successfully');
@@ -295,7 +297,7 @@ export class RedisService {
     const subscriber = await this.clientService.getSubscriber();
     await subscriber.subscribe(channel);
     
-    subscriber.on('message', (ch, msg) => {
+    subscriber.on('message', (ch: string, msg: string) => {
       if (ch === channel) {
         handler(msg);
       }

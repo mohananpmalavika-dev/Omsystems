@@ -65,16 +65,16 @@ export class HelmetDetector extends BaseDetector {
 
     if (riderViolations.length > 0) {
       const avgConf = this.calculateAverageConfidence(riderViolations);
-      const effectiveConf = Math.max(avgConf ?? 0.8, 0.75);
+      const effectiveConf = avgConf;
       const violationObjects = riderViolations.flatMap(detection => [
         {
           label: "no-helmet",
-          confidence: detection.confidence ?? effectiveConf,
+          confidence: detection.confidence,
           boundingBox: detection.personBoundingBox,
         },
         {
           label: "person",
-          confidence: detection.confidence ?? effectiveConf,
+          confidence: detection.confidence,
           boundingBox: detection.personBoundingBox,
         },
       ]);
@@ -109,16 +109,16 @@ export class HelmetDetector extends BaseDetector {
     const indoorHelmetWearers = detections.filter(d => !d.vehicleType && d.helmetDetected);
     if (indoorHelmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
-      const effectiveConf = Math.max(avgConf ?? 0.8, 0.75);
+      const effectiveConf = avgConf;
       const compliantObjects = indoorHelmetWearers.flatMap(detection => [
         {
           label: "helmet",
-          confidence: detection.confidence ?? effectiveConf,
+          confidence: detection.confidence,
           boundingBox: detection.personBoundingBox,
         },
         {
           label: "person",
-          confidence: detection.confidence ?? effectiveConf,
+          confidence: detection.confidence,
           boundingBox: detection.personBoundingBox,
         },
       ]);

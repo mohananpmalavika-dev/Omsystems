@@ -34,6 +34,12 @@ const schema = z.object({
 
 export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
   const config = schema.parse(environment);
+  const streamSecrets = parseStreamSecrets(config.STREAM_SECRETS_JSON);
+  if (environment.NODE_ENV === "production" &&
+      !config.STREAM_SECRET_PROVIDER_URL &&
+      Object.keys(streamSecrets).length === 0) {
+    throw new Error("A production stream secret provider or non-empty STREAM_SECRETS_JSON is required");
+  }
   if (config.STREAM_SECRET_PROVIDER_URL && !config.STREAM_SECRET_PROVIDER_KEY) {
     throw new Error("STREAM_SECRET_PROVIDER_KEY is required with STREAM_SECRET_PROVIDER_URL");
   }
@@ -43,6 +49,19 @@ export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
     PUBLIC_HLS_BASE_URL: config.PUBLIC_HLS_BASE_URL ?? (renderBase ? `${renderBase}/hls` : "http://localhost:8888"),
     PUBLIC_WEBRTC_BASE_URL: config.PUBLIC_WEBRTC_BASE_URL ?? (renderBase ? `${renderBase}/webrtc` : "http://localhost:8889"),
   };
+}
+
+function parseStreamSecrets(value: string): Record<string, string> {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("STREAM_SECRETS_JSON must be a string-to-string object");
+  }
+  for (const [key, item] of Object.entries(parsed)) {
+    if (typeof item !== "string" || !key) {
+      throw new Error("STREAM_SECRETS_JSON must be a string-to-string object");
+    }
+  }
+  return parsed as Record<string, string>;
 }
 
 export type MediaConfig = ReturnType<typeof loadMediaConfig>;

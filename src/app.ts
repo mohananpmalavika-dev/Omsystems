@@ -141,6 +141,7 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
+import { initializeRedisService } from "../backend/src/services/redis.service.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
@@ -2754,9 +2755,16 @@ export async function buildApp(options?: {
 
   // Register Distributed Media Orchestrator & Stream Scheduler routes
   try {
-    const streamLeaseRepo = new RedisStreamLeaseRepository();
-    const gatewayRegistry = new RedisMediaGatewayRegistry();
-    const sessionRepo = new RedisViewerSessionRepository();
+    let redis: unknown;
+    try {
+      redis = (await initializeRedisService()).getClient();
+    } catch (error) {
+      if (process.env.NODE_ENV === "production") throw error;
+      app.log.warn({ error }, "Redis unavailable; media orchestration is using development-only in-memory state");
+    }
+    const streamLeaseRepo = new RedisStreamLeaseRepository(redis);
+    const gatewayRegistry = new RedisMediaGatewayRegistry(redis);
+    const sessionRepo = new RedisViewerSessionRepository(redis);
     const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
     const mediaOrchestrator = new MediaOrchestrator(
       streamLeaseRepo,
