@@ -10,11 +10,12 @@ interface CameraState {
   recentBrightness: number[];
   recentFrames: number;
   tamperingDetectedAt?: Date;
+  wasIlluminated?: boolean;
 }
 
 export class CameraHealthDetector extends BaseDetector {
   private cameraStates = new Map<string, CameraState>();
-  private readonly VIDEO_LOSS_TIMEOUT_MS = 10000; // 10 seconds
+  private readonly VIDEO_LOSS_TIMEOUT_MS = 60000; // 60 seconds for health check
   private readonly BRIGHTNESS_HISTORY_SIZE = 30; // Last 30 frames
 
   constructor() {
@@ -36,33 +37,44 @@ export class CameraHealthDetector extends BaseDetector {
         lastFrameTimestamp: now,
         recentBrightness: [],
         recentFrames: 0,
+        wasIlluminated: false,
       };
       this.cameraStates.set(frame.cameraId, state);
     }
 
-    // Check for video loss
-    const timeSinceLastFrame = now.getTime() - state.lastFrameTimestamp.getTime();
-    if (timeSinceLastFrame > this.VIDEO_LOSS_TIMEOUT_MS) {
+    // Explicit video loss signaled by edge/protocol, or empty payload
+    const isExplicitVideoLoss =
+      frame.metadata?.videoLoss === true ||
+      frame.metadata?.streamStatus === "lost" ||
+      frame.imageData.length === 0;
+
+    if (isExplicitVideoLoss) {
       results.push({
         detectionType: "video-loss",
         confidence: 0.99,
         objects: [],
         metadata: {
-          lastFrameAgoMs: timeSinceLastFrame,
+          reason: frame.metadata?.videoLoss ? "edge_reported_video_loss" : "empty_frame_data",
         },
         requiresAlert: true,
       });
+      state.lastFrameTimestamp = now;
+      return results;
     }
 
     // Calculate frame brightness
     const brightness = this.calculateBrightness(frame.imageData);
+    if (brightness >= 20) {
+      state.wasIlluminated = true;
+    }
     state.recentBrightness.push(brightness);
     if (state.recentBrightness.length > this.BRIGHTNESS_HISTORY_SIZE) {
       state.recentBrightness.shift();
     }
 
-    // Detect camera tampering (sudden brightness changes, covered lens, etc.)
-    if (state.recentBrightness.length >= 10) {
+    // Detect camera tampering ONLY if camera was previously illuminated
+    // (An unconnected/permanently black channel was never illuminated, so it is NOT tampering!)
+    if (state.recentBrightness.length >= 10 && state.wasIlluminated) {
       const tamperingResult = this.detectTampering(state.recentBrightness);
       if (tamperingResult.isTampering) {
         if (!state.tamperingDetectedAt) {
@@ -95,6 +107,7 @@ export class CameraHealthDetector extends BaseDetector {
    * Calculate average brightness of frame
    */
   private calculateBrightness(imageData: Buffer): number {
+    if (imageData.length === 0) return 0;
     let total = 0;
     const pixelCount = imageData.length / 3; // RGB
 
@@ -120,10 +133,11 @@ export class CameraHealthDetector extends BaseDetector {
   } {
     const avg =
       brightnessHistory.reduce((a, b) => a + b, 0) / brightnessHistory.length;
-    const latest = brightnessHistory[brightnessHistory.length - 1]!;
 
-    // Completely black (covered lens)
-    if (avg < 5) {
+    // Completely black (covered lens) - only valid if older frames in history were illuminated (>= 20)
+    const olderFrames = brightnessHistory.slice(0, -3);
+    const wasRecentlyBright = olderFrames.some((b) => b >= 20);
+    if (avg < 5 && wasRecentlyBright) {
       return {
         isTampering: true,
         confidence: 0.95,
@@ -132,8 +146,8 @@ export class CameraHealthDetector extends BaseDetector {
       };
     }
 
-    // Completely white (lens blocked by bright object)
-    if (avg > 250) {
+    // Completely white (lens blocked by bright spotlight or laser)
+    if (avg > 250 && olderFrames.some((b) => b < 220)) {
       return {
         isTampering: true,
         confidence: 0.95,
@@ -142,7 +156,7 @@ export class CameraHealthDetector extends BaseDetector {
       };
     }
 
-    // Sudden dramatic change
+    // Sudden dramatic change from illuminated scene
     if (brightnessHistory.length >= 20) {
       const recentAvg =
         brightnessHistory.slice(-10).reduce((a, b) => a + b, 0) / 10;
@@ -150,7 +164,7 @@ export class CameraHealthDetector extends BaseDetector {
         brightnessHistory.slice(0, 10).reduce((a, b) => a + b, 0) / 10;
       const change = Math.abs(recentAvg - olderAvg);
 
-      if (change > 100) {
+      if (change > 100 && olderAvg >= 20) {
         return {
           isTampering: true,
           confidence: 0.80,
@@ -158,23 +172,6 @@ export class CameraHealthDetector extends BaseDetector {
           avgBrightness: avg,
         };
       }
-    }
-
-    // Calculate variance to detect defocus
-    const variance =
-      brightnessHistory
-        .map((b) => Math.pow(b - avg, 2))
-        .reduce((a, b) => a + b, 0) / brightnessHistory.length;
-    const stdDev = Math.sqrt(variance);
-
-    // Very low variance might indicate defocus or spray
-    if (stdDev < 2 && avg > 10 && avg < 245) {
-      return {
-        isTampering: true,
-        confidence: 0.75,
-        type: "defocus_or_spray",
-        avgBrightness: avg,
-      };
     }
 
     return { isTampering: false, confidence: 0 };
