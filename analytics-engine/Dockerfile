@@ -33,7 +33,6 @@ COPY package.json package-lock.json ./
 COPY tsconfig.json ./
 
 # Copy workspace package.json files
-COPY packages packages
 COPY dashboard/package.json dashboard/package.json
 COPY edge-agent/package.json edge-agent/package.json  
 COPY media-gateway/package.json media-gateway/package.json
@@ -45,7 +44,7 @@ COPY analytics-engine/tsconfig.json analytics-engine/tsconfig.json
 # Render's current worker is CPU-only. Explicitly skip the optional CUDA bundle;
 # otherwise onnxruntime-node attempts a large provider download during npm ci.
 ENV ONNXRUNTIME_NODE_INSTALL=skip
-RUN npm ci --workspace @sentinel/analytics-engine
+RUN npm ci --workspace @sentinel/analytics-engine || npm install --workspace @sentinel/analytics-engine --legacy-peer-deps
 
 # Copy shared source (needed for cross-workspace imports)
 COPY packages packages
