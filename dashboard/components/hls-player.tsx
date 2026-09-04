@@ -152,7 +152,7 @@ export function HlsPlayer({
               hls = null;
             }
           }
-          const refreshedSource = withToken(url, bearerToken);
+          const refreshedSource = url;
           if (Hls.isSupported()) {
             hls = new Hls({
               lowLatencyMode: false,
@@ -172,13 +172,9 @@ export function HlsPlayer({
                 const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
                 if (isSameOrigin) {
                   xhr.withCredentials = true;
-                  if (bearerToken) {
-                    xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-                    xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
-                  }
-                } else if (bearerToken) {
-                  const authorizedUrl = withToken(requestUrl, bearerToken);
-                  if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
+                }
+                if (bearerToken) {
+                  xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
                 }
               },
             });
@@ -213,7 +209,7 @@ export function HlsPlayer({
             hls.loadSource(refreshedSource);
             hls.attachMedia(video);
           } else {
-            video.src = refreshedSource;
+            video.src = withToken(refreshedSource, bearerToken);
             video.load();
             void video.play().catch(() => undefined);
           }
@@ -241,12 +237,11 @@ export function HlsPlayer({
     video.addEventListener("stalled", handleWaiting);
     video.addEventListener("error", handleVideoError);
 
-    const streamUrl = withToken(url, bearerToken);
     setStatus("loading");
     setError(null);
 
     const startNativePlayback = () => {
-      video.src = streamUrl;
+      video.src = withToken(url, bearerToken);
       video.load();
       void video.play().catch(() => undefined);
     };
@@ -272,13 +267,9 @@ export function HlsPlayer({
             const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
             if (isSameOrigin) {
               xhr.withCredentials = true;
-              if (bearerToken) {
-                xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-                xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
-              }
-            } else if (bearerToken) {
-              const authorizedUrl = withToken(requestUrl, bearerToken);
-              if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
+            }
+            if (bearerToken) {
+              xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
             }
           },
         });
@@ -315,7 +306,7 @@ export function HlsPlayer({
           }
           recover("hls_error");
         });
-        hls.loadSource(streamUrl);
+        hls.loadSource(url);
         hls.attachMedia(video);
       } catch {
         setPlayerError("Unable to initialize HLS playback");

@@ -322,6 +322,15 @@ export function EnhancedCameraGrid({
   const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
 
+  const releaseSession = useCallback((cameraId: string) => {
+    const session = sessionsRef.current.get(cameraId);
+    sessionsRef.current.delete(cameraId);
+    activeStreamTypesRef.current.delete(cameraId);
+    setSessions(new Map(sessionsRef.current));
+    void releaseLiveSession(session);
+    void closeSession(cameraId);
+  }, [closeSession]);
+
   const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
     if (
       sessionsRef.current.has(cameraId) ||
@@ -404,7 +413,10 @@ export function EnhancedCameraGrid({
       controller.abort();
     }
     pendingLiveStartsRef.current.clear();
-  }, []);
+    for (const cameraId of sessionsRef.current.keys()) {
+      releaseSession(cameraId);
+    }
+  }, [releaseSession]);
 
   // Live gateway grants are short-lived. Restart each stream before expiry so
   // a healthy tile does not freeze when its authorization token ages out.
@@ -417,17 +429,13 @@ export function EnhancedCameraGrid({
       return [window.setTimeout(() => {
         if (sessionsRef.current.get(cameraId) !== session) return;
         const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
-        void releaseLiveSession(sessionsRef.current.get(cameraId));
-        sessionsRef.current.delete(cameraId);
-        activeStreamTypesRef.current.delete(cameraId);
-        setSessions(new Map(sessionsRef.current));
-        void closeSession(cameraId);
+        releaseSession(cameraId);
         void handleStartLive(cameraId, stream);
       }, delay)];
     });
 
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [closeSession, handleStartLive, sessions]);
+  }, [handleStartLive, releaseSession, sessions]);
 
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
@@ -530,13 +538,11 @@ export function EnhancedCameraGrid({
       if (camerasById.has(cameraId)) continue;
       liveStartControllersRef.current.get(cameraId)?.abort();
       pendingLiveStartsRef.current.delete(cameraId);
-      sessionsRef.current.delete(cameraId);
-      activeStreamTypesRef.current.delete(cameraId);
       sessionsChanged = true;
-      void closeSession(cameraId);
+      releaseSession(cameraId);
     }
     if (sessionsChanged) setSessions(new Map(sessionsRef.current));
-  }, [cameras, closeSession]);
+  }, [cameras, releaseSession]);
 
   // Adaptive layout: elevate stream priority in-place for alerting cameras
   // WITHOUT rearranging physical tile positions (Channel 1 stays in Slot 0, Channel 2 in Slot 1, etc.)
@@ -681,12 +687,9 @@ export function EnhancedCameraGrid({
       if (visibleGridCameraIds.has(cameraId) && !liveErrors.has(cameraId)) {
         continue;
       }
-      activeStreamTypesRef.current.delete(cameraId);
       markPlaybackDeferred(cameraId);
       updateStreamState(cameraId, "PAUSED");
-      sessionsRef.current.delete(cameraId);
-      setSessions(new Map(sessionsRef.current));
-      void closeSession(cameraId);
+      releaseSession(cameraId);
     }
 
     for (const [cameraId, stream] of desiredLive) {
@@ -695,13 +698,13 @@ export function EnhancedCameraGrid({
       }
     }
   }, [
-    closeSession,
     handleStartLive,
     isInitialized,
     cameras,
     decoderLimit,
     loading,
     markPlaybackDeferred,
+    releaseSession,
     schedule,
     schedulerGridPositions,
     sessions,
