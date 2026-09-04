@@ -315,7 +315,7 @@ export default function ControlRoomPage() {
   const [selectedArea, setSelectedArea] = useState<string>("ALL");
   const [selectedBranchId, setSelectedBranchId] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "RECORDING" | "ALERT">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "ALERT">("ALL");
 
   const monitoredCameraSignatureRef = useRef("");
   const monitoredCamerasRef = useRef<CameraType[]>([]);
@@ -483,7 +483,7 @@ export default function ControlRoomPage() {
     const query = searchQuery.trim().toLowerCase();
 
     return cameras.filter((camera) => {
-      if (hideUnavailableChannels && camera.status === "offline") return false;
+      if (hideUnavailableChannels && statusFilter !== "OFFLINE" && camera.status === "offline") return false;
       const bId = camera.branchId || "default-branch";
       const bName = camera.branchName || `Branch ${bId}`;
       const { zone, region, area } = inferHierarchy(bName, camera.name);
@@ -500,7 +500,6 @@ export default function ControlRoomPage() {
       // Status filter
       if (statusFilter === "ONLINE" && camera.status === "offline") return false;
       if (statusFilter === "OFFLINE" && camera.status !== "offline") return false;
-      if (statusFilter === "RECORDING" && !camera.status) return false;
       if (statusFilter === "ALERT" && !prioritySet.has(camera.id)) return false;
 
       // Text search query
@@ -920,7 +919,7 @@ export default function ControlRoomPage() {
             )}
           </div>
           <div className="ai-wall-controls" aria-label="Live AI controls">
-            <span className={`ai-engine-chip ${liveAi.engineState}`} title={liveAi.error ?? "Live analytics engine status"}>
+            <span className={`ai-engine-chip ${liveAi.engineState}`} title={liveAi.error ?? (liveAi.telemetryIsStale ? "Live analytics telemetry is stale" : "Live analytics engine status")}>
               <BrainCircuit size={12} /><i /> AI {liveAi.engineState}
             </span>
             <button
