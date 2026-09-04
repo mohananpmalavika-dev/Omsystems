@@ -45,12 +45,20 @@ for ($i = 0; $i -lt 180; $i++) {
 }
 
 try {
-    $output = aws ssm get-command-invocation `
+    $inv = aws ssm get-command-invocation `
         --command-id $cmd `
         --instance-id $instanceId `
-        --query "StandardOutputContent" `
-        --output text
-    Write-Host $output
+        --output json | ConvertFrom-Json
+    if ($inv.StandardOutputContent) {
+        Write-Host $inv.StandardOutputContent
+    }
+    if ($inv.StandardErrorContent) {
+        Write-Host "STDERR:" -ForegroundColor Red
+        Write-Host $inv.StandardErrorContent -ForegroundColor Red
+    }
+    if ($status -ne "Success") {
+        Write-Host "SSM Command Status: $status" -ForegroundColor Yellow
+    }
 } catch {
     Write-Host "Completed with status: $status"
 }

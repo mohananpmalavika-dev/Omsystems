@@ -27,14 +27,12 @@ describe("video analytics and alert workflow", () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
       cameraCount: 9,
-      capabilityCount: 15,
-      created: 135,
+      capabilityCount: 22,
+      created: 198,
       enabled: 0,
       unchanged: 0,
     });
-    expect(first.json().setupRequired).toEqual(expect.arrayContaining([
-      "line-crossing", "intrusion", "loitering", "face-recognition", "watchlist-match",
-    ]));
+    expect(first.json().setupRequired).toEqual([]);
 
     const second = await app.inject({
       method: "POST",
@@ -45,10 +43,10 @@ describe("video analytics and alert workflow", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
       cameraCount: 9,
-      capabilityCount: 15,
+      capabilityCount: 22,
       created: 0,
       enabled: 0,
-      unchanged: 135,
+      unchanged: 198,
     });
   });
 
@@ -553,5 +551,82 @@ describe("video analytics and alert workflow", () => {
       average_count: 4, maximum_count: 5,
     })]);
     expect(empty.json().data).toEqual([]);
+  });
+
+  it("preserves acknowledged alert status across subsequent detections without spawning duplicate alerts until resolved", async () => {
+    const baseTime = Date.now();
+    const rule = await store.createAnalyticsRule(
+      "omsystems", "cam-001", "user-global-admin",
+      {
+        name: "Camera 1 Video Loss", detectionType: "video-loss", enabled: true,
+        objectClasses: [], minConfidence: 0.5, minDurationSeconds: 0,
+        direction: "any", severity: "P1", cooldownSeconds: 30,
+        recipients: [], recordingPolicy: "none",
+        preRollSeconds: 10, postRollSeconds: 30,
+      },
+    );
+
+    // First detection creates the alert
+    const r1 = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "loss-1",
+      detectionType: "video-loss", occurredAt: new Date(baseTime).toISOString(),
+      confidence: 0.99, durationSeconds: 0, modelVersion: "1.0.0",
+      objects: [],
+    });
+    expect(r1.alerts).toHaveLength(1);
+    const alertId = r1.alerts[0]!.id;
+    expect(r1.alerts[0]!.status).toBe("new");
+    expect(r1.alerts[0]!.occurrenceCount).toBe(1);
+
+    // Operator acknowledges the alert
+    const acked = await store.transitionAnalyticsAlert(alertId, "omsystems", {
+      status: "acknowledged",
+      actorUserId: "user-global-admin",
+    });
+    expect(acked?.status).toBe("acknowledged");
+
+    // Next detection arrives 45 seconds later (past old 30s cooldown!)
+    const r2 = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "loss-2",
+      detectionType: "video-loss", occurredAt: new Date(baseTime + 45_000).toISOString(),
+      confidence: 0.99, durationSeconds: 0, modelVersion: "1.0.0",
+      objects: [],
+    });
+    // Must NOT create duplicate alert! Must coalesce into existing acknowledged alert!
+    expect(r2.alerts).toHaveLength(1);
+    expect(r2.alerts[0]!.id).toBe(alertId);
+    expect(r2.alerts[0]!.status).toBe("acknowledged");
+    expect(r2.alerts[0]!.occurrenceCount).toBe(2);
+
+    // Verify total alerts in store is still exactly 1
+    const allAlerts = await store.listAnalyticsAlerts("omsystems", { cameraIds: ["cam-001"] });
+    expect(allAlerts.filter(a => a.ruleId === rule.id)).toHaveLength(1);
+
+    // Now operator resolves the issue
+    await store.transitionAnalyticsAlert(alertId, "omsystems", {
+      status: "resolved",
+      actorUserId: "user-global-admin",
+    });
+
+    // Detection 5 seconds later (within 30s cooldown) is suppressed
+    const r3 = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "loss-3",
+      detectionType: "video-loss", occurredAt: new Date(Date.now() + 5_000).toISOString(),
+      confidence: 0.99, durationSeconds: 0, modelVersion: "1.0.0",
+      objects: [],
+    });
+    const afterSuppressed = await store.listAnalyticsAlerts("omsystems", { cameraIds: ["cam-001"] });
+    expect(afterSuppressed.filter(a => a.ruleId === rule.id && a.status === "new")).toHaveLength(0);
+
+    // Detection after cooldown (60 seconds later) creates a fresh new alert
+    const r4 = await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-001", sourceEventId: "loss-4",
+      detectionType: "video-loss", occurredAt: new Date(Date.now() + 60_000).toISOString(),
+      confidence: 0.99, durationSeconds: 0, modelVersion: "1.0.0",
+      objects: [],
+    });
+    expect(r4.alerts).toHaveLength(1);
+    expect(r4.alerts[0]!.id).not.toBe(alertId);
+    expect(r4.alerts[0]!.status).toBe("new");
   });
 });

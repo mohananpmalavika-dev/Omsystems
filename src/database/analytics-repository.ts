@@ -323,21 +323,34 @@ export class AnalyticsRepository {
           `SELECT * FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
              AND status NOT IN ('resolved', 'false_alarm', 'suppressed')
-             AND last_detected_at <= $3::timestamptz
-             AND last_detected_at >= $3::timestamptz - ($4::double precision * interval '1 second')
            ORDER BY last_detected_at DESC LIMIT 1 FOR UPDATE`,
-          [rule.id, input.cameraId, input.occurredAt, rule.cooldownSeconds],
+          [rule.id, input.cameraId],
         );
         if (recent.rows[0]) {
           const updated = await client.query(
             `UPDATE analytics_alerts SET last_detected_at=$2,
-               occurrence_count=occurrence_count+1,
-               confidence=GREATEST(confidence,$3), severity=$4, updated_at=now()
-             WHERE id=$1 RETURNING *`,
+                occurrence_count=occurrence_count+1,
+                confidence=GREATEST(confidence,$3), severity=$4, updated_at=now()
+              WHERE id=$1 RETURNING *`,
             [recent.rows[0].id, input.occurredAt, input.confidence,
               moreSevere(recent.rows[0].severity, effectiveSeverity)],
           );
           alerts.push(mapAlert(updated.rows[0]));
+          continue;
+        }
+
+        // If an alert for this rule/camera was recently resolved within cooldownSeconds,
+        // suppress creating a new alert to prevent flutter.
+        const recentlyResolved = await client.query(
+          `SELECT id FROM analytics_alerts
+           WHERE rule_id=$1 AND camera_id=$2
+             AND status IN ('resolved', 'false_alarm')
+             AND resolved_at IS NOT NULL
+             AND resolved_at >= $3::timestamptz - ($4::double precision * interval '1 second')
+           LIMIT 1`,
+          [rule.id, input.cameraId, input.occurredAt, rule.cooldownSeconds],
+        );
+        if (recentlyResolved.rows[0]) {
           continue;
         }
         const alertId = randomUUID();

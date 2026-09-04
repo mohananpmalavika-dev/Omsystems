@@ -3518,10 +3518,8 @@ export class MemoryStore {
         correlatedDetectionCount: correlationCount(input.metadata),
       });
       const recent = this.analyticsAlerts.find((alert) => {
-        if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId ||
-            isTerminalAlertStatus(alert.status)) return false;
-        const elapsed = Date.parse(input.occurredAt) - Date.parse(alert.lastDetectedAt);
-        return elapsed >= 0 && elapsed <= rule.cooldownSeconds * 1_000;
+        return alert.ruleId === rule.id && alert.cameraId === input.cameraId &&
+            !isTerminalAlertStatus(alert.status);
       });
       if (recent) {
         recent.lastDetectedAt = input.occurredAt;
@@ -3530,6 +3528,14 @@ export class MemoryStore {
         recent.severity = moreSevere(recent.severity, effectiveSeverity);
         recent.updatedAt = now;
         alerts.push(recent);
+        continue;
+      }
+      const recentlyResolved = this.analyticsAlerts.find((alert) => {
+        if (alert.ruleId !== rule.id || alert.cameraId !== input.cameraId || !alert.resolvedAt) return false;
+        const elapsed = Date.parse(input.occurredAt) - Date.parse(alert.resolvedAt);
+        return elapsed >= 0 && elapsed <= rule.cooldownSeconds * 1_000;
+      });
+      if (recentlyResolved) {
         continue;
       }
       const alert: AnalyticsAlert = {
