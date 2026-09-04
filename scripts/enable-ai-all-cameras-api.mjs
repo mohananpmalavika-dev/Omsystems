@@ -3,12 +3,18 @@
 import { readFile } from "node:fs/promises";
 import dotenv from "dotenv";
 
-const rootEnvironment = dotenv.parse(await readFile(new URL("../.env", import.meta.url)));
-const dashboardEnvironment = dotenv.parse(await readFile(new URL("../dashboard/.env.local", import.meta.url)));
-const baseUrl = process.argv[2] || dashboardEnvironment.CONTROL_PLANE_INTERNAL_URL ||
-  rootEnvironment.CONTROL_PLANE_PUBLIC_URL;
+async function readEnvSafe(url) {
+  try {
+    return dotenv.parse(await readFile(url));
+  } catch {
+    return {};
+  }
+}
 
-if (!baseUrl) throw new Error("control_plane_url_unavailable");
+const rootEnvironment = await readEnvSafe(new URL("../.env", import.meta.url));
+const dashboardEnvironment = await readEnvSafe(new URL("../dashboard/.env.local", import.meta.url));
+const baseUrl = process.argv[2] || dashboardEnvironment.CONTROL_PLANE_INTERNAL_URL ||
+  rootEnvironment.CONTROL_PLANE_PUBLIC_URL || "http://3.7.216.169:8080";
 
 const headers = {
   "content-type": "application/json",

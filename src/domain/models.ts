@@ -75,7 +75,147 @@ export interface ResourceNode {
 
 export type CameraVendor = "hikvision" | "cp-plus" | "dahua" | "axis" | "uniview" | "hanwha" | "other";
 export type CameraStatus = "online" | "offline" | "degraded" | "unknown";
-export type CameraSourceType = "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+export enum VideoSourceType {
+  ONVIF_CAMERA = 'ONVIF_CAMERA',
+  RTSP_CAMERA = 'RTSP_CAMERA',
+  DVR_CHANNEL = 'DVR_CHANNEL',
+  NVR_CHANNEL = 'NVR_CHANNEL',
+
+  LAPTOP_CAMERA = 'LAPTOP_CAMERA',
+  USB_WEBCAM = 'USB_WEBCAM',
+  USB_CAPTURE_CARD = 'USB_CAPTURE_CARD',
+
+  ANDROID_CAMERA = 'ANDROID_CAMERA',
+  IOS_CAMERA = 'IOS_CAMERA',
+  BROWSER_CAMERA = 'BROWSER_CAMERA',
+}
+
+export type CameraSourceType =
+  | "ip-camera"
+  | "analog-dvr-channel"
+  | "nvr-channel"
+  | "laptop-camera"
+  | "usb-webcam"
+  | "usb-capture-card"
+  | "android-camera"
+  | "ios-camera"
+  | "browser-camera";
+
+export type VideoSourceStatus = "LIVE" | "OFFLINE" | "CONNECTING" | "DEGRADED" | "RECONNECTING" | "STANDBY";
+
+export interface VideoSourceCapabilities {
+  hasAudio: boolean;
+  hasLocation: boolean;
+  hasTorch: boolean;
+  canSwitchCamera: boolean;
+  supportedResolutions: Array<{ width: number; height: number }>;
+  supportedFps: number[];
+  canAdaptBitrate: boolean;
+}
+
+export interface VideoSourceHealth {
+  connectivity: "HEALTHY" | "DEGRADED" | "DISCONNECTED";
+  lastFrameAt?: string;
+  lastKeyframeAt?: string;
+  bitrateKbps?: number;
+  fps?: number;
+  packetLossPercent?: number;
+  jitterMs?: number;
+  rttMs?: number;
+  reconnectCount?: number;
+  batteryPercent?: number;
+  thermalState?: "nominal" | "fair" | "serious" | "critical";
+  recordingState: "RECORDING" | "PAUSED" | "STOPPED" | "NOT_CONFIGURED";
+}
+
+export interface VideoSource {
+  id: string;
+  tenantId: string;
+  branchId?: string;
+  type: VideoSourceType;
+  name: string;
+  status: VideoSourceStatus;
+  capabilities: VideoSourceCapabilities;
+  streamProfile: {
+    width: number;
+    height: number;
+    fps: number;
+    bitrateKbps: number;
+    codec: string;
+  };
+  recordingPolicy?: "NO_RECORDING" | "RECORD_WHILE_LIVE" | "CONTINUOUS_WHILE_SESSION_ACTIVE" | "MANUAL_RECORDING" | "INCIDENT_ONLY";
+  health?: VideoSourceHealth;
+}
+
+export interface PortableDevice {
+  id: string;
+  tenantId: string;
+  type: "ANDROID" | "IOS" | "WINDOWS" | "BROWSER";
+  deviceName: string;
+  enrolledBy?: string;
+  enrolledAt: string;
+  credentialId: string;
+  lastSeenAt: string;
+  state: "ACTIVE" | "REVOKED" | "LOST" | "EXPIRED";
+  appVersion?: string;
+  osVersion?: string;
+  lastKnownIp?: string;
+  cameraId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PortableCameraEnrollment {
+  id: string;
+  tenantId: string;
+  branchId?: string;
+  createdBy: string;
+  token: string;
+  expiresAt: string;
+  allowedSourceTypes: VideoSourceType[];
+  requestedPermissions: string[];
+  status: "PENDING" | "CONSUMED" | "EXPIRED" | "REVOKED";
+  usedAt?: string;
+  usedByDeviceId?: string;
+}
+
+export interface PortableCameraSession {
+  id: string;
+  tenantId: string;
+  branchId?: string;
+  sourceId: string;
+  deviceId: string;
+  userId: string;
+  mediaNodeId: string;
+  fencingToken: number;
+  startedAt: string;
+  endedAt?: string;
+  endedReason?: string;
+  state: "CREATED" | "CONNECTING" | "LIVE" | "DEGRADED" | "RECONNECTING" | "ENDED" | "FAILED";
+  videoCodec?: string;
+  audioCodec?: string;
+  resolution?: {
+    width: number;
+    height: number;
+  };
+  fps?: number;
+  bitrateKbps?: number;
+  recordingPolicy: "NO_RECORDING" | "RECORD_WHILE_LIVE" | "CONTINUOUS_WHILE_SESSION_ACTIVE" | "MANUAL_RECORDING" | "INCIDENT_ONLY";
+  health?: VideoSourceHealth;
+  incidentIds?: string[];
+}
+
+export interface PortableCameraPolicy {
+  tenantId: string;
+  enabled: boolean;
+  allowedSourceTypes: VideoSourceType[];
+  maxConcurrentSessions: number;
+  allowAudio: boolean;
+  allowLocation: boolean;
+  allowRecording: boolean;
+  defaultRecordingPolicy: string;
+  requireUserConsent: true;
+  maxSessionDurationMinutes?: number;
+}
 export type CameraStreamRole = "main" | "sub" | "unknown";
 export type CameraStreamUse = "recording" | "live" | "analytics";
 export type CameraConnectionTransport = "vpn" | "cloudflare-tunnel" | "edge-gateway";

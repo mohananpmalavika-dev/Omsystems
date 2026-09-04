@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{
       source: "/(.*)",
-      headers: [{ key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" }],
+      headers: [{ key: "Permissions-Policy", value: "microphone=(self), camera=(self), geolocation=(self)" }],
     }];
   },
   async rewrites() {
@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
       {
         source: "/api/v1/:path*",
         destination: `${apiBase}/api/v1/:path*`,
+      },
+      {
+        source: "/api/portable-camera/:path*",
+        destination: `${apiBase}/api/portable-camera/:path*`,
       },
       {
         source: "/v1/:path*",

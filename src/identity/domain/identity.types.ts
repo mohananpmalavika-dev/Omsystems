@@ -18,6 +18,18 @@ export const BankingPermissions = {
   RECORDER_CONFIGURE: 'recorder.configure',
   RECORDER_CREDENTIALS_READ: 'recorder.credentials.read',
 
+  // Portable & Software Cameras
+  PORTABLE_CAMERA_CREATE: 'portable_camera.create',
+  PORTABLE_CAMERA_ENROLL: 'portable_camera.enroll',
+  PORTABLE_CAMERA_START: 'portable_camera.start',
+  PORTABLE_CAMERA_STOP: 'portable_camera.stop',
+  PORTABLE_CAMERA_VIEW: 'portable_camera.view',
+  PORTABLE_CAMERA_RECORD: 'portable_camera.record',
+  PORTABLE_CAMERA_CONFIGURE: 'portable_camera.configure',
+  PORTABLE_CAMERA_REVOKE: 'portable_camera.revoke',
+  PORTABLE_CAMERA_LOCATION_VIEW: 'portable_camera.location.view',
+  PORTABLE_CAMERA_AUDIO_VIEW: 'portable_camera.audio.view',
+
   // Alerts & Incidents
   ALERT_VIEW: 'alert.view',
   ALERT_ACKNOWLEDGE: 'alert.acknowledge',

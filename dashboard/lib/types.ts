@@ -318,7 +318,16 @@ export interface Camera {
   model: string;
   status: CameraStatus;
   channel: number;
-  sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";
+  sourceType?:
+    | "ip-camera"
+    | "analog-dvr-channel"
+    | "nvr-channel"
+    | "laptop-camera"
+    | "usb-webcam"
+    | "usb-capture-card"
+    | "android-camera"
+    | "ios-camera"
+    | "browser-camera";
   connectionTransport?: "vpn" | "cloudflare-tunnel" | "edge-gateway";
   recorderId?: string;
   recorderChannel?: number;

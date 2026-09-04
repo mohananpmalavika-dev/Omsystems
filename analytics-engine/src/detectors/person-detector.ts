@@ -79,20 +79,69 @@ export class PersonDetector extends BaseDetector {
     const results: DetectionResult[] = [];
     
     if (tracked.length > 0) {
+      const avgConfidence = this.calculateAverageConfidence(tracked);
+      const objects = tracked.map(person => ({
+        label: "person",
+        confidence: person.confidence,
+        trackId: person.trackId,
+        boundingBox: person.boundingBox,
+      }));
+
+      // Base person detection
       results.push({
         detectionType: "person",
-        confidence: this.calculateAverageConfidence(tracked),
-        objects: tracked.map(person => ({
-          label: "person",
-          confidence: person.confidence,
-          trackId: person.trackId,
-          boundingBox: person.boundingBox,
-        })),
+        confidence: avgConfidence,
+        objects,
         metadata: {
           count: tracked.length,
           trackedIds: tracked.map(p => p.trackId),
         },
         requiresAlert: true,
+      });
+
+      // People / Person Counting metrics
+      results.push({
+        detectionType: "person-counting",
+        confidence: avgConfidence,
+        objects,
+        metadata: {
+          count: tracked.length,
+          occupancy: tracked.length,
+          total: tracked.length,
+          totalCrossings: tracked.length,
+          entries: tracked.length,
+          exits: 0,
+          trackedIds: tracked.map(p => p.trackId),
+        },
+        requiresAlert: false,
+      });
+
+      // Occupancy Counting metrics
+      results.push({
+        detectionType: "occupancy-counting",
+        confidence: avgConfidence,
+        objects,
+        metadata: {
+          count: tracked.length,
+          occupancy: tracked.length,
+          trackedIds: tracked.map(p => p.trackId),
+        },
+        requiresAlert: false,
+      });
+
+      // Footfall Counter metrics
+      results.push({
+        detectionType: "footfall",
+        confidence: avgConfidence,
+        objects,
+        metadata: {
+          count: tracked.length,
+          totalCrossings: tracked.length,
+          entries: tracked.length,
+          exits: 0,
+          occupancy: tracked.length,
+        },
+        requiresAlert: false,
       });
     }
 

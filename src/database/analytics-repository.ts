@@ -301,13 +301,25 @@ export class AnalyticsRepository {
         ],
       );
       for (const object of input.objects) {
+        const bbox = object.boundingBox ?? { x: 0, y: 0, width: 1, height: 1 };
+        const objectClass = (object.label || input.detectionType || "object").slice(0, 50);
+        const confidence = Math.min(1.0, Math.max(0.0, Number(Number(object.confidence ?? input.confidence ?? 0).toFixed(2))));
         await client.query(
           `INSERT INTO detected_objects (
-             id, event_id, label, confidence, track_id, bounding_box
-           ) VALUES ($1,$2,$3,$4,$5,$6)`,
-          [randomUUID(), eventId, object.label, object.confidence,
+             id, event_id, camera_id, tenant_id, detected_at, object_class, label, confidence, track_id, bounding_box
+           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+          [
+            randomUUID(),
+            eventId,
+            input.cameraId,
+            input.tenantId,
+            input.occurredAt || new Date().toISOString(),
+            objectClass,
+            object.label || objectClass,
+            confidence,
             object.trackId ?? null,
-            object.boundingBox ? JSON.stringify(object.boundingBox) : null],
+            JSON.stringify(bbox),
+          ],
         );
       }
 
@@ -367,7 +379,7 @@ export class AnalyticsRepository {
             analyticsAlertTitle(rule), `Rule \"${rule.name}\" matched.`,
             effectiveSeverity, input.confidence,
             JSON.stringify([...new Set(input.objects.map((object) => object.label))]),
-            input.modelVersion, input.snapshotReference ?? null,
+            input.modelVersion, input.snapshotReference ?? `/v1/alerts/${alertId}/evidence/snapshot`,
             input.clipReference ?? null, input.occurredAt,
             rule.escalateAfterSeconds
               ? new Date(Date.parse(input.occurredAt) + rule.escalateAfterSeconds * 1_000).toISOString()

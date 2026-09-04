@@ -19,7 +19,7 @@ export interface ControlPlaneClient {
 }
 
 export interface MediaRouter {
-  ensurePath(path: string, sourceUri: string): Promise<void>;
+  ensurePath(path: string, sourceUri?: string): Promise<void>;
   removePath(path: string): Promise<void>;
 }
 

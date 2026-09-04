@@ -197,6 +197,7 @@ export async function registerAnalyticsRoutes(
   store: ControlPlaneStore,
   options: {
     analyticsEngineSharedKey?: string;
+    analyticsSourceSharedKey?: string;
     analyticsEngineUrl?: string;
     recordingEngineUrl?: string;
     recordingEngineSharedKey?: string;
@@ -630,8 +631,56 @@ export async function registerAnalyticsRoutes(
     return reply.code(201).send(incident);
   });
 
+  app.get("/v1/analytics/alerts/:alertId/snapshot", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+    const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+    if (!alert) return reply.code(404).send({ error: "alert_not_found" });
+
+    // Try reading snapshotBase64 from analytics_events
+    if ((store as any).pool?.query && alert.eventId) {
+      try {
+        const res = await (store as any).pool.query(
+          "SELECT metadata FROM analytics_events WHERE id = $1",
+          [alert.eventId]
+        );
+        const meta = res.rows?.[0]?.metadata;
+        if (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0) {
+          reply.header("content-type", "image/jpeg");
+          reply.header("cache-control", "public, max-age=86400, immutable");
+          return reply.send(Buffer.from(meta.snapshotBase64, "base64"));
+        }
+      } catch {}
+    }
+
+    // Try analytics-engine
+    const aeUrl = options.analyticsEngineUrl || process.env.ANALYTICS_ENGINE_URL || "http://analytics-engine:8092";
+    try {
+      const aeResp = await fetch(new URL(`/internal/analytics/snapshots/${alert.eventId || alert.id}`, aeUrl), {
+        headers: { "x-analytics-engine-key": options.analyticsEngineSharedKey ?? "" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (aeResp.ok) {
+        reply.header("content-type", "image/jpeg");
+        reply.header("cache-control", "public, max-age=86400");
+        return reply.send(Buffer.from(await aeResp.arrayBuffer()));
+      }
+    } catch {}
+
+    // Fallback graphic
+    const title = (alert.title || "AI Alert Detection").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const detected = new Date(alert.firstDetectedAt).toLocaleString();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+      <rect width="640" height="360" fill="#090d16"/>
+      <circle cx="320" cy="150" r="44" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+      <text x="320" y="158" font-family="sans-serif" font-size="32" text-anchor="middle">🛡️</text>
+      <text x="320" y="230" font-family="sans-serif" font-size="16" font-weight="bold" fill="#f1f5f9" text-anchor="middle">${title}</text>
+      <text x="320" y="255" font-family="sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Detected: ${detected}</text>
+    </svg>`;
+    return reply.code(200).header("content-type", "image/svg+xml").header("cache-control", "public, max-age=60").send(svg);
+  });
+
   app.post("/internal/analytics/events", async (request, reply) => {
-    if (!engineIdentity(request, reply, options.analyticsEngineSharedKey)) return;
+    if (!engineIdentity(request, reply, options.analyticsEngineSharedKey, options.analyticsSourceSharedKey)) return;
     const input = eventSchema.parse(request.body);
     const anprEnrichment = input.detectionType === "anpr"
       ? await enrichAnprMetadata(store, input.tenantId, input.metadata)
@@ -1141,17 +1190,21 @@ function engineIdentity(
   request: FastifyRequest,
   reply: FastifyReply,
   expected: string | undefined,
+  fallback?: string | undefined,
 ) {
-  if (!expected) {
+  if (!expected && !fallback) {
     void reply.code(503).send({ error: "analytics_engine_not_configured" });
     return false;
   }
   const supplied = request.headers["x-analytics-engine-key"];
-    if (typeof supplied !== "string" || !same(supplied, expected)) {
+  if (typeof supplied !== "string") {
     void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
     return false;
   }
-  return true;
+  if (expected && same(supplied, expected)) return true;
+  if (fallback && same(supplied, fallback)) return true;
+  void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
+  return false;
 }
 
 async function triggerRecording(

@@ -39,7 +39,7 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
   const [columns, setColumns] = useState<CameraWallColumns>(4);
   const [renderedCameraCount, setRenderedCameraCount] = useState(CAMERA_WALL_RENDER_BATCH_SIZE);
   const [decoderBudget, setDecoderBudget] = useState(16);
-  const [sequencing, setSequencing] = useState(true);
+  const [sequencing, setSequencing] = useState(false);
   const [sequenceOffset, setSequenceOffset] = useState(0);
   const [wallRunning, setWallRunning] = useState(false);
   const [sessions, setSessions] = useState<Record<string, LiveSessionResponse>>({});
@@ -139,7 +139,21 @@ export function BranchCameraWall({ branchId, cameras }: { branchId: string; came
           {CAMERA_WALL_LAYOUTS.map((count) => <button key={count} type="button" aria-pressed={columns === count} onClick={() => setColumns(count)} className={`rounded-md px-2.5 py-1.5 text-xs font-semibold ${columns === count ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}><Grid2X2 size={13} className="mr-1 inline"/>{count}</button>)}
         </div>
         <label className="flex items-center gap-2 text-xs font-semibold text-gray-600">Decoder budget<select className="input py-1.5 text-xs" value={decoderBudget} onChange={(event) => { const value = Number(event.target.value); setDecoderBudget(value); window.localStorage.setItem("sentinel.branchDecoderBudget", String(value)); }}><option value={8}>8</option><option value={16}>16</option><option value={25}>25</option><option value={36}>36</option><option value={64}>64 certified</option></select></label>
-        <button type="button" aria-pressed={sequencing} className={`btn-secondary flex items-center gap-2 text-xs ${sequencing ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`} onClick={() => setSequencing((current) => !current)}><RotateCw size={14}/>Sequence {sequencing ? "on" : "off"}</button>
+        <button
+          type="button"
+          aria-pressed={sequencing}
+          className={`btn-secondary flex items-center gap-2 text-xs ${sequencing ? "border-blue-500 bg-blue-50 text-blue-700" : ""}`}
+          onClick={() => {
+            setSequencing((current) => {
+              if (current) setSequenceOffset(0);
+              return !current;
+            });
+          }}
+          title={sequencing ? "Camera auto-rotation is ON. Click to lock camera positions" : "Camera positions are FIXED. Click to enable auto-sequencing"}
+        >
+          <RotateCw size={14}/>
+          {sequencing ? "Rotating: On" : "Positions: Fixed"}
+        </button>
         <span className="rounded-full bg-slate-100 px-2.5 py-1.5 text-xs font-semibold text-slate-600">{Object.keys(sessions).length}/{decoderBudget} live</span>
         <button type="button" className="btn-primary flex items-center gap-2" onClick={() => void startAll()} disabled={loading.size > 0 || online === 0}><Radio size={15}/>{loading.size > 0 ? `Starting ${loading.size}…` : "Start all live"}</button>
       </div>

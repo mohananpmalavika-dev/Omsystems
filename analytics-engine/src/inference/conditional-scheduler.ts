@@ -353,6 +353,10 @@ export class ConditionalScheduler {
           break;
 
         case 'person':
+        case 'person-counting':
+        case 'occupancy-counting':
+        case 'footfall':
+        case 'customer-counting':
         case 'fall':
         case 'crowd-density':
         case 'tailgating':

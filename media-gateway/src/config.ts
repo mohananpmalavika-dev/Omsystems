@@ -12,6 +12,7 @@ const schema = z.object({
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32),
   MEDIAMTX_API_URL: z.string().url().default("http://localhost:9997"),
   MEDIAMTX_HLS_URL: z.string().url().default("http://localhost:8888"),
+  MEDIAMTX_WEBRTC_URL: z.string().url().default("http://localhost:8889"),
   PUBLIC_HLS_BASE_URL: z.string().url().optional(),
   PUBLIC_WEBRTC_BASE_URL: z.string().url().optional(),
   RENDER_EXTERNAL_URL: z.string().url().optional(),

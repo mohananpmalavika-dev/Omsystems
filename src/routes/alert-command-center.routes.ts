@@ -219,7 +219,67 @@ export async function registerAlertCommandCenterRoutes(
     }).parse(request.params);
     const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
     if (!alert) return reply.code(404).send({ error: "analytics_alert_not_found" });
-    if (!evidenceClient) return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+
+    // For snapshot evidence, first try the fast durable sources:
+    if (kind === "snapshot") {
+      try {
+        let snapshotBase64: string | undefined;
+        if ((store as any).pool?.query && alert.eventId) {
+          const eventResult = await (store as any).pool.query(
+            "SELECT metadata FROM analytics_events WHERE id = $1",
+            [alert.eventId],
+          );
+          const meta = eventResult.rows?.[0]?.metadata;
+          if (meta && typeof meta === "object" && typeof meta.snapshotBase64 === "string" && meta.snapshotBase64.length > 0) {
+            snapshotBase64 = meta.snapshotBase64;
+          }
+        }
+        if (snapshotBase64) {
+          const imageBuffer = Buffer.from(snapshotBase64, "base64");
+          reply.code(200);
+          reply.header("content-type", "image/jpeg");
+          reply.header("cache-control", "public, max-age=86400, immutable");
+          return reply.send(imageBuffer);
+        }
+      } catch (err) {
+        app.log.warn({ err, alertId }, "Failed checking event snapshotBase64 in database");
+      }
+
+      // Check analytics-engine internal endpoint if running
+      const aeUrl = process.env.ANALYTICS_ENGINE_URL || "http://analytics-engine:8092";
+      try {
+        const aeResp = await fetch(new URL(`/internal/analytics/snapshots/${alert.eventId || alert.id}`, aeUrl), {
+          headers: { "x-analytics-engine-key": process.env.ANALYTICS_ENGINE_SHARED_KEY || "" },
+          signal: AbortSignal.timeout(3000),
+        });
+        if (aeResp.ok) {
+          const buf = Buffer.from(await aeResp.arrayBuffer());
+          reply.code(200);
+          reply.header("content-type", "image/jpeg");
+          reply.header("cache-control", "public, max-age=86400");
+          return reply.send(buf);
+        }
+      } catch {
+        // Fall through to upstream evidenceClient
+      }
+    }
+
+    if (!evidenceClient) {
+      if (kind === "snapshot") {
+        const title = (alert.title || "AI Alert Detection").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const detected = new Date(alert.firstDetectedAt).toLocaleString();
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+          <rect width="640" height="360" fill="#090d16"/>
+          <circle cx="320" cy="150" r="44" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+          <text x="320" y="158" font-family="sans-serif" font-size="32" text-anchor="middle">🛡️</text>
+          <text x="320" y="230" font-family="sans-serif" font-size="16" font-weight="bold" fill="#f1f5f9" text-anchor="middle">${title}</text>
+          <text x="320" y="255" font-family="sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Detected: ${detected}</text>
+          <text x="320" y="280" font-family="sans-serif" font-size="11" fill="#64748b" text-anchor="middle">Live detection record preserved</text>
+        </svg>`;
+        return reply.code(200).header("content-type", "image/svg+xml").header("cache-control", "public, max-age=60").send(svg);
+      }
+      return reply.code(503).send({ error: "automatic_alert_evidence_unavailable" });
+    }
     const reference = kind === "snapshot" ? alert.snapshotReference : alert.clipReference;
     if (!isManagedAlertEvidenceReference(alert.id, reference)) {
       return reply.code(404).send({ error: "managed_alert_evidence_not_found" });

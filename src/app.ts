@@ -113,6 +113,9 @@ import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
 import { registerP0ControlPlaneRoutes } from "./routes/p0-control-plane.routes.js";
 import { registerLocalAiAnalyticsRoutes } from "./routes/local-ai-analytics.routes.js";
+import { registerPortableCameraRoutes } from "./routes/portable-camera.routes.js";
+import { PortableCameraRepository } from "./portable-camera/portable-camera-repository.js";
+import { PortableCameraLeaseManager } from "./ha/services/portable-camera-lease-manager.service.js";
 import {
   RedisStreamLeaseRepository,
   RedisMediaGatewayRegistry,
@@ -1480,18 +1483,32 @@ export async function buildApp(options?: {
       rtspPort: z.number().int().min(1).max(65535).optional(),
       streamProfile: z.string().trim().max(80).optional(),
       profile: cameraProfileSchema.omit({ rtspUri: true }).optional(),
-      sourceType: z.enum(["ip-camera", "analog-dvr-channel", "nvr-channel"]).default("ip-camera"),
+      sourceType: z.enum([
+        "ip-camera",
+        "analog-dvr-channel",
+        "nvr-channel",
+        "laptop-camera",
+        "usb-webcam",
+        "usb-capture-card",
+        "android-camera",
+        "ios-camera",
+        "browser-camera",
+      ]).default("ip-camera"),
       recorderId: z.string().trim().min(1).max(200).optional(),
       recorderChannel: z.number().int().min(1).max(65_535).optional(),
       recorderSerialNumber: z.string().trim().max(120).optional(),
     }).parse(request.body);
+    const isPortable = [
+      "laptop-camera", "usb-webcam", "usb-capture-card",
+      "android-camera", "ios-camera", "browser-camera"
+    ].includes(parsed.sourceType);
     const connectivity = await store.getBranchConnectivityProfile(branchId);
-    const connectionTransport = parsed.connectionTransport ?? connectivity?.primaryTransport;
-    if (connectionTransport && connectionTransport !== "edge-gateway" &&
+    const connectionTransport = parsed.connectionTransport ?? (isPortable ? "edge-gateway" : connectivity?.primaryTransport);
+    if (!isPortable && connectionTransport && connectionTransport !== "edge-gateway" &&
         (!connectivity || !transportIsAllowed(connectionTransport, connectivity))) {
       return reply.code(409).send({ error: "branch_connectivity_not_configured" });
     }
-    if (connectionTransport === "edge-gateway" && !parsed.connectionSecretRef?.startsWith("edge://")) {
+    if (!isPortable && connectionTransport === "edge-gateway" && !parsed.connectionSecretRef?.startsWith("edge://")) {
       return reply.code(400).send({ error: "edge_gateway_requires_edge_secret_reference" });
     }
     if (connectionTransport === "vpn" && (!parsed.ipAddress || !isPrivateIpv4Address(parsed.ipAddress))) {
@@ -1507,6 +1524,8 @@ export async function buildApp(options?: {
     }
     const connectionSecretRef = parsed.connectionSecretRef ?? (connectionTransport === "vpn"
       ? vpnSecretReference(branchId, parsed.sourceType, parsed.ipAddress!, parsed.recorderId, parsed.recorderChannel)
+      : isPortable
+      ? `rtsp://media-gateway:8554/camera-${(parsed.name || "portable").toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`
       : undefined);
     if (!connectionSecretRef) return reply.code(400).send({ error: "connection_secret_ref_required" });
     const approvalInput = {
@@ -2285,6 +2304,19 @@ export async function buildApp(options?: {
     localSearchProvider: federationLocalSearchProvider,
   });
 
+  const portableRepo = new PortableCameraRepository((store as any).pool);
+  const portableLeaseManager = new PortableCameraLeaseManager((store as any).redis, (store as any).pool);
+  registerPortableCameraRoutes(app, {
+    store,
+    repository: portableRepo,
+    leaseManager: portableLeaseManager,
+    mediaGatewayUrl: options?.mediaGatewaySharedKey ? (process.env.MEDIA_GATEWAY_INTERNAL_URL || "http://media-gateway:8090") : "http://127.0.0.1:8090",
+    mediaGatewaySharedKey,
+    recordingEngineUrl: options?.recordingEngineUrl ?? process.env.RECORDING_ENGINE_URL,
+    recordingEngineSharedKey: options?.recordingEngineSharedKey ?? process.env.RECORDING_ENGINE_SHARED_KEY,
+    publicDashboardUrl: options?.controlPlanePublicUrl ?? process.env.PUBLIC_DASHBOARD_URL ?? "http://127.0.0.1:10000",
+  });
+
   // Security operations is intentionally based on data that the control plane
   // already observes.  Do not let optional external collectors (EDR, TPM,
   // certificate authority, etc.) make the whole page unavailable: their
@@ -2449,6 +2481,8 @@ export async function buildApp(options?: {
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey
       ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),
+    ...(options?.analyticsSourceSharedKey
+      ? { analyticsSourceSharedKey: options.analyticsSourceSharedKey } : {}),
     ...(options?.analyticsEngineUrl
       ? { analyticsEngineUrl: options?.analyticsEngineUrl } : {}),
     ...(options?.recordingEngineUrl

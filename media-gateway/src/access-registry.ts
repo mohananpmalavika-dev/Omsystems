@@ -5,6 +5,7 @@ interface AccessSession {
   id: string;
   path: string;
   token: string;
+  action: "read" | "publish" | "both";
   expiresAt: number;
 }
 
@@ -16,11 +17,12 @@ export class AccessRegistry {
     private readonly ttlMs: number,
   ) {}
 
-  issue(path: string) {
+  issue(path: string, action: "read" | "publish" | "both" = "read") {
     const session: AccessSession = {
       id: randomUUID(),
       path,
       token: randomBytes(32).toString("base64url"),
+      action,
       expiresAt: Date.now() + this.ttlMs,
     };
     this.sessions.set(session.id, session);
@@ -29,16 +31,17 @@ export class AccessRegistry {
     return {
       id: session.id,
       token: session.token,
+      action: session.action,
       expiresAt: new Date(session.expiresAt).toISOString(),
     };
   }
 
   authenticate(token: string, path: string, action: string) {
-    if (action !== "read") return false;
     for (const session of this.sessions.values()) {
       if (
         session.path === path &&
         session.expiresAt > Date.now() &&
+        (session.action === "both" || session.action === action) &&
         secureEqual(session.token, token)
       ) return true;
     }

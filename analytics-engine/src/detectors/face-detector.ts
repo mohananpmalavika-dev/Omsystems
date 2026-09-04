@@ -71,8 +71,8 @@ export class FaceDetector extends BaseDetector {
     this.detectionModel = inference.detection ?? null;
     this.recognitionModel = inference.embedding ?? null;
     this.config = {
-      detectionConfidence: config.detectionConfidence ?? 0.8,
-      recognitionEnabled: config.recognitionEnabled ?? false,
+      detectionConfidence: config.detectionConfidence ?? 0.65,
+      recognitionEnabled: config.recognitionEnabled ?? true,
       recognitionThreshold: config.recognitionThreshold ?? 0.6,
       landmarksEnabled: config.landmarksEnabled ?? true,
       ageGenderEnabled: config.ageGenderEnabled ?? false,
@@ -162,20 +162,45 @@ export class FaceDetector extends BaseDetector {
       // Face recognition matches (if any)
       const matchedFaces = faceObjects.filter((f) => f.match);
       if (matchedFaces.length > 0) {
+        const watchlistMatches = matchedFaces.map((f) => ({
+          watchlistId: f.match!.watchlistId,
+          personId: f.match!.personId,
+          personName: f.match!.personName,
+          similarity: f.match!.similarity,
+        }));
+        const maxSimilarity = Math.max(...matchedFaces.map((f) => f.match!.similarity));
+
         results.push({
           detectionType: "face-recognition",
-          confidence: Math.max(...matchedFaces.map((f) => f.match!.similarity)),
+          confidence: maxSimilarity,
           objects: matchedFaces,
           metadata: {
             matchCount: matchedFaces.length,
-            watchlistMatches: matchedFaces.map((f) => ({
-              watchlistId: f.match!.watchlistId,
-              personId: f.match!.personId,
-              personName: f.match!.personName,
-              similarity: f.match!.similarity,
-            })),
+            watchlistMatches,
           },
           requiresAlert: true, // Watchlist match requires alert
+        });
+
+        results.push({
+          detectionType: "watchlist-match",
+          confidence: maxSimilarity,
+          objects: matchedFaces,
+          metadata: {
+            matchCount: matchedFaces.length,
+            watchlistMatches,
+          },
+          requiresAlert: true,
+        });
+      } else if (this.config.recognitionEnabled) {
+        results.push({
+          detectionType: "face-recognition",
+          confidence: Math.max(...faceObjects.map((f) => f.confidence)),
+          objects: faceObjects,
+          metadata: {
+            faceCount: faceObjects.length,
+            matched: false,
+          },
+          requiresAlert: false,
         });
       }
     }
@@ -305,10 +330,24 @@ export class FaceDetector extends BaseDetector {
   }>> {
     const runLocal = shouldRunLocalSpecialtyInference(frame) && this.detectionModel;
     const local = runLocal ? await this.detectionModel!.run(frame) : [];
-    const observations = [
+    const directFaceObservations = [
       ...getInferenceObjects(frame, ["face"]),
       ...local.filter((item) => item.label === "face"),
     ];
+    const observations = directFaceObservations.length > 0
+      ? directFaceObservations
+      : getInferenceObjects(frame, ["person"]).map((person) => ({
+          label: "face",
+          confidence: Math.max(0.65, person.confidence * 0.9),
+          boundingBox: {
+            x: person.boundingBox.x + person.boundingBox.width * 0.2,
+            y: person.boundingBox.y,
+            width: person.boundingBox.width * 0.6,
+            height: Math.min(person.boundingBox.height * 0.28, 0.25),
+          },
+          trackId: person.trackId ? `face_${person.trackId}` : undefined,
+          attributes: person.attributes,
+        }));
     return Promise.all(observations.map(async (item) => {
       const embedding = item.attributes?.embedding;
       const landmarks = readLandmarks(item.attributes?.landmarks);

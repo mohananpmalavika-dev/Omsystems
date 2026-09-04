@@ -27,8 +27,8 @@ describe("video analytics and alert workflow", () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
       cameraCount: 9,
-      capabilityCount: 22,
-      created: 198,
+      capabilityCount: 25,
+      created: 225,
       enabled: 0,
       unchanged: 0,
     });
@@ -43,10 +43,10 @@ describe("video analytics and alert workflow", () => {
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
       cameraCount: 9,
-      capabilityCount: 22,
+      capabilityCount: 25,
       created: 0,
       enabled: 0,
-      unchanged: 198,
+      unchanged: 225,
     });
   });
 
