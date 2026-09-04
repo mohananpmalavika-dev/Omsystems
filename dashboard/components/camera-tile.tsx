@@ -256,7 +256,7 @@ function CameraTileComponent({
         setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
       }}>
         <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
-          {session?.hls ? (
+          {session?.hls && !liveError ? (
             <HlsPlayer
               url={session.hls.url}
               bearerToken={session.hls.bearerToken ?? ""}
@@ -285,7 +285,7 @@ function CameraTileComponent({
         <div className="tile-topline">
           <span className={`status-pill ${hasLiveFrame ? "online" : liveError ? "offline" : camera.status}`}>
             <i />
-            {hasLiveFrame ? "Live HLS" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
+            {hasLiveFrame ? "Live HLS" : liveError ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
           </span>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>

@@ -335,7 +335,7 @@ export class HelmetDetector extends BaseDetector {
   ): Promise<HelmetDetection> {
     const personBox = match.person.boundingBox;
     const classification = await this.bestHelmetClassification(frame, personBox);
-    const riskLevel = classification.confidence < this.MIN_CONFIDENCE
+    const riskLevel = classification.confidence < Math.max(this.MIN_CONFIDENCE, 0.7)
       ? "uncertain"
       : classification.wearingHelmet ? "compliant" : "violation";
     return {
@@ -353,7 +353,7 @@ export class HelmetDetector extends BaseDetector {
   ): Promise<HelmetDetection> {
     const personBox = person.boundingBox;
     const classification = await this.bestHelmetClassification(frame, personBox);
-    const riskLevel = classification.confidence < this.MIN_CONFIDENCE
+    const riskLevel = classification.confidence < Math.max(this.MIN_CONFIDENCE, 0.7)
       ? "uncertain"
       : classification.wearingHelmet ? "compliant" : "violation";
     return {
