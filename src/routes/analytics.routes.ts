@@ -197,6 +197,7 @@ export async function registerAnalyticsRoutes(
   store: ControlPlaneStore,
   options: {
     analyticsEngineSharedKey?: string;
+    analyticsSourceSharedKey?: string;
     analyticsEngineUrl?: string;
     recordingEngineUrl?: string;
     recordingEngineSharedKey?: string;
@@ -631,7 +632,7 @@ export async function registerAnalyticsRoutes(
   });
 
   app.post("/internal/analytics/events", async (request, reply) => {
-    if (!engineIdentity(request, reply, options.analyticsEngineSharedKey)) return;
+    if (!engineIdentity(request, reply, options.analyticsEngineSharedKey, options.analyticsSourceSharedKey)) return;
     const input = eventSchema.parse(request.body);
     const anprEnrichment = input.detectionType === "anpr"
       ? await enrichAnprMetadata(store, input.tenantId, input.metadata)
@@ -1141,17 +1142,21 @@ function engineIdentity(
   request: FastifyRequest,
   reply: FastifyReply,
   expected: string | undefined,
+  fallback?: string | undefined,
 ) {
-  if (!expected) {
+  if (!expected && !fallback) {
     void reply.code(503).send({ error: "analytics_engine_not_configured" });
     return false;
   }
   const supplied = request.headers["x-analytics-engine-key"];
-    if (typeof supplied !== "string" || !same(supplied, expected)) {
+  if (typeof supplied !== "string") {
     void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
     return false;
   }
-  return true;
+  if (expected && same(supplied, expected)) return true;
+  if (fallback && same(supplied, fallback)) return true;
+  void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
+  return false;
 }
 
 async function triggerRecording(

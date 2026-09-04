@@ -2449,6 +2449,8 @@ export async function buildApp(options?: {
   await registerAnalyticsRoutes(app, store, {
     ...(options?.analyticsEngineSharedKey
       ? { analyticsEngineSharedKey: options.analyticsEngineSharedKey } : {}),
+    ...(options?.analyticsSourceSharedKey
+      ? { analyticsSourceSharedKey: options.analyticsSourceSharedKey } : {}),
     ...(options?.analyticsEngineUrl
       ? { analyticsEngineUrl: options?.analyticsEngineUrl } : {}),
     ...(options?.recordingEngineUrl
