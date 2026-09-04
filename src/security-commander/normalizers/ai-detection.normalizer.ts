@@ -113,8 +113,14 @@ export class AIDetectionNormalizer extends BaseEventNormalizer<RawAIDetection> {
 
       case 'ppe_violation':
       case 'no_helmet':
+      case 'no-helmet':
       case 'no_vest':
         return { eventType: 'ai.ppe_violation', severity: 'high' };
+
+      case 'helmet':
+      case 'helmet-worn':
+      case 'helmet_worn':
+        return { eventType: 'ai.intrusion', severity: 'high' };
 
       case 'weapon':
       case 'weapon_detected':

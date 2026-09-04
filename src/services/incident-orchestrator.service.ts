@@ -509,6 +509,9 @@ export class IncidentOrchestrator {
       'atm-tampering': 'ATM Tampering',
       'fall-detection': 'Person Fall Detected',
       'tailgating': 'Tailgating Detected',
+      'helmet-worn': 'Helmet Worn Inside Bank / Restricted Area',
+      'helmet': 'Helmet / Face Cover Inside Facility',
+      'no-helmet': 'Vehicle Rider Without Helmet',
     };
     
     const detectionType = event.detectionType ?? '';

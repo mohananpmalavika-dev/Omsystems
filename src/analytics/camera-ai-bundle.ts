@@ -24,7 +24,6 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
   { name: "AI - Fall detection", detectionType: "fall", objectClasses: ["person"], severity: "P1", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 30 },
   { name: "AI - Helmet / Face cover detection", detectionType: "helmet", objectClasses: ["helmet", "person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
   { name: "AI - Helmet worn inside bank", detectionType: "helmet-worn", objectClasses: ["helmet", "person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
-  { name: "AI - Missing helmet (PPE)", detectionType: "no-helmet", objectClasses: ["person"], severity: "P2", minDurationSeconds: 1, minConfidence: 0.7, cooldownSeconds: 60 },
   { name: "AI - Polygon intrusion", detectionType: "intrusion", objectClasses: ["person", "vehicle"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
   { name: "AI - Line crossing", detectionType: "line-crossing", objectClasses: ["person", "vehicle"], severity: "P2", minDurationSeconds: 0, cooldownSeconds: 30 },
   { name: "AI - Loitering detection", detectionType: "loitering", objectClasses: ["person"], severity: "P3", minDurationSeconds: 5, cooldownSeconds: 60 },

@@ -89,6 +89,46 @@ describe("local specialty model adapters", () => {
     expect(detector.getHealth().status).toBe("healthy");
   });
 
+  it("does NOT generate alerts for indoor bank visitors NOT wearing helmets", async () => {
+    const run = async () => ({
+      wearingHelmet: false,
+      confidence: 0.95,
+      wearingHelmetConfidence: 0.05,
+      unwearingHelmetConfidence: 0.95,
+    });
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+    // Indoor person (customer or staff member, no motorcycle)
+    const results = await detector.detect(frame([
+      object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+    ]));
+
+    // Normal bank visitor without helmet must NEVER trigger a no-helmet or helmet-worn violation
+    expect(results.filter(r => r.detectionType === "no-helmet")).toHaveLength(0);
+    expect(results.filter(r => r.detectionType === "helmet-worn")).toHaveLength(0);
+    expect(results.filter(r => r.detectionType === "helmet")).toHaveLength(0);
+  });
+
+  it("does NOT trigger helmet-worn inside bank when motorcycle rider outdoors wears a helmet", async () => {
+    const run = async () => ({
+      wearingHelmet: true,
+      confidence: 0.94,
+      wearingHelmetConfidence: 0.94,
+      unwearingHelmetConfidence: 0.06,
+    });
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+    // Rider on motorcycle with helmet outdoors
+    const results = await detector.detect(frame([
+      object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
+      object("motorcycle", 0.91, { x: 0.1, y: 0.45, width: 0.5, height: 0.45 }),
+    ]));
+
+    // Compliant motorcyclist outdoors should not trigger bank indoor helmet-worn alert
+    expect(results.filter(r => r.detectionType === "helmet-worn")).toHaveLength(0);
+    expect(results.filter(r => r.detectionType === "no-helmet")).toHaveLength(0);
+  });
+
   it("runs local face detection and embedding watchlist matching", async () => {
     const detector = new FaceDetector(
       { recognitionEnabled: true, detectionConfidence: 0.5 },

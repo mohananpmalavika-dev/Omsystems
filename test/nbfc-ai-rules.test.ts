@@ -60,6 +60,28 @@ describe('NBFC AI Surveillance & Dynamic Rule Engine', () => {
       expect(instantiated.zoneId).toBe("zone-vault-int");
       expect(instantiated.version).toBe(1);
     });
+
+    it("instantiates Helmet / Face Cover Inside Branch/ATM template (tmpl-37)", async () => {
+      const template = await repository.getTemplate("tmpl-37-helmet-face-cover");
+      expect(template).toBeDefined();
+      expect(template!.name).toBe("Helmet / Face Cover Inside Branch/ATM");
+      expect(template!.detectorType).toBe("helmet-worn");
+
+      const instantiated = await repository.instantiateTemplate(
+        "tmpl-37-helmet-face-cover",
+        "tenant-nbfc-01",
+        {
+          branchIds: ["branch-kollam-01"],
+          cameraIds: ["cam-entrance-01"],
+        },
+        "security-officer"
+      );
+
+      expect(instantiated.name).toBe("Helmet / Face Cover Inside Branch/ATM");
+      expect(instantiated.detectorType).toBe("helmet-worn");
+      expect(instantiated.severity).toBe("HIGH");
+      expect(instantiated.actions).toContain("CREATE_ALERT");
+    });
   });
 
   describe('Visual Zone Management', () => {
