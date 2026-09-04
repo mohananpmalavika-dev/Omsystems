@@ -202,6 +202,19 @@ export class HelmetDetector extends BaseDetector {
         .map((person) => this.detectHelmetPresence(person, helmets))
         .filter((detection): detection is HelmetDetection => Boolean(detection));
 
+    if (riderMatches.length === 0 && indoorPersons.length === 0 && runLocal && this.classifier) {
+      // Fallback: evaluate frame when safety helmet rules are active but base detector missed seated/occluded person
+      const fullFrameClassification = await this.classifier.run(frame, { x: 0, y: 0, width: 1, height: 1 });
+      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.8) {
+        return [{
+          personBoundingBox: { x: 0, y: 0, width: 1, height: 1 },
+          helmetDetected: true,
+          confidence: fullFrameClassification.confidence,
+          riskLevel: "compliant",
+        }];
+      }
+    }
+
     return [...riderDetections, ...indoorHelmetDetections];
   }
 
@@ -321,7 +334,7 @@ export class HelmetDetector extends BaseDetector {
     match: { person: any; vehicle: any },
   ): Promise<HelmetDetection> {
     const personBox = match.person.boundingBox;
-    const classification = await this.classifier!.run(frame, this.headRegion(personBox));
+    const classification = await this.bestHelmetClassification(frame, personBox);
     const riskLevel = classification.confidence < this.MIN_CONFIDENCE
       ? "uncertain"
       : classification.wearingHelmet ? "compliant" : "violation";
@@ -338,7 +351,8 @@ export class HelmetDetector extends BaseDetector {
     frame: DetectionFrame,
     person: any,
   ): Promise<HelmetDetection> {
-    const classification = await this.classifier!.run(frame, this.headRegion(person.boundingBox));
+    const personBox = person.boundingBox;
+    const classification = await this.bestHelmetClassification(frame, personBox);
     const riskLevel = classification.confidence < this.MIN_CONFIDENCE
       ? "uncertain"
       : classification.wearingHelmet ? "compliant" : "violation";
@@ -348,6 +362,34 @@ export class HelmetDetector extends BaseDetector {
       confidence: classification.confidence,
       riskLevel,
     };
+  }
+
+  private async bestHelmetClassification(
+    frame: DetectionFrame,
+    personBox: { x: number; y: number; width: number; height: number },
+  ) {
+    // 1. Upper body box (covers head above/beside torso on seated/slouched persons)
+    const upperBodyBox = {
+      x: Math.max(0, personBox.x - personBox.width * 0.15),
+      y: Math.max(0, personBox.y - personBox.height * 0.15),
+      width: Math.min(1 - Math.max(0, personBox.x - personBox.width * 0.15), personBox.width * 1.3),
+      height: Math.min(1 - Math.max(0, personBox.y - personBox.height * 0.15), personBox.height * 0.55),
+    };
+    const upperResult = await this.classifier!.run(frame, upperBodyBox);
+
+    // 2. Standard head region
+    const standardHeadBox = this.headRegion(personBox);
+    const standardResult = await this.classifier!.run(frame, standardHeadBox);
+
+    // If either detects wearing a helmet, prefer the helmet detection
+    if (upperResult.wearingHelmet && (!standardResult.wearingHelmet || upperResult.confidence >= standardResult.confidence)) {
+      return upperResult;
+    }
+    if (standardResult.wearingHelmet) {
+      return standardResult;
+    }
+    // Neither detected helmet, return the more confident unwearing result
+    return standardResult.confidence > upperResult.confidence ? standardResult : upperResult;
   }
 
   private headRegion(personBox: { x: number; y: number; width: number; height: number }) {
