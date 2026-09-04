@@ -116,6 +116,9 @@ import { registerLocalAiAnalyticsRoutes } from "./routes/local-ai-analytics.rout
 import { registerPortableCameraRoutes } from "./routes/portable-camera.routes.js";
 import { PortableCameraRepository } from "./portable-camera/portable-camera-repository.js";
 import { PortableCameraLeaseManager } from "./ha/services/portable-camera-lease-manager.service.js";
+import { registerNbfcAnalyticsRoutes } from "./routes/nbfc-analytics.routes.js";
+import { NbfcRuleRepository } from "./analytics/nbfc-rule-repository.js";
+import { NbfcRuleEngineService } from "./analytics/nbfc-rule-engine.service.js";
 import {
   RedisStreamLeaseRepository,
   RedisMediaGatewayRegistry,
@@ -2315,6 +2318,13 @@ export async function buildApp(options?: {
     recordingEngineUrl: options?.recordingEngineUrl ?? process.env.RECORDING_ENGINE_URL,
     recordingEngineSharedKey: options?.recordingEngineSharedKey ?? process.env.RECORDING_ENGINE_SHARED_KEY,
     publicDashboardUrl: options?.controlPlanePublicUrl ?? process.env.PUBLIC_DASHBOARD_URL ?? "http://127.0.0.1:10000",
+  });
+
+  const nbfcRuleRepo = new NbfcRuleRepository((store as any).pool);
+  const nbfcRuleEngine = new NbfcRuleEngineService(nbfcRuleRepo);
+  registerNbfcAnalyticsRoutes(app, {
+    repository: nbfcRuleRepo,
+    engineService: nbfcRuleEngine,
   });
 
   // Security operations is intentionally based on data that the control plane

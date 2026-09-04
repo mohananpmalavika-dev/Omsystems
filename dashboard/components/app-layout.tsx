@@ -176,6 +176,7 @@ export const navigation: NavGroup[] = [
       { label: "AI Command Center", href: "/operations/ai-command-center", icon: Command },
       { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", icon: TrendingUp },
       { label: "Video Analytics Hub", href: "/analytics", icon: Activity },
+      { label: "AI Rules & Automation", href: "/analytics/rules", icon: SlidersHorizontal },
       { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
       { label: "People Counting & Heatmaps", href: "/analytics/people", icon: Users },

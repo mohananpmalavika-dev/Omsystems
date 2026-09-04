@@ -12,6 +12,7 @@ docker image prune -f || true
 
 echo "=== 1.8. Applying Database Migrations ==="
 docker exec -i sentinel-aws-postgres psql -U sentinel_admin -d sentinel_grid < /opt/sentinel-grid/database/migrations/094_portable_cameras.sql || true
+docker exec -i sentinel-aws-postgres psql -U sentinel_admin -d sentinel_grid < /opt/sentinel-grid/database/migrations/095_nbfc_ai_rules_engine.sql || true
 
 echo "=== 2. Building services sequentially ==="
 cd /opt/sentinel-grid/deploy/aws

@@ -32,6 +32,10 @@ const nextConfig: NextConfig = {
         destination: `${apiBase}/api/portable-camera/:path*`,
       },
       {
+        source: "/api/ai/:path*",
+        destination: `${apiBase}/api/ai/:path*`,
+      },
+      {
         source: "/v1/:path*",
         destination: `${apiBase}/v1/:path*`,
       },
