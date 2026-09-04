@@ -1,12 +1,12 @@
 "use client";
 
 import {
-  Activity, AlertTriangle, ArrowLeft, BellRing, BrainCircuit, Camera,
+  Activity, AlertTriangle, ArrowLeft, BellRing, BrainCircuit, Camera, Box,
   Check, ChevronRight, CircleDot, Clock3, ExternalLink, Plus, RefreshCw,
   Save, ShieldAlert, ShieldCheck, Siren, Sparkles, Trash2, UsersRound, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
+import { analyticsApi, cameraInventoryApi, type AnalyticsDashboardSummary } from "@/lib/api-client";
 import { dashboardEvidenceUrl } from "@/lib/alert-command-center";
 import type {
   AnalyticsAlert, AnalyticsAlertStatus, AnalyticsAlertSummary,
@@ -42,6 +42,7 @@ export function AnalyticsConsole() {
   const [cameraId, setCameraId] = useState("");
   const [rules, setRules] = useState<AnalyticsRule[]>([]);
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
+  const [objectEvents, setObjectEvents] = useState<NonNullable<AnalyticsDashboardSummary["events"]>>([]);
   const [summary, setSummary] = useState(emptySummary);
   const [statusFilter, setStatusFilter] = useState<AnalyticsAlertStatus | "">("");
   const [loading, setLoading] = useState(true);
@@ -76,6 +77,19 @@ export function AnalyticsConsole() {
     setRules(response.data as AnalyticsRule[]);
   }, [cameraId]);
 
+  const refreshObjectEvents = useCallback(async () => {
+    if (!branchId) return;
+    const to = new Date();
+    const from = new Date(to.getTime() - 24 * 60 * 60 * 1_000);
+    const response = await analyticsApi.branchSummary(branchId, {
+      from: from.toISOString(),
+      to: to.toISOString(),
+    });
+    setObjectEvents((response.events ?? [])
+      .filter((event) => event.detectionType === "object")
+      .slice(0, 100));
+  }, [branchId]);
+
   useEffect(() => {
     void Promise.all([cameraInventoryApi.listBranches("analytics:view"), analyticsApi.capabilities()])
       .then(([{ data }, catalog]) => {
@@ -103,12 +117,19 @@ export function AnalyticsConsole() {
     void Promise.all([
       cameraInventoryApi.listByBranch(branchId, "analytics:view"),
       analyticsApi.listAlerts({ branchId, status: statusFilter || undefined, limit: 100 }),
-    ]).then(([cameraResponse, alertResponse]) => {
+      analyticsApi.branchSummary(branchId, {
+        from: new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString(),
+        to: new Date().toISOString(),
+      }),
+    ]).then(([cameraResponse, alertResponse, summaryResponse]) => {
       const nextCameras = cameraResponse.data as CameraType[];
       setCameras(nextCameras);
       setCameraId(nextCameras[0]?.id ?? "");
       setAlerts(alertResponse.data as AnalyticsAlert[]);
       setSummary(alertResponse.summary as AnalyticsAlertSummary);
+      setObjectEvents((summaryResponse.events ?? [])
+        .filter((event) => event.detectionType === "object")
+        .slice(0, 100));
     }).catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
   }, [branchId, statusFilter]);
@@ -331,7 +352,7 @@ export function AnalyticsConsole() {
           onClick={() => void enableAllFleetCameraAi()} title="Enable all AI rules on all cameras across the entire fleet">
           <Sparkles size={14} /> Enable 100% Fleet AI ({automaticCapabilityCount})
         </button>
-        <button className="secondary-button" onClick={() => void Promise.all([refreshRules(), refreshAlerts()])}>
+        <button className="secondary-button" onClick={() => void Promise.all([refreshRules(), refreshAlerts(), refreshObjectEvents()])}>
           <RefreshCw size={14} /> Refresh
         </button>
       </section>
@@ -429,6 +450,37 @@ export function AnalyticsConsole() {
                       {alert.snapshotReference && <a href={dashboardEvidenceUrl(alert.snapshotReference)} target="_blank" rel="noreferrer"><ExternalLink size={13} />Snapshot</a>}
                     </div>
                   )}
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="analytics-card alerts-card">
+          <div className="analytics-card-heading">
+            <div>
+              <span className="eyebrow">OBJECT EVENTS · LAST 24 HOURS</span>
+              <h2>Detected objects</h2>
+              <p>Raw object detections, separate from alarms</p>
+            </div>
+            <Box size={20} />
+          </div>
+          {objectEvents.length === 0 ? (
+            <EmptyState icon={<Box />} title="No objects detected"
+              text="Detected objects will appear here when the AI engine receives a matching frame." />
+          ) : (
+            <div className="analytics-alert-list">
+              {objectEvents.map((event) => (
+                <article className="analytics-alert low" key={event.id}>
+                  <div className="alert-topline">
+                    <span className="severity-chip low">AI</span>
+                    <strong>{event.objects?.map((object) => object.label).filter(Boolean).join(", ") || "Object detected"}</strong>
+                  </div>
+                  <p>{cameraById.get(event.cameraId)?.name ?? "Camera"} · {Math.round(event.confidence * 100)}% confidence</p>
+                  <div className="alert-meta">
+                    <span><Clock3 size={12} />{new Date(event.occurredAt).toLocaleString()}</span>
+                    {event.objects && event.objects.length > 0 && <span>{event.objects.length} object{event.objects.length === 1 ? "" : "s"}</span>}
+                  </div>
                 </article>
               ))}
             </div>

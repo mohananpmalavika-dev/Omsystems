@@ -1140,6 +1140,14 @@ export type AnalyticsDashboardSummary = {
   activeRules: number;
   totalEvents: number;
   eventsByType: Record<string, number>;
+  events?: Array<{
+    id: string;
+    cameraId: string;
+    detectionType: string;
+    occurredAt: string;
+    confidence: number;
+    objects?: Array<{ label?: string; confidence?: number }>;
+  }>;
   truncated: boolean;
   branch: { id: string; name: string; eventCount: number };
 };
