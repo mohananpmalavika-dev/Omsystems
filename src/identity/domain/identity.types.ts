@@ -30,6 +30,17 @@ export const BankingPermissions = {
   PORTABLE_CAMERA_LOCATION_VIEW: 'portable_camera.location.view',
   PORTABLE_CAMERA_AUDIO_VIEW: 'portable_camera.audio.view',
 
+  // NBFC AI Analytics & Rule Engine
+  AI_RULE_VIEW: 'ai_rule.view',
+  AI_RULE_CREATE: 'ai_rule.create',
+  AI_RULE_EDIT: 'ai_rule.edit',
+  AI_RULE_APPROVE: 'ai_rule.approve',
+  AI_RULE_ACTIVATE: 'ai_rule.activate',
+  AI_RULE_DISABLE: 'ai_rule.disable',
+  AI_RULE_DELETE: 'ai_rule.delete',
+  AI_RULE_TEST: 'ai_rule.test',
+  AI_ZONE_MANAGE: 'ai_zone.manage',
+
   // Alerts & Incidents
   ALERT_VIEW: 'alert.view',
   ALERT_ACKNOWLEDGE: 'alert.acknowledge',
