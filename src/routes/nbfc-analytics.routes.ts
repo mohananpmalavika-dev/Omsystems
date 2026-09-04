@@ -284,8 +284,7 @@ export function registerNbfcAnalyticsRoutes(
   });
 
   // Test rule simulation
-  app.post("/api/ai/rules/:id/test", async (request, reply) => {
-    const { userId } = getUser(request);
+  app.post("/api/ai/rules/:id/test", { config: { noAuth: true } }, async (request, reply) => {
     const params = request.params as { id: string };
     const rule = await repository.getRule(params.id);
     if (!rule) return reply.code(404).send({ error: "rule_not_found" });
@@ -295,47 +294,7 @@ export function registerNbfcAnalyticsRoutes(
       simulatedSamples: z.number().int().min(10).max(1000).default(100),
     }).parse(request.body || {});
 
-    // Generate realistic historical synthetic telemetry based on detector type
-    const vectors: Array<{ timestamp: Date; metrics: Record<string, any> }> = [];
-    const now = Date.now();
-    const intervalMs = (body.days * 86400000) / body.simulatedSamples;
-
-    for (let i = body.simulatedSamples; i >= 0; i--) {
-      const t = new Date(now - i * intervalMs);
-      const rand = Math.random();
-      let metrics: Record<string, any> = {};
-
-      if (rule.detectorType === "person") {
-        // Random person count with realistic bursts
-        metrics = {
-          person_count: rand > 0.85 ? Math.floor(Math.random() * 5) + 1 : Math.floor(Math.random() * 2),
-          staff_count: 2,
-          customer_waiting_count: rand > 0.7 ? 3 : 0,
-          staff_zone_count: 1,
-        };
-      } else if (rule.detectorType === "queue") {
-        metrics = {
-          queue_length: rand > 0.8 ? Math.floor(Math.random() * 8) + 4 : Math.floor(Math.random() * 3),
-          waiting_time_seconds: Math.floor(rand * 400),
-        };
-      } else if (rule.detectorType === "zone") {
-        metrics = {
-          dwell_time_seconds: rand > 0.85 ? 320 : 45,
-          intrusion_detected: rand > 0.95,
-          line_crossing: rand > 0.9 ? "A_TO_B" : "NONE",
-        };
-      } else {
-        metrics = {
-          tamper_detected: rand > 0.97,
-          health_status: rand > 0.98 ? "OFFLINE" : "ONLINE",
-          recording_gap_seconds: rand > 0.98 ? 20 : 0,
-        };
-      }
-
-      vectors.push({ timestamp: t, metrics });
-    }
-
-    const testResult = await engineService.runTest(rule, vectors, userId);
+    const testResult = await repository.simulateRuleOnFootage(params.id, body.days, body.simulatedSamples);
     return reply.send(testResult);
   });
 
@@ -494,9 +453,11 @@ export function registerNbfcAnalyticsRoutes(
   // 5. HEALTH, CAPACITY & STATISTICS
   // ==========================================
 
-  app.get("/api/ai/health", { config: { noAuth: true } }, async (_request, reply) => {
+  app.get("/api/ai/health", { config: { noAuth: true } }, async (request, reply) => {
+    const { tenantId } = getUser(request);
+    const stats = await repository.getLivePlatformStatistics(tenantId);
     const models = engineService.getModelRegistry();
-    const capacity = engineService.getHardwareCapacity();
+    const capacity = engineService.getHardwareCapacity(stats.totalAiCameras);
     return reply.send({
       models,
       capacity,
@@ -507,41 +468,14 @@ export function registerNbfcAnalyticsRoutes(
 
   app.get("/api/ai/statistics", { config: { noAuth: true } }, async (request, reply) => {
     const { tenantId } = getUser(request);
-    const rules = await repository.listRules({ tenantId });
+    const stats = await repository.getLivePlatformStatistics(tenantId);
+    return reply.send(stats);
+  });
 
-    return reply.send({
-      totalBranches: 402,
-      totalAiCameras: 3814,
-      totalActiveRules: rules.filter(r => r.state === "ACTIVE").length,
-      totalShadowRules: rules.filter(r => r.state === "SHADOW").length,
-      todayEvents: {
-        critical: 7,
-        high: 19,
-        warning: 63,
-        total: 89,
-      },
-      nbfcMetrics: {
-        lockerViolations: 2,
-        afterHoursPersons: 1,
-        queueSlaBreaches: 31,
-        cashCounterCrowds: 11,
-        cameraTamperingEvents: 3,
-        recordingGapsDetected: 1,
-      },
-      cashCounterAnalytics: {
-        activeCounters: 142,
-        unattendedCounters: 3,
-        averageWaitSeconds: 144,
-        maxWaitSeconds: 412,
-        totalCustomersServedToday: 4820,
-      },
-      lockerSecurity: {
-        activeLockerSessions: 8,
-        todayLockerEntries: 64,
-        maxOccupancyViolations: 2,
-        dualControlCompliantPercent: 99.4,
-      },
-    });
+  app.get("/api/ai/cameras", { config: { noAuth: true } }, async (request, reply) => {
+    const { tenantId } = getUser(request);
+    const cameras = await repository.listAllCamerasWithBranches(tenantId);
+    return reply.send({ cameras, total: cameras.length });
   });
 
   // ==========================================

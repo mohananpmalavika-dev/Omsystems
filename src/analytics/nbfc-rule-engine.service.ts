@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import os from "node:os";
 import type {
   ActionType,
   AnalyticsRule,
@@ -799,16 +800,34 @@ export class NbfcRuleEngineService {
   /**
    * Hardware Capacity Planning Telemetry
    */
-  getHardwareCapacity(): CapacityPlanningInfo {
+  getHardwareCapacity(liveCameraCount?: number): CapacityPlanningInfo {
+    const cpus = os.cpus();
+    const loadAvg = os.loadavg();
+    // 1-minute load average normalized by core count
+    const cpuUsagePercent = cpus && cpus.length > 0
+      ? Math.min(100, Math.max(5, Math.round(((loadAvg[0] || 0.5) / cpus.length) * 1000) / 10))
+      : 25.0;
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const memUsagePercent = totalMem > 0
+      ? Math.round(((totalMem - freeMem) / totalMem) * 1000) / 10
+      : 42.5;
+
+    const activeStreams = liveCameraCount !== undefined ? liveCameraCount : 0;
+    const totalStreamsCapacity = Math.max(64, Math.ceil((activeStreams + 16) / 16) * 16);
+    const reservedStreams = Math.min(10, Math.max(0, Math.floor(activeStreams * 0.1)));
+    const availableStreams = Math.max(0, totalStreamsCapacity - activeStreams - reservedStreams);
+
     return {
-      gpuNodeId: "gpu-worker-aws-01",
-      totalStreamsCapacity: 64,
-      totalCapacityStreams: 64,
-      activeStreams: 38,
-      reservedStreams: 10,
-      availableStreams: 16,
-      cpuUsagePercent: 44.2,
-      gpuMemoryUsagePercent: 58.7,
+      gpuNodeId: "node-" + os.hostname(),
+      totalStreamsCapacity,
+      totalCapacityStreams: totalStreamsCapacity,
+      activeStreams,
+      reservedStreams,
+      availableStreams,
+      cpuUsagePercent,
+      gpuMemoryUsagePercent: memUsagePercent,
     };
   }
 

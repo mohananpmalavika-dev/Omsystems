@@ -206,6 +206,9 @@ export function NbfcRulesWorkspace() {
   const [templates, setTemplates] = useState<TemplateItem[]>([]);
   const [models, setModels] = useState<ModelHealthItem[]>([]);
   const [stats, setStats] = useState<StatisticsData | null>(null);
+  const [capacity, setCapacity] = useState<any>(null);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; code?: string }>>([]);
+  const [cameras, setCameras] = useState<Array<{ id: string; name: string; branchId?: string; branchName?: string }>>([]);
 
   // Modals & Drawers
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -224,8 +227,8 @@ export function NbfcRulesWorkspace() {
   const [builderForm, setBuilderForm] = useState({
     name: "",
     description: "",
-    branchId: "Kollam",
-    cameraId: "cam-locker-01",
+    branchId: "ALL",
+    cameraId: "ALL",
     zoneId: "",
     detectorType: "person",
     metric: "person_count",
@@ -248,7 +251,7 @@ export function NbfcRulesWorkspace() {
   });
 
   // Zone manager state
-  const [zoneCameraId, setZoneCameraId] = useState("cam-locker-01");
+  const [zoneCameraId, setZoneCameraId] = useState("");
   const [zoneName, setZoneName] = useState("Locker Interior");
   const [zoneType, setZoneType] = useState("LOCKER");
   const [drawnPoints, setDrawnPoints] = useState<{ x: number; y: number }[]>([]);
@@ -259,83 +262,39 @@ export function NbfcRulesWorkspace() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [rulesRes, zonesRes, tmplRes, healthRes, statsRes] = await Promise.all([
+      const [rulesRes, zonesRes, tmplRes, healthRes, statsRes, branchRes, cameraRes] = await Promise.all([
         aiFetch("/api/ai/rules").catch(() => ({ rules: [] })),
         aiFetch("/api/ai/zones").catch(() => ({ zones: [] })),
         aiFetch("/api/ai/rule-templates").catch(() => ({ templates: [] })),
-        aiFetch("/api/ai/health").catch(() => ({ models: [] })),
+        aiFetch("/api/ai/health").catch(() => ({ models: [], capacity: null })),
         aiFetch("/api/ai/statistics").catch(() => null),
+        fetch("/api/branches", { credentials: "include" })
+          .then((r) => (r.ok ? r.json() : { data: [] }))
+          .catch(() => ({ data: [] })),
+        aiFetch("/api/ai/cameras").catch(() => ({ cameras: [] })),
       ]);
 
-      if (rulesRes?.rules && rulesRes.rules.length > 0) {
+      if (rulesRes?.rules && Array.isArray(rulesRes.rules)) {
         setRules(rulesRes.rules);
       } else {
-        // Fallback sample rules for instant UI hydration
-        setRules([
-          {
-            id: "rule-sample-01",
-            name: "Locker Maximum Occupancy",
-            description: "Alerts when more than 2 persons are inside the secure vault area.",
-            enabled: true,
-            state: "ACTIVE",
-            branchIds: ["Kollam"],
-            cameraIds: ["cam-locker-01"],
-            detectorType: "person",
-            condition: { metric: "person_count", operator: "GREATER_THAN", value: 2 },
-            durationMs: 5000,
-            schedule: { type: "BUSINESS_HOURS" },
-            severity: "CRITICAL",
-            cooldownMs: 60000,
-            actions: ["CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT", "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC"],
-            version: 1,
-            scopeType: "CAMERA",
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: "rule-sample-02",
-            name: "Cash Counter Crowd",
-            description: "Warns if queue/crowd in front of counter 2 exceeds 5 persons for > 60 seconds.",
-            enabled: true,
-            state: "ACTIVE",
-            branchIds: ["Kollam"],
-            cameraIds: ["cam-counter-02"],
-            detectorType: "crowd-density",
-            condition: { metric: "person_count", operator: "GREATER_THAN", value: 5 },
-            durationMs: 60000,
-            schedule: { type: "BUSINESS_HOURS" },
-            severity: "WARNING" as any,
-            cooldownMs: 120000,
-            actions: ["CREATE_ALERT", "NOTIFY_BRANCH_MANAGER"],
-            version: 1,
-            scopeType: "CAMERA",
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: "rule-sample-03",
-            name: "After-hours Presence",
-            description: "Critical alert if any person is observed in branch hall or vault after 19:00.",
-            enabled: true,
-            state: "ACTIVE",
-            branchIds: ["Kollam"],
-            cameraIds: ["cam-hall-01"],
-            detectorType: "person",
-            condition: { metric: "person_count", operator: "GREATER_THAN_OR_EQUAL", value: 1 },
-            durationMs: 3000,
-            schedule: { type: "AFTER_HOURS" },
-            severity: "CRITICAL",
-            cooldownMs: 30000,
-            actions: ["CREATE_ALERT", "CREATE_INCIDENT", "POPUP_LIVE_VIEW", "NOTIFY_SOC"],
-            version: 1,
-            scopeType: "BRANCH",
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+        setRules([]);
       }
 
       if (zonesRes?.zones) setZones(zonesRes.zones);
       if (tmplRes?.templates) setTemplates(tmplRes.templates);
       if (healthRes?.models) setModels(healthRes.models);
-      if (statsRes && statsRes.todayEvents) setStats(statsRes);
+      if (healthRes?.capacity) setCapacity(healthRes.capacity);
+      if (statsRes) setStats(statsRes);
+
+      if (branchRes?.data && Array.isArray(branchRes.data)) {
+        setBranches(branchRes.data);
+      }
+      if (cameraRes?.cameras && Array.isArray(cameraRes.cameras)) {
+        setCameras(cameraRes.cameras);
+        if (cameraRes.cameras.length > 0 && !zoneCameraId) {
+          setZoneCameraId(cameraRes.cameras[0].id);
+        }
+      }
     } catch (e) {
       console.error("Failed to load AI rules workspace data:", e);
     } finally {
@@ -368,8 +327,8 @@ export function NbfcRulesWorkspace() {
     setBuilderForm({
       name: "",
       description: "",
-      branchId: "Kollam",
-      cameraId: "cam-locker-01",
+      branchId: "ALL",
+      cameraId: "ALL",
       zoneId: "",
       detectorType: "person",
       metric: "person_count",
@@ -400,8 +359,8 @@ export function NbfcRulesWorkspace() {
     setBuilderForm({
       name: tmpl.name,
       description: tmpl.description,
-      branchId: "Kollam",
-      cameraId: "cam-locker-01",
+      branchId: "ALL",
+      cameraId: "ALL",
       zoneId: "",
       detectorType: tmpl.detectorType,
       metric: cond.metric || "person_count",
@@ -432,8 +391,8 @@ export function NbfcRulesWorkspace() {
     setBuilderForm({
       name: r.name,
       description: r.description || "",
-      branchId: r.branchIds?.[0] || "Kollam",
-      cameraId: r.cameraIds?.[0] || "cam-locker-01",
+      branchId: r.branchIds?.[0] || "ALL",
+      cameraId: r.cameraIds?.[0] || "ALL",
       zoneId: r.zoneId || "",
       detectorType: r.detectorType,
       metric: cond.metric || "person_count",
@@ -470,11 +429,16 @@ export function NbfcRulesWorkspace() {
     if (builderForm.actionNotifySoc) actions.push("NOTIFY_SOC");
     if (builderForm.actionNotifyBranch) actions.push("NOTIFY_BRANCH_MANAGER");
 
+    const branchIds = builderForm.branchId === "ALL" ? [] : [builderForm.branchId];
+    const cameraIds = builderForm.cameraId === "ALL" ? [] : [builderForm.cameraId];
+    const scopeType = cameraIds.length > 0 ? "CAMERA" : branchIds.length > 0 ? "BRANCH" : "GLOBAL";
+
     const payload = {
       name: builderForm.name,
       description: builderForm.description,
-      branchIds: [builderForm.branchId],
-      cameraIds: [builderForm.cameraId],
+      branchIds,
+      cameraIds,
+      scopeType,
       zoneId: builderForm.zoneId || undefined,
       detectorType: builderForm.detectorType,
       condition: {
@@ -719,7 +683,7 @@ export function NbfcRulesWorkspace() {
                 </span>
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">
-                No-code visual rule engine, zone perimeter designer, and 37 pre-configured banking security templates
+                No-code visual rule engine, zone perimeter designer, and {templates.length || 37} pre-configured banking security templates
               </p>
             </div>
           </div>
@@ -792,7 +756,7 @@ export function NbfcRulesWorkspace() {
                 <span>Fleet Branches</span>
                 <Building2 className="w-4 h-4 text-blue-400" />
               </div>
-              <p className="text-2xl font-bold text-white mt-2">{stats?.totalBranches ?? 402}</p>
+              <p className="text-2xl font-bold text-white mt-2">{stats?.totalBranches ?? branches.length}</p>
               <p className="text-xs text-green-400 mt-1 flex items-center gap-1">
                 <span>100% Monitored</span>
               </p>
@@ -803,7 +767,7 @@ export function NbfcRulesWorkspace() {
                 <span>Active AI Cameras</span>
                 <Camera className="w-4 h-4 text-emerald-400" />
               </div>
-              <p className="text-2xl font-bold text-white mt-2">{stats?.totalAiCameras ?? "3,814"}</p>
+              <p className="text-2xl font-bold text-white mt-2">{stats?.totalAiCameras ?? cameras.length}</p>
               <p className="text-xs text-gray-400 mt-1">Edge inference live</p>
             </div>
 
@@ -823,9 +787,9 @@ export function NbfcRulesWorkspace() {
                 <span>Today's Critical Alerts</span>
                 <AlertOctagon className="w-4 h-4 text-red-400" />
               </div>
-              <p className="text-2xl font-bold text-red-400 mt-2">{stats?.todayEvents?.critical ?? 7}</p>
+              <p className="text-2xl font-bold text-red-400 mt-2">{stats?.todayEvents?.critical ?? 0}</p>
               <p className="text-xs text-yellow-400 mt-1">
-                {stats?.todayEvents?.high ?? 19} high, {stats?.todayEvents?.warning ?? 63} warning
+                {stats?.todayEvents?.high ?? 0} high, {stats?.todayEvents?.warning ?? 0} warning
               </p>
             </div>
           </div>
@@ -847,24 +811,24 @@ export function NbfcRulesWorkspace() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Current Occupancy</span>
-                  <p className="text-lg font-bold text-white mt-1">0 Persons (Secure)</p>
+                  <p className="text-lg font-bold text-white mt-1">{stats?.lockerSecurity?.activeLockerSessions ?? 0} Vault Zones</p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Today's Locker Visits</span>
-                  <p className="text-lg font-bold text-white mt-1">64 Sessions</p>
+                  <p className="text-lg font-bold text-white mt-1">{stats?.lockerSecurity?.todayLockerEntries ?? 0} Sessions</p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Occupancy Violations (&gt;2)</span>
-                  <p className="text-lg font-bold text-red-400 mt-1">2 Intercepted</p>
+                  <p className="text-lg font-bold text-red-400 mt-1">{stats?.nbfcMetrics?.lockerViolations ?? 0} Intercepted</p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Dual-Control Compliance</span>
-                  <p className="text-lg font-bold text-emerald-400 mt-1">99.4% Staffed</p>
+                  <p className="text-lg font-bold text-emerald-400 mt-1">{stats?.lockerSecurity?.dualControlCompliantPercent ?? 100}% Staffed</p>
                 </div>
               </div>
 
               <div className="text-xs text-gray-400 bg-gray-800/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
-                <span>After-hours Motion Status: <strong className="text-emerald-400">ARMED (0 Detections)</strong></span>
+                <span>After-hours Motion Status: <strong className="text-emerald-400">{stats?.nbfcMetrics?.afterHoursPersons ? `${stats.nbfcMetrics.afterHoursPersons} Detected` : "ARMED (0 Detections)"}</strong></span>
                 <span>Last Verified Segment: <strong className="text-gray-200">2s ago</strong></span>
               </div>
             </div>
@@ -884,25 +848,29 @@ export function NbfcRulesWorkspace() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Active Counters</span>
-                  <p className="text-lg font-bold text-white mt-1">142 Operating</p>
+                  <p className="text-lg font-bold text-white mt-1">{stats?.cashCounterAnalytics?.activeCounters ?? 0} Operating</p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Unattended Alerts (&gt;2m)</span>
-                  <p className="text-lg font-bold text-yellow-400 mt-1">3 Alerts</p>
+                  <p className="text-lg font-bold text-yellow-400 mt-1">{stats?.cashCounterAnalytics?.unattendedCounters ?? 0} Alerts</p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Average Wait Time</span>
-                  <p className="text-lg font-bold text-emerald-400 mt-1">2m 24s</p>
+                  <p className="text-lg font-bold text-emerald-400 mt-1">
+                    {stats?.cashCounterAnalytics?.averageWaitSeconds
+                      ? `${Math.floor(stats.cashCounterAnalytics.averageWaitSeconds / 60)}m ${stats.cashCounterAnalytics.averageWaitSeconds % 60}s`
+                      : "0m 0s"}
+                  </p>
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Customers Served Today</span>
-                  <p className="text-lg font-bold text-white mt-1">4,820</p>
+                  <p className="text-lg font-bold text-white mt-1">{stats?.cashCounterAnalytics?.totalCustomersServedToday ?? 0}</p>
                 </div>
               </div>
 
               <div className="text-xs text-gray-400 bg-gray-800/20 p-3 rounded-lg border border-gray-800 flex items-center justify-between">
                 <span>Queue SLA Limit: <strong className="text-gray-200">&lt; 8 Persons</strong></span>
-                <span>Max Peak Wait: <strong className="text-yellow-400">6m 52s (11:30 AM)</strong></span>
+                <span>Max Peak Wait: <strong className="text-yellow-400">{stats?.cashCounterAnalytics?.maxWaitSeconds ? `${Math.floor(stats.cashCounterAnalytics.maxWaitSeconds / 60)}m ${stats.cashCounterAnalytics.maxWaitSeconds % 60}s` : "Nominal"}</strong></span>
               </div>
             </div>
           </div>
@@ -931,10 +899,12 @@ export function NbfcRulesWorkspace() {
                 onChange={(e) => setSelectedBranch(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
               >
-                <option value="ALL">Branch: All Branches</option>
-                <option value="Kollam">Kollam Central</option>
-                <option value="Trivandrum">Trivandrum Main</option>
-                <option value="Kochi">Kochi Hub</option>
+                <option value="ALL">Branch: All Branches ({branches.length})</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id || b.name}>
+                    {b.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -944,10 +914,14 @@ export function NbfcRulesWorkspace() {
                 onChange={(e) => setSelectedCamera(e.target.value)}
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-500"
               >
-                <option value="ALL">Camera: All Cameras</option>
-                <option value="cam-locker-01">Locker Camera 01</option>
-                <option value="cam-counter-02">Counter Cam 02</option>
-                <option value="cam-hall-01">Branch Hall Cam</option>
+                <option value="ALL">Camera: All Cameras ({cameras.length})</option>
+                {cameras
+                  .filter((c) => selectedBranch === "ALL" || !c.branchId || c.branchId === selectedBranch)
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.branchName ? `(${c.branchName})` : ""}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -988,7 +962,7 @@ export function NbfcRulesWorkspace() {
               <div className="text-center py-12 bg-gray-900/40 border border-gray-800 rounded-xl text-gray-400">
                 <SlidersHorizontal className="w-10 h-10 mx-auto text-gray-600 mb-3" />
                 <p className="text-base font-medium text-gray-300">No matching AI rules found</p>
-                <p className="text-xs text-gray-500 mt-1">Try clearing your filters or create a rule from our 36 templates.</p>
+                <p className="text-xs text-gray-500 mt-1">Try clearing your filters or create a rule from our {templates.length || 37} templates.</p>
                 <button
                   onClick={handleOpenCreateRule}
                   className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-medium"
@@ -1206,9 +1180,15 @@ export function NbfcRulesWorkspace() {
                     onChange={(e) => setZoneCameraId(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2 text-white focus:outline-none"
                   >
-                    <option value="cam-locker-01">Locker Camera 01 (Vault)</option>
-                    <option value="cam-counter-02">Cash Counter Cam 02</option>
-                    <option value="cam-hall-01">Branch Entrance & Hall</option>
+                    {cameras.length === 0 ? (
+                      <option value="">No cameras enrolled</option>
+                    ) : (
+                      cameras.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} {c.branchName ? `(${c.branchName})` : ""}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
 
@@ -1281,12 +1261,12 @@ export function NbfcRulesWorkspace() {
         </div>
       )}
 
-      {/* TAB 4: RULE TEMPLATES (ALL 36 NBFC TEMPLATES) */}
+      {/* TAB 4: RULE TEMPLATES (ALL NBFC TEMPLATES) */}
       {activeTab === "templates" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white">36 Built-in NBFC Surveillance Templates</h2>
+              <h2 className="text-lg font-bold text-white">{templates.length || 37} Built-in NBFC Surveillance Templates</h2>
               <p className="text-xs text-gray-400 mt-0.5">
                 Standard banking & gold loan branch rules ready for 1-click instantiation and threshold tuning.
               </p>
@@ -1355,29 +1335,69 @@ export function NbfcRulesWorkspace() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">Total Stream Capacity</span>
-              <p className="text-2xl font-bold text-white mt-1">64 Channels</p>
+              <p className="text-2xl font-bold text-white mt-1">
+                {capacity?.totalStreamsCapacity ?? (stats?.totalAiCameras ? Math.max(64, stats.totalAiCameras + 16) : 64)} Channels
+              </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
-                <div className="bg-emerald-500 h-full w-[60%]" />
+                <div
+                  className="bg-emerald-500 h-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(
+                        5,
+                        Math.round(
+                          (((capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) + (capacity?.reservedStreams ?? 0)) /
+                            (capacity?.totalStreamsCapacity || 64)) *
+                            100
+                        )
+                      )
+                    )}%`,
+                  }}
+                />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">38 active, 10 reserved, 16 available</p>
+              <p className="text-[11px] text-gray-400 mt-2">
+                {capacity?.activeStreams ?? stats?.totalAiCameras ?? 0} active, {capacity?.reservedStreams ?? 0} reserved,{" "}
+                {Math.max(
+                  0,
+                  (capacity?.totalStreamsCapacity ?? (stats?.totalAiCameras ? Math.max(64, stats.totalAiCameras + 16) : 64)) -
+                    (capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) -
+                    (capacity?.reservedStreams ?? 0)
+                )}{" "}
+                available
+              </p>
             </div>
 
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">CPU Ingestion Utilization</span>
-              <p className="text-2xl font-bold text-white mt-1">44.2%</p>
+              <p className="text-2xl font-bold text-white mt-1">
+                {capacity?.cpuUsagePercent !== undefined ? `${capacity.cpuUsagePercent}%` : "14.2%"}
+              </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
-                <div className="bg-blue-500 h-full w-[44.2%]" />
+                <div
+                  className="bg-blue-500 h-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(5, capacity?.cpuUsagePercent ?? 14.2))}%` }}
+                />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">Nominal thermal state</p>
+              <p className="text-[11px] text-gray-400 mt-2">
+                {capacity?.cpuUsagePercent && capacity.cpuUsagePercent > 80 ? "Elevated workload" : "Nominal thermal state"}
+              </p>
             </div>
 
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
-              <span className="text-xs text-gray-400">GPU Acceleration Allocation</span>
-              <p className="text-2xl font-bold text-white mt-1">58.7%</p>
+              <span className="text-xs text-gray-400">Memory & Hardware Allocation</span>
+              <p className="text-2xl font-bold text-white mt-1">
+                {capacity?.gpuMemoryUsagePercent !== undefined ? `${capacity.gpuMemoryUsagePercent}%` : "28.5%"}
+              </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
-                <div className="bg-purple-500 h-full w-[58.7%]" />
+                <div
+                  className="bg-purple-500 h-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(5, capacity?.gpuMemoryUsagePercent ?? 28.5))}%` }}
+                />
               </div>
-              <p className="text-[11px] text-gray-400 mt-2">NVIDIA T4 Tensor Cores Active</p>
+              <p className="text-[11px] text-gray-400 mt-2">
+                {capacity?.gpuNodeId ? `Node: ${capacity.gpuNodeId}` : "Hardware acceleration active"}
+              </p>
             </div>
           </div>
 
@@ -1452,20 +1472,26 @@ export function NbfcRulesWorkspace() {
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-              {rules.map((r) => (
-                <div key={r.id} className="bg-gray-800/40 p-3 rounded-lg border border-gray-700/60 flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-semibold text-white">{r.name}</p>
-                    <p className="text-gray-400">{r.detectorType} • v{r.version}</p>
-                  </div>
-                  <button
-                    onClick={() => handleRunTest(r)}
-                    className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded font-medium"
-                  >
-                    Run Simulation
-                  </button>
+              {rules.length === 0 ? (
+                <div className="col-span-3 text-center py-8 text-gray-500 text-xs bg-gray-800/20 rounded-lg border border-dashed border-gray-800">
+                  No active rules configured yet. Create a rule or instantiate one from templates above to run simulations.
                 </div>
-              ))}
+              ) : (
+                rules.map((r) => (
+                  <div key={r.id} className="bg-gray-800/40 p-3 rounded-lg border border-gray-700/60 flex justify-between items-center text-xs">
+                    <div>
+                      <p className="font-semibold text-white">{r.name}</p>
+                      <p className="text-gray-400">{r.detectorType} • v{r.version}</p>
+                    </div>
+                    <button
+                      onClick={() => handleRunTest(r)}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded font-medium transition"
+                    >
+                      Run Simulation
+                    </button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -1512,9 +1538,12 @@ export function NbfcRulesWorkspace() {
                       onChange={(e) => setBuilderForm({ ...builderForm, branchId: e.target.value })}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
                     >
-                      <option value="Kollam">Kollam Central</option>
-                      <option value="Trivandrum">Trivandrum Main</option>
-                      <option value="Kochi">Kochi Hub</option>
+                      <option value="ALL">All Branches (Global Fleet Policy)</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} {b.code ? `(${b.code})` : ""}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1527,9 +1556,20 @@ export function NbfcRulesWorkspace() {
                       onChange={(e) => setBuilderForm({ ...builderForm, cameraId: e.target.value })}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-red-500"
                     >
-                      <option value="cam-locker-01">Locker Camera 01 (Vault)</option>
-                      <option value="cam-counter-02">Counter Cam 02 (Cash)</option>
-                      <option value="cam-hall-01">Branch Hall Cam</option>
+                      <option value="ALL">All Cameras (Fleet-Wide Application)</option>
+                      {cameras
+                        .filter(
+                          (c) =>
+                            builderForm.branchId === "ALL" ||
+                            !builderForm.branchId ||
+                            !c.branchId ||
+                            c.branchId === builderForm.branchId
+                        )
+                        .map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.branchName ? `(${c.branchName})` : ""}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
