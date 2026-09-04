@@ -616,10 +616,11 @@ export class NbfcRuleRepository {
       detectorType: template.detectorType,
       condition: conditionOverrides || template.defaultCondition,
       durationMs: durationMs !== undefined ? durationMs : template.defaultDurationMs,
-      severity: severity || template.defaultSeverity,
+      severity: (severity || (template.defaultSeverity === ("WARNING" as any) ? "MEDIUM" : template.defaultSeverity)) as any,
       cooldownMs: cooldownMs !== undefined ? cooldownMs : template.defaultCooldownMs,
       actions: actions || template.defaultActions,
       templateId: template.id,
+      scopeType: (branchIds && branchIds.length > 0 ? "BRANCH" : (cameraIds && cameraIds.length > 0 ? "CAMERA" : "GLOBAL")) as any,
       schedule: { type: template.suggestedSchedule },
       createdBy,
     }, `Created from template: ${template.name}`);

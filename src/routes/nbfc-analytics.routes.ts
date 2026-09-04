@@ -107,6 +107,62 @@ export function registerNbfcAnalyticsRoutes(
     return reply.code(201).send(rule);
   });
 
+  // Enable all NBFC rule templates across all cameras
+  app.post("/api/ai/rules/apply-all-templates", { config: { noAuth: true } }, async (request, reply) => {
+    const { tenantId, userId } = getUser(request);
+    const templates = await repository.listTemplates();
+    const existingRules = await repository.listRules({ tenantId });
+    const existingTemplateIds = new Set(existingRules.map((r) => r.templateId).filter(Boolean));
+
+    const newlyInstantiated: any[] = [];
+    for (const tmpl of templates) {
+      if (!existingTemplateIds.has(tmpl.id)) {
+        try {
+          const rule = await repository.instantiateTemplate(tmpl.id, {
+            tenantId,
+            name: tmpl.name,
+            branchIds: [],
+            cameraIds: [],
+            createdBy: userId,
+          });
+          newlyInstantiated.push(rule);
+        } catch (e) {
+          console.warn(`Failed to instantiate template ${tmpl.id}:`, e);
+        }
+      }
+    }
+
+    // Ensure all existing rules are active and enabled
+    for (const rule of existingRules) {
+      if (!rule.enabled || rule.state !== "ACTIVE") {
+        await repository.updateRule(rule.id, { enabled: true, state: "ACTIVE" }, "Batch enabled for all cameras", userId);
+      }
+    }
+
+    immutableAuditService.append({
+      tenantId,
+      category: "CONFIG_CHANGED",
+      action: "ai_rules.all_enabled_for_all_cameras",
+      actorUserId: userId,
+      actorRoles: ["admin"],
+      targetResourceType: "AI_RULE",
+      targetResourceId: "all",
+      outcome: "SUCCESS",
+      metadata: { totalTemplates: templates.length, newlyInstantiated: newlyInstantiated.length },
+      timestamp: new Date().toISOString(),
+    });
+
+    const allRules = await repository.listRules({ tenantId });
+
+    return reply.send({
+      success: true,
+      message: `All ${templates.length} NBFC rules enabled across all cameras`,
+      totalTemplates: templates.length,
+      newlyInstantiated: newlyInstantiated.length,
+      totalActiveRules: allRules.filter((r) => r.state === "ACTIVE").length,
+    });
+  });
+
   // Get rule details
   app.get("/api/ai/rules/:id", { config: { noAuth: true } }, async (request, reply) => {
     const params = request.params as { id: string };
