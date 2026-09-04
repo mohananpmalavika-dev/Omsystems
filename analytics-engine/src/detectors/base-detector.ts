@@ -117,6 +117,7 @@ export interface DetectionResult {
   status?: ExecutionStatus;
   provenance?: ResultProvenance;
   confidence: number | null;
+  durationSeconds?: number;
   objects: DetectedObject[];
   metadata?: Record<string, unknown>;
   executionMetadata?: AIExecutionMetadata;
