@@ -305,6 +305,7 @@ export default function ControlRoomPage() {
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
   const [showAiOverlays, setShowAiOverlays] = useState(true);
   const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(true);
+  const [hideUnavailableChannels, setHideUnavailableChannels] = useState(true);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();
   
@@ -482,6 +483,7 @@ export default function ControlRoomPage() {
     const query = searchQuery.trim().toLowerCase();
 
     return cameras.filter((camera) => {
+      if (hideUnavailableChannels && camera.status === "offline") return false;
       const bId = camera.branchId || "default-branch";
       const bName = camera.branchName || `Branch ${bId}`;
       const { zone, region, area } = inferHierarchy(bName, camera.name);
@@ -524,6 +526,7 @@ export default function ControlRoomPage() {
     statusFilter,
     searchQuery,
     combinedPriorityCameraIds,
+    hideUnavailableChannels,
   ]);
 
   // Active filter count
@@ -935,6 +938,15 @@ export default function ControlRoomPage() {
               aria-pressed={prioritizeAiAlerts}
             >
               <Activity size={12} /> AI priority {prioritizeAiAlerts ? "on" : "off"}
+            </button>
+            <button
+              type="button"
+              className={hideUnavailableChannels ? "active" : ""}
+              onClick={() => setHideUnavailableChannels((current) => !current)}
+              aria-pressed={hideUnavailableChannels}
+              title="Hide camera channels that are offline or unavailable"
+            >
+              <Video size={12} /> Unavailable {hideUnavailableChannels ? "hidden" : "shown"}
             </button>
             <button type="button" className="open-ai-panel" onClick={() => setAiPanelOpen(true)}>
               {liveAi.summary.open} detection{liveAi.summary.open === 1 ? "" : "s"} <ChevronRight size={12} />
