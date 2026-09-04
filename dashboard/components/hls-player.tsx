@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw } from "lucide-react";
 
 const MAX_RECOVERY_ATTEMPTS = 8;
-const STALL_TIMEOUT_MS = 25_000;
-const RECOVERY_DELAY_MS = 1_500;
+const STALL_TIMEOUT_MS = 8_000;
+const RECOVERY_DELAY_MS = 1_000;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
@@ -192,18 +192,19 @@ export function HlsPlayer({
     if (Hls.isSupported()) {
       try {
         hls = new Hls({
-          // The public feed crosses a tunnel; a normal buffered HLS window
-          // avoids LL-HLS partial-playlist stalls on that path.
+          // Keeping a lean buffer window prevents 1-minute drift and browser memory stutter
           lowLatencyMode: false,
-          backBufferLength: 15,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-          liveSyncDurationCount: 4,
-          liveMaxLatencyDurationCount: 10,
-          maxLiveSyncPlaybackRate: 1.0,
-          fragLoadingTimeOut: 20_000,
+          backBufferLength: 4,
+          maxBufferLength: 8,
+          maxMaxBufferLength: 12,
+          liveSyncDurationCount: 2,
+          liveMaxLatencyDurationCount: 4,
+          maxLiveSyncPlaybackRate: 1.15,
+          liveDurationInfinity: true,
+          highBufferWatchdogPeriod: 2,
+          fragLoadingTimeOut: 15_000,
           fragLoadingMaxRetry: 4,
-          manifestLoadingTimeOut: 20_000,
+          manifestLoadingTimeOut: 15_000,
           manifestLoadingMaxRetry: 4,
           xhrSetup: (xhr, requestUrl) => {
             xhr.withCredentials = true;
@@ -259,11 +260,52 @@ export function HlsPlayer({
 
     watchdogTimer = setInterval(() => {
       if (!playbackStarted || video.paused) return;
-      if (Date.now() - lastProgressAt >= STALL_TIMEOUT_MS) recover("playback_stalled");
-    }, 3_000);
+      if (Date.now() - lastProgressAt >= STALL_TIMEOUT_MS) {
+        recover("playback_stalled");
+        return;
+      }
+
+      // Automatically snap to live edge if playback drifted behind
+      if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
+        const drift = hls.liveSyncPosition - video.currentTime;
+        if (drift > 8) {
+          try {
+            video.currentTime = hls.liveSyncPosition;
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }, 2_000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && video && !video.paused) {
+        if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
+          const drift = hls.liveSyncPosition - video.currentTime;
+          if (drift > 4) {
+            try {
+              video.currentTime = hls.liveSyncPosition;
+            } catch {
+              // ignore
+            }
+          }
+        } else if (video.buffered.length > 0) {
+          const end = video.buffered.end(video.buffered.length - 1);
+          if (end - video.currentTime > 4) {
+            try {
+              video.currentTime = Math.max(0, end - 1);
+            } catch {
+              // ignore
+            }
+          }
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (recoveryTimer) clearTimeout(recoveryTimer);
       if (watchdogTimer) clearInterval(watchdogTimer);
       video.removeEventListener("playing", markProgress);

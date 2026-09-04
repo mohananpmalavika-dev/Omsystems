@@ -15,7 +15,7 @@ hlsAddress: :8888
 # Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
 # blocking playlist/partial-segment requests.
 hlsVariant: mpegts
-hlsSegmentCount: 20
+hlsSegmentCount: 5
 hlsSegmentDuration: 2s
 hlsPartDuration: 500ms
 hlsAllowOrigins:

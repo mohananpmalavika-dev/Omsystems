@@ -400,9 +400,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(navigation.map((g) => g.label))
-  );
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
   const [recentHrefs, setRecentHrefs] = useState<string[]>([]);
   const [operator, setOperator] = useState<(MenuAccessUser & {
     displayName?: string;
@@ -427,13 +425,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       })
       .catch(() => {});
     try {
-      const stored = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setOpenGroups(new Set(parsed));
-        }
-      }
+      window.localStorage.removeItem(OPEN_GROUPS_STORAGE_KEY);
     } catch {}
   }, []);
 
@@ -509,28 +501,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, []);
 
   useEffect(() => {
-    try {
-      const storedGroups = JSON.parse(window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY) || "[]");
-      const validGroups = Array.isArray(storedGroups) && storedGroups.length > 0
-        ? storedGroups.filter((label): label is string => visibleNavigation.some((group) => group.label === label))
-        : visibleNavigation.map((group) => group.label);
-      if (activeGroup && !validGroups.includes(activeGroup.label)) validGroups.push(activeGroup.label);
-      setOpenGroups(new Set(validGroups));
-    } catch {
-      setOpenGroups(new Set(visibleNavigation.map((group) => group.label)));
+    if (activeGroup) {
+      setOpenGroups(new Set([activeGroup.label]));
+    } else {
+      setOpenGroups(new Set());
     }
-  }, [visibleNavigation]);
-
-
-  useEffect(() => {
-    if (!activeGroup) return;
-    setOpenGroups((current) => {
-      if (current.has(activeGroup.label)) return current;
-      const next = new Set(current).add(activeGroup.label);
-      window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
-      return next;
-    });
-  }, [activeGroup?.label]);
+  }, [pathname, activeGroup?.label]);
 
   useEffect(() => {
     try {
@@ -719,9 +695,11 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     } catch {}
   };
   const toggleAllGroups = () => {
-    persistOpenGroups(allGroupsOpen
-      ? new Set(activeGroup ? [activeGroup.label] : [])
-      : new Set(visibleNavigation.map((group) => group.label)));
+    setOpenGroups((prev) =>
+      prev.size > 0
+        ? new Set()
+        : new Set(activeGroup ? [activeGroup.label] : visibleNavigation.map((group) => group.label))
+    );
   };
   const openCommandResult = (href: string) => {
     setCommandOpen(false);
@@ -821,23 +799,16 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               key={group.label}
               open={openGroups.has(group.label)}
               suppressHydrationWarning
-              onToggle={(event) => {
-                const isOpen = event.currentTarget.open;
-                setOpenGroups((prev) => {
-                  const next = new Set(prev);
-                  if (isOpen) {
-                    next.add(group.label);
-                  } else {
-                    next.delete(group.label);
-                  }
-                  try {
-                    window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
-                  } catch {}
-                  return next;
-                });
-              }}
             >
-              <summary>
+              <summary
+                onClick={(e) => {
+                  e.preventDefault();
+                  setOpenGroups((prev) => {
+                    const isAlreadyOpen = prev.has(group.label);
+                    return isAlreadyOpen ? new Set() : new Set([group.label]);
+                  });
+                }}
+              >
                 <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{group.label}</span></span>
                 <span className="nav-group-meta"><small>{items.length}</small><ChevronRight size={13} /></span>
               </summary>
