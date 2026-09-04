@@ -265,9 +265,24 @@ export function DeviceManager() {
   const [stoppingSession, setStoppingSession] = useState(false);
   const [revokingDevice, setRevokingDevice] = useState(false);
 
+  function getPortableAuthHeaders(extra: Record<string, string> = {}) {
+    const token = typeof window !== "undefined"
+      ? localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")
+      : null;
+    const h: Record<string, string> = { ...extra };
+    if (token) {
+      h["Authorization"] = `Bearer ${token}`;
+      h["x-sentinel-session"] = token;
+    }
+    return h;
+  }
+
   async function loadPortableDevices() {
     try {
-      const res = await fetch("/api/portable-camera/devices");
+      const res = await fetch("/api/portable-camera/devices", {
+        credentials: "include",
+        headers: getPortableAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setPortableDevices(data.devices || []);
@@ -280,7 +295,8 @@ export function DeviceManager() {
     try {
       const res = await fetch("/api/portable-camera/enrollments", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        credentials: "include",
+        headers: getPortableAuthHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ branchId: selectedBranch || undefined }),
       });
       if (res.ok) {
@@ -302,7 +318,11 @@ export function DeviceManager() {
     if (!confirm("Are you sure you want to revoke this portable device? It will be disconnected immediately.")) return;
     setRevokingDevice(true);
     try {
-      await fetch(`/api/portable-camera/devices/${deviceId}/revoke`, { method: "POST" });
+      await fetch(`/api/portable-camera/devices/${deviceId}/revoke`, {
+        method: "POST",
+        credentials: "include",
+        headers: getPortableAuthHeaders(),
+      });
       await loadPortableDevices();
       setSelectedPortableDevice(null);
     } catch (e) {
@@ -317,7 +337,8 @@ export function DeviceManager() {
     try {
       await fetch(`/api/portable-camera/sessions/${sessionId}/stop`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        credentials: "include",
+        headers: getPortableAuthHeaders({ "content-type": "application/json" }),
         body: JSON.stringify({ reason: "operator_stopped_from_device_manager" }),
       });
       await loadPortableDevices();

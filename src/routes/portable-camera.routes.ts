@@ -64,7 +64,10 @@ export function registerPortableCameraRoutes(
       expiresInSeconds: body.expiresInSeconds,
     });
 
-    const enrollmentUrl = `${publicDashboardUrl.replace(/\/+$/, "")}/portable-camera/enroll?token=${enrollment.token}`;
+    const host = (request.headers["x-forwarded-host"] as string) || (request.headers["host"] as string);
+    const proto = (request.headers["x-forwarded-proto"] as string) || "https";
+    const baseUrl = host ? `${proto}://${host}` : publicDashboardUrl.replace(/\/+$/, "");
+    const enrollmentUrl = `${baseUrl}/portable-camera/enroll?token=${enrollment.token}`;
 
     immutableAuditService.append({
       category: "PORTABLE_CAMERA_EVENT",
@@ -95,7 +98,7 @@ export function registerPortableCameraRoutes(
   });
 
   // 2. Validate Enrollment Token (Mobile/Browser landing page)
-  app.get("/api/portable-camera/enrollments/:token", async (request, reply) => {
+  app.get("/api/portable-camera/enrollments/:token", { config: { noAuth: true } }, async (request, reply) => {
     const { token } = z.object({ token: z.string().min(1) }).parse(request.params);
     const enrollment = await repository.getEnrollment(token);
 
@@ -122,7 +125,7 @@ export function registerPortableCameraRoutes(
   });
 
   // 3. Complete Enrollment: Register Device & Create Camera
-  app.post("/api/portable-camera/enroll", async (request, reply) => {
+  app.post("/api/portable-camera/enroll", { config: { noAuth: true } }, async (request, reply) => {
     const body = z.object({
       token: z.string().min(1),
       deviceType: z.enum(["ANDROID", "IOS", "WINDOWS", "BROWSER"]),
@@ -224,8 +227,8 @@ export function registerPortableCameraRoutes(
   });
 
   // 4. Start Portable Camera Live Streaming Session
-  app.post("/api/portable-camera/sessions", async (request, reply) => {
-    const { tenantId, userId, roles } = getUser(request);
+  app.post("/api/portable-camera/sessions", { config: { noAuth: true } }, async (request, reply) => {
+    const { tenantId: authTenantId, userId: authUserId, roles: authRoles } = getUser(request);
     const body = z.object({
       deviceId: z.string().min(1),
       sourceId: z.string().min(1),
@@ -251,6 +254,10 @@ export function registerPortableCameraRoutes(
     if (device.state !== "ACTIVE") {
       return reply.code(403).send({ error: "device_is_revoked_or_inactive", state: device.state });
     }
+
+    const tenantId = device.tenantId || authTenantId;
+    const userId = device.enrolledBy || authUserId;
+    const roles = authRoles;
 
     // 1. Acquire distributed lease on media node
     const sessionId = `pcs_${Date.now()}`;
@@ -389,7 +396,7 @@ export function registerPortableCameraRoutes(
   });
 
   // 5. Get Session Info
-  app.get("/api/portable-camera/sessions/:id", async (request, reply) => {
+  app.get("/api/portable-camera/sessions/:id", { config: { noAuth: true } }, async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const session = await repository.getSession(id);
     if (!session) {
@@ -399,8 +406,8 @@ export function registerPortableCameraRoutes(
   });
 
   // 6. Stop Session
-  app.post("/api/portable-camera/sessions/:id/stop", async (request, reply) => {
-    const { tenantId, userId, roles } = getUser(request);
+  app.post("/api/portable-camera/sessions/:id/stop", { config: { noAuth: true } }, async (request, reply) => {
+    const { tenantId: authTenantId, userId: authUserId, roles: authRoles } = getUser(request);
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = z.object({ reason: z.string().max(200).optional() }).parse(request.body || {});
 
@@ -408,6 +415,10 @@ export function registerPortableCameraRoutes(
     if (!session) {
       return reply.code(404).send({ error: "session_not_found" });
     }
+
+    const tenantId = session.tenantId || authTenantId;
+    const userId = session.userId || authUserId;
+    const roles = authRoles;
 
     // Release lease
     await leaseManager.releaseLease(session.tenantId, session.sourceId, session.id, session.mediaNodeId);
@@ -438,7 +449,7 @@ export function registerPortableCameraRoutes(
   });
 
   // 7. Telemetry / Health Ingestion
-  app.post("/api/portable-camera/sessions/:id/health", async (request, reply) => {
+  app.post("/api/portable-camera/sessions/:id/health", { config: { noAuth: true } }, async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
     const body = z.object({
       connectivity: z.enum(["HEALTHY", "DEGRADED", "DISCONNECTED"]).default("HEALTHY"),
