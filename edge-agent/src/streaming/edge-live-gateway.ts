@@ -207,7 +207,7 @@ export class EdgeLiveGateway {
 
   private async handle(request: IncomingMessage, response: ServerResponse) {
     const url = new URL(request.url ?? "/", "http://edge.local");
-    if (url.pathname === "/v1/live/start" || url.pathname === "/v1/talk/start" || url.pathname.startsWith("/v1/talk/")) {
+    if (url.pathname === "/v1/live/start" || url.pathname.startsWith("/v1/live/") || url.pathname === "/v1/talk/start" || url.pathname.startsWith("/v1/talk/")) {
       setCorsHeaders(request, response);
       if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     }
@@ -243,6 +243,13 @@ export class EdgeLiveGateway {
       } catch (error) {
         return sendJson(response, 500, { error: "edge_live_start_failed", message: error instanceof Error ? error.message : "Unknown error" });
       }
+    }
+    if (request.method === "DELETE" && url.pathname.startsWith("/v1/live/")) {
+      const sessionId = url.pathname.slice("/v1/live/".length);
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+      if (!sessionId || !token) return sendJson(response, 401, { error: "invalid_live_session" });
+      const released = await this.access.release(sessionId, token);
+      return sendJson(response, released ? 200 : 404, { status: released ? "released" : "not_found" });
     }
     if (request.method === "POST" && url.pathname === "/v1/talk/start") {
       const body = await readJsonBody(request);
@@ -575,6 +582,15 @@ class EdgeAccessRegistry {
   authenticate(token: string, path: string, action: string) {
     return action === "read" && [...this.sessions.values()].some((session) =>
       session.path === path && session.expiresAt > Date.now() && secureEqual(session.token, token));
+  }
+  async release(id: string, token: string) {
+    const session = this.sessions.get(id);
+    if (!session || !secureEqual(session.token, token)) return false;
+    this.sessions.delete(id);
+    if (![...this.sessions.values()].some((item) => item.path === session.path && item.expiresAt > Date.now())) {
+      await this.router.removePath(session.path).catch(() => undefined);
+    }
+    return true;
   }
   private async expire(id: string) {
     const session = this.sessions.get(id); if (!session) return; this.sessions.delete(id);

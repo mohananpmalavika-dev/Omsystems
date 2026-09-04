@@ -19,7 +19,7 @@ import { TileStateIndicator } from "./tile-state-indicator";
 import type { AnalyticsAlert, AnalyticsRule, Camera, LiveSessionResponse } from "@/lib/types";
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
-import { startLiveFromBrowser } from "@/lib/live-client";
+import { releaseLiveSession, startLiveFromBrowser } from "@/lib/live-client";
 import { cameraInventoryApi } from "@/lib/api-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
@@ -195,6 +195,7 @@ export function EnhancedCameraGrid({
       }
       return next;
     });
+    void releaseLiveSession(sessionsRef.current.get(cameraId));
     closeSession(cameraId);
   }, [onDeleteCamera, closeSession]);
 
@@ -416,6 +417,7 @@ export function EnhancedCameraGrid({
       return [window.setTimeout(() => {
         if (sessionsRef.current.get(cameraId) !== session) return;
         const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
+        void releaseLiveSession(sessionsRef.current.get(cameraId));
         sessionsRef.current.delete(cameraId);
         activeStreamTypesRef.current.delete(cameraId);
         setSessions(new Map(sessionsRef.current));

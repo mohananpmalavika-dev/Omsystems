@@ -27,6 +27,7 @@ const EMPTY_SUMMARY: AnalyticsAlertSummary = {
 };
 
 const TERMINAL_ALERT_STATUSES = new Set(["resolved", "false_alarm", "suppressed"]);
+const TELEMETRY_STALE_AFTER_MS = 30_000;
 
 export function useLiveAiWall(cameras: Camera[], enabled = true) {
   const [rules, setRules] = useState<AnalyticsRule[]>([]);
@@ -68,11 +69,32 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
       setError(undefined);
     } catch (reason) {
       if (requestSequence !== requestSequenceRef.current) return;
+      setRules([]);
+      setAlerts([]);
+      setSummary(EMPTY_SUMMARY);
+      setLastUpdatedAt(undefined);
       setError(reason instanceof Error ? reason.message : "Live AI telemetry is unavailable");
     } finally {
       if (requestSequence === requestSequenceRef.current) setLoading(false);
     }
   }, [cameraSignature, enabled]);
+
+  const refreshHealth = useCallback(async () => {
+    const [healthResult, capabilityResult] = await Promise.allSettled([
+      analyticsApi.engineHealth(),
+      analyticsApi.capabilities(),
+    ]);
+    if (healthResult.status === "fulfilled") {
+      const status = String(healthResult.value?.status ?? "").toLowerCase();
+      setEngineState(status === "degraded" ? "degraded" : ["ok", "online", "healthy"].includes(status) ? "online" : "offline");
+    } else {
+      setEngineState("offline");
+    }
+    if (capabilityResult.status === "fulfilled") {
+      setCapabilityDomains(capabilityResult.value?.domains ?? []);
+      setCapabilityCount(Number(capabilityResult.value?.summary?.capabilities ?? 0));
+    }
+  }, []);
 
   useEffect(() => {
     if (!enabled) {
@@ -80,22 +102,15 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
       return;
     }
     let active = true;
-    void Promise.allSettled([analyticsApi.engineHealth(), analyticsApi.capabilities()])
-      .then(([healthResult, capabilityResult]) => {
-        if (!active) return;
-        if (healthResult.status === "fulfilled") {
-          const status = String(healthResult.value?.status ?? "").toLowerCase();
-          setEngineState(status === "degraded" ? "degraded" : ["ok", "online", "healthy"].includes(status) ? "online" : "offline");
-        } else {
-          setEngineState("offline");
-        }
-        if (capabilityResult.status === "fulfilled") {
-          setCapabilityDomains(capabilityResult.value?.domains ?? []);
-          setCapabilityCount(Number(capabilityResult.value?.summary?.capabilities ?? 0));
-        }
-      });
-    return () => { active = false; };
-  }, [enabled]);
+    void refreshHealth();
+    const timer = window.setInterval(() => {
+      if (active && document.visibilityState === "visible") void refreshHealth();
+    }, 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [enabled, refreshHealth]);
 
   useEffect(() => {
     void refresh();
@@ -115,6 +130,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
     () => alerts.filter((alert) => !TERMINAL_ALERT_STATUSES.has(alert.status)),
     [alerts],
   );
+  const telemetryIsStale = !lastUpdatedAt || Date.now() - Date.parse(lastUpdatedAt) > TELEMETRY_STALE_AFTER_MS;
   const priorityCameraIds = useMemo(() => [...new Set(
     openAlerts
       .filter((alert) => alert.severity === "P1" || alert.severity === "P2")
@@ -135,6 +151,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
     loading,
     error,
     lastUpdatedAt,
+    telemetryIsStale,
     refresh,
   };
 }

@@ -45,6 +45,24 @@ export async function startLiveFromBrowser(
   throw new Error(direct.error ?? "media_gateway_unavailable");
 }
 
+export async function releaseLiveSession(session: LiveSessionResponse | undefined) {
+  if (!session?.sessionId || !session.hls?.url || !session.hls.bearerToken) return;
+  try {
+    const source = new URL(session.hls.url);
+    const marker = "/hls/";
+    if (!source.pathname.includes(marker)) return;
+    const releaseUrl = `${source.origin}/v1/live/${encodeURIComponent(session.sessionId)}`;
+    await fetch(releaseUrl, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.hls.bearerToken}` },
+      credentials: "include",
+      cache: "no-store",
+    });
+  } catch {
+    // Session TTL remains the fallback when the gateway is unreachable.
+  }
+}
+
 async function requestLiveAuthorization(
   cameraId: string,
   profile: "main" | "sub",
