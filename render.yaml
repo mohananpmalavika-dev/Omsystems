@@ -35,6 +35,11 @@ services:
           type: web
           name: sentinel-grid-control-plane
           envVarKey: RENDER_EXTERNAL_URL
+      - key: PUBLIC_DASHBOARD_URL
+        fromService:
+          type: web
+          name: sentinel-grid-dashboard
+          envVarKey: RENDER_EXTERNAL_URL
       - key: RECORDING_ENGINE_URL
         fromService:
           type: pserv

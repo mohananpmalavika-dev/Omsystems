@@ -76,6 +76,7 @@ services:
       PORT: 10000
       CONTROL_PLANE_URL: http://control-plane:8080
       CONTROL_PLANE_INTERNAL_URL: http://control-plane:8080
+      PUBLIC_DASHBOARD_URL: http://dashboard:10000
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
       NEXT_PUBLIC_APP_NAME: Sentinel Grid
     ports:
