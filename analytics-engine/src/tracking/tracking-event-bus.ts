@@ -176,7 +176,7 @@ export class TrackingEventBus {
     private enqueue(eventType: TrackingEventType, event: TrackingEvent): boolean {
         // Check queue capacity
         if (this.queue.length >= this.config.maxQueueSize) {
-            return this.handleOverflow(event);
+            return this.handleOverflow(eventType, event);
         }
 
         this.queue.push(event);
@@ -194,7 +194,7 @@ export class TrackingEventBus {
     /**
      * Handle queue overflow based on policy
      */
-    private handleOverflow(event: TrackingEvent): boolean {
+    private handleOverflow(eventType: TrackingEventType, event: TrackingEvent): boolean {
         switch (this.config.overflowPolicy) {
             case 'drop-oldest':
                 this.queue.shift(); // Remove oldest
