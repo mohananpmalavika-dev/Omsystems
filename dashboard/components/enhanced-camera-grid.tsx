@@ -176,7 +176,7 @@ export function EnhancedCameraGrid({
   const [savedLayouts, setSavedLayouts] = useState<GridLayout[]>([]);
   const [layoutFeedback, setLayoutFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
-  const [sequencing, setSequencing] = useState(true);
+  const [sequencing, setSequencing] = useState(false);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
 
@@ -487,22 +487,38 @@ export function EnhancedCameraGrid({
   }, []);
 
   // Initialize from a saved layout. If its camera IDs are no longer present
-  // in the current API response, populate the wall with available cameras.
+  // Initialize from a saved layout or available cameras.
+  // Preserve existing positions so periodic camera refreshes do not shift or rotate positions.
   useEffect(() => {
     if (cameras.length === 0) {
       setGridPositions(new Map());
       return;
     }
 
-    const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
-    const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
-    const stream = totalPositions >= 16 ? "sub" : "main";
+    setGridPositions((currentPositions) => {
+      // If we already have positions assigned and valid, preserve them!
+      if (currentPositions.size > 0) {
+        const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
+        const updated = new Map<number, { camera: Camera; stream: "main" | "sub"; priority?: number }>();
+        let hasValid = false;
+        for (const [pos, entry] of currentPositions.entries()) {
+          const freshCamera = camerasById.get(entry.camera.id);
+          if (freshCamera) {
+            updated.set(pos, { ...entry, camera: freshCamera });
+            hasValid = true;
+          }
+        }
+        if (hasValid) return updated;
+      }
 
-    cameras.slice(0, totalPositions).forEach((camera, index) => {
-      posMap.set(index, { camera, stream, priority: 0 });
+      // Initial assignment: deterministic fixed order by camera array index
+      const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
+      const stream = totalPositions >= 16 ? "sub" : "main";
+      cameras.slice(0, totalPositions).forEach((camera, index) => {
+        posMap.set(index, { camera, stream, priority: 0 });
+      });
+      return posMap;
     });
-
-    setGridPositions(posMap);
   }, [cameras, totalPositions]);
 
   useEffect(() => {
@@ -520,44 +536,26 @@ export function EnhancedCameraGrid({
     if (sessionsChanged) setSessions(new Map(sessionsRef.current));
   }, [cameras, closeSession]);
 
-  // Adaptive layout: prioritize cameras with alerts
+  // Adaptive layout: elevate stream priority in-place for alerting cameras
+  // WITHOUT rearranging physical tile positions (Channel 1 stays in Slot 0, Channel 2 in Slot 1, etc.)
   useEffect(() => {
     if (!adaptiveLayout) return;
 
-    const updatePriorities = () => {
-      const newPositions = new Map(gridPositions);
+    const prioritySet = new Set(priorityCameraIds);
+    setGridPositions((currentPositions) => {
       let changed = false;
-
-      // Keep alerting cameras first. Offline cameras stay last because they
-      // cannot provide a useful live view.
-      const prioritySet = new Set(priorityCameraIds);
-      const sortedEntries = Array.from(newPositions.entries()).sort((a, b) => {
-        const priorityA = a[1].camera.status === "offline" ? 0 :
-                         prioritySet.has(a[1].camera.id) || a[1].camera.status === "alert" ? 3 : 1;
-        const priorityB = b[1].camera.status === "offline" ? 0 :
-                         prioritySet.has(b[1].camera.id) || b[1].camera.status === "alert" ? 3 : 1;
-        return priorityB - priorityA;
-      });
-
-      // Reassign positions based on priority
-      sortedEntries.forEach(([_, entry], index) => {
-        if (index < totalPositions) {
-          const currentEntry = newPositions.get(index);
-          if (!currentEntry || currentEntry.camera.id !== entry.camera.id) {
-            newPositions.set(index, { ...entry, priority: index });
-            changed = true;
-          }
+      const nextPositions = new Map(currentPositions);
+      for (const [pos, entry] of currentPositions.entries()) {
+        const isAlerting = prioritySet.has(entry.camera.id) || entry.camera.status === "alert";
+        const targetPriority = isAlerting ? 3 : 0;
+        if (entry.priority !== targetPriority) {
+          nextPositions.set(pos, { ...entry, priority: targetPriority });
+          changed = true;
         }
-      });
-
-      if (changed) {
-        setGridPositions(newPositions);
       }
-    };
-
-    const interval = setInterval(updatePriorities, 5000);
-    return () => clearInterval(interval);
-  }, [adaptiveLayout, gridPositions, priorityCameraIds, totalPositions]);
+      return changed ? nextPositions : currentPositions;
+    });
+  }, [adaptiveLayout, priorityCameraIds]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
     const newTotalPositions = gridSizeMap[newSize];
@@ -827,11 +825,11 @@ export function EnhancedCameraGrid({
             type="button"
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
             onClick={() => setSequencing((current) => !current)}
-            title="Rotate cameras every 15 seconds when assigned channels exceed decoder capacity"
+            title={sequencing ? "Auto-rotation (tour) is ON. Click to lock camera positions" : "Camera positions are FIXED. Click to enable auto-rotation tour"}
             aria-pressed={sequencing}
           >
             <RotateCw size={16} />
-            Sequence {sequencing ? "on" : "off"}
+            {sequencing ? "Rotating: On" : "Positions: Fixed"}
           </button>
           <span className="viewer-summary" title="Live decoders and snapshot fallbacks currently used by this wall">
             {activeDecoderCount}/{budget?.decoderBudget ?? capacity?.recommendedDecoderLimit ?? decoderLimit} live

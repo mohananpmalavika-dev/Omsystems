@@ -71,7 +71,7 @@ export class StreamScheduler {
     ]);
     const budget = this.createEffectiveBudget(detectedBudget, options.maxDecoderLimit);
     const now = Date.now();
-    const rotationEnabled = options.rotationEnabled !== false;
+    const rotationEnabled = options.rotationEnabled === true;
     const rotationDue = rotationEnabled && this.lastRotationTime > 0 &&
       now - this.lastRotationTime >= ROTATION_INTERVAL_MS;
     if (this.lastRotationTime === 0) this.lastRotationTime = now;

@@ -304,7 +304,7 @@ export default function ControlRoomPage() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [monitoredCameraIds, setMonitoredCameraIds] = useState<string[]>([]);
   const [showAiOverlays, setShowAiOverlays] = useState(true);
-  const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(true);
+  const [prioritizeAiAlerts, setPrioritizeAiAlerts] = useState(false);
   const [hideUnavailableChannels, setHideUnavailableChannels] = useState(true);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();

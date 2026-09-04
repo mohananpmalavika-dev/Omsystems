@@ -103,7 +103,7 @@ export function useVideoWallScheduler(
     operatorPinnedCameraIds = [],
     branchSelectedId = null,
     maxDecoderLimit,
-    rotationEnabled = true,
+    rotationEnabled = false,
     tileGeometry = { width: 640, height: 360 },
     enableSnapshots = true,
     snapshotBaseUrl = "/api/media/snapshot-relay",
