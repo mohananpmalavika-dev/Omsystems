@@ -135,8 +135,8 @@ const DEFAULT_MODEL_SCHEDULES: Record<string, ModelSchedule> = {
     cost: 2,
     dependencies: ['yolov8n'],
     triggerLabels: ['person', 'car', 'motorcycle'],
-    minConfidence: 0.6,
-    samplingRate: 3,
+    minConfidence: 0.4,
+    samplingRate: 2,
   },
 
   // Face detection (run when requested)
@@ -604,8 +604,18 @@ export class ConditionalScheduler {
    * Check if critical safety models are required
    */
   private requiresCriticalSafety(rules: AnalyticsRule[]): boolean {
+    const criticalTypes = [
+      'fire',
+      'smoke',
+      'helmet',
+      'helmet-worn',
+      'no-helmet',
+      'ppe',
+      'intrusion',
+      'loitering',
+    ];
     return rules.some(rule =>
-      rule.enabled && (rule.detectionType === 'fire' || rule.detectionType === 'smoke')
+      rule.enabled && criticalTypes.includes(rule.detectionType)
     );
   }
 

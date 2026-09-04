@@ -445,7 +445,7 @@ export class ModelManager {
 
     let freedSpace = 0;
     for (const model of models) {
-      if (model.config.warmup) continue; // Don't evict warmup models
+      if (model.config.warmup || model.config.required) continue; // Don't evict warmup or required models
 
       await this.unloadModel(model.id);
       freedSpace += model.memoryUsage;
@@ -459,9 +459,12 @@ export class ModelManager {
   /**
    * Unload model from memory
    */
-  async unloadModel(modelId: string): Promise<void> {
+  async unloadModel(modelId: string, force = false): Promise<void> {
     const instance = this.models.get(modelId);
     if (!instance || !instance.isLoaded) return;
+    if (!force && (instance.config.warmup || instance.config.required)) {
+      return;
+    }
 
     console.log(`Unloading model: ${instance.config.name}`);
 
@@ -526,7 +529,7 @@ export class ModelManager {
     const thresholdMs = this.options.autoUnloadAfter * 60 * 1000;
 
     for (const [modelId, instance] of this.models.entries()) {
-      if (instance.config.warmup) continue; // Keep warmup models
+      if (instance.config.warmup || instance.config.required) continue; // Keep warmup and required models
 
       const idleTime = now - instance.lastUsed.getTime();
       if (idleTime > thresholdMs) {

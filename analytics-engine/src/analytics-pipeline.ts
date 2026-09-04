@@ -339,10 +339,9 @@ export class AnalyticsPipeline {
       // Step 7: Conditionally run specialized detections based on scheduler
       const specializedPromises: Array<Promise<any[]>> = [];
 
-      // Helmet detection (if scheduled or active in rules for observed persons/vehicles)
-      if ((schedule.modelsToRun.includes('helmet') ||
-          this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet'])) &&
-          (persons.length > 0 || vehicles.length > 0)) {
+      // Helmet detection (if scheduled or active in rules)
+      if (schedule.modelsToRun.includes('helmet') ||
+          this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet'])) {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
 
