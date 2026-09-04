@@ -191,8 +191,11 @@ export class HelmetDetector extends BaseDetector {
         return this.checkHelmetCompliance(match, helmets, heads);
       }));
 
-    const riderIds = new Set(riderMatches.map((match) => match.person));
-    const indoorPersons = persons.filter((person) => !riderIds.has(person));
+    // Use bounding box ID instead of object reference to handle recreated person arrays
+    const riderPersonIds = new Set(
+      riderMatches.map((match) => this.getPersonIdentifier(match.person))
+    );
+    const indoorPersons = persons.filter((person) => !riderPersonIds.has(this.getPersonIdentifier(person)));
     const indoorHelmetDetections = runLocal && this.classifier
       ? await Promise.all(indoorPersons.map((person) => this.classifyPersonHelmetCompliance(frame, person)))
       : indoorPersons
@@ -200,6 +203,19 @@ export class HelmetDetector extends BaseDetector {
         .filter((detection): detection is HelmetDetection => Boolean(detection));
 
     return [...riderDetections, ...indoorHelmetDetections];
+  }
+
+  /**
+   * Generate stable identifier for person (trackId or bounding box hash)
+   */
+  private getPersonIdentifier(person: any): string {
+    // Use trackId if available (stable across frame updates)
+    if (typeof person.trackId === "string") {
+      return person.trackId;
+    }
+    // Fallback to bounding box coordinates (normalized to avoid floating point issues)
+    const box = person.boundingBox ?? {};
+    return `${Math.round((box.x ?? 0) * 1000)},${Math.round((box.y ?? 0) * 1000)},${Math.round((box.width ?? 0) * 1000)},${Math.round((box.height ?? 0) * 1000)}`;
   }
 
   private detectHelmetPresence(person: any, helmets: any[]): HelmetDetection | undefined {
