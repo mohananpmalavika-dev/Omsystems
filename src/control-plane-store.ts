@@ -1460,7 +1460,10 @@ export interface ControlPlaneStore {
     version: number;
     settings: Record<string, unknown>;
     createdBy: string;
-    status: 'draft' | 'active' | 'deprecated';
+    status: 'draft' | 'active' | 'deprecated' | 'published';
+    targetClassification?: string;
+    targetType?: 'camera' | 'recorder';
+    description?: string;
   }): Promise<any>;
   getDeviceTemplate(templateId: string): Promise<any | undefined>;
   listDeviceTemplates(tenantId: string, filters?: { name?: string; status?: string; templateType?: string }): Promise<any[]>;

@@ -30,6 +30,33 @@ export interface ImagingSettings {
   irCutFilter?: "ON" | "OFF" | "AUTO";
 }
 
+export interface ImagingOptions {
+  brightness?: { min: number; max: number };
+  colorSaturation?: { min: number; max: number };
+  contrast?: { min: number; max: number };
+  sharpness?: { min: number; max: number };
+  exposure?: {
+    mode?: Array<"AUTO" | "MANUAL">;
+    exposureTime?: { min: number; max: number };
+    gain?: { min: number; max: number };
+    iris?: { min: number; max: number };
+  };
+  focus?: {
+    autoFocusModes?: Array<"AUTO" | "MANUAL">;
+    defaultSpeed?: { min: number; max: number };
+  };
+  wideDynamicRange?: {
+    mode?: Array<"OFF" | "ON">;
+    level?: { min: number; max: number };
+  };
+  whiteBalance?: {
+    mode?: Array<"AUTO" | "MANUAL">;
+    crGain?: { min: number; max: number };
+    cbGain?: { min: number; max: number };
+  };
+  irCutFilterModes?: Array<"ON" | "OFF" | "AUTO">;
+}
+
 export class ImagingService {
   private readonly soap: SoapClient;
   private endpoint: string;
@@ -214,5 +241,137 @@ export class ImagingService {
       bodyXml,
       credentials: this.credentials,
     });
+  }
+
+  /**
+   * timg:GetOptions
+   */
+  async getOptions(videoSourceToken: string): Promise<ImagingOptions> {
+    const bodyXml = `
+<timg:GetOptions xmlns:timg="http://www.onvif.org/ver20/imaging/wsdl">
+  <timg:VideoSourceToken>${videoSourceToken}</timg:VideoSourceToken>
+</timg:GetOptions>`.trim();
+
+    const responseXml = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver20/imaging/wsdl/GetOptions",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    const parseRange = (tagName: string): { min: number; max: number } | undefined => {
+      const tag = SoapClient.extractTag(responseXml, tagName);
+      if (!tag) return undefined;
+      const minStr = SoapClient.extractTag(tag, "Min");
+      const maxStr = SoapClient.extractTag(tag, "Max");
+      if (minStr !== null && maxStr !== null) {
+        return { min: parseFloat(minStr), max: parseFloat(maxStr) };
+      }
+      return undefined;
+    };
+
+    const brightness = parseRange("Brightness");
+    const colorSaturation = parseRange("ColorSaturation");
+    const contrast = parseRange("Contrast");
+    const sharpness = parseRange("Sharpness");
+
+    // Exposure options
+    const exposureTag = SoapClient.extractTag(responseXml, "Exposure");
+    let exposure: ImagingOptions["exposure"] = undefined;
+    if (exposureTag) {
+      const modeMatches = exposureTag.match(/<(?:[\w-]+:)?Mode>([^<]+)<\/(?:[\w-]+:)?Mode>/gi);
+      const modes: Array<"AUTO" | "MANUAL"> = [];
+      if (modeMatches) {
+        for (const m of modeMatches) {
+          const val = m.replace(/<\/?[\w:-]+>/g, "").trim().toUpperCase();
+          if ((val === "AUTO" || val === "MANUAL") && !modes.includes(val)) {
+            modes.push(val);
+          }
+        }
+      }
+      const exposureTimeTag = SoapClient.extractTag(exposureTag, "ExposureTime");
+      const exposureTime = exposureTimeTag ? {
+        min: parseFloat(SoapClient.extractTag(exposureTimeTag, "Min") || "0"),
+        max: parseFloat(SoapClient.extractTag(exposureTimeTag, "Max") || "0"),
+      } : undefined;
+      const gainTag = SoapClient.extractTag(exposureTag, "Gain");
+      const gain = gainTag ? {
+        min: parseFloat(SoapClient.extractTag(gainTag, "Min") || "0"),
+        max: parseFloat(SoapClient.extractTag(gainTag, "Max") || "0"),
+      } : undefined;
+      const irisTag = SoapClient.extractTag(exposureTag, "Iris");
+      const iris = irisTag ? {
+        min: parseFloat(SoapClient.extractTag(irisTag, "Min") || "0"),
+        max: parseFloat(SoapClient.extractTag(irisTag, "Max") || "0"),
+      } : undefined;
+
+      exposure = {
+        mode: modes.length > 0 ? modes : undefined,
+        exposureTime,
+        gain,
+        iris,
+      };
+    }
+
+    // WideDynamicRange
+    const wdrTag = SoapClient.extractTag(responseXml, "WideDynamicRange");
+    let wideDynamicRange: ImagingOptions["wideDynamicRange"] = undefined;
+    if (wdrTag) {
+      const levelRange = parseRange("Level");
+      const modeMatches = wdrTag.match(/<(?:[\w-]+:)?Mode>([^<]+)<\/(?:[\w-]+:)?Mode>/gi);
+      const modes: Array<"OFF" | "ON"> = [];
+      if (modeMatches) {
+        for (const m of modeMatches) {
+          const val = m.replace(/<\/?[\w:-]+>/g, "").trim().toUpperCase();
+          if ((val === "OFF" || val === "ON") && !modes.includes(val)) {
+            modes.push(val);
+          }
+        }
+      }
+      wideDynamicRange = {
+        mode: modes.length > 0 ? modes : undefined,
+        level: levelRange,
+      };
+    }
+
+    // WhiteBalance
+    const wbTag = SoapClient.extractTag(responseXml, "WhiteBalance");
+    let whiteBalance: ImagingOptions["whiteBalance"] = undefined;
+    if (wbTag) {
+      const crTag = SoapClient.extractTag(wbTag, "CrGain");
+      const crGain = crTag ? {
+        min: parseFloat(SoapClient.extractTag(crTag, "Min") || "0"),
+        max: parseFloat(SoapClient.extractTag(crTag, "Max") || "0"),
+      } : undefined;
+      const cbTag = SoapClient.extractTag(wbTag, "CbGain");
+      const cbGain = cbTag ? {
+        min: parseFloat(SoapClient.extractTag(cbTag, "Min") || "0"),
+        max: parseFloat(SoapClient.extractTag(cbTag, "Max") || "0"),
+      } : undefined;
+      whiteBalance = { crGain, cbGain };
+    }
+
+    // IrCutFilterModes
+    const irCutFilterModes: Array<"ON" | "OFF" | "AUTO"> = [];
+    const irMatches = responseXml.match(/<(?:[\w-]+:)?IrCutFilterModes>([^<]+)<\/(?:[\w-]+:)?IrCutFilterModes>/gi);
+    if (irMatches) {
+      for (const m of irMatches) {
+        const val = m.replace(/<\/?[\w:-]+>/g, "").trim().toUpperCase();
+        if ((val === "ON" || val === "OFF" || val === "AUTO") && !irCutFilterModes.includes(val)) {
+          irCutFilterModes.push(val);
+        }
+      }
+    }
+
+    return {
+      brightness,
+      colorSaturation,
+      contrast,
+      sharpness,
+      exposure,
+      wideDynamicRange,
+      whiteBalance,
+      irCutFilterModes: irCutFilterModes.length > 0 ? irCutFilterModes : undefined,
+    };
   }
 }

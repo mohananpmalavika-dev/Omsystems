@@ -674,6 +674,7 @@ export class MemoryStore {
   readonly passwordRotations: any[] = [];
   readonly deviceTemplates: any[] = [];
   readonly deviceTemplateAssignments: any[] = [];
+  readonly configurationDrifts: any[] = [];
   readonly deviceIpAssignments: any[] = [];
   readonly deviceConfigurationJobs: any[] = [];
   readonly deviceJobSteps: any[] = [];
@@ -3253,7 +3254,17 @@ export class MemoryStore {
     return this.passwordRotations.filter((item) => item.tenantId === tenantId);
   }
 
-  async createDeviceTemplate(input: { tenantId: string; name: string; templateType: 'camera-configuration' | 'recording' | 'analytics' | 'privacy' | 'network' | 'security-hardening' | 'location'; category: string; settings: Record<string, unknown>; createdBy: string; }) {
+  async createDeviceTemplate(input: {
+    tenantId: string;
+    name: string;
+    templateType: 'camera-configuration' | 'recording' | 'analytics' | 'privacy' | 'network' | 'security-hardening' | 'location';
+    category: string;
+    settings: Record<string, unknown>;
+    createdBy: string;
+    version?: number;
+    status?: 'draft' | 'active' | 'deprecated';
+    targetClassification?: string;
+  }) {
     const now = new Date().toISOString();
     const template = {
       id: randomUUID(),
@@ -3262,13 +3273,121 @@ export class MemoryStore {
       templateType: input.templateType,
       category: input.category,
       settings: input.settings,
-      status: 'published',
+      version: input.version || 1,
+      status: input.status || 'published',
+      targetClassification: input.targetClassification,
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
     };
     this.deviceTemplates.push(template);
     return template;
+  }
+
+  async getDeviceTemplate(templateId: string) {
+    return this.deviceTemplates.find((item) => item.id === templateId);
+  }
+
+  async listDeviceTemplates(tenantId: string, filters?: { name?: string; status?: string; templateType?: string; targetClassification?: string }) {
+    return this.deviceTemplates.filter((item) => {
+      if (item.tenantId && item.tenantId !== tenantId && item.tenantId !== 'system') return false;
+      if (filters?.name && item.name !== filters.name) return false;
+      if (filters?.status && item.status !== filters.status) return false;
+      if (filters?.templateType && item.templateType !== filters.templateType) return false;
+      if (filters?.targetClassification && item.targetClassification !== filters.targetClassification) return false;
+      return true;
+    });
+  }
+
+  async updateDeviceTemplate(templateId: string, updates: { status?: string; settings?: Record<string, unknown>; name?: string; category?: string; targetClassification?: string }) {
+    const template = this.deviceTemplates.find((item) => item.id === templateId);
+    if (!template) return null;
+    Object.assign(template, updates, { updatedAt: new Date().toISOString() });
+    return template;
+  }
+
+  async createDeviceTemplateAssignment(input: {
+    tenantId: string;
+    deviceId: string;
+    templateId: string;
+    templateVersion: number;
+    appliedBy: string;
+    verificationStatus: 'pending' | 'verified' | 'drifted' | 'failed';
+  }) {
+    const now = new Date().toISOString();
+    const existingIdx = this.deviceTemplateAssignments.findIndex(
+      (a) => a.deviceId === input.deviceId && a.templateId === input.templateId
+    );
+    const assignment = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      templateId: input.templateId,
+      templateVersion: input.templateVersion,
+      appliedBy: input.appliedBy,
+      verificationStatus: input.verificationStatus,
+      appliedAt: now,
+      verifiedAt: input.verificationStatus === 'verified' ? now : undefined,
+    };
+    if (existingIdx >= 0) {
+      this.deviceTemplateAssignments[existingIdx] = assignment;
+    } else {
+      this.deviceTemplateAssignments.push(assignment);
+    }
+    return assignment;
+  }
+
+  async getDeviceTemplateAssignment(deviceId: string, templateId: string) {
+    return this.deviceTemplateAssignments.find(
+      (a) => a.deviceId === deviceId && a.templateId === templateId
+    );
+  }
+
+  async listDeviceTemplateAssignments(templateId: string) {
+    return this.deviceTemplateAssignments.filter((a) => a.templateId === templateId);
+  }
+
+  async updateDeviceTemplateAssignment(assignmentId: string, updates: { verificationStatus?: string; verifiedAt?: string }) {
+    const assignment = this.deviceTemplateAssignments.find((a) => a.id === assignmentId);
+    if (!assignment) return null;
+    Object.assign(assignment, updates);
+    return assignment;
+  }
+
+  async createConfigurationDrift(input: {
+    tenantId: string;
+    deviceId: string;
+    templateId?: string;
+    driftType: string;
+    desiredValue: any;
+    actualValue: any;
+    acknowledged: boolean;
+  }) {
+    const drift = {
+      id: randomUUID(),
+      ...input,
+      detectedAt: new Date().toISOString(),
+    };
+    this.configurationDrifts.push(drift);
+    return drift;
+  }
+
+  async listConfigurationDrift(deviceId: string, filters?: { acknowledged?: boolean; templateId?: string }) {
+    return this.configurationDrifts.filter((d) => {
+      if (d.deviceId !== deviceId) return false;
+      if (filters?.acknowledged !== undefined && d.acknowledged !== filters.acknowledged) return false;
+      if (filters?.templateId && d.templateId !== filters.templateId) return false;
+      return true;
+    });
+  }
+
+  async acknowledgeConfigurationDrift(driftId: string, acknowledgedBy: string) {
+    const drift = this.configurationDrifts.find((d) => d.id === driftId);
+    if (!drift) return null;
+    drift.acknowledged = true;
+    drift.acknowledgedBy = acknowledgedBy;
+    drift.acknowledgedAt = new Date().toISOString();
+    return drift;
   }
 
   async applyDeviceTemplate(input: { tenantId: string; deviceId: string; templateId: string; appliedBy: string; }) {

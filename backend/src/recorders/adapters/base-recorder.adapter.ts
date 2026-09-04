@@ -22,6 +22,12 @@ import {
   RecorderConnectionTimeoutError,
   RecorderAuthenticationError
 } from '../recorder-adapter.interface.js';
+import type {
+  ChannelVideoConfig,
+  RecordingSchedule,
+  DeviceTimeConfig,
+  DeviceNetworkConfig,
+} from '../../../../src/types/device-configuration.types.js';
 import { logger } from '../../utils/logger.js';
 
 /**
@@ -386,6 +392,41 @@ export abstract class BaseRecorderAdapter {
       recorderId: this.recorder.id,
       vendor: this.recorder.vendor
     });
+  }
+
+  async getChannelEncoding(channelId: string): Promise<CheckResult<ChannelVideoConfig>> {
+    this.logNotImplemented('getChannelEncoding');
+    return this.createUnknownResult('getChannelEncoding not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async setChannelEncoding(channelId: string, _config: ChannelVideoConfig): Promise<CheckResult<void>> {
+    this.logNotImplemented('setChannelEncoding');
+    return this.createUnknownResult('setChannelEncoding not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async getRecordingSchedule(channelId: string): Promise<CheckResult<RecordingSchedule>> {
+    this.logNotImplemented('getRecordingSchedule');
+    return this.createUnknownResult('getRecordingSchedule not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async setRecordingSchedule(channelId: string, _schedule: RecordingSchedule): Promise<CheckResult<void>> {
+    this.logNotImplemented('setRecordingSchedule');
+    return this.createUnknownResult('setRecordingSchedule not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async setTimeConfiguration(_timeConfig: DeviceTimeConfig): Promise<CheckResult<void>> {
+    this.logNotImplemented('setTimeConfiguration');
+    return this.createUnknownResult('setTimeConfiguration not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async getNetworkConfiguration(): Promise<CheckResult<DeviceNetworkConfig>> {
+    this.logNotImplemented('getNetworkConfiguration');
+    return this.createUnknownResult('getNetworkConfiguration not implemented', 'UNSUPPORTED_FEATURE');
+  }
+
+  async setNetworkConfiguration(_config: DeviceNetworkConfig): Promise<CheckResult<void>> {
+    this.logNotImplemented('setNetworkConfiguration');
+    return this.createUnknownResult('setNetworkConfiguration not implemented', 'UNSUPPORTED_FEATURE');
   }
   
   /**

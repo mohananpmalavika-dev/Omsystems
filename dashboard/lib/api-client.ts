@@ -1724,5 +1724,184 @@ export const platformCapabilitiesApi = {
     fetchApi<{ success: boolean; count: number; blockers: any[]; timestamp: string }>('/v1/admin/capabilities/blockers'),
 };
 
+export const deviceConfigurationApi = {
+  getDeviceConfiguration: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/devices/${encodeURIComponent(deviceId)}/configuration`),
+
+  getVideoConfiguration: (deviceId: string, profileToken?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/video${profileToken ? `?profileToken=${encodeURIComponent(profileToken)}` : ''}`
+    ),
+
+  getVideoOptions: (deviceId: string, profileToken?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/video/options${profileToken ? `?profileToken=${encodeURIComponent(profileToken)}` : ''}`
+    ),
+
+  setVideoConfiguration: (deviceId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/video`,
+      { method: 'POST', body: JSON.stringify(config) }
+    ),
+
+  getImagingConfiguration: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/imaging`
+    ),
+
+  getImagingOptions: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/imaging/options`
+    ),
+
+  setImagingConfiguration: (deviceId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/imaging`,
+      { method: 'POST', body: JSON.stringify(config) }
+    ),
+
+  getTimeConfiguration: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/time`
+    ),
+
+  setTimeConfiguration: (deviceId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/time`,
+      { method: 'POST', body: JSON.stringify(config) }
+    ),
+
+  getNetworkConfiguration: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/network`
+    ),
+
+  setNetworkConfiguration: (deviceId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/network`,
+      { method: 'PUT', body: JSON.stringify(config) }
+    ),
+
+  rollbackSnapshot: (deviceId: string, snapshotId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/rollback`,
+      { method: 'POST', body: JSON.stringify({ snapshotId }) }
+    ),
+
+  listSnapshots: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/snapshots`
+    ),
+
+  captureSnapshot: (deviceId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/devices/${encodeURIComponent(deviceId)}/configuration/snapshots`,
+      { method: 'POST' }
+    ),
+
+  getRecorderChannels: (recorderId: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/channels`
+    ),
+
+  getRecorderRecording: (recorderId: string, channelId?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/recording${channelId ? `?channelId=${encodeURIComponent(channelId)}` : ''}`
+    ),
+
+  getRecorderStorage: (recorderId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/storage`
+    ),
+
+  getRecorderTime: (recorderId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/time`
+    ),
+
+  setRecorderTime: (recorderId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/time`,
+      { method: 'POST', body: JSON.stringify(config) }
+    ),
+
+  getRecorderNetwork: (recorderId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/network`
+    ),
+
+  setRecorderNetwork: (recorderId: string, config: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/network`,
+      { method: 'PUT', body: JSON.stringify(config) }
+    ),
+
+  getRecorderSchedule: (recorderId: string, channelId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/channels/${encodeURIComponent(channelId)}/schedule`
+    ),
+
+  setRecorderSchedule: (recorderId: string, channelId: string, schedule: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/channels/${encodeURIComponent(channelId)}/schedule`,
+      { method: 'PUT', body: JSON.stringify(schedule) }
+    ),
+
+  getRecorderChannelEncoding: (recorderId: string, channelId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/channels/${encodeURIComponent(channelId)}/encoding`
+    ),
+
+  setRecorderChannelEncoding: (recorderId: string, channelId: string, encoding: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/recorders/${encodeURIComponent(recorderId)}/configuration/channels/${encodeURIComponent(channelId)}/encoding`,
+      { method: 'PUT', body: JSON.stringify(encoding) }
+    ),
+
+  listGoldenTemplates: (tenantId?: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/device-configuration/templates${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`
+    ),
+
+  getGoldenTemplate: (id: string, tenantId?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/templates/${encodeURIComponent(id)}${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`
+    ),
+
+  createGoldenTemplate: (template: any, tenantId?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/templates${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`,
+      { method: 'POST', body: JSON.stringify(template) }
+    ),
+
+  updateGoldenTemplate: (id: string, updates: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/templates/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    ),
+
+  applyGoldenTemplate: (id: string, req: any, tenantId?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/templates/${encodeURIComponent(id)}/apply${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`,
+      { method: 'POST', body: JSON.stringify(req) }
+    ),
+
+  getFleetCompliance: (templateId?: string, tenantId?: string) => {
+    const params = new URLSearchParams();
+    if (templateId) params.append('templateId', templateId);
+    if (tenantId) params.append('tenantId', tenantId);
+    const qs = params.toString();
+    return fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/compliance${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  remediateCompliance: (payload: { templateId: string; deviceIds?: string[] }, tenantId?: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/device-configuration/compliance/remediate${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+};
+
 export { ApiError };
 

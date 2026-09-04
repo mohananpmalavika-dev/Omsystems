@@ -190,6 +190,7 @@ export const navigation: NavGroup[] = [
     label: "FLEET MAINTENANCE",
     icon: Wrench,
     items: [
+      { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
       { label: "Maintenance Work Orders", href: "/maintenance/workorders", icon: ClipboardCheck },
       { label: "Vendor & Service Directory", href: "/maintenance/vendors", icon: Handshake },
@@ -234,7 +235,8 @@ export const navigation: NavGroup[] = [
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
       { label: "AI Quality & Model Registry", href: "/admin/ai-quality", icon: Sparkles },
       { label: "Database Tables & Data", href: "/admin/database", icon: Database },
-      { label: "Device Registry & ONVIF", href: "/maintenance/device-management", icon: SlidersHorizontal },
+      { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+      { label: "Device Registry & ONVIF", href: "/maintenance/device-management", icon: Server },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Notification Policies", href: "/operations/alert-notification-policy", icon: Bell },
       { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", icon: FileSpreadsheet },
@@ -295,6 +297,7 @@ export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
 
 
 export const quickActions: NavItem[] = [
+  { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
   { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
   { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },

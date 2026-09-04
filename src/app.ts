@@ -85,6 +85,8 @@ import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
+import { registerDeviceConfigurationRoutes } from "./routes/device-configuration.routes.js";
+import type { DeviceConfigurationService } from "./services/device-configuration.service.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
 import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
@@ -477,6 +479,8 @@ export async function buildApp(options?: {
   requireManagedEdgeTunnel?: boolean;
   /** Optional edge/vendor provider resolver for on-demand recorder operations. */
   recorderProviderResolver?: RecorderProviderResolver;
+  /** Optional device configuration service orchestrator. */
+  deviceConfigurationService?: DeviceConfigurationService;
 }): Promise<FastifyInstance> {
   // PRODUCTION SECRET VALIDATION
   // In production mode, validate all critical secrets before proceeding
@@ -2173,6 +2177,7 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerDeviceConfigurationRoutes(app, store, options?.deviceConfigurationService);
   await registerBranchConnectivityRoutes(app, store, {
     tunnelProvider: options?.edgeTunnelProvider,
   });

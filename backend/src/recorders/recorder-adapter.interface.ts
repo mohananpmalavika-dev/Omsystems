@@ -25,6 +25,12 @@ import type {
   RecorderCapabilities,
   CheckResult
 } from './types/index.js';
+import type {
+  ChannelVideoConfig,
+  RecordingSchedule,
+  DeviceTimeConfig,
+  DeviceNetworkConfig,
+} from '../../../src/types/device-configuration.types.js';
 
 /**
  * Recorder credentials
@@ -212,7 +218,42 @@ export interface RecorderAdapter {
    * - unknown: cannot read device time
    */
   getDeviceTime(): Promise<CheckResult<Date>>;
+
+  /**
+   * Read encoding settings for a specific channel
+   */
+  getChannelEncoding?(channelId: string): Promise<CheckResult<ChannelVideoConfig>>;
+
+  /**
+   * Configure encoding settings for a specific channel
+   */
+  setChannelEncoding?(channelId: string, config: ChannelVideoConfig): Promise<CheckResult<void>>;
+
+  /**
+   * Read internal recording schedule for a channel
+   */
+  getRecordingSchedule?(channelId: string): Promise<CheckResult<RecordingSchedule>>;
+
+  /**
+   * Set internal recording schedule for a channel
+   */
+  setRecordingSchedule?(channelId: string, schedule: RecordingSchedule): Promise<CheckResult<void>>;
+
+  /**
+   * Configure recorder time and NTP
+   */
+  setTimeConfiguration?(timeConfig: DeviceTimeConfig): Promise<CheckResult<void>>;
   
+  /**
+   * Read network configuration for the recorder
+   */
+  getNetworkConfiguration?(): Promise<CheckResult<DeviceNetworkConfig>>;
+
+  /**
+   * Configure network settings for the recorder
+   */
+  setNetworkConfiguration?(config: DeviceNetworkConfig): Promise<CheckResult<void>>;
+
   /**
    * Close connection and clean up resources
    */

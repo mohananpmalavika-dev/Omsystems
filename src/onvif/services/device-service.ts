@@ -18,6 +18,12 @@ export interface SystemDateAndTime {
   clockDriftMs: number; // Device time - Host time in ms
 }
 
+export interface NtpInformation {
+  fromDHCP: boolean;
+  manualServers: string[];
+  dhcpServers: string[];
+}
+
 export interface DeviceCapabilities {
   deviceServiceUrl?: string;
   mediaServiceUrl?: string;
@@ -32,6 +38,27 @@ export interface DeviceCapabilities {
 export interface OnvifUser {
   username: string;
   userLevel: "Administrator" | "Operator" | "User" | "Anonymous";
+}
+
+export interface OnvifNetworkInterface {
+  token: string;
+  enabled: boolean;
+  macAddress?: string;
+  mtu?: number;
+  ipv4?: {
+    enabled: boolean;
+    dhcp: boolean;
+    manual?: Array<{
+      address: string;
+      prefixLength: number;
+    }>;
+  };
+}
+
+export interface OnvifDnsInformation {
+  fromDHCP: boolean;
+  searchDomain: string[];
+  manualServers: string[];
 }
 
 export class DeviceService {
@@ -169,6 +196,79 @@ export class DeviceService {
   }
 
   /**
+   * tds:GetNTP
+   */
+  async getNtp(): Promise<NtpInformation> {
+    const bodyXml = `<tds:GetNTP xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`;
+
+    const response = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/GetNTP",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    const fromDHCP = SoapClient.extractTag(response, "FromDHCP") === "true";
+    const manualTags = SoapClient.extractAllTags(response, "NTPManual");
+    const dhcpTags = SoapClient.extractAllTags(response, "NTPFromDHCP");
+
+    const manualServers = manualTags
+      .map(
+        (t) =>
+          SoapClient.extractTag(t, "DNSname") ||
+          SoapClient.extractTag(t, "IPv4Address") ||
+          SoapClient.extractTag(t, "IPv6Address")
+      )
+      .filter((s): s is string => Boolean(s));
+
+    const dhcpServers = dhcpTags
+      .map(
+        (t) =>
+          SoapClient.extractTag(t, "DNSname") ||
+          SoapClient.extractTag(t, "IPv4Address") ||
+          SoapClient.extractTag(t, "IPv6Address")
+      )
+      .filter((s): s is string => Boolean(s));
+
+    return {
+      fromDHCP,
+      manualServers,
+      dhcpServers,
+    };
+  }
+
+  /**
+   * tds:SetNTP
+   */
+  async setNtp(options: {
+    fromDHCP: boolean;
+    manualServers?: string[];
+  }): Promise<void> {
+    const serversXml = (options.manualServers || [])
+      .map((server) => {
+        const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(server);
+        return `
+  <tds:NTPManual>
+    <tt:Type xmlns:tt="http://www.onvif.org/ver10/schema">${isIp ? "IPv4" : "DNS"}</tt:Type>
+    ${isIp ? `<tt:IPv4Address xmlns:tt="http://www.onvif.org/ver10/schema">${server}</tt:IPv4Address>` : `<tt:DNSname xmlns:tt="http://www.onvif.org/ver10/schema">${server}</tt:DNSname>`}
+  </tds:NTPManual>`;
+      })
+      .join("");
+
+    const bodyXml = `
+<tds:SetNTP xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  <tds:FromDHCP>${options.fromDHCP}</tds:FromDHCP>${serversXml}
+</tds:SetNTP>`.trim();
+
+    await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/SetNTP",
+      bodyXml,
+      credentials: this.credentials,
+    });
+  }
+
+  /**
    * tds:GetCapabilities
    */
   async getCapabilities(): Promise<DeviceCapabilities> {
@@ -221,6 +321,187 @@ export class DeviceService {
       username: SoapClient.extractTag(u, "Username") || "unknown",
       userLevel: (SoapClient.extractTag(u, "UserLevel") as any) || "User",
     }));
+  }
+
+  /**
+   * tds:GetNetworkInterfaces
+   */
+  async getNetworkInterfaces(): Promise<OnvifNetworkInterface[]> {
+    const bodyXml = `<tds:GetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`;
+
+    const response = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/GetNetworkInterfaces",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    const ifaceTags = SoapClient.extractAllTags(response, "NetworkInterfaces");
+    return ifaceTags.map((tag) => {
+      const token = SoapClient.extractAttribute(tag, "token") || "eth0";
+      const enabled = SoapClient.extractTag(tag, "Enabled") === "true";
+      const macAddress = SoapClient.extractTag(tag, "HwAddress") || undefined;
+      const mtuStr = SoapClient.extractTag(tag, "MTU");
+      const mtu = mtuStr ? parseInt(mtuStr, 10) : undefined;
+
+      const ipv4Tag = SoapClient.extractTag(tag, "IPv4");
+      let ipv4: OnvifNetworkInterface["ipv4"] = undefined;
+
+      if (ipv4Tag) {
+        const ipEnabled = SoapClient.extractTag(ipv4Tag, "Enabled") === "true";
+        const dhcp = SoapClient.extractTag(ipv4Tag, "DHCP") === "true";
+        const manualTags = SoapClient.extractAllTags(ipv4Tag, "Manual");
+
+        const manual = manualTags.map((m) => ({
+          address: SoapClient.extractTag(m, "Address") || "",
+          prefixLength: parseInt(SoapClient.extractTag(m, "PrefixLength") || "24", 10),
+        })).filter((m) => Boolean(m.address));
+
+        ipv4 = {
+          enabled: ipEnabled,
+          dhcp,
+          manual,
+        };
+      }
+
+      return {
+        token,
+        enabled,
+        macAddress,
+        mtu,
+        ipv4,
+      };
+    });
+  }
+
+  /**
+   * tds:SetNetworkInterfaces
+   */
+  async setNetworkInterfaces(token: string, config: {
+    ipAddress: string;
+    prefixLength: number;
+    dhcpEnabled: boolean;
+  }): Promise<void> {
+    const bodyXml = `
+<tds:SetNetworkInterfaces xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+  <tds:InterfaceToken>${token}</tds:InterfaceToken>
+  <tds:NetworkInterface>
+    <tt:Enabled>true</tt:Enabled>
+    <tt:IPv4>
+      <tt:Enabled>true</tt:Enabled>
+      <tt:Manual>
+        <tt:Address>${config.ipAddress}</tt:Address>
+        <tt:PrefixLength>${config.prefixLength}</tt:PrefixLength>
+      </tt:Manual>
+      <tt:DHCP>${config.dhcpEnabled}</tt:DHCP>
+    </tt:IPv4>
+  </tds:NetworkInterface>
+</tds:SetNetworkInterfaces>`.trim();
+
+    await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/SetNetworkInterfaces",
+      bodyXml,
+      credentials: this.credentials,
+    });
+  }
+
+  /**
+   * tds:GetNetworkDefaultGateway
+   */
+  async getNetworkDefaultGateway(): Promise<string[]> {
+    const bodyXml = `<tds:GetNetworkDefaultGateway xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`;
+
+    const response = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/GetNetworkDefaultGateway",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    return SoapClient.extractAllTags(response, "IPv4Address")
+      .map((t) => t.replace(/<\/?.*?>/g, "").trim())
+      .filter((s): s is string => Boolean(s));
+  }
+
+  /**
+   * tds:SetNetworkDefaultGateway
+   */
+  async setNetworkDefaultGateway(gateways: string[]): Promise<void> {
+    const gwXml = gateways
+      .map((gw) => `<tds:IPv4Address>${gw}</tds:IPv4Address>`)
+      .join("");
+
+    const bodyXml = `
+<tds:SetNetworkDefaultGateway xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  ${gwXml}
+</tds:SetNetworkDefaultGateway>`.trim();
+
+    await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/SetNetworkDefaultGateway",
+      bodyXml,
+      credentials: this.credentials,
+    });
+  }
+
+  /**
+   * tds:GetDNS
+   */
+  async getDNS(): Promise<OnvifDnsInformation> {
+    const bodyXml = `<tds:GetDNS xmlns:tds="http://www.onvif.org/ver10/device/wsdl" />`;
+
+    const response = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/GetDNS",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    const fromDHCP = SoapClient.extractTag(response, "FromDHCP") === "true";
+    const manualTags = SoapClient.extractAllTags(response, "DNSManual");
+    const manualServers = manualTags
+      .map((t) => SoapClient.extractTag(t, "IPv4Address") || SoapClient.extractTag(t, "DNSname"))
+      .filter((s): s is string => Boolean(s));
+
+    const domainTags = SoapClient.extractAllTags(response, "SearchDomain");
+    const searchDomain = domainTags
+      .map((t) => t.replace(/<\/?.*?>/g, "").trim())
+      .filter((s): s is string => Boolean(s));
+
+    return {
+      fromDHCP,
+      searchDomain,
+      manualServers,
+    };
+  }
+
+  /**
+   * tds:SetDNS
+   */
+  async setDNS(options: { fromDHCP: boolean; manualServers?: string[] }): Promise<void> {
+    const serversXml = (options.manualServers || [])
+      .map((server) => {
+        const isIp = /^(\d{1,3}\.){3}\d{1,3}$/.test(server);
+        return `
+  <tds:DNSManual>
+    <tt:Type xmlns:tt="http://www.onvif.org/ver10/schema">${isIp ? "IPv4" : "DNS"}</tt:Type>
+    ${isIp ? `<tt:IPv4Address xmlns:tt="http://www.onvif.org/ver10/schema">${server}</tt:IPv4Address>` : `<tt:DNSname xmlns:tt="http://www.onvif.org/ver10/schema">${server}</tt:DNSname>`}
+  </tds:DNSManual>`;
+      })
+      .join("");
+
+    const bodyXml = `
+<tds:SetDNS xmlns:tds="http://www.onvif.org/ver10/device/wsdl">
+  <tds:FromDHCP>${options.fromDHCP}</tds:FromDHCP>${serversXml}
+</tds:SetDNS>`.trim();
+
+    await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/SetDNS",
+      bodyXml,
+      credentials: this.credentials,
+    });
   }
 
   /**

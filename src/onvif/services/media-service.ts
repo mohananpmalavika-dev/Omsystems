@@ -29,6 +29,16 @@ export interface StreamUriResult {
   invalidAfterConnect?: string;
 }
 
+export interface VideoEncoderConfigurationOptions {
+  qualityRange: { min: number; max: number };
+  resolutionsAvailable: Array<{ width: number; height: number }>;
+  govLengthRange?: { min: number; max: number };
+  frameRateRange: { min: number; max: number };
+  bitrateRangeKbps: { min: number; max: number };
+  encodingIntervalRange?: { min: number; max: number };
+  h264ProfilesSupported?: string[];
+}
+
 export class MediaService {
   private readonly soap: SoapClient;
   private endpoint: string;
@@ -287,5 +297,84 @@ export class MediaService {
       bodyXml,
       credentials: this.credentials,
     });
+  }
+
+  /**
+   * trt:GetVideoEncoderConfigurationOptions
+   */
+  async getVideoEncoderConfigurationOptions(
+    configurationToken?: string,
+    profileToken?: string
+  ): Promise<VideoEncoderConfigurationOptions> {
+    const bodyXml = `
+<trt:GetVideoEncoderConfigurationOptions xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+  ${configurationToken ? `<trt:ConfigurationToken>${configurationToken}</trt:ConfigurationToken>` : ""}
+  ${profileToken ? `<trt:ProfileToken>${profileToken}</trt:ProfileToken>` : ""}
+</trt:GetVideoEncoderConfigurationOptions>`.trim();
+
+    const responseXml = await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/media/wsdl/GetVideoEncoderConfigurationOptions",
+      bodyXml,
+      credentials: this.credentials,
+    });
+
+    // Quality Range
+    const qualityTag = SoapClient.extractTag(responseXml, "QualityRange");
+    const qualityMin = qualityTag ? parseInt(SoapClient.extractTag(qualityTag, "Min") || "1", 10) : 1;
+    const qualityMax = qualityTag ? parseInt(SoapClient.extractTag(qualityTag, "Max") || "100", 10) : 100;
+
+    // Resolutions Available
+    const resolutionsAvailable: Array<{ width: number; height: number }> = [];
+    const resBlocks = SoapClient.extractAllFullTags(responseXml, "ResolutionsAvailable");
+    for (const resXml of resBlocks) {
+      const width = parseInt(SoapClient.extractTag(resXml, "Width") || "0", 10);
+      const height = parseInt(SoapClient.extractTag(resXml, "Height") || "0", 10);
+      if (width > 0 && height > 0 && !resolutionsAvailable.some(r => r.width === width && r.height === height)) {
+        resolutionsAvailable.push({ width, height });
+      }
+    }
+
+    // Gov Length
+    const govTag = SoapClient.extractTag(responseXml, "GovLengthRange");
+    const govMin = govTag ? parseInt(SoapClient.extractTag(govTag, "Min") || "1", 10) : undefined;
+    const govMax = govTag ? parseInt(SoapClient.extractTag(govTag, "Max") || "300", 10) : undefined;
+
+    // FrameRate Range
+    const fpsTag = SoapClient.extractTag(responseXml, "FrameRateRange");
+    const fpsMin = fpsTag ? parseInt(SoapClient.extractTag(fpsTag, "Min") || "1", 10) : 1;
+    const fpsMax = fpsTag ? parseInt(SoapClient.extractTag(fpsTag, "Max") || "30", 10) : 30;
+
+    // Bitrate Range
+    const bitrateTag = SoapClient.extractTag(responseXml, "BitrateRange");
+    const bitrateMin = bitrateTag ? parseInt(SoapClient.extractTag(bitrateTag, "Min") || "64", 10) : 64;
+    const bitrateMax = bitrateTag ? parseInt(SoapClient.extractTag(bitrateTag, "Max") || "16384", 10) : 16384;
+
+    // Encoding Interval Range
+    const intervalTag = SoapClient.extractTag(responseXml, "EncodingIntervalRange");
+    const intervalMin = intervalTag ? parseInt(SoapClient.extractTag(intervalTag, "Min") || "1", 10) : undefined;
+    const intervalMax = intervalTag ? parseInt(SoapClient.extractTag(intervalTag, "Max") || "1", 10) : undefined;
+
+    // H264 Profiles
+    const h264ProfilesSupported: string[] = [];
+    const profileMatches = responseXml.match(/<(?:[\w-]+:)?H264ProfilesSupported>([^<]+)<\/(?:[\w-]+:)?H264ProfilesSupported>/gi);
+    if (profileMatches) {
+      for (const pm of profileMatches) {
+        const val = pm.replace(/<\/?[\w:-]+>/g, "").trim();
+        if (val && !h264ProfilesSupported.includes(val)) {
+          h264ProfilesSupported.push(val);
+        }
+      }
+    }
+
+    return {
+      qualityRange: { min: qualityMin, max: qualityMax },
+      resolutionsAvailable,
+      govLengthRange: govMin !== undefined && govMax !== undefined ? { min: govMin, max: govMax } : undefined,
+      frameRateRange: { min: fpsMin, max: fpsMax },
+      bitrateRangeKbps: { min: bitrateMin, max: bitrateMax },
+      encodingIntervalRange: intervalMin !== undefined && intervalMax !== undefined ? { min: intervalMin, max: intervalMax } : undefined,
+      h264ProfilesSupported: h264ProfilesSupported.length > 0 ? h264ProfilesSupported : undefined,
+    };
   }
 }

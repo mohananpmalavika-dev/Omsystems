@@ -13,8 +13,9 @@ const KEY_LEN = 32;
 const PBKDF2_ITERS = 200_000;
 
 function getDerivedMasterKey(): Buffer {
-  const password = process.env.VAULT_MASTER_PASSWORD;
-  const salt = process.env.VAULT_SALT;
+  const isTest = process.env.NODE_ENV === "test" || Boolean(process.env.VITEST);
+  const password = process.env.VAULT_MASTER_PASSWORD || (isTest ? "test-vault-master-password-min-32chars-for-tests" : undefined);
+  const salt = process.env.VAULT_SALT || (isTest ? "test-vault-salt-min-32chars-for-tests" : undefined);
 
   if (!password || password.length < 32) {
     throw new Error(

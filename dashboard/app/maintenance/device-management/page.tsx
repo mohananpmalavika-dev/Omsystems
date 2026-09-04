@@ -140,12 +140,45 @@ export default function DeviceManagementPage() {
               Automated credential rotation, IP address reservation, template enforcement, and configuration drift monitoring across all branch CCTV appliances.
             </p>
           </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/maintenance/device-configuration"
+              className="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white shadow-sm shadow-indigo-600/20 transition"
+            >
+              <Sliders className="w-3.5 h-3.5 mr-1.5" />
+              Device Configuration Center
+            </Link>
+            <Link
+              href="/maintenance"
+              className="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
+              Back
+            </Link>
+          </div>
+        </div>
+
+        {/* Device Configuration Center Banner */}
+        <div className="bg-gradient-to-r from-indigo-950/60 via-slate-900/60 to-slate-900/60 border border-indigo-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-300">
+              <Sliders className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-semibold text-white">
+                New: Hardware Device Configuration Center
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Direct ONVIF video encoders, ISP imaging controls, 7-day 24h recording schedules, and safe anti-lockout network configurations.
+              </p>
+            </div>
+          </div>
           <Link
-            href="/maintenance"
-            className="inline-flex items-center px-3.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+            href="/maintenance/device-configuration"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-medium text-white transition self-start sm:self-auto shrink-0"
           >
-            <ArrowLeft className="w-3.5 h-3.5 mr-1.5" />
-            Back to Maintenance
+            Launch Center
+            <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
           </Link>
         </div>
 

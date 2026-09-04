@@ -15,6 +15,7 @@
 
 import crypto from 'crypto';
 import type { ExtendedControlPlaneStore } from '../control-plane-store.js';
+import { deviceCredentialVault } from '../security/vault/device-credential-vault.service.js';
 
 interface CredentialRotationInput {
   tenantId: string;
@@ -139,60 +140,53 @@ export class DeviceCredentialService {
   }
 
   /**
-   * Encrypt a secret using AES-256-GCM.
-   * 
-   * Format: <key_version>:<iv>:<auth_tag>:<ciphertext>
+   * Encrypt a secret using the authoritative AES-256-GCM Credential Vault.
    */
-  private async encryptSecret(plaintext: string): Promise<EncryptedSecret> {
-    const key = await this.getEncryptionKey(this.KEY_VERSION);
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(this.ALGORITHM, key, iv);
-
-    let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
-    ciphertext += cipher.final('hex');
-
-    const authTag = cipher.getAuthTag();
-
+  async encryptSecret(plaintext: string): Promise<EncryptedSecret> {
+    const encrypted = deviceCredentialVault.encryptCredential(plaintext);
     return {
-      ciphertext: `${this.KEY_VERSION}:${iv.toString('hex')}:${authTag.toString('hex')}:${ciphertext}`,
+      ciphertext: encrypted.ciphertext,
       keyVersion: this.KEY_VERSION,
     };
   }
 
   /**
-   * Decrypt a secret encrypted with encryptSecret().
+   * Decrypt a secret encrypted with encryptSecret() or legacy format.
    */
   async decryptSecret(encrypted: string): Promise<string> {
-    const parts = encrypted.split(':');
-    if (parts.length < 4) {
-      throw new Error('Invalid encrypted credential payload');
+    if (encrypted.includes(':')) {
+      // Legacy format backwards compatibility: <version>:<iv>:<tag>:<ciphertext>
+      const parts = encrypted.split(':');
+      if (parts.length >= 4) {
+        const versionStr = parts[0] ?? '';
+        const ivHex = parts[1] ?? '';
+        const authTagHex = parts[2] ?? '';
+        const ciphertext = parts.slice(3).join(':') ?? '';
+
+        if (versionStr && ivHex && authTagHex && ciphertext) {
+          const version = Number.parseInt(versionStr, 10);
+          if (Number.isFinite(version)) {
+            const key = await this.getEncryptionKey(version);
+            const iv = Buffer.from(ivHex, 'hex');
+            const authTag = Buffer.from(authTagHex, 'hex');
+
+            const decipher = crypto.createDecipheriv(this.ALGORITHM, key, iv);
+            decipher.setAuthTag(authTag);
+
+            let plaintext = decipher.update(ciphertext, 'hex', 'utf8');
+            plaintext += decipher.final('utf8');
+            return plaintext;
+          }
+        }
+      }
     }
 
-    const versionStr = parts[0] ?? '';
-    const ivHex = parts[1] ?? '';
-    const authTagHex = parts[2] ?? '';
-    const ciphertext = parts.slice(3).join(':') ?? '';
-
-    if (!versionStr || !ivHex || !authTagHex || !ciphertext) {
-      throw new Error('Invalid encrypted credential payload');
-    }
-
-    const version = Number.parseInt(versionStr, 10);
-    if (!Number.isFinite(version)) {
-      throw new Error('Invalid encrypted credential version');
-    }
-
-    const key = await this.getEncryptionKey(version);
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(authTagHex, 'hex');
-
-    const decipher = crypto.createDecipheriv(this.ALGORITHM, key, iv);
-    decipher.setAuthTag(authTag);
-
-    let plaintext = decipher.update(ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-
-    return plaintext;
+    // Authoritative Device Credential Vault format
+    return deviceCredentialVault.decryptCredential({
+      ciphertext: encrypted,
+      fingerprintSha256: '',
+      encryptedAt: new Date().toISOString(),
+    });
   }
 
   /**
