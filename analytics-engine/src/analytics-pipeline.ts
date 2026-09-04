@@ -123,7 +123,7 @@ export class AnalyticsPipeline {
     // Initialize enhanced detectors
     this.personDetector = new PersonDetector();
     this.vehicleDetector = new VehicleDetector();
-    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.7));
+    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.5));
     this.fallDetector = new FallDetector();
     this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
     this.crowdDensityDetector = new CrowdDensityDetector();
@@ -339,9 +339,9 @@ export class AnalyticsPipeline {
       // Step 7: Conditionally run specialized detections based on scheduler
       const specializedPromises: Array<Promise<any[]>> = [];
 
-      // Helmet detection (if scheduled)
+      // Helmet detection (if scheduled or active in rules for observed persons/vehicles)
       if ((schedule.modelsToRun.includes('helmet') ||
-          (!localInferenceRequested && this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet']))) &&
+          this.needsDetection(rules, ['helmet', 'helmet-worn', 'no-helmet'])) &&
           (persons.length > 0 || vehicles.length > 0)) {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
@@ -515,9 +515,11 @@ export class AnalyticsPipeline {
       detectionType: result.detectionType,
       occurredAt: frame.timestamp.toISOString(),
       confidence: result.confidence,
-      durationSeconds: 0,
-      modelVersion: "1.0.0",
-      objects: result.objects.map((obj: any) => ({
+      durationSeconds: typeof result.durationSeconds === "number"
+        ? result.durationSeconds
+        : (result.requiresAlert ? 1 : 0),
+      modelVersion: result.executionMetadata?.modelVersion ?? "1.0.0",
+      objects: (result.objects || []).map((obj: any) => ({
         label: obj.label,
         confidence: obj.confidence,
         trackId: obj.trackId,
@@ -563,6 +565,7 @@ export class AnalyticsPipeline {
     const vehicleTypes = [
       "vehicle",
       "helmet",
+      "helmet-worn",
       "no-helmet",
       "line-crossing",
     ];
@@ -571,7 +574,7 @@ export class AnalyticsPipeline {
 
   private needsObjectDetection(rules: AnalyticsRule[]): boolean {
     return this.needsDetection(rules, [
-      "object", "person", "vehicle", "helmet", "no-helmet", "fall", "fire", "smoke",
+      "object", "person", "vehicle", "helmet", "helmet-worn", "no-helmet", "fall", "fire", "smoke",
       "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
     ]);
   }

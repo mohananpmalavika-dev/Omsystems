@@ -9,6 +9,8 @@ const BUSINESS_DEFAULTS: Readonly<Record<string, AlertSeverity>> = {
   fire: "P1",
   "fire-smoke": "P1",
   "no-helmet": "P2",
+  helmet: "P2",
+  "helmet-worn": "P2",
   shoplifting: "P2",
 };
 

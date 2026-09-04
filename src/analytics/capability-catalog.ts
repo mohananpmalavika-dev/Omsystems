@@ -55,7 +55,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
   { id: "safety", name: "Fire & safety", description: "Immediate life-safety and PPE conditions", capabilities: [
     c("fire", "Fire detection", "open-model", "P1"), c("smoke", "Smoke detection", "open-model", "P1"),
     c("fire-smoke", "Combined fire / smoke detection", "open-model", "P1"),
-    c("helmet", "Helmet detection"), c("no-helmet", "No helmet", "open-model", "P2"),
+    c("helmet", "Helmet detection"), c("helmet-worn", "Helmet worn inside facility", "open-model", "P2"), c("no-helmet", "No helmet", "open-model", "P2"),
     c("no-safety-vest", "No safety vest", "open-model", "P2"), c("no-gloves", "No gloves", "open-model", "P2"),
     c("no-shoes", "No safety shoes", "open-model", "P2"), c("fire-extinguisher-missing", "Fire extinguisher missing", "open-model", "P1"),
     c("fire-exit-blocked", "Fire exit blocked", "open-model", "P1"), c("spill", "Spill detection", "open-model", "P2"),

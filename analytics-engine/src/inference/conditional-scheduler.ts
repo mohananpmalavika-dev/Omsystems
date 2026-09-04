@@ -364,6 +364,7 @@ export class ConditionalScheduler {
           break;
 
         case 'helmet':
+        case 'helmet-worn':
         case 'no-helmet':
           required.add('yolov8n');
           required.add('helmet');

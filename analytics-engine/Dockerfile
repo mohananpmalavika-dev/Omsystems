@@ -33,6 +33,7 @@ COPY package.json package-lock.json ./
 COPY tsconfig.json ./
 
 # Copy workspace package.json files
+COPY packages packages
 COPY dashboard/package.json dashboard/package.json
 COPY edge-agent/package.json edge-agent/package.json  
 COPY media-gateway/package.json media-gateway/package.json
@@ -47,6 +48,7 @@ ENV ONNXRUNTIME_NODE_INSTALL=skip
 RUN npm ci --workspace @sentinel/analytics-engine
 
 # Copy shared source (needed for cross-workspace imports)
+COPY packages packages
 COPY src src
 COPY backend/src backend/src
 
