@@ -393,21 +393,26 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
 export function createControlPlaneSubmitter(options: {
   controlPlaneUrl: string;
   sharedKey: string;
+  fallbackSharedKey?: string;
 }) {
   return async (event: z.infer<typeof detectionSchema>) => {
     let lastError: unknown;
+    const sharedKeys = [...new Set([options.sharedKey, options.fallbackSharedKey].filter((key): key is string => Boolean(key)))];
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
-        const response = await fetch(new URL("/internal/analytics/events", options.controlPlaneUrl), {
-          method: "POST", signal: AbortSignal.timeout(10_000),
-          headers: {
-            "content-type": "application/json",
-            "x-analytics-engine-key": options.sharedKey,
-          },
-          body: JSON.stringify(event),
-        });
-        if (!response.ok) throw new Error(`control_plane_${response.status}`);
-        return await response.json();
+        for (const sharedKey of sharedKeys) {
+          const response = await fetch(new URL("/internal/analytics/events", options.controlPlaneUrl), {
+            method: "POST", signal: AbortSignal.timeout(10_000),
+            headers: {
+              "content-type": "application/json",
+              "x-analytics-engine-key": sharedKey,
+            },
+            body: JSON.stringify(event),
+          });
+          if (response.ok) return await response.json();
+          lastError = new Error(`control_plane_${response.status}`);
+        }
+        throw lastError;
       } catch (error) {
         lastError = error;
         if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));

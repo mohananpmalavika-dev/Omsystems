@@ -1147,7 +1147,7 @@ function engineIdentity(
     return false;
   }
   const supplied = request.headers["x-analytics-engine-key"];
-  if (typeof supplied !== "string" || !same(supplied, expected)) {
+    if (typeof supplied !== "string" || !same(supplied, expected)) {
     void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
     return false;
   }

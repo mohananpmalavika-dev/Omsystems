@@ -21,6 +21,7 @@ const app = buildAnalyticsEngine({
   submit: createControlPlaneSubmitter({
     controlPlaneUrl: config.CONTROL_PLANE_URL,
     sharedKey: config.ANALYTICS_ENGINE_SHARED_KEY,
+    fallbackSharedKey: config.ANALYTICS_SOURCE_SHARED_KEY,
   }),
   logger: true,
 });
