@@ -3,7 +3,7 @@
  * Tests for performance and scalability
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { AnalyticsPipeline } from '../src/analytics-pipeline.js';
 import { ModelManager } from '../src/model-manager.js';
 import type { DetectionFrame } from '../src/detectors/base-detector.js';

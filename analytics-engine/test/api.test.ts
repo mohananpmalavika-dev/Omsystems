@@ -3,7 +3,7 @@
  * Tests for REST API endpoints
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { buildAnalyticsEngine } from '../src/app.js';
 import type { FastifyInstance } from 'fastify';
 

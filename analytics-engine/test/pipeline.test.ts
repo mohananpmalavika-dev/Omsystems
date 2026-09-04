@@ -3,7 +3,7 @@
  * Tests for the complete analytics pipeline
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { AnalyticsPipeline } from '../src/analytics-pipeline.js';
 import type { DetectionFrame } from '../src/detectors/base-detector.js';
 import type { AnalyticsRule } from '../src/analytics-pipeline.js';

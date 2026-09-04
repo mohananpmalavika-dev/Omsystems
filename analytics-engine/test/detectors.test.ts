@@ -3,7 +3,7 @@
  * Tests for individual detector modules
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MotionDetector } from '../src/detectors/motion-detector.js';
 import { PersonDetector } from '../src/detectors/person-detector.js';
 import { VehicleDetector } from '../src/detectors/vehicle-detector.js';

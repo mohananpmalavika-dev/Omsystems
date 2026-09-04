@@ -3,7 +3,7 @@
  * Unit and integration tests for statistics service and repository
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Pool } from "pg";
 import { AnalyticsStatisticsRepository } from "../repositories/analytics-statistics.repository.js";
 import { AnalyticsStatisticsService, ValidationError } from "../services/analytics-statistics.service.js";

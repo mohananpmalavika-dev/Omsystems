@@ -181,16 +181,6 @@ export class FaceDetector extends BaseDetector {
           requiresAlert: true, // Watchlist match requires alert
         });
 
-        results.push({
-          detectionType: "watchlist-match",
-          confidence: maxSimilarity,
-          objects: matchedFaces,
-          metadata: {
-            matchCount: matchedFaces.length,
-            watchlistMatches,
-          },
-          requiresAlert: true,
-        });
       } else if (this.config.recognitionEnabled) {
         results.push({
           detectionType: "face-recognition",

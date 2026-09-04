@@ -4,7 +4,7 @@
  * End-to-end tests for the complete banking analytics system
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BankingAnalyticsService } from '../banking-analytics.service.js';
 import { BankingEventBus } from '../events/banking-event-bus.js';
 import { MockEventGenerator, WorkflowScenarioBuilder, runScenario } from './test-utils.js';

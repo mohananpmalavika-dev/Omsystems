@@ -8,7 +8,7 @@
  * - Evidence tracking
  */
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BankingEventBus } from '../events/banking-event-bus.js';
 import { CashVanWorkflow } from '../workflow/cash-van-workflow.js';
 import { BankingEventConsumer } from '../workflow/event-consumer.js';
