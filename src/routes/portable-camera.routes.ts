@@ -308,7 +308,9 @@ export function registerPortableCameraRoutes(
       recordingPolicy: body.recordingPolicy,
       videoCodec: body.videoCodec,
       audioCodec: body.audioCodec,
-      resolution: body.resolution,
+      resolution: body.resolution
+        ? { width: body.resolution.width, height: body.resolution.height }
+        : undefined,
       fps: body.fps,
       bitrateKbps: body.bitrateKbps,
     });

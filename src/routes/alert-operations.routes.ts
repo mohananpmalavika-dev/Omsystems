@@ -27,7 +27,7 @@ export async function registerAlertOperationsRoutes(
         occurredAt: alert.occurredAt.toISOString(),
       }).then((result) => {
         if (!result.queued) {
-          app.log.warn({ alertId: alert.id, reason: result.reason }, "Physical siren command was not queued");
+          app.log.warn({ alertId: alert.id, reason: "reason" in result ? result.reason : undefined }, "Physical siren command was not queued");
         }
       }).catch((error) => {
         app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");

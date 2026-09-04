@@ -748,7 +748,7 @@ export async function registerAnalyticsRoutes(
             occurredAt: alert.firstDetectedAt,
           });
           if (!siren.queued) {
-            app.log.warn({ alertId: alert.id, reason: siren.reason }, "Physical siren command was not queued");
+            app.log.warn({ alertId: alert.id, reason: "reason" in siren ? siren.reason : undefined }, "Physical siren command was not queued");
           }
         } catch (error) {
           app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");

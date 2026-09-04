@@ -376,7 +376,7 @@ export function registerNbfcAnalyticsRoutes(
       cameraId: body.cameraId,
       name: body.name,
       type: body.type as any,
-      polygon: body.polygon,
+      polygon: body.polygon.map((point) => ({ x: point.x, y: point.y })),
       createdBy: userId,
     });
 
