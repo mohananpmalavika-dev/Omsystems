@@ -148,10 +148,68 @@ export function HlsPlayer({
             if (reason === "media_error") {
               hls.recoverMediaError();
             } else {
-              hls.stopLoad();
-              hls.startLoad(-1);
+              hls.destroy();
+              hls = null;
             }
+          }
+          const refreshedSource = withToken(url, bearerToken);
+          if (Hls.isSupported()) {
+            hls = new Hls({
+              lowLatencyMode: false,
+              backBufferLength: 4,
+              maxBufferLength: 8,
+              maxMaxBufferLength: 12,
+              liveSyncDurationCount: 2,
+              liveMaxLatencyDurationCount: 4,
+              maxLiveSyncPlaybackRate: 1.15,
+              liveDurationInfinity: true,
+              highBufferWatchdogPeriod: 2,
+              fragLoadingTimeOut: 15_000,
+              fragLoadingMaxRetry: 4,
+              manifestLoadingTimeOut: 15_000,
+              manifestLoadingMaxRetry: 4,
+              xhrSetup: (xhr, requestUrl) => {
+                xhr.withCredentials = true;
+                if (bearerToken) {
+                  const authorizedUrl = withToken(requestUrl, bearerToken);
+                  if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
+                  xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+                  xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
+                }
+              },
+            });
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              playbackStarted = true;
+              lastProgressAt = Date.now();
+              void video.play().catch(() => undefined);
+            });
+            hls.on(Hls.Events.ERROR, (_event, data) => {
+              if (!data.fatal) {
+                if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
+                  hls?.startLoad(-1);
+                }
+                return;
+              }
+              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
+                  if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                    recoveryAttempts += 1;
+                    lastProgressAt = Date.now();
+                    hls?.startLoad(-1);
+                    return;
+                  }
+                }
+              }
+              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                recover("media_error");
+                return;
+              }
+              recover("hls_error");
+            });
+            hls.loadSource(refreshedSource);
+            hls.attachMedia(video);
           } else {
+            video.src = refreshedSource;
             video.load();
             void video.play().catch(() => undefined);
           }
@@ -211,6 +269,8 @@ export function HlsPlayer({
             if (bearerToken) {
               const authorizedUrl = withToken(requestUrl, bearerToken);
               if (authorizedUrl !== requestUrl) xhr.open("GET", authorizedUrl, true);
+              xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+              xhr.setRequestHeader("X-Sentinel-Session", bearerToken);
             }
           },
         });
