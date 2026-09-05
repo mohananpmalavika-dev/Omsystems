@@ -768,8 +768,9 @@ async function readBinaryBody(request: IncomingMessage, maximumBytes: number) {
 function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
   response.setHeader("Access-Control-Allow-Origin", origin);
-  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  response.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+  response.setHeader("Access-Control-Allow-Credentials", "true");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
+  response.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS, GET, HEAD");
   if (request.headers["access-control-request-private-network"] === "true") {
     response.setHeader("Access-Control-Allow-Private-Network", "true");
   }

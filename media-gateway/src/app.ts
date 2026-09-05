@@ -138,13 +138,21 @@ export async function buildMediaGateway(options: {
     });
   });
 
-  app.delete("/v1/live/:sessionId", async (request, reply) => {
-    const params = z.object({ sessionId: z.string().uuid() }).parse(request.params);
-    const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
-    if (!token) throw new GatewayError(401, "invalid_live_session");
-    const released = await access.release(params.sessionId, token);
-    if (!released) throw new GatewayError(404, "invalid_live_session");
-    return reply.code(200).send({ status: "released" });
+  app.route({
+    method: ["DELETE", "OPTIONS"],
+    url: "/v1/live/:sessionId",
+    handler: async (request, reply) => {
+      setLiveSessionCorsHeaders(request.headers.origin, reply);
+      if (request.method === "OPTIONS") {
+        return reply.code(204).send();
+      }
+      const params = z.object({ sessionId: z.string().uuid() }).parse(request.params);
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+      if (!token) throw new GatewayError(401, "invalid_live_session");
+      const released = await access.release(params.sessionId, token);
+      if (!released) throw new GatewayError(404, "invalid_live_session");
+      return reply.code(200).send({ status: "released" });
+    },
   });
 
   app.post("/v1/portable/publish-start", async (request, reply) => {
@@ -283,6 +291,21 @@ function setWebRtcCorsHeaders(
   reply.header("access-control-allow-headers", "Authorization, Content-Type, Range, Id");
   reply.header("access-control-expose-headers", "Location, ETag, Id");
   reply.header("access-control-allow-methods", "GET, POST, OPTIONS, PATCH, DELETE, HEAD");
+}
+
+function setLiveSessionCorsHeaders(
+  origin: string | undefined,
+  reply: { header(name: string, value: string): unknown },
+) {
+  if (origin) {
+    reply.header("access-control-allow-origin", origin);
+    reply.header("access-control-allow-credentials", "true");
+    reply.header("vary", "Origin");
+  } else {
+    reply.header("access-control-allow-origin", "*");
+  }
+  reply.header("access-control-allow-headers", "Authorization, Content-Type");
+  reply.header("access-control-allow-methods", "DELETE, OPTIONS");
 }
 
 function forwardWebRtcHeaders(headers: Record<string, unknown>) {

@@ -56,8 +56,9 @@ export async function releaseLiveSession(session: LiveSessionResponse | undefine
     await fetch(releaseUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${bearerToken}` },
-      credentials: "include",
+      credentials: "omit",
       cache: "no-store",
+      signal: AbortSignal.timeout(3000),
     });
   } catch {
     // Session TTL remains the fallback when the gateway is unreachable.

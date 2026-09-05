@@ -47,11 +47,15 @@ export async function POST(request: NextRequest) {
 function publicLiveError(error: unknown) {
   if (error instanceof z.ZodError) return "invalid_request";
   const code = error instanceof Error ? error.message : "";
+  if (code.includes("bridge_offline")) return "bridge_offline";
+  if (code.includes("stream_secret_unavailable")) return "stream_secret_unavailable";
+  if (code.includes("media_gateway_unavailable")) return "media_gateway_unavailable";
   const knownCodes = new Set([
     "invalid_live_session",
     "media_gateway_failure",
     "media_gateway_unavailable",
     "stream_secret_unavailable",
+    "bridge_offline",
     "forbidden",
     "approval_required",
     "camera_not_found",
@@ -65,7 +69,7 @@ function publicLiveError(error: unknown) {
   ]);
 
   if (knownCodes.has(code)) return code;
-  const status = code.match(/^Control plane returned (\d{3})$/)?.[1];
+  const status = code.match(/^(?:Control plane|Media gateway) returned (\d{3})/i)?.[1];
   if (status === "401" || status === "403") return "forbidden";
   if (status && status.startsWith("5")) return "control_plane_unavailable";
   return "live_session_unavailable";
@@ -76,6 +80,13 @@ function publicLiveStatus(code: string) {
   if (code === "unauthenticated") return 401;
   if (code === "forbidden" || code === "approval_required") return 403;
   if (code === "camera_not_found" || code === "resource_not_found") return 404;
-  if (code === "control_plane_unavailable" || code === "media_gateway_unavailable" || code === "edge_agent_not_found" || code === "edge_agent_offline") return 503;
+  if (
+    code === "control_plane_unavailable" ||
+    code === "media_gateway_unavailable" ||
+    code === "stream_secret_unavailable" ||
+    code === "edge_agent_not_found" ||
+    code === "edge_agent_offline" ||
+    code === "bridge_offline"
+  ) return 503;
   return 502;
 }
