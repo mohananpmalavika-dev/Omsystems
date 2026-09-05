@@ -30,6 +30,7 @@ export default function PortableCameraEnrollPage() {
 
   // Enrollment & Device Info
   const [enrollmentInfo, setEnrollmentInfo] = useState<any>(null);
+  const [enrolledDevice, setEnrolledDevice] = useState<{ id: string; cameraId: string; branchId?: string } | null>(null);
   const [deviceName, setDeviceName] = useState<string>("");
   const [deviceType, setDeviceType] = useState<"ANDROID" | "IOS" | "WINDOWS" | "BROWSER">("BROWSER");
   const [allowMic, setAllowMic] = useState<boolean>(true);
@@ -68,6 +69,20 @@ export default function PortableCameraEnrollPage() {
     }
     setToken(t);
 
+    // Check if device was already enrolled in this browser session
+    const cached = typeof window !== "undefined" ? sessionStorage.getItem(`portable_enrolled_${t}`) : null;
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.id && parsed.cameraId) {
+          setEnrolledDevice(parsed);
+          setEnrollmentInfo({ branchId: parsed.branchId });
+          setStreamState("PERMISSION_CONSENT");
+          return;
+        }
+      } catch {}
+    }
+
     // Detect device type
     const ua = navigator.userAgent.toLowerCase();
     let detectedType: "ANDROID" | "IOS" | "WINDOWS" | "BROWSER" = "BROWSER";
@@ -98,8 +113,13 @@ export default function PortableCameraEnrollPage() {
 
     // Validate enrollment token
     fetch(`/api/portable-camera/enrollments/${t}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Enrollment session is invalid, expired, or has already been consumed.");
+      .then(async (res) => {
+        if (!res.ok) {
+          if (res.status === 410) {
+            throw new Error("This enrollment QR code has already been consumed or expired. If you need to connect a camera, please generate a fresh QR code from Device Manager.");
+          }
+          throw new Error("Enrollment session is invalid or not found.");
+        }
         return res.json();
       })
       .then((data) => {
@@ -134,25 +154,44 @@ export default function PortableCameraEnrollPage() {
       setStreamState("ENROLLING");
       setErrorMessage("");
 
-      // 1. Enroll device
-      const enrollRes = await fetch("/api/portable-camera/enroll", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          token,
-          deviceType,
-          deviceName,
-          branchId: enrollmentInfo?.branchId,
-        }),
-      });
+      let deviceId = enrolledDevice?.id;
+      let cameraId = enrolledDevice?.cameraId;
 
-      if (!enrollRes.ok) {
-        const err = await enrollRes.json().catch(() => ({}));
-        throw new Error(err.error || "Device enrollment rejected by VMS.");
+      if (!deviceId || !cameraId) {
+        // 1. Enroll device
+        const enrollRes = await fetch("/api/portable-camera/enroll", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            token,
+            deviceType,
+            deviceName,
+            branchId: enrollmentInfo?.branchId,
+          }),
+        });
+
+        if (!enrollRes.ok) {
+          const err = await enrollRes.json().catch(() => ({}));
+          throw new Error(err.error || "Device enrollment rejected by VMS.");
+        }
+        const enrollData = await enrollRes.json();
+        deviceId = enrollData.device?.id;
+        cameraId = enrollData.camera?.id;
+        if (!deviceId || !cameraId) {
+          throw new Error("Device enrollment succeeded but device or camera ID was not returned.");
+        }
+        setEnrolledDevice({ id: deviceId, cameraId, branchId: enrollmentInfo?.branchId });
+        try {
+          sessionStorage.setItem(
+            `portable_enrolled_${token}`,
+            JSON.stringify({ id: deviceId, cameraId, branchId: enrollmentInfo?.branchId })
+          );
+        } catch {}
       }
-      const enrollData = await enrollRes.json();
-      const deviceId = enrollData.device.id;
-      const cameraId = enrollData.camera.id;
+
+      if (!deviceId || !cameraId) {
+        throw new Error("Missing enrolled device credentials.");
+      }
 
       setStreamState("STARTING");
 
@@ -932,20 +971,37 @@ export default function PortableCameraEnrollPage() {
             <AlertTriangle size={36} color="#ef4444" style={{ marginBottom: "12px" }} />
             <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#f87171", margin: "0 0 8px 0" }}>Enrollment Error</h2>
             <p style={{ fontSize: "13px", color: "#cbd5e1", margin: "0 0 18px 0" }}>{errorMessage}</p>
-            <button
-              onClick={() => window.location.reload()}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#1e293b",
-                border: "1px solid #334155",
-                borderRadius: "8px",
-                color: "#f8fafc",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-            >
-              Retry
-            </button>
+            <div style={{ display: "flex", gap: "10px", justifyContent: "center" }}>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#1e293b",
+                  border: "1px solid #334155",
+                  borderRadius: "8px",
+                  color: "#f8fafc",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => { window.location.href = "/devices"; }}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#2563eb",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Device Manager
+              </button>
+            </div>
           </div>
         )}
       </main>

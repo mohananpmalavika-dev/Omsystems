@@ -283,18 +283,19 @@ export class PortableCameraRepository {
     return true;
   }
 
-  async updateDeviceSeen(deviceId: string, ip?: string): Promise<void> {
+  async updateDeviceSeen(deviceId: string, ip?: string, cameraId?: string): Promise<void> {
     const now = new Date().toISOString();
     if (this.pool) {
       await this.pool.query(
-        `UPDATE portable_devices SET last_seen_at = now(), last_known_ip = COALESCE($2, last_known_ip) WHERE id = $1`,
-        [deviceId, ip ?? null]
+        `UPDATE portable_devices SET last_seen_at = now(), last_known_ip = COALESCE($2, last_known_ip), camera_id = COALESCE($3::uuid, camera_id) WHERE id = $1`,
+        [deviceId, ip ?? null, cameraId ?? null]
       );
     } else {
       const dev = this.inMemoryDevices.get(deviceId);
       if (dev) {
         dev.lastSeenAt = now;
         if (ip) dev.lastKnownIp = ip;
+        if (cameraId) dev.cameraId = cameraId;
       }
     }
   }
