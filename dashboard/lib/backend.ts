@@ -185,8 +185,13 @@ export async function startLive(
           chosenGatewayUrl = gwUrl;
           break;
         }
-        const body = await res.json().catch(() => ({})) as { error?: unknown };
-        lastError = new Error(typeof body.error === "string" ? body.error : "media_gateway_failure");
+        const body = await res.json().catch(() => ({})) as { error?: unknown; message?: unknown };
+        const errMsg = typeof body.error === "string"
+          ? body.error
+          : typeof body.message === "string"
+            ? body.message
+            : `Media gateway returned ${res.status}`;
+        lastError = new Error(errMsg);
       } catch (error) {
         lastError = new Error("media_gateway_unavailable", { cause: error });
       }
