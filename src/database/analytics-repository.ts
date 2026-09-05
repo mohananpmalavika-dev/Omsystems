@@ -457,7 +457,7 @@ export class AnalyticsRepository {
     const result = await this.pool.query(
       `SELECT 
          alert.*,
-         camera.name AS camera_name,
+         COALESCE(cam_node.name, camera.model, 'Camera') AS camera_name,
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
          zone.name AS zone_name,
@@ -465,6 +465,7 @@ export class AnalyticsRepository {
          inc.status AS incident_status
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 
@@ -545,7 +546,7 @@ export class AnalyticsRepository {
     const result = await this.pool.query(
       `SELECT 
          alert.*,
-         camera.name AS camera_name,
+         COALESCE(cam_node.name, camera.model, 'Camera') AS camera_name,
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
          zone.name AS zone_name,
@@ -553,6 +554,7 @@ export class AnalyticsRepository {
          inc.status AS incident_status
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 

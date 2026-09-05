@@ -44,7 +44,7 @@ export class IncidentRepository {
       `SELECT 
          inc.*,
          node.name AS branch_name,
-         cam.name AS camera_name,
+         COALESCE(cam_node.name, cam.model, 'Camera') AS camera_name,
          cam.id AS camera_id,
          zone.name AS zone_name,
          snap.storage_path AS snapshot_storage_path,
@@ -53,6 +53,7 @@ export class IncidentRepository {
        LEFT JOIN resource_nodes node ON node.id = inc.branch_id
        LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
        LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN resource_nodes cam_node ON cam_node.id = cam.resource_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 
          WHERE camera_id = cam.id::text OR branch_id = inc.branch_id::text 
@@ -119,7 +120,7 @@ export class IncidentRepository {
       `SELECT 
          inc.*,
          node.name AS branch_name,
-         cam.name AS camera_name,
+         COALESCE(cam_node.name, cam.model, 'Camera') AS camera_name,
          cam.id AS camera_id,
          zone.name AS zone_name,
          snap.storage_path AS snapshot_storage_path,
@@ -128,6 +129,7 @@ export class IncidentRepository {
        LEFT JOIN resource_nodes node ON node.id = inc.branch_id
        LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
        LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN resource_nodes cam_node ON cam_node.id = cam.resource_node_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 
          WHERE camera_id = cam.id::text OR branch_id = inc.branch_id::text 
