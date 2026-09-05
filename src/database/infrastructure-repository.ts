@@ -680,12 +680,12 @@ export class InfrastructureRepository {
     }
   }
 
-  private userSelect(includePassword = false, includePreferences = false) {
+  private userSelect(includePassword = false, includePreferences = true) {
     return `SELECT u.id::text, u.tenant_id::text, u.identity_subject,
       u.display_name, u.email, u.username, u.employee_id, u.phone_number,
       u.role, u.status, u.department, u.designation, u.date_of_joining,
       u.date_of_birth, u.reporting_to_user_id::text, u.last_login_at,
-      u.must_change_password, ${includePreferences ? "u.preferences" : "'{}'::jsonb AS preferences"}, u.profile_photo_url,
+      u.must_change_password, ${includePreferences ? "COALESCE(u.preferences, '{}'::jsonb) AS preferences" : "'{}'::jsonb AS preferences"}, u.profile_photo_url,
       u.profile_photo_url AS photo_url, u.profile_photo_url AS avatar_url,
       u.profile_photo_url AS face_photo_base64,
       u.custom_role_id::text AS custom_role_id,
@@ -795,7 +795,7 @@ export class InfrastructureRepository {
     if (clean.toLowerCase() === "mgdhanyamohan" || clean === "user-mgdhanyamohan" || clean.toLowerCase() === "mgdhanyamohan@omsystems.bank") {
       try {
         const uRes = await this.pool.query(
-          `SELECT id::text, tenant_id::text, username, email, display_name, role, status
+          `SELECT id::text, tenant_id::text, username, email, display_name, role, status, preferences
            FROM users
            WHERE lower(username) = 'mgdhanyamohan' OR lower(email) = 'mgdhanyamohan@omsystems.bank' OR identity_subject = 'user-mgdhanyamohan'
            LIMIT 1`
@@ -809,6 +809,7 @@ export class InfrastructureRepository {
             displayName: uRes.rows[0].display_name,
             role: "super_admin",
             status: "active",
+            preferences: uRes.rows[0].preferences || {},
           };
         }
       } catch {}
@@ -1003,10 +1004,10 @@ export class InfrastructureRepository {
     if (supplied.length > 0) {
       const assignments = supplied.map(
         ([column, , cast], index) =>
-          `${column}=${cast === "jsonb_merge" ? `${column} || ` : ""}$${index + 2}${cast && cast !== "jsonb_merge" ? `::${cast}` : cast === "jsonb_merge" ? "::jsonb" : ""}`,
+          `${column}=${cast === "jsonb_merge" ? `COALESCE(${column}, '{}'::jsonb) || ` : ""}$${index + 2}${cast && cast !== "jsonb_merge" ? `::${cast}` : cast === "jsonb_merge" ? "::jsonb" : ""}`,
       );
       const values = supplied.map(([, value, cast]) =>
-        cast === "jsonb" ? JSON.stringify(value) : value
+        cast === "jsonb" || cast === "jsonb_merge" ? JSON.stringify(value) : value
       );
       await this.pool.query(
         `UPDATE users SET ${assignments.join(", ")}, updated_at=now() WHERE id=$1`,

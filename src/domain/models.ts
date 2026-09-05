@@ -683,6 +683,7 @@ export interface User {
   faceEnrolledAt?: string;
   department?: string;
   designation?: string;
+  preferences?: Record<string, any>;
 }
 
 export type UserRole =
