@@ -6,7 +6,7 @@
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 
                           process.env.CONTROL_PLANE_INTERNAL_URL || 
-                          'https://sentinel-grid-control-plane-zcli.onrender.com';
+                          'http://3.7.216.169:8080';
 
 async function diagnose() {
   console.log('🔍 Diagnosing Maintenance API Connectivity\n');

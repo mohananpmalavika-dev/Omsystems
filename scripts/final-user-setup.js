@@ -177,8 +177,7 @@ async function finalSetup() {
     console.log('================================================');
     console.log('✅ SETUP COMPLETE!');
     console.log('================================================\n');
-    console.log('Login credentials:');
-    console.log(`  URL: https://sentinel-grid-monitoring-s38w.onrender.com`);
+    console.log(`  URL: http://3.7.216.169:10000 (or https://3-7-216-169.sslip.io)`);
     console.log(`  Username: ${username}`);
     console.log('  Password: stored in the approved secrets provider');
     console.log(`  Tenant Slug: ${tenantSlug} (optional)`);

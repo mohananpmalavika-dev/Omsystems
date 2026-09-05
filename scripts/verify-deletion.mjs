@@ -3,14 +3,16 @@
 import pg from 'pg';
 const { Client } = pg;
 
-const DATABASE_URL = 'postgresql://aditivision_4gc4_user:vVZ8yzf7dRV7VIyOeQ6MmSQR9nHMifqa@dpg-da37mgbncjis73c09tpg-a.oregon-postgres.render.com/aditivision_4gc4';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL environment variable is required.");
+  process.exit(1);
+}
 
 async function verifyDeletion() {
   const client = new Client({
     connectionString: DATABASE_URL,
-    ssl: {
-      rejectUnauthorized: false
-    }
+    ssl: process.env.DB_SSL === 'true' || DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : false
   });
 
   try {

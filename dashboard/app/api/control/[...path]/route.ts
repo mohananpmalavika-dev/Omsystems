@@ -284,7 +284,6 @@ function publicControlApiBase(request: NextRequest) {
     request.headers.get("host")
       ? `${forwardedProtocol || request.nextUrl.protocol.replace(":", "") || "https"}://${request.headers.get("host")}`
       : undefined,
-    runtimeEnv("RENDER_EXTERNAL_URL", "") || undefined,
     request.nextUrl.origin,
   ];
 

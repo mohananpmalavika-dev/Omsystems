@@ -23,7 +23,7 @@ if (!DATABASE_URL) throw new Error('DATABASE_URL is required');
 async function fixPasswordHash() {
   const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: DATABASE_URL.includes('render.com') ? { rejectUnauthorized: false } : undefined
+    ssl: process.env.DB_SSL === 'true' || process.env.DATABASE_SSL === 'require' || DATABASE_URL.includes('sslmode=require') ? { rejectUnauthorized: false } : undefined
   });
 
   try {

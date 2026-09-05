@@ -42,8 +42,8 @@ export async function buildMediaGateway(options: {
     service: "sentinel-media-gateway",
   }));
 
-  // Render exposes one HTTP port per service. Proxy MediaMTX's HLS listener
-  // through the gateway so playlists and segments share that public port.
+  // Proxy MediaMTX's HLS listener through the gateway so playlists and segments
+  // share the main public service port.
   if (options.mediaMtxHlsUrl) {
     app.route({
       method: ["GET", "HEAD", "OPTIONS"],
@@ -246,8 +246,7 @@ function forwardMediaHeaders(headers: Record<string, unknown>) {
   const forwarded: Record<string, string> = {};
   // The gateway is the browser-facing CORS boundary. Forwarding the browser's
   // Origin to MediaMTX makes its static hlsAllowOrigins setting decide whether
-  // a playlist is usable, which breaks as soon as the dashboard hostname
-  // changes (for example, when Render assigns a new service suffix).
+  // a playlist is usable, which breaks as soon as the dashboard hostname changes.
   for (const name of ["accept", "authorization", "range", "user-agent"]) {
     const value = headers[name];
     if (typeof value === "string") forwarded[name] = value;

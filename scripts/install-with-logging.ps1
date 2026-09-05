@@ -74,8 +74,7 @@ if (-not (Test-Path $InstallerPath)) {
 Write-Log "Installer path: $InstallerPath" "INFO"
 
 # Check control plane availability
-Write-Log "Checking control plane availability..." "INFO"
-$controlPlaneUrl = "https://sentinel-grid-control-plane-zcli.onrender.com"
+$controlPlaneUrl = if ($env:CONTROL_PLANE_URL) { $env:CONTROL_PLANE_URL } else { "http://3.7.216.169:8080" }
 
 try {
     $response = Invoke-WebRequest -Uri "$controlPlaneUrl/health" -TimeoutSec 10 -UseBasicParsing -ErrorAction Stop

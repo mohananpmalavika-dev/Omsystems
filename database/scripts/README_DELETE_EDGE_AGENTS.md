@@ -31,8 +31,7 @@ This method is safer as it shows a summary before deletion and requires explicit
 # Set your database URL
 export DATABASE_URL="postgresql://username:password@host:5432/database"
 
-# For Render.com, get the connection string from:
-# https://dashboard.render.com -> Your Database -> "Connect" tab
+# Set your database URL (e.g. from AWS RDS or docker-compose environment)
 
 # Run with confirmation
 CONFIRM=yes DATABASE_URL="your-connection-string" node database/scripts/delete-all-edge-agents.js
@@ -94,13 +93,10 @@ COMMIT;
 postgresql://username:password@localhost:5432/sentinel
 ```
 
-### Render.com Production
+### AWS Production (RDS / EC2)
 Get your connection string from:
-1. Go to https://dashboard.render.com
-2. Navigate to your PostgreSQL database
-3. Click "Connect" tab
-4. Copy the "External Connection String"
-5. Format: `postgresql://username:password@hostname.render.com:5432/database`
+1. AWS Management Console -> RDS / EC2 instance
+2. Format: `postgresql://username:password@your-db-instance.region.rds.amazonaws.com:5432/database` (or `postgresql://sentinel_admin:password@localhost:5432/sentinel_grid`)
 
 ## Verification
 
@@ -155,7 +151,7 @@ psql "$DATABASE_URL" -c "SELECT 1"
 **Solution:** The database server is not running or not accessible:
 
 - **Local:** Start your PostgreSQL server
-- **Render.com:** Check the database is online in dashboard
+- **AWS / Cloud:** Check the database service/container is online and reachable
 - **Firewall:** Ensure port 5432 is accessible
 
 ### Error: "permission denied"

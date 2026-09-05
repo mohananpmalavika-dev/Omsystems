@@ -12,8 +12,7 @@ export class ZeroTouchEnrollmentService extends EventEmitter {
   private packages = new Map<string, EnrollmentPackage>();
 
   constructor(
-    private controlPlaneBaseUrl = process.env.CONTROL_PLANE_PUBLIC_URL ||
-      process.env.RENDER_EXTERNAL_URL || "",
+    private controlPlaneBaseUrl = process.env.CONTROL_PLANE_PUBLIC_URL || "",
   ) {
     super();
   }

@@ -95,37 +95,7 @@ node scripts/test-migrations-local.mjs
 
 ### Deployment Scripts
 
-#### `init-render-deployment.ps1`
-Initialize CCTV infrastructure after Render deployment.
-
-**Usage:**
-```powershell
-# Initialize all branches
-.\scripts\init-render-deployment.ps1 -ApiUrl "https://sentinel-grid-api.onrender.com"
-
-# With custom user
-.\scripts\init-render-deployment.ps1 -ApiUrl "https://your-api.onrender.com" -UserId "admin-user"
-```
-
-**What it does:**
-1. Tests API connectivity
-2. Fetches all branches
-3. Initializes camera requirements for each branch
-4. Verifies requirements were created
-5. Checks coverage gaps
-6. Shows next steps
-
-**Output Example:**
-```
-🚀 Sentinel Grid - Render Deployment Initialization
-✅ API is healthy
-✅ Found 5 branch(es)
-   Processing: Downtown Branch ✅
-   Processing: Airport Branch ✅
-   Processing: Mall Branch ✅
-✅ 5 branch(es) initialized successfully
-✅ Camera requirements verified (found 13 location types)
-```
+See `deploy/aws/` for AWS production deployment configurations and guides.
 
 ---
 
@@ -181,15 +151,9 @@ Initialize CCTV infrastructure after Render deployment.
    git push origin main
    ```
 
-3. **Deploy to Render:**
-   - Connect repository to Render
-   - Render automatically runs migrations during build
-   - Check logs for migration output
-
-4. **Initialize branches:**
-   ```powershell
-   .\scripts\init-render-deployment.ps1 -ApiUrl "https://your-api.onrender.com"
-   ```
+3. **Deploy to AWS:**
+   - Follow instructions in `deploy/aws/AWS_DEPLOYMENT_GUIDE.md`
+   - Services automatically execute schema migrations during startup
 
 ---
 
@@ -244,14 +208,14 @@ psql $DATABASE_URL -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO yo
 
 ---
 
-### Init Script Fails: "Cannot connect to API"
+### Service Connectivity Fails: "Cannot connect to API"
 
 **Cause:** API service not running or URL incorrect.
 
 **Solutions:**
-1. **Check API is running:** Visit `https://your-api.onrender.com/health`
-2. **Verify URL:** Ensure it's the correct Render URL
-3. **Check Render status:** Make sure service is not sleeping (free tier)
+1. **Check API is running:** Visit `http://your-host:8080/health` (or `/ready`)
+2. **Verify URL:** Ensure `CONTROL_PLANE_URL` points to the active AWS or local endpoint
+3. **Check container logs:** `docker compose -f deploy/aws/docker-compose.aws.yml logs control-plane`
 
 ---
 

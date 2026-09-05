@@ -1,5 +1,4 @@
-// Test the actual login API endpoint
-const API_URL = process.env.API_URL || 'https://sentinel-grid-control-plane-zcli.onrender.com';
+const API_URL = process.env.API_URL || 'http://3.7.216.169:8080';
 const testPassword = process.env.TEST_PASSWORD;
 if (!testPassword) throw new Error('TEST_PASSWORD is required');
 

@@ -258,13 +258,13 @@ if ($freeSpaceGB -lt 2) {
 $recommendations += @{
     Priority = 3
     Issue = "Network timeout or control plane unavailable"
-    Solution = "Wake control plane first: .\scripts\verify-render-urls.ps1 -WakeServices"
+    Solution = "Verify control plane is running on AWS / target host"
 }
 
 $recommendations += @{
     Priority = 4
     Issue = "Invalid or expired activation code"
-    Solution = "Generate new activation code at: https://sentinel-grid-monitoring-s38w.onrender.com/admin/branch-onboarding"
+    Solution = "Generate new activation code from the dashboard (/admin/branch-onboarding)"
 }
 
 $recommendations += @{

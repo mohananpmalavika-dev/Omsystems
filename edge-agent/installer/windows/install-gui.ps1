@@ -7,7 +7,7 @@ Add-Type -AssemblyName System.Drawing
 $ErrorActionPreference = "Stop"
 
 # Configuration
-$CONTROL_PLANE_URL = "https://sentinel-grid-control-plane-zcli.onrender.com"
+$CONTROL_PLANE_URL = if ($env:CONTROL_PLANE_URL) { $env:CONTROL_PLANE_URL } else { "http://3.7.216.169:8080" }
 $INSTALL_DIR = "C:\Program Files\Sentinel Grid\Edge Agent"
 
 # Check if running as Administrator

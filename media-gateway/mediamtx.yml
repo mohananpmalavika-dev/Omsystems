@@ -4,7 +4,7 @@ api: yes
 apiAddress: :9997
 
 authMethod: http
-authHTTPAddress: http://media-gateway:8090/internal/mediamtx/auth
+authHTTPAddress: http://127.0.0.1:8090/internal/mediamtx/auth
 authHTTPExclude:
   - action: api
   - action: metrics

@@ -61,9 +61,8 @@ function createClient(databaseUrl) {
   } catch {
     // PostgreSQL will report a more useful connection-string error.
   }
-  const sslSetting = process.env.DATABASE_SSL;
-  const useSsl = sslSetting === "require" ||
-    (sslSetting !== "disable" && hostname.endsWith(".render.com"));
+  const sslSetting = (process.env.DATABASE_SSL || process.env.DB_SSL || "").toLowerCase();
+  const useSsl = sslSetting === "require" || sslSetting === "true";
   return new Client({
     connectionString: databaseUrl,
     ssl: useSsl ? { rejectUnauthorized: false } : false,

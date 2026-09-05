@@ -5,7 +5,7 @@
  */
 
 async function testAPILogin() {
-  const apiUrl = 'https://sentinel-grid-monitoring-s38w.onrender.com/api/control/v1/auth/login';
+  const apiUrl = process.env.API_URL || 'http://3.7.216.169:8080/v1/auth/login';
   
   const testPassword = process.env.TEST_PASSWORD;
   if (!testPassword) throw new Error('TEST_PASSWORD is required');

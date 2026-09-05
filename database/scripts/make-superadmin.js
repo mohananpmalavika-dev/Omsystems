@@ -17,7 +17,7 @@ async function makeSuperAdmin() {
   const client = new Client({
     connectionString: DATABASE_URL,
     ssl: {
-      rejectUnauthorized: false // Required for Render.com databases
+      rejectUnauthorized: false // Required for cloud hosted databases
     }
   });
 

@@ -113,7 +113,7 @@ For help, contact:
 1. Creates installation directory: `C:\Program Files\KryptonVision\Edge Agent`
 2. Copies `edge-agent.exe` 
 3. Creates configuration file with:
-   - Control plane URL: `https://sentinel-grid-control-plane-zcli.onrender.com`
+   - Control plane URL: `http://3.7.216.169:8080`
    - Installation key (used as bridge key)
    - Branch name
 4. Creates scheduled task to run on system startup

@@ -130,8 +130,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
     }).parse(request.body || {});
 
     const publicBase = (request.headers["x-sentinel-public-api-base"] as string) ||
-      process.env.CONTROL_PLANE_PUBLIC_URL ||
-      process.env.RENDER_EXTERNAL_URL;
+      process.env.CONTROL_PLANE_PUBLIC_URL;
     if (!publicBase) return reply.code(503).send({ success: false, error: "control_plane_public_url_required" });
 
     const pkg = zeroTouchEnrollmentService.generateEnrollmentPackage(

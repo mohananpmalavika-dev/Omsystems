@@ -105,13 +105,12 @@ if ($freeGB -lt 1) {
 # 6. Check control plane
 Write-Host "`n6. Checking Control Plane Connection..." -ForegroundColor Yellow
 try {
-    $response = Invoke-WebRequest -Uri "https://sentinel-grid-control-plane-zcli.onrender.com/health" -TimeoutSec 10 -UseBasicParsing
-    Write-Host "   [OK] Control plane is reachable" -ForegroundColor Green
+    $cpUrl = if ($env:CONTROL_PLANE_URL) { $env:CONTROL_PLANE_URL } else { "http://3.7.216.169:8080" }
+    $response = Invoke-WebRequest -Uri "$cpUrl/health" -TimeoutSec 10 -UseBasicParsing
+    Write-Host "   [OK] Control plane is reachable at $cpUrl" -ForegroundColor Green
 } catch {
-    Write-Host "   [ERROR] Cannot reach control plane" -ForegroundColor Red
+    Write-Host "   [ERROR] Cannot reach control plane at $cpUrl" -ForegroundColor Red
     Write-Host "   Error: $($_.Exception.Message)" -ForegroundColor DarkRed
-    Write-Host "`n   FIX: Wake services first:" -ForegroundColor Yellow
-    Write-Host "   .\scripts\verify-render-urls.ps1 -WakeServices" -ForegroundColor Cyan
 }
 
 # Summary and recommendations

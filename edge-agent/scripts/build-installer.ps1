@@ -50,8 +50,7 @@ INSTALLATION INSTRUCTIONS:
 REQUIREMENTS:
 -------------
 - Windows 10/11 or Windows Server 2016+
-- Administrator rights
-- Internet connection to https://sentinel-grid-monitoring-s38w.onrender.com
+- Internet/network connection to the Sentinel Grid Control Plane
 
 GETTING THE INSTALLATION KEY:
 -----------------------------

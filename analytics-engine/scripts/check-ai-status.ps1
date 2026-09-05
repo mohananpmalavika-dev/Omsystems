@@ -1,7 +1,7 @@
-# PowerShell script to check AI Engine status on Render
+# PowerShell script to check AI Analytics Engine status
 # Usage: .\check-ai-status.ps1
 
-$HEALTH_URL = "https://kryptonvision-analytics-engine-u2sf.onrender.com/health"
+$HEALTH_URL = if ($env:ANALYTICS_HEALTH_URL) { $env:ANALYTICS_HEALTH_URL } else { "http://127.0.0.1:8092/health" }
 
 Write-Host "=== KryptonVision Analytics Engine Health Check ===" -ForegroundColor Cyan
 Write-Host ""
@@ -86,8 +86,7 @@ try {
         Write-Host "Service is fully operational with local AI inference" -ForegroundColor Green
     } elseif ($response.aiState -eq "AI_DEGRADED") {
         Write-Host "Service is operational but AI models are missing" -ForegroundColor Yellow
-        Write-Host "Can accept external detections but cannot perform local inference" -ForegroundColor Gray
-        Write-Host "See RENDER_DEPLOYMENT_GUIDE.md to deploy models" -ForegroundColor Gray
+        Write-Host "Run 'npm run models:download' or deploy container with provisioned models" -ForegroundColor Gray
     } else {
         Write-Host "Service pipeline initialization failed" -ForegroundColor Red
         if ($response.initializationError) {

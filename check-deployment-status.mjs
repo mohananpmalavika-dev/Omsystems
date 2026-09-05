@@ -73,16 +73,6 @@ async function main() {
     DASHBOARD_URL
   );
   
-  // Check DNS for Render domains
-  const renderDomains = [
-    'sentinel-grid-monitoring-s38w.onrender.com',
-    'omsystems.onrender.com',
-  ];
-  
-  for (const domain of renderDomains) {
-    await checkDNS(domain);
-  }
-  
   console.log('\n' + '='.repeat(60));
   console.log('\n📋 RECOMMENDATIONS:\n');
   

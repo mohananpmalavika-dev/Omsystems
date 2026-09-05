@@ -29,7 +29,7 @@ if (!DATABASE_URL) {
 async function deleteAllEdgeAgents() {
   const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: DATABASE_URL.includes('render.com') || DATABASE_URL.includes('heroku.com') || DATABASE_URL.includes('aws.com')
+    ssl: process.env.DB_SSL === 'true' || process.env.DATABASE_SSL === 'require' || DATABASE_URL.includes('sslmode=require') || DATABASE_URL.includes('aws.com') || DATABASE_URL.includes('amazonaws.com')
       ? { rejectUnauthorized: false }
       : false,
   });

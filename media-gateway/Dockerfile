@@ -25,8 +25,8 @@ COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm install --omit=dev --legacy-peer-deps --workspace @sentinel/media-gateway
 COPY --from=build /app/media-gateway/dist ./media-gateway/dist
 COPY --from=mediamtx /mediamtx /usr/local/bin/mediamtx
-COPY media-gateway/mediamtx.render.yml ./media-gateway/mediamtx.render.yml
-COPY --chmod=755 media-gateway/start-render.sh ./media-gateway/start-render.sh
-RUN sed -i 's/\r$//' ./media-gateway/start-render.sh
+COPY media-gateway/mediamtx.yml ./media-gateway/mediamtx.yml
+COPY --chmod=755 media-gateway/start.sh ./media-gateway/start.sh
+RUN sed -i 's/\r$//' ./media-gateway/start.sh
 USER node
-CMD ["sh", "media-gateway/start-render.sh"]
+CMD ["sh", "media-gateway/start.sh"]

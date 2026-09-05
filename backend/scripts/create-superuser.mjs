@@ -29,7 +29,7 @@ async function main() {
 
   const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: DATABASE_URL.includes('render.com') || DATABASE_URL.includes('heroku.com')
+    ssl: process.env.DB_SSL === 'true' || process.env.DATABASE_SSL === 'require' || DATABASE_URL.includes('sslmode=require')
       ? { rejectUnauthorized: false }
       : false,
   });

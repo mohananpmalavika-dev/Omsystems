@@ -31,8 +31,8 @@ const productionConfig = `# Production Configuration
 # Use relative paths for API calls (proxied through Next.js)
 NEXT_PUBLIC_API_BASE=/api/control
 
-# Control plane URL (update this with your Render.com URL or production domain)
-CONTROL_PLANE_URL=https://your-control-plane.onrender.com
+# Control plane URL (update this with your AWS URL or production domain)
+CONTROL_PLANE_URL=http://control-plane:8080
 `;
 
 try {
@@ -73,7 +73,7 @@ try {
   console.log('4. For production deployment:');
   console.log('   - Update dashboard/.env.production with your control plane URL');
   console.log('   - Rebuild dashboard: cd dashboard && npm run build');
-  console.log('   - Deploy to Render.com or your hosting service\n');
+  console.log('   - Deploy to AWS (see deploy/aws/AWS_DEPLOYMENT_GUIDE.md) or your hosting service\n');
   
 } catch (error) {
   console.error('❌ Error:', error.message);

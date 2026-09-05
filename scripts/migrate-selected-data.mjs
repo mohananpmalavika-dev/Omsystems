@@ -24,10 +24,9 @@ const baseTables = [
 ];
 
 function databaseClient(connectionString) {
-  const hostname = new URL(connectionString).hostname;
   return new Client({
     connectionString,
-    ssl: hostname.endsWith(".render.com")
+    ssl: process.env.DB_SSL === 'true' || process.env.DATABASE_SSL === 'require' || connectionString.includes('sslmode=require')
       ? { rejectUnauthorized: false }
       : false,
   });
