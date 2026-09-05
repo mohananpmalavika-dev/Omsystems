@@ -1,6 +1,73 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
+const VALID_INCIDENT_TYPES = new Set([
+  "theft-robbery",
+  "fire-emergency",
+  "atm-tampering",
+  "unauthorized-access",
+  "suspicious-activity",
+  "accident-injury",
+  "vandalism",
+  "customer-dispute",
+  "cash-shortage-excess",
+  "teller-dispute",
+  "vault-violation",
+  "locker-room-incident",
+  "employee-misconduct",
+  "fraud-suspicion",
+  "cyber-tampering",
+  "camera-tampering",
+  "panic-button",
+  "vehicle-incident",
+  "lost-property",
+  "workplace-safety",
+  "false-alarm",
+  "other",
+]);
+
+function resolveValidIncidentType(typeCandidate?: string): string {
+  if (!typeCandidate) return "suspicious-activity";
+  const normalized = typeCandidate.toLowerCase().replace(/[_\s]+/g, "-");
+  if (VALID_INCIDENT_TYPES.has(normalized)) return normalized;
+
+  if (
+    normalized.includes("helmet") ||
+    normalized.includes("mask") ||
+    normalized.includes("loiter") ||
+    normalized.includes("crowd") ||
+    normalized.includes("motion") ||
+    normalized.includes("person") ||
+    normalized.includes("suspicious")
+  ) {
+    return "suspicious-activity";
+  }
+  if (normalized.includes("fire") || normalized.includes("smoke")) {
+    return "fire-emergency";
+  }
+  if (
+    normalized.includes("intrusion") ||
+    normalized.includes("vault") ||
+    normalized.includes("entry") ||
+    normalized.includes("tailgat") ||
+    normalized.includes("unauthorized")
+  ) {
+    return "unauthorized-access";
+  }
+  if (normalized.includes("atm")) {
+    return "atm-tampering";
+  }
+  if (
+    normalized.includes("fall") ||
+    normalized.includes("safety") ||
+    normalized.includes("injury") ||
+    normalized.includes("accident")
+  ) {
+    return "workplace-safety";
+  }
+  return "other";
+}
+
 export class IncidentRepository {
   constructor(private readonly pool: Pool) {}
 
@@ -18,6 +85,8 @@ export class IncidentRepository {
   }) {
     const id = input.id ?? randomUUID();
     const incidentNumber = input.incidentNumber ?? `INC-AI-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+    const validIncidentType = resolveValidIncidentType(input.incidentType || input.title);
+    const validSeverity = ["P1", "P2", "P3", "P4", "P5"].includes(input.severity || "") ? input.severity : "P3";
     const result = await this.pool.query(
       `INSERT INTO incidents (
          id, tenant_id, incident_number, title, description, incident_type,
@@ -29,8 +98,8 @@ export class IncidentRepository {
         incidentNumber,
         input.title,
         input.description ?? null,
-        input.incidentType ?? null,
-        input.severity ?? null,
+        validIncidentType,
+        validSeverity,
         input.branchId ?? null,
         input.occurredAt ?? null,
         input.reportedBy ?? null,

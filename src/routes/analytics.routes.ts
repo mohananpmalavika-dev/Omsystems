@@ -649,12 +649,12 @@ export async function registerAnalyticsRoutes(
         incidentNumber,
         title: body.title ?? alert.title,
         description: body.notes ?? alert.description ?? `AI Detection alert: ${alert.title}`,
-        incidentType: rule?.detectionType ?? "ai-analytics",
+        incidentType: rule?.detectionType ?? alert.title,
         severity: alert.severity,
         branchId: branchId ?? undefined,
         occurredAt: alert.firstDetectedAt,
         reportedBy: request.currentUser.id,
-        detectionSource: "ai-analytics",
+        detectionSource: "ai-detection",
         aiConfidence: alert.confidence,
       });
     } catch (err) {
