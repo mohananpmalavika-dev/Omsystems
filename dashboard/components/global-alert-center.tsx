@@ -2,6 +2,7 @@
 
 import {
   BellRing,
+  AlertTriangle,
   Check,
   ChevronRight,
   Clock3,
@@ -54,6 +55,10 @@ export function GlobalAlertCenter() {
   const [evidenceStatus, setEvidenceStatus] = useState<AlertEvidenceCaptureStatus>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [notificationAlert, setNotificationAlert] = useState<CommandAlert>();
+  const alertsRef = useRef<CommandAlert[]>([]);
+  const hasLoadedAlerts = useRef(false);
+  const notificationTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     return alertAudioService.onStatusChange(setAudioStatus);
@@ -68,7 +73,19 @@ export function GlobalAlertCenter() {
       });
       if (!response.ok) return;
       const body = await response.json();
-      setAlerts((body.data ?? []) as CommandAlert[]);
+      const nextAlerts = (body.data ?? []) as CommandAlert[];
+      if (hasLoadedAlerts.current) {
+        const previousIds = new Set(alertsRef.current.map((alert) => alert.id));
+        const newAlert = nextAlerts.find((alert) => !previousIds.has(alert.id));
+        if (newAlert) {
+          if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
+          setNotificationAlert(newAlert);
+          notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
+        }
+      }
+      hasLoadedAlerts.current = true;
+      alertsRef.current = nextAlerts;
+      setAlerts(nextAlerts);
     } catch {
       // SSE reconnect and polling fallback
     }
@@ -95,6 +112,10 @@ export function GlobalAlertCenter() {
         const next = (body.data ?? []) as CommandAlert[];
         if (next.length === 0) return;
         const newAlert = next[0];
+        if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
+        setNotificationAlert(newAlert);
+        notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
+        alertsRef.current = [newAlert, ...alertsRef.current.filter((alert) => alert.id !== newAlert.id)];
         setAlerts((prev) => {
           const present = prev.find((a) => a.id === newAlert.id);
           if (present) return prev.map((a) => (a.id === newAlert.id ? newAlert : a));
@@ -140,6 +161,7 @@ export function GlobalAlertCenter() {
     return () => {
       events.close();
       window.clearInterval(timer);
+      if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
     };
   }, [enabledForRoute, load]);
 
@@ -254,6 +276,54 @@ export function GlobalAlertCenter() {
           <div className="pointer-events-auto">
             <CriticalAudioWarningBanner activeP1Count={activeP1Count} />
           </div>
+        </div>
+      )}
+
+      {notificationAlert && (
+        <div className="fixed bottom-5 right-5 z-[60] w-[calc(100vw-2rem)] max-w-[380px]">
+          <button
+            type="button"
+            onClick={() => {
+              setManualAlertId(notificationAlert.id);
+              setDismissed((items) => {
+                const next = new Set(items);
+                next.delete(notificationAlert.id);
+                return next;
+              });
+              setNotificationAlert(undefined);
+            }}
+            className={`w-full rounded-xl border p-4 text-left shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 ${
+              notificationAlert.severity === "P1"
+                ? "border-rose-400/60 bg-rose-950/95"
+                : "border-amber-400/50 bg-slate-950/95"
+            }`}
+          >
+            <span className="flex items-start gap-3">
+              <span className={notificationAlert.severity === "P1" ? "text-rose-300" : "text-amber-300"}>
+                <AlertTriangle className="h-5 w-5" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-300">
+                  AI Alert <Priority value={notificationAlert.severity} />
+                </span>
+                <span className="mt-1 block truncate text-sm font-semibold text-white">{notificationAlert.title}</span>
+                <span className="mt-1 block truncate text-xs text-slate-400">
+                  {notificationAlert.branchName || notificationAlert.branchId} • {notificationAlert.cameraName || notificationAlert.cameraId}
+                </span>
+              </span>
+              <span
+                role="button"
+                aria-label="Dismiss notification"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setNotificationAlert(undefined);
+                }}
+                className="rounded-md p-1 text-slate-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </span>
+            </span>
+          </button>
         </div>
       )}
 
