@@ -28,7 +28,9 @@ export interface IncidentMediaModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageUrl?: string | null;
+  snapshotUrl?: string | null;
   videoUrl?: string | null;
+  videoClipUrl?: string | null;
   title: string;
   cameraName?: string | null;
   cameraId?: string | null;
@@ -49,7 +51,9 @@ export function IncidentMediaModal({
   isOpen,
   onClose,
   imageUrl,
+  snapshotUrl,
   videoUrl,
+  videoClipUrl,
   title,
   cameraName,
   cameraId,
@@ -132,8 +136,8 @@ export function IncidentMediaModal({
     }
   };
 
-  const resolvedImageUrl = imageUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/snapshot` : null);
-  const resolvedVideoUrl = videoUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/clip` : null);
+  const resolvedImageUrl = imageUrl || snapshotUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/snapshot` : null);
+  const resolvedVideoUrl = videoUrl || videoClipUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/clip` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/clip` : null);
 
   return (
     <div

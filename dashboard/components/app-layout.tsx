@@ -115,7 +115,7 @@ export const navigation: NavGroup[] = [
       { label: "Command Center", href: "/", icon: LayoutDashboard },
       { label: "Fleet Branches", href: "/operations/branches", icon: Building2 },
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
-      { label: "AI Alerts & Incidents", href: "/analytics/alerts", icon: BellRing, badge: "alerts" },
+      { label: "AI Alerts & Incidents", href: "/analytics/alerts", icon: BellRing },
       { label: "Alert Operations", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Security Operations", href: "/security-operations", icon: Shield },

@@ -208,9 +208,10 @@ export default function AiAlertsIncidentHubPage() {
     <AppLayout>
       <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
         <PageHero
-          icon={<BellRing className="h-6 w-6 text-sky-400" />}
+          eyebrow="Vision AI Operations"
+          icon={BellRing}
           title="AI Alerts & Incident Conversion Hub"
-          subtitle="Real-time multi-camera detection feed with Zone, Branch, Camera, Alert context, and one-click enterprise Incident Conversion"
+          description="Real-time multi-camera detection feed with Zone, Branch, Camera, Alert context, and one-click enterprise Incident Conversion"
           actions={
             <div className="flex items-center gap-2">
               <Link
