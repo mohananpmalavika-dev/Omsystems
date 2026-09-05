@@ -642,7 +642,7 @@ export default function AiAlertsIncidentHubPage() {
           <IncidentMediaModal
             isOpen={Boolean(activeMediaAlert)}
             onClose={() => setActiveMediaAlert(null)}
-            imageUrl={activeMediaAlert.snapshotUrl || `/api/control/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
+            imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
             videoUrl={activeMediaAlert.videoClipUrl || `/api/control/v1/analytics/alerts/${activeMediaAlert.id}/clip`}
             title={activeMediaAlert.title}
             cameraName={activeMediaAlert.cameraName}
