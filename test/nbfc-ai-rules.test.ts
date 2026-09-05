@@ -510,4 +510,19 @@ describe('NBFC AI Surveillance & Dynamic Rule Engine', () => {
       );
     });
   });
+
+  describe('User Preferences & Cross-Device Audio Alerts', () => {
+    it('handles user preferences retrieval and update in repository', async () => {
+      const initial = await repository.getUserPreferences('user-test-123');
+      expect(initial).toBeDefined();
+
+      const updated = await repository.updateUserPreferences('user-test-123', {
+        alertAudioEnabled: true,
+        alertAudioVolume: 0.85,
+      });
+      expect(updated.alertAudioEnabled).toBe(true);
+      expect(updated.alertAudioVolume).toBe(0.85);
+    });
+  });
 });
+

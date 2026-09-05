@@ -1804,4 +1804,43 @@ export class NbfcRuleRepository {
       this.inMemoryTemplates.set(tmpl.id, tmpl);
     }
   }
+
+  async getUserPreferences(userId: string): Promise<Record<string, any>> {
+    if (!this.pool) return {};
+    try {
+      const clean = (userId || "").trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
+      const res = await this.pool.query(
+        `SELECT preferences FROM users
+         WHERE ${isUuid ? "id=$1::uuid" : "lower(username)=lower($1) OR lower(email)=lower($1) OR identity_subject=$1"}
+         LIMIT 1`,
+        [clean || "00000000-0000-4000-8000-000000000001"]
+      );
+      return res.rows[0]?.preferences || {};
+    } catch {
+      return {};
+    }
+  }
+
+  async updateUserPreferences(userId: string, preferences: Record<string, any>): Promise<Record<string, any>> {
+    if (!this.pool) return preferences;
+    try {
+      const clean = (userId || "").trim();
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
+      const res = await this.pool.query(
+        `UPDATE users
+         SET preferences = COALESCE(preferences, '{}'::jsonb) || $1::jsonb, updated_at=now()
+         WHERE ${isUuid ? "id=$2::uuid" : "lower(username)=lower($2) OR lower(email)=lower($2) OR identity_subject=$2"}
+         RETURNING preferences`,
+        [
+          JSON.stringify(preferences),
+          clean || "00000000-0000-4000-8000-000000000001",
+        ]
+      );
+      return res.rows[0]?.preferences || preferences;
+    } catch {
+      return preferences;
+    }
+  }
 }
+

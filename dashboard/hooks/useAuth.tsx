@@ -35,6 +35,7 @@ export interface User {
   permissions?: string[];
   branchId?: string;
   branchName?: string;
+  preferences?: Record<string, any>;
 }
 
 interface AuthContextValue {
@@ -72,7 +73,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (response.ok) {
         const data = await response.json();
-        setUser(data.user || null);
+        setUser(data.user || (data.id ? data : null));
       } else {
         setUser(null);
       }

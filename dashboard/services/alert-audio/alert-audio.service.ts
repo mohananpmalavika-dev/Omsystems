@@ -39,14 +39,21 @@ export class AlertAudioService {
   private activeAudibleAlerts: Map<string, AudibleAlert> = new Map();
   private repeatTimers: Map<string, number> = new Map();
   private temporarySilenceTimer?: number | undefined;
+  private volumeDebounceTimer?: number | undefined;
   private statusListeners: Set<(status: AlertAudioStatus) => void> = new Set();
   private isSynthesizing = false;
+  private initialized = false;
 
   constructor() {
     if (typeof window !== "undefined") {
+      const localEnabled = window.localStorage.getItem(SOUND_PREF_KEY) === "true";
       const savedVolume = window.localStorage.getItem(VOLUME_PREF_KEY);
       if (savedVolume) {
         this.status.volume = Number(savedVolume) || 0.9;
+      }
+      if (localEnabled) {
+        this.status.enabled = true;
+        this.status.state = "READY";
       }
     }
   }
@@ -72,8 +79,106 @@ export class AlertAudioService {
     }
   }
 
+  private async fetchPreferenceFromServer(): Promise<Record<string, any> | null> {
+    if (typeof window === "undefined" || typeof fetch === "undefined") return null;
+    try {
+      let res = await fetch("/api/ai/preferences", { credentials: "include" }).catch(() => null);
+      if (!res || !res.ok) {
+        res = await fetch("/api/control/v1/auth/preferences", { credentials: "include" }).catch(() => null);
+      }
+      if (res && res.ok) {
+        const data = await res.json();
+        return data.preferences || null;
+      }
+    } catch {
+      // Fallback
+    }
+    return null;
+  }
+
+  private async syncPreferenceToServer(prefs: Record<string, unknown>) {
+    if (typeof window === "undefined" || typeof fetch === "undefined") return;
+    try {
+      const reqInit = {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include" as const,
+        body: JSON.stringify(prefs),
+      };
+      await fetch("/api/ai/preferences", reqInit).catch(() => {});
+      await fetch("/api/control/v1/auth/preferences", reqInit).catch(() => {});
+    } catch {
+      // Background sync
+    }
+  }
+
+  private debouncedSyncVolume(volume: number) {
+    if (typeof window === "undefined") return;
+    if (this.volumeDebounceTimer) {
+      window.clearTimeout(this.volumeDebounceTimer);
+    }
+    this.volumeDebounceTimer = window.setTimeout(() => {
+      void this.syncPreferenceToServer({ alertAudioVolume: volume });
+    }, 600);
+  }
+
   /**
-   * Unlocks Web Audio during user interaction (gesture)
+   * Initializes audio alert settings from user account across all devices
+   * and arms browser autoplay seamlessly on first user gesture.
+   */
+  async init(userId = "operator"): Promise<void> {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    // Fetch authoritative server preference for this user
+    const serverPrefs = await this.fetchPreferenceFromServer();
+    if (serverPrefs && typeof serverPrefs.alertAudioEnabled === "boolean") {
+      if (serverPrefs.alertAudioEnabled) {
+        this.status.enabled = true;
+        this.status.state = "READY";
+        if (typeof serverPrefs.alertAudioVolume === "number") {
+          const vol = Math.max(0, Math.min(1, serverPrefs.alertAudioVolume));
+          this.status.volume = vol;
+          alertAudioSynthesizer.setMasterVolume(vol);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(VOLUME_PREF_KEY, String(vol));
+          }
+        }
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(SOUND_PREF_KEY, "true");
+        }
+      } else {
+        this.status.enabled = false;
+        this.status.state = "LOCKED";
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(SOUND_PREF_KEY);
+        }
+      }
+      this.notifyStatusChange();
+    }
+
+    // When audio is enabled, attach one-time transparent gesture listener
+    // so the very first interaction (click, keypress, tap) silently resumes the AudioContext
+    if (this.status.enabled && typeof window !== "undefined") {
+      const armOnFirstGesture = () => {
+        alertAudioSynthesizer.ensureAudioContext()
+          .then((ctx) => {
+            this.status.audioContextState = ctx.state;
+            if (ctx.state === "running") {
+              this.status.state = "READY";
+            }
+            this.notifyStatusChange();
+          })
+          .catch(() => {});
+      };
+      window.addEventListener("pointerdown", armOnFirstGesture, { once: true, passive: true });
+      window.addEventListener("keydown", armOnFirstGesture, { once: true, passive: true });
+      window.addEventListener("click", armOnFirstGesture, { once: true, passive: true });
+    }
+  }
+
+  /**
+   * Unlocks Web Audio during user interaction (gesture) and persists to account
    */
   async enable(userId = "operator"): Promise<void> {
     try {
@@ -98,6 +203,12 @@ export class AlertAudioService {
       if (typeof window !== "undefined") {
         window.localStorage.setItem(SOUND_PREF_KEY, "true");
       }
+
+      // Persist across devices to user's account in PostgreSQL
+      void this.syncPreferenceToServer({
+        alertAudioEnabled: true,
+        alertAudioVolume: this.status.volume,
+      });
 
       this.recordAuditEvent("AUDIO_ENABLED", userId);
       this.notifyStatusChange();
@@ -126,6 +237,12 @@ export class AlertAudioService {
     if (typeof window !== "undefined") {
       window.localStorage.removeItem(SOUND_PREF_KEY);
     }
+
+    // Persist across devices to user's account in PostgreSQL
+    void this.syncPreferenceToServer({
+      alertAudioEnabled: false,
+    });
+
     this.recordAuditEvent("AUDIO_DISABLED", userId);
     this.notifyStatusChange();
   }
@@ -137,6 +254,7 @@ export class AlertAudioService {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(VOLUME_PREF_KEY, String(clamped));
     }
+    this.debouncedSyncVolume(clamped);
     this.notifyStatusChange();
   }
 
@@ -144,6 +262,11 @@ export class AlertAudioService {
    * Plays alert sound according to severity policy, deduplication, and priority queue
    */
   async playAlert(options: PlayAlertOptions, userId = "operator"): Promise<void> {
+    // If audio is disabled by user, remain silent
+    if (!this.status.enabled) {
+      return;
+    }
+
     const now = new Date().toISOString();
     const policy = ALERT_AUDIO_POLICIES[options.severity];
     if (!policy || policy.toneFrequencies.length === 0) return;

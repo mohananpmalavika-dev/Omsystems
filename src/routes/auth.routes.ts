@@ -22,6 +22,7 @@ import {
   invalidateInMemorySession,
   invalidateAllInMemorySessionsForUser,
   invalidateTokenFromMemory,
+  updateUserPreferencesInMemory,
 } from "../middleware/auth.middleware.js";
 import { verifyEmployeeFace } from "../security/employee-face-verification.service.js";
 
@@ -619,6 +620,59 @@ export async function registerAuthRoutes(
       return user;
     }
   });
+
+  // Get current user preferences
+  app.get("/v1/auth/preferences", async (request, reply) => {
+    const user = request.currentUser;
+    if (!user) {
+      return reply.code(401).send({ error: "unauthenticated", message: "Authentication required" });
+    }
+    try {
+      const details =
+        typeof store.getUserDetails === "function"
+          ? await store.getUserDetails(user.id).catch(() => undefined)
+          : undefined;
+      const preferences = details?.preferences ?? (user as any).preferences ?? {};
+      return { success: true, preferences };
+    } catch {
+      return { success: true, preferences: (user as any).preferences ?? {} };
+    }
+  });
+
+  // Update current user preferences
+  const handleUpdatePreferences = async (request: any, reply: any) => {
+    const user = request.currentUser;
+    if (!user) {
+      return reply.code(401).send({ error: "unauthenticated", message: "Authentication required" });
+    }
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const updatePayload =
+      body.preferences && typeof body.preferences === "object"
+        ? (body.preferences as Record<string, unknown>)
+        : body;
+
+    const safePreferences: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(updatePayload)) {
+      if (k !== "menuAccess") {
+        safePreferences[k] = v;
+      }
+    }
+
+    try {
+      if (typeof store.updateUser === "function") {
+        await store.updateUser(user.id, { preferences: safePreferences });
+      }
+      updateUserPreferencesInMemory(user.id, safePreferences);
+      (user as any).preferences = { ...((user as any).preferences || {}), ...safePreferences };
+      return { success: true, preferences: (user as any).preferences };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.code(500).send({ error: "internal_error", message: msg });
+    }
+  };
+
+  app.post("/v1/auth/preferences", handleUpdatePreferences);
+  app.patch("/v1/auth/preferences", handleUpdatePreferences);
 
   // Request password reset (no authentication required)
   app.post(

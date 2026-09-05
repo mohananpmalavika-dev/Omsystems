@@ -57,6 +57,21 @@ export function refreshInMemorySessionsForCustomRole(roleId: string, newMenuAcce
   }
 }
 
+export function updateUserPreferencesInMemory(userId: string, preferences: Record<string, any>) {
+  if (!userId || !preferences) return;
+  const target = String(userId).toLowerCase();
+  for (const record of activeInMemorySessions.values()) {
+    const rUserId = String(record.user?.id || record.user?.userId || "").toLowerCase();
+    const rUsername = String(record.user?.username || "").toLowerCase();
+    if (rUserId === target || rUsername === target) {
+      record.user.preferences = {
+        ...(record.user.preferences || {}),
+        ...preferences,
+      };
+    }
+  }
+}
+
 function sanitizeCurrentUser(user: any): any {
   if (!user) return user;
   let id = user.id;

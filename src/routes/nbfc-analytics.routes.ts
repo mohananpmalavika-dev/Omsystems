@@ -502,4 +502,33 @@ export function registerNbfcAnalyticsRoutes(
 
     return reply.code(201).send(saved);
   });
+
+  // ==========================================
+  // 7. USER PREFERENCES (Cross-device alert audio, etc.)
+  // ==========================================
+
+  app.get("/api/ai/preferences", { config: { noAuth: true } }, async (request, reply) => {
+    const { userId } = getUser(request);
+    const preferences = await repository.getUserPreferences(userId);
+    return reply.send({ success: true, preferences });
+  });
+
+  app.post("/api/ai/preferences", { config: { noAuth: true } }, async (request, reply) => {
+    const { userId } = getUser(request);
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const updatePayload =
+      body.preferences && typeof body.preferences === "object"
+        ? (body.preferences as Record<string, unknown>)
+        : body;
+
+    const safePreferences: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(updatePayload)) {
+      if (k !== "menuAccess") {
+        safePreferences[k] = v;
+      }
+    }
+
+    const updated = await repository.updateUserPreferences(userId, safePreferences);
+    return reply.send({ success: true, preferences: updated });
+  });
 }
