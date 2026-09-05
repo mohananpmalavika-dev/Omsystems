@@ -43,12 +43,19 @@ export function registerPortableCameraRoutes(
   // 1. Generate Enrollment QR / Token
   app.post("/api/portable-camera/enrollments", async (request, reply) => {
     const { tenantId, userId, roles } = getUser(request);
+    const currentUser = (request as any).currentUser;
     const body = z.object({
-      branchId: z.string().optional(),
+      branchId: z.string().min(1),
       allowedSourceTypes: z.array(z.string()).optional(),
       requestedPermissions: z.array(z.string()).optional(),
       expiresInSeconds: z.number().int().min(60).max(86400).default(900),
     }).parse(request.body || {});
+
+    if (!currentUser) return reply.code(401).send({ error: "unauthenticated" });
+    const allowedBranches = await store.listAccessibleNodes(currentUser, "device:configure", "branch");
+    if (!allowedBranches.some((branch) => branch.id === body.branchId)) {
+      return reply.code(403).send({ error: "branch_access_denied" });
+    }
 
     const policy = await repository.getPolicy(tenantId);
     if (!policy.enabled) {
@@ -165,6 +172,7 @@ export function registerPortableCameraRoutes(
       appVersion: body.appVersion,
       osVersion: body.osVersion,
       lastKnownIp: clientIp,
+      metadata: { branchId: enrollment.branchId },
     });
 
     // 2. Register camera in VMS inventory
@@ -255,6 +263,10 @@ export function registerPortableCameraRoutes(
       return reply.code(403).send({ error: "device_is_revoked_or_inactive", state: device.state });
     }
 
+    const deviceBranchId = typeof device.metadata?.branchId === "string" ? device.metadata.branchId : undefined;
+    if (body.branchId && deviceBranchId && body.branchId !== deviceBranchId) {
+      return reply.code(403).send({ error: "branch_access_denied" });
+    }
     const tenantId = device.tenantId || authTenantId;
     const userId = device.enrolledBy || authUserId;
     const roles = authRoles;
@@ -306,7 +318,7 @@ export function registerPortableCameraRoutes(
     // 3. Create authoritative session record
     const session = await repository.createSession({
       tenantId,
-      branchId: body.branchId,
+      branchId: deviceBranchId || body.branchId,
       sourceId: body.sourceId,
       deviceId: body.deviceId,
       userId,
@@ -526,8 +538,18 @@ export function registerPortableCameraRoutes(
 
   // 9. List Enrolled Devices
   app.get("/api/portable-camera/devices", async (request, reply) => {
-    const { tenantId } = getUser(request);
-    const devices = await repository.listDevices(tenantId);
+    const { tenantId, user } = getUser(request);
+    if (!user) return reply.code(401).send({ error: "unauthenticated" });
+    const query = z.object({ branchId: z.string().optional() }).parse(request.query);
+    const allowedBranches = await store.listAccessibleNodes(user, "device:configure", "branch");
+    const allowedBranchIds = new Set(allowedBranches.map((branch) => branch.id));
+    if (query.branchId && !allowedBranchIds.has(query.branchId)) {
+      return reply.code(403).send({ error: "branch_access_denied" });
+    }
+    const devices = (await repository.listDevices(tenantId)).filter((device) => {
+      const deviceBranchId = typeof device.metadata?.branchId === "string" ? device.metadata.branchId : undefined;
+      return deviceBranchId && allowedBranchIds.has(deviceBranchId) && (!query.branchId || deviceBranchId === query.branchId);
+    });
     
     // Augment with active session if present
     const augmented = await Promise.all(
@@ -551,17 +573,25 @@ export function registerPortableCameraRoutes(
       })
     );
 
-    return reply.send({ devices: augmented });
+    const activeDevices = augmented.filter((device) => device.state !== "REVOKED");
+    const revokedDevices = augmented.filter((device) => device.state === "REVOKED");
+    return reply.send({ devices: activeDevices, revokedDevices });
   });
 
   // 10. Revoke Device
   app.post("/api/portable-camera/devices/:deviceId/revoke", async (request, reply) => {
-    const { tenantId, userId, roles } = getUser(request);
+    const { tenantId, userId, roles, user } = getUser(request);
     const { deviceId } = z.object({ deviceId: z.string().min(1) }).parse(request.params);
 
     const device = await repository.getDevice(deviceId);
     if (!device) {
       return reply.code(404).send({ error: "device_not_found" });
+    }
+    if (!user) return reply.code(401).send({ error: "unauthenticated" });
+    const deviceBranchId = typeof device.metadata?.branchId === "string" ? device.metadata.branchId : undefined;
+    const allowedBranches = await store.listAccessibleNodes(user, "device:configure", "branch");
+    if (!deviceBranchId || !allowedBranches.some((branch) => branch.id === deviceBranchId)) {
+      return reply.code(403).send({ error: "branch_access_denied" });
     }
 
     await repository.revokeDevice(deviceId);

@@ -255,6 +255,7 @@ export function DeviceManager() {
 
   // Portable Camera Subsystem State
   const [portableDevices, setPortableDevices] = useState<any[]>([]);
+  const [revokedPortableDevices, setRevokedPortableDevices] = useState<any[]>([]);
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>("");
   const [qrToken, setQrToken] = useState<string>("");
@@ -264,6 +265,7 @@ export function DeviceManager() {
   const [selectedPortableDevice, setSelectedPortableDevice] = useState<any | null>(null);
   const [stoppingSession, setStoppingSession] = useState(false);
   const [revokingDevice, setRevokingDevice] = useState(false);
+  const [portableEnrollmentBranch, setPortableEnrollmentBranch] = useState("");
 
   function getPortableAuthHeaders(extra: Record<string, string> = {}) {
     const token = typeof window !== "undefined"
@@ -278,26 +280,29 @@ export function DeviceManager() {
   }
 
   async function loadPortableDevices() {
+    if (!selectedBranch) return;
     try {
-      const res = await fetch("/api/portable-camera/devices", {
+      const res = await fetch(`/api/portable-camera/devices?branchId=${encodeURIComponent(selectedBranch)}`, {
         credentials: "include",
         headers: getPortableAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
         setPortableDevices(data.devices || []);
+        setRevokedPortableDevices(data.revokedDevices || []);
       }
     } catch {}
   }
 
-  async function generateEnrollmentQr() {
+  async function generateEnrollmentQr(branchId = portableEnrollmentBranch) {
+    if (!branchId) return;
     setQrLoading(true);
     try {
       const res = await fetch("/api/portable-camera/enrollments", {
         method: "POST",
         credentials: "include",
         headers: getPortableAuthHeaders({ "content-type": "application/json" }),
-        body: JSON.stringify({ branchId: selectedBranch || undefined }),
+        body: JSON.stringify({ branchId }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -312,6 +317,14 @@ export function DeviceManager() {
     } finally {
       setQrLoading(false);
     }
+  }
+
+  function openPortableEnrollment() {
+    setPortableEnrollmentBranch(selectedBranch);
+    setShowQrModal(true);
+    setQrDataUrl("");
+    setQrToken("");
+    void generateEnrollmentQr(selectedBranch);
   }
 
   async function handleRevokeDevice(deviceId: string) {
@@ -1706,10 +1719,7 @@ export function DeviceManager() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => {
-              setShowQrModal(true);
-              void generateEnrollmentQr();
-            }}
+            onClick={openPortableEnrollment}
             disabled={saving}
             title="Enroll a mobile phone, laptop, or browser camera as a temporary or permanent CCTV source"
           >
@@ -1776,10 +1786,7 @@ export function DeviceManager() {
             <button
               type="button"
               className="secondary-button"
-              onClick={() => {
-                setShowQrModal(true);
-                void generateEnrollmentQr();
-              }}
+              onClick={openPortableEnrollment}
               disabled={!selectedBranch}
               title="Generate single-use QR code for mobile, laptop, or browser camera onboarding"
             >
@@ -1892,17 +1899,14 @@ export function DeviceManager() {
               <Smartphone size={18} />
               <div>
                 <h3>Portable &amp; Software Cameras</h3>
-                <p>{portableDevices.length} registered device{portableDevices.length !== 1 ? "s" : ""} (Laptop, Android, iPhone, Browser)</p>
+                <p>{portableDevices.length} active device{portableDevices.length !== 1 ? "s" : ""} for {activeBranch?.name ?? "the selected branch"}</p>
               </div>
               <div style={{ marginLeft: "auto" }}>
                 <button
                   type="button"
                   className="secondary-button"
                   style={{ fontSize: "11px", padding: "4px 8px" }}
-                  onClick={() => {
-                    setShowQrModal(true);
-                    void generateEnrollmentQr();
-                  }}
+                  onClick={openPortableEnrollment}
                 >
                   <QrCode size={13} /> Enroll Device
                 </button>
@@ -1939,7 +1943,7 @@ export function DeviceManager() {
                     {portableDevices.map((dev) => {
                       const session = dev.activeSession;
                       const isLive = session && (session.state === "LIVE" || session.state === "CONNECTING" || session.state === "DEGRADED");
-                      const branchName = branches.find((b) => b.id === (session?.branchId || dev.metadata?.branchId))?.name || "Kollam / Default";
+                      const branchName = branches.find((b) => b.id === (session?.branchId || dev.metadata?.branchId))?.name || "Unknown branch";
                       const startedDate = session?.startedAt ? new Date(session.startedAt) : null;
                       const durationStr = startedDate
                         ? Math.floor((Date.now() - startedDate.getTime()) / 60000) + "m " + (Math.floor((Date.now() - startedDate.getTime()) / 1000) % 60) + "s"
@@ -2015,6 +2019,27 @@ export function DeviceManager() {
                   </tbody>
                 </table>
               </div>
+            )}
+            {revokedPortableDevices.length > 0 && (
+              <details style={{ marginTop: "14px", borderTop: "1px solid #e2e8f0", paddingTop: "10px" }}>
+                <summary style={{ cursor: "pointer", color: "#b45309", fontWeight: 700 }}>
+                  Revoked device report ({revokedPortableDevices.length})
+                </summary>
+                <div style={{ overflowX: "auto", marginTop: "8px" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "11px", textAlign: "left" }}>
+                    <thead><tr style={{ color: "#64748b" }}><th style={{ padding: "6px" }}>Name</th><th style={{ padding: "6px" }}>Type</th><th style={{ padding: "6px" }}>Branch</th><th style={{ padding: "6px" }}>Last seen</th><th style={{ padding: "6px" }}>Status</th></tr></thead>
+                    <tbody>{revokedPortableDevices.map((device) => (
+                      <tr key={device.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "6px" }}>{device.deviceName}</td>
+                        <td style={{ padding: "6px" }}>{device.type}</td>
+                        <td style={{ padding: "6px" }}>{branches.find((branch) => branch.id === device.metadata?.branchId)?.name || "Unknown branch"}</td>
+                        <td style={{ padding: "6px" }}>{device.lastSeenAt ? new Date(device.lastSeenAt).toLocaleString() : "Unknown"}</td>
+                        <td style={{ padding: "6px", color: "#b91c1c", fontWeight: 700 }}>REVOKED</td>
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </details>
             )}
           </section>
         </div>
@@ -2939,6 +2964,24 @@ export function DeviceManager() {
               </button>
             </div>
             <div className="modal-body" style={{ textAlign: "center", padding: "16px" }}>
+              <div className="form-group" style={{ textAlign: "left", marginBottom: "14px" }}>
+                <label htmlFor="portableEnrollmentBranch">Branch for this portable device</label>
+                <select
+                  id="portableEnrollmentBranch"
+                  value={portableEnrollmentBranch}
+                  onChange={(event) => {
+                    const branchId = event.target.value;
+                    setPortableEnrollmentBranch(branchId);
+                    setQrDataUrl("");
+                    setQrToken("");
+                    void generateEnrollmentQr(branchId);
+                  }}
+                  disabled={qrLoading || branches.length === 0}
+                >
+                  {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+                <small className="field-help">Only branches you are allowed to manage are listed.</small>
+              </div>
               <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
                 Scan this QR code with any mobile device camera (Android / iPhone) or open the enrollment link in a browser/laptop to convert it into a CCTV source.
               </p>
