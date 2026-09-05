@@ -605,30 +605,173 @@ export async function registerAnalyticsRoutes(
     return updated;
   });
 
-  app.post("/v1/analytics/alerts/:alertId/incidents", async (request, reply) => {
-    const { alertId } = alertParams.parse(request.params);
+  const handleConvertAlertToIncident = async (request: any, reply: any) => {
+    const alertId = request.params.alertId || request.params.id;
+    if (!alertId) return reply.code(400).send({ error: "alert_id_required" });
     const body = z.object({
       title: z.string().trim().min(3).max(160).optional(),
       notes: z.string().trim().min(3).max(2_000).optional(),
     }).parse(request.body ?? {});
     const alert = await authorizedAlert(request, reply, store, alertId, "alerts:escalate");
     if (!alert) return;
-    if (alert.incidentId) return reply.code(409).send({ error: "incident_already_linked" });
+    if (alert.incidentId) {
+      const existing = await store.getIncident(alert.incidentId).catch(() => null);
+      if (existing) return reply.code(200).send(existing);
+    }
+
+    const camera = await store.getCamera(alert.cameraId);
+    const branchId = camera?.branchId;
+
     const rule = (await store.listAnalyticsRules(alert.cameraId))
       .find((item) => item.id === alert.ruleId);
-    const incident = await store.createLiveIncident({
-      tenantId: request.currentUser.tenantId, cameraId: alert.cameraId,
-      createdBy: request.currentUser.id, title: body.title ?? alert.title,
-      notes: body.notes ?? alert.description, priority: alert.severity,
+
+    // 1. Create live incident (creates bookmark, legal hold, satisfies FK)
+    const liveIncident = await store.createLiveIncident({
+      tenantId: request.currentUser.tenantId,
+      cameraId: alert.cameraId,
+      createdBy: request.currentUser.id,
+      title: body.title ?? alert.title,
+      notes: body.notes ?? alert.description,
+      priority: alert.severity,
       occurredAt: alert.firstDetectedAt,
       preRollSeconds: rule?.preRollSeconds ?? 30,
       postRollSeconds: rule?.postRollSeconds ?? 120,
     });
-    await store.linkAnalyticsAlertIncident(alertId, request.currentUser.tenantId, incident.id);
+
+    const incidentNumber = `INC-AI-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    // 2. Create enterprise incident in main `incidents` table using the SAME UUID
+    let enterpriseIncident: any;
+    try {
+      enterpriseIncident = await store.createIncident({
+        id: liveIncident.id,
+        tenantId: request.currentUser.tenantId,
+        incidentNumber,
+        title: body.title ?? alert.title,
+        description: body.notes ?? alert.description ?? `AI Detection alert: ${alert.title}`,
+        incidentType: rule?.detectionType ?? "ai-analytics",
+        severity: alert.severity,
+        branchId: branchId ?? undefined,
+        occurredAt: alert.firstDetectedAt,
+        reportedBy: request.currentUser.id,
+        detectionSource: "ai-analytics",
+        aiConfidence: alert.confidence,
+      });
+    } catch (err) {
+      console.warn("Could not insert enterprise incident into incidents table:", err);
+    }
+
+    // 3. Associate camera to incident_cameras
+    try {
+      if ((store as any).incidents?.addCamera) {
+        await (store as any).incidents.addCamera(liveIncident.id, alert.cameraId);
+      }
+    } catch {}
+
+    // 4. Attach snapshot evidence
+    const snapshotPath = alert.snapshotReference ?? `/v1/analytics/alerts/${alert.id}/snapshot`;
+    try {
+      if ((store as any).incidents?.createSnapshot) {
+        await (store as any).incidents.createSnapshot({
+          incidentId: liveIncident.id,
+          cameraId: alert.cameraId,
+          timestamp: alert.firstDetectedAt,
+          snapshotType: "original",
+          storagePath: snapshotPath,
+          description: alert.title,
+          createdBy: request.currentUser.id,
+        });
+      }
+    } catch {}
+
+    // 5. Attach clip evidence if available
+    if (alert.clipReference) {
+      try {
+        if ((store as any).incidents?.createClip) {
+          await (store as any).incidents.createClip({
+            incidentId: liveIncident.id,
+            cameraId: alert.cameraId,
+            sourceSegmentIds: [],
+            startTime: alert.firstDetectedAt,
+            endTime: alert.lastDetectedAt,
+            clipType: "investigation-copy",
+            storagePath: alert.clipReference,
+            hasWatermark: true,
+            hasTimestamp: true,
+            createdBy: request.currentUser.id,
+            notes: `AI Alert Clip for ${alert.title}`,
+          });
+        }
+      } catch {}
+    }
+
+    // 6. Link incident to analytics_alerts and mark escalated
+    await store.linkAnalyticsAlertIncident(alertId, request.currentUser.tenantId, liveIncident.id);
+    try {
+      await store.transitionAnalyticsAlert(alertId, request.currentUser.tenantId, {
+        status: "escalated",
+        actorUserId: request.currentUser.id,
+        notes: `Converted to enterprise incident ${incidentNumber}`,
+      });
+    } catch {}
+
     await auditAlert(request, store, alert, "analytics.incident_created", {
-      incidentId: incident.id, legalHoldId: incident.legalHoldId,
+      incidentId: liveIncident.id,
+      incidentNumber,
+      legalHoldId: liveIncident.legalHoldId,
     });
-    return reply.code(201).send(incident);
+
+    const responsePayload = {
+      ...(enterpriseIncident ?? liveIncident),
+      id: liveIncident.id,
+      incidentNumber: enterpriseIncident?.incidentNumber ?? incidentNumber,
+      legalHoldId: liveIncident.legalHoldId,
+      branchId,
+      branchName: camera?.name ? `Branch for ${camera.name}` : undefined,
+      cameraId: alert.cameraId,
+      cameraName: camera?.name,
+      status: enterpriseIncident?.status ?? "new",
+      snapshotUrl: snapshotPath,
+      videoClipUrl: alert.clipReference ?? `/v1/analytics/alerts/${alert.id}/clip`,
+    };
+
+    return reply.code(201).send(responsePayload);
+  };
+
+  app.post("/v1/analytics/alerts/:alertId/incidents", handleConvertAlertToIncident);
+  app.post("/api/ai/alerts/:alertId/convert-incident", handleConvertAlertToIncident);
+
+  app.get("/v1/analytics/alerts/:alertId/clip", async (request, reply) => {
+    const { alertId } = z.object({ alertId: z.string().uuid() }).parse(request.params);
+    const alert = await store.getAnalyticsAlert(alertId, request.currentUser.tenantId);
+    if (!alert) return reply.code(404).send({ error: "alert_not_found" });
+
+    if (alert.clipReference) {
+      if (alert.clipReference.startsWith("http://") || alert.clipReference.startsWith("https://")) {
+        return reply.redirect(alert.clipReference);
+      }
+      return reply.send({ success: true, url: alert.clipReference, alertId });
+    }
+
+    const from = new Date(new Date(alert.firstDetectedAt).getTime() - 30_000).toISOString();
+    const to = new Date(new Date(alert.lastDetectedAt).getTime() + 60_000).toISOString();
+    const segments = await store.listRecordingSegments(alert.cameraId, from, to).catch(() => []);
+
+    if (segments && segments.length > 0 && segments[0]?.id) {
+      return reply.redirect(`/api/recordings/play?segmentId=${encodeURIComponent(segments[0].id)}`);
+    }
+
+    return reply.send({
+      success: true,
+      alertId,
+      cameraId: alert.cameraId,
+      timestamp: alert.firstDetectedAt,
+      fallbackStreamUrl: `/v1/cameras/${alert.cameraId}/live/stream`,
+      message: "Event clip index ready; stream playback active",
+    });
+  });
+  app.get("/v1/analytics/alerts/:alertId/video", async (request, reply) => {
+    return reply.redirect(`/v1/analytics/alerts/${(request.params as any).alertId}/clip`);
   });
 
   app.get("/v1/analytics/alerts/:alertId/snapshot", async (request, reply) => {

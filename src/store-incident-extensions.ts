@@ -16,7 +16,7 @@ export const IncidentManagementMethods = {
     const incidentNumber = input.incidentNumber ?? `INC-${input.tenantId.substring(0, 2).toUpperCase()}-${new Date().getFullYear()}-${String(this.incidents.length + 1).padStart(6, '0')}`;
     
     const incident = {
-      id: randomUUID(),
+      id: input.id ?? randomUUID(),
       incidentNumber,
       tenantId: input.tenantId,
       branchId: input.branchId,

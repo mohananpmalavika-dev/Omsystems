@@ -455,8 +455,23 @@ export class AnalyticsRepository {
   async listAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<AnalyticsAlert[]> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
-      `SELECT alert.* FROM analytics_alerts alert
+      `SELECT 
+         alert.*,
+         camera.name AS camera_name,
+         camera.branch_node_id AS branch_id,
+         branch.name AS branch_name,
+         zone.name AS zone_name,
+         inc.incident_number,
+         inc.status AS incident_status
+       FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
+       LEFT JOIN LATERAL (
+         SELECT name FROM nbfc_analytics_zones 
+         WHERE camera_id = camera.id::text OR branch_id = camera.branch_node_id::text 
+         ORDER BY created_at DESC LIMIT 1
+       ) zone ON true
+       LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
          AND ($3::uuid IS NULL OR camera.branch_node_id=$3)
@@ -528,7 +543,24 @@ export class AnalyticsRepository {
   async getAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
     const result = await this.pool.query(
-      "SELECT * FROM analytics_alerts WHERE id=$1 AND tenant_id=$2",
+      `SELECT 
+         alert.*,
+         camera.name AS camera_name,
+         camera.branch_node_id AS branch_id,
+         branch.name AS branch_name,
+         zone.name AS zone_name,
+         inc.incident_number,
+         inc.status AS incident_status
+       FROM analytics_alerts alert
+       JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
+       LEFT JOIN LATERAL (
+         SELECT name FROM nbfc_analytics_zones 
+         WHERE camera_id = camera.id::text OR branch_id = camera.branch_node_id::text 
+         ORDER BY created_at DESC LIMIT 1
+       ) zone ON true
+       LEFT JOIN incidents inc ON inc.id=alert.incident_id
+       WHERE alert.id=$1 AND alert.tenant_id=$2`,
       [id, resolvedTenantId],
     );
     return result.rows[0] ? mapAlert(result.rows[0]) : undefined;
@@ -899,6 +931,14 @@ function mapAlert(row: any): AnalyticsAlert {
     ...(row.sla_due_at ? { slaDueAt: iso(row.sla_due_at) } : {}),
     ...(row.correlation_key ? { correlationKey: row.correlation_key } : {}),
     version: Number(row.version ?? 1),
+    ...(row.camera_name ? { cameraName: row.camera_name } : {}),
+    ...(row.branch_id ? { branchId: row.branch_id } : {}),
+    ...(row.branch_name ? { branchName: row.branch_name } : {}),
+    ...(row.zone_name ? { zoneName: row.zone_name } : {}),
+    ...(row.incident_number ? { incidentNumber: row.incident_number } : {}),
+    ...(row.incident_status ? { incidentStatus: row.incident_status } : {}),
+    snapshotUrl: row.snapshot_reference ?? `/v1/analytics/alerts/${row.id}/snapshot`,
+    videoClipUrl: row.clip_reference ?? `/v1/analytics/alerts/${row.id}/clip`,
     createdAt: iso(row.created_at), updatedAt: iso(row.updated_at),
   };
 }

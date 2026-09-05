@@ -5,8 +5,9 @@ export class IncidentRepository {
   constructor(private readonly pool: Pool) {}
 
   async createIncident(input: {
+    id?: string;
     tenantId: string;
-    incidentNumber: string;
+    incidentNumber?: string;
     title: string;
     description?: string;
     incidentType?: string;
@@ -15,15 +16,17 @@ export class IncidentRepository {
     occurredAt?: string;
     reportedBy?: string;
   }) {
+    const id = input.id ?? randomUUID();
+    const incidentNumber = input.incidentNumber ?? `INC-AI-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const result = await this.pool.query(
       `INSERT INTO incidents (
          id, tenant_id, incident_number, title, description, incident_type,
          severity, branch_id, occurred_at, reported_by, status, created_at
        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'new', now()) RETURNING *`,
       [
-        randomUUID(),
+        id,
         input.tenantId,
-        input.incidentNumber,
+        incidentNumber,
         input.title,
         input.description ?? null,
         input.incidentType ?? null,
@@ -37,7 +40,37 @@ export class IncidentRepository {
   }
 
   async getIncident(id: string) {
-    const result = await this.pool.query(`SELECT * FROM incidents WHERE id=$1`, [id]);
+    const result = await this.pool.query(
+      `SELECT 
+         inc.*,
+         node.name AS branch_name,
+         cam.name AS camera_name,
+         cam.id AS camera_id,
+         zone.name AS zone_name,
+         snap.storage_path AS snapshot_storage_path,
+         clip.storage_path AS clip_storage_path
+       FROM incidents inc
+       LEFT JOIN resource_nodes node ON node.id = inc.branch_id
+       LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
+       LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN LATERAL (
+         SELECT name FROM nbfc_analytics_zones 
+         WHERE camera_id = cam.id::text OR branch_id = inc.branch_id::text 
+         ORDER BY created_at DESC LIMIT 1
+       ) zone ON true
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM incident_snapshots 
+         WHERE incident_id = inc.id 
+         ORDER BY created_at DESC LIMIT 1
+       ) snap ON true
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM incident_clips 
+         WHERE incident_id = inc.id 
+         ORDER BY created_at DESC LIMIT 1
+       ) clip ON true
+       WHERE inc.id=$1`,
+      [id],
+    );
     if (!result.rows[0]) return undefined;
     return mapIncident(result.rows[0]);
   }
@@ -54,38 +87,64 @@ export class IncidentRepository {
     to?: string;
     limit?: number;
   }) {
-    const clauses = ["tenant_id=$1"];
+    const clauses = ["inc.tenant_id=$1"];
     const params: unknown[] = [tenantId];
     const addFilter = (column: string, value: string | undefined) => {
       if (value === undefined) return;
       params.push(value);
       clauses.push(`${column}=$${params.length}`);
     };
-    addFilter("status", filters?.status);
-    addFilter("incident_type", filters?.incidentType);
-    addFilter("severity", filters?.severity);
-    addFilter("branch_id", filters?.branchId);
-    addFilter("assigned_to", filters?.assignedTo);
+    addFilter("inc.status", filters?.status);
+    addFilter("inc.incident_type", filters?.incidentType);
+    addFilter("inc.severity", filters?.severity);
+    addFilter("inc.branch_id", filters?.branchId);
+    addFilter("inc.assigned_to", filters?.assignedTo);
     if (filters?.branchIds) {
       params.push(filters.branchIds);
-      const branchPredicate = `branch_id::text = ANY($${params.length}::text[])`;
+      const branchPredicate = `inc.branch_id::text = ANY($${params.length}::text[])`;
       clauses.push(filters.includeUnscoped
-        ? `(${branchPredicate} OR branch_id IS NULL)`
+        ? `(${branchPredicate} OR inc.branch_id IS NULL)`
         : branchPredicate);
     }
     if (filters?.from !== undefined) {
       params.push(filters.from);
-      clauses.push(`occurred_at >= $${params.length}`);
+      clauses.push(`inc.occurred_at >= $${params.length}`);
     }
     if (filters?.to !== undefined) {
       params.push(filters.to);
-      clauses.push(`occurred_at <= $${params.length}`);
+      clauses.push(`inc.occurred_at <= $${params.length}`);
     }
     params.push(filters?.limit ?? 100);
     const res = await this.pool.query(
-      `SELECT * FROM incidents
+      `SELECT 
+         inc.*,
+         node.name AS branch_name,
+         cam.name AS camera_name,
+         cam.id AS camera_id,
+         zone.name AS zone_name,
+         snap.storage_path AS snapshot_storage_path,
+         clip.storage_path AS clip_storage_path
+       FROM incidents inc
+       LEFT JOIN resource_nodes node ON node.id = inc.branch_id
+       LEFT JOIN incident_cameras icam ON icam.incident_id = inc.id
+       LEFT JOIN cameras cam ON cam.id = icam.camera_id
+       LEFT JOIN LATERAL (
+         SELECT name FROM nbfc_analytics_zones 
+         WHERE camera_id = cam.id::text OR branch_id = inc.branch_id::text 
+         ORDER BY created_at DESC LIMIT 1
+       ) zone ON true
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM incident_snapshots 
+         WHERE incident_id = inc.id 
+         ORDER BY created_at DESC LIMIT 1
+       ) snap ON true
+       LEFT JOIN LATERAL (
+         SELECT storage_path FROM incident_clips 
+         WHERE incident_id = inc.id 
+         ORDER BY created_at DESC LIMIT 1
+       ) clip ON true
        WHERE ${clauses.join(" AND ")}
-       ORDER BY occurred_at DESC NULLS LAST, detected_at DESC
+       ORDER BY inc.occurred_at DESC NULLS LAST, inc.detected_at DESC
        LIMIT $${params.length}`,
       params,
     );
@@ -1082,14 +1141,20 @@ function mapIncident(row: any) {
     incidentType: row.incident_type ?? undefined,
     severity: row.severity ?? undefined,
     branchId: row.branch_id ?? undefined,
-    occurredAt: row.occurred_at?.toISOString(),
-    detectedAt: row.detected_at?.toISOString(),
+    branchName: row.branch_name ?? undefined,
+    cameraId: row.camera_id ?? undefined,
+    cameraName: row.camera_name ?? undefined,
+    zoneName: row.zone_name ?? undefined,
+    snapshotUrl: row.snapshot_storage_path ?? `/v1/incidents/${row.id}/snapshot`,
+    videoClipUrl: row.clip_storage_path ?? `/v1/incidents/${row.id}/clip`,
+    occurredAt: row.occurred_at instanceof Date ? row.occurred_at.toISOString() : (row.occurred_at ? new Date(row.occurred_at).toISOString() : undefined),
+    detectedAt: row.detected_at instanceof Date ? row.detected_at.toISOString() : (row.detected_at ? new Date(row.detected_at).toISOString() : undefined),
     reportedBy: row.reported_by ?? undefined,
     assignedTo: row.assigned_to ?? undefined,
     status: row.status,
     legalHoldId: row.legal_hold_id ?? undefined,
-    createdAt: row.created_at.toISOString(),
-    updatedAt: row.updated_at?.toISOString(),
+    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : new Date(row.created_at).toISOString(),
+    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : (row.updated_at ? new Date(row.updated_at).toISOString() : undefined),
   };
 }
 

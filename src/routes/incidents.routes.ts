@@ -570,8 +570,86 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
     return { data: snapshots };
   });
 
+  app.get('/v1/incidents/:id/snapshot', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const incident = await store.getIncident(id);
+    if (!incident) return reply.code(404).send({ error: 'incident_not_found' });
 
-  // ============ EVIDENCE ITEMS AND PACKAGES ============
+    // 1. Check incident snapshots
+    const snapshots = await store.listIncidentSnapshots(id).catch(() => []);
+    if (snapshots && snapshots.length > 0 && snapshots[0].storagePath) {
+      const sp = snapshots[0].storagePath;
+      if (sp.startsWith('http://') || sp.startsWith('https://') || sp.startsWith('/')) {
+        return reply.redirect(sp);
+      }
+    }
+
+    // 2. Check linked analytics alerts
+    try {
+      const alert = (await (store as any).pool?.query(
+        "SELECT id, snapshot_reference FROM analytics_alerts WHERE incident_id = $1 LIMIT 1",
+        [id]
+      ))?.rows?.[0];
+      if (alert) {
+        if (alert.snapshot_reference) {
+          return reply.redirect(alert.snapshot_reference);
+        }
+        return reply.redirect(`/v1/analytics/alerts/${alert.id}/snapshot`);
+      }
+    } catch {}
+
+    // 3. Fallback SVG surveillance banner
+    const title = (incident.title || 'Incident Visual Evidence').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const incNumber = incident.incidentNumber || 'INCIDENT';
+    const time = incident.occurredAt ? new Date(incident.occurredAt).toLocaleString() : new Date().toLocaleString();
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+      <rect width="640" height="360" fill="#0b0f19"/>
+      <rect x="20" y="20" width="600" height="320" rx="12" fill="#111827" stroke="#1f2937" stroke-width="2"/>
+      <circle cx="320" cy="140" r="40" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+      <text x="320" y="148" font-family="sans-serif" font-size="28" text-anchor="middle">🚨</text>
+      <text x="320" y="215" font-family="sans-serif" font-size="16" font-weight="bold" fill="#f9fafb" text-anchor="middle">${incNumber}</text>
+      <text x="320" y="240" font-family="sans-serif" font-size="13" fill="#93c5fd" text-anchor="middle">${title}</text>
+      <text x="320" y="265" font-family="sans-serif" font-size="11" fill="#6b7280" text-anchor="middle">Recorded: ${time}</text>
+    </svg>`;
+    return reply.code(200).header('content-type', 'image/svg+xml').send(svg);
+  });
+
+  app.get('/v1/incidents/:id/clip', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const incident = await store.getIncident(id);
+    if (!incident) return reply.code(404).send({ error: 'incident_not_found' });
+
+    // 1. Check incident clips
+    const clips = await store.listIncidentClips(id).catch(() => []);
+    if (clips && clips.length > 0 && clips[0].storagePath) {
+      return reply.redirect(clips[0].storagePath);
+    }
+
+    // 2. Check linked alert clip
+    try {
+      const alert = (await (store as any).pool?.query(
+        "SELECT id, clip_reference, camera_id FROM analytics_alerts WHERE incident_id = $1 LIMIT 1",
+        [id]
+      ))?.rows?.[0];
+      if (alert?.clip_reference) {
+        return reply.redirect(alert.clip_reference);
+      }
+      if (alert?.id) {
+        return reply.redirect(`/v1/analytics/alerts/${alert.id}/clip`);
+      }
+    } catch {}
+
+    return reply.send({
+      success: true,
+      incidentId: id,
+      incidentNumber: incident.incidentNumber,
+      message: "No dedicated MP4 clip archived; consult synchronized playback timeline.",
+    });
+  });
+
+  app.get('/v1/incidents/:id/video', async (request: FastifyRequest, reply: FastifyReply) => {
+    return reply.redirect(`/v1/incidents/${(request.params as any).id}/clip`);
+  });
   
   app.post('/v1/incidents/:id/evidence-items', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);

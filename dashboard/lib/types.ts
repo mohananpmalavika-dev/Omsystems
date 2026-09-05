@@ -686,6 +686,14 @@ export interface AnalyticsAlert {
   slaDueAt?: string;
   correlationKey?: string;
   version: number;
+  branchId?: string;
+  branchName?: string;
+  cameraName?: string;
+  zoneName?: string;
+  incidentNumber?: string;
+  incidentStatus?: string;
+  snapshotUrl?: string;
+  videoClipUrl?: string;
   createdAt: string;
   updatedAt: string;
 }

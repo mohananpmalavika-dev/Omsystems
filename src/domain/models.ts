@@ -1539,6 +1539,14 @@ export interface AnalyticsAlert {
   slaDueAt?: string | undefined;
   correlationKey?: string | undefined;
   version: number;
+  branchId?: string | undefined;
+  branchName?: string | undefined;
+  cameraName?: string | undefined;
+  zoneName?: string | undefined;
+  incidentNumber?: string | undefined;
+  incidentStatus?: string | undefined;
+  snapshotUrl?: string | undefined;
+  videoClipUrl?: string | undefined;
   createdAt: string;
   updatedAt: string;
 }
@@ -1874,6 +1882,12 @@ export interface Incident {
   incidentNumber: string;
   tenantId: string;
   branchId?: string;
+  branchName?: string;
+  cameraId?: string;
+  cameraName?: string;
+  zoneName?: string;
+  snapshotUrl?: string;
+  videoClipUrl?: string;
   title: string;
   description?: string;
   incidentType: IncidentType;

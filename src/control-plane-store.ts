@@ -819,6 +819,7 @@ export interface ControlPlaneStore {
   
   // Core Incident Operations
   createIncident(input: {
+    id?: string;
     tenantId: string;
     branchId?: string;
     incidentNumber?: string;

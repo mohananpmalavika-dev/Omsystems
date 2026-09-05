@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
-import { Plus, Siren, Camera } from "lucide-react";
-import { IncidentImageModal } from "@/components/incident-image-modal";
+import { Plus, Siren, Camera, FileVideo, MapPin, Building2, Eye } from "lucide-react";
+import { IncidentMediaModal } from "@/components/incident-media-modal";
 
 type Incident = {
   id: string;
@@ -16,6 +16,12 @@ type Incident = {
   severity: string;
   status: string;
   branchId?: string;
+  branchName?: string;
+  cameraId?: string;
+  cameraName?: string;
+  zoneName?: string;
+  snapshotUrl?: string;
+  videoClipUrl?: string;
   assignedTo?: string;
   detectionSource?: string;
   aiConfidence?: number;
@@ -41,7 +47,8 @@ export default function IncidentsPage() {
   const [stats, setStats] = useState<any>(null);
   const [view, setView] = useState<'all' | 'critical' | 'open' | 'sla-breach'>('all');
   const [error, setError] = useState<string | null>(null);
-  const [selectedIncidentForImage, setSelectedIncidentForImage] = useState<Incident | null>(null);
+  const [selectedIncidentForMedia, setSelectedIncidentForMedia] = useState<Incident | null>(null);
+  const [mediaModalTab, setMediaModalTab] = useState<'image' | 'video'>('image');
 
   async function loadIncidents() {
     setLoading(true);
@@ -127,7 +134,7 @@ export default function IncidentsPage() {
 
   const filteredIncidents = incidents.filter(inc => {
     if (view === 'critical' && !['P1', 'P2'].includes(inc.severity)) return false;
-    if (view === 'open' && ['closed', 'resolved', 'false-positive'].includes(inc.status)) return false;
+    if (view === 'open' && ['closed', 'false-positive', 'cancelled'].includes(inc.status)) return false;
     if (view === 'sla-breach') {
       // Would check SLA status - simplified for now
       return ['P1', 'P2'].includes(inc.severity) && inc.status !== 'closed';
@@ -299,32 +306,32 @@ export default function IncidentsPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead style={{ backgroundColor: '#f9fafb' }}>
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
                     Incident #
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
-                    Title
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                    Title & Type
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
-                    Type
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                    Zone
                   </th>
-                  <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                    Branch
+                  </th>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                    Camera
+                  </th>
+                  <th style={{ textAlign: 'center', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
                     Severity
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
                     Status
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
-                    Source
-                  </th>
-                  <th style={{ textAlign: 'left', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
+                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
                     Occurred
                   </th>
-                  <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
-                    AI
-                  </th>
-                  <th style={{ textAlign: 'center', padding: '12px 16px', fontWeight: 600, color: '#374151' }}>
-                    Snapshot
+                  <th style={{ textAlign: 'center', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                    Visual Evidence
                   </th>
                 </tr>
               </thead>
@@ -347,35 +354,64 @@ export default function IncidentsPage() {
                       onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f9fafb'}
                       onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
                     >
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '12px 14px' }}>
                         <Link
                           href={`/incidents/${inc.id}`}
                           style={{
                             color: '#2563eb',
                             textDecoration: 'none',
-                            fontWeight: 600,
-                            fontSize: '14px',
+                            fontWeight: 700,
+                            fontSize: '13px',
+                            fontFamily: 'monospace',
                           }}
                         >
                           {inc.incidentNumber}
                         </Link>
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: '14px', color: '#111827' }}>
+                      <td style={{ padding: '12px 14px' }}>
                         <Link
                           href={`/incidents/${inc.id}`}
-                          style={{ color: 'inherit', textDecoration: 'none' }}
+                          style={{ color: '#111827', textDecoration: 'none', fontWeight: 600, fontSize: '14px', display: 'block' }}
                         >
                           {inc.title}
                         </Link>
+                        <span style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {inc.incidentType || 'Security Incident'}
+                        </span>
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
-                        {inc.incidentType || 'Unknown'}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '12px 16px' }}>
+                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
                         <span style={{
-                          padding: '4px 10px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 8px',
                           borderRadius: '4px',
+                          backgroundColor: '#f3e8ff',
+                          color: '#7e22ce',
+                          fontWeight: 500,
                           fontSize: '12px',
+                        }}>
+                          <MapPin size={12} />
+                          {inc.zoneName || "Main Facility"}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
+                          <Building2 size={13} style={{ color: '#6b7280' }} />
+                          {inc.branchName || inc.branchId || "Headquarters"}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
+                          <Camera size={13} style={{ color: '#0284c7' }} />
+                          {inc.cameraName || inc.cameraId || "Camera"}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: 'center', padding: '12px 14px' }}>
+                        <span style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
                           fontWeight: 700,
                           backgroundColor: getSeverityColor(inc.severity),
                           color: 'white',
@@ -383,25 +419,10 @@ export default function IncidentsPage() {
                           {inc.severity}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 16px' }}>
+                      <td style={{ padding: '12px 14px' }}>
                         {getStatusBadge(inc.status)}
                       </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
-                        {inc.detectionSource === 'ai-analytics' ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span style={{
-                              width: '6px',
-                              height: '6px',
-                              borderRadius: '50%',
-                              backgroundColor: '#10b981',
-                            }} />
-                            AI Detection
-                          </span>
-                        ) : (
-                          'Manual'
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 16px', fontSize: '13px', color: '#6b7280' }}>
+                      <td style={{ padding: '12px 14px', fontSize: '12px', color: '#6b7280' }}>
                         {inc.occurredAt
                           ? new Date(inc.occurredAt).toLocaleString([], {
                               month: 'short',
@@ -411,40 +432,59 @@ export default function IncidentsPage() {
                             })
                           : 'N/A'}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '12px 16px', fontSize: '13px' }}>
-                        {inc.aiConfidence ? (
-                          <span style={{ color: inc.aiConfidence >= 0.85 ? '#10b981' : '#f59e0b' }}>
-                            {Math.round(inc.aiConfidence * 100)}%
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td style={{ textAlign: 'center', padding: '12px 16px' }}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedIncidentForImage(inc);
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            padding: '4px 10px',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                            backgroundColor: '#f0f9ff',
-                            color: '#0284c7',
-                            border: '1px solid #bae6fd',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                          }}
-                          title="View incident snapshot image"
-                        >
-                          <Camera size={13} />
-                          View Image
-                        </button>
+                      <td style={{ textAlign: 'center', padding: '12px 14px' }}>
+                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedIncidentForMedia(inc);
+                              setMediaModalTab('image');
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '5px 9px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              backgroundColor: '#f0fdf4',
+                              color: '#15803d',
+                              border: '1px solid #bbf7d0',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                            }}
+                            title="View high-resolution snapshot"
+                          >
+                            <Camera size={12} />
+                            Image
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedIncidentForMedia(inc);
+                              setMediaModalTab('video');
+                            }}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '5px 9px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                              backgroundColor: '#eff6ff',
+                              color: '#1d4ed8',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                            }}
+                            title="Watch incident video clip"
+                          >
+                            <FileVideo size={12} />
+                            Video
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -464,17 +504,20 @@ export default function IncidentsPage() {
           Showing {filteredIncidents.length} incident{filteredIncidents.length !== 1 ? 's' : ''}
         </div>
 
-        {selectedIncidentForImage && (
-          <IncidentImageModal
-            isOpen={!!selectedIncidentForImage}
-            onClose={() => setSelectedIncidentForImage(null)}
-            imageUrl={`/api/control/v1/alerts/${selectedIncidentForImage.id}/evidence/snapshot`}
-            title={selectedIncidentForImage.title}
-            cameraName={selectedIncidentForImage.branchId || "Incident Camera"}
-            branchName={selectedIncidentForImage.branchId}
-            timestamp={selectedIncidentForImage.occurredAt || selectedIncidentForImage.createdAt}
-            severity={selectedIncidentForImage.severity}
-            confidence={selectedIncidentForImage.aiConfidence}
+        {selectedIncidentForMedia && (
+          <IncidentMediaModal
+            isOpen={!!selectedIncidentForMedia}
+            onClose={() => setSelectedIncidentForMedia(null)}
+            initialTab={mediaModalTab}
+            snapshotUrl={selectedIncidentForMedia.snapshotUrl || `/api/control/v1/incidents/${selectedIncidentForMedia.id}/snapshot`}
+            videoClipUrl={selectedIncidentForMedia.videoClipUrl || `/api/control/v1/incidents/${selectedIncidentForMedia.id}/clip`}
+            title={`${selectedIncidentForMedia.incidentNumber}: ${selectedIncidentForMedia.title}`}
+            cameraName={selectedIncidentForMedia.cameraName || "Incident Camera"}
+            branchName={selectedIncidentForMedia.branchName || selectedIncidentForMedia.branchId || "Facility"}
+            zoneName={selectedIncidentForMedia.zoneName}
+            timestamp={selectedIncidentForMedia.occurredAt || selectedIncidentForMedia.createdAt}
+            severity={selectedIncidentForMedia.severity}
+            confidence={selectedIncidentForMedia.aiConfidence}
           />
         )}
       </div>
