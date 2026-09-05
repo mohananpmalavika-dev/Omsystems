@@ -15,7 +15,6 @@ const schema = z.object({
   MEDIAMTX_WEBRTC_URL: z.string().url().default("http://localhost:8889"),
   PUBLIC_HLS_BASE_URL: z.string().url().optional(),
   PUBLIC_WEBRTC_BASE_URL: z.string().url().optional(),
-  RENDER_EXTERNAL_URL: z.string().url().optional(),
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
   STREAM_SECRETS_JSON: z.string().default("{}"),
   STREAM_SECRET_PROVIDER_URL: z.preprocess(
@@ -38,16 +37,15 @@ export function loadMediaConfig(environment: NodeJS.ProcessEnv = process.env) {
   if (environment.NODE_ENV === "production" &&
       !config.STREAM_SECRET_PROVIDER_URL &&
       Object.keys(streamSecrets).length === 0) {
-    throw new Error("A production stream secret provider or non-empty STREAM_SECRETS_JSON is required");
+    console.warn("[media-gateway] Running in production without STREAM_SECRET_PROVIDER_URL or STREAM_SECRETS_JSON; direct RTSP secret resolutions will return 503 stream_secret_unavailable.");
   }
   if (config.STREAM_SECRET_PROVIDER_URL && !config.STREAM_SECRET_PROVIDER_KEY) {
     throw new Error("STREAM_SECRET_PROVIDER_KEY is required with STREAM_SECRET_PROVIDER_URL");
   }
-  const renderBase = config.RENDER_EXTERNAL_URL?.replace(/\/+$/, "");
   return {
     ...config,
-    PUBLIC_HLS_BASE_URL: config.PUBLIC_HLS_BASE_URL ?? (renderBase ? `${renderBase}/hls` : "http://localhost:8888"),
-    PUBLIC_WEBRTC_BASE_URL: config.PUBLIC_WEBRTC_BASE_URL ?? (renderBase ? `${renderBase}/webrtc` : "http://localhost:8889"),
+    PUBLIC_HLS_BASE_URL: config.PUBLIC_HLS_BASE_URL ?? "http://localhost:8888",
+    PUBLIC_WEBRTC_BASE_URL: config.PUBLIC_WEBRTC_BASE_URL ?? "http://localhost:8889",
   };
 }
 
