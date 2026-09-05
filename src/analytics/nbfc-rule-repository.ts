@@ -1814,9 +1814,15 @@ export class NbfcRuleRepository {
         `SELECT preferences FROM users
          WHERE ${isUuid ? "id=$1::uuid" : "lower(username)=lower($1) OR lower(email)=lower($1) OR identity_subject=$1"}
          LIMIT 1`,
-        [clean || "00000000-0000-4000-8000-000000000001"]
+        [clean || "00000000-0000-4000-8000-000000000201"]
       );
-      return res.rows[0]?.preferences || {};
+      if (res.rows[0]?.preferences) {
+        return res.rows[0].preferences;
+      }
+      const fallback = await this.pool.query(
+        `SELECT preferences FROM users WHERE role='super_admin' OR id='00000000-0000-4000-8000-000000000201'::uuid LIMIT 1`
+      );
+      return fallback.rows[0]?.preferences || {};
     } catch {
       return {};
     }
@@ -1834,10 +1840,20 @@ export class NbfcRuleRepository {
          RETURNING preferences`,
         [
           JSON.stringify(preferences),
-          clean || "00000000-0000-4000-8000-000000000001",
+          clean || "00000000-0000-4000-8000-000000000201",
         ]
       );
-      return res.rows[0]?.preferences || preferences;
+      if (res.rows[0]?.preferences) {
+        return res.rows[0].preferences;
+      }
+      const fallback = await this.pool.query(
+        `UPDATE users
+         SET preferences = COALESCE(preferences, '{}'::jsonb) || $1::jsonb, updated_at=now()
+         WHERE id = (SELECT id FROM users WHERE role='super_admin' OR id='00000000-0000-4000-8000-000000000201'::uuid LIMIT 1)
+         RETURNING preferences`,
+        [JSON.stringify(preferences)]
+      );
+      return fallback.rows[0]?.preferences || preferences;
     } catch {
       return preferences;
     }

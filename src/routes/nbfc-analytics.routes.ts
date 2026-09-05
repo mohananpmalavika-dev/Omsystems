@@ -19,7 +19,7 @@ export function registerNbfcAnalyticsRoutes(
     const user = (request as any).currentUser;
     const headerTenant = request.headers["x-tenant-id"] as string | undefined;
     const tenantId = user?.tenantId || headerTenant || "00000000-0000-4000-8000-000000000001";
-    const userId = user?.id || user?.userId || "system-admin";
+    const userId = user?.id || user?.userId || "00000000-0000-4000-8000-000000000201";
     const roles = user?.roles || ["admin"];
     return { tenantId, userId, roles, user };
   }
