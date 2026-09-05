@@ -192,7 +192,7 @@ export function registerPortableCameraRoutes(
     if (camera) {
       device.cameraId = camera.id;
       // Link camera in device record
-      await repository.updateDeviceSeen(device.id, clientIp);
+      await repository.updateDeviceSeen(device.id, clientIp, camera.id);
     }
 
     // 3. Consume token
