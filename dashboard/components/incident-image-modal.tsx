@@ -147,6 +147,8 @@ export function IncidentImageModal({
               <img
                 src={imageUrl}
                 alt={title}
+                decoding="async"
+                fetchPriority="high"
                 onLoad={() => setLoading(false)}
                 onError={() => {
                   setLoading(false);

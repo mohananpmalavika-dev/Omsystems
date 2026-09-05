@@ -245,6 +245,25 @@ export async function registerAlertCommandCenterRoutes(
         app.log.warn({ err, alertId }, "Failed checking event snapshotBase64 in database");
       }
 
+      // Prefer the durable evidence asset before waiting on analytics-engine.
+      // This is the common path for already-preserved incident snapshots.
+      if (evidenceClient && isManagedAlertEvidenceReference(alert.id, alert.snapshotReference)) {
+        try {
+          const evidence = await evidenceClient.asset(alertId, "snapshot", request.headers.range);
+          if (evidence.ok) {
+            reply.code(evidence.status);
+            for (const name of ["accept-ranges", "cache-control", "content-length", "content-range", "content-type"]) {
+              const value = evidence.headers.get(name);
+              if (value) reply.header(name, value);
+            }
+            if (!evidence.body) return reply.send();
+            return reply.send(Readable.fromWeb(evidence.body as any));
+          }
+        } catch (err) {
+          app.log.debug({ err, alertId }, "Durable alert snapshot was not ready; trying analytics snapshot");
+        }
+      }
+
       // Check analytics-engine internal endpoint if running
       const aeUrl = process.env.ANALYTICS_ENGINE_URL || "http://analytics-engine:8092";
       try {
