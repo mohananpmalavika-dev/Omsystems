@@ -460,18 +460,14 @@ export class AnalyticsRepository {
          COALESCE(cam_node.name, camera.model, 'Camera') AS camera_name,
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
-         zone.name AS zone_name,
+         event.metadata->>'zoneName' AS zone_name,
          inc.incident_number,
          inc.status AS incident_status
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN analytics_events event ON event.id=alert.event_id
        LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
-       LEFT JOIN LATERAL (
-         SELECT name FROM nbfc_analytics_zones 
-         WHERE camera_id = camera.id::text OR branch_id = camera.branch_node_id::text 
-         ORDER BY created_at DESC LIMIT 1
-       ) zone ON true
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)

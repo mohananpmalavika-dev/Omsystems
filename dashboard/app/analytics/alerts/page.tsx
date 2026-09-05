@@ -468,7 +468,7 @@ export default function AiAlertsIncidentHubPage() {
                   filteredAlerts.map((alert) => {
                     const isConverted = Boolean(alert.incidentId || alert.incidentNumber);
                     const isConverting = convertingId === alert.id;
-                    const zoneName = alert.zoneName || "General Area";
+                    const zoneName = alert.zoneName || "Zone not specified";
                     const branchName = alert.branchName || "Fleet Branch";
                     const cameraName = alert.cameraName || alert.cameraId.slice(0, 8);
 
