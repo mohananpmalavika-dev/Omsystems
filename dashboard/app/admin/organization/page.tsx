@@ -119,7 +119,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 
 export default function OrganizationHierarchyPage() {
   const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "roles" | "branding">("hierarchy");
-  const { branding, updateBranding } = useOrgBranding();
+  const { branding, organizations, selectOrganization, updateBranding } = useOrgBranding();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -231,7 +231,7 @@ export default function OrganizationHierarchyPage() {
   };
 
   const saveBranding = async () => {
-    const root = treeData[0];
+    const root = treeData.find((node) => node.id === branding.organizationId) ?? treeData[0];
     if (!root) return;
     setSaving(true);
     setError(null);
@@ -263,7 +263,8 @@ export default function OrganizationHierarchyPage() {
         const treeJson = await treeRes.json();
         const nodes = Array.isArray(treeJson) ? treeJson : treeJson.data || [];
         setTreeData(nodes);
-        if (nodes[0]?.logoUrl) setBrandingLogo(nodes[0].logoUrl);
+        const selectedRoot = nodes.find((node: OrgNode) => node.id === branding.organizationId) ?? nodes[0];
+        if (selectedRoot?.logoUrl) setBrandingLogo(selectedRoot.logoUrl);
 
         const flat: OrgNode[] = [];
         function flatten(list: OrgNode[]) {
@@ -1076,7 +1077,29 @@ export default function OrganizationHierarchyPage() {
           <div className="max-w-2xl p-6 bg-slate-900/60 border border-slate-800 rounded-xl space-y-5">
             <div>
               <h2 className="text-base font-bold text-slate-100 flex items-center gap-2"><Building2 size={18} className="text-emerald-400" /> Organization Branding</h2>
-              <p className="text-xs text-slate-400 mt-1">Upload the organization logo shown in navigation, login, and module surfaces.</p>
+              <p className="text-xs text-slate-400 mt-1">Choose an organization and update the name/logo shown across its branches, employees, and modules.</p>
+            </div>
+            {organizations.length > 1 && (
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Organization</label>
+                <select
+                  value={branding.organizationId ?? ""}
+                  onChange={(event) => {
+                    selectOrganization(event.target.value);
+                    const selected = treeData.find((node) => node.id === event.target.value);
+                    setBrandingLogo(selected?.logoUrl ?? null);
+                  }}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                >
+                  {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+                </select>
+              </div>
+            )}
+            <div className="flex items-center gap-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex h-24 w-24 items-center justify-center rounded-xl border border-slate-700 bg-white p-2">
+                {brandingLogo ? <img src={brandingLogo} alt="Organization logo" className="max-h-full max-w-full object-contain" /> : <Building2 size={36} className="text-slate-400" />}
+              </div>
+              <div><strong className="block text-lg text-slate-100">{(treeData.find((node) => node.id === branding.organizationId) ?? treeData[0])?.name || branding.orgName}</strong><span className="text-xs text-slate-400">This identity appears in the module header and navigation.</span></div>
             </div>
             <input ref={brandingFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleBrandingFile(file); }} />
             <button type="button" onClick={() => brandingFileRef.current?.click()} className="w-full min-h-44 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-emerald-500 transition-colors flex flex-col items-center justify-center gap-3">

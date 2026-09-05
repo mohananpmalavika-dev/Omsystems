@@ -29,7 +29,8 @@ export function camelRows<T = JsonRecord>(rows: JsonRecord[]): T[] {
 
 const organizationSelect = `
   SELECT id::text, tenant_id::text, parent_id::text, node_type AS type,
-         name, code, description, address, contact_info, metadata, is_active,
+         name, code, description, address, contact_info, metadata,
+         metadata->>'logoUrl' AS logo_url, is_active,
          is_sensitive, sensitivity_level, path::text, created_at, updated_at
   FROM resource_nodes`;
 
@@ -573,7 +574,7 @@ export class InfrastructureRepository {
           input.description ?? null,
           JSON.stringify(input.address ?? {}),
           JSON.stringify(input.contactInfo ?? {}),
-          JSON.stringify(input.metadata ?? {}),
+          JSON.stringify({ ...(input.metadata ?? {}), ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}) }),
           input.isSensitive ?? false,
           input.sensitivityLevel ?? "normal",
         ],
@@ -601,7 +602,7 @@ export class InfrastructureRepository {
           input.description ?? null,
           JSON.stringify(input.address ?? {}),
           JSON.stringify(input.contactInfo ?? {}),
-          JSON.stringify(input.metadata ?? {}),
+          JSON.stringify({ ...(input.metadata ?? {}), ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}) }),
           input.isSensitive ?? false,
           input.sensitivityLevel ?? "normal",
         ],
@@ -612,11 +613,14 @@ export class InfrastructureRepository {
   }
 
   async updateOrganizationNode(id: string, input: any) {
+    const metadata = input.metadata !== undefined || input.logoUrl !== undefined
+      ? { ...(input.metadata ?? {}), ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}) }
+      : undefined;
     const fields: Array<[string, unknown, string?]> = [
       ["name", input.name], ["code", input.code],
       ["description", input.description], ["address", input.address, "jsonb"],
       ["contact_info", input.contactInfo, "jsonb"],
-      ["metadata", input.metadata, "jsonb"], ["is_active", input.isActive],
+      ["metadata", metadata, "jsonb"], ["is_active", input.isActive],
       ["is_sensitive", input.isSensitive], ["sensitivity_level", input.sensitivityLevel],
     ];
     const supplied = fields.filter(([, value]) => value !== undefined);

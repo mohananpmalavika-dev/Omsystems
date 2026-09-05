@@ -396,7 +396,7 @@ export function AppLayout({ children, incidentCount = 0, cameraCount = 0 }: AppL
 function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLayoutProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { branding } = useOrgBranding();
+  const { branding, organizations, selectOrganization } = useOrgBranding();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -742,6 +742,18 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <strong>{branding.orgName || "KryptonVision"}</strong>
             <span>{branding.tagline || "Enterprise operations"}</span>
           </div>
+          {organizations.length > 1 && (
+            <select
+              aria-label="Active organization"
+              value={branding.organizationId ?? ""}
+              onChange={(event) => selectOrganization(event.target.value)}
+              className="basis-full mt-2 w-full rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-[11px] text-slate-300"
+            >
+              {organizations.map((organization) => (
+                <option key={organization.id} value={organization.id}>{organization.name}</option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             className="sidebar-collapse-btn desktop-only"
@@ -902,7 +914,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
-              <Link href="/">KryptonVision</Link><ChevronRight size={12} />
+              <Link href="/" className="inline-flex items-center gap-1.5">
+                {branding.logoUrl ? <img src={branding.logoUrl} alt="" className="h-5 w-5 rounded object-contain" /> : null}
+                <span>{branding.orgName || "KryptonVision"}</span>
+              </Link><ChevronRight size={12} />
               {activeGroup ? <Link href={activeGroup.items[0].href}>{currentPage.section}</Link> : <span>{currentPage.section}</span>}
             </div>
             <p className="topbar-title">{currentPage.title}</p>

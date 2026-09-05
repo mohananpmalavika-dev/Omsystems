@@ -140,7 +140,7 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
       if (err.statusCode === 403) {
         errorMessage = "You don't have permission to create an organization. Please contact your system administrator.";
       } else if (err.statusCode === 409) {
-        errorMessage = "An organization already exists. Only one organization is allowed per system.";
+        errorMessage = "This organization could not be created because the name or code is already in use.";
       } else if (err.message) {
         errorMessage = err.message;
       }

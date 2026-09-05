@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { organizationApi } from "@/lib/api-client";
 
 export interface OrgBranding {
+  organizationId: string | null;
   orgName: string;
   orgCode: string;
   logoUrl: string | null;
@@ -12,11 +13,14 @@ export interface OrgBranding {
 
 interface OrgBrandingContextValue {
   branding: OrgBranding;
+  organizations: Array<{ id: string; name: string; code?: string; logoUrl?: string | null }>;
+  selectOrganization: (organizationId: string) => void;
   updateBranding: (branding: Partial<OrgBranding>) => void;
   setLogo: (logoDataUrl: string | null) => void;
 }
 
 const DEFAULT_BRANDING: OrgBranding = {
+  organizationId: null,
   orgName: "KryptonVision",
   orgCode: "SENTINEL-CORP",
   logoUrl: null,
@@ -24,15 +28,34 @@ const DEFAULT_BRANDING: OrgBranding = {
 };
 
 const BRANDING_STORAGE_KEY = "sentinel-grid-org-branding";
+const ORGANIZATION_ID_STORAGE_KEY = "sentinel-grid-active-organization";
 
 const OrgBrandingContext = createContext<OrgBrandingContextValue>({
   branding: DEFAULT_BRANDING,
+  organizations: [],
+  selectOrganization: () => {},
   updateBranding: () => {},
   setLogo: () => {},
 });
 
 export function OrgBrandingProvider({ children }: { children: React.ReactNode }) {
   const [branding, setBranding] = useState<OrgBranding>(DEFAULT_BRANDING);
+  const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; code?: string; logoUrl?: string | null }>>([]);
+
+  const applyOrganization = (organization: { id: string; name: string; code?: string; logoUrl?: string | null }) => {
+    const next: OrgBranding = {
+      organizationId: organization.id,
+      orgName: organization.name || DEFAULT_BRANDING.orgName,
+      orgCode: organization.code || DEFAULT_BRANDING.orgCode,
+      logoUrl: organization.logoUrl || null,
+      tagline: DEFAULT_BRANDING.tagline,
+    };
+    setBranding(next);
+    try {
+      localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(ORGANIZATION_ID_STORAGE_KEY, organization.id);
+    } catch {}
+  };
 
   useEffect(() => {
     // 1. Load from localStorage for instantaneous rendering
@@ -49,26 +72,22 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
     organizationApi
       .getTree()
       .then((res: any) => {
-        if (res && res.tree && res.tree.length > 0) {
-          const rootOrg = res.tree[0];
-          setBranding((prev) => {
-            const updated: OrgBranding = {
-              ...prev,
-              orgName: rootOrg.name || prev.orgName,
-              orgCode: rootOrg.code || prev.orgCode,
-              logoUrl: rootOrg.logoUrl || prev.logoUrl,
-            };
-            try {
-              localStorage.setItem(BRANDING_STORAGE_KEY, JSON.stringify(updated));
-            } catch (err) {}
-            return updated;
-          });
-        }
+        const roots = Array.isArray(res?.data) ? res.data : Array.isArray(res?.tree) ? res.tree : [];
+        const organizations = roots.map((root: any) => ({ id: root.id, name: root.name, code: root.code, logoUrl: root.logoUrl ?? root.metadata?.logoUrl ?? null }));
+        setOrganizations(organizations);
+        const savedId = localStorage.getItem(ORGANIZATION_ID_STORAGE_KEY);
+        const selected = organizations.find((organization: any) => organization.id === savedId) ?? organizations[0];
+        if (selected) applyOrganization(selected);
       })
       .catch(() => {
         // Fallback gracefully if API is not yet loaded or offline
       });
   }, []);
+
+  const selectOrganization = (organizationId: string) => {
+    const selected = organizations.find((organization) => organization.id === organizationId);
+    if (selected) applyOrganization(selected);
+  };
 
   const updateBranding = (updates: Partial<OrgBranding>) => {
     setBranding((prev) => {
@@ -87,7 +106,7 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
   };
 
   return (
-    <OrgBrandingContext.Provider value={{ branding, updateBranding, setLogo }}>
+    <OrgBrandingContext.Provider value={{ branding, organizations, selectOrganization, updateBranding, setLogo }}>
       {children}
     </OrgBrandingContext.Provider>
   );

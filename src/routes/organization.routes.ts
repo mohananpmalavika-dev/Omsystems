@@ -41,6 +41,7 @@ const createNodeSchema = z.object({
       contactPerson: z.string().optional(),
     })
     .optional(),
+  logoUrl: z.string().max(15_000_000).nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
   isSensitive: z.boolean().optional(),
   sensitivityLevel: z.enum(["normal", "restricted", "highly_restricted"]).optional(),
@@ -66,6 +67,7 @@ const updateNodeSchema = z.object({
       contactPerson: z.string().optional(),
     })
     .optional(),
+  logoUrl: z.string().max(15_000_000).nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
   isActive: z.boolean().optional(),
   isSensitive: z.boolean().optional(),
