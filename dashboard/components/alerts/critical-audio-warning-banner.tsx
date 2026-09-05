@@ -40,7 +40,7 @@ export function CriticalAudioWarningBanner({ activeP1Count = 0 }: { activeP1Coun
         onClick={() => alertAudioService.enable()}
         className="px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider bg-rose-500 hover:bg-rose-400 text-white shadow-lg transition-all shrink-0 ml-4"
       >
-        Enable Audio Now
+        Arm Mandatory System Tone
       </button>
     </div>
   );

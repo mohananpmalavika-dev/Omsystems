@@ -23,11 +23,13 @@ import { alertAudioSynthesizer } from "./alert-audio-synthesizer";
 
 const SOUND_PREF_KEY = "sentinel-control-room-alert-audio-enabled";
 const VOLUME_PREF_KEY = "sentinel-control-room-alert-audio-volume";
+const SPEECH_PREF_KEY = "sentinel-control-room-speech-alerts-enabled";
 
 export class AlertAudioService {
   private status: AlertAudioStatus = {
     state: "LOCKED",
-    enabled: false,
+    enabled: true,
+    speechEnabled: true,
     muted: false,
     volume: 0.9,
     outputRouting: "SYSTEM_DEFAULT",
@@ -43,10 +45,12 @@ export class AlertAudioService {
   private statusListeners: Set<(status: AlertAudioStatus) => void> = new Set();
   private isSynthesizing = false;
   private initialized = false;
+  private spokenAt: Map<string, number> = new Map();
 
   constructor() {
     if (typeof window !== "undefined") {
       const localEnabled = window.localStorage.getItem(SOUND_PREF_KEY) === "true";
+      const localSpeech = window.localStorage.getItem(SPEECH_PREF_KEY);
       const savedVolume = window.localStorage.getItem(VOLUME_PREF_KEY);
       if (savedVolume) {
         this.status.volume = Number(savedVolume) || 0.9;
@@ -55,6 +59,7 @@ export class AlertAudioService {
         this.status.enabled = true;
         this.status.state = "READY";
       }
+      if (localSpeech !== null) this.status.speechEnabled = localSpeech === "true";
     }
   }
 
@@ -132,9 +137,12 @@ export class AlertAudioService {
 
     // Fetch authoritative server preference for this user
     const serverPrefs = await this.fetchPreferenceFromServer();
-    if (serverPrefs && typeof serverPrefs.alertAudioEnabled === "boolean") {
+    if (serverPrefs) {
+      if (typeof serverPrefs.speechAlertsEnabled === "boolean") {
+        this.status.speechEnabled = serverPrefs.speechAlertsEnabled;
+        if (typeof window !== "undefined") window.localStorage.setItem(SPEECH_PREF_KEY, String(this.status.speechEnabled));
+      }
       if (serverPrefs.alertAudioEnabled) {
-        this.status.enabled = true;
         this.status.state = "READY";
         if (typeof serverPrefs.alertAudioVolume === "number") {
           const vol = Math.max(0, Math.min(1, serverPrefs.alertAudioVolume));
@@ -146,12 +154,6 @@ export class AlertAudioService {
         }
         if (typeof window !== "undefined") {
           window.localStorage.setItem(SOUND_PREF_KEY, "true");
-        }
-      } else {
-        this.status.enabled = false;
-        this.status.state = "LOCKED";
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem(SOUND_PREF_KEY);
         }
       }
       this.notifyStatusChange();
@@ -228,22 +230,9 @@ export class AlertAudioService {
   }
 
   disable(userId = "operator"): void {
-    this.stopAll();
-    this.status = {
-      ...this.status,
-      state: "LOCKED",
-      enabled: false,
-    };
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(SOUND_PREF_KEY);
-    }
-
-    // Persist across devices to user's account in PostgreSQL
-    void this.syncPreferenceToServer({
-      alertAudioEnabled: false,
-    });
-
-    this.recordAuditEvent("AUDIO_DISABLED", userId);
+    void userId;
+    // System tones are mandatory. Only spoken announcements can be disabled.
+    this.status.enabled = true;
     this.notifyStatusChange();
   }
 
@@ -255,6 +244,14 @@ export class AlertAudioService {
       window.localStorage.setItem(VOLUME_PREF_KEY, String(clamped));
     }
     this.debouncedSyncVolume(clamped);
+    this.notifyStatusChange();
+  }
+
+  setSpeechEnabled(enabled: boolean): void {
+    this.status.speechEnabled = enabled;
+    if (typeof window !== "undefined") window.localStorage.setItem(SPEECH_PREF_KEY, String(enabled));
+    void this.syncPreferenceToServer({ speechAlertsEnabled: enabled });
+    if (!enabled && typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
     this.notifyStatusChange();
   }
 
@@ -320,6 +317,7 @@ export class AlertAudioService {
       this.isSynthesizing = true;
       const frequencies = options.isSlaWarning ? SLA_WARNING_TONE_FREQUENCIES : policy.toneFrequencies;
       await alertAudioSynthesizer.playToneSequence(frequencies, policy.volumeMultiplier);
+      this.speakAlert(options);
 
       this.status = {
         ...this.status,
@@ -344,6 +342,23 @@ export class AlertAudioService {
     if (policy.repeatIntervalMs && !this.repeatTimers.has(options.alertId)) {
       this.scheduleRepeat(options);
     }
+  }
+
+  private speakAlert(options: PlayAlertOptions): void {
+    if (!this.status.speechEnabled || typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    const now = Date.now();
+    const lastSpoken = this.spokenAt.get(options.alertId) ?? 0;
+    if (!options.force && now - lastSpoken < 10_000) return;
+    this.spokenAt.set(options.alertId, now);
+
+    const text = options.announcement?.trim() || buildAlertAnnouncement(options);
+    if (!text) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.volume = Math.max(0, Math.min(1, this.status.volume));
+    utterance.rate = 0.95;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
   }
 
   private scheduleRepeat(options: PlayAlertOptions) {
@@ -480,6 +495,23 @@ export class AlertAudioService {
       });
     }
   }
+}
+
+function buildAlertAnnouncement(options: PlayAlertOptions): string {
+  const severity = options.severity === "P1" ? "Critical" : options.severity === "P2" ? "High priority" : "Security";
+  const detection = friendlyDetectionType(options.detectionType || options.title);
+  const location = [options.branchName, options.cameraName].filter(Boolean).join(", ");
+  return `${severity} alert${location ? ` at ${location}` : ""}: ${detection}.`;
+}
+
+function friendlyDetectionType(value?: string): string {
+  const normalized = (value || "AI event").toLowerCase().replaceAll("_", "-");
+  if (normalized.includes("helmet") && (normalized.includes("worn") || normalized.includes("inside"))) return "helmet detected inside the branch";
+  if (normalized.includes("no-helmet") || normalized.includes("helmet violation")) return "person without helmet detected";
+  if (normalized.includes("unauthorized") || normalized.includes("unknown-person") || normalized.includes("watchlist")) return "unauthorized access detected";
+  if (normalized.includes("intrusion") || normalized.includes("entry")) return "unauthorized entry detected";
+  if (normalized.includes("fire") || normalized.includes("smoke")) return "fire or smoke detected";
+  return value?.trim() || "AI event detected";
 }
 
 export const alertAudioService = new AlertAudioService();

@@ -106,6 +106,9 @@ export function GlobalAlertCenter() {
           alertId: newAlert.id,
           severity: (newAlert.severity ?? "P3") as AlertSeverity,
           title: newAlert.title,
+          branchName: newAlert.branchName,
+          cameraName: newAlert.cameraName,
+          detectionType: newAlert.detectionType,
         });
       } catch { }
     });
@@ -154,6 +157,9 @@ export function GlobalAlertCenter() {
       alertId: current.id,
       severity: (current.severity ?? "P3") as AlertSeverity,
       title: current.title,
+      branchName: current.branchName,
+      cameraName: current.cameraName,
+      detectionType: current.detectionType,
     });
   }, [current?.id]);
 

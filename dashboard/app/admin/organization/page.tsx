@@ -35,12 +35,15 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/components/app-layout";
+import { useOrgBranding } from "@/components/ui/org-branding-provider";
+import { organizationApi } from "@/lib/api-client";
 
 type OrgNode = {
   id: string;
   parentId: string | null;
   name: string;
   code?: string;
+  logoUrl?: string | null;
   type:
     | "company"
     | "headquarters"
@@ -115,7 +118,8 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 }
 
 export default function OrganizationHierarchyPage() {
-  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "roles">("hierarchy");
+  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "roles" | "branding">("hierarchy");
+  const { branding, updateBranding } = useOrgBranding();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -175,6 +179,8 @@ export default function OrganizationHierarchyPage() {
   const [roleBaseRole, setRoleBaseRole] = useState("operator");
   const [roleMenuAccess, setRoleMenuAccess] = useState<string[]>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
+  const brandingFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadAllData();
@@ -185,7 +191,9 @@ export default function OrganizationHierarchyPage() {
       if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
       const tabParam = params.get("tab");
-      if (tabParam === "roles" || tabParam === "role-menu" || tabParam === "role-vs-menu") {
+      if (tabParam === "branding") {
+        setActiveTab("branding");
+      } else if (tabParam === "roles" || tabParam === "role-menu" || tabParam === "role-vs-menu") {
         setActiveTab("roles");
       } else if (tabParam === "employees" || tabParam === "users") {
         setActiveTab("employees");
@@ -198,12 +206,43 @@ export default function OrganizationHierarchyPage() {
     return () => window.removeEventListener("popstate", syncTabFromUrl);
   }, []);
 
-  const handleTabChange = (tab: "hierarchy" | "employees" | "roles") => {
+  const handleTabChange = (tab: "hierarchy" | "employees" | "roles" | "branding") => {
     setActiveTab(tab);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
       window.history.pushState(null, "", url.toString());
+    }
+  };
+
+  const handleBrandingFile = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please select a PNG, JPG, WebP, or SVG image.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Logo must be smaller than 10MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setBrandingLogo(String(reader.result));
+    reader.onerror = () => setError("Unable to read the logo file.");
+    reader.readAsDataURL(file);
+  };
+
+  const saveBranding = async () => {
+    const root = treeData[0];
+    if (!root) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await organizationApi.updateNode(root.id, { logoUrl: brandingLogo });
+      updateBranding({ logoUrl: brandingLogo, orgName: root.name, orgCode: root.code || branding.orgCode });
+      setNotice("Organization logo updated across the application.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save organization logo.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -224,6 +263,7 @@ export default function OrganizationHierarchyPage() {
         const treeJson = await treeRes.json();
         const nodes = Array.isArray(treeJson) ? treeJson : treeJson.data || [];
         setTreeData(nodes);
+        if (nodes[0]?.logoUrl) setBrandingLogo(nodes[0].logoUrl);
 
         const flat: OrgNode[] = [];
         function flatten(list: OrgNode[]) {
@@ -943,6 +983,14 @@ export default function OrganizationHierarchyPage() {
           >
             <Shield size={15} /> 3. Role vs Menu Permissions (Roles & Menu Access)
           </button>
+          <button
+            onClick={() => handleTabChange("branding")}
+            className={`pb-3 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 ${
+              activeTab === "branding" ? "border-emerald-500 text-emerald-400" : "border-transparent text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Upload size={15} /> 4. Branding &amp; Logo
+          </button>
         </div>
 
         {/* TAB 1: Hierarchy Tree */}
@@ -1020,6 +1068,25 @@ export default function OrganizationHierarchyPage() {
                     })}
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "branding" && (
+          <div className="max-w-2xl p-6 bg-slate-900/60 border border-slate-800 rounded-xl space-y-5">
+            <div>
+              <h2 className="text-base font-bold text-slate-100 flex items-center gap-2"><Building2 size={18} className="text-emerald-400" /> Organization Branding</h2>
+              <p className="text-xs text-slate-400 mt-1">Upload the organization logo shown in navigation, login, and module surfaces.</p>
+            </div>
+            <input ref={brandingFileRef} type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) handleBrandingFile(file); }} />
+            <button type="button" onClick={() => brandingFileRef.current?.click()} className="w-full min-h-44 rounded-xl border-2 border-dashed border-slate-700 bg-slate-950/60 hover:border-emerald-500 transition-colors flex flex-col items-center justify-center gap-3">
+              {brandingLogo ? <img src={brandingLogo} alt="Organization logo preview" className="max-h-28 max-w-[280px] object-contain" /> : <Upload size={30} className="text-emerald-400" />}
+              <span className="text-xs text-slate-300">{brandingLogo ? "Click to replace logo" : "Click to upload organization logo"}</span>
+              <span className="text-[11px] text-slate-500">PNG, JPG, WebP, or SVG · maximum 10MB</span>
+            </button>
+            <div className="flex justify-end gap-2">
+              {brandingLogo && <button type="button" onClick={() => setBrandingLogo(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">Remove logo</button>}
+              <button type="button" onClick={() => void saveBranding()} disabled={saving || !treeData[0]} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save branding"}</button>
             </div>
           </div>
         )}

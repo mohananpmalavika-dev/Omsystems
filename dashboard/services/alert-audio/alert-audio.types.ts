@@ -15,6 +15,7 @@ export type AlertSeverity = "P1" | "P2" | "P3" | "P4";
 export interface AlertAudioStatus {
   state: AlertAudioState;
   enabled: boolean;
+  speechEnabled: boolean;
   muted: boolean;
   volume: number; // 0.0 to 1.0
 
@@ -49,6 +50,10 @@ export interface PlayAlertOptions {
   alertId: string;
   severity: AlertSeverity;
   title?: string | undefined;
+  branchName?: string | undefined;
+  cameraName?: string | undefined;
+  detectionType?: string | undefined;
+  announcement?: string | undefined;
   isSlaWarning?: boolean | undefined;
   force?: boolean | undefined;
 }

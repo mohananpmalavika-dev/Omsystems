@@ -109,32 +109,15 @@ export function AlertAudioIndicator() {
 
           {/* Primary Cross-Device Toggle Button */}
           <div className="space-y-1.5">
-            {isEnabled ? (
-              <button
-                type="button"
-                onClick={() => alertAudioService.disable()}
-                className="w-full py-2 px-3 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-600 text-rose-200 font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-              >
-                <VolumeX className="h-4 w-4 text-rose-400" />
-                <span>Turn Off Audio Alert (All Devices)</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => alertAudioService.enable()}
-                className="w-full py-2 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-950/40"
-              >
-                <Volume2 className="h-4 w-4" />
-                <span>Turn On Audio Alert (All Devices)</span>
-              </button>
-            )}
+            <div className="w-full rounded-lg bg-emerald-950/70 border border-emerald-600/70 text-emerald-200 font-bold flex items-center justify-center gap-2 py-2 px-3">
+              <Volume2 className="h-4 w-4 text-emerald-400" />
+              <span>System tone: ALWAYS ON</span>
+            </div>
             <div className="flex items-center gap-1 text-[10px] text-slate-400 px-1">
               <Laptop className="h-3 w-3 text-slate-500" />
               <Smartphone className="h-3 w-3 text-slate-500" />
               <span>
-                {isEnabled
-                  ? "Synced to your account: stays ON until you turn it off."
-                  : "Synced to your account: stays OFF until you turn it on."}
+                "Mandatory system tone. Browser audio is armed after your first interaction."
               </span>
             </div>
           </div>
@@ -155,6 +138,24 @@ export function AlertAudioIndicator() {
               disabled={!isEnabled}
               className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-500 disabled:opacity-40"
             />
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+            <div>
+              <div className="text-[11px] font-semibold text-slate-200">Spoken AI alerts</div>
+              <div className="text-[10px] text-slate-500">Announce branch, alert type, and camera</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={status.speechEnabled}
+              disabled={!isEnabled}
+              onClick={() => alertAudioService.setSpeechEnabled(!status.speechEnabled)}
+              className={`relative h-5 w-10 rounded-full transition-colors disabled:opacity-40 ${status.speechEnabled ? "bg-emerald-600" : "bg-slate-700"}`}
+              title={status.speechEnabled ? "Disable spoken AI alerts" : "Enable spoken AI alerts"}
+            >
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${status.speechEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
           </div>
 
           {/* Status & Routing Details */}

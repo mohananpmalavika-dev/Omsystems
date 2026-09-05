@@ -71,7 +71,7 @@ export function AlertAudioActivationModal({
                 activated ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400"
               }`}
             >
-              {activated ? "● READY" : "NOT ENABLED"}
+              {activated ? "● READY" : "WAITING FOR BROWSER AUDIO"}
             </span>
           </div>
           <div className="flex justify-between items-center">
@@ -86,7 +86,7 @@ export function AlertAudioActivationModal({
             onClick={handleEnable}
             className="w-full py-2.5 rounded-xl font-bold bg-sky-600 hover:bg-sky-500 text-white shadow-lg transition-all text-center text-xs uppercase tracking-wider"
           >
-            Enable Alert Audio
+            Arm Mandatory System Tone
           </button>
         ) : (
           <div className="space-y-3">
