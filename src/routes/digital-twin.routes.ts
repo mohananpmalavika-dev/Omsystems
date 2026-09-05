@@ -72,7 +72,7 @@ export async function registerDigitalTwinRoutes(app: FastifyInstance, store: Con
     reply.hijack();reply.raw.writeHead(200,{"content-type":"text/event-stream; charset=utf-8","cache-control":"no-cache, no-transform",connection:"keep-alive","x-accel-buffering":"no"});reply.raw.write(`event: ready\ndata: ${JSON.stringify({timestamp:new Date().toISOString()})}\n\n`);
     const write=(event:unknown,type="twin.updated")=>{if(!reply.raw.destroyed)reply.raw.write(`event: ${type}\ndata: ${JSON.stringify(event)}\n\n`);};
     const unsubTwin=digitalTwinEvents.subscribe(current.tenantId,(event)=>write(event,event.type),{branchId:q.branchId,floorId:q.floorId});
-    const unsubHealth=operationalHealthEvents.subscribe(current.tenantId,(event)=>{if((!q.branchId||event.branchId===q.branchId)&&(!q.floorId||q.floorId))write({...event,type:"telemetry.updated"},"telemetry.updated");});
+    const unsubHealth=operationalHealthEvents.subscribe(current.tenantId,(event)=>{if(!q.floorId&&(!q.branchId||event.branchId===q.branchId))write({...event,type:"telemetry.updated"},"telemetry.updated");});
     const heartbeat=setInterval(()=>{if(!reply.raw.destroyed)reply.raw.write(`: heartbeat ${Date.now()}\n\n`);},15000);heartbeat.unref();request.raw.once("close",()=>{clearInterval(heartbeat);unsubTwin();unsubHealth();});
   });
 }

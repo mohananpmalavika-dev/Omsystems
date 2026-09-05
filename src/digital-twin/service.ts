@@ -7,10 +7,12 @@ import { digitalTwinEvents } from "./event-stream.js";
 import type { DigitalTwinState, TwinEventInput, TwinObjectInput, TwinPlanInput, TwinZoneInput } from "./state.js";
 import type {
   TwinAlertMarker, TwinBinding, TwinBranchSummary, TwinEvent, TwinFloorState, TwinHeatmap,
-  TwinHeatmapType, TwinObject, TwinObjectStatus, TwinSeverity,
+  TwinHeatmapType, TwinObject, TwinObjectStatus, TwinObjectType, TwinSeverity,
 } from "./types.js";
 
 export class DigitalTwinService {
+  private readonly cameraSyncs = new Map<string, Promise<void>>();
+
   constructor(private readonly store: ControlPlaneStore, readonly state: DigitalTwinState, readonly assets: DigitalTwinAssetStore) {}
 
   async listBranches(user: User): Promise<TwinBranchSummary[]> {
@@ -64,6 +66,7 @@ export class DigitalTwinService {
     const branch = await this.requireBranch(user, branchId, "recording:view");
     const building = await this.state.getBuildingByBranch(user.tenantId, branchId);
     if (!building) return { branch: { id: branch.id, name: branch.name }, configured: false, building: null, floors: [] };
+    await this.syncBranchCameras(user, branchId, building.id);
     const floors = await this.state.listFloors(building.id);
     return { branch: { id: branch.id, name: branch.name }, configured: true, building, floors: await Promise.all(floors.map((floor) => this.floorState(user, floor.id))) };
   }
@@ -98,6 +101,7 @@ export class DigitalTwinService {
 
   async inventory(user: User, floorId: string) {
     const scope = await this.requireFloor(user, floorId, "device:configure");
+    await this.syncBranchCameras(user, scope.branchId, scope.buildingId);
     const [cameras, telemetry, bindings] = await Promise.all([
       this.store.listCamerasByBranch(user, scope.branchId, "recording:view"),
       this.store.listLatestOperationalTelemetry(user.tenantId, [scope.branchId]), this.state.listBindings(floorId),
@@ -107,6 +111,108 @@ export class DigitalTwinService {
     const deviceMap: Record<string, { deviceType: string; objectType: string }> = { recorder: { deviceType: "recorder", objectType: "nvr" }, ups: { deviceType: "ups", objectType: "ups" }, network: { deviceType: "network", objectType: "network_switch" }, disk: { deviceType: "disk", objectType: "server" } };
     const telemetryItems = telemetry.filter((item) => deviceMap[item.deviceType]).map((item) => ({ ...deviceMap[item.deviceType]!, deviceId: item.deviceId, name: metricName(item) ?? `${item.deviceType} ${item.deviceId}`, status: telemetryState(item), bound: bound.has(`${deviceMap[item.deviceType]!.deviceType}:${item.deviceId}`) }));
     return [...cameraItems, ...telemetryItems];
+  }
+
+  private async syncBranchCameras(user: User, branchId: string, buildingId: string): Promise<void> {
+    const existingSync = this.cameraSyncs.get(branchId);
+    if (existingSync) return existingSync;
+
+    const sync = (async () => {
+      const floor = (await this.state.listFloors(buildingId))[0];
+      if (!floor) return;
+      const cameras = await this.store.listCamerasByBranch(user, branchId, "recording:view");
+      const telemetry = await this.store.listLatestOperationalTelemetry(user.tenantId, [branchId]);
+      const objects = await this.state.listObjects(floor.id);
+      const boundDevices = new Set(
+        objects
+          .filter((object) => object.binding)
+          .map((object) => `${object.binding!.deviceType}:${object.binding!.deviceId}`),
+      );
+
+      for (const [index, camera] of cameras.entries()) {
+        if (boundDevices.has(`camera:${camera.id}`)) continue;
+        const column = index % 4;
+        const row = Math.floor(index / 4);
+        const object = await this.state.createObject({
+          floorId: floor.id,
+          objectType: "camera",
+          name: camera.name,
+          description: "Automatically synchronized from camera inventory",
+          positionX: Math.min(0.88, 0.12 + column * 0.24),
+          positionY: Math.min(0.88, 0.16 + row * 0.2),
+          fieldOfView: 80,
+          viewingDistance: 12,
+          showStatus: true,
+          showLabel: true,
+          showFieldOfView: true,
+          metadata: { autoProvisioned: true, source: "camera_inventory" },
+        }, user.id);
+        await this.state.bindDevice({
+          twinObjectId: object.id,
+          tenantId: user.tenantId,
+          branchId,
+          deviceType: "camera",
+          deviceId: camera.id,
+          statusSource: "camera_inventory",
+          alertSource: "analytics",
+          autoUpdate: true,
+          metadata: { autoProvisioned: true },
+        });
+        boundDevices.add(`camera:${camera.id}`);
+        digitalTwinEvents.publish({
+          id: randomUUID(), tenantId: user.tenantId, branchId, floorId: floor.id,
+          type: "object.created", occurredAt: new Date().toISOString(), objectId: object.id,
+        });
+      }
+
+      const telemetryTypes: Record<string, { deviceType: "recorder" | "ups" | "network" | "disk"; objectType: TwinObjectType }> = {
+        recorder: { deviceType: "recorder", objectType: "nvr" },
+        ups: { deviceType: "ups", objectType: "ups" },
+        network: { deviceType: "network", objectType: "network_switch" },
+        disk: { deviceType: "disk", objectType: "server" },
+      };
+      const autoDevices = telemetry.filter((item) => telemetryTypes[item.deviceType]);
+      for (const [index, telemetryItem] of autoDevices.entries()) {
+        const mapped = telemetryTypes[telemetryItem.deviceType]!;
+        const bindingKey = `${mapped.deviceType}:${telemetryItem.deviceId}`;
+        if (boundDevices.has(bindingKey)) continue;
+        const column = index % 4;
+        const row = Math.floor((cameras.length + index) / 4);
+        const object = await this.state.createObject({
+          floorId: floor.id,
+          objectType: mapped.objectType,
+          name: metricName(telemetryItem) ?? `${mapped.deviceType} ${telemetryItem.deviceId}`,
+          description: "Automatically synchronized from operational telemetry",
+          positionX: Math.min(0.88, 0.12 + column * 0.24),
+          positionY: Math.min(0.88, 0.16 + row * 0.2),
+          showStatus: true,
+          showLabel: true,
+          metadata: { autoProvisioned: true, source: "operational_telemetry" },
+        }, user.id);
+        await this.state.bindDevice({
+          twinObjectId: object.id,
+          tenantId: user.tenantId,
+          branchId,
+          deviceType: mapped.deviceType,
+          deviceId: telemetryItem.deviceId,
+          statusSource: "operational_telemetry",
+          autoUpdate: true,
+          metadata: { autoProvisioned: true, quality: telemetryItem.quality },
+        });
+        boundDevices.add(bindingKey);
+        digitalTwinEvents.publish({
+          id: randomUUID(), tenantId: user.tenantId, branchId, floorId: floor.id,
+          type: "object.created", occurredAt: new Date().toISOString(), objectId: object.id,
+        });
+      }
+    })();
+
+    this.cameraSyncs.set(branchId, sync);
+    try {
+      await sync;
+    } finally {
+      this.cameraSyncs.delete(branchId);
+    }
   }
 
   async uploadPlan(user: User, input: Omit<TwinPlanInput, "storageKey" | "fileSizeBytes" | "uploadedBy" | "fileType"> & { dataBase64: string; fileType?: string }) {
