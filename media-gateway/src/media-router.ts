@@ -5,11 +5,12 @@ export class MediaMtxRouter implements MediaRouter {
 
   async ensurePath(path: string, sourceUri: string = "publisher") {
     const encodedPath = encodeURIComponent(path);
+    const isPublisher = sourceUri === "publisher";
     const payload = {
       source: sourceUri,
       rtspTransport: "tcp",
-      ...(sourceUri !== "publisher" ? {
-        sourceOnDemand: true,
+      sourceOnDemand: !isPublisher,
+      ...(!isPublisher ? {
         sourceOnDemandStartTimeout: "15s",
         sourceOnDemandCloseAfter: "120s",
       } : {}),
