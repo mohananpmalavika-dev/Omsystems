@@ -405,7 +405,7 @@ export async function registerSignedConfigRoutes(
     });
 
     const body = createTemplateSchema.parse(request.body);
-    const created = goldenConfigurationTemplateService.createTemplate(body);
+    const created = goldenConfigurationTemplateService.createTemplate(body as unknown as Parameters<typeof goldenConfigurationTemplateService.createTemplate>[0]);
     return reply.code(201).send({ success: true, data: created });
   });
 

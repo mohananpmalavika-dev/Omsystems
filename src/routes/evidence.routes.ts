@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
+import { createReadStream, existsSync, statSync } from "node:fs";
+import { basename, extname } from "node:path";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { ExportWorker } from "../recording/export-worker.js";
 
@@ -565,11 +567,15 @@ export async function registerEvidenceRoutes(
               ? 100
               : 0;
 
+          const downloadUrl = job.downloadToken
+            ? `/v1/evidence/exports/${job.id}/download?token=${job.downloadToken}`
+            : undefined;
+
           return {
             id: job.id,
             status: job.status,
             progress,
-            downloadUrl: job.outputPath,
+            downloadUrl,
           };
         }
       }
@@ -610,7 +616,7 @@ export async function registerEvidenceRoutes(
     try {
       const validation = await exportWorker.validateDownload(query.token);
       if (!validation.valid || !validation.job || validation.job.id !== exportId) {
-        return reply.code(403).send({ error: "invalid_download_token" });
+        return reply.code(403).send({ error: "invalid_download_token", reason: validation.reason });
       }
 
       await store.recordCustodyEvent({
@@ -618,16 +624,22 @@ export async function registerEvidenceRoutes(
         action: "export_downloaded",
         performedBy: request.currentUser?.id ?? "system",
         sourceIp: request.ip,
-        reason: "Export download requested",
+        reason: "Authorized evidence export download",
       });
 
-      return {
-        id: validation.job.id,
-        status: validation.job.status,
-        outputPath: validation.job.outputPath,
-        downloadToken: query.token,
-        downloadExpiresAt: validation.job.downloadExpiresAt,
-      };
+      const filePath = validation.job.outputPath;
+      if (filePath && existsSync(filePath)) {
+        const filename = basename(filePath);
+        const ext = extname(filename).toLowerCase();
+        const mimeType = ext === ".mp4" ? "video/mp4" : ext === ".tar" ? "application/x-tar" : ext === ".json" ? "application/json" : "application/octet-stream";
+        const stats = statSync(filePath);
+        reply.header("Content-Type", mimeType);
+        reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+        reply.header("Content-Length", stats.size);
+        return reply.send(createReadStream(filePath));
+      }
+
+      return reply.code(404).send({ error: "evidence_media_not_found" });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "download_failed", details: message });
