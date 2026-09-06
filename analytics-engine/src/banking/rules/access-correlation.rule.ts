@@ -36,32 +36,47 @@ export class AccessCorrelationRule extends BaseRule {
       );
     }
 
-    // Check if access control is available
-    if (!session.evidenceAvailability.accessControl) {
-      return this.unknown(
-        'Access control data not available',
-        {
-          reason: 'access_control_unavailable',
-          secureZoneId,
-        }
-      );
-    }
-
     // Find personnel who entered secure zone
     const personnelInSecureZone = session.personnel.filter(person =>
       person.zoneHistory.some(z => z.zoneId === secureZoneId)
     );
 
-    if (personnelInSecureZone.length === 0) {
+    // Also check transfer objects in secure zone
+    const objectsInSecureZone = session.transferObjects.filter(obj =>
+      obj.zoneHistory.some(z => z.zoneId === secureZoneId) || obj.currentZoneId === secureZoneId
+    );
+
+    if (personnelInSecureZone.length === 0 && objectsInSecureZone.length === 0) {
       // No one entered secure zone yet
       return this.unknown(
-        'No personnel have entered secure zone yet',
+        'No personnel or transfer objects have entered secure zone yet',
         {
           reason: 'no_secure_zone_entry',
           secureZoneId,
         }
       );
     }
+
+    // Check if access control data is available
+    if (!session.evidenceAvailability.accessControl || session.accessEvents.length === 0) {
+      return this.fail(
+        'Secure zone entered without required access control correlation',
+        {
+          reason: 'access_control_missing',
+          secureZoneId,
+          personnelCount: personnelInSecureZone.length,
+          objectsCount: objectsInSecureZone.length,
+        },
+        [
+          ...personnelInSecureZone.map(p => ({
+            type: 'track' as const,
+            id: p.trackId,
+            timestamp: p.lastSeenAt,
+          })),
+        ]
+      );
+    }
+
 
     // Check correlation for each person
     const correlationWindow = monitor.accessRules.accessCorrelationWindowMs;

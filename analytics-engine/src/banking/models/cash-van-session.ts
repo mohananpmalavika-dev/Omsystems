@@ -417,11 +417,17 @@ export interface UpdateCashVanSessionInput {
   state?: CashVanState;
   assessment?: WorkflowAssessment;
   vehicle?: Partial<ObservedVehicle>;
+  vehicleArrivedAt?: Date;
+  unloadingStartedAt?: Date;
+  transferCompletedAt?: Date;
+  vehicleDepartedAt?: Date;
   addPersonnel?: ObservedPerson;
   updatePersonnel?: Partial<ObservedPerson> & { trackId: string };
   addObject?: ObservedObject;
+  updateObject?: Partial<ObservedObject> & { trackId: string };
   addViolation?: Omit<CashVanViolation, 'id' | 'sessionId' | 'createdAt' | 'updatedAt'>;
   addAccessEvent?: SessionAccessEvent;
   evidenceAvailability?: Partial<EvidenceAvailability>;
   overallConfidence?: number;
 }
+
