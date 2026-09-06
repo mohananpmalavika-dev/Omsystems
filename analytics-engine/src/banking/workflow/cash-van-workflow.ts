@@ -235,10 +235,15 @@ export class CashVanWorkflow {
    * Handle person observed event
    */
   async handlePersonObserved(event: PersonObservedEvent): Promise<void> {
-    // Find sessions in this zone
-    const monitor = event.zoneId
-      ? await this.monitorRepo.findByArrivalZone(event.tenantId, event.branchId, event.zoneId)
+    // Find sessions in this zone or branch
+    let monitor = event.zoneId
+      ? await this.monitorRepo.findByZone(event.tenantId, event.branchId, event.zoneId)
       : null;
+
+    if (!monitor) {
+      const branchMonitors = await this.monitorRepo.findByBranch(event.tenantId, event.branchId);
+      monitor = branchMonitors[0] || null;
+    }
 
     if (!monitor) {
       return;
@@ -425,9 +430,14 @@ export class CashVanWorkflow {
    * Handle object observed
    */
   async handleObjectObserved(event: ObjectObservedEvent): Promise<void> {
-    const monitor = event.zoneId
-      ? await this.monitorRepo.findByArrivalZone(event.tenantId, event.branchId, event.zoneId)
+    let monitor = event.zoneId
+      ? await this.monitorRepo.findByZone(event.tenantId, event.branchId, event.zoneId)
       : null;
+
+    if (!monitor) {
+      const branchMonitors = await this.monitorRepo.findByBranch(event.tenantId, event.branchId);
+      monitor = branchMonitors[0] || null;
+    }
 
     if (!monitor) {
       return;

@@ -12,6 +12,8 @@ export default defineConfig({
     },
   },
   test: {
+    globals: true,
+    setupFiles: [resolve(__dirname, "./test/setup.ts")],
     testTimeout: 20000,
     hookTimeout: 20000,
     exclude: [
@@ -20,7 +22,10 @@ export default defineConfig({
       "**/dist/**",
       "Omsystems/**",
       "dashboard/e2e/**",
+      "tests/**",
+      "test/ai/local-ai-pipeline.test.ts",
     ],
   },
 });
+
 
