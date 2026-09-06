@@ -21,7 +21,9 @@ export class ClockMonitoringService {
   private readonly deviceHistory = new Map<string, ClockEvidence[]>();
   private readonly auditLog: ClockSyncAuditEntry[] = [];
 
-  constructor() {}
+  constructor() {
+    this.seedDefaultBranchClocks();
+  }
 
   /**
    * Determine health state based on strict bank surveillance threshold rules:

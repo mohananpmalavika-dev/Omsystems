@@ -9,6 +9,7 @@ export class EdgeAgentLifecycleService {
   private readonly packages = new Map<string, EdgeUpgradePackage>(); // packageId -> package
 
   constructor() {
+    this.seedDefaultEdgeNodes();
   }
 
   private seedDefaultEdgeNodes(): void {

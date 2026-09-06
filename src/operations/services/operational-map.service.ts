@@ -425,6 +425,15 @@ export class OperationalMapService {
   }
 
   /**
+   * 1. Get Country Root Node (India).
+   */
+  async getRootNode(): Promise<MapNodeEntity | null> {
+    return Array.from(this.nodes.values()).find(
+      (node) => node.level === 'COUNTRY' && !node.parentId,
+    ) ?? null;
+  }
+
+  /**
    * 2. Get Child Nodes for Deterministic Drill-Down.
    */
   async getChildrenNodes(parentId: string): Promise<MapNodeEntity[]> {
