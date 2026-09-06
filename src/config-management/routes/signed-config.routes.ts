@@ -377,6 +377,52 @@ export async function registerSignedConfigRoutes(
     return { success: true, data: templates };
   });
 
+  app.post('/v1/config/golden-templates', async (request: FastifyRequest, reply: FastifyReply) => {
+    const parameterSetSchema = z.object({
+      resolution: z.string().min(1),
+      fps: z.number().int().min(1).max(60),
+      bitrateKbps: z.number().int().min(128).max(16384),
+      codec: z.enum(['H264', 'H265', 'MJPEG']),
+      streamProfile: z.enum(['main', 'sub', 'snapshot']),
+      recordingMode: z.enum(['CONTINUOUS', 'MOTION', 'SCHEDULE', 'DISABLED']),
+      retentionDays: z.number().int().min(1),
+      ntpServer: z.string().min(1),
+      timezone: z.string().min(1),
+      audioEnabled: z.boolean(),
+      analyticsAssigned: z.array(z.string()).default([]),
+    });
+
+    const createTemplateSchema = z.object({
+      name: z.string().min(1),
+      code: z.string().min(1),
+      description: z.string().min(1),
+      industryCategory: z.enum(['BFSI_BANKING', 'RETAIL', 'LOGISTICS_WAREHOUSE', 'CRITICAL_VAULT', 'LOW_BANDWIDTH']),
+      complianceStandards: z.array(z.string()).default([]),
+      parameters: parameterSetSchema,
+      estimatedBandwidthPerCamMbps: z.number().optional(),
+      estimatedStoragePerCamGbPerDay: z.number().optional(),
+      version: z.string().optional(),
+    });
+
+    const body = createTemplateSchema.parse(request.body);
+    const created = goldenConfigurationTemplateService.createTemplate(body);
+    return reply.code(201).send({ success: true, data: created });
+  });
+
+  app.get('/v1/config/golden-templates/export', async () => {
+    const templates = goldenConfigurationTemplateService.exportTemplates();
+    return { success: true, data: templates };
+  });
+
+  app.post('/v1/config/golden-templates/import', async (request: FastifyRequest) => {
+    const schema = z.object({
+      templates: z.array(z.any()),
+    });
+    const body = schema.parse(request.body);
+    const result = goldenConfigurationTemplateService.importTemplates(body.templates);
+    return { success: true, data: result };
+  });
+
   app.get('/v1/config/golden-templates/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const template = goldenConfigurationTemplateService.getTemplate(id);
@@ -384,6 +430,27 @@ export async function registerSignedConfigRoutes(
       return reply.status(404).send({ success: false, error: 'Golden template not found' });
     }
     return { success: true, data: template };
+  });
+
+  app.put('/v1/config/golden-templates/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const updates = request.body as any;
+    try {
+      const updated = goldenConfigurationTemplateService.updateTemplate(id, updates);
+      return reply.code(200).send({ success: true, data: updated });
+    } catch (err: any) {
+      return reply.code(400).send({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/v1/config/golden-templates/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    try {
+      const deleted = goldenConfigurationTemplateService.deleteTemplate(id);
+      return reply.code(200).send({ success: true, deleted });
+    } catch (err: any) {
+      return reply.code(400).send({ success: false, error: err.message });
+    }
   });
 
   app.post('/v1/config/golden-templates/preview', async (request: FastifyRequest) => {
@@ -420,10 +487,35 @@ export async function registerSignedConfigRoutes(
     const result = goldenConfigurationTemplateService.applyTemplate(
       body.templateId,
       body.branchId,
-      targetCameras,
-      request.currentUser.id || 'system-admin',
+      body.targetCameras,
+      request.currentUser?.id || 'system-admin',
     );
     return { success: true, data: result };
+  });
+
+  app.post('/v1/config/golden-templates/:id/draft', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const schema = z.object({
+      branchId: z.string().min(1),
+      versionNumber: z.number().int().optional(),
+      changeReason: z.string().optional(),
+    });
+    const body = schema.parse(request.body);
+    const creator = request.currentUser?.username ?? request.currentUser?.id ?? 'ciso.officer';
+
+    try {
+      const draft = await goldenConfigurationTemplateService.convertTemplateToBranchConfigDraft({
+        templateId: id,
+        branchId: body.branchId,
+        tenantId: request.currentUser?.tenantId ?? 'BANK-001',
+        creator,
+        versionNumber: body.versionNumber,
+        changeReason: body.changeReason,
+      });
+      return reply.code(201).send({ success: true, data: draft });
+    } catch (err: any) {
+      return reply.code(400).send({ success: false, error: err.message });
+    }
   });
 
   app.get('/v1/config/golden-templates/history', async (request: FastifyRequest) => {

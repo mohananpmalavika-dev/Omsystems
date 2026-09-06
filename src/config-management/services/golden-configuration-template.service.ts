@@ -288,6 +288,173 @@ export class GoldenConfigurationTemplateService {
     return result;
   }
 
+  public createTemplate(input: {
+    name: string;
+    code: string;
+    description: string;
+    industryCategory: GoldenConfigurationTemplate['industryCategory'];
+    complianceStandards: string[];
+    parameters: GoldenTemplateParameterSet;
+    estimatedBandwidthPerCamMbps?: number;
+    estimatedStoragePerCamGbPerDay?: number;
+    version?: string;
+  }): GoldenConfigurationTemplate {
+    const id = `golden-${input.code.toLowerCase().replace(/_/g, '-')}-${randomUUID().slice(0, 6)}`;
+    const now = new Date().toISOString();
+    const bw = input.estimatedBandwidthPerCamMbps ?? Number((input.parameters.bitrateKbps / 1024).toFixed(2));
+    const storage = input.estimatedStoragePerCamGbPerDay ?? Number(((bw * 3600 * 24) / (8 * 1024)).toFixed(1));
+
+    const template: GoldenConfigurationTemplate = {
+      id,
+      name: input.name,
+      code: input.code,
+      description: input.description,
+      industryCategory: input.industryCategory,
+      complianceStandards: input.complianceStandards,
+      parameters: input.parameters,
+      estimatedBandwidthPerCamMbps: bw,
+      estimatedStoragePerCamGbPerDay: storage,
+      isBuiltIn: false,
+      version: input.version || '1.0.0',
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.templates.set(id, template);
+    return template;
+  }
+
+  public updateTemplate(id: string, updates: Partial<GoldenConfigurationTemplate>): GoldenConfigurationTemplate {
+    const existing = this.getTemplate(id);
+    if (!existing) throw new Error(`Golden template ${id} not found`);
+
+    const updated: GoldenConfigurationTemplate = {
+      ...existing,
+      ...updates,
+      id: existing.id,
+      isBuiltIn: existing.isBuiltIn,
+      parameters: {
+        ...existing.parameters,
+        ...(updates.parameters || {}),
+      },
+      updatedAt: new Date().toISOString(),
+    };
+
+    this.templates.set(id, updated);
+    return updated;
+  }
+
+  public deleteTemplate(id: string): boolean {
+    const existing = this.getTemplate(id);
+    if (!existing) throw new Error(`Golden template ${id} not found`);
+    if (existing.isBuiltIn) throw new Error(`Built-in compliance template ${id} cannot be deleted`);
+
+    return this.templates.delete(id);
+  }
+
+  public exportTemplates(): GoldenConfigurationTemplate[] {
+    return Array.from(this.templates.values());
+  }
+
+  public importTemplates(templates: GoldenConfigurationTemplate[]): { importedCount: number } {
+    let count = 0;
+    for (const t of templates) {
+      if (!t.id || !t.name || !t.parameters) continue;
+      this.templates.set(t.id, {
+        ...t,
+        isBuiltIn: false,
+        updatedAt: new Date().toISOString(),
+      });
+      count++;
+    }
+    return { importedCount: count };
+  }
+
+  public async convertTemplateToBranchConfigDraft(input: {
+    templateId: string;
+    branchId: string;
+    tenantId: string;
+    creator: string;
+    versionNumber?: number;
+    changeReason?: string;
+  }) {
+    const template = this.getTemplate(input.templateId);
+    if (!template) throw new Error(`Golden template ${input.templateId} not found`);
+
+    // Import signedConfigService dynamically to avoid circular dependencies
+    const { signedConfigService } = await import('./signed-config.service.js');
+    const existingState = signedConfigService.getBranchState(input.branchId, input.tenantId);
+    const baseConfig: BranchConfiguration = existingState?.actualConfig || {
+      schemaVersion: '3.1',
+      network: {
+        dnsServers: ['10.100.1.10', '10.100.1.11'],
+        ntpServers: [template.parameters.ntpServer || 'time.bank.internal'],
+        gatewayIp: '10.100.1.1',
+        subnetMask: '255.255.255.0',
+        uplinkBandwidthMbps: 100,
+      },
+      cameras: [
+        {
+          id: 'CAM-01',
+          channel: 1,
+          name: `${template.name} Camera 1`,
+          ip: '10.100.1.21',
+          resolution: template.parameters.resolution,
+          fps: template.parameters.fps,
+          bitrateKbps: template.parameters.bitrateKbps,
+          codec: template.parameters.codec,
+          streamProfile: template.parameters.streamProfile,
+          credentialRef: `secret://branch/${input.branchId}/camera/CAM-01`,
+          analyticsAssigned: template.parameters.analyticsAssigned,
+          enabled: true,
+        },
+      ],
+      recorder: {
+        nvrId: `NVR-${input.branchId}`,
+        name: `Branch Main NVR (${input.branchId})`,
+        manufacturer: 'CP PLUS',
+        model: 'Universal-4K-V3',
+        managementIp: '10.100.1.10',
+        storageTargets: ['/dev/sda1'],
+        recordingMode: template.parameters.recordingMode,
+        ntpServer: template.parameters.ntpServer,
+        credentialRef: `secret://branch/${input.branchId}/recorder/main`,
+        channelsCount: 16,
+      },
+      retention: {
+        continuousDays: template.parameters.retentionDays,
+        alertFootageDays: 180,
+        forensicEvidenceDays: 365,
+        storagePurgeThresholdPercent: 90,
+      },
+      analytics: {
+        detectorVersions: { intrusion: '2.4.0' },
+        schedules: { after_hours: '20:00-06:00' },
+        sensitivityThresholds: { intrusion: 0.85 },
+        zonesCount: 4,
+      },
+      security: {
+        minTlsVersion: 'TLS1.3',
+        certificateThumbprints: ['SHA256:CERT-THUMB-01'],
+        allowedCiphers: ['TLS_AES_256_GCM_SHA384'],
+        enforceSignedConfig: true,
+      },
+    };
+
+    const nextVer = input.versionNumber || (existingState?.desiredVersion ? existingState.desiredVersion + 1 : 35);
+    const draft = await signedConfigService.createDraftVersion(
+      {
+        tenantId: input.tenantId,
+        version: nextVer,
+        config: baseConfig,
+        changeReason: input.changeReason || `Applied Golden Template: ${template.name} (${template.code})`,
+      },
+      input.creator
+    );
+
+    return draft;
+  }
+
   public getApplicationHistory(branchId?: string): TemplateApplicationResult[] {
     const all = Array.from(this.history.values());
     if (!branchId) return all;
