@@ -23,16 +23,17 @@ export class AccessRegistry {
     private readonly onCleanupError: (error: unknown) => void = () => undefined,
   ) {}
 
-  async start(path: string, sourceUri: string, action: "read" | "publish" = "read") {
+  async start(path: string, sourceUri: string, action: "read" | "publish" = "read", id?: string) {
     return this.withPath(path, async () => {
       await this.router.ensurePath(path, sourceUri);
-      return this.issue(path, action);
+      return this.issue(path, action, id);
     });
   }
 
-  issue(path: string, action: "read" | "publish" | "both" = "read") {
+  issue(path: string, action: "read" | "publish" | "both" = "read", id: string = randomUUID()) {
+    if (this.sessions.has(id)) throw new Error("Media session already exists");
     const session: AccessSession = {
-      id: randomUUID(),
+      id,
       path,
       token: randomBytes(32).toString("base64url"),
       action,
@@ -81,6 +82,12 @@ export class AccessRegistry {
       );
       if (!pathStillUsed) await this.router.removePath(session.path);
     });
+  }
+
+  async revokePublisher(id: string) {
+    const session = this.sessions.get(id);
+    if (!session || session.action !== "publish") return;
+    await this.expire(id);
   }
 
   async close() {

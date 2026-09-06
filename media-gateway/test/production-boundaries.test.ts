@@ -29,7 +29,7 @@ describe("media gateway production boundaries", () => {
   it("requires control-plane identity before provisioning a portable publisher", async () => {
     const input = { ...options(), controlPlaneSharedKey: "g".repeat(32) };
     app = await buildMediaGateway(input);
-    const request = { method: "POST" as const, url: "/v1/portable/publish-start", payload: { controlPlaneToken: "pcs_arbitrary", cameraId: "portable-1" } };
+    const request = { method: "POST" as const, url: "/v1/portable/publish-start", payload: { controlPlaneToken: "9d5f1b73-358c-43d1-8bd5-939dff762779", cameraId: "portable-1" } };
     expect((await app.inject(request)).statusCode).toBe(401);
     expect(input.router.ensurePath).not.toHaveBeenCalled();
     const started = await app.inject({ ...request, headers: { "x-media-gateway-key": input.controlPlaneSharedKey } });
@@ -39,6 +39,10 @@ describe("media gateway production boundaries", () => {
     for (const [action, status] of [["publish", 204], ["read", 401], ["api", 401]] as const) {
       expect((await app.inject({ method: "POST", url: "/internal/mediamtx/auth", payload: { token: session.publishToken, path: session.path, action } })).statusCode).toBe(status);
     }
+    const stopped = await app.inject({ method: "POST", url: `/v1/portable/${session.sessionId}/stop`, headers: { "x-media-gateway-key": input.controlPlaneSharedKey } });
+    expect(stopped.statusCode).toBe(204);
+    expect(input.router.removePath).toHaveBeenCalledWith(session.path);
+    expect((await app.inject({ method: "POST", url: "/internal/mediamtx/auth", payload: { token: session.publishToken, path: session.path, action: "publish" } })).statusCode).toBe(401);
   });
 
   it.each(["/hls//other.example/secrets", "/webrtc//other.example/secrets"])("rejects upstream host override: %s", async (url) => {

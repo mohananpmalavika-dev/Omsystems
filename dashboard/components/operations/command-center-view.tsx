@@ -56,8 +56,6 @@ export function CommandCenterView() {
   const [selectedBranchWorkspace, setSelectedBranchWorkspace] = useState<any | null>(null);
   const [askSentinelQuery, setAskSentinelQuery] = useState("");
   const [askSentinelResponse, setAskSentinelResponse] = useState<string | null>(null);
-  const [executingAction, setExecutingAction] = useState<string | null>(null);
-  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const pendingLoad = useRef<AbortController | null>(null);
   const router = useRouter();
 
@@ -126,6 +124,13 @@ export function CommandCenterView() {
     };
   }, []);
 
+  const hasSummaryData = summary !== null;
+  const hasAnyConfirmedData = hasSummaryData || hasBranchData;
+  const hasBranchCountData = hasBranchData || summary?.branches?.total != null;
+  const hasHealthyBranchData = hasBranchData || summary?.branches?.healthy != null;
+  const hasCameraCountData = hasBranchData || summary?.cameras?.total != null;
+  const hasRiskData = hasBranchData || summary?.atRiskBranchesCount != null;
+
   const cameraTotals = useMemo(() => {
     if (!hasBranchData) {
       const total = Number(summary?.cameras?.total ?? 0);
@@ -192,39 +197,46 @@ export function CommandCenterView() {
     if (!askSentinelQuery.trim()) return;
     const q = askSentinelQuery.toLowerCase();
 
-    if (totalBranchesCount === 0) {
-      setAskSentinelResponse("Fleet database is currently empty. Connect edge agents or add camera streams to activate live telemetry analysis.");
+    if (!hasAnyConfirmedData) {
+      setAskSentinelResponse("Live fleet telemetry is unavailable. Refresh the Command Center before relying on an operational answer.");
+      return;
+    }
+
+    if (hasBranchCountData && totalBranchesCount === 0) {
+      setAskSentinelResponse("The latest confirmed fleet data contains no enrolled branches.");
       return;
     }
 
     if (q.includes("fail") || q.includes("72") || q.includes("risk")) {
-      const atRisk = branches.filter((b) => b.risk?.level === "HIGH" || b.risk?.level === "MEDIUM");
-      if (atRisk.length > 0) {
-        setAskSentinelResponse(`Found ${atRisk.length} at-risk branch(es): ${atRisk.map((b) => `${b.name} (${b.risk?.probabilityPct}%)`).join(", ")}.`);
+      if (hasBranchData) {
+        const atRisk = branches.filter((b) => b.risk?.level === "HIGH" || b.risk?.level === "MEDIUM");
+        if (atRisk.length > 0) {
+          setAskSentinelResponse(`The latest branch telemetry marks ${atRisk.length} branch(es) at risk: ${atRisk.map((b) => `${b.name} (${b.risk?.probabilityPct ?? "unknown"}%)`).join(", ")}.`);
+        } else {
+          setAskSentinelResponse("No branches in the latest confirmed branch telemetry are marked medium or high risk.");
+        }
+      } else if (summary?.atRiskBranchesCount != null) {
+        setAskSentinelResponse(`The latest Command Center summary reports ${Number(summary.atRiskBranchesCount)} at-risk branch(es). Branch-level telemetry is unavailable.`);
       } else {
-        setAskSentinelResponse("Zero predicted failures detected across fleet. All operational telemetry within normal envelope.");
+        setAskSentinelResponse("Risk telemetry is unavailable, so no risk assessment can be confirmed.");
       }
     } else if (q.includes("offline") || q.includes("camera")) {
-      const offline = branches.filter((b) => (b.cameras?.notWorking ?? (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0)) > 0);
-      if (offline.length > 0) {
-        setAskSentinelResponse(`Found cameras that are not working across: ${offline.map((b) => `${b.name} (${b.cameras.notWorking ?? ((b.cameras.total ?? 0) - (b.cameras.healthy ?? 0))} not working)`).join(", ")}.`);
+      if (hasBranchData) {
+        const offline = branches.filter((b) => (b.cameras?.notWorking ?? (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0)) > 0);
+        if (offline.length > 0) {
+          setAskSentinelResponse(`The latest branch telemetry reports cameras not working at: ${offline.map((b) => `${b.name} (${b.cameras.notWorking ?? ((b.cameras.total ?? 0) - (b.cameras.healthy ?? 0))})`).join(", ")}.`);
+        } else {
+          setAskSentinelResponse("No branch in the latest confirmed telemetry reports a camera as not working.");
+        }
+      } else if (hasCameraCountData) {
+        setAskSentinelResponse(`The latest Command Center summary reports ${workingCamerasCount} of ${totalCamerasCount} cameras working. Branch-level telemetry is unavailable.`);
       } else {
-        setAskSentinelResponse("All provisioned cameras are working and online.");
+        setAskSentinelResponse("Camera telemetry is unavailable, so camera status cannot be confirmed.");
       }
     } else {
-      setAskSentinelResponse(`Analyzing live fleet telemetry for "${askSentinelQuery}"... ${totalBranchesCount} branch(es) registered.`);
-    }
-  };
-
-  const handleQuickAction = async (actionType: string, branchCode: string) => {
-    setExecutingAction(branchCode);
-    setActionSuccessMsg(null);
-    try {
-      await new Promise((r) => setTimeout(r, 600));
-      setActionSuccessMsg(`✓ Successfully executed ${actionType} for Branch ${branchCode}`);
-      setTimeout(() => setActionSuccessMsg(null), 4000);
-    } finally {
-      setExecutingAction(null);
+      setAskSentinelResponse(hasBranchCountData
+        ? `The latest confirmed telemetry covers ${totalBranchesCount} registered branch(es). Refine the query to camera or risk status for the available checks.`
+        : "The Command Center summary is available, but the requested detail is not present in the current telemetry.");
     }
   };
 

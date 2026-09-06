@@ -199,12 +199,12 @@ export async function buildMediaGateway(options: {
       throw new GatewayError(401, "invalid_gateway_identity");
     }
     const body = z.object({
-      controlPlaneToken: z.string().min(10).max(256),
+      controlPlaneToken: z.string().uuid(),
       cameraId: z.string().min(1).max(200),
     }).parse(request.body);
 
     const path = `camera-${safeIdentifier(body.cameraId)}`;
-    const session = await access.start(path, "publisher", "publish");
+    const session = await access.start(path, "publisher", "publish", body.controlPlaneToken);
     reply.header("cache-control", "no-store");
     return reply.code(201).send({
       sessionId: session.id,
@@ -215,6 +215,15 @@ export async function buildMediaGateway(options: {
       whepUrl: `${stripSlash(options.publicWebRtcBaseUrl)}/${path}/whep`,
       publishToken: session.token,
     });
+  });
+
+  app.post("/v1/portable/:sessionId/stop", async (request, reply) => {
+    if (!options.controlPlaneSharedKey || !secureEqualHeader(
+      request.headers["x-media-gateway-key"], options.controlPlaneSharedKey,
+    )) throw new GatewayError(401, "invalid_gateway_identity");
+    const { sessionId } = z.object({ sessionId: z.string().uuid() }).parse(request.params);
+    await access.revokePublisher(sessionId);
+    return reply.code(204).send();
   });
 
   app.post("/internal/mediamtx/auth", async (request, reply) => {

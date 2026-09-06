@@ -159,6 +159,15 @@ export class BootstrapOnboardingService {
       store.users.set(admin.id, admin);
     }
     if (!admin?.id) throw new Error("admin_creation_failed");
+    if (existingAdmin && typeof store.assignUserToOrganization === "function") {
+      const assignment = await store.assignUserToOrganization(
+        admin.id,
+        org.id,
+        true,
+        admin.id,
+      );
+      if (!assignment?.id) throw new Error("admin_assignment_failed");
+    }
     if (Array.isArray(store.grants)) {
       store.grants.push({ userId: admin.id, scopeNodeId: org.id,
         actions: ALL_SUPERADMIN_ACTIONS, effect: "allow" });

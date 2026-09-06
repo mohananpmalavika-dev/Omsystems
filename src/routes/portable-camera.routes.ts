@@ -57,6 +57,15 @@ export function registerPortableCameraRoutes(
     return false;
   }
 
+  async function stopPublisher(sessionId: string) {
+    if (!mediaGatewaySharedKey) throw new Error("Media gateway identity is not configured");
+    const response = await fetch(`${mediaGatewayUrl.replace(/\/+$/, "")}/v1/portable/${encodeURIComponent(sessionId)}/stop`, {
+      method: "POST", headers: { "x-media-gateway-key": mediaGatewaySharedKey },
+      signal: AbortSignal.timeout(15_000), redirect: "error",
+    });
+    if (!response.ok) throw new Error("Media gateway could not stop publisher");
+  }
+
   // 1. Generate Enrollment QR / Token
   app.post("/api/portable-camera/enrollments", async (request, reply) => {
     const { tenantId, userId, roles } = getUser(request);
@@ -444,7 +453,8 @@ export function registerPortableCameraRoutes(
       return reply.code(404).send({ error: "session_not_found" });
     }
     const device = await repository.getDevice(session.deviceId);
-    if (!device || !await authorizeDevice(request, reply, device)) return;
+    if (!device) return reply.code(404).send({ error: "device_not_found" });
+    if (!await authorizeDevice(request, reply, device)) return;
     return reply.send(session);
   });
 
@@ -460,7 +470,13 @@ export function registerPortableCameraRoutes(
     }
 
     const device = await repository.getDevice(session.deviceId);
-    if (!device || !await authorizeDevice(request, reply, device)) return;
+    if (!device) return reply.code(404).send({ error: "device_not_found" });
+    if (!await authorizeDevice(request, reply, device)) return;
+
+    try { await stopPublisher(session.id); } catch (error) {
+      request.log.warn({ err: error }, "Portable publisher stop failed");
+      return reply.code(502).send({ error: "media_gateway_failed_to_stop_publish" });
+    }
 
     const tenantId = session.tenantId || authTenantId;
     const userId = session.userId || authUserId;
@@ -522,7 +538,8 @@ export function registerPortableCameraRoutes(
     }
 
     const device = await repository.getDevice(session.deviceId);
-    if (!device || !await authorizeDevice(request, reply, device)) return;
+    if (!device) return reply.code(404).send({ error: "device_not_found" });
+    if (!await authorizeDevice(request, reply, device)) return;
     if (["ENDED", "FAILED", "REVOKED"].includes(session.state)) {
       return reply.code(409).send({ error: "session_already_ended" });
     }
@@ -644,6 +661,10 @@ export function registerPortableCameraRoutes(
     if (device.cameraId) {
       const activeSession = await repository.getActiveSessionForSource(device.cameraId);
       if (activeSession) {
+        try { await stopPublisher(activeSession.id); } catch (error) {
+          request.log.warn({ err: error }, "Revoked device publisher stop failed");
+          return reply.code(502).send({ error: "device_revoked_media_stop_pending" });
+        }
         await leaseManager.releaseLease(tenantId, device.cameraId, activeSession.id, activeSession.mediaNodeId);
         await repository.updateSessionState(activeSession.id, "ENDED", undefined, "device_revoked");
         await store.updateCameraStatus(device.cameraId, "offline").catch(() => undefined);

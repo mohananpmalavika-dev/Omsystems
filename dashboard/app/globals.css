@@ -5249,6 +5249,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   background: #fff !important;
 }
 .control-room-section .stat-card { min-height: 84px; border: 1px solid #e0e7f0; background: #fbfcfe !important; }
+.control-room-section .stat-card strong { color: #162641 !important; }
+.control-room-section .stat-card span { color: #52627a !important; }
 .control-room-section .stat-icon.text-purple { color: var(--blue) !important; }
 
 /* Enterprise infrastructure follows the same restrained operational palette:

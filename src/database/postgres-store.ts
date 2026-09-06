@@ -115,98 +115,44 @@ export class PostgresStore
     this.gridLayouts = new GridLayoutRepository(pool);
     this.operationalReports = new OperationalReportRepository(pool);
     this.activityTracking = new ActivityTrackingRepository(pool);
-    void this.ensureSuperUser();
+    void this.ensureSuperUser().catch(() => {
+      // The API readiness check reports storage availability; never synthesize
+      // a privileged account if initialization could not be persisted.
+    });
   }
 
-  /**
-   * Guarantees that superuser mgdhanyamohan is stored and properly configured in the database
-   */
+  /** Provision the first administrator once; stored privileges remain authoritative. */
   async ensureSuperUser(): Promise<void> {
-    if (!PERMANENT_SUPERADMIN.password) {
-      // A deployment must explicitly configure bootstrap credentials. Do not
-      // create or update an account with an empty or shared default password.
-      return;
-    }
-
+    if (!PERMANENT_SUPERADMIN.password) return;
+    const client = await this.pool.connect();
     try {
-      // 1. Resolve or create default root tenant
-      let tenantRes = await this.pool.query("SELECT id::text FROM tenants WHERE slug = 'omsystems' LIMIT 1").catch(() => ({ rows: [] }));
-      let tenantId = tenantRes.rows[0]?.id;
-      if (!tenantId) {
-        tenantRes = await this.pool.query("SELECT id::text FROM tenants LIMIT 1").catch(() => ({ rows: [] }));
-        tenantId = tenantRes.rows[0]?.id;
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(739214608)");
+      const initialized = await client.query(
+        `SELECT EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM resource_nodes) AS initialized`,
+      );
+      if (!initialized.rows[0]?.initialized) {
+        const tenant = await client.query(
+          `INSERT INTO tenants (id,name,slug,status,created_at,updated_at)
+           VALUES (gen_random_uuid(),'OM Systems Bank','omsystems','active',now(),now())
+           ON CONFLICT (slug) DO UPDATE SET slug=EXCLUDED.slug RETURNING id::text`,
+        );
+        const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
+        await client.query(
+          `INSERT INTO users (id,tenant_id,username,email,display_name,role,status,active,
+             password_hash,identity_subject,created_at,updated_at)
+           VALUES (gen_random_uuid(),$1,$2,$3,$4,'super_admin','active',true,$5,
+             'user-mgdhanyamohan',now(),now()) ON CONFLICT DO NOTHING`,
+          [tenant.rows[0].id, PERMANENT_SUPERADMIN.username, PERMANENT_SUPERADMIN.email,
+            PERMANENT_SUPERADMIN.displayName, passwordHash],
+        );
       }
-      if (!tenantId) {
-        const insTenant = await this.pool.query(
-          `INSERT INTO tenants (id, name, slug, status, created_at, updated_at)
-           VALUES (gen_random_uuid(), 'OM Systems Bank', 'omsystems', 'active', now(), now())
-           ON CONFLICT (slug) DO UPDATE SET status='active'
-           RETURNING id::text`,
-        ).catch(() => ({ rows: [] }));
-        tenantId = insTenant.rows[0]?.id || "00000000-0000-4000-8000-000000000000";
-      }
-
-      // 2. Hash default superuser password
-      const passwordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
-
-      // 3. Upsert superuser mgdhanyamohan
-      const existingUserRes = await this.pool.query(
-        `SELECT id::text, tenant_id::text FROM users
-         WHERE lower(username) = lower($1) OR lower(email) = lower($1) OR identity_subject = 'user-mgdhanyamohan'
-         LIMIT 1`,
-        [PERMANENT_SUPERADMIN.username],
-      ).catch(() => ({ rows: [] }));
-
-      let superUserId = "00000000-0000-4000-8000-000000000001";
-      if (existingUserRes.rows.length > 0) {
-        superUserId = existingUserRes.rows[0].id;
-        await this.pool.query(
-          `UPDATE users
-           SET role = 'super_admin', status = 'active', active = true, updated_at = now()
-           WHERE id = $1::uuid`,
-          [superUserId],
-        ).catch(() => {});
-      } else {
-        const insRes = await this.pool.query(
-          `INSERT INTO users (
-             id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
-           ) VALUES (
-             '00000000-0000-4000-8000-000000000001'::uuid, $1, $2, $3,
-             $4, 'super_admin', 'active', true, $5, 'user-mgdhanyamohan', now(), now()
-           )
-           ON CONFLICT (id) DO UPDATE SET
-             role = 'super_admin',
-             status = 'active',
-             active = true,
-             password_hash = COALESCE(users.password_hash, EXCLUDED.password_hash),
-             tenant_id = EXCLUDED.tenant_id,
-             display_name = EXCLUDED.display_name,
-             identity_subject = COALESCE(users.identity_subject, 'user-mgdhanyamohan'),
-             updated_at = now()
-           RETURNING id::text`,
-          [tenantId, PERMANENT_SUPERADMIN.username, PERMANENT_SUPERADMIN.email, PERMANENT_SUPERADMIN.displayName, passwordHash],
-        ).catch(() => ({ rows: [] }));
-        if (insRes.rows[0]?.id) superUserId = insRes.rows[0].id;
-      }
-
-      // 4. Ensure root resource node exists and superuser has root access grant
-      const rootNodeRes = await this.pool.query(
-        `SELECT id::text FROM resource_nodes WHERE parent_id IS NULL AND tenant_id = $1 LIMIT 1`,
-        [tenantId],
-      ).catch(() => ({ rows: [] }));
-      const rootNodeId = rootNodeRes.rows[0]?.id;
-      if (rootNodeId) {
-        await this.pool.query(
-          `INSERT INTO access_grants (
-             id, tenant_id, user_id, scope_node_id, action, effect, created_at
-           ) VALUES (
-             gen_random_uuid(), $1, '00000000-0000-4000-8000-000000000001'::uuid, $2::uuid, 'org:manage', 'allow', now()
-           ) ON CONFLICT DO NOTHING`,
-          [tenantId, rootNodeId],
-        ).catch(() => {});
-      }
-    } catch {
-      // Non-fatal if schema is being initialized concurrently
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

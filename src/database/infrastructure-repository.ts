@@ -868,9 +868,17 @@ export class InfrastructureRepository {
       }
     }
 
-    const client = await this.pool.connect();
+    // Bootstrap onboarding constructs this repository around an already
+    // checked-out PoolClient so every organization, user, grant and session
+    // write shares one transaction. In normal use `pool` is a Pool and this
+    // method owns its transaction; in the bootstrap case it must reuse the
+    // caller's client instead of attempting PoolClient.connect().
+    const ownsTransaction = typeof (this.pool as any).connect === "function";
+    const client = ownsTransaction
+      ? await this.pool.connect()
+      : this.pool as unknown as PoolClient;
     try {
-      await client.query("BEGIN");
+      if (ownsTransaction) await client.query("BEGIN");
       const result = await client.query(
         `INSERT INTO users (
            tenant_id, identity_subject, display_name, email, username,
@@ -894,13 +902,13 @@ export class InfrastructureRepository {
       if (input.primaryOrgNodeId) {
         await this.assignOrganization(client, id, input.primaryOrgNodeId, true, input.createdBy ?? null);
       }
-      await client.query("COMMIT");
+      if (ownsTransaction) await client.query("COMMIT");
       return this.getUserWithPassword(id);
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (ownsTransaction) await client.query("ROLLBACK");
       throw error;
     } finally {
-      client.release();
+      if (ownsTransaction) client.release();
     }
   }
 
@@ -1115,19 +1123,22 @@ export class InfrastructureRepository {
     assignedBy: string,
     replaceExisting: boolean = true,
   ) {
-    const client = await this.pool.connect();
+    const ownsTransaction = typeof (this.pool as any).connect === "function";
+    const client = ownsTransaction
+      ? await this.pool.connect()
+      : this.pool as unknown as PoolClient;
     try {
-      await client.query("BEGIN");
+      if (ownsTransaction) await client.query("BEGIN");
       const assignment = await this.assignOrganization(
         client, userId, scopeNodeId, isPrimary, assignedBy, replaceExisting,
       );
-      await client.query("COMMIT");
+      if (ownsTransaction) await client.query("COMMIT");
       return assignment;
     } catch (error) {
-      await client.query("ROLLBACK");
+      if (ownsTransaction) await client.query("ROLLBACK");
       throw error;
     } finally {
-      client.release();
+      if (ownsTransaction) client.release();
     }
   }
 

@@ -10,8 +10,8 @@ const optionalUrl = z.preprocess(
 );
 const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
-  value = value.trim();
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+  const normalized = value.trim();
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(normalized) ? normalized : `http://${normalized}`;
 }, httpUrl);
 
 const schema = z.object({

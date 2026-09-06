@@ -2,6 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { organizationApi } from "@/lib/api-client";
+import { isPublicDashboardRoute } from "@/lib/session-navigation";
+import { usePathname } from "next/navigation";
 
 export interface OrgBranding {
   organizationId: string | null;
@@ -39,6 +41,7 @@ const OrgBrandingContext = createContext<OrgBrandingContextValue>({
 });
 
 export function OrgBrandingProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [branding, setBranding] = useState<OrgBranding>(DEFAULT_BRANDING);
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; code?: string; logoUrl?: string | null }>>([]);
 
@@ -68,9 +71,19 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
       console.error("Failed to load cached branding:", e);
     }
 
-    // 2. Fetch fresh organization details from API
-    organizationApi
-      .getTree()
+    // Public pages do not need organization data to render.
+    if (isPublicDashboardRoute(pathname)) return;
+
+    // Refresh in the background without allowing an unavailable API to hold
+    // the page open during startup.
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2000);
+    Promise.race([
+      organizationApi.getTree(),
+      new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () => reject(new Error("Organization refresh timed out")), { once: true });
+      }),
+    ])
       .then((res: any) => {
         const roots = Array.isArray(res?.data) ? res.data : Array.isArray(res?.tree) ? res.tree : [];
         const organizations = roots.map((root: any) => ({ id: root.id, name: root.name, code: root.code, logoUrl: root.logoUrl ?? root.metadata?.logoUrl ?? null }));
@@ -81,8 +94,13 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
       })
       .catch(() => {
         // Fallback gracefully if API is not yet loaded or offline
-      });
-  }, []);
+      })
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [pathname]);
 
   const selectOrganization = (organizationId: string) => {
     const selected = organizations.find((organization) => organization.id === organizationId);

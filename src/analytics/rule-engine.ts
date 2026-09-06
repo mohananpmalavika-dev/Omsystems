@@ -44,8 +44,11 @@ export function analyticsAlertTitle(rule: AnalyticsRule) {
 
 function objectClassesMatch(rule: AnalyticsRule, event: AnalyticsEventInput) {
   if (rule.objectClasses.length === 0) return true;
-  const detected = new Set(event.objects.map((object) => object.label.toLowerCase()));
-  return rule.objectClasses.some((label) => detected.has(label.toLowerCase()));
+  return event.objects.some((object) =>
+    rule.objectClasses.some((label) =>
+      object.label.toLowerCase() === label.toLowerCase() && object.confidence >= rule.minConfidence,
+    ),
+  );
 }
 
 function directionMatches(rule: AnalyticsRule, event: AnalyticsEventInput) {

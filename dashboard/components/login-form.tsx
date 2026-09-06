@@ -7,22 +7,15 @@ import { authApi, organizationApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/session-navigation";
 
-import { ThemeProvider } from "@/components/ui/theme-provider";
 import { ThemeSwitcher } from "@/components/ui/theme-switcher";
-import { OrgBrandingProvider, useOrgBranding } from "@/components/ui/org-branding-provider";
+import { useOrgBranding } from "@/components/ui/org-branding-provider";
 
 interface LoginFormProps {
   onSuccess?: () => void;
 }
 
 export function LoginForm(props: LoginFormProps) {
-  return (
-    <ThemeProvider>
-      <OrgBrandingProvider>
-        <LoginFormInner {...props} />
-      </OrgBrandingProvider>
-    </ThemeProvider>
-  );
+  return <LoginFormInner {...props} />;
 }
 
 function LoginFormInner({ onSuccess }: LoginFormProps) {
