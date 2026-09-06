@@ -334,11 +334,14 @@ export class SocOperatorAnalyticsService {
       { id: 'BR-118', name: 'Kollam Main Branch', regionId: 'REG-S-KL', regionName: 'South Kerala Region', stateId: 'KL' },
       { id: 'BR-034', name: 'Kochi MG Road Hub', regionId: 'REG-C-KL', regionName: 'Central Kerala Region', stateId: 'KL' },
       { id: 'BR-204', name: 'Trivandrum City Branch', regionId: 'REG-S-KL', regionName: 'South Kerala Region', stateId: 'KL' },
+      { id: 'BR-210', name: 'Kochi North', regionId: 'REG-C-KL', regionName: 'Central Kerala Region', stateId: 'KL' },
+      { id: 'BR-310', name: 'Kozhikode Main', regionId: 'REG-N-KL', regionName: 'North Kerala Region', stateId: 'KL' },
     ];
     const operators = [
       { id: 'usr-op-01', name: 'Arun Kumar' },
       { id: 'usr-op-02', name: 'Beena Joseph' },
       { id: 'usr-op-03', name: 'Cyril Mathew' },
+      { id: 'usr-op-04', name: 'Deepa Nair' },
     ];
     const shifts: ShiftType[] = ['MORNING', 'EVENING', 'NIGHT'];
     const alertTypes: AlertCategoryType[] = ['VAULT_INTRUSION', 'RECORDER_OFFLINE', 'CAMERA_OFFLINE'];
