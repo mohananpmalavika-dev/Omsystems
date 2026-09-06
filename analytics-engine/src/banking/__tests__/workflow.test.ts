@@ -24,6 +24,7 @@ import {
   EscortVerificationRule,
   UnloadingDurationRule,
   AccessCorrelationRule,
+  ObjectEscortRule,
 } from '../rules.js';
 import {
   MockEventGenerator,
@@ -57,6 +58,7 @@ describe('Banking Analytics Workflow', () => {
       new EscortVerificationRule(),
       new UnloadingDurationRule(),
       new AccessCorrelationRule(),
+      new ObjectEscortRule(),
     ]);
 
     workflow = new CashVanWorkflow(

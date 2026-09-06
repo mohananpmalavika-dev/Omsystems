@@ -237,6 +237,29 @@ export class CashVanSessionRepository {
       session.overallConfidence = update.overallConfidence;
     }
 
+    if (update.vehicleArrivedAt !== undefined) {
+      session.vehicleArrivedAt = update.vehicleArrivedAt;
+    }
+    if (update.unloadingStartedAt !== undefined) {
+      session.unloadingStartedAt = update.unloadingStartedAt;
+    }
+    if (update.transferCompletedAt !== undefined) {
+      session.transferCompletedAt = update.transferCompletedAt;
+    }
+    if (update.vehicleDepartedAt !== undefined) {
+      session.vehicleDepartedAt = update.vehicleDepartedAt;
+    }
+
+    if (update.state === 'unloading' && !session.unloadingStartedAt) {
+      session.unloadingStartedAt = update.unloadingStartedAt || now;
+    }
+    if (update.state === 'transfer_complete' && !session.transferCompletedAt) {
+      session.transferCompletedAt = update.transferCompletedAt || now;
+    }
+    if (update.state === 'departed' && !session.vehicleDepartedAt) {
+      session.vehicleDepartedAt = update.vehicleDepartedAt || now;
+    }
+
     // Update vehicle
     if (update.vehicle) {
       session.vehicle = { ...session.vehicle, ...update.vehicle } as any;
@@ -246,6 +269,9 @@ export class CashVanSessionRepository {
       }
       if (update.vehicle.plate && !session.plate) {
         session.plate = update.vehicle.plate;
+      }
+      if (update.vehicle.arrivedAt && !session.vehicleArrivedAt) {
+        session.vehicleArrivedAt = update.vehicle.arrivedAt;
       }
     }
 
