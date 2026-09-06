@@ -287,6 +287,7 @@ export class PostgresStore
   }
 
   async getCamera(id: string) { return this.cameras.findById(id); }
+  async listCameras(tenantId: string) { return this.cameras.listByTenant(tenantId); }
   async listCamerasByBranch(user: User, branchId: string, action: Action) {
     return this.cameras.listAuthorizedByBranch(user.id, branchId, action);
   }
