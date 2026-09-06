@@ -157,6 +157,17 @@ export default function SecurityDashboard() {
     <div className="space-y-6">
       <SecurityHero refreshing={refreshing} onRefresh={() => void fetchSecurityOperations()} />
 
+      <div className={`flex items-start justify-between gap-3 rounded-xl border p-4 ${summary?.state === 'healthy' ? 'border-emerald-500/30 bg-emerald-950/15' : summary?.state === 'attention' ? 'border-amber-500/30 bg-amber-950/15' : 'border-slate-700 bg-slate-900/90'}`}>
+        <div className="flex items-start gap-3">
+          {summary?.state === 'healthy' ? <CheckCircle className="mt-0.5 text-emerald-300" size={18} /> : summary?.state === 'attention' ? <AlertTriangle className="mt-0.5 text-amber-300" size={18} /> : <HelpCircle className="mt-0.5 text-slate-400" size={18} />}
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Security posture status</h2>
+            <p className="mt-1 text-xs text-slate-300">{summary?.state === 'healthy' ? 'All security attestations are passing. Operations are running with full protection.' : summary?.state === 'attention' ? 'Some security checks need operator attention. Review evidence below and remediate if required.' : 'Security posture is unknown. Ensure observability collectors are connected.'}</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => void fetchSecurityOperations()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700"><RefreshCw size={14} /> Refresh</button>
+      </div>
+
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
           <span>{error} Showing the most recently received live data.</span>
