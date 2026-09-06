@@ -200,7 +200,8 @@ export interface RetentionAuditEvent {
     | "VIOLATION_CREATED"
     | "VIOLATION_ACKNOWLEDGED"
     | "VIOLATION_RESOLVED"
-    | "MANUAL_VERIFICATION";
+    | "MANUAL_VERIFICATION"
+    | "DELETION_DENIED";
   previousState?: RetentionState | undefined;
   newState?: RetentionState | undefined;
   actorType: "SYSTEM" | "USER";

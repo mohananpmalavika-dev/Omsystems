@@ -19,6 +19,7 @@ import { DeletionPlannerService, DeletionPlanResult } from "./deletion-planner.s
 import { PolicySimulationService } from "./policy-simulation.service.js";
 import { pool } from "../../database/pool.js";
 import type { EvidenceRepository } from "../../database/evidence-repository.js";
+import { retentionAuditService } from "./retention-audit.service.js";
 
 export interface CameraComprehensiveRetentionStatus {
   cameraId: string;
@@ -539,6 +540,10 @@ export class RetentionEngineService {
       success: true,
       auditId: audit.id,
     };
+  }
+
+  getAuditTrail(tenantId: string) {
+    return retentionAuditService.getAuditLogs(tenantId);
   }
 }
 

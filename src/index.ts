@@ -12,7 +12,7 @@ const config = loadConfig();
 const controlPlanePublicUrl = config.CONTROL_PLANE_PUBLIC_URL;
 
 // Log critical configuration for debugging startup issues
-console.log('🚀 Sentinel Grid Control Plane starting...');
+console.log('🚀 KryptoVision Control Plane starting (KryptonLogic)...');
 console.log('Configuration check:');
 console.log('  - Database:', config.DATABASE_URL ? '✓ configured' : '✗ MISSING');
 console.log('  - Redis:', config.REDIS_URL ? '✓ configured' : 'ℹ optional (not set)');

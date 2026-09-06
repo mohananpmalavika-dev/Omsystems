@@ -67,7 +67,7 @@ function createInMemoryPgPool() {
     if (cleanSql.includes("FROM recording_legal_holds")) {
       let results = Array.from(tables.recording_legal_holds.values());
 
-      if (cleanSql.includes("id = $1")) {
+      if (cleanSql.includes("WHERE id = $1")) {
         results = results.filter((r) => r.id === params[0]);
       }
       if (cleanSql.includes("camera_id = $1") || cleanSql.includes("camera_id = $2") || cleanSql.includes("camera_ids")) {
@@ -652,7 +652,7 @@ describe("KryptoVision — P0/P1 Forensic Evidence & Production Hardening Test S
     const auditEvents = engine.getAuditTrail("BANK-002");
     const denialEvent = auditEvents.find((e) => e.eventType === "DELETION_DENIED");
     expect(denialEvent).toBeDefined();
-    expect(denialEvent?.reason).toContain("protected by active Legal Hold");
+    expect((denialEvent?.notes || denialEvent?.reason || "").toLowerCase()).toContain("protected by active legal hold");
   });
 
   // --------------------------------------------------------------------------

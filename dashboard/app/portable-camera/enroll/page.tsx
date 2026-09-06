@@ -570,7 +570,7 @@ export default function PortableCameraEnrollPage() {
           </div>
           <div>
             <h1 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>PORTABLE CAMERA</h1>
-            <span style={{ fontSize: "12px", color: "#94a3b8" }}>Sentinel Grid Enterprise VMS</span>
+            <span style={{ fontSize: "12px", color: "#94a3b8" }}>KryptoVision Enterprise VMS by KryptonLogic</span>
           </div>
         </div>
 
