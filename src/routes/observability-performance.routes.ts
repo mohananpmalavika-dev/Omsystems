@@ -38,44 +38,13 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
    * Returns endpoint latency metrics with percentiles
    */
   app.get(
-   * Fastify hook to track request latencies
-   * Should be registered with: app.addHook("onResponse", performanceTrackingMiddleware)
-   */
-  /**
-   */
+    '/api/observability/performance/endpoints',
     async (request, reply) => {
-  export function performanceTrackingMiddleware(
-    request: FastifyRequest,
-    reply: FastifyReply
-  ) {
-    const startTime = Date.now();
-  
-    // Store start time on request for use in response hook
-    (request as any).__performanceStart = startTime;
-  }
-      const { method, path } = request.params as { method: string; path: string };
-  export function performanceTrackingResponseHook(
-    request: FastifyRequest,
-    reply: FastifyReply
-  ) {
-    const startTime = (request as any).__performanceStart ?? Date.now();
-    const duration = Date.now() - startTime;
-    const isError = reply.statusCode >= 400;
-  
-    getPerformanceObserver().recordEndpointLatency(
-      request.url,
-      request.method,
-      duration,
-      isError
-    );
-  }
+      const { method, path } = request.query as { method?: string; path?: string };
       const observer = getPerformanceObserver();
-      const metrics = observer.getEndpointMetrics(path, method.toUpperCase());
-      
-      return reply.send({
-        success: true,
-        data: metrics[0] || null,
-      });
+      const metrics = observer.getEndpointMetrics(path, method?.toUpperCase());
+      const observer = getPerformanceObserver();
+      return reply.send({ success: true, data: metrics });
     }
   );
 

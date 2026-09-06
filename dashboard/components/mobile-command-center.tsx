@@ -36,6 +36,9 @@ import {
   Video,
   FileText,
   MoreVertical,
+  ClipboardCheck,
+  Navigation,
+  Wrench,
 } from "lucide-react";
 
 interface ConnectionState {
@@ -61,6 +64,7 @@ export function MobileCommandCenter() {
   const [bottomTab, setBottomTab] = useState<BottomNavTab>("home");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(false);
+  const [shiftCheckedIn, setShiftCheckedIn] = useState(false);
   
   const sseRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -539,15 +543,24 @@ export function MobileCommandCenter() {
   // ============ HOME DASHBOARD ============
 
   const p1Count = homeData?.incidents?.filter((i: any) => i.severity === "P1").length || 0;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredIncidents = (homeData?.incidents || []).filter((incident: any) => {
+    if (!normalizedSearch) return true;
+    return [incident.title, incident.branch?.name, incident.branch?.code, incident.camera?.name]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSearch);
+  });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 max-w-md mx-auto border-x border-slate-800 shadow-2xl flex flex-col">
+    <div className="mobile-command-center min-h-screen bg-slate-950 text-slate-100 max-w-md mx-auto border-x border-slate-800 shadow-2xl flex flex-col">
       {/* Header */}
       <div className="sticky top-0 z-40 p-4 bg-gradient-to-r from-slate-900 via-slate-900 to-rose-950/30 border-b border-slate-800 backdrop-blur-md space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-white">Mobile Command</h1>
-            <p className="text-[10px] text-slate-400 font-mono">Real-time operations center</p>
+            <p className="text-[10px] text-slate-400 font-mono">Field operations | {shiftCheckedIn ? "On shift" : "Ready to check in"}</p>
           </div>
           <ConnectionIndicator />
         </div>
@@ -610,18 +623,50 @@ export function MobileCommandCenter() {
                   <div className="text-[10px] text-slate-400 font-mono">{homeData?.operator?.shift || "Active"}</div>
                 </div>
               </div>
-              {homeData?.operator?.onCall && (
-                <span className="px-2.5 py-1 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  ON CALL
-                </span>
-              )}
+              <button
+                type="button"
+                onClick={() => setShiftCheckedIn((checkedIn) => !checkedIn)}
+                className={`min-h-11 px-3 py-2 rounded-lg text-[10px] font-mono font-bold border flex items-center gap-1.5 transition-colors ${
+                  shiftCheckedIn || homeData?.operator?.onCall
+                    ? "bg-emerald-950 text-emerald-300 border-emerald-800"
+                    : "bg-slate-950 text-slate-300 border-slate-700"
+                }`}
+                aria-pressed={shiftCheckedIn || Boolean(homeData?.operator?.onCall)}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${shiftCheckedIn || homeData?.operator?.onCall ? "bg-emerald-400" : "bg-slate-500"}`} />
+                {shiftCheckedIn || homeData?.operator?.onCall ? "ON SHIFT" : "CHECK IN"}
+              </button>
             </div>
 
+            <section aria-labelledby="field-toolkit-heading" className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h2 id="field-toolkit-heading" className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Field toolkit</h2>
+                <span className="text-[10px] text-slate-500">Quick actions</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <a href="/incidents/create" className="min-h-14 p-3 rounded-xl bg-rose-600 text-white flex items-center gap-2.5 shadow-md active:scale-[0.98]">
+                  <AlertOctagon className="w-5 h-5 shrink-0" />
+                  <span className="text-xs font-bold">Report incident</span>
+                </a>
+                <a href="/maintenance/workorders/new" className="min-h-14 p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-center gap-2.5 active:scale-[0.98]">
+                  <Wrench className="w-5 h-5 shrink-0 text-amber-400" />
+                  <span className="text-xs font-bold">Log maintenance</span>
+                </a>
+                <a href="/operations/branches" className="min-h-14 p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-center gap-2.5 active:scale-[0.98]">
+                  <Navigation className="w-5 h-5 shrink-0 text-cyan-400" />
+                  <span className="text-xs font-bold">Find a branch</span>
+                </a>
+                <a href="/maintenance/device-management" className="min-h-14 p-3 rounded-xl bg-slate-900 border border-slate-800 text-slate-200 flex items-center gap-2.5 active:scale-[0.98]">
+                  <ClipboardCheck className="w-5 h-5 shrink-0 text-emerald-400" />
+                  <span className="text-xs font-bold">Check equipment</span>
+                </a>
+              </div>
+            </section>
+
             {/* P1 Incidents */}
-            {homeData?.incidents && homeData.incidents.length > 0 && (
+            {filteredIncidents.length > 0 && (
               <div className="space-y-3">
-                {homeData.incidents.map((incident: any) => (
+                {filteredIncidents.map((incident: any) => (
                   <div
                     key={incident.id}
                     onClick={() => setSelectedIncident(incident)}
@@ -664,7 +709,7 @@ export function MobileCommandCenter() {
             )}
 
             {/* No Incidents - All Clear */}
-            {homeData?.incidents?.length === 0 && (
+            {filteredIncidents.length === 0 && (
               <div className="p-6 rounded-xl bg-emerald-950/20 border border-emerald-900/30 text-center space-y-2">
                 <div className="w-12 h-12 rounded-full bg-emerald-950/60 border border-emerald-800 flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-6 h-6 text-emerald-400" />
@@ -715,8 +760,8 @@ export function MobileCommandCenter() {
                 </h3>
                 <div className="text-2xl font-bold text-purple-400">{homeData.myIncidentsCount}</div>
                 <p className="text-xs text-slate-400">Assigned to you</p>
-                <button className="w-full mt-2 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold">
-                  View All
+                <button onClick={() => setBottomTab("incidents")} className="w-full min-h-11 mt-2 px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold">
+                  View my incidents
                 </button>
               </div>
             )}
@@ -797,36 +842,39 @@ export function MobileCommandCenter() {
         {bottomTab === "incidents" && (
           <div className="p-4 space-y-3">
             <h2 className="text-sm font-bold text-white">My Incidents</h2>
-            <p className="text-sm text-slate-400 text-center py-8">
-              {homeData?.myIncidentsCount || 0} incidents assigned to you
-            </p>
+            {filteredIncidents.length > 0 ? filteredIncidents.map((incident: any) => (
+              <button key={incident.id} onClick={() => setSelectedIncident(incident)} className="w-full min-h-16 p-3 rounded-xl bg-slate-900 border border-slate-800 text-left flex items-center justify-between gap-3">
+                <span><span className="block text-sm font-bold text-white">{incident.title}</span><span className="block text-xs text-slate-400 mt-1">{incident.branch?.name || "Unknown branch"}</span></span>
+                <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+              </button>
+            )) : <p className="text-sm text-slate-400 text-center py-8">No incidents match this search</p>}
           </div>
         )}
 
         {bottomTab === "more" && (
           <div className="p-4 space-y-3">
             <h2 className="text-sm font-bold text-white mb-4">More Options</h2>
-            <button className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
+            <a href="/account/security" className="w-full min-h-16 p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
               <Bell className="w-5 h-5 text-slate-400" />
               <div>
                 <div className="text-sm font-medium text-white">Notifications</div>
                 <div className="text-xs text-slate-400">Manage push notifications</div>
               </div>
-            </button>
-            <button className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
+            </a>
+            <a href="/account/security" className="w-full min-h-16 p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
               <Settings className="w-5 h-5 text-slate-400" />
               <div>
                 <div className="text-sm font-medium text-white">Settings</div>
                 <div className="text-xs text-slate-400">App preferences</div>
               </div>
-            </button>
-            <button className="w-full p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
+            </a>
+            <a href="/reports" className="w-full min-h-16 p-3 rounded-lg bg-slate-900 border border-slate-800 text-left flex items-center gap-3">
               <FileText className="w-5 h-5 text-slate-400" />
               <div>
                 <div className="text-sm font-medium text-white">Reports</div>
                 <div className="text-xs text-slate-400">View incident reports</div>
               </div>
-            </button>
+            </a>
           </div>
         )}
       </div>

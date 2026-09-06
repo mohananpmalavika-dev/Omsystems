@@ -278,6 +278,18 @@ body {
   -webkit-font-smoothing: antialiased;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
+
+.mobile-command-center {
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior-y: contain;
+}
+
+.mobile-command-center button,
+.mobile-command-center a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
 button, input { font: inherit; }
 button { cursor: pointer; }
 
