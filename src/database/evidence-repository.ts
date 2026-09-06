@@ -204,6 +204,36 @@ export class EvidenceRepository {
     return mapEvidenceManifest(result.rows[0]);
   }
 
+  async saveManifest(input: {
+    id: string;
+    tenantId?: string;
+    caseId?: string;
+    exportJobId?: string;
+    manifestData: any;
+    signature: string;
+    signingKeyId: string;
+  }): Promise<EvidenceManifest> {
+    const manifestJson = typeof input.manifestData === "string" ? input.manifestData : JSON.stringify(input.manifestData);
+    const result = await this.pool.query(
+      `INSERT INTO evidence_manifests (
+         id, tenant_id, case_id, destination_file, signature, signing_key_id, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, now())
+       ON CONFLICT (id) DO UPDATE SET
+         signature = EXCLUDED.signature,
+         signing_key_id = EXCLUDED.signing_key_id
+       RETURNING *`,
+      [
+        input.id,
+        input.tenantId || null,
+        input.caseId || null,
+        manifestJson,
+        input.signature,
+        input.signingKeyId,
+      ],
+    );
+    return mapEvidenceManifest(result.rows[0]);
+  }
+
   async getManifest(manifestId: string): Promise<EvidenceManifest | undefined> {
     const result = await this.pool.query(
       `SELECT * FROM evidence_manifests WHERE id = $1`,
@@ -297,6 +327,27 @@ export class EvidenceRepository {
     }
   }
 
+  async appendCustodyEvent(input: {
+    evidenceId?: string;
+    eventType: CustodyAction;
+    actor: string;
+    actorType?: "USER" | "SYSTEM" | "SERVICE";
+    reason?: string;
+    sourceIp?: string;
+    workstationId?: string;
+    details?: any;
+  }): Promise<ChainOfCustodyEvent> {
+    return this.recordCustodyEvent({
+      evidenceId: input.evidenceId,
+      action: input.eventType,
+      performedBy: input.actor,
+      actorType: input.actorType,
+      reason: input.reason,
+      sourceIp: input.sourceIp,
+      workstationId: input.workstationId,
+    });
+  }
+
   async getCustodyLog(evidenceId: string): Promise<ChainOfCustodyEvent[]> {
     const result = await this.pool.query(
       `SELECT * FROM chain_of_custody_events
@@ -305,6 +356,10 @@ export class EvidenceRepository {
       [evidenceId],
     );
     return result.rows.map(mapChainOfCustodyEvent);
+  }
+
+  async getCustodyHistory(evidenceId: string): Promise<ChainOfCustodyEvent[]> {
+    return this.getCustodyLog(evidenceId);
   }
 
   async verifyCustodyChain(evidenceId: string): Promise<{
@@ -459,7 +514,7 @@ export class EvidenceRepository {
        WHERE (status = 'active' OR status IS NULL)
          AND released_at IS NULL
          AND (
-           camera_id = $1::uuid
+           camera_id = $1
            OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $1 || '%')
          )
          AND (from_at IS NULL OR from_at <= $2::timestamptz OR start_time IS NULL OR start_time <= $2::timestamptz)

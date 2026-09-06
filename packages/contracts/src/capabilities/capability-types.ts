@@ -96,6 +96,13 @@ export interface PlatformCapabilityImplementation {
   persistenceImplemented: boolean;
 }
 
+export interface CapabilityProof {
+  sourceFiles?: string[];
+  testFiles?: string[];
+  routeIds?: string[];
+  migrations?: string[];
+}
+
 export interface PlatformCapabilityVerification {
   unitTests: boolean;
   integrationTests: boolean;
@@ -103,6 +110,7 @@ export interface PlatformCapabilityVerification {
   productionDependencyVerified: boolean;
   lastVerifiedAt?: string;
   verifiedVersion?: string;
+  proof?: CapabilityProof;
 }
 
 export interface PlatformCapabilityDependencies {

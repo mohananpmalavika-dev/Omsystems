@@ -438,6 +438,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/retention/services/retention-engine.service.ts', 'src/database/recording-repository.ts'],
+        testFiles: ['test/recording/continuity-verification.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -464,6 +469,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/retention/services/retention-engine.service.ts', 'src/database/recording-repository.ts'],
+        testFiles: ['test/retention/retention-engine.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane', 'recording-engine'],
@@ -545,6 +555,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/evidence/services/evidence-package.service.ts', 'src/database/evidence-repository.ts'],
+        testFiles: ['test/evidence.test.ts', 'test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -571,6 +586,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/recording/export-worker.ts', 'src/media/services/evidence-export.service.ts', 'src/routes/evidence.routes.ts'],
+        testFiles: ['test/evidence.test.ts', 'test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['recording-engine', 'control-plane'],
@@ -596,6 +616,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/recording/export-worker.ts', 'src/evidence/services/forensic-evidence-package.service.ts'],
+        testFiles: ['test/evidence.test.ts', 'test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -621,6 +646,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/recording/export-worker.ts', 'src/evidence-export/canonical-json.ts'],
+        testFiles: ['test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -630,9 +660,9 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
   {
     id: 'evidence.signed_manifest',
     name: 'Cryptographically Signed Manifest',
-    description: 'RSA/Ed25519 digital signature of evidence manifest for court-admissible verification.',
+    description: 'Digital signature of evidence manifest using persistent file/KMS/HSM for court-admissible verification.',
     category: 'EVIDENCE',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -644,8 +674,13 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/evidence/signing/evidence-signing-provider.ts', 'src/evidence-export/services/evidence-signer.service.ts', 'src/recording/export-worker.ts'],
+        testFiles: ['test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -672,6 +707,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/evidence/services/chain-of-custody.service.ts', 'src/database/evidence-repository.ts'],
+        testFiles: ['test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
@@ -698,6 +738,11 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
       integrationTests: true,
       e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: ['src/evidence/services/legal-hold.service.ts', 'src/database/evidence-repository.ts', 'src/retention/services/retention-engine.service.ts'],
+        testFiles: ['test/evidence/forensic-evidence-production-hardening.test.ts'],
+        migrations: ['database/migrations/100_evidence_legal_hold_hardening.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane', 'recording-engine'],

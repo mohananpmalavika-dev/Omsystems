@@ -144,6 +144,58 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
         snippet: line.trim(),
       });
     }
+
+    // Check 5: Forbidden mock constants and simulation patterns in production runtime
+    const forbiddenPatterns = [
+      { pattern: /\bMOCK_[A-Z0-9_]+\b/, rule: "NO_MOCK_CONSTANTS", message: "Production code must not define or reference MOCK_ constants." },
+      { pattern: /\bFAKE_[A-Z0-9_]+\b/, rule: "NO_FAKE_CONSTANTS", message: "Production code must not define or reference FAKE_ constants." },
+      { pattern: /For now,\s*return\s+(?:a\s+)?placeholder/i, rule: "NO_PLACEHOLDER_RETURNS", message: "Production code must not return placeholder data." },
+      { pattern: /simulated\s+progress/i, rule: "NO_SIMULATED_PROGRESS", message: "Production code must not simulate job/task progress." },
+      { pattern: /simulation\s+baseline/i, rule: "NO_SIMULATION_BASELINE", message: "Production code must not use simulation baselines." },
+      { pattern: /hard-coded\s+health\s+metrics/i, rule: "NO_HARD_CODED_HEALTH_METRICS", message: "Production code must not use hard-coded health metrics." },
+      { pattern: /fabricated\s+confidence/i, rule: "NO_FABRICATED_CONFIDENCE", message: "Production code must not fabricate confidence." },
+      { pattern: /fabricated\s+retention/i, rule: "NO_FABRICATED_RETENTION", message: "Production code must not fabricate retention values." },
+      { pattern: /fabricated\s+capacity/i, rule: "NO_FABRICATED_CAPACITY", message: "Production code must not fabricate storage capacity." },
+      { pattern: /fabricated\s+NTP\s+state/i, rule: "NO_FABRICATED_NTP", message: "Production code must not fabricate NTP synchronization status." },
+      { pattern: /fabricated\s+clock\s+offset/i, rule: "NO_FABRICATED_CLOCK_OFFSET", message: "Production code must not fabricate clock offset." },
+    ];
+
+    for (const fp of forbiddenPatterns) {
+      if (fp.pattern.test(line)) {
+        violations.push({
+          file: relPath,
+          line: lineNum,
+          rule: fp.rule,
+          message: fp.message,
+          snippet: line.trim(),
+        });
+      }
+    }
+  }
+
+  // Check 6: Enforce no sibling .js files when authoritative .ts/.tsx exists
+  if (relPath.endsWith(".js")) {
+    const tsPath = relPath.replace(/\.js$/, ".ts");
+    const tsxPath = relPath.replace(/\.js$/, ".tsx");
+    let hasSibling = false;
+    try {
+      await stat(join(baseDir, tsPath));
+      hasSibling = true;
+    } catch {
+      try {
+        await stat(join(baseDir, tsxPath));
+        hasSibling = true;
+      } catch {}
+    }
+    if (hasSibling) {
+      violations.push({
+        file: relPath,
+        line: 1,
+        rule: "NO_SIBLING_JS_SOURCE",
+        message: `Compiled or sibling JS source file found alongside TypeScript source: ${relPath}. Authoritative source must be TypeScript only.`,
+        snippet: relPath,
+      });
+    }
   }
 
   return violations;

@@ -16,6 +16,16 @@ export function HaFailoverView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const metrics = cluster?.metrics ?? {};
+  const nodes = cluster?.nodes ?? [];
+  const healthyNodeCount = Array.isArray(nodes) ? nodes.filter((node) => String(node.status || "").toLowerCase() === "healthy").length : 0;
+  const failoverReady = nodes.length > 0 && healthyNodeCount >= Math.max(1, Math.ceil(nodes.length / 2));
+  const trustMessage = error
+    ? "Failover telemetry is degraded; recovery actions should be manual until the control plane reconnects."
+    : failoverReady
+      ? "Cluster health is within operating tolerance and failover recovery is ready for a controlled handoff."
+      : "Cluster protection is reduced; operators should review node health before initiating a failover or maintenance window.";
+
   const fetchStatus = useCallback(async () => {
     setError(null);
     try {
@@ -52,18 +62,25 @@ export function HaFailoverView() {
     return <div className="flex items-center justify-center p-12 text-slate-400"><RefreshCw className="mr-2 animate-spin" size={22} /> Loading HA telemetry…</div>;
   }
 
-  const metrics = cluster?.metrics ?? {};
-  const nodes = cluster?.nodes ?? [];
-
   return (
     <div className="space-y-6">
-      {error && <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200"><AlertTriangle size={18} /> {error}</div>}
+      <div className={`flex items-start justify-between gap-3 rounded-xl border p-4 ${error ? "border-rose-500/30 bg-rose-950/20" : failoverReady ? "border-emerald-500/30 bg-emerald-950/15" : "border-amber-500/30 bg-amber-950/15"}`}>
+        <div className="flex items-start gap-3">
+          {error ? <AlertTriangle className="mt-0.5 text-rose-300" size={18} /> : failoverReady ? <CheckCircle2 className="mt-0.5 text-emerald-300" size={18} /> : <AlertTriangle className="mt-0.5 text-amber-300" size={18} />}
+          <div>
+            <h2 className="text-sm font-semibold text-slate-100">Operational trust status</h2>
+            <p className="mt-1 text-xs text-slate-300">{error ? error : trustMessage}</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => void fetchStatus()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700"><RefreshCw size={14} /> Refresh</button>
+      </div>
+
+      {error && <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200"><AlertTriangle size={18} /> Recovery path: reconnect the HA service and confirm node health before any failover request.</div>}
       <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/90 p-4">
         <div>
           <h2 className="text-sm font-semibold text-slate-100">High-availability cluster telemetry</h2>
           <p className="mt-1 text-xs text-slate-400">Live node, lease, and failover data from the HA service.</p>
         </div>
-        <button type="button" onClick={() => void fetchStatus()} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700"><RefreshCw size={14} /> Refresh</button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -76,17 +93,17 @@ export function HaFailoverView() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {nodes.length === 0 ? <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-6 text-sm text-slate-400">No HA nodes were returned.</div> : nodes.map((node) => (
+        {nodes.length === 0 ? <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-6 text-sm text-slate-400">No HA nodes were returned. If this is unexpected, confirm that the HA service is connected and retry the cluster sync.</div> : nodes.map((node) => (
           <div key={String(node.nodeId)} className="rounded-xl border border-slate-800 bg-slate-900/90 p-4">
-            <div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Server size={16} /> {node.nodeName || node.nodeId}</h3><span className="inline-flex items-center gap-1 text-xs text-emerald-300"><CheckCircle2 size={14} /> {node.status || "UNKNOWN"}</span></div>
+            <div className="flex items-center justify-between"><h3 className="flex items-center gap-2 text-sm font-semibold text-slate-100"><Server size={16} /> {node.nodeName || node.nodeId}</h3><span className={`inline-flex items-center gap-1 text-xs ${String(node.status || "UNKNOWN").toLowerCase() === "healthy" ? "text-emerald-300" : String(node.status || "UNKNOWN").toLowerCase() === "degraded" ? "text-amber-300" : "text-rose-300"}`}><CheckCircle2 size={14} /> {node.status || "UNKNOWN"}</span></div>
             <dl className="mt-4 grid grid-cols-2 gap-3 text-xs"><div><dt className="text-slate-500">Host</dt><dd className="mt-1 text-slate-200">{node.host || "—"}</dd></div><div><dt className="text-slate-500">Role</dt><dd className="mt-1 text-slate-200">{node.role || "—"}</dd></div><div><dt className="text-slate-500">Cameras</dt><dd className="mt-1 text-slate-200">{node.capacity?.currentCameras ?? "—"} / {node.capacity?.maxCameras ?? "—"}</dd></div><div><dt className="text-slate-500">Ingress</dt><dd className="mt-1 text-slate-200">{node.capacity?.ingressMbps ?? "—"} / {node.capacity?.maxIngressMbps ?? "—"} Mbps</dd></div></dl>
           </div>
         ))}
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><h3 className="text-sm font-semibold text-slate-100">Active camera leases ({leases.length})</h3><div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-slate-500"><tr><th className="p-2">Camera</th><th className="p-2">Owner</th><th className="p-2">Fencing token</th><th className="p-2">Expires</th></tr></thead><tbody>{leases.map((lease, index) => <tr key={String(lease.cameraId || index)} className="border-t border-slate-800"><td className="p-2 text-slate-200">{lease.cameraId || "—"}</td><td className="p-2 text-slate-300">{lease.nodeId || "—"}</td><td className="p-2 text-slate-300">{lease.fencingToken ?? "—"}</td><td className="p-2 text-slate-300">{lease.expiresAt ? new Date(lease.expiresAt).toLocaleString() : "—"}</td></tr>)}</tbody></table></div></div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><h3 className="text-sm font-semibold text-slate-100">Active camera leases ({leases.length})</h3>{leases.length === 0 ? <p className="mt-3 text-xs text-slate-400">No active camera leases are currently recorded. Safe state until a protected failover takes ownership.</p> : <div className="mt-3 overflow-x-auto"><table className="w-full text-left text-xs"><thead className="text-slate-500"><tr><th className="p-2">Camera</th><th className="p-2">Owner</th><th className="p-2">Fencing token</th><th className="p-2">Expires</th></tr></thead><tbody>{leases.map((lease, index) => <tr key={String(lease.cameraId || index)} className="border-t border-slate-800"><td className="p-2 text-slate-200">{lease.cameraId || "—"}</td><td className="p-2 text-slate-300">{lease.nodeId || "—"}</td><td className="p-2 text-slate-300">{lease.fencingToken ?? "—"}</td><td className="p-2 text-slate-300">{lease.expiresAt ? new Date(lease.expiresAt).toLocaleString() : "—"}</td></tr>)}</tbody></table></div>}</div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><h3 className="text-sm font-semibold text-slate-100">Recent failover events ({events.length})</h3><div className="mt-3 space-y-2">{events.length === 0 ? <p className="text-xs text-slate-400">No events were returned.</p> : events.slice(0, 20).map((event, index) => <div key={String(event.id || index)} className="rounded-lg border border-slate-800 p-3 text-xs"><div className="flex justify-between gap-3"><span className="font-semibold text-slate-200">{event.type || "EVENT"}</span><span className="text-slate-500">{event.timestamp ? new Date(event.timestamp).toLocaleString() : "—"}</span></div><p className="mt-1 text-slate-400">Camera {event.cameraId || "—"}: {event.reason || `${event.previousNode || "—"} → ${event.newNode || "—"}`}</p></div>)}</div></div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><h3 className="text-sm font-semibold text-slate-100">Recent failover events ({events.length})</h3><div className="mt-3 space-y-2">{events.length === 0 ? <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-400">No failover events were recorded in the window. Recovery posture remains stable and no handoff was required.</div> : events.slice(0, 20).map((event, index) => <div key={String(event.id || index)} className="rounded-lg border border-slate-800 p-3 text-xs"><div className="flex justify-between gap-3"><span className="font-semibold text-slate-200">{event.type || "EVENT"}</span><span className="text-slate-500">{event.timestamp ? new Date(event.timestamp).toLocaleString() : "—"}</span></div><p className="mt-1 text-slate-400">Camera {event.cameraId || "—"}: {event.reason || `${event.previousNode || "—"} → ${event.newNode || "—"}`}</p></div>)}</div></div>
     </div>
   );
 }
