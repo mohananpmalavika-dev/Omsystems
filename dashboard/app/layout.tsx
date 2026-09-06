@@ -5,6 +5,7 @@ import { ActivityMonitor } from "@/components/activity-monitor";
 import { ApplicationShell } from "@/components/application-shell";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { OrgBrandingProvider } from "@/components/ui/org-branding-provider";
+import { PerformanceMonitorProvider } from "@/components/performance-monitor-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -46,8 +47,10 @@ export default function RootLayout({
           <OrgBrandingProvider>
             <SessionProvider>
               <ActivityMonitor>
+                 <PerformanceMonitorProvider>
                 <ApplicationShell>{children}</ApplicationShell>
                 <GlobalAlertCenter />
+                 </PerformanceMonitorProvider>
               </ActivityMonitor>
             </SessionProvider>
           </OrgBrandingProvider>

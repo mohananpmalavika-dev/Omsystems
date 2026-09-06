@@ -67,6 +67,7 @@ import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
 import { registerEdgeProductRoutes } from "./edge-product/routes/edge-product.routes.js";
 import { registerObservabilityRoutes } from "./observability/observability.routes.js";
+import { registerPerformanceObservabilityRoutes, performanceTrackingMiddleware } from "./routes/observability-performance.routes.js";
 import { registerZeroTouchRoutes } from "./zero-touch/routes/zero-touch.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
 import { registerAuditRoutes } from "./routes/audit.routes.js";
@@ -617,7 +618,8 @@ export async function buildApp(options?: {
   await app.register(cors, { origin: false });
 
   app.decorateRequest("currentUser");
-  app.decorateRequest("edgeAgentAuthenticated", false);
+    app.addHook("preHandler", performanceTrackingMiddleware);
+    app.decorateRequest("edgeAgentAuthenticated", false);
   app.decorateRequest("edgeAgentId");
   const extendedStore = hasExtendedInfrastructure(store) ? store : undefined;
   const sessionAuth = extendedStore
@@ -633,6 +635,7 @@ export async function buildApp(options?: {
       request.url === "/health" ||
       request.url === "/ready" ||
       request.url === "/metrics" ||
+       request.url.startsWith("/api/observability/") ||
       request.url.startsWith("/api/ai/") ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
@@ -2626,6 +2629,7 @@ export async function buildApp(options?: {
     await registerAdaptiveStreamRoutes(app);
     await registerEdgeProductRoutes(app);
     await registerObservabilityRoutes(app);
+    await registerPerformanceObservabilityRoutes(app);
     await registerZeroTouchRoutes(app, store);
     app.log.info('Morning digest, Virtual guard, QRT dispatch, HA Cluster, Edge Lifecycle, Mobile, Asset Lifecycle, Media Pipeline, Device Connectivity, HA Leases, Adaptive Stream, Edge Product, Prometheus Observability, and Zero-Touch Brownfield routes registered');
   } catch (err: unknown) {
