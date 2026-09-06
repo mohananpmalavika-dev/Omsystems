@@ -10,6 +10,17 @@ import type {
   StreamSecretProvider,
 } from "./contracts.js";
 
+const PORTABLE_SOURCE_TYPES = new Set([
+  "android-camera",
+  "ios-camera",
+  "laptop-camera",
+  "browser-camera",
+]);
+
+function isPortableSource(sourceType?: string) {
+  return Boolean(sourceType && PORTABLE_SOURCE_TYPES.has(sourceType));
+}
+
 export async function buildMediaGateway(options: {
   controlPlane: ControlPlaneClient;
   router: MediaRouter;
@@ -148,14 +159,11 @@ export async function buildMediaGateway(options: {
       body.controlPlaneToken,
     );
     if (consumed.purpose === "talk") throw new GatewayError(403, "invalid_live_session");
-    const sourceUri = await options.secrets.resolve(
-      consumed.connectionSecretRef,
-    );
-    if (!sourceUri) {
-      throw new GatewayError(503, "stream_secret_unavailable");
-    }
     const path = `camera-${safeIdentifier(consumed.cameraId)}`;
-    const session = await access.start(path, sourceUri);
+    const portableSource = isPortableSource(consumed.sourceType);
+    const session = portableSource
+      ? access.issue(path, "read")
+      : await startCameraSource(path, consumed.connectionSecretRef);
     reply.header("cache-control", "no-store");
     return reply.code(201).send({
       sessionId: session.id,
@@ -171,6 +179,12 @@ export async function buildMediaGateway(options: {
         bearerToken: session.token,
       },
     });
+
+    async function startCameraSource(cameraPath: string, connectionSecretRef: string) {
+      const sourceUri = await options.secrets.resolve(connectionSecretRef);
+      if (!sourceUri) throw new GatewayError(503, "stream_secret_unavailable");
+      return access.start(cameraPath, sourceUri);
+    }
   });
 
   app.route({
