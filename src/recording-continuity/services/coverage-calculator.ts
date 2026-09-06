@@ -18,7 +18,7 @@ export interface RecordingCoverageDaily {
   recordedSeconds: number;
   missingSeconds: number;
 
-  coveragePercent: number; // high-precision e.g. 99.99769
+  coveragePercent: number; // calculated high-precision percentage
 
   gapCount: number;
   largestGapSeconds: number;

@@ -21,7 +21,28 @@ function createInMemoryPgPool() {
     evidence_cases: new Map<string, any>(),
   };
 
-  const activeAdvisoryLocks = new Set<string>();
+  const advisoryLockQueues = new Map<string, Array<() => void>>();
+  const heldLocks = new Set<string>();
+
+  const acquireLock = async (key: string) => {
+    while (heldLocks.has(key)) {
+      await new Promise<void>((resolve) => {
+        const q = advisoryLockQueues.get(key) || [];
+        q.push(resolve);
+        advisoryLockQueues.set(key, q);
+      });
+    }
+    heldLocks.add(key);
+  };
+
+  const releaseLock = (key: string) => {
+    heldLocks.delete(key);
+    const q = advisoryLockQueues.get(key);
+    if (q && q.length > 0) {
+      const next = q.shift()!;
+      next();
+    }
+  };
 
   const executeQuery = async (text: string, params: any[] = []) => {
     const cleanSql = text.trim();
@@ -33,42 +54,49 @@ function createInMemoryPgPool() {
     // SELECT pg_advisory_xact_lock
     if (cleanSql.includes("pg_advisory_xact_lock")) {
       const lockKey = String(params[0]);
-      activeAdvisoryLocks.add(lockKey);
+      await acquireLock(lockKey);
       return { rows: [{ locked: true }], rowCount: 1 };
     }
 
     // INSERT INTO recording_legal_holds
     if (cleanSql.includes("INSERT INTO recording_legal_holds")) {
+      const hasRefNum = cleanSql.includes("reference_number");
       const id = params[0];
+      const refNum = hasRefNum ? params[1] : undefined;
+      const offset = hasRefNum ? 1 : 0;
+
       const record = {
         id,
-        tenant_id: params[1],
-        branch_id: params[2],
-        case_number: params[3],
-        reason: params[4],
-        requested_by: params[5],
-        camera_id: params[6],
-        camera_ids: typeof params[7] === "string" ? JSON.parse(params[7]) : (params[7] || []),
-        evidence_package_ids: typeof params[8] === "string" ? JSON.parse(params[8]) : (params[8] || []),
-        start_time: params[9] instanceof Date ? params[9] : new Date(params[9]),
-        end_time: params[10] instanceof Date ? params[10] : new Date(params[10]),
-        from_at: params[9] instanceof Date ? params[9] : new Date(params[9]),
-        to_at: params[10] instanceof Date ? params[10] : new Date(params[10]),
-        review_date: params[11] || null,
-        expiry_date: params[12] || null,
+        reference_number: refNum,
+        tenant_id: params[1 + offset],
+        branch_id: params[2 + offset],
+        case_number: params[3 + offset],
+        reason: params[4 + offset],
+        requested_by: params[5 + offset],
+        camera_id: params[6 + offset],
+        camera_ids: typeof params[7 + offset] === "string" ? JSON.parse(params[7 + offset]) : (params[7 + offset] || []),
+        evidence_package_ids: typeof params[8 + offset] === "string" ? JSON.parse(params[8 + offset]) : (params[8 + offset] || []),
+        start_time: params[9 + offset] instanceof Date ? params[9 + offset] : new Date(params[9 + offset]),
+        end_time: params[10 + offset] instanceof Date ? params[10 + offset] : new Date(params[10 + offset]),
+        from_at: params[9 + offset] instanceof Date ? params[9 + offset] : new Date(params[9 + offset]),
+        to_at: params[10 + offset] instanceof Date ? params[10 + offset] : new Date(params[10 + offset]),
+        review_date: params[11 + offset] || null,
+        expiry_date: params[12 + offset] || null,
         status: "active",
         created_at: new Date(),
       };
       tables.recording_legal_holds.set(id, record);
+      if (refNum) tables.recording_legal_holds.set(refNum, record);
       return { rows: [record], rowCount: 1 };
     }
 
     // SELECT FROM recording_legal_holds
     if (cleanSql.includes("FROM recording_legal_holds")) {
-      let results = Array.from(tables.recording_legal_holds.values());
+      let results = Array.from(new Set(tables.recording_legal_holds.values()));
 
-      if (cleanSql.includes("WHERE id = $1")) {
-        results = results.filter((r) => r.id === params[0]);
+      if (cleanSql.includes("WHERE id = $1") || cleanSql.includes("id = $1 OR reference_number = $1") || cleanSql.includes("FOR UPDATE")) {
+        const target = params[0];
+        results = results.filter((r) => r.id === target || r.reference_number === target || r.case_number === target);
       }
       if (cleanSql.includes("camera_id = $1") || cleanSql.includes("camera_id = $2") || cleanSql.includes("camera_ids")) {
         const cam = params.find((p) => typeof p === "string" && p.startsWith("cam-"));
@@ -186,14 +214,44 @@ function createInMemoryPgPool() {
     return { rows: [], rowCount: 0 };
   };
 
-  const clientMock = {
-    query: executeQuery,
-    release: () => {},
+  const createClient = () => {
+    const clientHeldLocks = new Set<string>();
+
+    const clientQuery = async (text: string, params: any[] = []) => {
+      const cleanSql = text.trim();
+
+      if (cleanSql === "COMMIT" || cleanSql === "ROLLBACK") {
+        for (const k of clientHeldLocks) {
+          releaseLock(k);
+        }
+        clientHeldLocks.clear();
+        return { rows: [], rowCount: 0 };
+      }
+
+      if (cleanSql.includes("pg_advisory_xact_lock")) {
+        const lockKey = String(params[0]);
+        await acquireLock(lockKey);
+        clientHeldLocks.add(lockKey);
+        return { rows: [{ locked: true }], rowCount: 1 };
+      }
+
+      return executeQuery(text, params);
+    };
+
+    return {
+      query: clientQuery,
+      release: () => {
+        for (const k of clientHeldLocks) {
+          releaseLock(k);
+        }
+        clientHeldLocks.clear();
+      },
+    };
   };
 
   const poolMock = {
     query: executeQuery,
-    connect: async () => clientMock,
+    connect: async () => createClient(),
     _tables: tables,
   };
 
@@ -390,32 +448,37 @@ describe("KryptoVision — P0/P1 Forensic Evidence & Production Hardening Test S
   });
 
   // --------------------------------------------------------------------------
-  // Test 4 — Concurrent custody writers
+  // Test 4 — Concurrent custody writers (P0.12 True Concurrency Test)
   // --------------------------------------------------------------------------
   it("Test 4: Concurrent custody writers are strictly ordered and do not fork or duplicate sequence", async () => {
     const evidenceId = "evid-concurrent-test";
     const repo = new EvidenceRepository(sharedPgPool);
 
-    // Launch sequential/concurrent appends
-    for (let i = 0; i < 5; i++) {
-      await repo.appendCustodyEvent({
+    // Launch 20 concurrent writers simultaneously using Promise.all
+    const writerCount = 20;
+    const writers = Array.from({ length: writerCount }, (_, i) => {
+      return repo.appendCustodyEvent({
         evidenceId,
         eventType: "ACCESS_AUDIT" as any,
-        actor: `worker-${i}`,
+        actor: `concurrent-worker-${i}`,
         actorType: "SERVICE",
-        reason: `Concurrent audit log ${i}`,
+        reason: `Concurrent custody event append by worker ${i}`,
       });
-    }
+    });
+
+    const results = await Promise.all(writers);
+    expect(results).toHaveLength(writerCount);
 
     const verification = await repo.verifyCustodyChain(evidenceId);
     expect(verification.valid).toBe(true);
-    expect(verification.eventCount).toBe(5);
+    expect(verification.eventCount).toBe(writerCount);
 
     const history = await repo.getCustodyHistory(evidenceId);
     const sequences = history.map((e) => e.sequence);
-    expect(sequences).toEqual([1, 2, 3, 4, 5]);
+    const expectedSequences = Array.from({ length: writerCount }, (_, i) => i + 1);
+    expect(sequences).toEqual(expectedSequences);
 
-    // Ensure strictly unique sequences and no forks
+    // Ensure strictly unique sequences, unbroken hash chain, and no forks
     for (let i = 1; i < history.length; i++) {
       expect(history[i].previousHash).toBe(history[i - 1].eventHash);
     }

@@ -3180,7 +3180,16 @@ function startExportWorker(
   pool: any,
 ) {
   const interval = parseInt(process.env.EXPORT_WORKER_INTERVAL || "10000", 10);
-  
+
+  // Recover any jobs left in-flight from previous crash
+  worker.recoverIncompleteJobs().then((count) => {
+    if (count > 0) {
+      app.log.warn({ recoveredJobs: count }, "Recovered incomplete export jobs interrupted by worker crash/restart");
+    }
+  }).catch((error) => {
+    app.log.error({ error }, "Failed to recover incomplete export jobs");
+  });
+
   const processExports = async () => {
     try {
       const pending = await pool.query(

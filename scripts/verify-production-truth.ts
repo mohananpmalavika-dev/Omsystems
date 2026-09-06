@@ -10,7 +10,7 @@
  */
 
 import { readdir, readFile, stat } from "node:fs/promises";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 interface Violation {
   file: string;
@@ -75,7 +75,14 @@ async function collectFiles(dir: string, baseDir: string): Promise<string[]> {
 
 async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]> {
   const violations: Violation[] = [];
-  const content = await readFile(join(baseDir, relPath), "utf-8");
+  const filePath = resolve(baseDir, relPath);
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf-8");
+  } catch (err: any) {
+    if (err.code === "ENOENT") return [];
+    throw err;
+  }
   const lines = content.split("\n");
 
   for (let i = 0; i < lines.length; i++) {

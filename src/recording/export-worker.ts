@@ -1113,18 +1113,38 @@ export class ExportWorker {
   }
 
   /**
-   * Recovers jobs interrupted by process crash. Ensures no job stays indefinitely 'processing'.
+   * P1.5 Crash Recovery: On startup or worker restart, scan for jobs left in-flight
+   * (status in 'processing', 'transcoding', 'packaging', 'signing') due to worker crash
+   * or power loss, and transition them to 'failed' with explicit forensic audit trails,
+   * preventing jobs from remaining indefinitely stuck in 'processing'.
    */
   async recoverIncompleteJobs(): Promise<number> {
     const result = await this.pool.query(
-      `UPDATE forensic_export_jobs
-       SET status = 'failed',
-           error_message = 'Export worker restarted while job was in progress; marked failed for recovery',
-           updated_at = now()
-       WHERE status IN ('processing', 'transcoding', 'packaging', 'signing')
-       RETURNING id`,
+      `SELECT id, case_id, status FROM forensic_export_jobs
+       WHERE status IN ('processing', 'transcoding', 'packaging', 'signing')`,
     );
-    return result.rowCount || 0;
+
+    for (const row of result.rows) {
+      await this.pool.query(
+        `UPDATE forensic_export_jobs
+         SET status = 'failed',
+             error_message = 'WORKER_CRASH_RECOVERY: Interrupted by worker restart or crash during state ' || $2,
+             updated_at = now()
+         WHERE id = $1`,
+        [row.id, row.status],
+      );
+
+      try {
+        await this.recordCustodyEvent({
+          evidenceId: row.case_id,
+          action: "worker_crash_recovered",
+          performedBy: "system",
+          reason: `Export job ${row.id} recovered after worker crash during state ${row.status}`,
+        });
+      } catch {}
+    }
+
+    return result.rows.length;
   }
 
   async getExportJob(jobId: string): Promise<ExportJob | undefined> {
