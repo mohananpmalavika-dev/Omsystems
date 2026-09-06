@@ -72,7 +72,21 @@ export function VmsObservabilityView() {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 text-sm text-rose-200">{error}</div>}
+      {error && <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200"><AlertTriangle size={18} /> {error}. Verify metrics endpoint and connectivity.</div>}
+
+      {/* Operational Trust Banner */}
+      <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300">Operational trust</p>
+            <h2 className="mt-1 text-base font-bold text-slate-100">VMS observability is live and streaming</h2>
+          </div>
+          {!error && <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-[11px] font-medium text-emerald-200"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Prometheus metrics active</div>}
+        </div>
+        <p className="mt-2 text-xs text-slate-300">
+          Real-time performance data from Sentinel Grid and VMS infrastructure. Use these metrics to monitor system health, capacity, and operational stress under live conditions.
+        </p>
+      </div>
 
       {/* Observability Header & Tab Controls */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
