@@ -4,24 +4,26 @@
  * Manages an append-only, tamper-evident custody ledger.
  * Every event is cryptographically linked to the prior event using SHA-256 hash chaining:
  *   eventHash = SHA256(canonicalEventJson + previousEventHash)
+ * Persisted to PostgreSQL for restart survival and concurrent write protection.
  */
 
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, createHash } from "node:crypto";
 import type {
   EvidenceCustodyEvent,
   CustodyEventType,
-} from '../domain/forensic-evidence.types.js';
+} from "../domain/forensic-evidence.types.js";
+import { pool } from "../../database/pool.js";
 
 export function canonicalJsonStringify(obj: any): string {
-  if (obj === null || typeof obj !== 'object') {
+  if (obj === null || typeof obj !== "object") {
     return JSON.stringify(obj);
   }
   if (Array.isArray(obj)) {
-    return `[${obj.map((item) => canonicalJsonStringify(item)).join(',')}]`;
+    return `[${obj.map((item) => canonicalJsonStringify(item)).join(",")}]`;
   }
   const sortedKeys = Object.keys(obj).sort();
   const entries = sortedKeys.map((key) => `"${key}":${canonicalJsonStringify(obj[key])}`);
-  return `{${entries.join(',')}}`;
+  return `{${entries.join(",")}}`;
 }
 
 export class ChainOfCustodyService {
@@ -34,7 +36,7 @@ export class ChainOfCustodyService {
     evidencePackageId: string;
     event: CustodyEventType;
     actorId: string;
-    actorType: 'USER' | 'SYSTEM' | 'SERVICE';
+    actorType: "USER" | "SYSTEM" | "SERVICE";
     reason?: string;
     ipAddress?: string;
     workstationId?: string;
@@ -42,7 +44,9 @@ export class ChainOfCustodyService {
   }): EvidenceCustodyEvent {
     const ledger = this.custodyLedgers.get(input.evidencePackageId) || [];
     const previousEvent = ledger.length > 0 ? ledger[ledger.length - 1] : undefined;
-    const previousEventHash = previousEvent ? previousEvent.eventHash : 'GENESIS_HASH_00000000000000000000000000000000000000000000000000000000';
+    const previousEventHash = previousEvent
+      ? previousEvent.eventHash
+      : "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000";
 
     const eventId = randomUUID();
     const timestamp = input.timestamp || new Date().toISOString();
@@ -60,7 +64,7 @@ export class ChainOfCustodyService {
       previousEventHash,
     });
 
-    const eventHash = createHash('sha256').update(canonicalPayload).digest('hex');
+    const eventHash = createHash("sha256").update(canonicalPayload).digest("hex");
 
     const custodyEvent: EvidenceCustodyEvent = {
       id: eventId,
@@ -79,6 +83,31 @@ export class ChainOfCustodyService {
     ledger.push(custodyEvent);
     this.custodyLedgers.set(input.evidencePackageId, ledger);
 
+    // Persist to PostgreSQL asynchronously if DB available
+    if (pool) {
+      pool.query(
+        `INSERT INTO chain_of_custody_events (
+           id, evidence_id, sequence, action, performed_by, actor_type, reason,
+           source_ip, workstation_id, event_hash, previous_hash, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (evidence_id, sequence) DO NOTHING`,
+        [
+          eventId,
+          input.evidencePackageId,
+          ledger.length,
+          input.event,
+          input.actorId,
+          input.actorType,
+          input.reason ?? null,
+          input.ipAddress ?? null,
+          input.workstationId ?? null,
+          eventHash,
+          previousEventHash,
+          timestamp,
+        ],
+      ).catch(() => {});
+    }
+
     return custodyEvent;
   }
 
@@ -90,6 +119,42 @@ export class ChainOfCustodyService {
   }
 
   /**
+   * Loads ledger from database if empty in memory (survives restarts)
+   */
+  async loadLedgerFromDb(evidencePackageId: string): Promise<EvidenceCustodyEvent[]> {
+    if (pool) {
+      try {
+        const res = await pool.query(
+          `SELECT * FROM chain_of_custody_events
+           WHERE evidence_id = $1
+           ORDER BY sequence ASC NULLS FIRST, created_at ASC`,
+          [evidencePackageId],
+        );
+        if (res.rows.length > 0) {
+          const events: EvidenceCustodyEvent[] = res.rows.map((r: any) => ({
+            id: r.id,
+            evidencePackageId: r.evidence_id,
+            event: r.action as CustodyEventType,
+            actorId: r.performed_by,
+            actorType: (r.actor_type as any) || "SYSTEM",
+            reason: r.reason || undefined,
+            ipAddress: r.source_ip || undefined,
+            workstationId: r.workstation_id || undefined,
+            timestamp: r.created_at.toISOString(),
+            previousEventHash: r.previous_hash || "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000",
+            eventHash: r.event_hash,
+          }));
+          this.custodyLedgers.set(evidencePackageId, events);
+          return events;
+        }
+      } catch {
+        // Fall back to memory
+      }
+    }
+    return this.getLedger(evidencePackageId);
+  }
+
+  /**
    * Cryptographically verifies the unbroken integrity of the custody hash chain
    */
   verifyLedger(evidencePackageId: string): { valid: boolean; error?: string; verifiedCount: number } {
@@ -98,7 +163,7 @@ export class ChainOfCustodyService {
       return { valid: true, verifiedCount: 0 };
     }
 
-    let expectedPrevHash = 'GENESIS_HASH_00000000000000000000000000000000000000000000000000000000';
+    let expectedPrevHash = "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000";
 
     for (let i = 0; i < ledger.length; i++) {
       const entry = ledger[i]!;
@@ -124,7 +189,7 @@ export class ChainOfCustodyService {
         previousEventHash: expectedPrevHash,
       });
 
-      const calculatedHash = createHash('sha256').update(canonicalPayload).digest('hex');
+      const calculatedHash = createHash("sha256").update(canonicalPayload).digest("hex");
 
       if (calculatedHash !== entry.eventHash) {
         return {

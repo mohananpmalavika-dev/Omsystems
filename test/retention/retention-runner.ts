@@ -19,9 +19,11 @@ import {
   type RetentionEvidence,
 } from "../../src/retention/index.js";
 import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 
 async function runRetentionTests() {
-  const app = await buildApp();
+  process.env.NODE_ENV = "test";
+  const app = await buildApp({ store: new MemoryStore() });
   console.log("================================================================================");
   console.log("  RETENTION COMPLIANCE SUBSYSTEM - COMPREHENSIVE VERIFICATION RUNNER");
   console.log("================================================================================\n");
@@ -360,9 +362,8 @@ async function runRetentionTests() {
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);
   console.log("================================================================================\n");
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  await app.close();
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 runRetentionTests().catch((err) => {
