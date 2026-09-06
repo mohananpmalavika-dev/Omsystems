@@ -7,7 +7,6 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Banknote,
   Bell,
   BellRing,
   Boxes,
@@ -125,25 +124,6 @@ export const navigation: NavGroup[] = [
     ],
   },
   {
-    label: "SECURITY DEVICE OPERATIONS",
-    icon: Shield,
-    items: [
-      { label: "Security Device Overview", href: "/security-devices", icon: LayoutGrid },
-      { label: "CCTV & Video Devices", href: "/security-devices?category=video", icon: Camera },
-      { label: "Access Control & Doors", href: "/security-devices?category=access-control", icon: LockKeyhole },
-      { label: "Intrusion & Alarm Systems", href: "/security-devices?category=intrusion", icon: ShieldAlert },
-      { label: "Panic & Emergency Response", href: "/security-devices?category=emergency", icon: Siren },
-      { label: "Fire & Life Safety", href: "/security-devices?category=fire-safety", icon: AlertTriangle },
-      { label: "Vault, Safe & Cash Security", href: "/security-devices?category=vault-cash", icon: Landmark },
-      { label: "ATM Security", href: "/security-devices?category=atm", icon: Banknote },
-      { label: "Power, UPS & Environment", href: "/security-devices?category=power-environment", icon: Activity },
-      { label: "Branch Security Posture", href: "/security-devices/branch-posture", icon: ShieldCheck },
-      { label: "Device Discovery & Enrollment", href: "/security-devices/discovery", icon: Radar },
-      { label: "Device Integrations", href: "/security-devices/integrations", icon: Workflow },
-      { label: "Security Incidents", href: "/incidents?source=security-devices", icon: Siren, badge: "incidents" },
-    ],
-  },
-  {
     label: "HEALTH & HARDWARE LAB",
     icon: HeartPulse,
     items: [
@@ -237,6 +217,7 @@ export const navigation: NavGroup[] = [
       { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
       { label: "AI Quality & Model Registry", href: "/admin/ai-quality", icon: Sparkles },
+      { label: "Automated UI Audit", href: "/admin/qa/ui-audit", icon: Sparkles },
       { label: "Database Tables & Data", href: "/admin/database", icon: Database },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Device Registry & ONVIF", href: "/maintenance/device-management", icon: Server },
@@ -255,13 +236,13 @@ export const navigation: NavGroup[] = [
 
 const unrestrictedRoles = new Set(["super_admin", "company_admin", "hq_admin", "admin", "superadmin"]);
 const roleGroups: Record<string, string[]> = {
-  zone_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  region_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  area_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  branch_manager: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  operator: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK"],
-  security_officer: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "INVESTIGATE & PLAYBACK"],
-  viewer: ["OPERATIONS", "SECURITY DEVICE OPERATIONS", "INVESTIGATE & PLAYBACK"],
+  zone_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  region_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  area_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  branch_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
+  operator: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK"],
+  security_officer: ["OPERATIONS", "INVESTIGATE & PLAYBACK"],
+  viewer: ["OPERATIONS", "INVESTIGATE & PLAYBACK"],
   auditor: ["ASSURANCE & GOVERNANCE", "AUDIT & REPORTING", "INVESTIGATE & PLAYBACK"],
 };
 

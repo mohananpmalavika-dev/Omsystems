@@ -72,6 +72,41 @@ describe("media gateway production boundaries", () => {
     expect(upstream.mock.calls[1]?.[1]).toMatchObject({ headers: { "if-match": '"session"' }, body: "a=candidate:1" });
   });
 
+  it("proxies WHIP publishing with charset suffix and normalizes content-type upstream", async () => {
+    const upstream = vi.fn().mockResolvedValueOnce(new Response("v=0\r\nanswer", {
+      status: 201,
+      headers: {
+        "content-type": "application/sdp",
+        location: "http://127.0.0.1:8889/camera-1/whip/session-1",
+      },
+    }));
+    vi.stubGlobal("fetch", upstream);
+    app = await buildMediaGateway(options());
+    const offer = "v=0\r\no=portable";
+    const result = await app.inject({
+      method: "POST",
+      url: "/webrtc/camera-1/whip",
+      headers: {
+        "content-type": "application/sdp; charset=UTF-8",
+        authorization: "Bearer publisher-token",
+      },
+      payload: offer,
+    });
+    expect(result.statusCode).toBe(201);
+    expect(result.headers.location).toBe("/webrtc/camera-1/whip/session-1");
+    expect(upstream).toHaveBeenCalledWith(
+      new URL("http://127.0.0.1:8889/camera-1/whip"),
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "content-type": "application/sdp",
+          authorization: "Bearer publisher-token",
+        }),
+        body: offer,
+      }),
+    );
+  });
+
   it("preserves HLS range responses and streams segment bytes", async () => {
     const upstream = vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 206, headers: { "content-type": "video/mp2t", "content-range": "bytes 2-4/10", "content-length": "3" } }));
     vi.stubGlobal("fetch", upstream);

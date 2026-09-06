@@ -88,6 +88,8 @@ export class PostgresStore
   private readonly gridLayouts: GridLayoutRepository;
   private readonly operationalReports: OperationalReportRepository;
   private readonly activityTracking: ActivityTrackingRepository;
+  readonly deviceConfigurationJobs: any[] = [];
+  readonly deviceJobSteps: any[] = [];
 
   // Public getter for direct database access (use sparingly)
   get db() {
@@ -2531,5 +2533,126 @@ export class PostgresStore
     endDate: string
   ): Promise<any> {
     return this.activityTracking.getComprehensiveReport(tenantId, userId, startDate, endDate);
+  }
+
+  async createDeviceConfigurationJob(input: {
+    tenantId: string;
+    deviceId: string;
+    jobType: 'credential-rotation' | 'ip-change' | 'template-apply' | 'firmware-upgrade' | 'reboot';
+    requestedBy: string;
+    reason: string;
+    priority: 'low' | 'normal' | 'high' | 'critical';
+    payload: Record<string, any>;
+    status: string;
+    edgeAgentId?: string;
+  }): Promise<any> {
+    const job = {
+      id: randomUUID(),
+      tenantId: input.tenantId,
+      deviceId: input.deviceId,
+      jobType: input.jobType,
+      requestedBy: input.requestedBy,
+      reason: input.reason,
+      priority: input.priority,
+      payload: input.payload,
+      status: input.status,
+      edgeAgentId: input.edgeAgentId,
+      attempts: 0,
+      maxAttempts: 3,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.deviceConfigurationJobs.push(job);
+    return job;
+  }
+
+  async getDeviceConfigurationJob(jobId: string): Promise<any | undefined> {
+    return this.deviceConfigurationJobs.find((j) => j.id === jobId);
+  }
+
+  async listDeviceConfigurationJobs(tenantId: string, filters?: { deviceId?: string; status?: string; limit?: number }): Promise<any[]> {
+    let result = this.deviceConfigurationJobs.filter((j) => !j.tenantId || j.tenantId === tenantId);
+    if (filters?.deviceId) {
+      result = result.filter((j) => j.deviceId === filters.deviceId);
+    }
+    if (filters?.status) {
+      const statuses = filters.status.split(',').map((s) => s.trim());
+      result = result.filter((j) => statuses.includes(j.status));
+    }
+    if (filters?.limit) {
+      result = result.slice(0, filters.limit);
+    }
+    return result;
+  }
+
+  async claimDeviceConfigurationJobs(input: { limit: number; now: string }): Promise<any[]> {
+    const claimed: any[] = [];
+    for (const job of this.deviceConfigurationJobs) {
+      if (job.status === 'queued' && claimed.length < input.limit) {
+        job.status = 'claimed';
+        job.startedAt = input.now;
+        job.updatedAt = input.now;
+        claimed.push(job);
+      }
+    }
+    return claimed;
+  }
+
+  async updateDeviceJobStatus(jobId: string, updates: {
+    status?: string;
+    attempts?: number;
+    error?: string;
+    nextAttemptAt?: string;
+    startedAt?: string;
+    completedAt?: string;
+  }): Promise<any> {
+    const job = this.deviceConfigurationJobs.find((j) => j.id === jobId);
+    if (!job) return null;
+    Object.assign(job, updates, { updatedAt: new Date().toISOString() });
+    return job;
+  }
+
+  async updateDeviceJobResult(jobId: string, result: Record<string, any>): Promise<any> {
+    const job = this.deviceConfigurationJobs.find((j) => j.id === jobId);
+    if (!job) return null;
+    job.result = result;
+    job.updatedAt = new Date().toISOString();
+    return job;
+  }
+
+  async createDeviceJobStep(input: {
+    jobId: string;
+    stepNumber: number;
+    stepName: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+    startedAt?: string;
+  }): Promise<any> {
+    const step = {
+      id: randomUUID(),
+      ...input,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    this.deviceJobSteps.push(step);
+    return step;
+  }
+
+  async completeDeviceJobStep(input: {
+    jobId: string;
+    stepNumber: number;
+    status: 'completed' | 'failed' | 'skipped';
+    completedAt: string;
+    durationMs?: number;
+    result?: Record<string, any>;
+    error?: string;
+  }): Promise<any> {
+    const step = this.deviceJobSteps.find((s) => s.jobId === input.jobId && s.stepNumber === input.stepNumber);
+    if (!step) return null;
+    Object.assign(step, input, { updatedAt: new Date().toISOString() });
+    return step;
+  }
+
+  async listDeviceJobSteps(jobId: string): Promise<any[]> {
+    return this.deviceJobSteps.filter((s) => s.jobId === jobId).sort((a, b) => a.stepNumber - b.stepNumber);
   }
 }

@@ -6,6 +6,7 @@ RUN npm install --legacy-peer-deps && cd dashboard && npm install --legacy-peer-
 COPY packages/ ./packages/
 COPY src/ ./src/
 COPY backend/ ./backend/
+COPY qa-engine/ ./qa-engine/
 COPY dashboard/ ./dashboard/
 WORKDIR /app/dashboard
 ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080

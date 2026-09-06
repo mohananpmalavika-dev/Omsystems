@@ -27,7 +27,8 @@ import {
   ArrowRight,
   Check,
   Siren,
-  Loader2
+  Loader2,
+  ShieldX
 } from "lucide-react";
 import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from "@/lib/types";
 
@@ -41,8 +42,12 @@ export default function AiAlertsIncidentHubPage() {
   const [zoneFilter, setZoneFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [conversionFilter, setConversionFilter] = useState<"all" | "unconverted" | "converted">("all");
+  const [conversionFilter, setConversionFilter] = useState<"all" | "unconverted" | "converted" | "false_alarm">("all");
   const [convertingId, setConvertingId] = useState<string | null>(null);
+  const [markingFalseAlert, setMarkingFalseAlert] = useState<AnalyticsAlert | null>(null);
+  const [falseAlarmReasonChoice, setFalseAlarmReasonChoice] = useState("False detection / algorithm misclassification");
+  const [falseAlarmNotes, setFalseAlarmNotes] = useState("");
+  const [submittingFalseAlarm, setSubmittingFalseAlarm] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
 
   // Media modal state
@@ -102,8 +107,9 @@ export default function AiAlertsIncidentHubPage() {
       if (zoneFilter !== "all" && alert.zoneName !== zoneFilter) return false;
       if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
       if (statusFilter !== "all" && alert.status !== statusFilter) return false;
-      if (conversionFilter === "unconverted" && (alert.incidentId || alert.incidentNumber)) return false;
+      if (conversionFilter === "unconverted" && (alert.incidentId || alert.incidentNumber || ["resolved", "false_alarm", "suppressed"].includes(alert.status))) return false;
       if (conversionFilter === "converted" && !alert.incidentId && !alert.incidentNumber) return false;
+      if (conversionFilter === "false_alarm" && alert.status !== "false_alarm") return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -112,7 +118,8 @@ export default function AiAlertsIncidentHubPage() {
         const matchBranch = alert.branchName?.toLowerCase().includes(q);
         const matchZone = alert.zoneName?.toLowerCase().includes(q);
         const matchIncident = alert.incidentNumber?.toLowerCase().includes(q);
-        if (!matchTitle && !matchCamera && !matchBranch && !matchZone && !matchIncident) return false;
+        const matchFalseReason = alert.falseAlarmReason?.toLowerCase().includes(q);
+        if (!matchTitle && !matchCamera && !matchBranch && !matchZone && !matchIncident && !matchFalseReason) return false;
       }
 
       return true;
@@ -130,9 +137,12 @@ export default function AiAlertsIncidentHubPage() {
     const total = isFiltered ? target.length : (summary?.total ?? target.length);
     const active = target.filter((a) => !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
     const converted = target.filter((a) => Boolean(a.incidentId || a.incidentNumber)).length;
-    const unconverted = target.filter((a) => !a.incidentId && !a.incidentNumber).length;
+    const unconverted = target.filter((a) => !a.incidentId && !a.incidentNumber && !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
     const critical = target.filter((a) => a.severity === "P1" || a.severity === "P2").length;
-    return { total, active, converted, unconverted, critical };
+    const falseAlarms = isFiltered
+      ? target.filter((a) => a.status === "false_alarm").length
+      : (summary?.falseAlarms ?? target.filter((a) => a.status === "false_alarm").length);
+    return { total, active, converted, unconverted, critical, falseAlarms };
   }, [isFiltered, summary, filteredAlerts, alerts]);
 
   // Convert to incident handler
@@ -180,6 +190,58 @@ export default function AiAlertsIncidentHubPage() {
     }
   };
 
+  // Mark as false alarm handler
+  const handleMarkFalseAlarm = async (alertId: string, reason: string, notes?: string) => {
+    setSubmittingFalseAlarm(true);
+    setActionMessage(null);
+    try {
+      const res = await fetch(`/api/control/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "false_alarm",
+          falseAlarmReason: reason,
+          ...(notes ? { notes } : {}),
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || errData.error || `HTTP ${res.status}`);
+      }
+
+      setActionMessage({
+        kind: "success",
+        text: `Alert successfully marked as False Alarm: ${reason}`,
+      });
+
+      // Update local state immediately
+      setAlerts((prev) =>
+        prev.map((a) =>
+          a.id === alertId
+            ? { ...a, status: "false_alarm", falseAlarmReason: reason }
+            : a
+        )
+      );
+
+      if (activeMediaAlert && activeMediaAlert.id === alertId) {
+        setActiveMediaAlert((prev) => (prev ? { ...prev, status: "false_alarm", falseAlarmReason: reason } : null));
+      }
+
+      setMarkingFalseAlert(null);
+      setTimeout(loadAlerts, 1000);
+    } catch (err: any) {
+      console.error("Failed to mark false alarm:", err);
+      setActionMessage({
+        kind: "error",
+        text: `Failed to mark false alarm: ${err.message || "Unknown error"}`,
+      });
+      throw err;
+    } finally {
+      setSubmittingFalseAlarm(false);
+    }
+  };
+
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
       case "P1":
@@ -208,7 +270,7 @@ export default function AiAlertsIncidentHubPage() {
       case "resolved":
         return "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
       case "false_alarm":
-        return "bg-slate-700/40 text-slate-400 border-slate-700";
+        return "bg-rose-950/40 text-rose-300 border-rose-800/50";
       default:
         return "bg-slate-800 text-slate-300 border-slate-700";
     }
@@ -271,7 +333,7 @@ export default function AiAlertsIncidentHubPage() {
         )}
 
         {/* Stats Strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <button
             onClick={() => setConversionFilter("all")}
             className={`p-4 rounded-xl border text-left transition-all ${
@@ -321,6 +383,25 @@ export default function AiAlertsIncidentHubPage() {
             </div>
             <div className="text-2xl font-bold text-indigo-300 mt-1">{stats.converted}</div>
             <div className="text-[11px] text-indigo-500/80 mt-0.5">In Incident Report</div>
+          </button>
+
+          <button
+            onClick={() => {
+              setConversionFilter("false_alarm");
+              setStatusFilter("all");
+            }}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              conversionFilter === "false_alarm"
+                ? "bg-rose-950/50 border-rose-500/60 shadow-md ring-1 ring-rose-500/40"
+                : "bg-slate-900/60 border-slate-800 hover:bg-slate-800/50"
+            }`}
+          >
+            <div className="text-xs font-medium text-rose-400 flex items-center justify-between">
+              <span>False Alarms</span>
+              <ShieldX className="h-3.5 w-3.5" />
+            </div>
+            <div className="text-2xl font-bold text-rose-300 mt-1">{stats.falseAlarms}</div>
+            <div className="text-[11px] text-rose-400/70 mt-0.5">Dismissed & audited</div>
           </button>
 
           <div className="p-4 rounded-xl border bg-slate-900/60 border-slate-800">
@@ -436,6 +517,14 @@ export default function AiAlertsIncidentHubPage() {
               >
                 Converted
               </button>
+              <button
+                onClick={() => setConversionFilter("false_alarm")}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  conversionFilter === "false_alarm" ? "bg-rose-600 text-white font-semibold" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                False Alarms
+              </button>
             </div>
           </div>
         </div>
@@ -532,11 +621,35 @@ export default function AiAlertsIncidentHubPage() {
                               <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
                                 <span>{Math.round(alert.confidence * 100)}% match</span>
                                 <span>•</span>
-                                <span className="flex items-center gap-1">
+                                <span
+                                  className="flex items-center gap-1"
+                                  title={
+                                    alert.occurrenceCount && alert.occurrenceCount > 1 && alert.lastDetectedAt
+                                      ? `Triggered: ${new Date(alert.firstDetectedAt || alert.createdAt).toLocaleString()}\nLatest occurrence: ${new Date(alert.lastDetectedAt).toLocaleString()} (${alert.occurrenceCount} detections)`
+                                      : `Detected at: ${new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleString()}`
+                                  }
+                                >
                                   <Clock className="h-3 w-3 text-slate-500" />
-                                  <span>{new Date(alert.lastDetectedAt || alert.firstDetectedAt).toLocaleTimeString()}</span>
+                                  <span>{new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleTimeString()}</span>
                                 </span>
+                                {alert.occurrenceCount && alert.occurrenceCount > 1 && (
+                                  <>
+                                    <span>•</span>
+                                    <span
+                                      className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60 font-mono"
+                                      title={`Repeated ${alert.occurrenceCount} times (latest at ${new Date(alert.lastDetectedAt).toLocaleTimeString()})`}
+                                    >
+                                      {alert.occurrenceCount}x
+                                    </span>
+                                  </>
+                                )}
                               </div>
+                              {alert.falseAlarmReason && (
+                                <div className="flex items-center gap-1.5 text-[11px] text-rose-400 font-medium mt-1">
+                                  <ShieldX className="h-3 w-3 text-rose-400 flex-shrink-0" />
+                                  <span className="italic truncate">{alert.falseAlarmReason}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -600,7 +713,7 @@ export default function AiAlertsIncidentHubPage() {
                           </div>
                         </td>
 
-                        {/* Action Column (Incident Conversion) */}
+                        {/* Action Column */}
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           {isConverted ? (
                             <Link
@@ -611,24 +724,43 @@ export default function AiAlertsIncidentHubPage() {
                               <span>View Incident</span>
                               <ArrowRight className="h-3 w-3" />
                             </Link>
+                          ) : alert.status === "false_alarm" ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/40 text-xs font-medium">
+                              <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                              <span>False Alarm</span>
+                            </span>
                           ) : (
-                            <button
-                              type="button"
-                              disabled={isConverting}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleConvertIncident(alert.id);
-                              }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition-colors"
-                              title="Convert this alert into an Incident"
-                            >
-                              {isConverting ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-3 w-3" />
-                              )}
-                              <span>Convert to Incident</span>
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setMarkingFalseAlert(alert);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors shadow-sm"
+                                title="Mark as False Alarm"
+                              >
+                                <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                                <span>False Alarm</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isConverting}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConvertIncident(alert.id);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition-colors"
+                                title="Convert this alert into an Incident"
+                              >
+                                {isConverting ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-3 w-3" />
+                                )}
+                                <span>Convert</span>
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -648,6 +780,100 @@ export default function AiAlertsIncidentHubPage() {
           </div>
         </div>
 
+        {/* Modal: Dismiss as False Alarm */}
+        {markingFalseAlert && (
+          <div
+            className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+            onClick={() => setMarkingFalseAlert(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl space-y-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 flex-shrink-0">
+                  <ShieldX className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Dismiss Alert as False Alarm</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Classify this detection as a false positive for audit trail and algorithm tuning.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-1">
+                <div className="flex items-center justify-between text-slate-300 font-semibold">
+                  <span>{markingFalseAlert.title}</span>
+                  <span className="font-mono text-[11px] text-slate-400">{markingFalseAlert.severity}</span>
+                </div>
+                <div className="text-slate-500 flex items-center gap-2">
+                  <span>Camera: {markingFalseAlert.cameraName || markingFalseAlert.cameraId.slice(0, 8)}</span>
+                  <span>•</span>
+                  <span>Branch: {markingFalseAlert.branchName || "Main"}</span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    False Alarm Categorization <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={falseAlarmReasonChoice}
+                    onChange={(e) => setFalseAlarmReasonChoice(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="False detection / algorithm misclassification">False detection / algorithm misclassification</option>
+                    <option value="Environmental factors (lighting, shadows, reflections)">Environmental factors (lighting, shadows, reflections)</option>
+                    <option value="Authorized / routine permitted activity">Authorized / routine permitted activity</option>
+                    <option value="Informational sensor / counting metric">Informational sensor / counting metric</option>
+                    <option value="Sensor calibration / testing">Sensor calibration / testing</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Operator Notes & Context (Optional)
+                  </label>
+                  <textarea
+                    value={falseAlarmNotes}
+                    onChange={(e) => setFalseAlarmNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Add context on why this alert is considered a false alarm..."
+                    className="w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setMarkingFalseAlert(null)}
+                  disabled={submittingFalseAlarm}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingFalseAlarm}
+                  onClick={() => handleMarkFalseAlarm(markingFalseAlert.id, falseAlarmReasonChoice, falseAlarmNotes)}
+                  className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow"
+                >
+                  {submittingFalseAlarm ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <ShieldX className="h-4 w-4" />
+                  )}
+                  <span>Confirm False Alarm</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Unified Media Modal */}
         {activeMediaAlert && (
           <IncidentMediaModal
@@ -655,21 +881,23 @@ export default function AiAlertsIncidentHubPage() {
             onClose={() => setActiveMediaAlert(null)}
             imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
             snapshotUrl={`/api/control/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
-            videoUrl={activeMediaAlert.videoClipUrl || `/api/control/v1/analytics/alerts/${activeMediaAlert.id}/clip`}
+            videoUrl={activeMediaAlert.videoClipUrl || ("/api/control/v1/analytics/alerts/" + activeMediaAlert.id + "/clip")}
             title={activeMediaAlert.title}
             cameraName={activeMediaAlert.cameraName}
             cameraId={activeMediaAlert.cameraId}
             branchName={activeMediaAlert.branchName}
             zoneName={activeMediaAlert.zoneName}
-            timestamp={activeMediaAlert.lastDetectedAt || activeMediaAlert.firstDetectedAt}
+            timestamp={activeMediaAlert.firstDetectedAt || activeMediaAlert.createdAt || activeMediaAlert.lastDetectedAt}
             severity={activeMediaAlert.severity}
             confidence={activeMediaAlert.confidence}
             alertId={activeMediaAlert.id}
             incidentId={activeMediaAlert.incidentId}
             incidentNumber={activeMediaAlert.incidentNumber}
             status={activeMediaAlert.status}
+            falseAlarmReason={activeMediaAlert.falseAlarmReason}
             initialTab={mediaModalTab}
             onConvertToIncident={handleConvertIncident}
+            onMarkFalseAlarm={handleMarkFalseAlarm}
           />
         )}
       </div>

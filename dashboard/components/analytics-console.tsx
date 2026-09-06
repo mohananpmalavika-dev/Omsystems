@@ -434,7 +434,7 @@ export function AnalyticsConsole() {
                   </div>
                   <p>{cameraById.get(alert.cameraId)?.name ?? "Camera"} · {Math.round(alert.confidence * 100)}% confidence · {alert.modelVersion}</p>
                   <div className="alert-meta">
-                    <span><Clock3 size={12} />{new Date(alert.lastDetectedAt).toLocaleString()}</span>
+                    <span><Clock3 size={12} />{new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleString()}</span>
                     {alert.occurrenceCount > 1 && <span>{alert.occurrenceCount} occurrences</span>}
                     {alert.objectClasses.length > 0 && <span><UsersRound size={12} />{alert.objectClasses.join(", ")}</span>}
                     {alert.incidentId && <span className="protected"><ShieldCheck size={12} />Evidence protected</span>}

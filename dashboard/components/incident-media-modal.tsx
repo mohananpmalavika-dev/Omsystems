@@ -21,7 +21,8 @@ import {
   Sparkles,
   ExternalLink,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  ShieldX
 } from "lucide-react";
 
 export interface IncidentMediaModalProps {
@@ -43,7 +44,9 @@ export interface IncidentMediaModalProps {
   incidentId?: string | null;
   incidentNumber?: string | null;
   status?: string | null;
+  falseAlarmReason?: string | null;
   onConvertToIncident?: (alertId: string) => Promise<void>;
+  onMarkFalseAlarm?: (alertId: string, reason: string, notes?: string) => Promise<void>;
   initialTab?: "image" | "video";
 }
 
@@ -66,7 +69,9 @@ export function IncidentMediaModal({
   incidentId,
   incidentNumber,
   status,
+  falseAlarmReason,
   onConvertToIncident,
+  onMarkFalseAlarm,
   initialTab = "image",
 }: IncidentMediaModalProps) {
   const [activeTab, setActiveTab] = useState<"image" | "video">(initialTab);
@@ -79,6 +84,12 @@ export function IncidentMediaModal({
   const [isMuted, setIsMuted] = useState(true);
   const [converting, setConverting] = useState(false);
   const [convertedIncidentNum, setConvertedIncidentNum] = useState<string | null>(incidentNumber ?? null);
+  const [localStatus, setLocalStatus] = useState<string | null>(status ?? null);
+  const [localFalseAlarmReason, setLocalFalseAlarmReason] = useState<string | null>(falseAlarmReason ?? null);
+  const [showFalseAlarmDialog, setShowFalseAlarmDialog] = useState(false);
+  const [falseAlarmReasonChoice, setFalseAlarmReasonChoice] = useState("False detection / algorithm misclassification");
+  const [falseAlarmNotes, setFalseAlarmNotes] = useState("");
+  const [submittingFalseAlarm, setSubmittingFalseAlarm] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -92,6 +103,10 @@ export function IncidentMediaModal({
       setVideoError(false);
       setIsPlaying(false);
       setConvertedIncidentNum(incidentNumber ?? null);
+      setLocalStatus(status ?? null);
+      setLocalFalseAlarmReason(falseAlarmReason ?? null);
+      setShowFalseAlarmDialog(false);
+      setSubmittingFalseAlarm(false);
 
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape") onClose();
@@ -99,7 +114,7 @@ export function IncidentMediaModal({
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }
-  }, [isOpen, imageUrl, videoUrl, initialTab, incidentNumber, onClose]);
+  }, [isOpen, imageUrl, videoUrl, initialTab, incidentNumber, status, falseAlarmReason, onClose]);
 
   if (!isOpen) return null;
 
@@ -133,6 +148,21 @@ export function IncidentMediaModal({
       console.error("Failed to convert incident:", err);
     } finally {
       setConverting(false);
+    }
+  };
+
+  const handleConfirmFalseAlarm = async () => {
+    if (!alertId || !onMarkFalseAlarm || submittingFalseAlarm) return;
+    setSubmittingFalseAlarm(true);
+    try {
+      await onMarkFalseAlarm(alertId, falseAlarmReasonChoice, falseAlarmNotes);
+      setLocalStatus("false_alarm");
+      setLocalFalseAlarmReason(falseAlarmReasonChoice);
+      setShowFalseAlarmDialog(false);
+    } catch (err) {
+      console.error("Failed to mark as false alarm:", err);
+    } finally {
+      setSubmittingFalseAlarm(false);
     }
   };
 
@@ -194,6 +224,12 @@ export function IncidentMediaModal({
                     <span>{convertedIncidentNum || incidentNumber || "Converted"}</span>
                   </span>
                 )}
+                {localStatus === "false_alarm" && (
+                  <span className="text-xs px-2 py-0.5 rounded font-mono font-semibold bg-rose-950/70 border border-rose-700/40 text-rose-300 flex items-center gap-1">
+                    <ShieldX className="h-3 w-3 text-rose-400" />
+                    <span>False Alarm{localFalseAlarmReason ? `: ${localFalseAlarmReason}` : ""}</span>
+                  </span>
+                )}
               </h2>
               <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400 mt-0.5">
                 {zoneName && (
@@ -219,8 +255,22 @@ export function IncidentMediaModal({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+            {/* Mark as False Alarm Button */}
+            {!convertedIncidentNum && !incidentId && localStatus !== "false_alarm" && localStatus !== "resolved" && onMarkFalseAlarm && alertId && (
+              <button
+                type="button"
+                onClick={() => setShowFalseAlarmDialog(true)}
+                disabled={submittingFalseAlarm}
+                className="px-3 py-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm"
+                title="Mark this detection as a False Alarm"
+              >
+                <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                <span>Mark as False Alarm</span>
+              </button>
+            )}
+
             {/* Convert to Incident Button */}
-            {!convertedIncidentNum && !incidentId && onConvertToIncident && alertId && (
+            {!convertedIncidentNum && !incidentId && localStatus !== "false_alarm" && onConvertToIncident && alertId && (
               <button
                 onClick={handleConvert}
                 disabled={converting}
@@ -403,6 +453,83 @@ export function IncidentMediaModal({
             </div>
           )}
         </div>
+
+        {/* Dismiss as False Alarm Dialog Overlay */}
+        {showFalseAlarmDialog && (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400">
+                  <ShieldX className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-100">Dismiss Alert as False Alarm</h3>
+                  <p className="text-xs text-slate-400">Classify this detection as a false positive</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    False Alarm Categorization <span className="text-rose-400">*</span>
+                  </label>
+                  <select
+                    value={falseAlarmReasonChoice}
+                    onChange={(e) => setFalseAlarmReasonChoice(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="False detection / algorithm misclassification">False detection / algorithm misclassification</option>
+                    <option value="Environmental factors (lighting, shadows, reflections)">Environmental factors (lighting, shadows, reflections)</option>
+                    <option value="Authorized / routine permitted activity">Authorized / routine permitted activity</option>
+                    <option value="Informational sensor / counting metric">Informational sensor / counting metric</option>
+                    <option value="Sensor calibration / testing">Sensor calibration / testing</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Operator Notes & Justification (Optional)
+                  </label>
+                  <textarea
+                    value={falseAlarmNotes}
+                    onChange={(e) => setFalseAlarmNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Enter observation details, reason for dismissal, or environmental context..."
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowFalseAlarmDialog(false)}
+                  disabled={submittingFalseAlarm}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmFalseAlarm}
+                  disabled={submittingFalseAlarm}
+                  className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow"
+                >
+                  {submittingFalseAlarm ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ShieldX className="h-3.5 w-3.5" />
+                  )}
+                  <span>Confirm False Alarm</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer info banner */}
         <div className="flex items-center justify-between border-t border-slate-800/90 px-6 py-3 bg-slate-950/90 text-xs text-slate-400">
