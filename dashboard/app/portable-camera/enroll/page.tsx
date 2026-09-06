@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { portableDeviceHeaders, readPortableDevice, type EnrolledPortableDevice } from "@/lib/portable-device";
 import {
   Camera,
   Video,
@@ -30,7 +31,7 @@ export default function PortableCameraEnrollPage() {
 
   // Enrollment & Device Info
   const [enrollmentInfo, setEnrollmentInfo] = useState<any>(null);
-  const [enrolledDevice, setEnrolledDevice] = useState<{ id: string; cameraId: string; branchId?: string } | null>(null);
+  const [enrolledDevice, setEnrolledDevice] = useState<EnrolledPortableDevice | null>(null);
   const [deviceName, setDeviceName] = useState<string>("");
   const [deviceType, setDeviceType] = useState<"ANDROID" | "IOS" | "WINDOWS" | "BROWSER">("BROWSER");
   const [allowMic, setAllowMic] = useState<boolean>(true);
@@ -57,6 +58,21 @@ export default function PortableCameraEnrollPage() {
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const telemetryTimerRef = useRef<any>(null);
   const durationTimerRef = useRef<any>(null);
+  const enrolledDeviceRef = useRef<EnrolledPortableDevice | null>(null);
+  const activeSessionRef = useRef<string | null>(null);
+
+  // Cleanup must run even when an enrolled device is restored from the cache.
+  useEffect(() => () => {
+    cleanupStream();
+    const device = enrolledDeviceRef.current;
+    const sessionId = activeSessionRef.current;
+    if (device && sessionId) {
+      void fetch(`/api/portable-camera/sessions/${encodeURIComponent(sessionId)}/stop`, {
+        method: "POST", headers: portableDeviceHeaders(device), keepalive: true,
+        body: JSON.stringify({ reason: "page_closed" }),
+      }).catch(() => undefined);
+    }
+  }, []);
 
   // 1. Detect environment and parse token on mount
   useEffect(() => {
@@ -73,13 +89,18 @@ export default function PortableCameraEnrollPage() {
     const cached = typeof window !== "undefined" ? sessionStorage.getItem(`portable_enrolled_${t}`) : null;
     if (cached) {
       try {
-        const parsed = JSON.parse(cached);
-        if (parsed.id && parsed.cameraId) {
+        const parsed = readPortableDevice(JSON.parse(cached));
+        if (parsed) {
           setEnrolledDevice(parsed);
+          enrolledDeviceRef.current = parsed;
           setEnrollmentInfo({ branchId: parsed.branchId });
           setStreamState("PERMISSION_CONSENT");
           return;
         }
+        sessionStorage.removeItem(`portable_enrolled_${t}`);
+        setStreamState("ERROR");
+        setErrorMessage("This device needs to be enrolled again. Request a new QR code from Device Manager.");
+        return;
       } catch {}
     }
 
@@ -112,7 +133,7 @@ export default function PortableCameraEnrollPage() {
     }
 
     // Validate enrollment token
-    fetch(`/api/portable-camera/enrollments/${t}`)
+    fetch(`/api/portable-camera/enrollments/${encodeURIComponent(t)}`)
       .then(async (res) => {
         if (!res.ok) {
           if (res.status === 410) {
@@ -131,9 +152,6 @@ export default function PortableCameraEnrollPage() {
         setErrorMessage(err.message || "Failed to validate enrollment token.");
       });
 
-    return () => {
-      cleanupStream();
-    };
   }, []);
 
   // Enumerate video devices
@@ -156,6 +174,11 @@ export default function PortableCameraEnrollPage() {
 
       let deviceId = enrolledDevice?.id;
       let cameraId = enrolledDevice?.cameraId;
+      let deviceCredentials = enrolledDevice;
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Camera access requires HTTPS or localhost and a supported browser.");
+      }
 
       if (!deviceId || !cameraId) {
         // 1. Enroll device
@@ -177,19 +200,24 @@ export default function PortableCameraEnrollPage() {
         const enrollData = await enrollRes.json();
         deviceId = enrollData.device?.id;
         cameraId = enrollData.camera?.id;
-        if (!deviceId || !cameraId) {
-          throw new Error("Device enrollment succeeded but device or camera ID was not returned.");
+        deviceCredentials = readPortableDevice({
+          id: deviceId, cameraId, credentialSecret: enrollData.device?.credentialSecret,
+          branchId: enrollmentInfo?.branchId,
+        });
+        if (!deviceCredentials) {
+          throw new Error("Device credentials were not returned. Request a new enrollment QR code.");
         }
-        setEnrolledDevice({ id: deviceId, cameraId, branchId: enrollmentInfo?.branchId });
+        setEnrolledDevice(deviceCredentials);
+        enrolledDeviceRef.current = deviceCredentials;
         try {
           sessionStorage.setItem(
             `portable_enrolled_${token}`,
-            JSON.stringify({ id: deviceId, cameraId, branchId: enrollmentInfo?.branchId })
+            JSON.stringify(deviceCredentials)
           );
         } catch {}
       }
 
-      if (!deviceId || !cameraId) {
+      if (!deviceId || !cameraId || !deviceCredentials) {
         throw new Error("Missing enrolled device credentials.");
       }
 
@@ -231,7 +259,7 @@ export default function PortableCameraEnrollPage() {
       // 3. Start portable session on Control Plane
       const sessionRes = await fetch("/api/portable-camera/sessions", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: portableDeviceHeaders(deviceCredentials),
         body: JSON.stringify({
           deviceId,
           sourceId: cameraId,
@@ -249,6 +277,7 @@ export default function PortableCameraEnrollPage() {
         throw new Error(err.error || "Failed to start streaming session on media node.");
       }
       const sessionData = await sessionRes.json();
+      activeSessionRef.current = sessionData.session.id;
       setSession({ ...sessionData.session, publish: sessionData.publish, deviceId, cameraId });
 
       // 4. Publish via WebRTC WHIP
@@ -263,12 +292,21 @@ export default function PortableCameraEnrollPage() {
       }, 1000);
 
       // Start periodic health telemetry
-      startTelemetry(sessionData.session.id);
+      startTelemetry(sessionData.session.id, deviceCredentials);
     } catch (err: any) {
       console.error("Failed to start portable camera:", err);
       setStreamState("ERROR");
       setErrorMessage(err.message || "Failed to start camera. Please verify permissions and network.");
       cleanupStream();
+      const failedSessionId = activeSessionRef.current;
+      const device = enrolledDeviceRef.current;
+      activeSessionRef.current = null;
+      if (failedSessionId && device) {
+        void fetch(`/api/portable-camera/sessions/${encodeURIComponent(failedSessionId)}/stop`, {
+          method: "POST", headers: portableDeviceHeaders(device),
+          body: JSON.stringify({ reason: "publish_failed" }),
+        }).catch(() => undefined);
+      }
     }
   };
 
@@ -343,7 +381,7 @@ export default function PortableCameraEnrollPage() {
   };
 
   // Periodic Telemetry Reporting
-  const startTelemetry = (sessionId: string) => {
+  const startTelemetry = (sessionId: string, device: EnrolledPortableDevice) => {
     if (telemetryTimerRef.current) clearInterval(telemetryTimerRef.current);
     telemetryTimerRef.current = setInterval(async () => {
       let locationData = undefined;
@@ -377,9 +415,9 @@ export default function PortableCameraEnrollPage() {
         } catch {}
       }
 
-      await fetch(`/api/portable-camera/sessions/${sessionId}/health`, {
+      await fetch(`/api/portable-camera/sessions/${encodeURIComponent(sessionId)}/health`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: portableDeviceHeaders(device),
         body: JSON.stringify({
           connectivity: streamState === "RECONNECTING" ? "DEGRADED" : "HEALTHY",
           fps,
@@ -459,15 +497,22 @@ export default function PortableCameraEnrollPage() {
 
   // Stop Camera Session
   const handleStopCamera = async () => {
-    if (session?.id) {
-      await fetch(`/api/portable-camera/sessions/${session.id}/stop`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason: "user_clicked_stop" }),
-      }).catch(() => undefined);
-    }
     cleanupStream();
     setStreamState("STOPPED");
+    const sessionId = activeSessionRef.current;
+    const device = enrolledDeviceRef.current;
+    activeSessionRef.current = null;
+    if (sessionId && device) {
+      try {
+        const response = await fetch(`/api/portable-camera/sessions/${encodeURIComponent(sessionId)}/stop`, {
+          method: "POST", headers: portableDeviceHeaders(device),
+          body: JSON.stringify({ reason: "user_clicked_stop" }),
+        });
+        if (!response.ok) throw new Error("Session stop was not confirmed");
+      } catch {
+        setErrorMessage("Camera capture has stopped on this device. The server could not confirm session closure; check Device Manager.");
+      }
+    }
   };
 
   const cleanupStream = () => {
@@ -937,8 +982,9 @@ export default function PortableCameraEnrollPage() {
             </div>
             <h2 style={{ fontSize: "20px", fontWeight: 700, margin: "0 0 8px 0" }}>Camera Session Concluded</h2>
             <p style={{ fontSize: "13px", color: "#94a3b8", margin: "0 0 20px 0" }}>
-              Total Stream Duration: <strong>{formatDuration(elapsedSeconds)}</strong>. Recording has been finalized and indexed into the VMS archive.
+              Total Stream Duration: <strong>{formatDuration(elapsedSeconds)}</strong>. Camera capture has stopped. Check the recordings workspace for available footage.
             </p>
+            {errorMessage && <p role="status" style={{ color: "#fbbf24", fontSize: "13px" }}>{errorMessage}</p>}
             <button
               onClick={() => window.location.reload()}
               style={{
@@ -987,7 +1033,7 @@ export default function PortableCameraEnrollPage() {
                 Retry
               </button>
               <button
-                onClick={() => { window.location.href = "/devices"; }}
+                onClick={() => { window.location.href = "/admin/branch-onboarding"; }}
                 style={{
                   padding: "8px 16px",
                   backgroundColor: "#2563eb",

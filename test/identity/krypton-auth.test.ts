@@ -3,11 +3,13 @@ import Fastify from "fastify";
 import { MemoryStore } from "../../src/store.js";
 import { registerAuthRoutes } from "../../src/routes/auth.routes.js";
 import { PERMANENT_SUPERADMIN } from "../../src/identity/services/bootstrap-onboarding.service.js";
+import { hashPassword } from "../../src/security/password.js";
 
 describe("Krypton and Admin Login Aliases", () => {
   it("authenticates krypton, Krypton, admin, and superadmin aliases", async () => {
-    PERMANENT_SUPERADMIN.password = "SentinelMasterAdmin2026!";
     const store = new MemoryStore();
+    const admin = store.users.get("user-superadmin-mgdhanyamohan")!;
+    admin.passwordHash = await hashPassword("SentinelMasterAdmin2026!");
     const app = Fastify();
     await registerAuthRoutes(app, store as any);
 

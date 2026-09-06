@@ -8,6 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { isPublicDashboardRoute } from '@/lib/session-navigation';
 
 interface ActivityMonitorProps {
   children?: React.ReactNode;
@@ -676,10 +677,7 @@ export function ActivityMonitor({ children }: ActivityMonitorProps) {
   // Initialize after authentication, then serialize the first page entry behind
   // session creation so it cannot be lost while the request is in flight.
   useEffect(() => {
-    const isAuthPage = pathname?.startsWith('/login') || 
-                       pathname?.startsWith('/forgot-password') || 
-                       pathname?.startsWith('/reset-password');
-    if (!pathname || isAuthPage || !getUserId()) return;
+    if (!pathname || isPublicDashboardRoute(pathname) || !getUserId()) return;
 
     let cancelled = false;
     const initializeAndTrack = async () => {

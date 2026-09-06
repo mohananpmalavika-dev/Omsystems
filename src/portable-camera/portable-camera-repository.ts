@@ -1,5 +1,5 @@
 import type { Pool } from "pg";
-import { randomUUID, randomBytes, createHash } from "node:crypto";
+import { randomUUID, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import type {
   PortableCameraEnrollment,
   PortableDevice,
@@ -33,6 +33,7 @@ export interface RegisterDeviceInput {
 }
 
 export interface CreateSessionInput {
+  id?: string;
   tenantId: string;
   branchId?: string;
   sourceId: string;
@@ -51,6 +52,7 @@ export interface CreateSessionInput {
 export class PortableCameraRepository {
   private inMemoryEnrollments = new Map<string, PortableCameraEnrollment>();
   private inMemoryDevices = new Map<string, PortableDevice>();
+  private inMemoryCredentialHashes = new Map<string, string>();
   private inMemorySessions = new Map<string, PortableCameraSession>();
   private inMemoryEvents: Array<{ id: string; sessionId: string; eventType: string; payload: any; timestamp: string }> = [];
   private inMemoryPolicies = new Map<string, PortableCameraPolicy>();
@@ -212,10 +214,29 @@ export class PortableCameraRepository {
         ]
       );
     } else {
-      this.inMemoryDevices.set(device.id, device);
+      this.inMemoryCredentialHashes.set(device.id, credentialHash);
+      this.inMemoryDevices.set(device.id, { ...device, metadata: { ...input.metadata } });
     }
 
     return device;
+  }
+
+  async authenticateDevice(deviceId: string, secret: string): Promise<boolean> {
+    if (!secret || secret.length > 256) return false;
+    let credentialHash: string | undefined;
+    if (this.pool) {
+      const result = await this.pool.query<{ credential_hash: string }>(
+        "SELECT credential_hash FROM portable_devices WHERE id = $1 AND state = 'ACTIVE'",
+        [deviceId],
+      );
+      credentialHash = result.rows[0]?.credential_hash;
+    } else if (this.inMemoryDevices.get(deviceId)?.state === "ACTIVE") {
+      credentialHash = this.inMemoryCredentialHashes.get(deviceId);
+    }
+    if (!credentialHash) return false;
+    const expected = Buffer.from(credentialHash, "hex");
+    const supplied = createHash("sha256").update(secret).digest();
+    return expected.length === supplied.length && timingSafeEqual(expected, supplied);
   }
 
   async getDevice(deviceId: string): Promise<PortableDevice | undefined> {
@@ -301,7 +322,7 @@ export class PortableCameraRepository {
   }
 
   async createSession(input: CreateSessionInput): Promise<PortableCameraSession> {
-    const id = randomUUID();
+    const id = input.id ?? randomUUID();
     const now = new Date().toISOString();
     const session: PortableCameraSession = {
       id,

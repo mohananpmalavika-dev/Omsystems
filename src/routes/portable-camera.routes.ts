@@ -1,10 +1,11 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { PortableCameraRepository } from "../portable-camera/portable-camera-repository.js";
 import type { PortableCameraLeaseManager } from "../ha/services/portable-camera-lease-manager.service.js";
 import { immutableAuditService } from "../security/audit/immutable-audit.service.js";
-import type { VideoSourceType } from "../domain/models.js";
+import type { PortableDevice, VideoSourceType } from "../domain/models.js";
 
 export interface PortableCameraRouteOptions {
   store: ControlPlaneStore;
@@ -29,6 +30,7 @@ export function registerPortableCameraRoutes(
     mediaGatewayUrl = process.env.MEDIA_GATEWAY_INTERNAL_URL || "http://127.0.0.1:8090",
     publicDashboardUrl = process.env.PUBLIC_DASHBOARD_URL || "http://127.0.0.1:10000",
     mediaNodeId = process.env.MEDIA_NODE_ID || "media-node-aws-01",
+    mediaGatewaySharedKey = process.env.MEDIA_GATEWAY_SHARED_KEY,
   } = options;
 
   function getUser(request: FastifyRequest) {
@@ -38,6 +40,21 @@ export function registerPortableCameraRoutes(
     const userId = user?.id || user?.userId || "system-operator";
     const roles = user?.roles || ["operator"];
     return { tenantId, userId, roles, user };
+  }
+
+  async function authorizeDevice(request: FastifyRequest, reply: FastifyReply, device: PortableDevice) {
+    const suppliedDeviceId = request.headers["x-portable-device-id"];
+    const suppliedSecret = request.headers["x-portable-device-secret"];
+    if (suppliedDeviceId === device.id && typeof suppliedSecret === "string" &&
+        await repository.authenticateDevice(device.id, suppliedSecret)) return true;
+    const { user } = getUser(request);
+    if (user && user.tenantId === device.tenantId) {
+      const branchId = typeof device.metadata?.branchId === "string" ? device.metadata.branchId : undefined;
+      const branches = await store.listAccessibleNodes(user, "device:configure", "branch");
+      if (branchId && branches.some((branch) => branch.id === branchId)) return true;
+    }
+    reply.code(401).send({ error: "invalid_portable_device_identity" });
+    return false;
   }
 
   // 1. Generate Enrollment QR / Token
@@ -87,7 +104,6 @@ export function registerPortableCameraRoutes(
       targetResourceId: enrollment.id,
       branchId: body.branchId,
       metadata: {
-        token: enrollment.token,
         expiresAt: enrollment.expiresAt,
         allowedSourceTypes: enrollment.allowedSourceTypes,
       },
@@ -147,11 +163,10 @@ export function registerPortableCameraRoutes(
       return reply.code(410).send({ error: "invalid_or_expired_enrollment_token" });
     }
 
-    const branchId =
-      body.branchId ||
-      enrollment.branchId ||
-      (await (store as any).listBranches?.(enrollment.tenantId, {}))?.[0]?.id ||
-      "branch-default";
+    if (!enrollment.branchId || (body.branchId && body.branchId !== enrollment.branchId)) {
+      return reply.code(403).send({ error: "branch_access_denied" });
+    }
+    const branchId = enrollment.branchId;
 
     // Map device type to camera source type
     const sourceTypeMap: Record<string, string> = {
@@ -175,6 +190,12 @@ export function registerPortableCameraRoutes(
       metadata: { branchId: enrollment.branchId },
     });
 
+    // Claim the one-use enrollment before creating any camera inventory.
+    if (!await repository.consumeEnrollment(body.token, device.id)) {
+      await repository.revokeDevice(device.id);
+      return reply.code(410).send({ error: "invalid_or_expired_enrollment_token" });
+    }
+
     // 2. Register camera in VMS inventory
     const cameraName = `${body.deviceName} (${body.deviceType})`;
     const camera = await store.createCameraFromManualRegistration(branchId, {
@@ -194,9 +215,6 @@ export function registerPortableCameraRoutes(
       // Link camera in device record
       await repository.updateDeviceSeen(device.id, clientIp, camera.id);
     }
-
-    // 3. Consume token
-    await repository.consumeEnrollment(body.token, device.id);
 
     immutableAuditService.append({
       category: "PORTABLE_CAMERA_EVENT",
@@ -259,6 +277,10 @@ export function registerPortableCameraRoutes(
     if (!device) {
       return reply.code(404).send({ error: "device_not_found" });
     }
+    if (!await authorizeDevice(request, reply, device)) return;
+    if (device.cameraId !== body.sourceId) {
+      return reply.code(403).send({ error: "camera_source_access_denied" });
+    }
     if (device.state !== "ACTIVE") {
       return reply.code(403).send({ error: "device_is_revoked_or_inactive", state: device.state });
     }
@@ -272,7 +294,8 @@ export function registerPortableCameraRoutes(
     const roles = authRoles;
 
     // 1. Acquire distributed lease on media node
-    const sessionId = `pcs_${Date.now()}`;
+    if (!mediaGatewaySharedKey) return reply.code(503).send({ error: "media_gateway_not_configured" });
+    const sessionId = randomUUID();
     const leaseResult = await leaseManager.acquireLease(
       tenantId,
       body.sourceId,
@@ -294,29 +317,31 @@ export function registerPortableCameraRoutes(
     try {
       const gwRes = await fetch(`${mediaGatewayUrl.replace(/\/+$/, "")}/v1/portable/publish-start`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-media-gateway-key": mediaGatewaySharedKey },
         body: JSON.stringify({
           controlPlaneToken: sessionId,
           cameraId: body.sourceId,
         }),
+        signal: AbortSignal.timeout(15_000),
+        redirect: "error",
       });
       if (!gwRes.ok) {
         await leaseManager.releaseLease(tenantId, body.sourceId, sessionId, mediaNodeId);
         return reply.code(502).send({ error: "media_gateway_failed_to_initialize_publish" });
       }
-      publishDetails = await gwRes.json();
+      publishDetails = z.object({
+        whipUrl: z.string().url(), whepUrl: z.string().url(),
+        publishToken: z.string().min(32), expiresAt: z.string().datetime(),
+      }).parse(await gwRes.json());
     } catch (gwErr) {
-      // Fallback URLs if internal network differs
-      publishDetails = {
-        whipUrl: `/webrtc/camera-${body.sourceId}/whip`,
-        whepUrl: `/webrtc/camera-${body.sourceId}/whep`,
-        publishToken: `pub_${Date.now()}`,
-        expiresAt: new Date(Date.now() + 3600_000).toISOString(),
-      };
+      request.log.warn({ err: gwErr }, "Portable media gateway startup failed");
+      await leaseManager.releaseLease(tenantId, body.sourceId, sessionId, mediaNodeId);
+      return reply.code(502).send({ error: "media_gateway_failed_to_initialize_publish" });
     }
 
     // 3. Create authoritative session record
     const session = await repository.createSession({
+      id: sessionId,
       tenantId,
       branchId: deviceBranchId || body.branchId,
       sourceId: body.sourceId,
@@ -414,6 +439,8 @@ export function registerPortableCameraRoutes(
     if (!session) {
       return reply.code(404).send({ error: "session_not_found" });
     }
+    const device = await repository.getDevice(session.deviceId);
+    if (!device || !await authorizeDevice(request, reply, device)) return;
     return reply.send(session);
   });
 
@@ -427,6 +454,9 @@ export function registerPortableCameraRoutes(
     if (!session) {
       return reply.code(404).send({ error: "session_not_found" });
     }
+
+    const device = await repository.getDevice(session.deviceId);
+    if (!device || !await authorizeDevice(request, reply, device)) return;
 
     const tenantId = session.tenantId || authTenantId;
     const userId = session.userId || authUserId;
@@ -485,6 +515,16 @@ export function registerPortableCameraRoutes(
     const session = await repository.getSession(id);
     if (!session) {
       return reply.code(404).send({ error: "session_not_found" });
+    }
+
+    const device = await repository.getDevice(session.deviceId);
+    if (!device || !await authorizeDevice(request, reply, device)) return;
+    if (["ENDED", "FAILED", "REVOKED"].includes(session.state)) {
+      return reply.code(409).send({ error: "session_already_ended" });
+    }
+    const renewed = await leaseManager.acquireLease(session.tenantId, session.sourceId, session.id, session.mediaNodeId, 60);
+    if (!renewed.acquired || renewed.lease?.fencingToken !== session.fencingToken) {
+      return reply.code(409).send({ error: "camera_source_lease_lost" });
     }
 
     const healthObj = {

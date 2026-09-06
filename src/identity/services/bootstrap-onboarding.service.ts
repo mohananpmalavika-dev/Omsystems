@@ -1,10 +1,7 @@
-import { randomBytes, randomUUID } from "node:crypto";
-import type {
-  ControlPlaneStore,
-  OrganizationStore,
-  UserManagementStore,
-} from "../../control-plane-store.js";
-import type { ResourceNode, User, AccessGrant, Action } from "../../domain/models.js";
+import { createHash, randomBytes } from "node:crypto";
+import type { Pool } from "pg";
+import { InfrastructureRepository } from "../../database/infrastructure-repository.js";
+import type { Action } from "../../domain/models.js";
 import { hashPassword, verifyPassword } from "../../security/password.js";
 import type {
   OnboardingSetupInput,
@@ -44,21 +41,30 @@ export class BootstrapOnboardingService {
   async getOnboardingStatus(store: any): Promise<OnboardingStatus> {
     let orgCount = 0;
     let branchCount = 0;
-
-    if (typeof store.getOrganizationTree === "function") {
-      try {
-        const tree = await store.getOrganizationTree("omsystems");
-        orgCount = Array.isArray(tree) ? tree.filter((n: any) => n.type === "company" || n.nodeType === "company").length : 0;
-        branchCount = Array.isArray(tree) ? tree.filter((n: any) => n.type === "branch" || n.nodeType === "branch").length : 0;
-      } catch {
-        // Fallback
+    const pool = store.db ?? store.pool;
+    if (pool?.query) {
+      // Count globally: an alternate tenant slug must not reopen bootstrap.
+      const result = await pool.query(`SELECT
+        count(*) FILTER (WHERE node_type='company')::int AS organizations,
+        count(*) FILTER (WHERE node_type='branch')::int AS branches
+        FROM resource_nodes`);
+      orgCount = Number(result.rows[0]?.organizations ?? 0);
+      branchCount = Number(result.rows[0]?.branches ?? 0);
+    } else if (store.nodes instanceof Map) {
+      for (const node of store.nodes.values()) {
+        if (node.type === "company") orgCount++;
+        if (node.type === "branch") branchCount++;
       }
-    }
-
-    if (orgCount === 0 && store.nodes instanceof Map) {
-      const nodes = Array.from(store.nodes.values()) as ResourceNode[];
-      orgCount = nodes.filter((n) => n.type === "company").length;
-      branchCount = nodes.filter((n) => n.type === "branch").length;
+    } else {
+      const tree = await store.getOrganizationTree("omsystems");
+      const visit = (nodes: any[]) => {
+        for (const node of nodes) {
+          if ((node.type ?? node.nodeType) === "company") orgCount++;
+          if ((node.type ?? node.nodeType) === "branch") branchCount++;
+          if (Array.isArray(node.children)) visit(node.children);
+        }
+      };
+      visit(tree);
     }
 
     const isFirstTimeSetup = orgCount === 0;
@@ -83,164 +89,101 @@ export class BootstrapOnboardingService {
     store: any,
     input: OnboardingSetupInput,
   ): Promise<OnboardingSetupResult> {
+    const pool = store.db ?? store.pool;
+    if (pool?.connect) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        // Serialize initialization across API instances and roll back every
+        // organization/user/session write if any step fails.
+        await client.query("SELECT pg_advisory_xact_lock(739214608)");
+        const transactionalStore = new InfrastructureRepository(client as unknown as Pool);
+        const result = await this.performSetup(transactionalStore, input);
+        await client.query("COMMIT");
+        return result;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+    return this.performSetup(store, input);
+  }
+
+  private async performSetup(store: any, input: OnboardingSetupInput): Promise<OnboardingSetupResult> {
+    const status = await this.getOnboardingStatus(store);
+    if (!status.isFirstTimeSetup) throw new Error("onboarding_already_completed");
     const tenantId = input.tenantSlug?.trim() || "omsystems";
     const orgName = input.organizationName.trim();
     const branchName = input.firstBranchName.trim();
     const regionName = input.regionName?.trim() || "Headquarters Region";
-
     const adminUsername = input.adminUsername?.trim() || PERMANENT_SUPERADMIN.username;
-    const adminPassword = input.adminPassword || PERMANENT_SUPERADMIN.password;
-    if (!adminPassword) {
-      throw new Error("admin_password_required");
+    const adminPassword = input.adminPassword;
+    if (!adminPassword || adminPassword.length < 8) throw new Error("admin_password_required");
+    if (PERMANENT_SUPERADMIN.password && adminPassword !== PERMANENT_SUPERADMIN.password) {
+      throw new Error("invalid_bootstrap_credentials");
     }
     const adminEmail = input.adminEmail?.trim() || PERMANENT_SUPERADMIN.email;
     const adminDisplayName = input.adminDisplayName?.trim() || PERMANENT_SUPERADMIN.displayName;
-
+    const existingAdmin = await store.findUserByUsername(adminUsername, tenantId);
+    if (existingAdmin && (existingAdmin.status !== "active" || existingAdmin.role !== "super_admin" ||
+      !(await verifyPassword(adminPassword, existingAdmin.passwordHash)))) {
+      throw new Error("invalid_bootstrap_credentials");
+    }
     const passwordHash = await hashPassword(adminPassword);
+    const org = await store.createOrganizationNode(tenantId, {
+      nodeType: "company", name: orgName, code: input.organizationCode ?? "HQ",
+    });
+    if (!org?.id) throw new Error("organization_creation_failed");
+    const region = await store.createOrganizationNode(tenantId, {
+      parentNodeId: org.id, nodeType: "region", name: regionName,
+    });
+    if (!region?.id) throw new Error("region_creation_failed");
+    const branch = await store.createOrganizationNode(tenantId, {
+      parentNodeId: region.id, nodeType: "branch", name: branchName,
+      code: input.firstBranchCode ?? "BR-001", address: input.firstBranchAddress,
+    });
+    if (!branch?.id) throw new Error("branch_creation_failed");
 
-    let orgNodeId = `org-${Date.now()}`;
-    let regionNodeId = `region-${Date.now()}`;
-    let branchNodeId = `branch-${Date.now()}`;
-    const superadminUserId = `user-${adminUsername}`;
-
-    // 1. Create Organization in Database or In-Memory Store
-    if (typeof store.createOrganizationNode === "function") {
-      try {
-        const orgRes = await store.createOrganizationNode(tenantId, {
-          nodeType: "company",
-          name: orgName,
-          code: input.organizationCode ?? "HQ",
-        });
-        if (orgRes?.id) orgNodeId = orgRes.id;
-
-        const regRes = await store.createOrganizationNode(tenantId, {
-          parentNodeId: orgNodeId,
-          nodeType: "region",
-          name: regionName,
-        });
-        if (regRes?.id) regionNodeId = regRes.id;
-
-        const brRes = await store.createOrganizationNode(tenantId, {
-          parentNodeId: regionNodeId,
-          nodeType: "branch",
-          name: branchName,
-          code: input.firstBranchCode ?? "BR-001",
-          address: input.firstBranchAddress,
-        });
-        if (brRes?.id) branchNodeId = brRes.id;
-      } catch {
-        // Fallback for memory store
-      }
-    }
-
-    if (store.nodes instanceof Map) {
-      const orgNode: ResourceNode = {
-        id: orgNodeId,
-        parentId: null,
-        tenantId,
-        type: "company",
-        name: orgName,
-        path: [orgNodeId],
-      };
-      const regNode: ResourceNode = {
-        id: regionNodeId,
-        parentId: orgNodeId,
-        tenantId,
-        type: "region",
-        name: regionName,
-        path: [orgNodeId, regionNodeId],
-      };
-      const brNode: ResourceNode = {
-        id: branchNodeId,
-        parentId: regionNodeId,
-        tenantId,
-        type: "branch",
-        name: branchName,
-        path: [orgNodeId, regionNodeId, branchNodeId],
-      };
-
-      store.nodes.set(orgNodeId, orgNode);
-      store.nodes.set(regionNodeId, regNode);
-      store.nodes.set(branchNodeId, brNode);
-    }
-
-    // 2. Create/Ensure Superadmin User
-    if (typeof store.createUser === "function") {
-      try {
-        await store.createUser(tenantId, {
-          username: adminUsername,
-          displayName: adminDisplayName,
-          email: adminEmail,
-          passwordHash,
-          role: "super_admin",
-          status: "active",
-          primaryOrgNodeId: orgNodeId,
-        });
-      } catch {
-        // May already exist
-      }
-    }
-
-    if (store.users instanceof Map) {
-      const userRecord: User & { passwordHash: string } = {
-        id: superadminUserId,
-        displayName: adminDisplayName,
-        username: adminUsername,
-        email: adminEmail,
-        role: "super_admin",
-        status: "active",
-        tenantId,
-        passwordHash,
-      };
-      store.users.set(superadminUserId, userRecord);
-    }
-
-    // 3. Grant Superadmin full access across the entire organization tree
-    if (store.grants && Array.isArray(store.grants)) {
-      store.grants.push({
-        userId: superadminUserId,
-        scopeNodeId: orgNodeId,
-        actions: ALL_SUPERADMIN_ACTIONS,
-        effect: "allow",
+    let admin = existingAdmin;
+    if (!admin && typeof store.createUser === "function") {
+      admin = await store.createUser(tenantId, {
+        username: adminUsername, displayName: adminDisplayName, email: adminEmail,
+        passwordHash, role: "super_admin", status: "active", primaryOrgNodeId: org.id,
       });
+    } else if (!admin && store.users instanceof Map) {
+      admin = { id: `user-${adminUsername}`, displayName: adminDisplayName,
+        username: adminUsername, email: adminEmail, role: "super_admin",
+        status: "active", tenantId, passwordHash };
+      store.users.set(admin.id, admin);
     }
-
-    // 4. Generate Auth Tokens
+    if (!admin?.id) throw new Error("admin_creation_failed");
+    if (Array.isArray(store.grants)) {
+      store.grants.push({ userId: admin.id, scopeNodeId: org.id,
+        actions: ALL_SUPERADMIN_ACTIONS, effect: "allow" });
+    }
     const accessToken = randomBytes(32).toString("hex");
     const refreshToken = randomBytes(32).toString("hex");
+    const hashToken = (token: string) => createHash("sha256").update(token).digest("base64");
+    const session = await store.createUserSession(admin.id, admin.tenantId ?? tenantId,
+      hashToken(accessToken), hashToken(refreshToken));
+    if (!session?.id) throw new Error("session_creation_failed");
+    const expiry = new Date(session.accessExpiresAt).getTime();
+    if (!Number.isFinite(expiry) || expiry <= Date.now()) throw new Error("invalid_session_expiry");
 
     return {
       success: true,
-      message: `Organization '${orgName}' and first branch '${branchName}' created successfully. Superadmin '${adminUsername}' configured.`,
-      organization: {
-        id: orgNodeId,
-        name: orgName,
-        code: input.organizationCode,
-        tenantId,
-      },
-      region: {
-        id: regionNodeId,
-        name: regionName,
-      },
-      firstBranch: {
-        id: branchNodeId,
-        name: branchName,
-        code: input.firstBranchCode,
-      },
-      superadmin: {
-        id: superadminUserId,
-        username: adminUsername,
-        displayName: adminDisplayName,
-        email: adminEmail,
-        role: "super_admin",
-      },
-      tokens: {
-        accessToken,
-        refreshToken,
-        expiresIn: 86400,
-      },
+      message: `Organization '${orgName}' and first branch '${branchName}' created successfully.`,
+      organization: { id: org.id, name: orgName, code: input.organizationCode, tenantId: org.tenantId ?? tenantId },
+      region: { id: region.id, name: regionName },
+      firstBranch: { id: branch.id, name: branchName, code: input.firstBranchCode },
+      superadmin: { id: admin.id, username: adminUsername, displayName: adminDisplayName,
+        email: adminEmail, role: "super_admin" },
+      tokens: { accessToken, refreshToken, expiresIn: Math.max(1, Math.floor((expiry - Date.now()) / 1000)) },
     };
   }
+
 }
 
 export const bootstrapOnboardingService = new BootstrapOnboardingService();

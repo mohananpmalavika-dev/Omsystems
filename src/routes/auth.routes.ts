@@ -118,10 +118,19 @@ export async function registerAuthRoutes(
       });
     } catch (error: any) {
       request.log.error({ error }, "First-time onboarding setup failed");
-      return reply.code(400).send({
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
+      }
+      const expectedErrors: Record<string, number> = {
+        onboarding_already_completed: 409,
+        invalid_bootstrap_credentials: 403,
+        admin_password_required: 400,
+      };
+      const statusCode = expectedErrors[error.message] ?? 503;
+      return reply.code(statusCode).send({
         success: false,
-        error: "onboarding_setup_failed",
-        message: error.message || "Failed to complete initial organization setup",
+        error: expectedErrors[error.message] ? error.message : "onboarding_setup_failed",
+        message: statusCode === 503 ? "Initial setup could not be saved. Please try again." : undefined,
       });
     }
   };
@@ -193,7 +202,7 @@ export async function registerAuthRoutes(
         } else if (typeof store.recordFailedLogin === "function") {
           // Configuration faults must not consume a user's login attempts or
           // lock the account. Count only a real mismatch against a usable hash.
-          await store.recordFailedLogin(user.id).catch(() => {});
+          await Promise.resolve(store.recordFailedLogin(user.id)).catch(() => {});
         }
 
         return reply.code(401).send({

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -58,6 +58,7 @@ export function CommandCenterView() {
   const [askSentinelResponse, setAskSentinelResponse] = useState<string | null>(null);
   const [executingAction, setExecutingAction] = useState<string | null>(null);
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+  const pendingLoad = useRef<AbortController | null>(null);
   const router = useRouter();
 
   const navigateTo = (href: string) => (e: React.MouseEvent) => {
@@ -77,45 +78,52 @@ export function CommandCenterView() {
   };
 
   const loadData = async () => {
+    if (pendingLoad.current) return;
+    const controller = new AbortController();
+    pendingLoad.current = controller;
     setLoading(true);
     setLoadError(null);
     try {
       const [sumRes, branchRes] = await Promise.all([
-        fetch("/api/control/v1/operations/command-center", { credentials: "include" }).catch(() => null),
-        fetch("/api/control/v1/operations/branches", { credentials: "include" }).catch(() => null),
+        fetch("/api/control/v1/operations/command-center", { credentials: "include", signal: controller.signal }).catch(() => null),
+        fetch("/api/control/v1/operations/branches", { credentials: "include", signal: controller.signal }).catch(() => null),
       ]);
       const sumData = sumRes ? await sumRes.json().catch(() => ({})) : {};
       const branchData = branchRes ? await branchRes.json().catch(() => ({})) : {};
+      if (controller.signal.aborted) return;
+      const unavailable: string[] = [];
 
-      if (sumData?.success && sumData?.data) {
+      if (sumRes?.ok && sumData?.success && sumData?.data) {
         setSummary(sumData.data);
-      } else if (sumRes && !sumRes.ok) {
-        setLoadError(sumData?.error || "Command Center summary is unavailable");
+      } else {
+        unavailable.push("Command Center summary");
       }
 
-      if (branchData?.success && Array.isArray(branchData?.data)) {
+      if (branchRes?.ok && branchData?.success && Array.isArray(branchData?.data)) {
         setBranches(branchData.data);
         setHasBranchData(true);
       } else {
-        setBranches([]);
-        setHasBranchData(false);
+        unavailable.push("branch telemetry");
       }
 
-      if (!sumData?.data && (!branchData?.data || branchData.data.length === 0) && (!sumRes?.ok || !branchRes?.ok)) {
-        setLoadError("Unable to load live fleet telemetry");
-      }
+      if (unavailable.length) setLoadError(`${unavailable.join(" and ")} unavailable`);
     } catch (err) {
       console.error("Failed to load command center data:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load live fleet telemetry");
     } finally {
-      setLoading(false);
+      if (pendingLoad.current === controller) pendingLoad.current = null;
+      if (!controller.signal.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 15000); // 15s auto-refresh
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      pendingLoad.current?.abort();
+      pendingLoad.current = null;
+    };
   }, []);
 
   const cameraTotals = useMemo(() => {
@@ -335,7 +343,7 @@ export function CommandCenterView() {
 
       {loadError && (
         <div className="p-3 rounded-xl border border-rose-800/60 bg-rose-950/30 text-sm text-rose-200" role="alert">
-          Live fleet data could not be refreshed: {loadError}. Showing the last confirmed values.
+          Live fleet data could not be refreshed: {loadError}. {summary || hasBranchData ? "Showing the last confirmed values." : "Retry when the connection is restored."}
         </div>
       )}
 
@@ -702,17 +710,18 @@ export function CommandCenterView() {
                       <td colSpan={10} className="px-4 py-12 text-center text-slate-400">
                         <div className="max-w-md mx-auto space-y-3">
                           <Building2 className="w-8 h-8 text-slate-600 mx-auto" />
-                          <div className="font-semibold text-slate-300">No branches enrolled in fleet database yet</div>
+                          <div className="font-semibold text-slate-300">{loading ? "Loading branch telemetry…" : !hasBranchData ? "Branch telemetry unavailable" : branches.length > 0 ? "No branches match your filters" : "No branches enrolled yet"}</div>
                           <p className="text-xs text-slate-500">
-                            When you connect cameras, edge agents, or onboard branches, live telemetry will populate automatically.
+                            {!hasBranchData ? "Refresh to try loading your accessible branches again." : branches.length > 0 ? "Clear the search and filters to see all accessible branches." : "Onboard a branch to start monitoring cameras and edge devices."}
                           </p>
-                          <Link
+                          {hasBranchData && branches.length === 0 && <Link
                             href="/admin/branch-onboarding"
                             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow transition-colors"
                           >
                             <PlusCircle className="w-3.5 h-3.5" />
                             <span>Onboard First Branch</span>
-                          </Link>
+                          </Link>}
+                          {hasBranchData && branches.length > 0 && <button type="button" className="text-sm font-semibold text-blue-400 underline" onClick={() => { setSearchQuery(""); setSelectedStatus("ALL"); setSelectedRegion("ALL"); }}>Clear filters</button>}
                         </div>
                       </td>
                     </tr>
