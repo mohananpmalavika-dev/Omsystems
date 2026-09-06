@@ -1,6 +1,6 @@
 {
   "name": "sentinel-grid",
-  "version": "0.1.0",
+  "version": "1.0.0-rc.1",
   "private": true,
   "workspaces": [
     "dashboard",
@@ -10,7 +10,7 @@
     "analytics-engine",
     "packages/*"
   ],
-  "description": "Hybrid CCTV control plane for multi-branch organizations",
+  "description": "KryptoVision Hybrid CCTV Control Plane & Forensic Evidence Vault by KryptonLogic",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",

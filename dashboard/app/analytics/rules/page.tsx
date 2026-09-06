@@ -1,7 +1,7 @@
 import { NbfcRulesWorkspace } from "@/components/nbfc-rules/nbfc-rules-workspace";
 
 export const metadata = {
-  title: "AI Rules & Automation | Sentinel Grid",
+  title: "AI Rules & Automation | KryptoVision",
   description: "NBFC AI surveillance rule engine, visual zone designer, and operational automation",
 };
 
