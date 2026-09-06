@@ -169,16 +169,6 @@ async function loadLiveBranchRetentionSummaries(store: ControlPlaneStore | undef
 export async function registerRetentionRoutes(app: FastifyInstance, store?: ControlPlaneStore) {
   const requireUser = (request: FastifyRequest, reply: FastifyReply): User | null => {
     if (!request.currentUser) {
-      if (process.env.NODE_ENV === "test" || !store) {
-        return {
-          id: "system-test-user",
-          tenantId: "bank-corp",
-          roles: ["admin"],
-          permissions: ["*"],
-          email: "test@kryptovision.internal",
-          name: "Test System User",
-        } as unknown as User;
-      }
       reply.code(401).send({ success: false, error: "Authentication required" });
       return null;
     }
@@ -201,8 +191,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/retention/overview", { config: { noAuth: true } }, handleRetentionOverview);
-  app.get("/v1/retention/overview", { config: { noAuth: true } }, handleRetentionOverview);
+  app.get("/api/v1/retention/overview", handleRetentionOverview);
+  app.get("/v1/retention/overview", handleRetentionOverview);
 
   /**
    * GET /api/v1/retention/branches & /v1/retention/branches
@@ -249,8 +239,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/retention/branches", { config: { noAuth: true } }, handleRetentionBranches);
-  app.get("/v1/retention/branches", { config: { noAuth: true } }, handleRetentionBranches);
+  app.get("/api/v1/retention/branches", handleRetentionBranches);
+  app.get("/v1/retention/branches", handleRetentionBranches);
 
   /**
    * GET /api/v1/branches/:branchId/retention/assessment
@@ -402,8 +392,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/branches/:branchId/retention/assessment", { config: { noAuth: true } }, handleBranchAssessment);
-  app.get("/v1/branches/:branchId/retention/assessment", { config: { noAuth: true } }, handleBranchAssessment);
+  app.get("/api/v1/branches/:branchId/retention/assessment", handleBranchAssessment);
+  app.get("/v1/branches/:branchId/retention/assessment", handleBranchAssessment);
 
   /**
    * GET /api/v1/cameras/:cameraId/retention/evidence
@@ -575,8 +565,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/cameras/:cameraId/retention/evidence", { config: { noAuth: true } }, handleCameraEvidence);
-  app.get("/v1/cameras/:cameraId/retention/evidence", { config: { noAuth: true } }, handleCameraEvidence);
+  app.get("/api/v1/cameras/:cameraId/retention/evidence", handleCameraEvidence);
+  app.get("/v1/cameras/:cameraId/retention/evidence", handleCameraEvidence);
 
   /**
    * GET /api/v1/retention/reports/daily & /v1/retention/reports/daily
@@ -597,8 +587,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/retention/reports/daily", { config: { noAuth: true } }, handleDailyReport);
-  app.get("/v1/retention/reports/daily", { config: { noAuth: true } }, handleDailyReport);
+  app.get("/api/v1/retention/reports/daily", handleDailyReport);
+  app.get("/v1/retention/reports/daily", handleDailyReport);
 
   /**
    * GET /api/v1/retention/audit & /v1/retention/audit
@@ -613,7 +603,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     });
   };
 
-  app.get("/api/v1/retention/audit", { config: { noAuth: true } }, handleRetentionAudit);
-  app.get("/v1/retention/audit", { config: { noAuth: true } }, handleRetentionAudit);
+  app.get("/api/v1/retention/audit", handleRetentionAudit);
+  app.get("/v1/retention/audit", handleRetentionAudit);
 
 }

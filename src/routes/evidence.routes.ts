@@ -106,23 +106,27 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/cases
    */
   app.post("/v1/evidence/cases", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const body = evidenceCaseSchema.parse(request.body);
 
     try {
       const caseRecord = await store.createEvidenceCase({
-        tenantId: request.currentUser?.tenantId ?? "",
+        tenantId: request.currentUser.tenantId,
         caseNumber: body.caseNumber,
         title: body.title,
         description: body.description,
-        createdBy: request.currentUser?.id ?? "unknown",
+        createdBy: request.currentUser.id,
       });
 
       await store.recordCustodyEvent({
         evidenceId: caseRecord.id,
         action: "recording_created",
-        performedBy: request.currentUser?.id ?? "system",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: `Evidence case created: ${body.caseNumber}`,
+        tenantId: request.currentUser.tenantId,
       });
 
       return caseRecord;
@@ -137,11 +141,14 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/cases/:caseId
    */
   app.get("/v1/evidence/cases/:caseId", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
 
     try {
-      const caseRecord = await store.getEvidenceCase(caseId);
-      if (!caseRecord) {
+      const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+      if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "case_not_found" });
       }
 
@@ -157,13 +164,16 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/cases
    */
   app.get("/v1/evidence/cases", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const query = z.object({
       status: z.enum(["open", "investigating", "closed", "archived"]).optional(),
       limit: z.number().int().min(1).max(500).default(100),
     }).parse(request.query);
 
     try {
-      const cases = await store.listEvidenceCases(request.currentUser?.tenantId ?? "", {
+      const cases = await store.listEvidenceCases(request.currentUser.tenantId, {
         status: query.status,
         limit: query.limit,
       });
@@ -180,11 +190,14 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/cases/:caseId/items
    */
   app.post("/v1/evidence/cases/:caseId/items", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
     const body = evidenceItemSchema.parse(request.body);
 
-    const caseRecord = await store.getEvidenceCase(caseId);
-    if (!caseRecord) {
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
@@ -195,17 +208,18 @@ export async function registerEvidenceRoutes(
         startTime: body.startTime,
         endTime: body.endTime,
         description: body.description,
-        addedBy: request.currentUser?.id ?? "unknown",
+        addedBy: request.currentUser.id,
         hash: body.hash,
         fileSize: body.fileSize,
-      });
+      }, request.currentUser.tenantId);
 
       await store.recordCustodyEvent({
         evidenceId: caseId,
         action: "added_to_case",
-        performedBy: request.currentUser?.id ?? "system",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: body.description,
+        tenantId: request.currentUser.tenantId,
       });
 
       return item;
@@ -220,15 +234,18 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/cases/:caseId/items
    */
   app.get("/v1/evidence/cases/:caseId/items", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
 
-    const caseRecord = await store.getEvidenceCase(caseId);
-    if (!caseRecord) {
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
     try {
-      const items = await store.listEvidenceItems(caseId);
+      const items = await store.listEvidenceItems(caseId, request.currentUser.tenantId);
       return { data: items };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -241,23 +258,22 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/cases/:caseId/exports
    */
   app.post("/v1/evidence/cases/:caseId/exports", async (request, reply) => {
-    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
-    const body = exportRequestSchema.parse(request.body);
-
-    if (!request.currentUser) {
+    if (!request.currentUser || !request.currentUser.tenantId) {
       return reply.code(401).send({ error: "unauthenticated" });
     }
+    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
+    const body = exportRequestSchema.parse(request.body);
 
     if (!exportWorker) {
       return reply.code(501).send({ error: "export_worker_not_enabled" });
     }
 
-    const caseRecord = await store.getEvidenceCase(caseId);
-    if (!caseRecord) {
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
-    const items = await store.listEvidenceItems(caseId);
+    const items = await store.listEvidenceItems(caseId, request.currentUser.tenantId);
     const cameras = inferRecordingCameras(items);
     if (cameras.length === 0) {
       return reply.code(400).send({ error: "no_recording_items", message: "No recording items found for this case." });
@@ -299,6 +315,7 @@ export async function registerEvidenceRoutes(
         performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: body.reason,
+        tenantId: request.currentUser.tenantId,
       });
 
       return reply.code(201).send(exportJob);
@@ -313,18 +330,17 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/cases/:caseId/exports
    */
   app.get("/v1/evidence/cases/:caseId/exports", async (request, reply) => {
-    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
-
-    if (!request.currentUser) {
+    if (!request.currentUser || !request.currentUser.tenantId) {
       return reply.code(401).send({ error: "unauthenticated" });
     }
+    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
 
     if (!exportWorker) {
       return reply.code(501).send({ error: "export_worker_not_enabled" });
     }
 
-    const caseRecord = await store.getEvidenceCase(caseId);
-    if (!caseRecord) {
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
@@ -346,11 +362,14 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/exports/:exportId
    */
   app.get("/v1/evidence/exports/:exportId", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { exportId } = z.object({ exportId: z.string() }).parse(request.params);
 
     try {
-      const exportRecord = await store.getEvidenceExport(exportId);
-      if (!exportRecord) {
+      const exportRecord = await store.getEvidenceExport(exportId, request.currentUser.tenantId);
+      if (!exportRecord || (exportRecord.tenantId && exportRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "export_not_found" });
       }
 
@@ -366,15 +385,18 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/cases/:caseId/chain-of-custody
    */
   app.get("/v1/evidence/cases/:caseId/chain-of-custody", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
 
-    const caseRecord = await store.getEvidenceCase(caseId);
-    if (!caseRecord) {
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
       return reply.code(404).send({ error: "case_not_found" });
     }
 
     try {
-      const custody = await store.getCustodyLog(caseId);
+      const custody = await store.getCustodyLog(caseId, request.currentUser.tenantId);
       return { data: custody };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -387,6 +409,9 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/legal-holds
    */
   app.post("/v1/evidence/legal-holds", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const body = legalHoldSchema.parse(request.body);
 
     // Check access to at least one camera's branch
@@ -403,19 +428,21 @@ export async function registerEvidenceRoutes(
       const hold = await store.createLegalHold({
         caseNumber: body.caseNumber,
         reason: body.reason,
-        requestedBy: request.currentUser?.id ?? "unknown",
+        requestedBy: request.currentUser.id,
         cameraIds: body.cameraIds,
         startTime: body.startTime,
         endTime: body.endTime,
         reviewDate: body.reviewDate,
         expiryDate: body.expiryDate,
+        tenantId: request.currentUser.tenantId,
       });
 
       await store.recordCustodyEvent({
         action: "legal_hold_applied",
-        performedBy: request.currentUser?.id ?? "system",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: body.reason,
+        tenantId: request.currentUser.tenantId,
       });
 
       return hold;
@@ -430,20 +457,24 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/legal-holds/:holdId/release
    */
   app.post("/v1/evidence/legal-holds/:holdId/release", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { holdId } = z.object({ holdId: z.string() }).parse(request.params);
     const body = z.object({ reason: z.string().trim().max(500).optional() }).parse(request.body);
 
     try {
-      const released = await store.releaseLegalHold(holdId, request.currentUser?.id ?? "unknown");
+      const released = await store.releaseLegalHold(holdId, request.currentUser.id, request.currentUser.tenantId, body.reason);
       if (!released) {
         return reply.code(404).send({ error: "hold_not_found" });
       }
 
       await store.recordCustodyEvent({
         action: "hold_released",
-        performedBy: request.currentUser?.id ?? "system",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
         reason: body.reason,
+        tenantId: request.currentUser.tenantId,
       });
 
       return released;
@@ -458,15 +489,18 @@ export async function registerEvidenceRoutes(
    * POST /v1/evidence/verify/:caseId
    */
   app.post("/v1/evidence/verify/:caseId", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { caseId } = z.object({ caseId: z.string() }).parse(request.params);
 
     try {
-      const caseRecord = await store.getEvidenceCase(caseId);
-      if (!caseRecord) {
+      const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+      if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "case_not_found" });
       }
 
-      const items = await store.listEvidenceItems(caseId);
+      const items = await store.listEvidenceItems(caseId, request.currentUser.tenantId);
       const recordingItems = items.filter((item) => item.type === "recording" && item.recordingSegmentId);
       const verifications = await Promise.all(
         recordingItems.map((item) => store.verifyRecordingSegment(item.recordingSegmentId!)),
@@ -475,8 +509,9 @@ export async function registerEvidenceRoutes(
       await store.recordCustodyEvent({
         evidenceId: caseId,
         action: "verified",
-        performedBy: request.currentUser?.id ?? "system",
+        performedBy: request.currentUser.id,
         sourceIp: request.ip,
+        tenantId: request.currentUser.tenantId,
       });
 
       return {
@@ -515,7 +550,7 @@ export async function registerEvidenceRoutes(
       priority: z.number().int().min(1).max(1000).optional(),
     }).parse(request.body);
 
-    if (!request.currentUser) {
+    if (!request.currentUser || !request.currentUser.tenantId) {
       return reply.code(401).send({ error: "unauthenticated" });
     }
 
@@ -524,8 +559,8 @@ export async function registerEvidenceRoutes(
     }
 
     try {
-      const caseRecord = await store.getEvidenceCase(body.caseId);
-      if (!caseRecord) {
+      const caseRecord = await store.getEvidenceCase(body.caseId, request.currentUser.tenantId);
+      if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "case_not_found" });
       }
 
@@ -557,12 +592,19 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/exports/:exportId/status
    */
   app.get("/v1/evidence/exports/:exportId/status", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
 
     try {
       if (exportWorker) {
         const job = await exportWorker.getExportJob(exportId);
         if (job) {
+          if (job.tenantId && job.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin") {
+            return reply.code(404).send({ error: "export_not_found" });
+          }
+
           const progress = job.totalSegments
             ? Math.min(100, Math.round((job.processedSegments / job.totalSegments) * 100))
             : job.status === "ready"
@@ -582,8 +624,8 @@ export async function registerEvidenceRoutes(
         }
       }
 
-      const exportRecord = await store.getEvidenceExport(exportId);
-      if (!exportRecord) {
+      const exportRecord = await store.getEvidenceExport(exportId, request.currentUser.tenantId);
+      if (!exportRecord || (exportRecord.tenantId && exportRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "export_not_found" });
       }
 
@@ -602,9 +644,6 @@ export async function registerEvidenceRoutes(
   /**
    * Download export
    * GET /v1/evidence/exports/:exportId/download
-  /**
-   * Download export
-   * GET /v1/evidence/exports/:exportId/download
    * Enforces P0.24, P0.26:
    * Authenticated session + valid download token + tenant match + permission check + audit of successes and failures
    */
@@ -617,7 +656,7 @@ export async function registerEvidenceRoutes(
     }
 
     const currentUser = request.currentUser;
-    if (!currentUser) {
+    if (!currentUser || !currentUser.tenantId) {
       try {
         await store.recordCustodyEvent({
           evidenceId: exportId,
@@ -638,6 +677,7 @@ export async function registerEvidenceRoutes(
           performedBy: currentUser.id,
           sourceIp: request.ip,
           reason: "Missing download token",
+          tenantId: currentUser.tenantId,
         });
       } catch {}
       return reply.code(400).send({ error: "missing_download_token" });
@@ -653,12 +693,13 @@ export async function registerEvidenceRoutes(
             performedBy: currentUser.id,
             sourceIp: request.ip,
             reason: `Invalid download token: ${validation.reason || "mismatch"}`,
+            tenantId: currentUser.tenantId,
           });
         } catch {}
         return reply.code(403).send({ error: "invalid_download_token", reason: validation.reason });
       }
 
-      // Tenant match check (P0.24)
+      // Tenant match check (P0-19: Must return 404 to prevent enumeration)
       if (validation.job.tenantId && validation.job.tenantId !== currentUser.tenantId && currentUser.role !== "super_admin") {
         try {
           await store.recordCustodyEvent({
@@ -667,9 +708,10 @@ export async function registerEvidenceRoutes(
             performedBy: currentUser.id,
             sourceIp: request.ip,
             reason: `Tenant mismatch: expected ${validation.job.tenantId}, user belongs to ${currentUser.tenantId}`,
+            tenantId: currentUser.tenantId,
           });
         } catch {}
-        return reply.code(403).send({ error: "tenant_isolation_violation", reason: "Tenant mismatch" });
+        return reply.code(404).send({ error: "export_not_found" });
       }
 
       // Permission check (P0.24)
@@ -689,6 +731,7 @@ export async function registerEvidenceRoutes(
             performedBy: currentUser.id,
             sourceIp: request.ip,
             reason: "Insufficient permissions for evidence download",
+            tenantId: currentUser.tenantId,
           });
         } catch {}
         return reply.code(403).send({ error: "access_denied", reason: "Insufficient evidence download permissions" });
@@ -704,6 +747,7 @@ export async function registerEvidenceRoutes(
           performedBy: currentUser.id,
           sourceIp: request.ip,
           reason: `Authorized download of evidence package ${exportId} (${stats.size} bytes) via ${request.headers["user-agent"] ?? "client"}`,
+          tenantId: currentUser.tenantId,
         });
 
         const filename = basename(filePath);
@@ -728,7 +772,7 @@ export async function registerEvidenceRoutes(
    */
   app.post("/v1/evidence/shares", async (request, reply) => {
     const currentUser = request.currentUser;
-    if (!currentUser) return reply.code(401).send({ error: "unauthenticated" });
+    if (!currentUser || !currentUser.tenantId) return reply.code(401).send({ error: "unauthenticated" });
 
     const body = z.object({
       exportId: z.string().uuid(),
@@ -771,6 +815,7 @@ export async function registerEvidenceRoutes(
       performedBy: currentUser.id,
       sourceIp: request.ip,
       reason: `External share created for ${body.recipientEmail} (expires in ${body.expiresInHours}h, max ${body.maxDownloads} downloads)`,
+      tenantId: currentUser.tenantId,
     });
 
     return reply.code(201).send({
@@ -846,6 +891,9 @@ export async function registerEvidenceRoutes(
    * GET /v1/evidence/exports/:exportId/manifest
    */
   app.get("/v1/evidence/exports/:exportId/manifest", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
 
     try {
@@ -853,20 +901,30 @@ export async function registerEvidenceRoutes(
 
       if (exportWorker) {
         const job = await exportWorker.getExportJob(exportId);
-        manifestId = job?.manifestId;
+        if (job) {
+          if (job.tenantId && job.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin") {
+            return reply.code(404).send({ error: "export_not_found" });
+          }
+          manifestId = job.manifestId;
+        }
       }
 
       if (!manifestId) {
-        const exportRecord = await store.getEvidenceExport(exportId);
-        manifestId = exportRecord?.manifestId;
+        const exportRecord = await store.getEvidenceExport(exportId, request.currentUser.tenantId);
+        if (exportRecord) {
+          if (exportRecord.tenantId && exportRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin") {
+            return reply.code(404).send({ error: "export_not_found" });
+          }
+          manifestId = exportRecord.manifestId;
+        }
       }
 
       if (!manifestId) {
         return reply.code(404).send({ error: "manifest_not_found" });
       }
 
-      const manifest = await store.getEvidenceManifest(manifestId);
-      if (!manifest) {
+      const manifest = await store.getEvidenceManifest(manifestId, request.currentUser.tenantId);
+      if (!manifest || (manifest.tenantId && manifest.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
         return reply.code(404).send({ error: "manifest_not_found" });
       }
 

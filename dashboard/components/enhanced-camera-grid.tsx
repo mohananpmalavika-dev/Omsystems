@@ -1005,6 +1005,9 @@ export function EnhancedCameraGrid({
                 onDragOver={handleDragOver}
                 onDrop={() => handleDrop(i)}
               >
+                <div className="empty-slot-header">
+                  <span className="empty-slot-badge">Slot #{String(i + 1).padStart(2, "0")}</span>
+                </div>
                 <Settings size={24} className="opacity-30" />
                 <select
                   className="camera-selector"
@@ -1017,7 +1020,7 @@ export function EnhancedCameraGrid({
                   }}
                   value=""
                 >
-                  <option value="">Select camera...</option>
+                  <option value="">Select camera for Slot #{i + 1}...</option>
                   {cameras.map((cam) => (
                     <option key={cam.id} value={cam.id}>
                       {cam.name} - {cam.branchName}
@@ -1117,11 +1120,11 @@ export function EnhancedCameraGrid({
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 12px 16px;
-          background: white;
-          border-radius: 8px;
-          border: 1px solid #e2e8f0;
-          box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+          padding: 10px 16px;
+          background: #0d1926;
+          border-radius: 10px;
+          border: 1px solid #1e3a52;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
           flex-wrap: wrap;
           gap: 12px;
         }
@@ -1137,7 +1140,7 @@ export function EnhancedCameraGrid({
           display: flex;
           align-items: center;
           gap: 7px;
-          color: #475569;
+          color: #94a3b8;
           font-size: 12px;
           font-weight: 700;
         }
@@ -1151,91 +1154,95 @@ export function EnhancedCameraGrid({
         .toolbar-control select {
           min-height: 34px;
           padding: 0 28px 0 9px;
-          border: 1px solid #cbd5e1;
+          border: 1px solid #1e3a52;
           border-radius: 6px;
-          background: #fff;
-          color: #0f172a;
+          background: #0f1c2b;
+          color: #f8fafc;
           font-size: 12px;
+          font-weight: 600;
         }
 
         .viewer-summary {
-          padding: 6px 10px;
-          border: 1px solid #bfdbfe;
+          padding: 6px 12px;
+          border: 1px solid rgba(56, 189, 248, 0.4);
           border-radius: 999px;
-          background: #eff6ff;
-          color: #1d4ed8;
+          background: rgba(14, 116, 144, 0.2);
+          color: #38bdf8;
           font-size: 11px;
-          font-weight: 700;
+          font-weight: 800;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
           white-space: nowrap;
         }
 
         .active-control {
-          border-color: #2563eb;
-          background: #eff6ff;
-          color: #1d4ed8;
+          border-color: #0284c7 !important;
+          background: #0c4a6e !important;
+          color: #e0f2fe !important;
         }
 
         .tour-pagination {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          background: #f1f5f9;
-          padding: 2px 6px;
+          gap: 6px;
+          background: #0b1420;
+          padding: 3px 8px;
           border-radius: 6px;
-          border: 1px solid #cbd5e1;
+          border: 1px solid #1e3a52;
         }
 
         .btn-page {
-          background: #ffffff;
-          border: 1px solid #cbd5e1;
-          color: #334155;
+          background: #132234;
+          border: 1px solid #274563;
+          color: #cbd5e1;
           border-radius: 4px;
-          padding: 2px 6px;
+          padding: 3px 8px;
           font-size: 11px;
+          font-weight: 700;
           cursor: pointer;
           transition: all 0.15s ease;
         }
 
         .btn-page:hover:not(:disabled) {
-          background: #e2e8f0;
-          color: #0f172a;
+          background: #1e3a52;
+          color: #38bdf8;
         }
 
         .btn-page:disabled {
-          opacity: 0.4;
+          opacity: 0.35;
           cursor: not-allowed;
         }
 
         .page-indicator {
-          font-size: 11px;
-          font-weight: 700;
-          color: #334155;
+          font-size: 12px;
+          font-weight: 800;
+          color: #f8fafc;
           padding: 0 4px;
           white-space: nowrap;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         }
 
         .btn-primary,
         .btn-secondary {
-          padding: 8px 16px;
+          padding: 7px 14px;
           border-radius: 6px;
           border: 1px solid;
           cursor: pointer;
           display: flex;
           align-items: center;
           gap: 6px;
-          font-size: 14px;
-          font-weight: 500;
+          font-size: 13px;
+          font-weight: 600;
           transition: all 0.2s;
         }
 
         .btn-primary {
-          background: #3b82f6;
+          background: #2563eb;
           color: white;
           border-color: #3b82f6;
         }
 
         .btn-primary:hover {
-          background: #2563eb;
+          background: #1d4ed8;
         }
 
         .btn-primary:disabled,
@@ -1245,13 +1252,14 @@ export function EnhancedCameraGrid({
         }
 
         .btn-secondary {
-          background: white;
-          color: #374151;
-          border-color: #d1d5db;
+          background: #132234;
+          color: #cbd5e1;
+          border-color: #274563;
         }
 
         .btn-secondary:hover {
-          background: #f3f4f6;
+          background: #1e3a52;
+          color: #f8fafc;
         }
 
         .layout-save-panel {
@@ -1314,30 +1322,54 @@ export function EnhancedCameraGrid({
 
         .grid-empty-slot {
           aspect-ratio: 16/9;
-          border: 2px dashed #d1d5db;
-          border-radius: 8px;
+          border: 2px dashed #1e3a52;
+          border-radius: 10px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 12px;
-          background: #f9fafb;
+          gap: 10px;
+          background: #0d1a27;
           padding: 16px;
           transition: all 0.2s;
+          position: relative;
         }
 
         .grid-empty-slot:hover {
-          border-color: #3b82f6;
-          background: #eff6ff;
+          border-color: #38bdf8;
+          background: #102436;
+        }
+
+        .empty-slot-header {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+        }
+
+        .empty-slot-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 2px 8px;
+          border-radius: 5px;
+          background: rgba(15, 23, 42, 0.9);
+          border: 1px solid rgba(56, 189, 248, 0.45);
+          color: #38bdf8;
+          font-size: 11px;
+          font-weight: 800;
+          font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+          letter-spacing: 0.5px;
         }
 
         .camera-selector {
           width: 100%;
-          max-width: 200px;
-          padding: 8px;
-          border: 1px solid #d1d5db;
+          max-width: 220px;
+          padding: 7px 10px;
+          border: 1px solid #1e3a52;
           border-radius: 6px;
-          font-size: 13px;
+          font-size: 12px;
+          font-weight: 600;
+          background: #0f1c2b;
+          color: #f8fafc;
           cursor: pointer;
         }
 

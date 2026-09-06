@@ -2526,6 +2526,35 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     },
     owner: 'infrastructure-team',
   },
+  {
+    id: 'security.hsm_evidence_signing',
+    name: 'Hardware Security Module (HSM) Evidence Signing',
+    description: 'PKCS#11 hardware security module cryptographic signing provider for air-gapped evidence packaging (Beta/Experimental pending physical appliance testing).',
+    category: 'SECURITY',
+    maturity: CapabilityMaturity.BETA,
+    runtime: { state: CapabilityRuntimeState.HEALTHY },
+    implementation: {
+      backend: true,
+      frontend: false,
+      api: true,
+      persistenceRequired: true,
+      persistenceImplemented: true,
+    },
+    verification: {
+      unitTests: true,
+      integrationTests: false,
+      e2eTests: false,
+      productionDependencyVerified: false,
+      lastVerifiedAt: '2026-09-07T00:00:00Z',
+    },
+    dependencies: {
+      services: ['evidence-vault'],
+      infrastructure: ['pkcs11-hardware-module'],
+    },
+    owner: 'security-team',
+    introducedVersion: '1.0.0-rc.1',
+    documentation: 'docs/security/HSM_INTEGRATION.md',
+  },
 ];
 
 

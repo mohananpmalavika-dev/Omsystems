@@ -5431,8 +5431,8 @@ export class MemoryStore {
     return caseRecord;
   }
 
-  async getEvidenceCase(id: string): Promise<any | undefined> {
-    return this.evidenceCases.find(c => c.id === id);
+  async getEvidenceCase(id: string, tenantId?: string): Promise<any | undefined> {
+    return this.evidenceCases.find(c => c.id === id && (!tenantId || c.tenantId === tenantId));
   }
 
   async listEvidenceCases(tenantId: string, filters?: any): Promise<any[]> {
@@ -5441,19 +5441,23 @@ export class MemoryStore {
     ).slice(0, filters?.limit ?? 100);
   }
 
-  async updateEvidenceCaseStatus(id: string, status: any): Promise<any> {
-    const caseRecord = this.evidenceCases.find(c => c.id === id);
+  async updateEvidenceCaseStatus(id: string, status: any, tenantId?: string): Promise<any> {
+    const caseRecord = this.evidenceCases.find(c => c.id === id && (!tenantId || c.tenantId === tenantId));
     if (!caseRecord) return undefined;
     caseRecord.status = status;
     caseRecord.updatedAt = new Date().toISOString();
     return caseRecord;
   }
 
-  async addEvidenceItem(caseId: string, input: any): Promise<any> {
+  async addEvidenceItem(caseId: string, input: any, tenantId?: string): Promise<any> {
+    const caseRecord = await this.getEvidenceCase(caseId, tenantId);
+    if (!caseRecord) return undefined;
+
     const now = new Date().toISOString();
     const item = {
       id: randomUUID(),
       caseId,
+      tenantId: caseRecord.tenantId,
       type: input.type,
       cameraId: input.cameraId,
       startTime: input.startTime,
@@ -5469,7 +5473,9 @@ export class MemoryStore {
     return item;
   }
 
-  async listEvidenceItems(caseId: string): Promise<any[]> {
+  async listEvidenceItems(caseId: string, tenantId?: string): Promise<any[]> {
+    const caseRecord = await this.getEvidenceCase(caseId, tenantId);
+    if (!caseRecord) return [];
     return this.evidenceItems.filter(item => item.caseId === caseId);
   }
 
@@ -5494,7 +5500,11 @@ export class MemoryStore {
     return event;
   }
 
-  async getCustodyLog(evidenceId: string): Promise<any[]> {
+  async getCustodyLog(evidenceId: string, tenantId?: string): Promise<any[]> {
+    if (tenantId) {
+      const caseRecord = await this.getEvidenceCase(evidenceId, tenantId);
+      if (!caseRecord) return [];
+    }
     return this.custodyEvents.filter(event => event.evidenceId === evidenceId);
   }
 
@@ -5502,6 +5512,7 @@ export class MemoryStore {
     const now = new Date().toISOString();
     const hold = {
       id: randomUUID(),
+      tenantId: input.tenantId,
       caseNumber: input.caseNumber,
       reason: input.reason,
       requestedBy: input.requestedBy,
@@ -5516,20 +5527,24 @@ export class MemoryStore {
     return hold;
   }
 
-  async releaseLegalHold(holdId: string, releasedBy: string): Promise<any | undefined> {
-    const hold = this.evidenceLegalHolds.find(h => h.id === holdId);
+  async getLegalHold(id: string, tenantId?: string): Promise<any | undefined> {
+    return this.evidenceLegalHolds.find(h => h.id === id && (!tenantId || h.tenantId === tenantId));
+  }
+
+  async releaseLegalHold(holdId: string, releasedBy: string, tenantId?: string): Promise<any | undefined> {
+    const hold = this.evidenceLegalHolds.find(h => h.id === holdId && (!tenantId || h.tenantId === tenantId));
     if (!hold) return undefined;
     hold.releasedBy = releasedBy;
     hold.releasedAt = new Date().toISOString();
     return hold;
   }
 
-  async getEvidenceExport(exportId: string): Promise<any | undefined> {
-    return this.evidenceExports.find(e => e.id === exportId);
+  async getEvidenceExport(exportId: string, tenantId?: string): Promise<any | undefined> {
+    return this.evidenceExports.find(e => e.id === exportId && (!tenantId || e.tenantId === tenantId));
   }
 
-  async getEvidenceManifest(manifestId: string): Promise<any | undefined> {
-    return this.evidenceManifests.find(m => m.id === manifestId);
+  async getEvidenceManifest(manifestId: string, tenantId?: string): Promise<any | undefined> {
+    return this.evidenceManifests.find(m => m.id === manifestId && (!tenantId || m.tenantId === tenantId));
   }
 
   // Device Inventory Management

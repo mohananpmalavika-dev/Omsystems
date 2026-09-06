@@ -98,7 +98,7 @@ export class EvidenceVerifierService {
     }
 
     // 4. Validate Chain of Custody
-    const custodyResult = chainOfCustodyService.verifyLedger(pkg.id);
+    const custodyResult = await chainOfCustodyService.verifyLedger(pkg.id);
     if (!custodyResult.valid) {
       errors.push(`Chain of custody validation error: ${custodyResult.error}`);
     } else {
@@ -108,7 +108,7 @@ export class EvidenceVerifierService {
     const overallValid = manifestValid && signatureValid && artifactsValid && chainOfCustodyValid;
 
     // Record verification event in custody
-    chainOfCustodyService.recordEvent({
+    await chainOfCustodyService.recordEvent({
       evidencePackageId: pkg.id,
       event: overallValid ? 'VERIFIED' : 'VERIFICATION_FAILED',
       actorId: verifierActorId,

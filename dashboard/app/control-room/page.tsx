@@ -1474,7 +1474,11 @@ export default function ControlRoomPage() {
         }
         .all-pill {
           font-size: 11px;
-          color: #64748b;
+          color: #94a3b8;
+        }
+        .all-pill strong {
+          color: #f8fafc;
+          font-weight: 700;
         }
 
         /* 3. Single Branch Hero Banner */
@@ -1575,13 +1579,14 @@ export default function ControlRoomPage() {
           flex-direction: column;
         }
         .stat-card strong {
-          font-size: 17px;
+          font-size: 18px;
           line-height: 1.15;
-          color: #f8fafc;
+          color: #f8fafc !important;
+          font-weight: 800;
         }
         .stat-card span {
           overflow: hidden;
-          color: #94a3b8;
+          color: #94a3b8 !important;
           font-size: 11px;
           font-weight: 600;
           text-overflow: ellipsis;

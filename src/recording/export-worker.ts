@@ -15,7 +15,10 @@ import {
   getEvidenceSigningProvider,
   type EvidenceSigningProvider,
 } from "../evidence/signing/evidence-signing-provider.js";
-import { canonicalJsonStringify } from "../evidence-export/services/canonical-json.js";
+import {
+  canonicalJsonStringify,
+  appendCustodyEventTx,
+} from "../database/evidence-repository.js";
 
 /**
  * Creates a standard POSIX ustar TAR archive buffer from memory entries.
@@ -169,6 +172,25 @@ export interface RecordingGapItem {
   durationSeconds: number;
 }
 
+export interface CameraExportDetails {
+  cameraId: string;
+  cameraName: string;
+  requestedWindow: { start: string; end: string };
+  actualFootageWindow: { start: string | null; end: string | null };
+  startDeviationMs: number;
+  endDeviationMs: number;
+  coveragePercent: number;
+  gapCount: number;
+  totalGapsDurationMs: number;
+  segmentCount: number;
+  outputFile: string;
+  outputSha256: string;
+  codec?: { video?: string; audio?: string };
+  resolution?: string;
+  fps?: number;
+  mediaInfo?: any;
+}
+
 export interface ExportManifest {
   schemaVersion: string;
   packageId: string;
@@ -179,6 +201,10 @@ export interface ExportManifest {
   exportedBy: string;
   reason: string;
   branchId: string | null;
+  investigationWindow: {
+    start: string;
+    end: string;
+  };
   camera: {
     id: string;
     name: string;
@@ -186,6 +212,7 @@ export interface ExportManifest {
     recorder: string | null;
     location: string | null;
   };
+  cameras: Record<string, CameraExportDetails>;
   requested: {
     from: string;
     to: string;
@@ -209,19 +236,24 @@ export interface ExportManifest {
   };
   packageDigest?: string;
   deviceTimestamp: string | null;
-  serverReceiveTimestamp: string;
+  serverReceiveTimestamp: string | null;
+  recordingServerReceiveTimestamp?: string | null;
+  exportServerTimestamp: string;
   estimatedClockOffset: number | null;
+  cameraClockOffset: string;
   clockOffsetSource: string;
   ntpStatus: string;
   timezone: string;
   sourceSegments: Array<{
     id: string;
+    cameraId?: string;
     start: string;
     end: string;
     size: number;
     sha256: string;
     storageLocator: string;
     valid: boolean;
+    recordingServerReceiveTimestamp?: string | null;
   }>;
   gaps: RecordingGapItem[];
   outputFiles: Array<{
@@ -439,18 +471,19 @@ export class ExportWorker {
       const jobDir = resolve(vaultRoot, jobId);
       mkdirSync(jobDir, { recursive: true });
 
-      let outputPath: string;
-      let outputHash: string;
-      let outputSize: number;
+      let outputPath: string = "";
+      let outputHash: string = "0".repeat(64);
+      let outputSize: number = 0;
       let mediaInfo: any;
       const outputFiles: Array<{ filename: string; mimeType: string; size: number; sha256: string }> = [];
+      const cameraExportDetails: Record<string, CameraExportDetails> = {};
 
       if (job.format === "manifest-only") {
         outputPath = resolve(jobDir, "manifest.json");
         outputHash = "0".repeat(64);
         outputSize = 0;
       } else if (job.exportType === "original") {
-        const origResult = await this.exportOriginalEvidence(jobDir, validationResults);
+        const origResult = await this.exportOriginalEvidence(jobDir, validationResults, cameras);
         outputPath = origResult.outputPath;
         outputHash = origResult.hash;
         outputSize = origResult.size;
@@ -460,19 +493,164 @@ export class ExportWorker {
           size: outputSize,
           sha256: outputHash,
         });
+
+        // Populate camera details for originals
+        for (const cam of cameras) {
+          const camValidations = validationResults.filter((v) => v.cameraId === cam.cameraId);
+          const camValidSorted = camValidations
+            .filter((v) => v.isValid)
+            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+          const firstFrame = camValidSorted.length > 0 ? camValidSorted[0]!.startTime : null;
+          const lastFrame = camValidSorted.length > 0 ? camValidSorted[camValidSorted.length - 1]!.endTime : null;
+          const reqFromMs = new Date(cam.fromTime).getTime();
+          const reqToMs = new Date(cam.toTime).getTime();
+          const reqDurationMs = Math.max(1, reqToMs - reqFromMs);
+          const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
+          const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
+          const startDeviationMs = firstFrameMs ? firstFrameMs - reqFromMs : 0;
+          const endDeviationMs = lastFrameMs ? lastFrameMs - reqToMs : 0;
+          const camGaps = gaps.filter((g) => g.cameraId === cam.cameraId);
+          const totalGapsDurationMs = camGaps.reduce((sum, g) => sum + g.durationSeconds * 1000, 0);
+          const coveredDurationMs = Math.max(0, reqDurationMs - totalGapsDurationMs);
+          const coveragePercent = Math.min(100, Math.round((coveredDurationMs / reqDurationMs) * 1000) / 10);
+
+          cameraExportDetails[cam.cameraId] = {
+            cameraId: cam.cameraId,
+            cameraName: camValidations[0]?.cameraName || cam.cameraId,
+            requestedWindow: { start: cam.fromTime, end: cam.toTime },
+            actualFootageWindow: { start: firstFrame, end: lastFrame },
+            startDeviationMs,
+            endDeviationMs,
+            coveragePercent,
+            gapCount: camGaps.length,
+            totalGapsDurationMs,
+            segmentCount: camValidSorted.length,
+            outputFile: `originals/${cam.cameraId}/`,
+            outputSha256: outputHash,
+          };
+        }
       } else {
-        // Viewing copy / MP4
-        const viewingResult = await this.createViewingCopy(jobDir, jobId, validationResults, job.options, cameras[0]);
-        outputPath = viewingResult.outputPath;
-        outputHash = viewingResult.hash;
-        outputSize = viewingResult.size;
-        mediaInfo = viewingResult.mediaInfo;
-        outputFiles.push({
-          filename: "viewing-copy.mp4",
-          mimeType: "video/mp4",
-          size: outputSize,
-          sha256: outputHash,
-        });
+        // Multi-camera or viewing copy
+        if (cameras.length > 1 || job.exportType === "multi-camera") {
+          for (const camera of cameras) {
+            const camValidations = validationResults.filter((v) => v.cameraId === camera.cameraId);
+            const camResult = await this.createViewingCopy(
+              jobDir,
+              camera.cameraId,
+              camValidations,
+              job.options,
+              camera,
+            );
+            outputFiles.push({
+              filename: camResult.relativePath,
+              mimeType: "video/mp4",
+              size: camResult.size,
+              sha256: camResult.hash,
+            });
+            if (!outputPath!) {
+              outputPath = camResult.outputPath;
+              outputHash = camResult.hash;
+              outputSize = camResult.size;
+              mediaInfo = camResult.mediaInfo;
+            }
+
+            const camValidSorted = camValidations
+              .filter((v) => v.isValid)
+              .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            const firstFrame = camValidSorted.length > 0 ? camValidSorted[0]!.startTime : null;
+            const lastFrame = camValidSorted.length > 0 ? camValidSorted[camValidSorted.length - 1]!.endTime : null;
+            const reqFromMs = new Date(camera.fromTime).getTime();
+            const reqToMs = new Date(camera.toTime).getTime();
+            const reqDurationMs = Math.max(1, reqToMs - reqFromMs);
+            const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
+            const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
+            const startDeviationMs = firstFrameMs ? firstFrameMs - reqFromMs : 0;
+            const endDeviationMs = lastFrameMs ? lastFrameMs - reqToMs : 0;
+            const camGaps = gaps.filter((g) => g.cameraId === camera.cameraId);
+            const totalGapsDurationMs = camGaps.reduce((sum, g) => sum + g.durationSeconds * 1000, 0);
+            const coveredDurationMs = Math.max(0, reqDurationMs - totalGapsDurationMs);
+            const coveragePercent = Math.min(100, Math.round((coveredDurationMs / reqDurationMs) * 1000) / 10);
+
+            cameraExportDetails[camera.cameraId] = {
+              cameraId: camera.cameraId,
+              cameraName: camValidations[0]?.cameraName || camera.cameraId,
+              requestedWindow: { start: camera.fromTime, end: camera.toTime },
+              actualFootageWindow: { start: firstFrame, end: lastFrame },
+              startDeviationMs,
+              endDeviationMs,
+              coveragePercent,
+              gapCount: camGaps.length,
+              totalGapsDurationMs,
+              segmentCount: camValidSorted.length,
+              outputFile: camResult.relativePath,
+              outputSha256: camResult.hash,
+              codec: {
+                video: camResult.mediaInfo?.videoCodec,
+                audio: camResult.mediaInfo?.hasAudio ? "aac" : undefined,
+              },
+              resolution: camResult.mediaInfo?.width && camResult.mediaInfo?.height
+                ? `${camResult.mediaInfo.width}x${camResult.mediaInfo.height}`
+                : undefined,
+              fps: camResult.mediaInfo?.fps,
+              mediaInfo: camResult.mediaInfo,
+            };
+          }
+        } else {
+          // Single camera viewing copy (e.g. jobId.mp4 for existing integration test backward compatibility)
+          const viewingResult = await this.createViewingCopy(jobDir, jobId, validationResults, job.options, cameras[0]);
+          outputPath = viewingResult.outputPath;
+          outputHash = viewingResult.hash;
+          outputSize = viewingResult.size;
+          mediaInfo = viewingResult.mediaInfo;
+          outputFiles.push({
+            filename: "viewing-copy.mp4",
+            mimeType: "video/mp4",
+            size: outputSize,
+            sha256: outputHash,
+          });
+
+          if (cameras[0]) {
+            const camValidSorted = validationResults
+              .filter((v) => v.isValid)
+              .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+            const firstFrame = camValidSorted.length > 0 ? camValidSorted[0]!.startTime : null;
+            const lastFrame = camValidSorted.length > 0 ? camValidSorted[camValidSorted.length - 1]!.endTime : null;
+            const reqFromMs = new Date(cameras[0].fromTime).getTime();
+            const reqToMs = new Date(cameras[0].toTime).getTime();
+            const reqDurationMs = Math.max(1, reqToMs - reqFromMs);
+            const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
+            const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
+            const startDeviationMs = firstFrameMs ? firstFrameMs - reqFromMs : 0;
+            const endDeviationMs = lastFrameMs ? lastFrameMs - reqToMs : 0;
+            const totalGapsDurationMs = gaps.reduce((sum, g) => sum + g.durationSeconds * 1000, 0);
+            const coveredDurationMs = Math.max(0, reqDurationMs - totalGapsDurationMs);
+            const coveragePercent = Math.min(100, Math.round((coveredDurationMs / reqDurationMs) * 1000) / 10);
+
+            cameraExportDetails[cameras[0].cameraId] = {
+              cameraId: cameras[0].cameraId,
+              cameraName: validationResults[0]?.cameraName || cameras[0].cameraId,
+              requestedWindow: { start: cameras[0].fromTime, end: cameras[0].toTime },
+              actualFootageWindow: { start: firstFrame, end: lastFrame },
+              startDeviationMs,
+              endDeviationMs,
+              coveragePercent,
+              gapCount: gaps.length,
+              totalGapsDurationMs,
+              segmentCount: camValidSorted.length,
+              outputFile: `footage/${jobId}.mp4`,
+              outputSha256: outputHash,
+              codec: {
+                video: viewingResult.mediaInfo?.videoCodec,
+                audio: viewingResult.mediaInfo?.hasAudio ? "aac" : undefined,
+              },
+              resolution: viewingResult.mediaInfo?.width && viewingResult.mediaInfo?.height
+                ? `${viewingResult.mediaInfo.width}x${viewingResult.mediaInfo.height}`
+                : undefined,
+              fps: viewingResult.mediaInfo?.fps,
+              mediaInfo: viewingResult.mediaInfo,
+            };
+          }
+        }
       }
 
       // Generate real metadata.json and audit.json for the evidence package
@@ -542,6 +720,7 @@ export class ExportWorker {
         options: job.options,
         jobDir,
         mediaInfo,
+        cameraExportDetails,
       });
 
       await this.recordCustodyEvent({
@@ -715,15 +894,18 @@ export class ExportWorker {
 
   /**
    * Export original evidence: package immutable segments into authentic POSIX TAR archive
+   * Packages originals per camera under originals/${cameraId}/ per P0-01 forensic spec.
    */
   private async exportOriginalEvidence(
     jobDir: string,
     validations: SegmentValidationResult[],
+    cameras?: Array<{ cameraId: string; fromTime: string; toTime: string }>,
   ): Promise<{ outputPath: string; hash: string; size: number }> {
     const originalsDir = resolve(jobDir, "originals");
     mkdirSync(originalsDir, { recursive: true });
 
     const tarEntries: Array<{ name: string; buffer: Buffer; mtime?: Date }> = [];
+    const isMultiCamera = (cameras && cameras.length > 1) || new Set(validations.map((v) => v.cameraId)).size > 1;
 
     for (const val of validations) {
       if (!val.exists) continue;
@@ -733,14 +915,26 @@ export class ExportWorker {
         ? val.storagePath.split(/[/\\]/).pop()!
         : `${val.segmentId}.mp4`;
 
-      // Preserve individual segment inside originals folder
-      copyFileSync(src, resolve(originalsDir, filename));
+      const camDir = resolve(originalsDir, val.cameraId);
+      mkdirSync(camDir, { recursive: true });
+      copyFileSync(src, resolve(camDir, filename));
 
+      // Always include camera-scoped entry in tar
       tarEntries.push({
-        name: `originals/${filename}`,
+        name: `originals/${val.cameraId}/${filename}`,
         buffer: data,
         mtime: new Date(val.startTime),
       });
+
+      // If single camera, also include root originals/ entry for backward compatibility
+      if (!isMultiCamera) {
+        copyFileSync(src, resolve(originalsDir, filename));
+        tarEntries.push({
+          name: `originals/${filename}`,
+          buffer: data,
+          mtime: new Date(val.startTime),
+        });
+      }
     }
 
     // Produce genuine POSIX ustar TAR archive
@@ -764,14 +958,15 @@ export class ExportWorker {
    */
   private async createViewingCopy(
     jobDir: string,
-    jobId: string,
+    outputName: string,
     validations: SegmentValidationResult[],
     options: any,
     camera?: { cameraId: string; fromTime: string; toTime: string },
-  ): Promise<{ outputPath: string; hash: string; size: number; mediaInfo?: any }> {
+  ): Promise<{ outputPath: string; relativePath: string; hash: string; size: number; mediaInfo?: any }> {
     const footageDir = resolve(jobDir, "footage");
     mkdirSync(footageDir, { recursive: true });
-    const outputPath = resolve(footageDir, `${jobId}.mp4`);
+    const outputPath = resolve(footageDir, `${outputName}.mp4`);
+    const relativePath = `footage/${outputName}.mp4`;
 
     const existingValid = validations
       .filter((v) => v.exists && v.sizeBytes > 0 && v.isValid)
@@ -791,7 +986,8 @@ export class ExportWorker {
     }
 
     // Build FFmpeg concat demuxer manifest
-    const concatPath = resolve(jobDir, `concat_${jobId}.txt`);
+    const safeConcatId = outputName.replace(/[^a-zA-Z0-9_-]/g, "_");
+    const concatPath = resolve(jobDir, `concat_${safeConcatId}.txt`);
     const concatLines = existingValid.map((v) => {
       const resolved = this.resolveStoragePath(v.storagePath).replace(/\\/g, "/");
       return `file '${resolved}'`;
@@ -857,6 +1053,7 @@ export class ExportWorker {
 
     return {
       outputPath,
+      relativePath,
       hash: finalHash,
       size: finalSize,
       mediaInfo: probeResult,
@@ -880,6 +1077,7 @@ export class ExportWorker {
     options: any;
     jobDir: string;
     mediaInfo?: any;
+    cameraExportDetails?: Record<string, CameraExportDetails>;
   }): Promise<string> {
     const manifestId = randomUUID();
 
@@ -902,6 +1100,13 @@ export class ExportWorker {
     const firstFrame = sortedValid.length > 0 ? sortedValid[0]!.startTime : null;
     const lastFrame = sortedValid.length > 0 ? sortedValid[sortedValid.length - 1]!.endTime : null;
 
+    const earliestReqStart = input.cameras.reduce((min, c) => (!min || c.fromTime < min ? c.fromTime : min), "");
+    const latestReqEnd = input.cameras.reduce((max, c) => (!max || c.toTime > max ? c.toTime : max), "");
+    const investigationWindow = {
+      start: earliestReqStart || new Date().toISOString(),
+      end: latestReqEnd || new Date().toISOString(),
+    };
+
     const reqFromMs = firstCamera ? new Date(firstCamera.fromTime).getTime() : 0;
     const reqToMs = firstCamera ? new Date(firstCamera.toTime).getTime() : 0;
     const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
@@ -914,6 +1119,30 @@ export class ExportWorker {
       .update(canonicalJsonStringify(sortedOutputs.map((f) => ({ filename: f.filename, size: f.size, sha256: f.sha256 }))))
       .digest("hex");
 
+    const rawMap = new Map<string, any>();
+    for (const r of input.rawSegments) {
+      rawMap.set(r.id, r);
+    }
+
+    const sourceSegments = input.validationResults.map((v) => {
+      const raw = rawMap.get(v.segmentId);
+      const receiveTs = raw?.server_receive_timestamp || raw?.received_at;
+      return {
+        id: v.segmentId,
+        cameraId: v.cameraId,
+        start: v.startTime,
+        end: v.endTime,
+        size: v.sizeBytes,
+        sha256: v.actualSha256 || v.expectedSha256 || "0".repeat(64),
+        storageLocator: v.storagePath,
+        valid: v.isValid,
+        recordingServerReceiveTimestamp: receiveTs ? new Date(receiveTs).toISOString() : null,
+      };
+    });
+
+    const firstRecv = sourceSegments.find((s) => s.recordingServerReceiveTimestamp)?.recordingServerReceiveTimestamp || null;
+    const exportServerTimestamp = new Date().toISOString();
+
     // Build real manifest - no fabricated clock offset or NTP state
     const manifestPayload: ExportManifest = {
       schemaVersion: "2.0",
@@ -925,6 +1154,7 @@ export class ExportWorker {
       exportedBy: input.exportedBy,
       reason: evidenceCase?.description || "Forensic Investigation Export",
       branchId: cameraRow?.branch_id || null,
+      investigationWindow,
       camera: {
         id: cameraRow?.id || firstCamera?.cameraId || "unknown",
         name: cameraRow?.name || "Camera",
@@ -932,9 +1162,10 @@ export class ExportWorker {
         recorder: cameraRow?.recorder_id ?? null,
         location: cameraRow?.location_type ?? null,
       },
+      cameras: input.cameraExportDetails || {},
       requested: {
-        from: firstCamera?.fromTime || new Date().toISOString(),
-        to: firstCamera?.toTime || new Date().toISOString(),
+        from: firstCamera?.fromTime || investigationWindow.start,
+        to: firstCamera?.toTime || investigationWindow.end,
       },
       actual: {
         firstFrame,
@@ -945,20 +1176,15 @@ export class ExportWorker {
       mediaInfo: input.mediaInfo,
       packageDigest,
       deviceTimestamp: firstFrame,
-      serverReceiveTimestamp: new Date().toISOString(),
+      serverReceiveTimestamp: firstRecv,
+      recordingServerReceiveTimestamp: firstRecv,
+      exportServerTimestamp,
       estimatedClockOffset: null, // Null unless telemetry recorded
+      cameraClockOffset: "UNKNOWN", // P0-02: Never fabricate 0 or omit when offset is unknown
       clockOffsetSource: "UNAVAILABLE",
       ntpStatus: "UNKNOWN", // Never fabricate "synchronized"
       timezone: "UTC",
-      sourceSegments: input.validationResults.map((v) => ({
-        id: v.segmentId,
-        start: v.startTime,
-        end: v.endTime,
-        size: v.sizeBytes,
-        sha256: v.actualSha256 || v.expectedSha256 || "0".repeat(64),
-        storageLocator: v.storagePath,
-        valid: v.isValid,
-      })),
+      sourceSegments,
       gaps: input.gaps,
       outputFiles: input.outputFiles,
       watermarkApplied: Boolean(input.options?.watermark),
@@ -969,22 +1195,24 @@ export class ExportWorker {
       signedAt: new Date().toISOString(),
     };
 
-    // Serialize canonically with deterministic key ordering
-    const canonicalManifestJson = canonicalJsonStringify(manifestPayload);
+    // Clean and serialize canonically with deterministic key ordering
+    const cleanPayload = JSON.parse(JSON.stringify(manifestPayload));
+    delete cleanPayload.digitalSignature;
+    const canonicalManifestJson = canonicalJsonStringify(cleanPayload);
     const manifestDigest = createHash("sha256").update(canonicalManifestJson, "utf8").digest();
 
     // Sign with persistent EvidenceSigningProvider
     const signatureResult = await this.signingProvider.signDigest(manifestDigest);
     const signatureBase64 = signatureResult.signature.toString("base64");
 
-    manifestPayload.digitalSignature = signatureBase64;
-    manifestPayload.signingAlgorithm = signatureResult.algorithm;
-    manifestPayload.signingKeyId = signatureResult.keyId;
+    cleanPayload.digitalSignature = signatureBase64;
+    cleanPayload.signingAlgorithm = signatureResult.algorithm;
+    cleanPayload.signingKeyId = signatureResult.keyId;
 
     // Write manifest files to package folder
     const manifestPath = resolve(input.jobDir, "manifest.json");
     const sigPath = resolve(input.jobDir, "manifest.sig");
-    writeFileSync(manifestPath, JSON.stringify(manifestPayload, null, 2), "utf-8");
+    writeFileSync(manifestPath, JSON.stringify(cleanPayload, null, 2), "utf-8");
     writeFileSync(sigPath, signatureBase64, "utf-8");
 
     // Persist to PostgreSQL database
@@ -1134,14 +1362,12 @@ export class ExportWorker {
         [row.id, row.status],
       );
 
-      try {
-        await this.recordCustodyEvent({
-          evidenceId: row.case_id,
-          action: "worker_crash_recovered",
-          performedBy: "system",
-          reason: `Export job ${row.id} recovered after worker crash during state ${row.status}`,
-        });
-      } catch {}
+      await this.recordCustodyEvent({
+        evidenceId: row.case_id,
+        action: "worker_crash_recovered",
+        performedBy: "system",
+        reason: `Export job ${row.id} recovered after worker crash during state ${row.status}`,
+      });
     }
 
     return result.rows.length;
@@ -1214,54 +1440,18 @@ export class ExportWorker {
     action: string;
     performedBy: string;
     reason?: string;
+    tenantId?: string;
   }): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
-      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [input.evidenceId]);
-
-      const prevResult = await client.query(
-        `SELECT sequence, event_hash FROM chain_of_custody_events
-         WHERE evidence_id = $1
-         ORDER BY sequence DESC NULLS LAST, created_at DESC
-         LIMIT 1`,
-        [input.evidenceId],
-      );
-
-      const nextSequence = (prevResult.rows[0]?.sequence || 0) + 1;
-      const previousHash = prevResult.rows[0]?.event_hash || null;
-
-      const canonicalPayload = canonicalJsonStringify({
+      await appendCustodyEventTx(client, {
         evidenceId: input.evidenceId,
-        sequence: nextSequence,
         action: input.action,
         performedBy: input.performedBy,
-        timestamp: new Date().toISOString(),
-        reason: input.reason || null,
-        previousHash: previousHash || "0".repeat(64),
+        actorType: "SYSTEM",
+        reason: input.reason,
       });
-
-      const eventHash = createHash("sha256")
-        .update(canonicalPayload + (previousHash || "0".repeat(64)))
-        .digest("hex");
-
-      await client.query(
-        `INSERT INTO chain_of_custody_events (
-           id, evidence_id, sequence, action, performed_by, actor_type, reason,
-           event_hash, previous_hash, created_at
-         ) VALUES ($1, $2, $3, $4, $5, 'SYSTEM', $6, $7, $8, now())`,
-        [
-          randomUUID(),
-          input.evidenceId,
-          nextSequence,
-          input.action,
-          input.performedBy,
-          input.reason || null,
-          eventHash,
-          previousHash,
-        ],
-      );
-
       await client.query("COMMIT");
     } catch (err) {
       await client.query("ROLLBACK");

@@ -224,7 +224,7 @@ export class ForensicEvidencePackageService {
     }
 
     // 4. Initial Custody Record
-    chainOfCustodyService.recordEvent({
+    await chainOfCustodyService.recordEvent({
       evidencePackageId: evidenceId,
       event: 'CAPTURE_REQUESTED',
       actorId: input.capturedBy,
@@ -234,7 +234,7 @@ export class ForensicEvidencePackageService {
     });
 
     if (input.redaction?.enabled) {
-      chainOfCustodyService.recordEvent({
+      await chainOfCustodyService.recordEvent({
         evidencePackageId: evidenceId,
         event: 'REDACTION_APPLIED',
         actorId: input.redaction.redactedBy || input.capturedBy,
@@ -244,7 +244,7 @@ export class ForensicEvidencePackageService {
       });
     }
 
-    chainOfCustodyService.recordEvent({
+    await chainOfCustodyService.recordEvent({
       evidencePackageId: evidenceId,
       event: 'CAPTURED',
       actorId: 'system-evidence-capture',
@@ -301,7 +301,7 @@ export class ForensicEvidencePackageService {
     };
 
     // 7. Seal Package & Custody
-    chainOfCustodyService.recordEvent({
+    await chainOfCustodyService.recordEvent({
       evidencePackageId: evidenceId,
       event: 'SEALED',
       actorId: 'system-crypto-signer',

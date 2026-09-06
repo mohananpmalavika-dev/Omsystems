@@ -283,10 +283,17 @@ function CameraTileComponent({
         </div>
 
         <div className="tile-topline">
-          <span className={`status-pill ${hasLiveFrame ? "online" : liveError ? "offline" : camera.status}`}>
-            <i />
-            {hasLiveFrame ? "Live HLS" : liveError ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {typeof index === "number" && (
+              <span className="slot-index-badge" title={`Video Wall Slot ${index + 1}`}>
+                #{String(index + 1).padStart(2, "0")}
+              </span>
+            )}
+            <span className={`status-pill ${hasLiveFrame ? "online" : liveError ? "offline" : camera.status}`}>
+              <i />
+              {hasLiveFrame ? "Live HLS" : liveError ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
+            </span>
+          </div>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
               {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
