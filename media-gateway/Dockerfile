@@ -10,7 +10,7 @@ COPY media-gateway ./media-gateway
 COPY recording-engine/package.json ./recording-engine/package.json
 COPY analytics-engine/package.json ./analytics-engine/package.json
 RUN npm install --legacy-peer-deps
-RUN cd media-gateway && npx tsc -p tsconfig.json
+RUN npm run build --workspace @sentinel/media-gateway
 
 FROM node:22-alpine
 ENV NODE_ENV=production

@@ -28,10 +28,10 @@ export async function buildMediaGateway(options: {
     app.log.error({ err: error }, "Media session cleanup failed");
   });
   app.addHook("onClose", async () => access.close());
-  app.addContentTypeParser(
-    ["application/sdp", "application/trickle-ice-sdpfrag"],
+  (app as any).addContentTypeParser(
+    [/^application\/(sdp|trickle-ice-sdpfrag)/i, "application/sdp", "application/trickle-ice-sdpfrag"],
     { parseAs: "string", bodyLimit: 256 * 1024 },
-    (_request, body, done) => done(null, body),
+    (_request: unknown, body: string, done: (err: Error | null, body?: string) => void) => done(null, body),
   );
 
   app.addHook("preHandler", async (request, reply) => {
@@ -369,7 +369,20 @@ function forwardWebRtcHeaders(headers: Record<string, unknown>) {
   const forwarded: Record<string, string> = {};
   for (const name of ["accept", "authorization", "content-type", "id", "if-match", "range", "user-agent"]) {
     const value = headers[name];
-    if (typeof value === "string") forwarded[name] = value;
+    if (typeof value === "string") {
+      if (name === "content-type") {
+        const lower = value.toLowerCase();
+        if (lower.includes("application/sdp")) {
+          forwarded[name] = "application/sdp";
+          continue;
+        }
+        if (lower.includes("application/trickle-ice-sdpfrag")) {
+          forwarded[name] = "application/trickle-ice-sdpfrag";
+          continue;
+        }
+      }
+      forwarded[name] = value;
+    }
   }
   return forwarded;
 }

@@ -10,8 +10,8 @@ const optionalUrl = z.preprocess(
 );
 const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
-  value = value.trim();
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+  const trimmed = value.trim();
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
 }, httpUrl);
 
 const schema = z.object({
@@ -19,9 +19,9 @@ const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(8090),
   CONTROL_PLANE_URL: serviceUrl,
   MEDIA_GATEWAY_SHARED_KEY: z.string().min(32),
-  MEDIAMTX_API_URL: httpUrl.default("http://localhost:9997"),
-  MEDIAMTX_HLS_URL: httpUrl.default("http://localhost:8888"),
-  MEDIAMTX_WEBRTC_URL: httpUrl.default("http://localhost:8889"),
+  MEDIAMTX_API_URL: httpUrl.default("http://127.0.0.1:9997"),
+  MEDIAMTX_HLS_URL: httpUrl.default("http://127.0.0.1:8888"),
+  MEDIAMTX_WEBRTC_URL: httpUrl.default("http://127.0.0.1:8889"),
   PUBLIC_HLS_BASE_URL: optionalUrl,
   PUBLIC_WEBRTC_BASE_URL: optionalUrl,
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
