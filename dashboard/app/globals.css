@@ -6198,6 +6198,377 @@ body {
 }
 @media (prefers-reduced-motion: reduce) { .command-center-metrics > div, .command-center-hero > div:last-child :where(a, button) { transition: none; } }
 
+/* Live Video Wall: a focused operator console rather than a generic content page. */
+.control-room-section {
+  background:
+    radial-gradient(circle at 92% 0%, rgba(20, 125, 138, .08), transparent 24rem),
+    linear-gradient(180deg, #f7fbfb 0, #edf4f6 300px);
+}
+
+.control-room-section .control-room {
+  padding-top: 22px;
+}
+
+.control-room-section .control-room-header {
+  min-height: 132px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 23px 26px;
+  border: 1px solid rgba(139, 198, 202, .5);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(24, 167, 165, .24), transparent 22rem),
+    linear-gradient(135deg, #17324a 0%, #102c3d 70%, #0e2434 100%);
+  box-shadow: 0 24px 58px -34px rgba(10, 52, 67, .62);
+}
+
+.control-room-section .control-room-header h1 {
+  font-size: clamp(24px, 2.2vw, 32px);
+  letter-spacing: -1px;
+}
+
+.control-room-section .control-room-header p {
+  max-width: 680px;
+  line-height: 1.55;
+}
+
+.control-room-section .header-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 9px;
+  background: rgba(255,255,255,.07);
+  white-space: nowrap;
+}
+
+.control-room-section .stats-bar {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.control-room-section .stats-bar .stat-card {
+  min-height: 88px;
+  padding: 14px;
+  border-radius: 13px !important;
+}
+
+.control-room-section .stats-bar .stat-card strong {
+  color: #17324a !important;
+  font-size: 23px;
+  letter-spacing: -.55px;
+}
+
+.control-room-section .stats-bar .stat-card span {
+  color: #647b89 !important;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.control-room-section .filter-bar,
+.control-room-section .control-room-filters,
+.control-room-section .filters-panel {
+  border: 1px solid #d3e2e7;
+  border-radius: 14px;
+  background: rgba(255,255,255,.82);
+  box-shadow: 0 8px 26px rgba(31, 70, 88, .05);
+}
+
+.control-room-section .filter-meta-row {
+  align-items: center;
+  gap: 12px;
+  padding: 11px 13px;
+  border: 1px solid #d3e2e7;
+  border-radius: 12px;
+  background: rgba(255,255,255,.72);
+}
+
+.control-room-section .status-chips,
+.control-room-section .ai-wall-controls {
+  gap: 6px;
+}
+
+.control-room-section .status-chips .chip,
+.control-room-section .ai-wall-controls button,
+.control-room-section .ai-engine-chip {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid #d5e2e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #557184;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.control-room-section .status-chips .chip:hover,
+.control-room-section .ai-wall-controls button:hover,
+.control-room-section .status-chips .chip.active,
+.control-room-section .ai-wall-controls button.active {
+  color: #0f6570;
+  border-color: #8fc4c8;
+  background: #e8f7f6;
+}
+
+.control-room-section .ai-engine-chip {
+  color: #0f6570;
+  border-color: #b8dddd;
+  background: #effafa;
+}
+
+.control-room-section .control-room-content {
+  padding: 14px;
+  border: 1px solid #cbdde3;
+  border-radius: 17px;
+  background: #10202c;
+  box-shadow: 0 18px 45px rgba(18, 48, 63, .16);
+}
+
+.control-room-section .control-room-content .camera-grid-container {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.control-room-section .camera-grid {
+  gap: 12px;
+  margin-top: 0;
+}
+
+.control-room-section .camera-tile {
+  overflow: hidden;
+  border-color: #365364;
+  border-radius: 12px;
+  background: #081722;
+  box-shadow: 0 12px 26px rgba(0,0,0,.22);
+}
+
+.control-room-section .camera-tile:hover {
+  border-color: #67c6c5;
+  box-shadow: 0 18px 34px rgba(0,0,0,.3);
+}
+
+.control-room-section .camera-feed-placeholder {
+  min-height: 190px;
+  color: #9bb5c3;
+  background: linear-gradient(145deg, #102a38, #081722);
+}
+
+.control-room-section .camera-feed-placeholder small {
+  max-width: 230px;
+  color: #d99a9a;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.control-room-section .empty-control-room-card {
+  min-height: 310px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 10px;
+  padding: 34px 20px;
+  border: 1px dashed #547180;
+  border-radius: 12px;
+  color: #b3c7d0;
+  background: #0d202c;
+  text-align: center;
+}
+
+.control-room-section .empty-control-room-card h2 {
+  color: #f0f7f8;
+  font-size: 17px;
+}
+
+.control-room-section .empty-control-room-card p {
+  max-width: 430px;
+  color: #98b0bb;
+  line-height: 1.55;
+}
+
+@media (max-width: 1100px) {
+  .control-room-section .stats-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 680px) {
+  .control-room-section .control-room { padding: 14px 12px 30px; }
+  .control-room-section .control-room-header { min-height: 0; padding: 19px; }
+  .control-room-section .control-room-header h1 { font-size: 24px; }
+  .control-room-section .header-time { width: 100%; justify-content: center; }
+  .control-room-section .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .control-room-section .stats-bar .stat-card { min-height: 76px; padding: 11px; }
+  .control-room-section .stats-bar .stat-card strong { font-size: 20px; }
+  .control-room-section .filter-meta-row { align-items: stretch; flex-direction: column; }
+  .control-room-section .status-chips,
+  .control-room-section .ai-wall-controls { flex-wrap: wrap; }
+  .control-room-section .control-room-content { padding: 8px; border-radius: 13px; }
+}
+
+/* Product-wide finishing layer for high-traffic operational modules. */
+.incident-management-page,
+.evidence-manager-container,
+.maintenance-dashboard,
+.governance-section .page-container,
+.operations-section .page-container {
+  color: var(--ink);
+}
+
+.incident-management-page,
+.evidence-manager-container {
+  width: min(100%, 1440px) !important;
+  padding: 24px 28px 48px !important;
+  margin-inline: auto;
+}
+
+.page-hero {
+  min-height: 132px;
+  margin-bottom: 18px;
+  border-radius: 18px;
+  box-shadow: 0 18px 48px -32px rgba(18, 52, 73, .42);
+}
+
+.page-hero-light {
+  border-color: #d3e2e7;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(24, 167, 165, .1), transparent 20rem),
+    linear-gradient(145deg, #fff, #f3f9fa);
+}
+
+.page-hero-light .page-hero-icon {
+  background: linear-gradient(145deg, #18a7a5, #147d8a);
+  box-shadow: 0 10px 24px rgba(20, 125, 138, .2);
+}
+
+.page-hero-actions :where(a, button),
+.btn-primary,
+.primary-button,
+.primary-action {
+  min-height: 40px;
+  border-radius: 9px;
+  font-weight: 760;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
+}
+
+.page-hero-actions :where(a, button):hover,
+.btn-primary:hover,
+.primary-button:hover,
+.primary-action:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(20, 125, 138, .17);
+}
+
+.incident-management-page .incident-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 11px !important;
+  margin-bottom: 18px !important;
+}
+
+.incident-management-page .incident-metrics-grid > * {
+  min-height: 96px;
+  border: 1px solid #d6e3e7;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.incident-management-page .incident-filter-panel,
+.incident-management-page .incident-table-panel,
+.evidence-manager-container .cases-panel,
+.evidence-manager-container .details-panel {
+  border-color: #d3e2e7 !important;
+  border-radius: 15px !important;
+  box-shadow: 0 8px 26px rgba(31, 70, 88, .06) !important;
+}
+
+.incident-management-page .incident-filter-panel {
+  padding: 13px !important;
+  background: rgba(255,255,255,.85) !important;
+}
+
+.incident-management-page .incident-table-panel {
+  overflow: hidden;
+}
+
+.incident-management-page table thead,
+.evidence-manager-container .panel-header,
+.evidence-manager-container .section-header {
+  background: #f5fafa;
+}
+
+.incident-management-page table th {
+  color: #557184;
+  font-size: 10px;
+  letter-spacing: .65px;
+}
+
+.incident-management-page table td {
+  color: #29465b;
+  border-color: #e2ecef;
+}
+
+.incident-management-page table tbody tr:hover {
+  background: #f1f9f9;
+}
+
+.evidence-manager-container .evidence-layout {
+  gap: 14px;
+}
+
+.evidence-manager-container .cases-panel,
+.evidence-manager-container .details-panel {
+  background: #fff;
+}
+
+.evidence-manager-container .case-item {
+  border-color: #e0ecef;
+  transition: border-color .16s ease, background .16s ease, transform .16s ease;
+}
+
+.evidence-manager-container .case-item:hover,
+.evidence-manager-container .case-item.active {
+  border-color: #8fc4c8;
+  background: #effafa;
+  transform: translateX(2px);
+}
+
+.evidence-manager-container .status-badge,
+.evidence-manager-container .case-number {
+  letter-spacing: .3px;
+}
+
+.evidence-manager-container .empty-state,
+.evidence-manager-container .empty-state-small {
+  color: #668392;
+  background: #f8fbfb;
+}
+
+.page-alert.error,
+.module-alert,
+.data-banner {
+  border-radius: 11px;
+  box-shadow: 0 6px 18px rgba(133, 54, 54, .06);
+}
+
+@media (max-width: 760px) {
+  .incident-management-page,
+  .evidence-manager-container {
+    padding: 16px 14px 36px !important;
+  }
+
+  .incident-management-page .incident-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .page-hero { min-height: 0; }
+  .page-hero-actions :where(a, button) { flex: 1 1 45%; }
+  .evidence-manager-container .evidence-layout { grid-template-columns: 1fr !important; }
+}
+
 /* ===========================================================================
    Cross-route design stabilization
    Keep the navigation shell, legacy utility pages, and dense operational
