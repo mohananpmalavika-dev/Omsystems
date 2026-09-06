@@ -32,6 +32,8 @@ function addLiveViewFixture(store: MemoryStore) {
     id: "user-live-test",
     displayName: "Live view test operator",
     tenantId: "omsystems",
+    role: "operator",
+    status: "active",
   });
   store.grants.push({
     userId: "user-live-test",

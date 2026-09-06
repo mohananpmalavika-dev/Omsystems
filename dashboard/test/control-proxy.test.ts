@@ -363,10 +363,10 @@ describe("dashboard control-plane BFF", () => {
     expect(await response.json()).toEqual({ data: [] });
   });
 
-  it("returns an empty digital twin branch list when the upstream route is missing", async () => {
+  it.each([401, 403, 404, 503])("preserves a failed digital twin response (%s) instead of claiming there are no branches", async (status) => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       new Response(null, {
-        status: 404,
+        status,
         headers: { "content-type": "application/json" },
       }),
     ));
@@ -376,8 +376,8 @@ describe("dashboard control-plane BFF", () => {
       { params: Promise.resolve({ path: ["v1", "digital-twin", "branches"] }) },
     );
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual([]);
+    expect(response.status).toBe(status);
+    expect(await response.text()).not.toBe("[]");
   });
 
   it("keeps login tokens in HttpOnly cookies and removes them from JSON", async () => {

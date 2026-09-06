@@ -329,10 +329,14 @@ export function registerPortableCameraRoutes(
         await leaseManager.releaseLease(tenantId, body.sourceId, sessionId, mediaNodeId);
         return reply.code(502).send({ error: "media_gateway_failed_to_initialize_publish" });
       }
-      publishDetails = z.object({
+      const parsedPublishDetails = z.object({
         whipUrl: z.string().url(), whepUrl: z.string().url(),
         publishToken: z.string().min(32), expiresAt: z.string().datetime(),
       }).parse(await gwRes.json());
+      publishDetails = {
+        whipUrl: parsedPublishDetails.whipUrl!, whepUrl: parsedPublishDetails.whepUrl!,
+        publishToken: parsedPublishDetails.publishToken!, expiresAt: parsedPublishDetails.expiresAt!,
+      };
     } catch (gwErr) {
       request.log.warn({ err: gwErr }, "Portable media gateway startup failed");
       await leaseManager.releaseLease(tenantId, body.sourceId, sessionId, mediaNodeId);

@@ -49,7 +49,7 @@ services:
       REDIS_URL: ${REDIS_URL:?REDIS_URL is required (URL-encode credentials)}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
-      MEDIA_GATEWAY_URL: http://media-gateway:8090
+      MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
       EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
       RECORDING_ENGINE_URL: http://recording-engine:8091

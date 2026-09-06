@@ -43,7 +43,7 @@ for (const filePath of gitFiles) {
         // Exclude common benign placeholders
         if (/change-me|change-in-production|example|localhost|00000000-0000-0000-0000-000000000000|your[-_ ]?secure[-_ ]?token|your[-_ ]?openai[-_ ]?api[-_ ]?key|default[-_ ]?secret|default[-_ ]?key|test[-_ ]?(?:api[-_ ]?key|jwt[-_ ]?secret|secret[-_ ]?key)|for-testing-only/i.test(line)) continue;
 
-        findings.push({ file: filePath, line: i + 1, text: line.trim() });
+        findings.push({ file: filePath, line: i + 1 });
         break;
       }
     }
@@ -57,7 +57,7 @@ if (findings.length === 0) {
 
 console.error('Secret scan found potential sensitive values:');
 for (const finding of findings) {
-  console.error(`- ${finding.file}:${finding.line}: ${finding.text}`);
+  console.error(`- ${finding.file}:${finding.line}: potential secret (value redacted)`);
 }
 console.error('\nReview the findings and remove any committed secrets.');
 process.exit(1);
