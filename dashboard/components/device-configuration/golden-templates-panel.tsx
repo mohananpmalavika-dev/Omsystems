@@ -150,6 +150,13 @@ export function GoldenTemplatesPanel({
   const [remediating, setRemediating] = useState(false);
   const [remediationResult, setRemediationResult] = useState<any | null>(null);
 
+  // Convert to Signed Config Draft Modal State
+  const [draftModalOpen, setDraftModalOpen] = useState(false);
+  const [draftBranchId, setDraftBranchId] = useState<string>(selectedBranchId || (branches[0]?.id ?? "BR-118"));
+  const [draftChangeReason, setDraftChangeReason] = useState<string>("");
+  const [drafting, setDrafting] = useState(false);
+  const [draftResult, setDraftResult] = useState<any | null>(null);
+
   // Expanded Drifts in Table
   const [expandedDriftDeviceIds, setExpandedDriftDeviceIds] = useState<Set<string>>(new Set());
 
@@ -262,6 +269,33 @@ export function GoldenTemplatesPanel({
       else next.add(deviceId);
       return next;
     });
+  };
+
+  const handleOpenDraftModal = (template: Template) => {
+    setSelectedTemplate(template);
+    setDraftResult(null);
+    setDraftChangeReason(`Standardize branch configuration using ${template.name}`);
+    setDraftModalOpen(true);
+  };
+
+  const handleExecuteDraft = async () => {
+    if (!selectedTemplate) return;
+    setDrafting(true);
+    setDraftResult(null);
+    try {
+      const res = await deviceConfigurationApi.convertGoldenTemplateToDraft(selectedTemplate.id, {
+        branchId: draftBranchId,
+        changeReason: draftChangeReason,
+      });
+      setDraftResult(res?.data || { success: true, message: "Draft version created successfully." });
+    } catch (err: any) {
+      setDraftResult({
+        success: false,
+        error: err.message || "Failed to create signed config draft",
+      });
+    } finally {
+      setDrafting(false);
+    }
   };
 
   const filteredTemplates = templates.filter((t) => {
@@ -564,11 +598,11 @@ export function GoldenTemplatesPanel({
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex items-center gap-2 pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center gap-1.5 pt-3 border-t border-slate-800/80">
                       <button
                         type="button"
                         onClick={() => handleOpenViewDetails(template)}
-                        className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-1.5 transition"
+                        className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-semibold flex items-center justify-center gap-1 transition"
                       >
                         <Eye className="w-3.5 h-3.5" />
                         Settings
@@ -576,8 +610,18 @@ export function GoldenTemplatesPanel({
 
                       <button
                         type="button"
+                        onClick={() => handleOpenDraftModal(template)}
+                        className="flex-1 py-2 rounded-xl bg-purple-950/50 hover:bg-purple-900/70 border border-purple-800/60 text-purple-300 text-[11px] font-semibold flex items-center justify-center gap-1 transition"
+                        title="Convert Golden Template into Signed Configuration Draft"
+                      >
+                        <Shield className="w-3.5 h-3.5" />
+                        Draft
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => handleOpenApplyModal(template)}
-                        className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-md shadow-indigo-600/20"
+                        className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center justify-center gap-1 transition shadow-md shadow-indigo-600/20"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         Apply
@@ -976,6 +1020,106 @@ export function GoldenTemplatesPanel({
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIGNED CONFIG DRAFT MODAL */}
+      {draftModalOpen && selectedTemplate && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-purple-400" />
+                  Convert to Signed Config Draft
+                </h3>
+                <span className="text-xs text-slate-400">
+                  {selectedTemplate.name} (v{selectedTemplate.version})
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDraftModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Target Branch ID:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. BR-118"
+                  value={draftBranchId}
+                  onChange={(e) => setDraftBranchId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-slate-300">Audit Change Reason:</label>
+                <textarea
+                  rows={2}
+                  value={draftChangeReason}
+                  onChange={(e) => setDraftChangeReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-purple-500"
+                />
+              </div>
+
+              <div className="bg-purple-950/30 p-3 rounded-xl border border-purple-900/50 text-[11px] text-purple-300 space-y-1">
+                <div className="font-bold flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  Immutable Signed Configuration Control:
+                </div>
+                <p className="text-slate-400">
+                  Converting this golden template creates a new immutable version draft. In accordance with Banking SOC Separation of Duties, it requires CISO dual-custody approval and Ed25519 signing before canary deployment.
+                </p>
+              </div>
+
+              {draftResult && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs ${
+                    draftResult.success !== false
+                      ? "bg-emerald-950/60 border-emerald-800/80 text-emerald-300"
+                      : "bg-rose-950/60 border-rose-800/80 text-rose-300"
+                  }`}
+                >
+                  <div className="font-bold flex items-center gap-1.5">
+                    {draftResult.success !== false ? (
+                      <CheckCircle className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <AlertTriangle className="w-4 h-4 text-rose-400" />
+                    )}
+                    {draftResult.success !== false ? "Draft Created Successfully" : "Draft Creation Failed"}
+                  </div>
+                  <div className="mt-1 text-[11px] font-mono">
+                    {draftResult.id ? `Version ${draftResult.version || ''} (ID: ${draftResult.id})` : draftResult.message || draftResult.error}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setDraftModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDraft}
+                disabled={drafting || !draftBranchId}
+                className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-purple-600/30"
+              >
+                <Shield className={`w-3.5 h-3.5 ${drafting ? "animate-spin" : ""}`} />
+                {drafting ? "Generating Draft..." : "Generate Signed Draft"}
               </button>
             </div>
           </div>

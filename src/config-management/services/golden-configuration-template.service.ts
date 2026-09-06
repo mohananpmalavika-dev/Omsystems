@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { CameraConfiguration } from "../domain/signed-config.types.js";
+import type { CameraConfiguration, BranchConfiguration } from "../domain/signed-config.types.js";
 
 export interface GoldenTemplateParameterSet {
   resolution: string;
@@ -383,8 +383,8 @@ export class GoldenConfigurationTemplateService {
 
     // Import signedConfigService dynamically to avoid circular dependencies
     const { signedConfigService } = await import('./signed-config.service.js');
-    const existingState = signedConfigService.getBranchState(input.branchId, input.tenantId);
-    const baseConfig: BranchConfiguration = existingState?.actualConfig || {
+    const activeVer = signedConfigService.getActiveVersion();
+    const baseConfig: BranchConfiguration = activeVer?.config ? JSON.parse(JSON.stringify(activeVer.config)) : {
       schemaVersion: '3.1',
       network: {
         dnsServers: ['10.100.1.10', '10.100.1.11'],
@@ -441,7 +441,7 @@ export class GoldenConfigurationTemplateService {
       },
     };
 
-    const nextVer = input.versionNumber || (existingState?.desiredVersion ? existingState.desiredVersion + 1 : 35);
+    const nextVer = input.versionNumber || (activeVer?.version ? activeVer.version + 1 : 35);
     const draft = await signedConfigService.createDraftVersion(
       {
         tenantId: input.tenantId,

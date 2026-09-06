@@ -196,6 +196,7 @@ export interface ComponentApplyResult {
   errorMessage?: string;
   desiredHash?: string;
   actualHash?: string;
+  appliedSettings?: Record<string, unknown>;
 }
 
 export interface BranchApplyResult {

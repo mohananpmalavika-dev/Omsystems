@@ -41,6 +41,7 @@ export class OperationalMapService {
         configDriftCount: 1,
         clockDriftCount: 1,
       },
+      childrenCount: 4,
     };
     this.nodes.set(countryNode.id, countryNode);
 
@@ -70,6 +71,7 @@ export class OperationalMapService {
         configDriftCount: 1,
         clockDriftCount: 1,
       },
+      childrenCount: 2,
     };
 
     const tamilNaduNode: MapNodeEntity = {
@@ -97,6 +99,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 3,
     };
 
     const karnatakaNode: MapNodeEntity = {
@@ -124,6 +127,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 2,
     };
 
     const maharashtraNode: MapNodeEntity = {
@@ -151,6 +155,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 3,
     };
 
     this.nodes.set(keralaNode.id, keralaNode);
@@ -183,6 +188,7 @@ export class OperationalMapService {
         configDriftCount: 1,
         clockDriftCount: 1,
       },
+      childrenCount: 2,
     };
 
     const centralKeralaNode: MapNodeEntity = {
@@ -209,6 +215,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 1,
     };
 
     this.nodes.set(southKeralaNode.id, southKeralaNode);
@@ -239,6 +246,7 @@ export class OperationalMapService {
         configDriftCount: 1,
         clockDriftCount: 1,
       },
+      childrenCount: 2,
     };
 
     const br121Node: MapNodeEntity = {
@@ -265,6 +273,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 1,
     };
 
     const br034Node: MapNodeEntity = {
@@ -291,6 +300,7 @@ export class OperationalMapService {
         configDriftCount: 0,
         clockDriftCount: 0,
       },
+      childrenCount: 1,
     };
 
     this.nodes.set(br118Node.id, br118Node);
@@ -303,12 +313,14 @@ export class OperationalMapService {
       branchId: 'BR-118',
       name: 'Main Vault & Strongroom',
       floorNumber: -1,
+      planImageUrl: '/assets/floorplans/vault.svg',
       widthMeters: 20,
       heightMeters: 15,
       cameras: [
         {
           cameraId: 'CAM-118-14',
-          name: 'Vault Door Primary',
+          cameraName: 'Vault Door Primary',
+          channel: 14,
           xPercent: 40,
           yPercent: 60,
           rotationDegrees: 225,
@@ -318,7 +330,8 @@ export class OperationalMapService {
         },
         {
           cameraId: 'CAM-118-15',
-          name: 'Safe Deposit Lockers',
+          cameraName: 'Safe Deposit Lockers',
+          channel: 15,
           xPercent: 70,
           yPercent: 30,
           rotationDegrees: 45,
@@ -334,12 +347,14 @@ export class OperationalMapService {
       branchId: 'BR-118',
       name: 'Ground Floor Banking Hall',
       floorNumber: 1,
+      planImageUrl: '/assets/floorplans/ground.svg',
       widthMeters: 35,
       heightMeters: 25,
       cameras: [
         {
           cameraId: 'CAM-118-04',
-          name: 'Teller Cash Counter 4',
+          cameraName: 'Teller Cash Counter 4',
+          channel: 4,
           xPercent: 55,
           yPercent: 42,
           rotationDegrees: 180,
@@ -349,7 +364,8 @@ export class OperationalMapService {
         },
         {
           cameraId: 'CAM-118-01',
-          name: 'Main Lobby Entrance',
+          cameraName: 'Main Lobby Entrance',
+          channel: 1,
           xPercent: 10,
           yPercent: 10,
           rotationDegrees: 90,
@@ -359,7 +375,8 @@ export class OperationalMapService {
         },
         {
           cameraId: 'CAM-118-02',
-          name: 'Customer Waiting Lounge & ATM Vestibule',
+          cameraName: 'Customer Waiting Lounge & ATM Vestibule',
+          channel: 2,
           xPercent: 30,
           yPercent: 45,
           rotationDegrees: 45,
@@ -377,59 +394,61 @@ export class OperationalMapService {
     // 6. Causes for Drill-Down
     this.nodeCauses.set('node-state-kerala', [
       {
-        causeId: 'cause-kl-01',
-        nodeId: 'node-state-kerala',
         code: 'REGION_CRITICAL',
         severity: 'CRITICAL',
+        sourceType: 'INCIDENT',
+        sourceId: 'node-region-south-kerala',
         message: 'South Kerala Regional Grid has 1 branch in active P1 state',
-        drillDownTarget: { id: 'node-region-south-kerala', type: 'REGION' },
+        observedAt: new Date(),
+        drillDownTarget: { id: 'node-region-south-kerala', level: 'REGION' },
       },
     ]);
 
     this.nodeCauses.set('node-region-south-kerala', [
       {
-        causeId: 'cause-reg-skl-01',
-        nodeId: 'node-region-south-kerala',
         code: 'BRANCH_CRITICAL',
         severity: 'CRITICAL',
+        sourceType: 'INCIDENT',
+        sourceId: 'BR-118',
         message: 'Branch BR-118 Kollam Main has active P1 intrusion event',
-        drillDownTarget: { id: 'BR-118', type: 'BRANCH' },
+        observedAt: new Date(),
+        drillDownTarget: { id: 'BR-118', level: 'BRANCH' },
       },
     ]);
 
     this.nodeCauses.set('BR-118', [
       {
-        causeId: 'cause-br118-01',
-        nodeId: 'BR-118',
         code: 'P1_VAULT_INTRUSION',
         severity: 'CRITICAL',
-        sourceType: 'AI_DETECTOR',
+        sourceType: 'INCIDENT',
+        sourceId: 'CAM-118-14',
         message: 'Vault solitary entry detected by YOLOv8 on CAM-118-14',
-        drillDownTarget: { id: 'CAM-118-14', type: 'CAMERA' },
+        observedAt: new Date(),
+        drillDownTarget: { id: 'CAM-118-14', level: 'CAMERA' },
       },
       {
-        causeId: 'cause-br118-02',
-        nodeId: 'BR-118',
         code: 'RECORDER_NVR_OFFLINE',
         severity: 'CRITICAL',
         sourceType: 'RECORDER',
+        sourceId: 'NVR-BR-118-02',
         message: 'Secondary NVR storage target unreachable',
+        observedAt: new Date(),
       },
       {
-        causeId: 'cause-br118-03',
-        nodeId: 'BR-118',
         code: 'RETENTION_POLICY_BREACH',
         severity: 'WARNING',
-        sourceType: 'STORAGE',
+        sourceType: 'RETENTION',
+        sourceId: 'STOR-BR-118-01',
         message: 'Storage disk retention is 17 days behind regulatory 90-day requirement',
+        observedAt: new Date(),
       },
       {
-        causeId: 'cause-br118-04',
-        nodeId: 'BR-118',
         code: 'CAMERA_OFFLINE',
         severity: 'WARNING',
         sourceType: 'CAMERA',
+        sourceId: 'CAM-118-14',
         message: 'CAM-118-14 signal heartbeat intermittent',
+        observedAt: new Date(),
       },
     ]);
   }
