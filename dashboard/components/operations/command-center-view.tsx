@@ -75,7 +75,8 @@ export function CommandCenterView() {
       return;
     }
     setTimeout(() => {
-      if (typeof window !== "undefined" && window.location.pathname !== href) {
+      const expectedPath = href.split("?", 1)[0];
+      if (typeof window !== "undefined" && window.location.pathname !== expectedPath) {
         window.location.assign(href);
       }
     }, 120);
@@ -85,6 +86,7 @@ export function CommandCenterView() {
     if (pendingLoad.current) return;
     const controller = new AbortController();
     pendingLoad.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 8_000);
     setLoading(true);
     setLoadError(null);
     try {
@@ -115,6 +117,7 @@ export function CommandCenterView() {
       console.error("Failed to load command center data:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load live fleet telemetry");
     } finally {
+      window.clearTimeout(timeout);
       if (pendingLoad.current === controller) pendingLoad.current = null;
       if (!controller.signal.aborted) setLoading(false);
     }
@@ -293,6 +296,9 @@ export function CommandCenterView() {
   };
 
   const predicted = summary?.predictedFailuresSummary?.nextLikelyFailure;
+  const workflowContext = selectedBranchWorkspace?.branchId
+    ? `?branchId=${encodeURIComponent(selectedBranchWorkspace.branchId)}&source=command-center`
+    : "?source=command-center";
 
   return (
     <ErrorBoundary fallback={<div className="p-6 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 text-sm">Failed to render Surveillance Command Center. Please refresh or check connection.</div>}>
@@ -358,6 +364,40 @@ export function CommandCenterView() {
           </button>
         </div>
       </div>
+
+      <nav className="command-center-workflow" aria-label="Security operations workflow">
+        <div className="command-center-workflow-intro">
+          <span>OPERATOR PATH</span>
+          <strong>Move from signal to proof</strong>
+        </div>
+        <div className="command-center-workflow-steps">
+          <Link href="/control-room" onClick={navigateTo("/control-room")} className="active">
+            <span className="workflow-step-index">01</span>
+            <span><strong>Monitor</strong><small>See what is happening</small></span>
+            <Play className="workflow-step-icon" />
+          </Link>
+          <Link href={`/video-search${workflowContext}`} onClick={navigateTo(`/video-search${workflowContext}`)}>
+            <span className="workflow-step-index">02</span>
+            <span><strong>Investigate</strong><small>Find supporting video</small></span>
+            <Search className="workflow-step-icon" />
+          </Link>
+          <Link href={`/incidents${workflowContext}`} onClick={navigateTo(`/incidents${workflowContext}`)}>
+            <span className="workflow-step-index">03</span>
+            <span><strong>Respond</strong><small>Assign and resolve</small></span>
+            <Siren className="workflow-step-icon" />
+          </Link>
+          <Link href={`/maintenance/workorders${workflowContext}`} onClick={navigateTo(`/maintenance/workorders${workflowContext}`)}>
+            <span className="workflow-step-index">04</span>
+            <span><strong>Maintain</strong><small>Prevent repeat failures</small></span>
+            <Wrench className="workflow-step-icon" />
+          </Link>
+          <Link href={`/evidence${workflowContext}`} onClick={navigateTo(`/evidence${workflowContext}`)}>
+            <span className="workflow-step-index">05</span>
+            <span><strong>Prove</strong><small>Protect the audit trail</small></span>
+            <FileCheck2 className="workflow-step-icon" />
+          </Link>
+        </div>
+      </nav>
 
       {loadError && (
         <div className="p-3 rounded-xl border border-rose-800/60 bg-rose-950/30 text-sm text-rose-200" role="alert">

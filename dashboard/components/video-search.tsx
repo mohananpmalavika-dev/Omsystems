@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState, useRef } from "react";
 import { videoSearchApi } from "@/lib/api-client";
 import type { Camera as CameraType, Branch } from "@/lib/types";
+import { useSearchParams } from "next/navigation";
 
 interface SearchFilters {
   cameraId?: string;
@@ -70,9 +71,13 @@ interface Thumbnail {
 }
 
 export function VideoSearch() {
+  const searchParams = useSearchParams();
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [filters, setFilters] = useState<SearchFilters>(defaultFilters);
+  const [filters, setFilters] = useState<SearchFilters>(() => ({
+    ...defaultFilters,
+    branchId: typeof window !== "undefined" ? searchParams?.get("branchId") || undefined : undefined,
+  }));
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<SearchResult | null>(null);
@@ -144,6 +149,11 @@ export function VideoSearch() {
     () => cameras.find((c) => c.id === filters.cameraId),
     [cameras, filters.cameraId],
   );
+  const visibleCameras = useMemo(() => {
+    if (!filters.branchId) return cameras;
+    const scoped = cameras.filter((candidate) => (candidate as CameraType & { branchId?: string }).branchId === filters.branchId);
+    return scoped.length > 0 ? scoped : cameras;
+  }, [cameras, filters.branchId]);
 
   const eventTypeOptions = [
     "motion",
@@ -190,7 +200,7 @@ export function VideoSearch() {
               onChange={(e) => setFilters((f) => ({ ...f, cameraId: e.target.value }))}
             >
               <option value="">Select a camera…</option>
-              {cameras.map((cam) => (
+              {visibleCameras.map((cam) => (
                 <option key={cam.id} value={cam.id}>
                   {cam.name} ({cam.vendor})
                 </option>
