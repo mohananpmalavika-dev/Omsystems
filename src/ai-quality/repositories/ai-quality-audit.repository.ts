@@ -36,7 +36,10 @@ export class AIQualityAuditRepository {
       id: randomUUID(),
       recordedAt: new Date().toISOString(),
     };
-    this.feedbacks.push(fullFeedback);
+    const index = this.feedbacks.findIndex(item => item.alertId === feedback.alertId
+      && item.detectorId === feedback.detectorId && item.modelVersionId === feedback.modelVersionId);
+    if (index >= 0) this.feedbacks[index] = fullFeedback;
+    else this.feedbacks.push(fullFeedback);
     return fullFeedback;
   }
 
@@ -51,23 +54,16 @@ export class AIQualityAuditRepository {
     detectorId: string,
     detectorCode: string,
     activeModelVersion: string,
-    baselineRate = 0.08,
+    baselineRate?: number,
+    modelVersionId?: string,
   ): Promise<DetectorRuntimeQuality> {
-    const relevant = this.feedbacks.filter((f) => f.detectorId === detectorId);
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const relevant = this.feedbacks.filter((f) => f.detectorId === detectorId
+      && (!modelVersionId || f.modelVersionId === modelVersionId) && Date.parse(f.recordedAt) >= cutoff);
     const tpCount = relevant.filter((f) => f.classification === "true_positive").length;
     const fpCount = relevant.filter((f) => f.classification === "false_positive").length;
-    const total = tpCount + fpCount || 100; // default sample basis
-
-    // Calculate observed false alert rate
-    const observedRate = fpCount > 0 ? (fpCount / total) * 0.5 : baselineRate;
-    const driftPercent = ((observedRate - baselineRate) / baselineRate) * 100;
-
-    let driftStatus: DetectorRuntimeQuality["driftStatus"] = "HEALTHY";
-    if (driftPercent > 100) {
-      driftStatus = "CRITICAL_DRIFT";
-    } else if (driftPercent > 25) {
-      driftStatus = "WARNING";
-    }
+    // Reviewed alert counts cannot establish a per-camera-hour rate without
+    // monitored camera exposure and complete alert coverage.
 
     const highFalseAlarmCameras = Array.from(
       new Set(
@@ -81,13 +77,13 @@ export class AIQualityAuditRepository {
       detectorId,
       detectorCode,
       activeModelVersion,
-      totalAlertsLast7Days: total,
-      operatorConfirmedTPCount: tpCount || 95,
-      operatorConfirmedFPCount: fpCount || 5,
-      observedFalseAlertRatePerHour: Number(observedRate.toFixed(3)),
-      baselineFalseAlertRatePerHour: baselineRate,
-      driftPercentage: Number(driftPercent.toFixed(1)),
-      driftStatus,
+      totalAlertsLast7Days: relevant.length,
+      operatorConfirmedTPCount: tpCount,
+      operatorConfirmedFPCount: fpCount,
+      observedFalseAlertRatePerHour: null,
+      baselineFalseAlertRatePerHour: baselineRate !== undefined && Number.isFinite(baselineRate) && baselineRate >= 0 ? baselineRate : null,
+      driftPercentage: null,
+      driftStatus: "INSUFFICIENT_DATA",
       highFalseAlarmCameraIds: highFalseAlarmCameras,
     };
   }

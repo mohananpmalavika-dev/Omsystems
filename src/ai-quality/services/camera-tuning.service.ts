@@ -13,11 +13,11 @@ export interface ThresholdRecommendation {
   cameraId: string;
   detectorId: string;
   currentThreshold: number;
-  observedFalseAlertsPerHour: number;
-  fleetAverageFalseAlertsPerHour: number;
+  observedFalseAlertsPerHour: number | null;
+  fleetAverageFalseAlertsPerHour: number | null;
   recommendedThreshold: number;
-  expectedFalseAlertsPerHour: number;
-  expectedRecallImpactPercent: number;
+  expectedFalseAlertsPerHour: number | null;
+  expectedRecallImpactPercent: number | null;
   recommendationReason: string;
 }
 
@@ -131,37 +131,20 @@ export class CameraTuningService {
   async generateThresholdRecommendation(
     cameraId: string,
     detectorId: string,
-    observedFalseAlertRate: number,
+    observedFalseAlertRate?: number,
   ): Promise<ThresholdRecommendation> {
     const config = await this.getEffectiveConfiguration("tenant-default", "branch-default", cameraId, detectorId);
-    const fleetAverage = 0.08;
-
-    if (observedFalseAlertRate > fleetAverage * 2) {
-      // Recommend tightening threshold (e.g. from 0.60 to 0.68)
-      const recommended = Math.min(0.85, Number((config.confidenceThreshold + 0.08).toFixed(2)));
-      return {
-        cameraId,
-        detectorId,
-        currentThreshold: config.confidenceThreshold,
-        observedFalseAlertsPerHour: observedFalseAlertRate,
-        fleetAverageFalseAlertsPerHour: fleetAverage,
-        recommendedThreshold: recommended,
-        expectedFalseAlertsPerHour: Number((observedFalseAlertRate * 0.35).toFixed(2)),
-        expectedRecallImpactPercent: -2.1,
-        recommendationReason: `Observed false alarm rate (${observedFalseAlertRate.toFixed(2)}/hr) is ${(observedFalseAlertRate / fleetAverage).toFixed(1)}x fleet baseline. Increasing threshold to ${recommended} eliminates environmental reflection/shadow noise while maintaining >91% recall.`,
-      };
-    }
 
     return {
       cameraId,
       detectorId,
       currentThreshold: config.confidenceThreshold,
-      observedFalseAlertsPerHour: observedFalseAlertRate,
-      fleetAverageFalseAlertsPerHour: fleetAverage,
+      observedFalseAlertsPerHour: observedFalseAlertRate !== undefined && Number.isFinite(observedFalseAlertRate) && observedFalseAlertRate >= 0 ? observedFalseAlertRate : null,
+      fleetAverageFalseAlertsPerHour: null,
       recommendedThreshold: config.confidenceThreshold,
-      expectedFalseAlertsPerHour: observedFalseAlertRate,
-      expectedRecallImpactPercent: 0,
-      recommendationReason: "Camera false alert rate is within normal baseline limits.",
+      expectedFalseAlertsPerHour: null,
+      expectedRecallImpactPercent: null,
+      recommendationReason: "Threshold recommendation requires measured validation on this camera. Recall impact is not yet known.",
     };
   }
 
@@ -185,16 +168,20 @@ export class CameraTuningService {
 
     const threshold = config?.confidenceThreshold ?? model?.defaultThreshold ?? 0.60;
 
+    if (!detector || !model || !/^[a-f0-9]{64}$/i.test(model.artifactSha256)) {
+      throw new Error("Registered model artifact is required for AI provenance");
+    }
+
     return {
-      detectorId: detector?.id || `det-${detectorCode}`,
+      detectorId: detector.id,
       detectorCode,
-      modelId: model?.id || `model-${detectorCode}-prod`,
-      modelVersion: model?.version || "1.0.0",
-      modelSha256: model?.artifactSha256 || "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      modelId: model.id,
+      modelVersion: model.version,
+      modelSha256: model.artifactSha256,
       threshold,
       confidence,
       inferenceNodeId,
-      hardwareProfile: "NVIDIA RTX A4000 (CUDA 12.2 / TensorRT 8.6)",
+      hardwareProfile: "unreported",
       inferenceTimestamp: new Date().toISOString(),
     };
   }

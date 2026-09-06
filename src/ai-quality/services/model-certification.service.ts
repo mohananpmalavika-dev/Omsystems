@@ -60,6 +60,17 @@ export class ModelCertificationService {
     const checks: QualityGateEvaluationResult["checks"] = [];
     const failingReasons: string[] = [];
 
+    const evidenceValid = evaluation.evidence?.source === "measured"
+      && evaluation.evidence.modelSha256 === model.artifactSha256
+      && /^[a-f0-9]{64}$/i.test(model.artifactSha256)
+      && /^[a-f0-9]{64}$/i.test(evaluation.evidence.datasetSha256)
+      && evaluation.evidence.sampleCount > 0 && evaluation.evidence.cameraHours > 0
+      && evaluation.detectorId === model.detectorId
+      && Number.isFinite(evaluation.threshold) && evaluation.threshold > 0 && evaluation.threshold <= 1
+      && Object.values(evaluation.overallMetrics).every(value => Number.isFinite(value) && value >= 0);
+    checks.push({ metricName: "Measured benchmark evidence", target: "Matching model and labeled dataset", actual: evidenceValid ? "verified" : "missing or invalid", passed: evidenceValid });
+    if (!evidenceValid) failingReasons.push("Measured benchmark evidence is missing or does not match the model artifact");
+
     // 1. Precision Check
     const precPassed = evaluation.overallMetrics.precision >= gates.minimumPrecision;
     checks.push({
@@ -121,16 +132,19 @@ export class ModelCertificationService {
     if (!fpsPassed) failingReasons.push(`Throughput ${evaluation.overallMetrics.fpsAverage} FPS < ${gates.minimumFPS} FPS`);
 
     // 7. Night Condition Check
-    const nightScenario = evaluation.scenarioBreakdown.find((s) => s.scenarioName.includes("Night"));
-    if (nightScenario && gates.minimumNightRecall) {
-      const nightRecallPassed = nightScenario.recall >= gates.minimumNightRecall;
+    const nightScenarios = evaluation.scenarioBreakdown.filter((s) => /night|infra.?red|\bIR\b/i.test(s.scenarioName));
+    for (const [metric, minimum] of [["precision", gates.minimumNightPrecision], ["recall", gates.minimumNightRecall]] as const) {
+      if (minimum === undefined) continue;
+      const actual = nightScenarios.length ? Math.min(...nightScenarios.map(s => s[metric])) : null;
+      const passed = actual !== null && Number.isFinite(actual) && actual >= minimum
+        && nightScenarios.every(s => s.samplesCount > 0);
       checks.push({
-        metricName: "Night Scenario Recall",
-        target: `>= ${(gates.minimumNightRecall * 100).toFixed(1)}%`,
-        actual: `${(nightScenario.recall * 100).toFixed(1)}%`,
-        passed: nightRecallPassed,
+        metricName: `Night Scenario ${metric}`,
+        target: `>= ${(minimum * 100).toFixed(1)}%`,
+        actual: actual === null ? "not evaluated" : `${(actual * 100).toFixed(1)}%`,
+        passed,
       });
-      if (!nightRecallPassed) failingReasons.push(`Night Recall ${(nightScenario.recall * 100).toFixed(1)}% < ${(gates.minimumNightRecall * 100).toFixed(1)}%`);
+      if (!passed) failingReasons.push(`Night ${metric} is missing or below the required threshold`);
     }
 
     const allPassed = failingReasons.length === 0;
@@ -146,13 +160,14 @@ export class ModelCertificationService {
         checks,
         failingReasons,
       },
-      approvedUseCases: allPassed
-        ? ["Indoor Bank Branch", "Vault Security", "ATM Lobby", "Perimeter Daytime"]
-        : [],
-      excludedConditions: ["Heavy Rain without radar/PIR", "Sub-720p feeds"],
-      certifiedHardwareProfileIds: allPassed ? ["hw-rtx-a4000", "hw-nvidia-l4", "hw-jetson-orin"] : [],
-      approvedBy: approver?.userName || "AI Safety Architecture Committee",
+      approvedUseCases: allPassed ? evaluation.scenarioBreakdown.map(s => s.scenarioName) : [],
+      excludedConditions: ["Conditions outside the evaluated dataset"],
+      certifiedHardwareProfileIds: allPassed ? [evaluation.hardwareProfileId] : [],
+      approvedBy: approver?.userName || "Automated quality gate",
       approvedAt: allPassed ? now : undefined,
+      evaluationRunId: evaluation.id,
+      modelSha256: model.artifactSha256,
+      threshold: evaluation.threshold,
     };
 
     await this.evaluationRepo.saveCertification(certification);
@@ -191,7 +206,13 @@ export class ModelCertificationService {
    */
   async assertCanDeployToProduction(modelVersionId: string): Promise<ModelCertification> {
     const cert = await this.evaluationRepo.getCertification(modelVersionId);
-    if (!cert || cert.certificationStatus !== "approved") {
+    const model = await this.detectorRepo.getModelVersion(modelVersionId);
+    const evaluation = await this.evaluationRepo.getLatestEvaluationForModel(modelVersionId);
+    if (!cert || cert.certificationStatus !== "approved" || !cert.qualityGateResults.passed
+      || !model || !evaluation || cert.evaluationRunId !== evaluation.id
+      || cert.modelSha256 !== model.artifactSha256 || cert.threshold !== model.defaultThreshold
+      || evaluation.evidence?.source !== "measured" || evaluation.evidence.modelSha256 !== model.artifactSha256
+      || (cert.expiresAt !== undefined && (!Number.isFinite(Date.parse(cert.expiresAt)) || Date.parse(cert.expiresAt) <= Date.now()))) {
       throw new ModelNotCertifiedError(
         modelVersionId,
         cert?.certificationStatus || "uncertified",

@@ -33,6 +33,9 @@ export class YoloDetectionInference {
     this.decoder = options.decoder ?? "yolov8";
     this.confidenceThreshold = options.confidenceThreshold ?? 0.5;
     this.iouThreshold = options.iouThreshold ?? 0.45;
+    if (![this.confidenceThreshold, this.iouThreshold].every(value => Number.isFinite(value) && value > 0 && value <= 1)) {
+      throw new Error("YOLO thresholds must be finite values in (0, 1]");
+    }
   }
 
   async run(frame: DetectionFrame): Promise<InferenceObject[]> {
@@ -132,8 +135,9 @@ export class YoloDetectionInference {
     for (let row = 0; row < rows; row += 1) {
       const offset = row * features;
       const confidence = data[offset + 4]!;
-      const classIndex = Math.trunc(data[offset + 5]!);
-      if (confidence < this.confidenceThreshold || !this.options.labels[classIndex]) continue;
+      const classIndex = data[offset + 5]!;
+      if (!Number.isFinite(confidence) || confidence > 1 || confidence < this.confidenceThreshold
+        || !Number.isInteger(classIndex) || !this.options.labels[classIndex]) continue;
       const x1 = data[offset]!;
       const y1 = data[offset + 1]!;
       const x2 = data[offset + 2]!;
@@ -212,6 +216,9 @@ export class YoloDetectionInference {
 }
 
 function assertRgb24(frame: DetectionFrame) {
+  if (![frame.width, frame.height].every(value => Number.isSafeInteger(value) && value > 0)) {
+    throw new Error("RGB24 frame dimensions must be positive integers");
+  }
   const expected = frame.width * frame.height * 3;
   if (frame.imageData.length !== expected) {
     throw new Error(`Expected RGB24 frame with ${expected} bytes, received ${frame.imageData.length}`);
@@ -330,18 +337,23 @@ function orientation(first: number, second: number, expected: number) {
 }
 
 function normalizeBox(x: number, y: number, width: number, height: number, frameWidth: number, frameHeight: number) {
+  if (![x, y, width, height, frameWidth, frameHeight].every(Number.isFinite) || width <= 0 || height <= 0) {
+    return { x: 0, y: 0, width: 0, height: 0 };
+  }
   const normalizedX = clamp(x / frameWidth);
   const normalizedY = clamp(y / frameHeight);
   return {
     x: normalizedX,
     y: normalizedY,
-    width: Math.max(0.0001, Math.min(1 - normalizedX, width / frameWidth)),
-    height: Math.max(0.0001, Math.min(1 - normalizedY, height / frameHeight)),
+    width: Math.max(0, clamp((x + width) / frameWidth) - normalizedX),
+    height: Math.max(0, clamp((y + height) / frameHeight) - normalizedY),
   };
 }
 
 function nonMaximumSuppression(candidates: InferenceObject[], threshold: number) {
-  const ordered = [...candidates].sort((a, b) => b.confidence - a.confidence);
+  const ordered = candidates.filter(item => typeof item.confidence === "number" && Number.isFinite(item.confidence)
+    && item.confidence >= 0 && item.confidence <= 1 && item.boundingBox.width > 0 && item.boundingBox.height > 0)
+    .sort((a, b) => b.confidence! - a.confidence!);
   const kept: InferenceObject[] = [];
   while (ordered.length > 0) {
     const best = ordered.shift()!;

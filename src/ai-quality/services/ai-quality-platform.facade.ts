@@ -16,7 +16,7 @@ import { DetectorRegistryRepository } from "../repositories/detector-registry.re
 import { EvaluationRepository } from "../repositories/evaluation.repository.js";
 import { CameraTuningRepository } from "../repositories/camera-tuning.repository.js";
 import { AIQualityAuditRepository } from "../repositories/ai-quality-audit.repository.js";
-import { EvaluationEngineService } from "./evaluation-engine.service.js";
+import { EvaluationEngineService, type BenchmarkRunner } from "./evaluation-engine.service.js";
 import { ModelCertificationService } from "./model-certification.service.js";
 import { CameraTuningService } from "./camera-tuning.service.js";
 
@@ -30,13 +30,13 @@ export class AIQualityPlatformFacade {
   readonly certificationService: ModelCertificationService;
   readonly cameraTuning: CameraTuningService;
 
-  constructor() {
+  constructor(benchmarkRunner?: BenchmarkRunner) {
     this.detectorRepo = new DetectorRegistryRepository();
     this.evaluationRepo = new EvaluationRepository();
     this.cameraTuningRepo = new CameraTuningRepository();
     this.auditRepo = new AIQualityAuditRepository();
 
-    this.evaluationEngine = new EvaluationEngineService(this.evaluationRepo);
+    this.evaluationEngine = new EvaluationEngineService(this.evaluationRepo, benchmarkRunner);
     this.certificationService = new ModelCertificationService(
       this.evaluationRepo,
       this.detectorRepo,
@@ -66,7 +66,10 @@ export class AIQualityPlatformFacade {
     validationDatasetId?: string;
     actor: { userId: string; userName: string };
   }): Promise<ModelVersion> {
+    if (!/^[a-f0-9]{64}$/i.test(input.artifactSha256)) throw new Error("Model artifact SHA-256 must contain 64 hexadecimal characters");
+    if (!await this.detectorRepo.getDetector(input.detectorId)) throw new Error("Detector not found");
     const id = `model-${input.detectorId.replace("det-", "")}-v${input.version.replace(/\./g, "-")}`;
+    if (await this.detectorRepo.getModelVersion(id)) throw new Error("Model version already registered; register a new version for a changed artifact");
     const model: ModelVersion = {
       id,
       detectorId: input.detectorId,
@@ -77,7 +80,7 @@ export class AIQualityPlatformFacade {
       artifactSha256: input.artifactSha256,
       inputWidth: input.inputWidth || 640,
       inputHeight: input.inputHeight || 640,
-      defaultThreshold: input.defaultThreshold || 0.60,
+      defaultThreshold: input.defaultThreshold ?? 0.60,
       trainingDatasetId: input.trainingDatasetId,
       validationDatasetId: input.validationDatasetId,
       lifecycle: "candidate",
@@ -109,13 +112,11 @@ export class AIQualityPlatformFacade {
     const model = await this.detectorRepo.getModelVersion(modelVersionId);
     if (!model) throw new Error(`Model ${modelVersionId} not found`);
 
-    const dataset = await this.detectorRepo.getDatasetVersion(
-      datasetId || model.validationDatasetId || "ds-bank-intrusion-2026-08",
-    );
+    const dataset = await this.detectorRepo.getDatasetVersion(datasetId || model.validationDatasetId || "");
     if (!dataset) throw new Error(`Dataset not found`);
 
     const hardware = await this.detectorRepo.getHardwareProfile(
-      hardwareId || "hw-rtx-a4000",
+      hardwareId || "",
     );
     if (!hardware) throw new Error(`Hardware profile not found`);
 
@@ -229,6 +230,8 @@ export class AIQualityPlatformFacade {
         detector.id,
         detector.code,
         prodModel?.version || "1.0.0",
+        undefined,
+        prodModel?.id,
       );
 
       if (runtime.driftStatus === "WARNING") qualityWarnings++;

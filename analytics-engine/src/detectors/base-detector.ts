@@ -78,21 +78,22 @@ export function getInferenceObjects(
     const item = value as Record<string, unknown>;
     const box = item.boundingBox as Record<string, unknown> | undefined;
     const rawConf = item.confidence;
-    const isNum = typeof rawConf === "number";
-    const isNull = rawConf === null;
-    if (typeof item.label !== "string" || (!isNum && !isNull) ||
+    if (typeof item.label !== "string" || !item.label.trim() || typeof rawConf !== "number" || !Number.isFinite(rawConf) || rawConf < 0 || rawConf > 1 ||
         !box || typeof box.x !== "number" || typeof box.y !== "number" ||
         typeof box.width !== "number" || typeof box.height !== "number" ||
+        ![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.width <= 0 || box.height <= 0 ||
         (allowed && !allowed.has(item.label))) return [];
+    const x = Math.max(0, box.x);
+    const y = Math.max(0, box.y);
+    const right = Math.min(1, box.x + box.width);
+    const bottom = Math.min(1, box.y + box.height);
+    if (right <= x || bottom <= y) return [];
     return [{
       label: item.label,
-      confidence: isNum ? Math.max(0, Math.min(1, rawConf as number)) : null,
+      confidence: rawConf,
 
       boundingBox: {
-        x: Math.max(0, Math.min(1, box.x)),
-        y: Math.max(0, Math.min(1, box.y)),
-        width: Math.max(0.0001, Math.min(1, box.width)),
-        height: Math.max(0.0001, Math.min(1, box.height)),
+        x, y, width: right - x, height: bottom - y,
       },
       ...(typeof item.trackId === "string" ? { trackId: item.trackId } : {}),
       ...(item.attributes && typeof item.attributes === "object"
