@@ -3637,6 +3637,29 @@ export class MemoryStore {
     return counts;
   }
 
+  async getAnalyticsAlertsSummary(
+    inputTenantId: string,
+    filters?: { branchId?: string; cameraId?: string },
+  ) {
+    let total = 0;
+    let active = 0;
+    let converted = 0;
+    let unconverted = 0;
+    let critical = 0;
+    for (const alert of this.analyticsAlerts) {
+      if (alert.tenantId !== inputTenantId) continue;
+      if (filters?.cameraId && alert.cameraId !== filters.cameraId) continue;
+      if (filters?.branchId && this.cameras.get(alert.cameraId)?.branchId !== filters.branchId) continue;
+      total += 1;
+      const isActive = !["resolved", "false_alarm", "suppressed"].includes(alert.status);
+      if (isActive) active += 1;
+      if (alert.incidentId) converted += 1;
+      else unconverted += 1;
+      if (alert.severity === "P1" || alert.severity === "P2") critical += 1;
+    }
+    return { total, active, converted, unconverted, critical };
+  }
+
   async getAnalyticsAlert(id: string, inputTenantId: string) {
     return this.analyticsAlerts.find((alert) =>
       alert.id === id && alert.tenantId === inputTenantId

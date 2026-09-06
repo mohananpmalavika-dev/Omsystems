@@ -509,6 +509,14 @@ export interface AnalyticsAlertFilters {
   limit: number;
 }
 
+export interface AnalyticsAlertsAggregateSummary {
+  total: number;
+  active: number;
+  converted: number;
+  unconverted: number;
+  critical: number;
+}
+
 export interface AnalyticsEventInput {
   tenantId: string;
   cameraId: string;
@@ -1280,6 +1288,10 @@ export interface ControlPlaneStore {
     tenantId: string,
     filters: AnalyticsAlertFilters,
   ): Promise<Record<AnalyticsAlert["severity"], number>>;
+  getAnalyticsAlertsSummary(
+    tenantId: string,
+    filters?: { branchId?: string; cameraId?: string },
+  ): Promise<AnalyticsAlertsAggregateSummary>;
   getAnalyticsAlert(id: string, tenantId: string): Promise<AnalyticsAlert | undefined>;
   updateAnalyticsAlertEvidence(
     id: string,

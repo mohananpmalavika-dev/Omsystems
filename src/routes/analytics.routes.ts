@@ -37,6 +37,7 @@ import {
   normalizePlateNumber,
   recordAnprRegistryMatches,
 } from "../analytics/identity-registry.js";
+import { generateAlertEvidenceSvg } from "../alerts/alert-evidence-graphic.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -505,7 +506,25 @@ export async function registerAnalyticsRoutes(
         if (data.length >= query.limit) break;
       }
     }
-    return { data, summary: summarize(data) };
+    const summary = await store.getAnalyticsAlertsSummary(
+      request.currentUser.tenantId,
+      { branchId: query.branchId, cameraId: query.cameraId },
+    );
+    return { data, summary, total: summary.total };
+  });
+
+  app.get("/v1/analytics/alerts/summary", async (request, reply) => {
+    const query = z.object({
+      cameraId: z.string().min(1).optional(),
+      branchId: z.string().min(1).optional(),
+    }).parse(request.query);
+    if (query.cameraId && !await authorizedCamera(request, reply, store, query.cameraId, "analytics:view")) return;
+    if (query.branchId && !await authorizedNode(request, reply, store, query.branchId, "analytics:view")) return;
+    const summary = await store.getAnalyticsAlertsSummary(
+      request.currentUser.tenantId,
+      { branchId: query.branchId, cameraId: query.cameraId },
+    );
+    return summary;
   });
 
   app.get("/v1/analytics/alerts/:alertId", async (request, reply) => {
@@ -810,16 +829,13 @@ export async function registerAnalyticsRoutes(
     } catch {}
 
     // Fallback graphic
-    const title = (alert.title || "AI Alert Detection").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const detected = new Date(alert.firstDetectedAt).toLocaleString();
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#090d16"/>
-      <circle cx="320" cy="150" r="44" fill="#1e293b" stroke="#334155" stroke-width="2"/>
-      <text x="320" y="158" font-family="sans-serif" font-size="32" text-anchor="middle">🛡️</text>
-      <text x="320" y="230" font-family="sans-serif" font-size="16" font-weight="bold" fill="#f1f5f9" text-anchor="middle">${title}</text>
-      <text x="320" y="255" font-family="sans-serif" font-size="12" fill="#94a3b8" text-anchor="middle">Detected: ${detected}</text>
-    </svg>`;
-    return reply.code(200).header("content-type", "image/svg+xml").header("cache-control", "public, max-age=60").send(svg);
+    const camera = await store.getCamera(alert.cameraId).catch(() => null);
+    const branch = camera ? await store.getNode(camera.branchId).catch(() => null) : null;
+    const svg = generateAlertEvidenceSvg(alert, {
+      cameraName: camera?.name,
+      branchName: branch?.name,
+    });
+    return reply.code(200).header("content-type", "image/svg+xml; charset=utf-8").header("cache-control", "public, max-age=300").send(svg);
   });
 
   app.post("/internal/analytics/events", async (request, reply) => {

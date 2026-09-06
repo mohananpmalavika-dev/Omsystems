@@ -10,6 +10,7 @@ import type {
 } from "../domain/models.js";
 import type {
   AnalyticsAlertFilters,
+  AnalyticsAlertsAggregateSummary,
   AnalyticsAlertTransitionInput,
   AnalyticsEventFilters,
   AnalyticsEventInput,
@@ -509,6 +510,35 @@ export class AnalyticsRepository {
       P3: Number(row.p3 ?? 0),
       P4: Number(row.p4 ?? 0),
       P5: Number(row.p5 ?? 0),
+    };
+  }
+
+  async getAlertsSummary(
+    tenantId: string,
+    filters?: { branchId?: string; cameraId?: string },
+  ): Promise<AnalyticsAlertsAggregateSummary> {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    const result = await this.pool.query(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE alert.status NOT IN ('resolved','false_alarm','suppressed'))::int AS active,
+         COUNT(*) FILTER (WHERE alert.incident_id IS NOT NULL)::int AS converted,
+         COUNT(*) FILTER (WHERE alert.incident_id IS NULL)::int AS unconverted,
+         COUNT(*) FILTER (WHERE alert.severity IN ('P1', 'P2'))::int AS critical
+       FROM analytics_alerts alert
+       JOIN cameras camera ON camera.id=alert.camera_id
+       WHERE alert.tenant_id=$1
+         AND ($2::uuid IS NULL OR alert.camera_id=$2)
+         AND ($3::uuid IS NULL OR camera.branch_node_id=$3)`,
+      [resolvedTenantId, filters?.cameraId ?? null, filters?.branchId ?? null],
+    );
+    const row = result.rows[0] ?? {};
+    return {
+      total: Number(row.total ?? 0),
+      active: Number(row.active ?? 0),
+      converted: Number(row.converted ?? 0),
+      unconverted: Number(row.unconverted ?? 0),
+      critical: Number(row.critical ?? 0),
     };
   }
 
