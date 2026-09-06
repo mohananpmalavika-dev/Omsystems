@@ -4,7 +4,7 @@ import { signedConfigService, SignedConfigService } from '../services/signed-con
 import { fleetRolloutControllerService } from '../services/fleet-rollout-controller.service.js';
 import { configReconciliationService } from '../services/config-reconciliation.service.js';
 import { branchConfigurationAgentService } from '../services/branch-configuration-agent.service.js';
-import { goldenConfigurationTemplateService } from '../services/golden-configuration-template.service.js';
+import { goldenConfigurationTemplateService, type TargetCameraInput } from '../services/golden-configuration-template.service.js';
 import type { BranchConfiguration } from '../domain/signed-config.types.js';
 
 const cameraSchema = z.object({
