@@ -1,7 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
+import { randomUUID, randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
+import { pool as defaultPool } from "../database/pool.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { ExportWorker } from "../recording/export-worker.js";
 
@@ -600,6 +602,11 @@ export async function registerEvidenceRoutes(
   /**
    * Download export
    * GET /v1/evidence/exports/:exportId/download
+  /**
+   * Download export
+   * GET /v1/evidence/exports/:exportId/download
+   * Enforces P0.24, P0.26:
+   * Authenticated session + valid download token + tenant match + permission check + audit of successes and failures
    */
   app.get("/v1/evidence/exports/:exportId/download", async (request, reply) => {
     const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
@@ -609,30 +616,99 @@ export async function registerEvidenceRoutes(
       return reply.code(501).send({ error: "export_worker_not_enabled" });
     }
 
+    const currentUser = request.currentUser;
+    if (!currentUser) {
+      try {
+        await store.recordCustodyEvent({
+          evidenceId: exportId,
+          action: "export_download_rejected" as any,
+          performedBy: "unauthenticated",
+          sourceIp: request.ip,
+          reason: "Unauthenticated download request rejected",
+        });
+      } catch {}
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+
     if (!query.token) {
+      try {
+        await store.recordCustodyEvent({
+          evidenceId: exportId,
+          action: "export_download_rejected" as any,
+          performedBy: currentUser.id,
+          sourceIp: request.ip,
+          reason: "Missing download token",
+        });
+      } catch {}
       return reply.code(400).send({ error: "missing_download_token" });
     }
 
     try {
       const validation = await exportWorker.validateDownload(query.token);
       if (!validation.valid || !validation.job || validation.job.id !== exportId) {
+        try {
+          await store.recordCustodyEvent({
+            evidenceId: exportId,
+            action: "export_download_rejected" as any,
+            performedBy: currentUser.id,
+            sourceIp: request.ip,
+            reason: `Invalid download token: ${validation.reason || "mismatch"}`,
+          });
+        } catch {}
         return reply.code(403).send({ error: "invalid_download_token", reason: validation.reason });
       }
 
-      await store.recordCustodyEvent({
-        evidenceId: exportId,
-        action: "export_downloaded",
-        performedBy: request.currentUser?.id ?? "system",
-        sourceIp: request.ip,
-        reason: "Authorized evidence export download",
-      });
+      // Tenant match check (P0.24)
+      if (validation.job.tenantId && validation.job.tenantId !== currentUser.tenantId && currentUser.role !== "super_admin") {
+        try {
+          await store.recordCustodyEvent({
+            evidenceId: exportId,
+            action: "export_download_rejected" as any,
+            performedBy: currentUser.id,
+            sourceIp: request.ip,
+            reason: `Tenant mismatch: expected ${validation.job.tenantId}, user belongs to ${currentUser.tenantId}`,
+          });
+        } catch {}
+        return reply.code(403).send({ error: "tenant_isolation_violation", reason: "Tenant mismatch" });
+      }
+
+      // Permission check (P0.24)
+      const allowedRoles = ["super_admin", "admin", "investigator", "cso"];
+      const userPermissions: string[] = (currentUser as any).permissions || [];
+      const hasPerm =
+        Boolean(currentUser.role && allowedRoles.includes(currentUser.role)) ||
+        userPermissions.includes("evidence:download") ||
+        userPermissions.includes("evidence:export") ||
+        userPermissions.includes("evidence.download");
+
+      if (!hasPerm) {
+        try {
+          await store.recordCustodyEvent({
+            evidenceId: exportId,
+            action: "export_download_rejected" as any,
+            performedBy: currentUser.id,
+            sourceIp: request.ip,
+            reason: "Insufficient permissions for evidence download",
+          });
+        } catch {}
+        return reply.code(403).send({ error: "access_denied", reason: "Insufficient evidence download permissions" });
+      }
 
       const filePath = validation.job.outputPath;
       if (filePath && existsSync(filePath)) {
+        const stats = statSync(filePath);
+        // Record custody event before sending bytes (durability is part of operation)
+        await store.recordCustodyEvent({
+          evidenceId: exportId,
+          action: "export_downloaded",
+          performedBy: currentUser.id,
+          sourceIp: request.ip,
+          reason: `Authorized download of evidence package ${exportId} (${stats.size} bytes) via ${request.headers["user-agent"] ?? "client"}`,
+        });
+
         const filename = basename(filePath);
         const ext = extname(filename).toLowerCase();
         const mimeType = ext === ".mp4" ? "video/mp4" : ext === ".tar" ? "application/x-tar" : ext === ".json" ? "application/json" : "application/octet-stream";
-        const stats = statSync(filePath);
         reply.header("Content-Type", mimeType);
         reply.header("Content-Disposition", `attachment; filename="${filename}"`);
         reply.header("Content-Length", stats.size);
@@ -644,6 +720,125 @@ export async function registerEvidenceRoutes(
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "download_failed", details: message });
     }
+  });
+
+  /**
+   * P0.25 External Evidence Sharing
+   * POST /v1/evidence/shares - Create a time-limited, audited external share
+   */
+  app.post("/v1/evidence/shares", async (request, reply) => {
+    const currentUser = request.currentUser;
+    if (!currentUser) return reply.code(401).send({ error: "unauthenticated" });
+
+    const body = z.object({
+      exportId: z.string().uuid(),
+      recipientEmail: z.string().email(),
+      reason: z.string().min(5),
+      scope: z.enum(["VIEW_ONLY", "DOWNLOAD"]).default("VIEW_ONLY"),
+      maxDownloads: z.number().int().min(1).max(10).default(3),
+      expiresInHours: z.number().int().min(1).max(168).default(24),
+    }).parse(request.body);
+
+    const shareId = randomUUID();
+    const shareToken = randomBytes(24).toString("hex");
+    const expiresAt = new Date(Date.now() + body.expiresInHours * 3600_000);
+
+    const pool = (store as any).pool || defaultPool;
+    if (pool) {
+      await pool.query(
+        `INSERT INTO external_evidence_shares (
+           id, tenant_id, export_id, share_token, recipient_email, reason,
+           scope, max_downloads, download_count, expires_at, created_by, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 0, $9, $10, now())`,
+        [
+          shareId,
+          currentUser.tenantId,
+          body.exportId,
+          shareToken,
+          body.recipientEmail,
+          body.reason,
+          body.scope,
+          body.maxDownloads,
+          expiresAt,
+          currentUser.id,
+        ],
+      );
+    }
+
+    await store.recordCustodyEvent({
+      evidenceId: body.exportId,
+      action: "export_shared" as any,
+      performedBy: currentUser.id,
+      sourceIp: request.ip,
+      reason: `External share created for ${body.recipientEmail} (expires in ${body.expiresInHours}h, max ${body.maxDownloads} downloads)`,
+    });
+
+    return reply.code(201).send({
+      shareId,
+      shareToken,
+      recipientEmail: body.recipientEmail,
+      expiresAt: expiresAt.toISOString(),
+      maxDownloads: body.maxDownloads,
+      shareUrl: `/v1/evidence/external-download?token=${shareToken}`,
+    });
+  });
+
+  /**
+   * P0.25 External Download via Share Token
+   * GET /v1/evidence/external-download
+   */
+  app.get("/v1/evidence/external-download", async (request, reply) => {
+    const query = z.object({ token: z.string().min(16) }).parse(request.query);
+    const pool = (store as any).pool || defaultPool;
+    if (!pool) return reply.code(501).send({ error: "database_not_configured" });
+
+    const res = await pool.query(
+      `SELECT * FROM external_evidence_shares WHERE share_token = $1`,
+      [query.token],
+    );
+
+    if (res.rows.length === 0) {
+      return reply.code(404).send({ error: "share_not_found" });
+    }
+
+    const share = res.rows[0];
+    if (share.revoked_at) {
+      return reply.code(403).send({ error: "share_revoked" });
+    }
+
+    if (new Date(share.expires_at).getTime() < Date.now()) {
+      return reply.code(403).send({ error: "share_expired" });
+    }
+
+    if (share.download_count >= share.max_downloads) {
+      return reply.code(403).send({ error: "download_limit_exceeded" });
+    }
+
+    await pool.query(
+      `UPDATE external_evidence_shares SET download_count = download_count + 1 WHERE id = $1`,
+      [share.id],
+    );
+
+    await store.recordCustodyEvent({
+      evidenceId: share.export_id,
+      action: "export_downloaded",
+      performedBy: `external:${share.recipient_email}`,
+      sourceIp: request.ip,
+      reason: `External share download (${share.download_count + 1}/${share.max_downloads})`,
+    });
+
+    if (exportWorker) {
+      const job = await exportWorker.getExportJob(share.export_id);
+      if (job?.outputPath && existsSync(job.outputPath)) {
+        const stats = statSync(job.outputPath);
+        const filename = basename(job.outputPath);
+        reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+        reply.header("Content-Length", stats.size);
+        return reply.send(createReadStream(job.outputPath));
+      }
+    }
+
+    return reply.code(404).send({ error: "evidence_media_not_found" });
   });
 
   /**

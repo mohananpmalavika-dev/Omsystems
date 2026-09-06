@@ -267,7 +267,6 @@ export class RetentionEngineService {
 
     let usableStorageBytes = 0;
     try {
-      const { enterpriseStoragePool } = await import("../../storage/enterprise-storage-pool.js");
       const nodes = enterpriseStoragePool.listNodes();
       for (const node of nodes) {
         if ((node as any).capacityBytes) {

@@ -128,6 +128,7 @@ export class RecordingContinuityService {
       branchName?: string | undefined;
       now?: Date | undefined;
       clockOffsetSeconds?: number | undefined;
+      requiredRetentionDays?: number | undefined;
     }
   ): RecordingContinuity {
     const now = options?.now || new Date();
@@ -214,14 +215,14 @@ export class RecordingContinuityService {
       gapCount24h: gaps.length,
       totalGapSeconds24h: Math.round(totalGapSec),
       continuity24hPct,
-      continuity7dPct: Math.min(continuity24hPct, 99.97),
-      continuity30dPct: Math.min(continuity24hPct, 99.95),
-      actualRetentionDays: actualRetentionDays > 0 ? actualRetentionDays : 90.4,
-      requiredRetentionDays: 90,
-      oldestRecordingAt: oldestSegment ? oldestSegment.start : new Date(now.getTime() - 90.4 * 86400_000),
-      playbackVerified: playback?.successful ?? true,
-      lastPlaybackVerifiedAt: playback?.verifiedAt ?? new Date(now.getTime() - 900_000),
-      playbackLatencyMs: playback?.latencyMs ?? 142,
+      continuity7dPct: continuity24hPct,
+      continuity30dPct: continuity24hPct,
+      actualRetentionDays,
+      requiredRetentionDays: options?.requiredRetentionDays ?? 90,
+      oldestRecordingAt: oldestSegment ? oldestSegment.start : undefined,
+      playbackVerified: playback ? playback.successful : false,
+      lastPlaybackVerifiedAt: playback?.verifiedAt,
+      playbackLatencyMs: playback?.latencyMs,
       evidenceConfidence,
       state,
       observedAt: now,
