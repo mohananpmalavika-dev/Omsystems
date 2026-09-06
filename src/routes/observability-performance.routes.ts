@@ -20,7 +20,7 @@ export async function performanceTrackingMiddleware(
     const isError = reply.raw.statusCode >= 400;
     
     getPerformanceObserver().recordEndpointLatency(
-      request.url,
+      request.routeOptions.url ?? request.url,
       request.method,
       duration,
       isError
@@ -83,6 +83,7 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
           timestamp: snapshot.timestamp,
           endpoints: Array.from(snapshot.endpoints.values()),
           queries: Array.from(snapshot.queries.values()),
+          webVitals: snapshot.webVitals,
           systemHealth: {
             uptime: snapshot.systemHealth.uptime,
             memory: {
@@ -140,16 +141,19 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
   app.post(
     '/api/observability/web-vitals',
     async (request, reply) => {
-      const payload = request.body as any;
-      
-      // Store metrics in observability system
-      // In production, send to dedicated metrics backend (Prometheus, DataDog, etc.)
+      const payload = request.body as { webVitals?: unknown };
+      const metrics = Array.isArray(payload?.webVitals) ? payload.webVitals : [payload];
+      for (const metric of metrics) {
+        if (metric && typeof metric === 'object') {
+          getPerformanceObserver().recordWebVital(metric as Record<string, unknown>);
+        }
+      }
       
       return reply.send({
         success: true,
         data: {
           received: true,
-          metrics: payload.webVitals?.length ?? 0,
+          metrics: metrics.length,
         },
       });
     }

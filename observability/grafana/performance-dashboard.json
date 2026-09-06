@@ -1,0 +1,63 @@
+{
+  "title": "Sentinel Grid Performance",
+  "uid": "sentinel-performance",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "service",
+        "type": "query",
+        "query": "label_values(service_name)",
+        "current": { "text": "sentinel-control-plane", "value": "sentinel-control-plane" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "HTTP latency percentiles",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "P50", "expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P50" },
+        { "refId": "P95", "expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P95" },
+        { "refId": "P99", "expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Database query latency percentiles",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "P50", "expr": "histogram_quantile(0.50, sum by (le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P50" },
+        { "refId": "P95", "expr": "histogram_quantile(0.95, sum by (le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P95" },
+        { "refId": "P99", "expr": "histogram_quantile(0.99, sum by (le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"$service\"}[5m])))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP request rate",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [{ "refId": "A", "expr": "sum(rate(http_server_request_duration_seconds_count{service_name=~\"$service\"}[5m]))" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" } },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Core Web Vitals",
+      "datasource": { "type": "json", "uid": "sentinel-api" },
+      "targets": [{ "refId": "A", "url": "/api/observability/performance/snapshot", "format": "table" }],
+      "gridPos": { "h": 4, "w": 16, "x": 8, "y": 8 }
+    }
+  ]
+}

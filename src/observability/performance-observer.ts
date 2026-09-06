@@ -41,6 +41,7 @@ export interface PerformanceSnapshot {
   timestamp: string;
   endpoints: Map<string, EndpointMetrics>;
   queries: Map<string, DatabaseQueryMetrics>;
+  webVitals: Record<string, LatencyPercentiles>;
   systemHealth: {
     uptime: number;
     memoryUsage: NodeJS.MemoryUsage;
@@ -53,6 +54,7 @@ class PerformanceObserver {
   private queryMetrics = new Map<string, { latencies: number[]; errors: number; executions: number }>();
   private startTime = Date.now();
   private eventLoopLag = 0;
+  private webVitals = new Map<string, number[]>();
 
   constructor() {
     this.monitorEventLoop();
@@ -113,6 +115,16 @@ class PerformanceObserver {
     }
   }
 
+  recordWebVital(metric: Record<string, unknown>) {
+    const name = typeof metric.name === "string" ? metric.name.toUpperCase() : "UNKNOWN";
+    const value = typeof metric.value === "number" ? metric.value : Number(metric.value);
+    if (!Number.isFinite(value) || value < 0 || name === "UNKNOWN") return;
+    const values = this.webVitals.get(name) ?? [];
+    values.push(value);
+    if (values.length > 1_000) values.splice(0, values.length - 1_000);
+    this.webVitals.set(name, values);
+  }
+
   private normalizeQuery(query: string): string {
     // Remove parameter values to group similar queries
     return query
@@ -136,7 +148,7 @@ class PerformanceObserver {
           successCount: v.successes,
           errorCount: v.errors,
           latencyPercentiles: this.calculatePercentiles(v.latencies),
-          errorRate: (v.errors / (v.successes + v.errors)) * 100,
+          errorRate: v.errors > 0 ? (v.errors / (v.successes + v.errors)) * 100 : 0,
           lastUpdated: new Date().toISOString(),
         };
       });
@@ -190,6 +202,9 @@ class PerformanceObserver {
       queries: new Map(
         this.getQueryMetrics().map((m) => [m.query, m])
       ),
+      webVitals: Object.fromEntries(
+        [...this.webVitals.entries()].map(([name, values]) => [name, this.calculatePercentiles(values)]),
+      ),
       systemHealth: {
         uptime: Date.now() - this.startTime,
         memoryUsage: process.memoryUsage(),
@@ -201,6 +216,7 @@ class PerformanceObserver {
   reset() {
     this.endpointMetrics.clear();
     this.queryMetrics.clear();
+    this.webVitals.clear();
     this.startTime = Date.now();
   }
 }

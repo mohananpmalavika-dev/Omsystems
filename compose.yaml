@@ -4,6 +4,7 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8080
+      OTEL_PROMETHEUS_PORT: 9464
       AUTH_MODE: development
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
@@ -16,6 +17,7 @@ services:
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:?ANALYTICS_SOURCE_SHARED_KEY is required}
     ports:
       - "8080:8080"
+      - "9464:9464"
     depends_on:
       postgres:
         condition: service_healthy
