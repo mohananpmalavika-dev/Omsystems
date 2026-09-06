@@ -96,7 +96,7 @@ export class CPPlusDeviceAdapter implements DeviceAdapter {
   }
 
   async getSnapshot(channelId: string): Promise<{ buffer: Buffer; mimeType: string }> {
-    return { buffer: Buffer.from("CPPLUS_MOCK_JPEG"), mimeType: "image/jpeg" };
+    return { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xd9]), mimeType: "image/jpeg" };
   }
 
   async getDeviceTime(): Promise<{ utcTime: Date; timeZone: string; ntpSynced: boolean }> {
@@ -147,7 +147,7 @@ export class DahuaDeviceAdapter implements DeviceAdapter {
   }
 
   async getSnapshot(): Promise<{ buffer: Buffer; mimeType: string }> {
-    return { buffer: Buffer.from("DAHUA_MOCK_JPEG"), mimeType: "image/jpeg" };
+    return { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xd9]), mimeType: "image/jpeg" };
   }
 
   async getDeviceTime(): Promise<{ utcTime: Date; timeZone: string; ntpSynced: boolean }> {
@@ -198,7 +198,7 @@ export class HikvisionDeviceAdapter implements DeviceAdapter {
   }
 
   async getSnapshot(): Promise<{ buffer: Buffer; mimeType: string }> {
-    return { buffer: Buffer.from("HIK_MOCK_JPEG"), mimeType: "image/jpeg" };
+    return { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xd9]), mimeType: "image/jpeg" };
   }
 
   async getDeviceTime(): Promise<{ utcTime: Date; timeZone: string; ntpSynced: boolean }> {
@@ -247,7 +247,7 @@ export class GenericOnvifDeviceAdapter implements DeviceAdapter {
   }
 
   async getSnapshot(): Promise<{ buffer: Buffer; mimeType: string }> {
-    return { buffer: Buffer.from("ONVIF_MOCK_JPEG"), mimeType: "image/jpeg" };
+    return { buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x01, 0x00, 0x48, 0x00, 0x48, 0x00, 0x00, 0xff, 0xd9]), mimeType: "image/jpeg" };
   }
 
   async getDeviceTime(): Promise<{ utcTime: Date; timeZone: string; ntpSynced: boolean }> {

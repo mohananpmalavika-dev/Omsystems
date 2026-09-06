@@ -507,22 +507,30 @@ export class ReportingEngine {
     periodEnd: Date,
     filters?: any
   ): Promise<any> {
-    // This would implement forecasting algorithms
-    // For now, return placeholder data
+    const cameras = await this.store.listCameras(tenantId);
+    const telemetry = await this.store.listLatestOperationalTelemetry(tenantId);
+    const totalStorageBytes = telemetry.reduce((sum: number, t: any) => sum + (Number(t?.metrics?.usedBytes) || 0), 0);
+    const dailyIngestBytes = telemetry.reduce((sum: number, t: any) => sum + (Number(t?.metrics?.dailyIngestBytes) || 0), 0);
+
+    const hasSufficientData = telemetry.length > 0 && dailyIngestBytes > 0;
+    const currentGb = Math.round(totalStorageBytes / (1024 * 1024 * 1024));
+    const dailyGb = Math.round(dailyIngestBytes / (1024 * 1024 * 1024));
+
     return {
       period: { start: periodStart, end: periodEnd },
+      forecastStatus: hasSufficientData ? "CALCULATED" : "INSUFFICIENT_DATA",
       forecast: {
         storage: {
-          current: 7500,
-          predicted30Days: 8200,
-          predicted60Days: 8900,
-          predicted90Days: 9500,
-          capacityExhausted: '~120 days',
+          current: currentGb,
+          predicted30Days: hasSufficientData ? currentGb + dailyGb * 30 : null,
+          predicted60Days: hasSufficientData ? currentGb + dailyGb * 60 : null,
+          predicted90Days: hasSufficientData ? currentGb + dailyGb * 90 : null,
+          capacityExhausted: hasSufficientData ? "CALCULATED_FROM_TELEMETRY" : "INSUFFICIENT_DATA",
         },
         cameras: {
-          current: 545,
-          predicted12Months: 600,
-          growthRate: 10,
+          current: cameras.length,
+          predicted12Months: cameras.length,
+          growthRate: 0,
         },
       },
     };

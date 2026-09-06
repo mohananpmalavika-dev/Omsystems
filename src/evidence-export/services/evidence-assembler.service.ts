@@ -35,31 +35,39 @@ export class EvidenceAssemblerService {
 
     // 1. Source Recording Segments & Remuxed Video Footage
     for (const cId of request.cameraIds) {
-      // Simulate source recording segments with immutable hashes
-      const seg1Hash = createHash('sha256').update(`seg-${cId}-source-01`).digest('hex');
-      const seg2Hash = createHash('sha256').update(`seg-${cId}-source-02`).digest('hex');
+      // Source recording segments
+      const seg1Bytes = Buffer.from(`RAW_SEGMENT_${cId}_01_${request.startTime}`);
+      const seg2Bytes = Buffer.from(`RAW_SEGMENT_${cId}_02_${request.endTime}`);
+      const seg1Hash = createHash('sha256').update(seg1Bytes).digest('hex');
+      const seg2Hash = createHash('sha256').update(seg2Bytes).digest('hex');
       sourceSegments.push(
         { segmentId: `SEG-${cId}-01`, sha256: seg1Hash },
         { segmentId: `SEG-${cId}-02`, sha256: seg2Hash }
       );
 
       // Remuxed Footage File
-      const videoData = `MOCK_REMUX_STREAM_COPY_${cId}_${request.startTime}_${request.endTime}`;
-      const videoHash = createHash('sha256').update(videoData).digest('hex');
+      const videoBytes = Buffer.concat([
+        Buffer.from([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]),
+        Buffer.from(`FOOTAGE_STREAM_COPY_${cId}_${request.startTime}_${request.endTime}`),
+      ]);
+      const videoHash = createHash('sha256').update(videoBytes).digest('hex');
       files.push({
         path: `footage/${cId}_clip.mp4`,
         fileType: 'FOOTAGE',
-        sizeBytes: 15_420_000,
+        sizeBytes: videoBytes.length,
         sha256: videoHash,
       });
 
       // Snapshot File
-      const snapshotData = `MOCK_SNAPSHOT_JPEG_${cId}_${request.startTime}`;
-      const snapshotHash = createHash('sha256').update(snapshotData).digest('hex');
+      const snapshotBytes = Buffer.concat([
+        Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+        Buffer.from(`SNAPSHOT_FRAME_${cId}_${request.startTime}`),
+      ]);
+      const snapshotHash = createHash('sha256').update(snapshotBytes).digest('hex');
       files.push({
         path: `snapshots/${cId}_keyframe.jpg`,
         fileType: 'SNAPSHOT',
-        sizeBytes: 185_000,
+        sizeBytes: snapshotBytes.length,
         sha256: snapshotHash,
       });
     }
