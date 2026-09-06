@@ -30,6 +30,7 @@ const PRODUCTION_SCAN_DIRS = [
   "dashboard/components",
   "dashboard/lib",
   "packages/contracts/src",
+  "scripts",
 ];
 
 const IGNORE_PATTERNS = [
@@ -158,6 +159,11 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
       { pattern: /fabricated\s+capacity/i, rule: "NO_FABRICATED_CAPACITY", message: "Production code must not fabricate storage capacity." },
       { pattern: /fabricated\s+NTP\s+state/i, rule: "NO_FABRICATED_NTP", message: "Production code must not fabricate NTP synchronization status." },
       { pattern: /fabricated\s+clock\s+offset/i, rule: "NO_FABRICATED_CLOCK_OFFSET", message: "Production code must not fabricate clock offset." },
+      { pattern: /10\s*\*\s*1024\s*\*\s*1024\s*\*\s*1024\s*\*\s*1024/, rule: "NO_HARDCODED_10TB_CAPACITY", message: "Production code must not use hardcoded 10 TB baseline storage capacity." },
+      { pattern: /usedStorageBytes\s*\*\s*1\.5/, rule: "NO_SYNTHETIC_STORAGE_MULTIPLIER", message: "Production code must not use synthetic usedStorageBytes * 1.5 multiplier." },
+      { pattern: /usableStorageBytes\s*\*\s*1\.1/, rule: "NO_SYNTHETIC_STORAGE_MULTIPLIER", message: "Production code must not use synthetic usableStorageBytes * 1.1 multiplier." },
+      { pattern: /99\.997/, rule: "NO_HARDCODED_COMPLIANCE_METRICS", message: "Production code must not use hardcoded 99.997 compliance metrics." },
+      { pattern: /83\.4/, rule: "NO_HARDCODED_COMPLIANCE_METRICS", message: "Production code must not use hardcoded 83.4 retention metrics." },
     ];
 
     for (const fp of forbiddenPatterns) {
