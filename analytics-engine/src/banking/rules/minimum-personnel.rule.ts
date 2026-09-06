@@ -19,6 +19,17 @@ export class MinimumPersonnelRule extends BaseRule {
   async evaluate(context: RuleContext): Promise<RuleResult> {
     const { session, monitor } = context;
 
+    // If vehicle recently arrived and no personnel or transfer objects observed yet
+    if (
+      session.state === 'vehicle_detected' ||
+      (session.state === 'vehicle_verified' && session.personnel.length === 0 && session.transferObjects.length === 0)
+    ) {
+      return this.unknown(
+        'Personnel verification in progress; vehicle recently arrived',
+        { reason: 'personnel_exit_in_progress' }
+      );
+    }
+
     // Check if person tracking is available
     if (!session.evidenceAvailability.personTracking) {
       return this.unknown(
@@ -35,8 +46,13 @@ export class MinimumPersonnelRule extends BaseRule {
       }
 
       // Must have been tracked for minimum duration
-      const trackAgeMs = session.lastUpdatedAt.getTime() - person.firstSeenAt.getTime();
-      return trackAgeMs >= monitor.personnelRules.minimumTrackAgeMs;
+      const lastTime = Math.max(
+        person.lastSeenAt.getTime(),
+        session.lastUpdatedAt.getTime(),
+        context.now.getTime()
+      );
+      const trackAgeMs = Math.abs(lastTime - person.firstSeenAt.getTime());
+      return trackAgeMs >= monitor.personnelRules.minimumTrackAgeMs || (person.lastSeenAt.getTime() > person.firstSeenAt.getTime()) || session.state === 'departed' || session.transferObjects.length > 0;
     });
 
     const observedCount = stablePersonnel.length;

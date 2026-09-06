@@ -393,19 +393,24 @@ export class WorkflowScenarioBuilder {
       })
     );
 
-    // 7. Move to secure zone
-    this.events.push(
-      this.generator.zoneTransition('object', cashCaseTrack, 'zone_secure', 'entered', {
-        offsetSeconds: 30,
-      })
-    );
-
-    // 8. Access control correlation
+    // 7. Access control correlation (badge authorization prior to entry)
     this.events.push(
       this.generator.accessControl('door_secure', 'granted', {
         identityId: 'guard_001',
         zoneId: 'zone_secure',
-        offsetSeconds: 31,
+        offsetSeconds: 29,
+      })
+    );
+
+    // 8. Move guard and object to secure zone
+    this.events.push(
+      this.generator.zoneTransition('person', guard1Track, 'zone_secure', 'entered', {
+        offsetSeconds: 30,
+      })
+    );
+    this.events.push(
+      this.generator.zoneTransition('object', cashCaseTrack, 'zone_secure', 'entered', {
+        offsetSeconds: 30,
       })
     );
 

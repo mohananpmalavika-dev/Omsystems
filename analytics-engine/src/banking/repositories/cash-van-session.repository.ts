@@ -302,6 +302,17 @@ export class CashVanSessionRepository {
       }
     }
 
+    // Update object
+    if (update.updateObject) {
+      const index = session.transferObjects.findIndex(o => o.trackId === update.updateObject!.trackId);
+      if (index >= 0) {
+        session.transferObjects[index] = {
+          ...session.transferObjects[index],
+          ...update.updateObject,
+        } as ObservedObject;
+      }
+    }
+
     // Add violation
     if (update.addViolation) {
       const violation: CashVanViolation = {
