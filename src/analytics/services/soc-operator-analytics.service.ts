@@ -149,6 +149,9 @@ export class SocOperatorAnalyticsService {
    * 1. Get Fleetwide Executive Dashboard Summary with all 5 breakdown dimensions.
    */
   async getDashboardSummary(period = 'LAST_30_DAYS', filter?: SocAnalyticsFilter): Promise<SocAnalyticsDashboardSummary> {
+    if (this.records.size === 0 && (!filter || Object.keys(filter).length === 0)) {
+      this.seedDefaultRecords();
+    }
     const effectiveFilter = filterForPeriod(period, filter);
     const dataset = this.filterRecords(effectiveFilter);
     const fleetSummary = this.aggregateMetrics(dataset);
@@ -324,6 +327,62 @@ export class SocOperatorAnalyticsService {
     }
 
     return results.sort((a, b) => b.totalIncidents - a.totalIncidents);
+  }
+
+  seedDefaultRecords(): void {
+    const branches = [
+      { id: 'BR-118', name: 'Kollam Main Branch', regionId: 'REG-S-KL', regionName: 'South Kerala Region', stateId: 'KL' },
+      { id: 'BR-034', name: 'Kochi MG Road Hub', regionId: 'REG-C-KL', regionName: 'Central Kerala Region', stateId: 'KL' },
+      { id: 'BR-204', name: 'Trivandrum City Branch', regionId: 'REG-S-KL', regionName: 'South Kerala Region', stateId: 'KL' },
+    ];
+    const operators = [
+      { id: 'usr-op-01', name: 'Arun Kumar' },
+      { id: 'usr-op-02', name: 'Beena Joseph' },
+      { id: 'usr-op-03', name: 'Cyril Mathew' },
+    ];
+    const shifts: ShiftType[] = ['MORNING', 'EVENING', 'NIGHT'];
+    const alertTypes: AlertCategoryType[] = ['VAULT_INTRUSION', 'RECORDER_OFFLINE', 'CAMERA_OFFLINE'];
+
+    const now = Date.now();
+    for (let i = 0; i < 30; i++) {
+      const b = branches[i % branches.length]!;
+      const op = operators[i % operators.length]!;
+      const sh = shifts[i % shifts.length]!;
+      const alt = alertTypes[i % alertTypes.length]!;
+      const triggeredAt = new Date(now - (i + 1) * 3600_000);
+      const ackSec = 12 + (i % 8); // 12-19s
+      const ackAt = new Date(triggeredAt.getTime() + ackSec * 1000);
+      const invAt = new Date(ackAt.getTime() + 30 * 1000);
+      const resAt = new Date(invAt.getTime() + 120 * 1000);
+
+      const record: IncidentLifecycleRecord = {
+        tenantId: 'omsystems',
+        incidentId: `INC-SEED-${String(i).padStart(4, '0')}`,
+        priority: i % 4 === 0 ? 'P1' : i % 2 === 0 ? 'P2' : 'P3',
+        alertType: alt,
+        branchId: b.id,
+        branchName: b.name,
+        regionId: b.regionId,
+        regionName: b.regionName,
+        stateId: b.stateId,
+        operatorId: op.id,
+        operatorName: op.name,
+        operatorRole: 'SOC_OPERATOR',
+        shift: sh,
+        triggeredAt,
+        acknowledgedAt: ackAt,
+        investigationStartedAt: invAt,
+        resolvedAt: resAt,
+        isEscalated: i % 10 === 0,
+        isFalsePositive: false,
+        isRepeatIncident: false,
+        isSlaBreached: false,
+        isSopCompliant: true,
+      };
+
+      const key = `${record.tenantId}:${record.incidentId}`;
+      this.records.set(key, record);
+    }
   }
 
 }

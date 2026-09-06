@@ -357,6 +357,16 @@ export class OperationalMapService {
           coverageDepthMeters: 15,
           status: 'ONLINE',
         },
+        {
+          cameraId: 'CAM-118-02',
+          name: 'Customer Waiting Lounge & ATM Vestibule',
+          xPercent: 30,
+          yPercent: 45,
+          rotationDegrees: 45,
+          fieldOfViewDegrees: 80,
+          coverageDepthMeters: 10,
+          status: 'ONLINE',
+        },
       ],
     };
 
