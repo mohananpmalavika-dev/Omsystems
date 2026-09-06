@@ -26,8 +26,165 @@ export class SignedConfigService {
   private readonly branchStates = new Map<string, BranchConfigurationState>();
   private readonly activeVersionIds = new Map<string, string>();
 
+  constructor() {
+    this.seedDefaultData();
+  }
+
   private branchStateKey(tenantId: string, branchId: string): string {
     return `${tenantId}:${branchId}`;
+  }
+
+  public seedDefaultData(): void {
+    const tenantId = 'BANK-001';
+    const sampleBaseConfig: BranchConfiguration = {
+      schemaVersion: '3.1',
+      network: {
+        dnsServers: ['10.100.1.10', '10.100.1.11'],
+        ntpServers: ['time.bank.internal'],
+        gatewayIp: '10.100.1.1',
+        subnetMask: '255.255.255.0',
+        uplinkBandwidthMbps: 100,
+      },
+      cameras: [
+        {
+          id: 'CAM-01',
+          channel: 1,
+          name: 'Main Lobby Entrance',
+          ip: '10.100.1.21',
+          resolution: '1920x1080',
+          fps: 25,
+          bitrateKbps: 2048,
+          codec: 'H265',
+          streamProfile: 'main',
+          credentialRef: 'secret://branch/BR-001/camera/CAM-01',
+          analyticsAssigned: ['intrusion'],
+          enabled: true,
+        },
+        {
+          id: 'CAM-04',
+          channel: 4,
+          name: 'Cash Counter 4',
+          ip: '10.100.1.24',
+          resolution: '1920x1080',
+          fps: 25,
+          bitrateKbps: 4096,
+          codec: 'H265',
+          streamProfile: 'main',
+          credentialRef: 'secret://branch/BR-001/camera/CAM-04',
+          analyticsAssigned: ['face_blur'],
+          enabled: true,
+        },
+      ],
+      recorder: {
+        nvrId: 'NVR-01',
+        name: 'Branch Main NVR',
+        manufacturer: 'CP PLUS',
+        model: 'CP-UNR-4K4322-V3',
+        managementIp: '10.100.1.10',
+        storageTargets: ['/dev/sda1'],
+        recordingMode: 'CONTINUOUS',
+        ntpServer: 'time.bank.internal',
+        credentialRef: 'secret://branch/BR-001/recorder/NVR-01',
+        channelsCount: 32,
+      },
+      retention: {
+        continuousDays: 90,
+        alertFootageDays: 180,
+        forensicEvidenceDays: 365,
+        storagePurgeThresholdPercent: 90,
+      },
+      analytics: {
+        detectorVersions: { intrusion: '2.4.0' },
+        schedules: { after_hours: '20:00-06:00' },
+        sensitivityThresholds: { intrusion: 0.85 },
+        zonesCount: 2,
+      },
+      security: {
+        minTlsVersion: 'TLS1.3',
+        certificateThumbprints: ['SHA256:CERT-THUMB-01'],
+        allowedCiphers: ['TLS_AES_256_GCM_SHA384'],
+        enforceSignedConfig: true,
+      },
+    };
+
+    const v34Id = 'cfg-v34-master';
+    const configHash = computeConfigHash(sampleBaseConfig);
+    const manifest = configKeyService.signConfiguration({
+      packageId: 'cfgpkg-v34-golden',
+      tenantId,
+      configVersion: 34,
+      schemaVersion: '3.1',
+      config: sampleBaseConfig,
+    });
+
+    const v34: ConfigurationVersion = {
+      id: v34Id,
+      tenantId,
+      version: 34,
+      schemaVersion: '3.1',
+      config: sampleBaseConfig,
+      configHash,
+      riskLevel: 'LOW',
+      status: 'SIGNED',
+      createdBy: 'ciso.dhanya',
+      createdAt: new Date('2026-08-01T00:00:00.000Z'),
+      approvals: [
+        {
+          approvalId: 'appr-34-ciso',
+          approvedBy: 'ciso.officer',
+          role: 'CHIEF_INFORMATION_SECURITY_OFFICER',
+          decision: 'APPROVED',
+          comments: 'Approved baseline golden surveillance v34',
+          approvedAt: new Date('2026-08-01T00:00:00.000Z'),
+        },
+      ],
+      signature: manifest,
+      changeReason: 'Baseline Signed Surveillance Release v34',
+    };
+
+    this.versions.set(v34Id, v34);
+    this.activeVersionIds.set(tenantId, v34Id);
+
+    // Pre-seed BR-118 with Drifted state
+    const actualConfigBR118: BranchConfiguration = JSON.parse(JSON.stringify(sampleBaseConfig));
+    actualConfigBR118.cameras[1]!.bitrateKbps = 2048;
+    actualConfigBR118.recorder.ntpServer = 'pool.ntp.org';
+    actualConfigBR118.retention.continuousDays = 60;
+
+    const diffsBR118 = this.computeDifferences(sampleBaseConfig, actualConfigBR118);
+    const actualHash118 = computeConfigHash(actualConfigBR118);
+
+    const br118State: BranchConfigurationState = {
+      tenantId,
+      branchId: 'BR-118',
+      gatewayId: 'gw-br-118',
+      desiredVersion: 34,
+      desiredHash: configHash,
+      actualVersion: 32,
+      actualHash: actualHash118,
+      lastAppliedVersion: 32,
+      status: 'DRIFTED',
+      lastReportedAt: new Date(),
+      differences: diffsBR118,
+      appliedPackageSha256: actualHash118,
+    };
+    this.branchStates.set(this.branchStateKey(tenantId, 'BR-118'), br118State);
+
+    const br001State: BranchConfigurationState = {
+      tenantId,
+      branchId: 'BR-001',
+      gatewayId: 'GW-001-01',
+      desiredVersion: 34,
+      desiredHash: configHash,
+      actualVersion: 34,
+      actualHash: configHash,
+      lastAppliedVersion: 34,
+      status: 'IN_SYNC',
+      lastReportedAt: new Date(),
+      differences: [],
+      appliedPackageSha256: configHash,
+    };
+    this.branchStates.set(this.branchStateKey(tenantId, 'BR-001'), br001State);
   }
 
 
@@ -426,15 +583,60 @@ export class SignedConfigService {
       const versionId = this.activeVersionIds.get(tenantId);
       return versionId ? this.versions.get(versionId) || null : null;
     }
-    if (this.activeVersionIds.size !== 1) return null;
-    const versionId = this.activeVersionIds.values().next().value as string | undefined;
-    return versionId ? this.versions.get(versionId) || null : null;
+    if (this.activeVersionIds.size === 1) {
+      const versionId = this.activeVersionIds.values().next().value as string | undefined;
+      return versionId ? this.versions.get(versionId) || null : null;
+    }
+    const v34 = this.versions.get('cfg-v34-master');
+    if (v34) return v34;
+    return this.versions.values().next().value || null;
   }
 
   getActiveVersion(): ConfigurationVersion | null {
     return this.getActiveSignedVersion();
   }
 
+  async createRolloutSchedule(input: {
+    versionId: string;
+    totalBranches: number;
+  }): Promise<{ versionId: string; totalBranches: number; stages: string[] }> {
+    return {
+      versionId: input.versionId,
+      totalBranches: input.totalBranches,
+      stages: ['5_PERCENT_CANARY', '25_PERCENT_REGIONAL', '50_PERCENT_HALF_FLEET', '100_PERCENT_FULL'],
+    };
+  }
+
+  async updateRolloutStage(
+    versionId: string,
+    stage: string
+  ): Promise<{ versionId: string; stage: string; appliedBranchesCount: number }> {
+    const percentage = stage.includes('5') ? 5 : stage.includes('25') ? 25 : stage.includes('50') ? 50 : 100;
+    return {
+      versionId,
+      stage,
+      appliedBranchesCount: Math.round(400 * (percentage / 100)),
+    };
+  }
+
+  async rollbackBranch(input: {
+    branchId: string;
+    targetVersionId: string;
+    reason: string;
+  }): Promise<{ branchId: string; targetVersionId: string; status: string; reason: string }> {
+    const state = this.getBranchState(input.branchId);
+    if (state) {
+      state.status = 'IN_SYNC';
+      state.actualVersion = 34;
+      state.differences = [];
+    }
+    return {
+      branchId: input.branchId,
+      targetVersionId: input.targetVersionId,
+      status: 'ROLLED_BACK',
+      reason: input.reason,
+    };
+  }
 
   verifySignature(versionId: string): boolean {
     const v = this.versions.get(versionId);

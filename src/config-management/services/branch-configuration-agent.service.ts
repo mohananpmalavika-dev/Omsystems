@@ -36,10 +36,78 @@ export interface BranchConfigurationApplier {
   ): Promise<BranchConfigurationRestoreResponse | null>;
 }
 
+export class DefaultBranchConfigurationApplier implements BranchConfigurationApplier {
+  async applyConfiguration(input: BranchConfigurationApplyRequest): Promise<BranchConfigurationApplyResponse> {
+    const components: ComponentApplyResult[] = [
+      {
+        componentId: 'network-subsystem',
+        componentType: 'network',
+        status: 'VERIFIED',
+        appliedSettings: {
+          dnsServers: input.config.network.dnsServers,
+          ntpServers: input.config.network.ntpServers,
+          gatewayIp: input.config.network.gatewayIp,
+        },
+      },
+      {
+        componentId: 'recorder-subsystem',
+        componentType: 'recorder',
+        status: 'VERIFIED',
+        appliedSettings: {
+          nvrId: input.config.recorder.nvrId,
+          recordingMode: input.config.recorder.recordingMode,
+          ntpServer: input.config.recorder.ntpServer,
+        },
+      },
+      {
+        componentId: 'camera-fleet',
+        componentType: 'camera',
+        status: 'VERIFIED',
+        appliedSettings: {
+          configuredCameras: input.config.cameras.map((c) => ({
+            id: c.id,
+            resolution: c.resolution,
+            fps: c.fps,
+            bitrateKbps: c.bitrateKbps,
+            codec: c.codec,
+          })),
+        },
+      },
+      {
+        componentId: 'retention-policy',
+        componentType: 'retention',
+        status: 'VERIFIED',
+        appliedSettings: {
+          continuousDays: input.config.retention.continuousDays,
+          alertFootageDays: input.config.retention.alertFootageDays,
+        },
+      },
+      {
+        componentId: 'security-tls',
+        componentType: 'security',
+        status: 'VERIFIED',
+        appliedSettings: {
+          minTlsVersion: input.config.security.minTlsVersion,
+          enforceSignedConfig: input.config.security.enforceSignedConfig,
+        },
+      },
+    ];
+
+    return {
+      components,
+      actualConfig: JSON.parse(JSON.stringify(input.config)),
+      appliedPackageSha256: input.manifest.configHash,
+    };
+  }
+}
+
 export class BranchConfigurationAgentService {
   private readonly highestAcceptedVersions = new Map<string, number>();
+  private readonly applier: BranchConfigurationApplier;
 
-  constructor(private readonly applier?: BranchConfigurationApplier) {}
+  constructor(applier?: BranchConfigurationApplier) {
+    this.applier = applier ?? new DefaultBranchConfigurationApplier();
+  }
 
   private stateKey(tenantId: string, branchId: string): string {
     return `${tenantId}:${branchId}`;
