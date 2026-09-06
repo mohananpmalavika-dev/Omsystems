@@ -4,6 +4,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { metrics, type Histogram } from '@opentelemetry/api';
 
 export interface LatencyPercentiles {
   p50: number;
@@ -55,6 +56,7 @@ class PerformanceObserver {
   private startTime = Date.now();
   private eventLoopLag = 0;
   private webVitals = new Map<string, number[]>();
+  private webVitalHistogram: Histogram | undefined;
 
   constructor() {
     this.monitorEventLoop();
@@ -123,6 +125,11 @@ class PerformanceObserver {
     values.push(value);
     if (values.length > 1_000) values.splice(0, values.length - 1_000);
     this.webVitals.set(name, values);
+    this.webVitalHistogram ??= metrics.getMeter('sentinel-web-vitals').createHistogram('web_vital_value', {
+      description: 'Browser Core Web Vital values reported by the dashboard',
+      unit: 'ms',
+    });
+    this.webVitalHistogram.record(value, { name });
   }
 
   private normalizeQuery(query: string): string {
