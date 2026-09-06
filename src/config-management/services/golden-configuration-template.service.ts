@@ -39,6 +39,15 @@ export interface GoldenConfigurationTemplate {
   updatedAt: string;
 }
 
+export interface TargetCameraInput {
+  id: string;
+  name: string;
+  currentResolution?: string;
+  currentFps?: number;
+  currentBitrateKbps?: number;
+  currentCodec?: string;
+}
+
 export interface TemplateApplicationResult {
   applicationId: string;
   templateId: string;
@@ -203,7 +212,7 @@ export class GoldenConfigurationTemplateService {
 
   public previewApplication(
     templateId: string,
-    targetCameras: Array<{ id: string; name: string; currentResolution?: string; currentFps?: number; currentBitrateKbps?: number; currentCodec?: string }>,
+    targetCameras: TargetCameraInput[],
   ) {
     const template = this.getTemplate(templateId);
     if (!template) throw new Error(`Golden template ${templateId} not found`);
@@ -236,7 +245,7 @@ export class GoldenConfigurationTemplateService {
   public applyTemplate(
     templateId: string,
     branchId: string,
-    targetCameras: Array<{ id: string; name: string; currentResolution?: string; currentFps?: number; currentBitrateKbps?: number; currentCodec?: string }>,
+    targetCameras: TargetCameraInput[],
     appliedBy: string = "system-admin",
   ): TemplateApplicationResult {
     const template = this.getTemplate(templateId);
