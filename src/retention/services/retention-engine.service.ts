@@ -64,6 +64,7 @@ export interface BranchRetentionOverview {
 export class RetentionEngineService {
   public readonly policyResolver = new PolicyResolverService();
   private cameraSegments = new Map<string, RetentionSegmentMetadata[]>();
+  private localHolds: any[] = [];
 
   constructor(private readonly evidenceRepo?: EvidenceRepository) {}
 
@@ -84,31 +85,43 @@ export class RetentionEngineService {
       reason: hold.reason,
       requestedBy: hold.createdBy,
       tenantId: hold.tenantId,
-      cameraIds: hold.scope.cameras,
+      cameraIds: hold.scope.cameras || [],
       startTime: hold.scope.startTime?.toISOString() || new Date().toISOString(),
       endTime: hold.scope.endTime?.toISOString() || new Date().toISOString(),
     });
 
-    return {
+    const result: LegalHold = {
       ...hold,
       id: created.id,
       createdAt: new Date(created.createdAt),
       status: "ACTIVE",
     };
+    this.localHolds.push(result);
+    return result;
   }
 
   async releaseLegalHold(holdId: string, approvedBy: string, reason?: string): Promise<any> {
     const repo = this.getEffectiveEvidenceRepo();
+    this.localHolds = this.localHolds.filter((h) => h.id !== holdId);
     return repo.releaseLegalHold(holdId, approvedBy, reason);
   }
 
+  getLegalHoldsSync(cameraId?: string, branchId?: string): any[] {
+    return this.localHolds.filter((h) => {
+      if (h.status !== "ACTIVE") return false;
+      if (branchId && h.scope?.branches && !h.scope.branches.includes(branchId)) return false;
+      if (cameraId && h.scope?.cameras && !h.scope.cameras.includes(cameraId)) return false;
+      return true;
+    });
+  }
+
   async getLegalHolds(cameraId?: string, branchId?: string, tenantId?: string): Promise<any[]> {
-    if (!pool && !this.evidenceRepo) return [];
+    if (!pool && !this.evidenceRepo) return this.getLegalHoldsSync(cameraId, branchId);
     try {
       const repo = this.getEffectiveEvidenceRepo();
-      return repo.listLegalHolds({ cameraId, branchId, tenantId, status: "active" });
+      return await repo.listLegalHolds({ cameraId, branchId, tenantId, status: "active" });
     } catch {
-      return [];
+      return this.getLegalHoldsSync(cameraId, branchId);
     }
   }
 
@@ -274,7 +287,7 @@ export class RetentionEngineService {
           status: (currentDays >= requiredDays ? "HEALTHY" : currentDays > 0 ? "WARNING" : "CRITICAL") as "HEALTHY" | "WARNING" | "CRITICAL",
         };
 
-    const activeHolds = this.getLegalHolds(context.cameraId, context.branchId);
+    const activeHolds = this.getLegalHoldsSync(context.cameraId, context.branchId);
 
     const status: "HEALTHY" | "WARNING" | "CRITICAL" =
       currentDays >= requiredDays && coveragePercent >= 98
@@ -312,14 +325,14 @@ export class RetentionEngineService {
    * Evaluates branch-level retention overview aggregated from actual camera metrics.
    */
   getBranchOverview(branchId: string, tenantId: string = "BANK-001"): BranchRetentionOverview {
-    const activeHolds = this.getLegalHolds(undefined, branchId);
+    const activeHolds = this.getLegalHoldsSync(undefined, branchId);
     const effectivePolicy = this.policyResolver.resolve({
       cameraId: "default",
       branchId,
       tenantId,
     });
     const requiredRetentionDays = effectivePolicy.minimumRetentionDays;
-    const warningRetentionDays = effectivePolicy.warningRetentionDays ?? Math.max(1, requiredRetentionDays - 10);
+    const warningRetentionDays = (effectivePolicy as any).warningRetentionDays ?? Math.max(1, requiredRetentionDays - 10);
 
     // Sum storage and ingest across all ingested cameras for this branch
     let usedStorageBytes = 0;
