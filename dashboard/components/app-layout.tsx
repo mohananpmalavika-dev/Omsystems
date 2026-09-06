@@ -236,15 +236,111 @@ export const navigation: NavGroup[] = [
 ];
 
 const unrestrictedRoles = new Set(["super_admin", "company_admin", "hq_admin", "admin", "superadmin"]);
-const roleGroups: Record<string, string[]> = {
-  zone_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  region_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  area_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  branch_manager: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK", "AUDIT & REPORTING"],
-  operator: ["OPERATIONS", "HEALTH & HARDWARE LAB", "INVESTIGATE & PLAYBACK"],
-  security_officer: ["OPERATIONS", "INVESTIGATE & PLAYBACK"],
-  viewer: ["OPERATIONS", "INVESTIGATE & PLAYBACK"],
-  auditor: ["ASSURANCE & GOVERNANCE", "AUDIT & REPORTING", "INVESTIGATE & PLAYBACK"],
+const roleWorkspacePaths: Record<string, string[]> = {
+  operator: [
+    "/",
+    "/control-room",
+    "/operations/alerts",
+    "/analytics/alerts",
+    "/incidents",
+    "/video-search",
+    "/playback/synced",
+    "/recordings",
+  ],
+  security_officer: [
+    "/",
+    "/control-room",
+    "/operations/alerts",
+    "/analytics/alerts",
+    "/incidents",
+    "/video-search",
+    "/playback/synced",
+    "/evidence",
+  ],
+  viewer: ["/", "/control-room", "/video-search", "/playback/synced", "/recordings"],
+  branch_manager: [
+    "/",
+    "/operations/branches",
+    "/operations/cameras",
+    "/operations/recording",
+    "/operations/workorders",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+  ],
+  zone_manager: [
+    "/",
+    "/operations/branches",
+    "/operations/cameras",
+    "/operations/recording",
+    "/operations/workorders",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/reports",
+  ],
+  region_manager: [
+    "/",
+    "/operations/branches",
+    "/operations/cameras",
+    "/operations/recording",
+    "/operations/workorders",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+    "/reports",
+  ],
+  area_manager: [
+    "/",
+    "/operations/branches",
+    "/operations/cameras",
+    "/operations/recording",
+    "/operations/workorders",
+    "/operations/storage",
+    "/operations/network",
+    "/operations/edge-agents",
+    "/maintenance/workorders",
+    "/maintenance/health",
+  ],
+  auditor: [
+    "/",
+    "/evidence",
+    "/compliance",
+    "/compliance/assessments",
+    "/compliance/controls",
+    "/compliance/risks",
+    "/activity-report",
+    "/audit/branch-compliance",
+    "/audit/health",
+    "/audit/maintenance",
+    "/reports",
+  ],
+  admin: [
+    "/",
+    "/admin/organization?tab=hierarchy",
+    "/admin/organization?tab=employees",
+    "/admin/organization?tab=roles",
+    "/admin/branch-onboarding",
+    "/admin/zero-touch",
+    "/maintenance/device-configuration",
+    "/maintenance/device-management",
+    "/integrations",
+    "/admin/system",
+    "/account/security",
+  ],
+};
+
+const roleAliases: Record<string, string> = {
+  super_admin: "admin",
+  company_admin: "admin",
+  hq_admin: "admin",
+  superadmin: "admin",
 };
 
 export function menuKey(item: NavItem) {
@@ -252,23 +348,15 @@ export function menuKey(item: NavItem) {
 }
 
 export function defaultMenuAccessForRole(role?: string) {
-  if (role && unrestrictedRoles.has(role)) return navigation.flatMap((group) => group.items.map(menuKey));
-  const groups = new Set(roleGroups[role ?? ""] ?? []);
-  return navigation.filter((group) => groups.has(group.label)).flatMap((group) => group.items.map(menuKey));
+  const normalizedRole = roleAliases[role ?? ""] ?? role ?? "operator";
+  const paths = roleWorkspacePaths[normalizedRole];
+  if (paths) return paths;
+  if (unrestrictedRoles.has(role ?? "")) return roleWorkspacePaths.admin;
+  return roleWorkspacePaths.operator;
 }
 
-export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
-  if (!user) return navigation;
-  const configuredValue =
-    user.menuAccess ??
-    (user as any).menu_access ??
-    user.preferences?.menuAccess ??
-    (user.preferences as any)?.menu_access;
-  const configured = Array.isArray(configuredValue)
-    ? configuredValue.filter((value): value is string => typeof value === "string")
-    : null;
-  const allowed = new Set(configured ?? defaultMenuAccessForRole(user.role));
-  return navigation
+function filterNavigationByAllowed(navigationItems: NavGroup[], allowed: Set<string>) {
+  return navigationItems
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
@@ -278,6 +366,32 @@ export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
       }),
     }))
     .filter((group) => group.items.length > 0);
+}
+
+export function getAuthorizedNavigation(user: MenuAccessUser | null | undefined) {
+  if (!user) return navigation;
+  const configuredValue =
+    user.menuAccess ??
+    (user as any).menu_access ??
+    user.preferences?.menuAccess ??
+    (user.preferences as any)?.menu_access;
+  const configured = Array.isArray(configuredValue)
+    ? configuredValue.filter((value): value is string => typeof value === "string")
+    : null;
+  return filterNavigationByAllowed(navigation, new Set(configured ?? navigation.flatMap((group) => group.items.map(menuKey))));
+}
+
+export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
+  if (!user) return filterNavigationByAllowed(navigation, new Set(defaultMenuAccessForRole("operator")));
+  const authorized = getAuthorizedNavigation(user);
+  const configuredValue =
+    user.menuAccess ??
+    (user as any).menu_access ??
+    user.preferences?.menuAccess ??
+    (user.preferences as any)?.menu_access;
+  if (Array.isArray(configuredValue)) return authorized;
+  const workspace = new Set(defaultMenuAccessForRole(user.role));
+  return filterNavigationByAllowed(authorized, workspace);
 }
 
 
