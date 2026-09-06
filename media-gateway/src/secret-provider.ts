@@ -21,7 +21,7 @@ export class EnvironmentSecretProvider implements StreamSecretProvider {
   }
 
   async resolve(reference: string) {
-    return this.secrets[reference];
+    return Object.hasOwn(this.secrets, reference) ? this.secrets[reference] : undefined;
   }
 }
 
@@ -37,11 +37,17 @@ export class HttpStreamSecretProvider implements StreamSecretProvider {
     const response = await fetch(url, {
       headers: { "x-edge-media-key": this.sharedKey },
       cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+      redirect: "error",
     });
     if (response.status === 404) return undefined;
     if (!response.ok) throw new Error(`Edge secret provider returned ${response.status}`);
     const body = await response.json() as { sourceUri?: unknown };
-    return typeof body.sourceUri === "string" ? body.sourceUri : undefined;
+    if (typeof body.sourceUri !== "string") return undefined;
+    if (!["rtsp:", "rtsps:", "http:", "https:"].includes(new URL(body.sourceUri).protocol)) {
+      throw new Error("Edge secret provider returned an unsupported media protocol");
+    }
+    return body.sourceUri;
   }
 }
 

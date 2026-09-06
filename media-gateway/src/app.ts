@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { timingSafeEqual } from "node:crypto";
+import { Readable } from "node:stream";
 import { z } from "zod";
 import { AccessRegistry } from "./access-registry.js";
 import { GatewayError } from "./control-plane-client.js";
@@ -19,14 +20,23 @@ export async function buildMediaGateway(options: {
   mediaMtxWebRtcUrl?: string;
   accessTtlMs: number;
   edgeBridgeSharedKey?: string;
+  controlPlaneSharedKey?: string;
   logger?: boolean;
 }) {
   const app = Fastify({ logger: options.logger ?? false });
-  const access = new AccessRegistry(options.router, options.accessTtlMs);
+  const access = new AccessRegistry(options.router, options.accessTtlMs, (error) => {
+    app.log.error({ err: error }, "Media session cleanup failed");
+  });
+  app.addHook("onClose", async () => access.close());
+  app.addContentTypeParser(
+    ["application/sdp", "application/trickle-ice-sdpfrag"],
+    { parseAs: "string", bodyLimit: 256 * 1024 },
+    (_request, body, done) => done(null, body),
+  );
 
   app.addHook("preHandler", async (request, reply) => {
     if (
-      request.url === "/v1/live/start" &&
+      request.routeOptions.url === "/v1/live/start" &&
       options.edgeBridgeSharedKey &&
       !secureEqualHeader(
         request.headers["x-edge-bridge-key"],
@@ -54,10 +64,12 @@ export async function buildMediaGateway(options: {
           return reply.code(204).send();
         }
         const suffix = request.raw.url?.slice("/hls".length) || "/";
-        const target = new URL(suffix, options.mediaMtxHlsUrl);
+        const target = mediaTarget(suffix, options.mediaMtxHlsUrl!);
         const upstream = await fetch(target, {
           method: request.method,
           headers: forwardMediaHeaders(request.headers),
+          signal: AbortSignal.timeout(30_000),
+          redirect: "error",
         });
         reply.code(upstream.status);
         for (const name of [
@@ -65,14 +77,18 @@ export async function buildMediaGateway(options: {
           "cache-control",
           "content-length",
           "content-type",
+          "content-range",
+          "etag",
+          "last-modified",
         ]) {
           const value = upstream.headers.get(name);
           if (value) reply.header(name, value);
         }
-        if (request.method === "HEAD" || upstream.status === 204) {
+        if (request.method === "HEAD" || upstream.status === 204 || upstream.status === 304 || !upstream.body) {
+          await upstream.body?.cancel();
           return reply.send();
         }
-        return reply.send(Buffer.from(await upstream.arrayBuffer()));
+        return reply.send(Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream));
       },
     });
   }
@@ -88,17 +104,36 @@ export async function buildMediaGateway(options: {
         return reply.code(204).send();
       }
       const suffix = request.raw.url?.slice("/webrtc".length) || "/";
-      const target = new URL(suffix, mediaMtxWebRtcUrl);
+      const target = mediaTarget(suffix, mediaMtxWebRtcUrl);
+      const hasBody = request.method === "POST" || request.method === "PATCH";
+      if (hasBody && typeof request.body !== "string") {
+        throw new GatewayError(415, "unsupported_media_type");
+      }
       const upstream = await fetch(target, {
         method: request.method,
         headers: forwardWebRtcHeaders(request.headers),
-        body: ["POST", "PATCH", "PUT"].includes(request.method) ? (request.body as any) : undefined,
+        ...(hasBody ? { body: request.body as string } : {}),
+        signal: AbortSignal.timeout(30_000),
+        redirect: "error",
       });
       reply.code(upstream.status);
       for (const [name, value] of upstream.headers.entries()) {
-        if (["content-type", "location", "access-control-expose-headers", "etag", "id"].includes(name.toLowerCase())) {
+        if (["content-type", "etag", "id", "link", "accept-patch"].includes(name.toLowerCase())) {
           reply.header(name, value);
         }
+      }
+      const location = upstream.headers.get("location");
+      if (location) {
+        const sessionUrl = new URL(location, target);
+        if (sessionUrl.origin !== target.origin) {
+          await upstream.body?.cancel();
+          throw new GatewayError(502, "invalid_media_session_location");
+        }
+        reply.header("location", `/webrtc${sessionUrl.pathname}${sessionUrl.search}`);
+      }
+      if (request.method === "HEAD" || upstream.status === 204 || upstream.status === 304) {
+        await upstream.body?.cancel();
+        return reply.send();
       }
       const responseData = await upstream.text();
       return reply.send(responseData);
@@ -120,8 +155,8 @@ export async function buildMediaGateway(options: {
       throw new GatewayError(503, "stream_secret_unavailable");
     }
     const path = `camera-${safeIdentifier(consumed.cameraId)}`;
-    await options.router.ensurePath(path, sourceUri);
-    const session = access.issue(path);
+    const session = await access.start(path, sourceUri);
+    reply.header("cache-control", "no-store");
     return reply.code(201).send({
       sessionId: session.id,
       cameraId: consumed.cameraId,
@@ -156,14 +191,21 @@ export async function buildMediaGateway(options: {
   });
 
   app.post("/v1/portable/publish-start", async (request, reply) => {
+    // Only the authenticated control plane may authorize a publisher. A viewer
+    // token or caller-supplied camera ID must never grant camera write access.
+    if (!options.controlPlaneSharedKey || !secureEqualHeader(
+      request.headers["x-media-gateway-key"], options.controlPlaneSharedKey,
+    )) {
+      throw new GatewayError(401, "invalid_gateway_identity");
+    }
     const body = z.object({
       controlPlaneToken: z.string().min(10).max(256),
-      cameraId: z.string().min(1),
+      cameraId: z.string().min(1).max(200),
     }).parse(request.body);
 
     const path = `camera-${safeIdentifier(body.cameraId)}`;
-    await options.router.ensurePath(path, "publisher");
-    const session = access.issue(path, "publish");
+    const session = await access.start(path, "publisher", "publish");
+    reply.header("cache-control", "no-store");
     return reply.code(201).send({
       sessionId: session.id,
       cameraId: body.cameraId,
@@ -219,6 +261,10 @@ export async function buildMediaGateway(options: {
     if (error instanceof GatewayError) {
       return reply.code(error.statusCode).send({ error: error.code });
     }
+    if (error && typeof error === "object" && "statusCode" in error &&
+        typeof error.statusCode === "number" && error.statusCode >= 400 && error.statusCode < 500) {
+      return reply.code(error.statusCode).send({ error: "invalid_request" });
+    }
     app.log.error(error);
     return reply.code(502).send({ error: "media_gateway_failure" });
   });
@@ -234,6 +280,17 @@ function stripSlash(value: string) {
   return value.replace(/\/+$/, "");
 }
 
+function mediaTarget(suffix: string, base: string) {
+  // Reject authority overrides and backslash URL normalization before resolving.
+  if (!suffix.startsWith("/") || suffix.startsWith("//") || suffix.includes("\\")) {
+    throw new GatewayError(400, "invalid_media_path");
+  }
+  const configured = new URL(base);
+  const target = new URL(suffix, configured);
+  if (target.origin !== configured.origin) throw new GatewayError(400, "invalid_media_path");
+  return target;
+}
+
 function secureEqualHeader(value: string | string[] | undefined, expected: string) {
   if (typeof value !== "string") return false;
   const supplied = Buffer.from(value);
@@ -247,7 +304,7 @@ function forwardMediaHeaders(headers: Record<string, unknown>) {
   // The gateway is the browser-facing CORS boundary. Forwarding the browser's
   // Origin to MediaMTX makes its static hlsAllowOrigins setting decide whether
   // a playlist is usable, which breaks as soon as the dashboard hostname changes.
-  for (const name of ["accept", "authorization", "range", "user-agent"]) {
+  for (const name of ["accept", "authorization", "range", "if-none-match", "if-modified-since", "if-range", "user-agent"]) {
     const value = headers[name];
     if (typeof value === "string") forwarded[name] = value;
   }
@@ -268,6 +325,7 @@ function setHlsCorsHeaders(
   }
   reply.header("access-control-allow-headers", "Authorization, Content-Type, Range");
   reply.header("access-control-allow-methods", "GET, HEAD, OPTIONS");
+  reply.header("access-control-expose-headers", "Accept-Ranges, Content-Range, Content-Length, ETag");
   const requestsPrivateNetwork = Array.isArray(privateNetworkRequest)
     ? privateNetworkRequest.includes("true")
     : privateNetworkRequest === "true";
@@ -287,8 +345,8 @@ function setWebRtcCorsHeaders(
   } else {
     reply.header("access-control-allow-origin", "*");
   }
-  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range, Id");
-  reply.header("access-control-expose-headers", "Location, ETag, Id");
+  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range, Id, If-Match");
+  reply.header("access-control-expose-headers", "Location, ETag, Id, Link, Accept-Patch");
   reply.header("access-control-allow-methods", "GET, POST, OPTIONS, PATCH, DELETE, HEAD");
 }
 
@@ -309,7 +367,7 @@ function setLiveSessionCorsHeaders(
 
 function forwardWebRtcHeaders(headers: Record<string, unknown>) {
   const forwarded: Record<string, string> = {};
-  for (const name of ["accept", "authorization", "content-type", "id", "range", "user-agent"]) {
+  for (const name of ["accept", "authorization", "content-type", "id", "if-match", "range", "user-agent"]) {
     const value = headers[name];
     if (typeof value === "string") forwarded[name] = value;
   }

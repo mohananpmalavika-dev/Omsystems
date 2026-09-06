@@ -14,7 +14,7 @@ import {
   type ControlPlaneStore,
 } from "./control-plane-store.js";
 import { actions, type Action, type Camera, type RecordingJob } from "./domain/models.js";
-import { createAuthMiddleware, RateLimiter } from "./middleware/auth.middleware.js";
+import { createAuthMiddleware, RateLimiter, sanitizeCurrentUser } from "./middleware/auth.middleware.js";
 import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
 import { RecorderService, type RecorderProviderResolver } from "./vms/index.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
@@ -696,27 +696,20 @@ export async function buildApp(options?: {
       return sessionAuth(request, reply);
     }
 
-    // Memory-store development identity for local tests.
+    // Header identities are restricted to the explicit development adapter.
+    if ((options?.authMode ?? "development") !== "development") {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
     const identity = (request.headers["x-user-id"] || request.headers["x-development-user-id"]) as string | undefined;
     if (typeof identity !== "string") {
-      return reply.code(401).send({
-        error: "unauthenticated",
-        message: "Supply x-user-id while AUTH_MODE=development",
-      });
+      return reply.code(401).send({ error: "unauthenticated" });
     }
-    let user = await store.getUser(identity);
-    if (!user) {
-      user = {
-        id: "00000000-0000-4000-8000-000000000201",
-        username: "mgdhanyamohan",
-        displayName: "Super Administrator",
-        email: "mgdhanyamohan@omsystems.bank",
-        role: "super_admin",
-        tenantId: "00000000-0000-4000-8000-000000000001",
-        status: "active",
-      } as any;
+    const user = await store.getUser(identity);
+    if (!user || user.status !== "active") {
+      return reply.code(401).send({ error: "invalid_identity" });
     }
-    request.currentUser = user!;
+    request.currentUser = sanitizeCurrentUser(user);
+
   });
 
   app.addHook("onClose", async () => {

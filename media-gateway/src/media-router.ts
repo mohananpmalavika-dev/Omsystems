@@ -21,6 +21,8 @@ export class MediaMtxRouter implements MediaRouter {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+        redirect: "error",
       },
     );
     if (add.ok) return;
@@ -33,6 +35,8 @@ export class MediaMtxRouter implements MediaRouter {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15_000),
+        redirect: "error",
       },
     );
     if (!patch.ok) {
@@ -43,7 +47,7 @@ export class MediaMtxRouter implements MediaRouter {
   async removePath(path: string) {
     const response = await fetch(
       new URL(`/v3/config/paths/delete/${encodeURIComponent(path)}`, this.apiUrl),
-      { method: "DELETE" },
+      { method: "DELETE", signal: AbortSignal.timeout(15_000), redirect: "error" },
     );
     if (!response.ok && response.status !== 404) {
       throw new Error(`Media router rejected path deletion (${response.status})`);

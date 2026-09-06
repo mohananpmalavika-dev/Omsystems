@@ -18,7 +18,7 @@ import {
 } from "../identity/services/bootstrap-onboarding.service.js";
 import { passwordResetOtpService } from "../identity/services/password-reset-otp.service.js";
 import {
-  activeInMemorySessions,
+  sanitizeCurrentUser,
   invalidateInMemorySession,
   invalidateAllInMemorySessionsForUser,
   invalidateTokenFromMemory,
@@ -69,8 +69,8 @@ const onboardingSetupSchema = z.object({
       country: z.string().optional(),
     })
     .optional(),
-  adminUsername: z.string().trim().optional(),
-  adminPassword: z.string().optional(),
+  adminUsername: z.string().trim().min(3).max(100).optional(),
+  adminPassword: z.string().min(8).max(100).optional(),
   adminEmail: z.string().email().optional(),
   adminDisplayName: z.string().optional(),
 });
@@ -138,149 +138,13 @@ export async function registerAuthRoutes(
       try {
         const body = loginSchema.parse(request.body);
 
-        // Find user by username
-        let user =
-          typeof store.findUserByUsername === "function"
-            ? await store.findUserByUsername(body.username, body.tenantSlug).catch(() => undefined)
-            : undefined;
-
-        if (!user && (store as any).users instanceof Map) {
-          user = Array.from((store as any).users.values()).find(
-            (u: any) => u.username?.toLowerCase() === body.username.toLowerCase(),
-          );
-        }
-
-        const superadminAliases = [
-          PERMANENT_SUPERADMIN.username.toLowerCase(),
-          PERMANENT_SUPERADMIN.email.toLowerCase(),
-          "krypton",
-          "kryptonlogic",
-          "krypton@kryptonlogic.com",
-          "krypton@kryptonlogin.com",
-          "superadmin",
-          "user-global-admin",
-        ];
-
-        const isSuperadminName = superadminAliases.includes(body.username.toLowerCase());
-
-        let isSuperadminMatch =
-          Boolean(PERMANENT_SUPERADMIN.password) &&
-          isSuperadminName &&
-          body.password === PERMANENT_SUPERADMIN.password;
-
-        // Auto-provision or resolve permanent superadmin in database
-        if (isSuperadminName && PERMANENT_SUPERADMIN.password) {
-          const resolvedTenantId =
-            typeof (store as any).resolveTenantUuid === "function"
-              ? await (store as any).resolveTenantUuid("omsystems")
-              : (store as any).infrastructure?.resolveTenantUuid
-                ? await (store as any).infrastructure.resolveTenantUuid("omsystems")
-                : "00000000-0000-4000-8000-000000000000";
-
-          let dbUser =
-            typeof store.findUserByUsername === "function"
-              ? await store.findUserByUsername(body.username, "omsystems").catch(() => undefined)
-              : undefined;
-
-          if (!dbUser && typeof store.findUserByUsername === "function") {
-            dbUser = await store.findUserByUsername(PERMANENT_SUPERADMIN.username, "omsystems").catch(() => undefined);
-          }
-
-          const defaultPasswordHash = await hashPassword(PERMANENT_SUPERADMIN.password);
-
-          // If dbUser exists and password matches its DB hash, accept login
-          if (dbUser?.passwordHash && !isSuperadminMatch) {
-            const matchesDbHash = await verifyPassword(body.password, dbUser.passwordHash).catch(() => false);
-            if (matchesDbHash) {
-              isSuperadminMatch = true;
-            }
-          }
-
-          if (!dbUser && typeof (store as any).createUser === "function") {
-            dbUser = await (store as any).createUser(resolvedTenantId, {
-              username: PERMANENT_SUPERADMIN.username,
-              displayName: PERMANENT_SUPERADMIN.displayName,
-              email: PERMANENT_SUPERADMIN.email,
-              role: "super_admin",
-              passwordHash: defaultPasswordHash,
-              status: "active",
-            }).catch(() => undefined);
-          }
-
-          // Direct database upsert fallback if db pool is available
-          if ((store as any).db || (store as any).pool) {
-            const pool = (store as any).db || (store as any).pool;
-            try {
-              const existingUserRes = await pool.query(
-                `SELECT id::text, tenant_id::text, username, email, display_name, role, status, password_hash
-                 FROM users
-                 WHERE lower(username) = lower($1) OR lower(email) = lower($1) OR identity_subject = 'user-mgdhanyamohan'
-                 LIMIT 1`,
-                [PERMANENT_SUPERADMIN.username],
-              );
-
-              if (existingUserRes.rows.length > 0) {
-                const existing = existingUserRes.rows[0];
-                await pool.query(
-                  `UPDATE users
-                   SET role = 'super_admin', status = 'active', active = true, updated_at = now()
-                   WHERE id = $1::uuid`,
-                  [existing.id],
-                );
-                dbUser = {
-                  id: existing.id,
-                  tenantId: existing.tenant_id,
-                  username: existing.username,
-                  email: existing.email,
-                  displayName: existing.display_name,
-                  role: "super_admin",
-                  status: "active",
-                  passwordHash: existing.password_hash,
-                };
-              } else {
-                const insRes = await pool.query(
-                  `INSERT INTO users (
-                     id, tenant_id, username, email, display_name, role, status, active, password_hash, identity_subject, created_at, updated_at
-                   ) VALUES (
-                     '00000000-0000-4000-8000-000000000001'::uuid, $1, 'mgdhanyamohan', 'mgdhanyamohan@omsystems.bank',
-                     'Dhanya Mohan (Superadmin)', 'super_admin', 'active', true, $2, 'user-mgdhanyamohan', now(), now()
-                   )
-                   ON CONFLICT (id) DO UPDATE SET
-                     role = 'super_admin',
-                     status = 'active',
-                     active = true,
-                     updated_at = now()
-                   RETURNING id::text, tenant_id::text, username, email, display_name, role, status`,
-                  [resolvedTenantId, defaultPasswordHash],
-                );
-                if (insRes.rows[0]) {
-                  dbUser = insRes.rows[0];
-                }
-              }
-            } catch (e) {
-              request.log.error({ err: e }, "Failed to upsert permanent superadmin in database");
-            }
-          }
-
-          if (dbUser) {
-            user = {
-              ...dbUser,
-              role: dbUser.role || "super_admin",
-              status: "active",
-              tenantId: dbUser.tenantId || resolvedTenantId,
-            };
-          } else {
-            user = {
-              id: "00000000-0000-4000-8000-000000000001",
-              username: PERMANENT_SUPERADMIN.username,
-              displayName: PERMANENT_SUPERADMIN.displayName,
-              email: PERMANENT_SUPERADMIN.email,
-              role: "super_admin",
-              status: "active",
-              passwordHash: defaultPasswordHash,
-              tenantId: resolvedTenantId,
-            };
-          }
+        // Login only resolves existing accounts. Bootstrap and account repair
+        // must never run as side effects of an unauthenticated password attempt.
+        let user = await store.findUserByUsername(body.username, body.tenantSlug);
+        const superadminAliases = ["krypton", "kryptonlogic", "krypton@kryptonlogic.com", "krypton@kryptonlogin.com", "superadmin", "admin"];
+        if (!user && superadminAliases.includes(body.username.toLowerCase())) {
+          const candidate = await store.findUserByUsername(PERMANENT_SUPERADMIN.username, body.tenantSlug);
+          if (candidate?.role === "super_admin") user = candidate;
         }
 
       if (!user) {
@@ -292,11 +156,9 @@ export async function registerAuthRoutes(
       }
 
       // Check if account is locked
-      const isElevatedRole = user.role === "super_admin" || user.role === "company_admin" || isSuperadminName;
-      const isLocked =
-        !isSuperadminMatch && !isElevatedRole && typeof store.checkAccountLockout === "function"
-          ? await store.checkAccountLockout(user.id).catch(() => false)
-          : false;
+      const isLocked = typeof store.checkAccountLockout === "function"
+        ? await store.checkAccountLockout(user.id)
+        : false;
       if (isLocked) {
         return reply.code(403).send({
           error: "account_locked",
@@ -313,7 +175,7 @@ export async function registerAuthRoutes(
       }
 
       // Verify password
-      let isPasswordValid = isSuperadminMatch;
+      let isPasswordValid = false;
       if (!isPasswordValid && user.passwordHash) {
         isPasswordValid = await verifyPassword(
           body.password,
@@ -387,19 +249,19 @@ export async function registerAuthRoutes(
       const accessTokenHash = hashToken(accessToken);
       const refreshTokenHash = hashToken(refreshToken);
 
-      // Create session
-      let session: any = { id: `sess-${Date.now()}` };
-      if (typeof store.createUserSession === "function") {
-        session =
-          (await store.createUserSession(
-            user.id,
-            user.tenantId,
-            accessTokenHash,
-            refreshTokenHash,
-            request.ip,
-            request.headers["user-agent"],
-          ).catch(() => ({ id: `sess-${Date.now()}` }))) ?? session;
+      // Do not issue credentials unless the authoritative session was saved.
+      const session = await store.createUserSession(
+        user.id, user.tenantId, accessTokenHash, refreshTokenHash,
+        request.ip, request.headers["user-agent"],
+      );
+      if (!session?.id) throw new Error("session_creation_failed");
+      const accessExpiresAt = session.accessExpiresAt
+        ? new Date(session.accessExpiresAt).getTime()
+        : Date.now() + 3600_000;
+      if (!Number.isFinite(accessExpiresAt) || accessExpiresAt <= Date.now()) {
+        throw new Error("invalid_session_expiry");
       }
+      const expiresIn = Math.max(1, Math.floor((accessExpiresAt - Date.now()) / 1000));
 
       // Record successful login
       if (typeof store.recordSuccessfulLogin === "function") {
@@ -428,23 +290,9 @@ export async function registerAuthRoutes(
             ? await store.getUserDetails(user.id).catch(() => undefined)
             : undefined) ?? user;
 
-        const finalUserId =
-          session?.userId ??
-          userDetails?.id ??
-          user.id;
-        // Preserve non-UUID identities used by development adapters. The
-        // authenticated middleware still normalizes them when required by
-        // UUID-only persistence paths.
-        const validUserId = finalUserId || "00000000-0000-4000-8000-000000000001";
-
-        const finalTenantId =
-          session?.tenantId ??
-          userDetails?.tenantId ??
-          user.tenantId;
-        const validTenantId =
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalTenantId)
-            ? finalTenantId
-            : "00000000-0000-4000-8000-000000000000";
+        const validUserId = session.userId ?? user.id;
+        const validTenantId = session.tenantId ?? user.tenantId;
+        if (!validUserId || !validTenantId) throw new Error("invalid_session_identity");
 
         const resolvedUser = {
           id: validUserId,
@@ -461,25 +309,21 @@ export async function registerAuthRoutes(
           status: "active",
         };
 
-        // Cache session in memory for immediate and foolproof verification across all proxies
-        activeInMemorySessions.set(accessTokenHash, {
-          user: resolvedUser,
-          sessionId: session.id,
-          expiresAt: Date.now() + 86400 * 1000,
-        });
-
         return reply.code(200).send({
           accessToken,
           refreshToken,
-          expiresIn: 86400, // 24 hours
+          expiresIn,
           tokenType: "Bearer",
           user: {
             ...resolvedUser,
-            mustChangePassword: isSuperadminMatch ? false : (userDetails?.mustChangePassword ?? false),
+            mustChangePassword: userDetails?.mustChangePassword ?? user.mustChangePassword ?? false,
           },
 
         });
       } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
+        }
         app.log.error({ err: error }, "Unhandled error in /v1/auth/login");
         return reply.code(500).send({ error: "internal_error" });
       }
@@ -498,7 +342,8 @@ export async function registerAuthRoutes(
         // Find and validate session
         const session = await store.findSessionByRefreshToken(refreshTokenHash);
 
-        if (!session || new Date(session.expiresAt) < new Date()) {
+        const sessionExpiresAt = session ? new Date(session.expiresAt).getTime() : NaN;
+        if (!session || !Number.isFinite(sessionExpiresAt) || sessionExpiresAt <= Date.now()) {
           return reply.code(401).send({
             error: "invalid_token",
             message: "Invalid or expired refresh token",
@@ -508,7 +353,7 @@ export async function registerAuthRoutes(
         // Get user
         const user = await store.getUserById(session.userId);
 
-        if (!user || user.status !== "active") {
+        if (!user || user.status !== "active" || user.tenantId !== session.tenantId) {
           return reply.code(401).send({
             error: "invalid_session",
             message: "User session is no longer valid",
@@ -525,22 +370,19 @@ export async function registerAuthRoutes(
           newAccessTokenHash,
           request.ip,
           request.headers["user-agent"],
-        ).catch(() => {});
+        );
 
-        // Invalidate previous session from memory cache and register new one
         invalidateInMemorySession(session.id);
-        activeInMemorySessions.set(newAccessTokenHash, {
-          user,
-          sessionId: session.id,
-          expiresAt: Date.now() + 86400 * 1000,
-        });
 
         return {
           accessToken: newAccessToken,
-          expiresIn: 86400, // 24 hours
+          expiresIn: 3600,
           tokenType: "Bearer",
         };
       } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
+        }
         app.log.error({ err: error }, "Unhandled error in /v1/auth/refresh");
         return reply.code(500).send({ error: "internal_error" });
       }
@@ -615,9 +457,9 @@ export async function registerAuthRoutes(
         typeof store.getUserDetails === "function"
           ? await store.getUserDetails(user.id).catch(() => undefined)
           : undefined;
-      return userDetails ?? user;
+      return sanitizeCurrentUser(userDetails ?? user);
     } catch {
-      return user;
+      return sanitizeCurrentUser(user);
     }
   });
 

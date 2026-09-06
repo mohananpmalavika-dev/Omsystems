@@ -5,6 +5,7 @@ import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw 
 import QRCode from "qrcode";
 import { authApi, organizationApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/session-navigation";
 
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { ThemeSwitcher } from "@/components/ui/theme-switcher";
@@ -147,7 +148,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = "/";
+        window.location.href = safeReturnPath(searchParams?.get("next"));
       }
 
     } catch (err: any) {
@@ -234,7 +235,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        router.push("/");
+        router.push(safeReturnPath(searchParams?.get("next")));
       }
     } catch (err: any) {
       console.error("Password change failed:", err);

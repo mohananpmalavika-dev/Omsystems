@@ -2,13 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { AppLayout } from "@/components/app-layout";
-
-const authRoutes = ["/login", "/forgot-password", "/reset-password"];
+import { isPublicDashboardRoute } from "@/lib/session-navigation";
 
 export function ApplicationShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
-  const isAuthRoute = authRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
-
-  if (isAuthRoute) return <>{children}</>;
+  if (isPublicDashboardRoute(pathname)) return <>{children}</>;
   return <AppLayout>{children}</AppLayout>;
 }

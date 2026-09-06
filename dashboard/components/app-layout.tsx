@@ -475,35 +475,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, [commandQuery, recentHrefs, searchableModules]);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken") || localStorage.getItem("user") || localStorage.getItem("sentinel_login_time");
-      const isPublicPath = pathname === "/login" || pathname === "/forgot-password" || pathname === "/reset-password";
-      if (!token && !isPublicPath) {
-        window.location.replace("/login");
-      }
-    }
-  }, [pathname]);
-
-
-  useEffect(() => {
-    let active = true;
-    const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
-    if (!token) return;
-
-    authApi.getCurrentUser()
-      .then((user) => {
-        if (active && user) setOperator(user);
-      })
-      .catch(() => {
-        // Authentication and authorization remain server-enforced. Keep the shell usable
-        // if the optional identity label cannot be refreshed during a transient outage.
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
     if (activeGroup) {
       setOpenGroups(new Set([activeGroup.label]));
     } else {
@@ -724,6 +695,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <a href="#workspace-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-blue-600 focus:px-4 focus:py-3 focus:text-white">Skip to main content</a>
       <button
         className={`sidebar-scrim ${sidebarOpen ? "visible" : ""}`}
         aria-label="Close navigation"
@@ -895,7 +867,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </div>
       </aside>
 
-      <main className="workspace">
+      <main id="workspace-content" tabIndex={-1} className="workspace">
         <header className="topbar">
           <button
             type="button"

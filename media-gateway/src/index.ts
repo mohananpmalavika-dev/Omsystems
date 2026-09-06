@@ -22,11 +22,21 @@ const app = await buildMediaGateway({
   publicHlsBaseUrl: config.PUBLIC_HLS_BASE_URL,
   publicWebRtcBaseUrl: config.PUBLIC_WEBRTC_BASE_URL,
   accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1000,
+  controlPlaneSharedKey: config.MEDIA_GATEWAY_SHARED_KEY,
   ...(config.EDGE_BRIDGE_SHARED_KEY
     ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY }
     : {}),
   logger: true,
 });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.once(signal, () => {
+    void app.close().catch((error) => {
+      app.log.error(error);
+      process.exitCode = 1;
+    });
+  });
+}
 
 try {
   await app.listen({ host: config.HOST, port: config.PORT });

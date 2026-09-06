@@ -5,6 +5,7 @@
 
 import { logout as authManagerLogout } from './auth-manager';
 import { refreshCookieBackedSession } from './api-client';
+import { loginPath } from './session-navigation';
 
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
@@ -60,8 +61,7 @@ export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' 
   // Redirect to login with reason
   const currentPath = window.location.pathname;
   if (currentPath !== '/login') {
-    const params = new URLSearchParams({ reason });
-    window.location.href = `/login?${params.toString()}`;
+    window.location.href = loginPath(reason, window.location);
   }
 }
 

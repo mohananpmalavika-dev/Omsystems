@@ -18,6 +18,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { isPublicDashboardRoute } from "@/lib/session-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveSessionResponse } from "@/lib/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
@@ -42,7 +43,7 @@ type EvidenceMode = "live" | "snapshot" | "clip";
 
 export function GlobalAlertCenter() {
   const pathname = usePathname();
-  const enabledForRoute = pathname !== "/login";
+  const enabledForRoute = !isPublicDashboardRoute(pathname);
   const [alerts, setAlerts] = useState<CommandAlert[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const [manualAlertId, setManualAlertId] = useState<string>();

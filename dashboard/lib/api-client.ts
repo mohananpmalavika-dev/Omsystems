@@ -1,4 +1,5 @@
 // API client for backend communication
+import { loginPath } from './session-navigation';
 
 import type {
   AlertNotificationPolicy,
@@ -68,7 +69,7 @@ function redirectToLogin() {
     // Redirect to login
     const currentPath = window.location.pathname;
     if (currentPath !== '/login') {
-      window.location.href = '/login?reason=expired';
+      window.location.href = loginPath('expired', window.location);
     }
   }
 }
@@ -77,6 +78,7 @@ function isPublicAuthEndpoint(endpoint: string) {
   return endpoint.includes('/auth/login') ||
     endpoint.includes('/auth/refresh') ||
     endpoint.includes('/auth/forgot-password') ||
+    endpoint.includes('/auth/request-password-reset') ||
     endpoint.includes('/auth/verify-otp') ||
     endpoint.includes('/auth/reset-password');
 }
@@ -96,8 +98,11 @@ export function refreshCookieBackedSession(): Promise<boolean> {
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
   })
-    .then((response) => response.ok)
-    .catch(() => false)
+    .then((response) => {
+      if (response.ok) return true;
+      if (response.status === 401 || response.status === 403) return false;
+      throw new ApiError('Sign-in service is temporarily unavailable. Please try again.', response.status);
+    })
     .finally(() => { cookieRefreshPromise = null; });
   return cookieRefreshPromise;
 }
@@ -139,6 +144,7 @@ async function fetchApi<T>(
       response = await send();
     }
   } catch (error: any) {
+    if (error instanceof ApiError) throw error;
     // A transport failure does not invalidate an existing cookie-backed
     // session. Clearing browser state here caused a login loop whenever the
     // control plane was restarting or briefly unreachable immediately after
@@ -215,6 +221,7 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
       response = await send();
     }
   } catch (error: any) {
+    if (error instanceof ApiError) throw error;
     // Network error - API not reachable
     console.error('API connection failed:', error);
     // Downloads must follow the same authentication policy as JSON requests:

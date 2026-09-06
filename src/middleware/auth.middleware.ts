@@ -72,28 +72,11 @@ export function updateUserPreferencesInMemory(userId: string, preferences: Recor
   }
 }
 
-function sanitizeCurrentUser(user: any): any {
+export function sanitizeCurrentUser(user: any): any {
   if (!user) return user;
-  let id = user.id;
-  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    id = "00000000-0000-4000-8000-000000000201";
-  }
-  let tenantId = user.tenantId;
-  if (!tenantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
-    tenantId = "00000000-0000-4000-8000-000000000001";
-  }
-  const isSuper =
-    user.role === "super_admin" ||
-    user.role === "superadmin" ||
-    user.username?.toLowerCase() === "mgdhanyamohan" ||
-    user.username?.toLowerCase() === "user-global-admin";
-  return {
-    ...user,
-    id,
-    tenantId,
-    role: isSuper ? "super_admin" : (user.role ?? "viewer"),
-    isSuperAdmin: isSuper,
-  };
+  const { passwordHash: _passwordHash, password_hash: _legacyHash, ...publicUser } = user;
+  const isSuper = user.role === "super_admin" || user.role === "superadmin";
+  return { ...publicUser, role: isSuper ? "super_admin" : (user.role ?? "viewer"), isSuperAdmin: isSuper };
 }
 
 /**
@@ -119,18 +102,10 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     // Development & Dashboard proxy mode: use x-user-id or x-development-user-id header
     const userId = (request.headers["x-user-id"] || request.headers["x-development-user-id"]) as string | undefined;
-    if (typeof userId === "string" && userId) {
-      let user = await store.getUser(userId).catch(() => undefined);
-      if (!user) {
-        user = {
-          id: "00000000-0000-4000-8000-000000000201",
-          username: "mgdhanyamohan",
-          displayName: "Super Administrator",
-          email: "mgdhanyamohan@omsystems.bank",
-          role: "super_admin",
-          tenantId: "00000000-0000-4000-8000-000000000001",
-          status: "active",
-        } as any;
+    if (developmentMode && typeof userId === "string" && userId) {
+      const user = await store.getUser(userId);
+      if (!user || user.status !== "active") {
+        return reply.code(401).send({ error: "invalid_identity" });
       }
       request.currentUser = sanitizeCurrentUser(user);
       return;
@@ -147,7 +122,11 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
       const parsedCookies = Object.fromEntries(
         request.headers.cookie.split(";").map((c) => {
           const [k, ...v] = c.trim().split("=");
-          return [k, decodeURIComponent(v.join("="))];
+          try {
+            return [k, decodeURIComponent(v.join("="))];
+          } catch {
+            return [k, ""];
+          }
         })
       );
       token = parsedCookies["sentinel_access"] || parsedCookies["sentinel_session"] || parsedCookies["accessToken"];
@@ -163,18 +142,12 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     // Hash token to compare with stored hash
     const tokenHash = createHash("sha256").update(token).digest("base64");
 
-    // Check in-memory session cache for fast and resilient validation
-    const inMemory = activeInMemorySessions.get(tokenHash);
-    if (inMemory && inMemory.expiresAt > Date.now()) {
-      request.currentUser = sanitizeCurrentUser(inMemory.user);
-      (request as any).sessionId = inMemory.sessionId;
-      return;
-    }
-
-    // Find session by access token
-    const session = await store.findSessionByAccessToken(tokenHash).catch(() => undefined);
+    // Verify persisted state on every request so revocation and role changes
+    // take effect across every API instance.
+    const session = await store.findSessionByAccessToken(tokenHash);
 
     if (!session) {
+      activeInMemorySessions.delete(tokenHash);
       return reply.code(401).send({
         error: "invalid_token",
         message: "Invalid or expired access token",
@@ -182,7 +155,8 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     }
 
     // Check if session has expired
-    if (new Date(session.accessExpiresAt ?? session.expiresAt) < new Date()) {
+    const expiresAt = new Date(session.accessExpiresAt ?? session.expiresAt).getTime();
+    if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
       return reply.code(401).send({
         error: "token_expired",
         message: "Access token has expired. Please refresh your token.",
@@ -197,6 +171,10 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
         error: "user_not_found",
         message: "User associated with token not found",
       });
+    }
+
+    if (!user.id || !user.tenantId || session.tenantId !== user.tenantId) {
+      return reply.code(401).send({ error: "invalid_session" });
     }
 
     // Check if user account is active
@@ -222,12 +200,8 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     // Attach session ID for logout functionality
     (request as any).sessionId = session.id;
 
-    // Cache verified session in memory
-    activeInMemorySessions.set(tokenHash, {
-      user,
-      sessionId: session.id,
-      expiresAt: new Date(session.accessExpiresAt ?? session.expiresAt).getTime(),
-    });
+    activeInMemorySessions.delete(tokenHash);
+
   };
 }
 
@@ -328,13 +302,7 @@ export class PermissionChecker {
   isSuperAdmin(request: FastifyRequest): boolean {
     const u = request.currentUser;
     if (!u) return false;
-    return (
-      u.role === "super_admin" ||
-      (u.role as string) === "superadmin" ||
-      u.username?.toLowerCase() === "mgdhanyamohan" ||
-      (u as any).isSuperAdmin === true ||
-      u.id === "00000000-0000-4000-8000-000000000001"
-    );
+    return u.role === "super_admin" || (u.role as string) === "superadmin";
   }
 
   /**
@@ -488,10 +456,7 @@ export class RateLimiter {
         return;
       }
 
-      const forwarded = request.headers["x-forwarded-for"];
-      const identifier = typeof forwarded === "string"
-        ? forwarded.split(",")[0]!.trim()
-        : request.ip;
+      const identifier = request.ip;
       const result = this.check(identifier);
 
       if (!result.allowed) {

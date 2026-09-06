@@ -19,6 +19,8 @@ export class HttpControlPlaneClient implements ControlPlaneClient {
           "x-media-gateway-key": this.sharedKey,
         },
         body: JSON.stringify({ token }),
+        signal: AbortSignal.timeout(15_000),
+        redirect: "error",
       },
     );
     if (!response.ok) {

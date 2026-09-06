@@ -117,14 +117,6 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     if (willSendBody) fetchOptions.body = requestBody;
     const response = await fetch(upstreamUrl, fetchOptions);
 
-    if (routePath === "/v1/digital-twin/branches" && response.status === 404) {
-      return Response.json([], { status: 200, headers: { "cache-control": "no-store" } });
-    }
-
-    if (routePath === "/v1/operations/branches" && !response.ok) {
-      return Response.json({ success: true, count: 0, data: [] }, { status: 200, headers: { "cache-control": "no-store" } });
-    }
-
     if (routePath.endsWith("/install.ps1")) {
       const body = await response.arrayBuffer();
       return new Response(body, {
@@ -232,9 +224,6 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       cause: cause?.message,
       causeCode: cause && "code" in cause ? cause.code : undefined,
     });
-    if (routePath === "/v1/operations/branches") {
-      return Response.json({ success: true, count: 0, data: [] }, { status: 200, headers: { "cache-control": "no-store" } });
-    }
     return Response.json(
       { error: "control_plane_unavailable" },
       { status: 502 },

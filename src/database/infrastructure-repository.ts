@@ -713,35 +713,6 @@ export class InfrastructureRepository {
   async getUserById(id: string) {
     if (!id) return undefined;
     const clean = id.trim();
-    if (
-      clean.toLowerCase() === "mgdhanyamohan" ||
-      clean === "user-mgdhanyamohan" ||
-      clean === "00000000-0000-4000-8000-000000000001"
-    ) {
-      const result = await this.pool.query(
-        `${this.userSelect()}
-         WHERE u.id='00000000-0000-4000-8000-000000000001'::uuid
-            OR lower(u.username)='mgdhanyamohan'
-            OR u.identity_subject='user-mgdhanyamohan'
-         LIMIT 1`
-      );
-      if (result.rows[0]) {
-        const u = camelRow(result.rows[0]);
-        u.role = "super_admin";
-        u.status = "active";
-        return u;
-      }
-      return {
-        id: "00000000-0000-4000-8000-000000000001",
-        tenantId: "00000000-0000-4000-8000-000000000000",
-        username: "mgdhanyamohan",
-        email: "mgdhanyamohan@omsystems.bank",
-        displayName: "Dhanya Mohan (Superadmin)",
-        role: "super_admin",
-        status: "active",
-      };
-    }
-
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
       const result = await this.pool.query(
         `${this.userSelect()} WHERE u.identity_subject=$1 OR lower(u.username)=lower($2) OR lower(u.email)=lower($2) LIMIT 1`,
@@ -776,92 +747,33 @@ export class InfrastructureRepository {
   }
 
   async findUserByUsername(username: string, tenantSlug?: string) {
-    const clean = (username || "").trim();
+    const clean = username.trim();
     if (!clean) return undefined;
     const result = await this.pool.query(
-      `${this.userSelect(true, true)}
+      `${this.userSelect(true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE (lower(u.username)=lower($1) OR lower(u.email)=lower($1) OR u.identity_subject=$1 OR 'user-' || lower(u.username)=lower($1))
-         AND ($2::text IS NULL OR t.slug=$2 OR u.role='super_admin' OR u.role='company_admin' OR lower(u.username) IN ('mgdhanyamohan', 'krypton', 'kryptonlogic', 'superadmin'))
-       ORDER BY CASE WHEN u.role='super_admin' THEN 0 WHEN u.role='company_admin' THEN 1 ELSE 2 END, u.created_at ASC
-       LIMIT 1`,
+         AND ($2::text IS NULL OR t.slug=$2 OR t.id::text=$2)
+       LIMIT 2`,
       [clean, tenantSlug ?? null],
     );
-    if (result.rows[0]) {
-      const u = camelRow(result.rows[0]);
-      if (u.username?.toLowerCase() === "mgdhanyamohan") {
-        u.role = "super_admin";
-        u.status = "active";
-      }
-      return u;
-    }
-
-    if (clean.toLowerCase() === "mgdhanyamohan" || clean === "user-mgdhanyamohan" || clean.toLowerCase() === "mgdhanyamohan@omsystems.bank") {
-      try {
-        const uRes = await this.pool.query(
-          `SELECT id::text, tenant_id::text, username, email, display_name, role, status, preferences
-           FROM users
-           WHERE lower(username) = 'mgdhanyamohan' OR lower(email) = 'mgdhanyamohan@omsystems.bank' OR identity_subject = 'user-mgdhanyamohan'
-           LIMIT 1`
-        );
-        if (uRes.rows[0]) {
-          return {
-            id: uRes.rows[0].id,
-            tenantId: uRes.rows[0].tenant_id,
-            username: uRes.rows[0].username,
-            email: uRes.rows[0].email,
-            displayName: uRes.rows[0].display_name,
-            role: "super_admin",
-            status: "active",
-            preferences: uRes.rows[0].preferences || {},
-          };
-        }
-      } catch {}
-      return {
-        id: "00000000-0000-4000-8000-000000000001",
-        tenantId: "00000000-0000-4000-8000-000000000000",
-        username: "mgdhanyamohan",
-        email: "mgdhanyamohan@omsystems.bank",
-        displayName: "Dhanya Mohan (Superadmin)",
-        role: "super_admin",
-        status: "active",
-      };
-    }
-    return undefined;
+    // Ambiguous identities need an explicit tenant; never choose another
+    // tenant's administrator merely because its role sorts first.
+    return result.rows.length === 1 ? camelRow(result.rows[0]!) : undefined;
   }
 
   async findUserByEmail(email: string, tenantSlug?: string) {
-    const clean = (email || "").trim();
+    const clean = email.trim();
     if (!clean) return undefined;
     const result = await this.pool.query(
       `${this.userSelect(true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE (lower(u.email)=lower($1) OR lower(u.username)=lower($1))
-         AND ($2::text IS NULL OR t.slug=$2 OR u.role='super_admin' OR lower(u.username)='mgdhanyamohan')
-       ORDER BY CASE WHEN u.role='super_admin' THEN 0 ELSE 1 END, u.created_at ASC
-       LIMIT 1`,
+         AND ($2::text IS NULL OR t.slug=$2 OR t.id::text=$2)
+       LIMIT 2`,
       [clean, tenantSlug ?? null],
     );
-    if (result.rows[0]) {
-      const u = camelRow(result.rows[0]);
-      if (u.username?.toLowerCase() === "mgdhanyamohan") {
-        u.role = "super_admin";
-        u.status = "active";
-      }
-      return u;
-    }
-    if (clean.toLowerCase() === "mgdhanyamohan@omsystems.bank" || clean.toLowerCase() === "mgdhanyamohan") {
-      return {
-        id: "00000000-0000-4000-8000-000000000001",
-        tenantId: "00000000-0000-4000-8000-000000000000",
-        username: "mgdhanyamohan",
-        email: "mgdhanyamohan@omsystems.bank",
-        displayName: "Dhanya Mohan (Superadmin)",
-        role: "super_admin",
-        status: "active",
-      };
-    }
-    return undefined;
+    return result.rows.length === 1 ? camelRow(result.rows[0]!) : undefined;
   }
 
   async listUsers(tenantId: string, filters: any) {
@@ -1285,26 +1197,19 @@ export class InfrastructureRepository {
     ipAddress?: string,
     userAgent?: string,
   ) {
-    const resolvedTenantId = await this.resolveTenantUuid(tenantId);
-    let resolvedUserId = userId;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
-      const userRes = await this.pool.query(
-        `SELECT id::text FROM users WHERE username=$1 OR identity_subject=$1 LIMIT 1`,
-        [userId.replace(/^user-/, "")],
-      );
-      if (userRes.rows[0]?.id) {
-        resolvedUserId = userRes.rows[0].id;
-      } else {
-        const insUser = await this.pool.query(
-          `INSERT INTO users (id, tenant_id, identity_subject, display_name, email, username, role, status, active)
-           VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'super_admin', 'active', true)
-           ON CONFLICT (username) DO UPDATE SET active=true
-           RETURNING id::text`,
-          [resolvedTenantId, userId, "Dhanya Mohan (Superadmin)", "mgdhanyamohan@omsystems.bank", "mgdhanyamohan"],
-        );
-        resolvedUserId = insUser.rows[0]?.id ?? randomUUID();
-      }
-    }
+    const identity = await this.pool.query(
+      `SELECT u.id::text, u.tenant_id::text
+       FROM users u JOIN tenants t ON t.id=u.tenant_id
+       WHERE (u.id::text=$1 OR u.identity_subject=$1)
+         AND (t.id::text=$2 OR t.slug=$2)
+         AND u.status='active' AND u.active=true
+       LIMIT 1`,
+      [userId, tenantId],
+    );
+    const principal = identity.rows[0];
+    if (!principal) throw new Error("invalid_session_identity");
+    const resolvedUserId = principal.id;
+    const resolvedTenantId = principal.tenant_id;
 
     const result = await this.pool.query(
       `INSERT INTO user_sessions (
