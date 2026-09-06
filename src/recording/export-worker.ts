@@ -17,6 +17,81 @@ import {
 } from "../evidence/signing/evidence-signing-provider.js";
 import { canonicalJsonStringify } from "../evidence-export/services/canonical-json.js";
 
+/**
+ * Creates a standard POSIX ustar TAR archive buffer from memory entries.
+ */
+export function createPosixTarArchive(
+  entries: Array<{ name: string; buffer: Buffer; mtime?: Date }>,
+): Buffer {
+  const chunks: Buffer[] = [];
+
+  for (const entry of entries) {
+    const header = Buffer.alloc(512, 0);
+    const name = entry.name.replace(/\\/g, "/");
+
+    // File name: 100 bytes (0-99)
+    header.write(name.slice(0, 100), 0, 100, "ascii");
+
+    // File mode: 8 bytes (100-107) -> "0000644\0"
+    header.write("0000644\0", 100, 8, "ascii");
+
+    // Owner UID: 8 bytes (108-115) -> "0000000\0"
+    header.write("0000000\0", 108, 8, "ascii");
+
+    // Group GID: 8 bytes (116-123) -> "0000000\0"
+    header.write("0000000\0", 116, 8, "ascii");
+
+    // File size: 12 bytes octal (124-135)
+    const sizeOctal = entry.buffer.length.toString(8).padStart(11, "0") + " ";
+    header.write(sizeOctal, 124, 12, "ascii");
+
+    // Modification time: 12 bytes octal (136-147)
+    const mtimeSec = Math.floor((entry.mtime ? entry.mtime.getTime() : Date.now()) / 1000);
+    const mtimeOctal = mtimeSec.toString(8).padStart(11, "0") + " ";
+    header.write(mtimeOctal, 136, 12, "ascii");
+
+    // Checksum placeholder: 8 spaces (148-155)
+    header.fill(0x20, 148, 156);
+
+    // Typeflag: 1 byte (156) -> '0' (regular file)
+    header.write("0", 156, 1, "ascii");
+
+    // Magic: 6 bytes (257-262) -> "ustar\0"
+    header.write("ustar\0", 257, 6, "ascii");
+
+    // Version: 2 bytes (263-264) -> "00"
+    header.write("00", 263, 2, "ascii");
+
+    // Uname: 32 bytes (265-296) -> "kryptovision\0"
+    header.write("kryptovision\0", 265, 32, "ascii");
+
+    // Gname: 32 bytes (297-328) -> "kryptovision\0"
+    header.write("kryptovision\0", 297, 32, "ascii");
+
+    // Calculate checksum: unsigned sum of all bytes in 512-byte header
+    let checksum = 0;
+    for (let i = 0; i < 512; i++) {
+      checksum += header[i]!;
+    }
+    const checksumOctal = checksum.toString(8).padStart(6, "0") + "\0 ";
+    header.write(checksumOctal, 148, 8, "ascii");
+
+    chunks.push(header);
+    chunks.push(entry.buffer);
+
+    // Padding to 512-byte boundary
+    const remainder = entry.buffer.length % 512;
+    if (remainder > 0) {
+      chunks.push(Buffer.alloc(512 - remainder, 0));
+    }
+  }
+
+  // End of archive marker: two 512-byte blocks of zeroes (1024 bytes)
+  chunks.push(Buffer.alloc(1024, 0));
+
+  return Buffer.concat(chunks);
+}
+
 export interface ExportJob {
   id: string;
   caseId: string;
@@ -115,7 +190,21 @@ export interface ExportManifest {
   actual: {
     firstFrame: string | null;
     lastFrame: string | null;
+    startDeviationMs?: number;
+    endDeviationMs?: number;
   };
+  mediaInfo?: {
+    container: string;
+    videoCodec?: string;
+    width?: number;
+    height?: number;
+    fps?: number;
+    durationSeconds: number;
+    hasAudio: boolean;
+    streamCount: number;
+    startTime?: string;
+  };
+  packageDigest?: string;
   deviceTimestamp: string | null;
   serverReceiveTimestamp: string;
   estimatedClockOffset: number | null;
@@ -309,6 +398,33 @@ export class ExportWorker {
       const validationResults = await this.validateSourceSegments(allRawSegments);
       const gaps = this.calculateGaps(cameras, validationResults);
 
+      const hashMismatch = validationResults.find(
+        (v) => v.expectedSha256 && v.actualSha256 && v.expectedSha256.toLowerCase() !== v.actualSha256.toLowerCase(),
+      );
+      if (hashMismatch) {
+        const err = new Error(
+          `SOURCE_HASH_MISMATCH: Segment ${hashMismatch.segmentId} checksum failed. Expected ${hashMismatch.expectedSha256}, got ${hashMismatch.actualSha256}`,
+        );
+        (err as any).code = "SOURCE_HASH_MISMATCH";
+        throw err;
+      }
+
+      const missingSegments = validationResults.filter((v) => !v.exists);
+      if (missingSegments.length > 0 && job.options?.strictSourceIntegrity) {
+        const err = new Error(
+          `FAILED_SOURCE_INTEGRITY: ${missingSegments.length} indexed segments physically missing from storage`,
+        );
+        (err as any).code = "FAILED_SOURCE_INTEGRITY";
+        throw err;
+      }
+
+      const existingValid = validationResults.filter((v) => v.exists && v.sizeBytes > 0 && v.isValid);
+      if (job.format !== "manifest-only" && existingValid.length === 0) {
+        const err = new Error("EXPORT_FAILED: No valid source recordings available for requested interval");
+        (err as any).code = "EXPORT_FAILED";
+        throw err;
+      }
+
       await this.recordCustodyEvent({
         evidenceId: job.caseId,
         action: "source_verified",
@@ -323,6 +439,7 @@ export class ExportWorker {
       let outputPath: string;
       let outputHash: string;
       let outputSize: number;
+      let mediaInfo: any;
       const outputFiles: Array<{ filename: string; mimeType: string; size: number; sha256: string }> = [];
 
       if (job.format === "manifest-only") {
@@ -342,10 +459,11 @@ export class ExportWorker {
         });
       } else {
         // Viewing copy / MP4
-        const viewingResult = await this.createViewingCopy(jobDir, jobId, validationResults, job.options);
+        const viewingResult = await this.createViewingCopy(jobDir, jobId, validationResults, job.options, cameras[0]);
         outputPath = viewingResult.outputPath;
         outputHash = viewingResult.hash;
         outputSize = viewingResult.size;
+        mediaInfo = viewingResult.mediaInfo;
         outputFiles.push({
           filename: "viewing-copy.mp4",
           mimeType: "video/mp4",
@@ -353,6 +471,51 @@ export class ExportWorker {
           sha256: outputHash,
         });
       }
+
+      // Generate real metadata.json and audit.json for the evidence package
+      const metadataPath = resolve(jobDir, "metadata.json");
+      const metadataContent = JSON.stringify(
+        {
+          packageId: jobId,
+          caseId: job.caseId,
+          tenantId: job.tenantId,
+          requestedBy: job.requestedBy,
+          reason: job.reason,
+          cameras,
+          options: job.options,
+          generatedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      );
+      writeFileSync(metadataPath, metadataContent, "utf-8");
+      outputFiles.push({
+        filename: "metadata.json",
+        mimeType: "application/json",
+        size: Buffer.byteLength(metadataContent),
+        sha256: createHash("sha256").update(metadataContent).digest("hex"),
+      });
+
+      const auditPath = resolve(jobDir, "audit.json");
+      const auditContent = JSON.stringify(
+        {
+          jobId,
+          caseId: job.caseId,
+          totalSegments: validationResults.length,
+          validSegments: validationResults.filter((v) => v.isValid).length,
+          gaps,
+          auditedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      );
+      writeFileSync(auditPath, auditContent, "utf-8");
+      outputFiles.push({
+        filename: "audit.json",
+        mimeType: "application/json",
+        size: Buffer.byteLength(auditContent),
+        sha256: createHash("sha256").update(auditContent).digest("hex"),
+      });
 
       await this.recordCustodyEvent({
         evidenceId: job.caseId,
@@ -375,6 +538,7 @@ export class ExportWorker {
         exportedBy: job.requestedBy,
         options: job.options,
         jobDir,
+        mediaInfo,
       });
 
       await this.recordCustodyEvent({
@@ -547,7 +711,7 @@ export class ExportWorker {
   }
 
   /**
-   * Export original evidence: copy immutable segments into package directory
+   * Export original evidence: package immutable segments into authentic POSIX TAR archive
    */
   private async exportOriginalEvidence(
     jobDir: string,
@@ -556,31 +720,33 @@ export class ExportWorker {
     const originalsDir = resolve(jobDir, "originals");
     mkdirSync(originalsDir, { recursive: true });
 
-    let totalBytes = 0;
-    const copiedFiles: string[] = [];
+    const tarEntries: Array<{ name: string; buffer: Buffer; mtime?: Date }> = [];
 
     for (const val of validations) {
       if (!val.exists) continue;
       const src = this.resolveStoragePath(val.storagePath);
-      const dest = resolve(originalsDir, `${val.segmentId}.segment`);
-      copyFileSync(src, dest);
-      copiedFiles.push(dest);
-      totalBytes += statSync(dest).size;
+      const data = readFileSync(src);
+      const filename = val.storagePath.includes("/") || val.storagePath.includes("\\")
+        ? val.storagePath.split(/[/\\]/).pop()!
+        : `${val.segmentId}.mp4`;
+
+      // Preserve individual segment inside originals folder
+      copyFileSync(src, resolve(originalsDir, filename));
+
+      tarEntries.push({
+        name: `originals/${filename}`,
+        buffer: data,
+        mtime: new Date(val.startTime),
+      });
     }
 
-    // Produce an archive bundle file (or canonical manifest bundle)
-    const bundlePath = resolve(jobDir, "originals.bundle");
-    // Bundle payload containing concatenated authentic segment bytes
-    const combinedHash = createHash("sha256");
-    for (const file of copiedFiles) {
-      const data = readFileSync(file);
-      combinedHash.update(data);
-    }
-    const hash = combinedHash.digest("hex");
-    writeFileSync(bundlePath, `KRYPTOVISION_ORIGINALS_BUNDLE\nCOUNT:${copiedFiles.length}\nHASH:${hash}\nTOTAL_BYTES:${totalBytes}\n`);
+    // Produce genuine POSIX ustar TAR archive
+    const tarBuffer = createPosixTarArchive(tarEntries);
+    const bundlePath = resolve(jobDir, "originals.tar");
+    writeFileSync(bundlePath, tarBuffer);
 
-    const finalSize = statSync(bundlePath).size;
-    const finalHash = await this.computeFileSha256(bundlePath);
+    const finalSize = tarBuffer.length;
+    const finalHash = createHash("sha256").update(tarBuffer).digest("hex");
 
     return {
       outputPath: bundlePath,
@@ -590,67 +756,107 @@ export class ExportWorker {
   }
 
   /**
-   * Create viewing copy (transcoded MP4 / stream-copied MP4)
-   * Hashes the ACTUAL OUTPUT BYTES after file generation closes.
+   * Create viewing copy (stream-copied/trimmed MP4 using FFmpeg concat demuxer)
+   * Validates output with ffprobe and hashes the ACTUAL OUTPUT BYTES directly from disk.
    */
   private async createViewingCopy(
     jobDir: string,
     jobId: string,
     validations: SegmentValidationResult[],
     options: any,
-  ): Promise<{ outputPath: string; hash: string; size: number }> {
+    camera?: { cameraId: string; fromTime: string; toTime: string },
+  ): Promise<{ outputPath: string; hash: string; size: number; mediaInfo?: any }> {
     const footageDir = resolve(jobDir, "footage");
     mkdirSync(footageDir, { recursive: true });
     const outputPath = resolve(footageDir, `${jobId}.mp4`);
 
-    const existingValid = validations.filter((v) => v.exists && v.sizeBytes > 0);
+    const existingValid = validations
+      .filter((v) => v.exists && v.sizeBytes > 0 && v.isValid)
+      .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
-    if (existingValid.length > 0) {
-      const firstSrc = this.resolveStoragePath(existingValid[0]!.storagePath);
-      const ffmpegInstalled = await this.checkFfmpegAvailable();
-
-      if (ffmpegInstalled) {
-        // Run FFmpeg stream copy
-        const args = [
-          "-v", "error",
-          "-y",
-          "-i", firstSrc,
-          "-c", "copy",
-          "-movflags", "+faststart",
-          outputPath,
-        ];
-        await new Promise<void>((resolvePromise) => {
-          const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
-          child.once("exit", () => resolvePromise());
-          child.once("error", () => resolvePromise());
-        });
-      }
-
-      // If output was not created by FFmpeg, write direct binary content
-      if (!existsSync(outputPath) || statSync(outputPath).size === 0) {
-        const segmentData = readFileSync(firstSrc);
-        writeFileSync(outputPath, segmentData);
-      }
-    } else {
-      // Create minimal valid MP4 / media container with real non-zero payload
-      const dummyHeader = Buffer.from([
-        0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, // ftyp box
-        0x69, 0x73, 0x6f, 0x6d, 0x00, 0x00, 0x02, 0x00,
-        0x69, 0x73, 0x6f, 0x6d, 0x69, 0x73, 0x6f, 0x32,
-        0x00, 0x00, 0x00, 0x08, 0x6d, 0x64, 0x61, 0x74, // mdat box
-      ]);
-      const body = Buffer.from(`KRYPTOVISION_FORENSIC_EXPORT_${jobId}_${Date.now()}`);
-      writeFileSync(outputPath, Buffer.concat([dummyHeader, body]));
+    if (existingValid.length === 0) {
+      const err = new Error("EXPORT_FAILED: No valid source recordings available for requested interval");
+      (err as any).code = "EXPORT_FAILED";
+      throw err;
     }
 
-    // Compute SHA-256 over ACTUAL OUTPUT BYTES
-    const stats = statSync(outputPath);
-    const hash = await this.computeFileSha256(outputPath);
+    const ffmpegInstalled = await this.checkFfmpegAvailable();
+    if (!ffmpegInstalled) {
+      const err = new Error("MEDIA_ASSEMBLY_FAILED: FFmpeg is required for forensic media assembly");
+      (err as any).code = "MEDIA_ASSEMBLY_FAILED";
+      throw err;
+    }
+
+    // Build FFmpeg concat demuxer manifest
+    const concatPath = resolve(jobDir, `concat_${jobId}.txt`);
+    const concatLines = existingValid.map((v) => {
+      const resolved = this.resolveStoragePath(v.storagePath).replace(/\\/g, "/");
+      return `file '${resolved}'`;
+    });
+    writeFileSync(concatPath, concatLines.join("\n"), "utf-8");
+
+    let startOffsetSec = 0;
+    let durationSec = 0;
+    if (camera?.fromTime && camera?.toTime) {
+      const firstSegStart = new Date(existingValid[0]!.startTime).getTime();
+      const reqFrom = new Date(camera.fromTime).getTime();
+      const reqTo = new Date(camera.toTime).getTime();
+      startOffsetSec = Math.max(0, (reqFrom - firstSegStart) / 1000);
+      durationSec = Math.max(0.1, (reqTo - reqFrom) / 1000);
+    }
+
+    const args = [
+      "-v", "error",
+      "-y",
+      "-f", "concat",
+      "-safe", "0",
+      "-i", concatPath,
+    ];
+
+    if (startOffsetSec > 0.05) {
+      args.push("-ss", startOffsetSec.toFixed(3));
+    }
+    if (durationSec > 0) {
+      args.push("-t", durationSec.toFixed(3));
+    }
+    args.push("-c", "copy", "-movflags", "+faststart", outputPath);
+
+    let stderr = "";
+    const exitCode = await new Promise<number | null>((resolvePromise) => {
+      const child = spawn("ffmpeg", args, { stdio: ["ignore", "pipe", "pipe"] });
+      child.stderr?.on("data", (chunk) => { stderr += chunk.toString(); });
+      child.once("exit", (code) => resolvePromise(code));
+      child.once("error", () => resolvePromise(-1));
+    });
+
+    if (exitCode !== 0) {
+      const err = new Error(`MEDIA_ASSEMBLY_FAILED: FFmpeg exited with code ${exitCode}. ${stderr}`);
+      (err as any).code = "MEDIA_ASSEMBLY_FAILED";
+      throw err;
+    }
+
+    if (!existsSync(outputPath) || statSync(outputPath).size < 100) {
+      const err = new Error("MEDIA_ASSEMBLY_FAILED: Output file was not generated or is empty");
+      (err as any).code = "MEDIA_ASSEMBLY_FAILED";
+      throw err;
+    }
+
+    // Verify output with ffprobe
+    const probeResult = await this.probeMedia(outputPath);
+    if (!probeResult.isValid || probeResult.durationSeconds <= 0) {
+      const err = new Error(`MEDIA_ASSEMBLY_FAILED: ffprobe validation failed: ${probeResult.error || "invalid video stream"}`);
+      (err as any).code = "MEDIA_ASSEMBLY_FAILED";
+      throw err;
+    }
+
+    const finalSize = statSync(outputPath).size;
+    const finalHash = await this.computeFileSha256(outputPath);
 
     return {
       outputPath,
-      hash,
-      size: stats.size,
+      hash: finalHash,
+      size: finalSize,
+      mediaInfo: probeResult,
     };
   }
 
@@ -670,6 +876,7 @@ export class ExportWorker {
     exportedBy: string;
     options: any;
     jobDir: string;
+    mediaInfo?: any;
   }): Promise<string> {
     const manifestId = randomUUID();
 
@@ -691,6 +898,18 @@ export class ExportWorker {
 
     const firstFrame = sortedValid.length > 0 ? sortedValid[0]!.startTime : null;
     const lastFrame = sortedValid.length > 0 ? sortedValid[sortedValid.length - 1]!.endTime : null;
+
+    const reqFromMs = firstCamera ? new Date(firstCamera.fromTime).getTime() : 0;
+    const reqToMs = firstCamera ? new Date(firstCamera.toTime).getTime() : 0;
+    const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
+    const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
+    const startDeviationMs = firstFrameMs && reqFromMs ? firstFrameMs - reqFromMs : 0;
+    const endDeviationMs = lastFrameMs && reqToMs ? lastFrameMs - reqToMs : 0;
+
+    const sortedOutputs = [...input.outputFiles].sort((a, b) => a.filename.localeCompare(b.filename));
+    const packageDigest = createHash("sha256")
+      .update(canonicalJsonStringify(sortedOutputs.map((f) => ({ filename: f.filename, size: f.size, sha256: f.sha256 }))))
+      .digest("hex");
 
     // Build real manifest - no fabricated clock offset or NTP state
     const manifestPayload: ExportManifest = {
@@ -717,7 +936,11 @@ export class ExportWorker {
       actual: {
         firstFrame,
         lastFrame,
+        startDeviationMs,
+        endDeviationMs,
       },
+      mediaInfo: input.mediaInfo,
+      packageDigest,
       deviceTimestamp: firstFrame,
       serverReceiveTimestamp: new Date().toISOString(),
       estimatedClockOffset: null, // Null unless telemetry recorded
@@ -791,6 +1014,115 @@ export class ExportWorker {
     );
 
     return manifestId;
+  }
+
+  /**
+   * Validates media file using ffprobe and extracts technical metadata
+   */
+  async probeMedia(filePath: string): Promise<{
+    isValid: boolean;
+    container: string;
+    videoCodec?: string;
+    width?: number;
+    height?: number;
+    fps?: number;
+    durationSeconds: number;
+    hasAudio: boolean;
+    streamCount: number;
+    startTime?: string;
+    error?: string;
+  }> {
+    return new Promise((resolvePromise) => {
+      const child = spawn("ffprobe", [
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
+        filePath,
+      ]);
+
+      let stdout = "";
+      let stderr = "";
+      child.stdout?.on("data", (d) => { stdout += d.toString(); });
+      child.stderr?.on("data", (d) => { stderr += d.toString(); });
+
+      child.once("exit", (code) => {
+        if (code !== 0) {
+          return resolvePromise({
+            isValid: false,
+            container: "unknown",
+            durationSeconds: 0,
+            hasAudio: false,
+            streamCount: 0,
+            error: stderr || `ffprobe exited with code ${code}`,
+          });
+        }
+
+        try {
+          const data = JSON.parse(stdout);
+          const format = data.format || {};
+          const streams = Array.isArray(data.streams) ? data.streams : [];
+          const videoStream = streams.find((s: any) => s.codec_type === "video");
+          const audioStream = streams.find((s: any) => s.codec_type === "audio");
+          const durationSeconds = parseFloat(format.duration || "0") || (videoStream ? parseFloat(videoStream.duration || "0") : 0);
+
+          let fps = 0;
+          if (videoStream?.r_frame_rate) {
+            const parts = videoStream.r_frame_rate.split("/");
+            fps = parts.length === 2 && parseFloat(parts[1]) > 0 ? parseFloat(parts[0]) / parseFloat(parts[1]) : parseFloat(parts[0]);
+          }
+
+          resolvePromise({
+            isValid: Boolean(videoStream && durationSeconds > 0),
+            container: format.format_name || "mp4",
+            videoCodec: videoStream?.codec_name,
+            width: videoStream?.width ? parseInt(videoStream.width, 10) : undefined,
+            height: videoStream?.height ? parseInt(videoStream.height, 10) : undefined,
+            fps: Math.round(fps * 100) / 100,
+            durationSeconds: Math.round(durationSeconds * 1000) / 1000,
+            hasAudio: Boolean(audioStream),
+            streamCount: streams.length,
+            startTime: format.start_time,
+          });
+        } catch (err: any) {
+          resolvePromise({
+            isValid: false,
+            container: "unknown",
+            durationSeconds: 0,
+            hasAudio: false,
+            streamCount: 0,
+            error: err.message,
+          });
+        }
+      });
+
+      child.once("error", (err) => {
+        resolvePromise({
+          isValid: false,
+          container: "unknown",
+          durationSeconds: 0,
+          hasAudio: false,
+          streamCount: 0,
+          error: err.message,
+        });
+      });
+    });
+  }
+
+  /**
+   * Recovers jobs interrupted by process crash. Ensures no job stays indefinitely 'processing'.
+   */
+  async recoverIncompleteJobs(): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE forensic_export_jobs
+       SET status = 'failed',
+           error_message = 'Export worker restarted while job was in progress; marked failed for recovery',
+           updated_at = now()
+       WHERE status IN ('processing', 'transcoding', 'packaging', 'signing')
+       RETURNING id`,
+    );
+    return result.rowCount || 0;
+  }
   }
 
   async getExportJob(jobId: string): Promise<ExportJob | undefined> {

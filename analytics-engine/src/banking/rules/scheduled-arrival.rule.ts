@@ -40,8 +40,8 @@ export class ScheduledArrivalRule extends BaseRule {
 
     // Check against schedule rules
     if (!monitor.scheduleRules || monitor.scheduleRules.length === 0) {
-      return this.unknown(
-        'No schedule rules configured',
+      return this.pass(
+        'No schedule rules configured; schedule window check not enforced',
         { reason: 'no_schedule_rules' }
       );
     }

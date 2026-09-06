@@ -457,6 +457,11 @@ export class CashVanWorkflow {
         existing.currentZoneId = event.zoneId;
         existing.carriedBy = event.carriedBy;
         existing.confidence = Math.max(existing.confidence, event.confidence);
+
+        await this.sessionRepo.update(session.id, {
+          updateObject: existing,
+        });
+        await this.evaluateSession(session.id);
       } else {
         // Check if this is a transfer object type
         if (!monitor.unloadingRules.transferObjectClasses.includes(event.objectType)) {
@@ -480,11 +485,14 @@ export class CashVanWorkflow {
         });
 
         // Mark unloading started if not already
-        if (!session.unloadingStartedAt && session.state === 'escort_verified') {
+        if (!session.unloadingStartedAt) {
           await this.sessionRepo.update(session.id, {
             state: 'unloading',
+            unloadingStartedAt: event.timestamp,
           });
         }
+
+        await this.evaluateSession(session.id);
       }
     }
   }
@@ -502,9 +510,17 @@ export class CashVanWorkflow {
     for (const session of allSessions) {
       const obj = session.transferObjects.find(o => o.trackId === event.objectTrackId);
       if (obj) {
-        obj.unattendedSince = new Date(
+        const unattendedSince = new Date(
           event.timestamp.getTime() - event.durationSeconds * 1000
         );
+
+        await this.sessionRepo.update(session.id, {
+          updateObject: {
+            trackId: obj.trackId,
+            unattendedSince,
+            carriedBy: undefined,
+          },
+        });
 
         // Evaluate rules immediately
         await this.evaluateSession(session.id);
@@ -558,17 +574,24 @@ export class CashVanWorkflow {
         const secureZoneId = monitor.secureEntryZoneId;
         if (secureZoneId) {
           const allInSecureZone = session.transferObjects.every(obj =>
-            obj.zoneHistory.some(z => z.zoneId === secureZoneId)
+            obj.zoneHistory.some(z => z.zoneId === secureZoneId) || obj.currentZoneId === secureZoneId
           );
           if (allInSecureZone) {
-            await this.sessionRepo.update(session.id, { state: 'secure_zone_entry' });
+            const completedAt = session.transferObjects[0]?.lastSeenAt || new Date();
+            await this.sessionRepo.update(session.id, {
+              state: 'transfer_complete',
+              transferCompletedAt: completedAt,
+            });
           }
         }
         break;
 
       case 'secure_zone_entry':
         // Mark transfer complete
-        await this.sessionRepo.update(session.id, { state: 'transfer_complete' });
+        await this.sessionRepo.update(session.id, {
+          state: 'transfer_complete',
+          transferCompletedAt: session.transferObjects[0]?.lastSeenAt || new Date(),
+        });
         break;
     }
   }
@@ -599,7 +622,7 @@ export class CashVanWorkflow {
       overallConfidence: confidence,
     });
 
-    // Add violations from failed rules
+    // Process rule results
     for (const result of results) {
       if (result.status === 'fail') {
         const existing = session.violations.find(v => v.ruleCode === result.ruleId);
@@ -618,6 +641,12 @@ export class CashVanWorkflow {
               lastDetectedAt: result.evaluatedAt,
             },
           });
+        }
+      } else if (result.status === 'pass') {
+        const existing = session.violations.find(v => v.ruleCode === result.ruleId && v.status === 'active');
+        if (existing) {
+          existing.status = 'resolved';
+          existing.resolvedAt = result.evaluatedAt;
         }
       }
     }

@@ -21,6 +21,17 @@ export class EscortVerificationRule extends BaseRule {
 
     const rules = monitor.personnelRules;
 
+    // If vehicle recently arrived and no personnel or transfer objects observed yet
+    if (
+      session.state === 'vehicle_detected' ||
+      (session.state === 'vehicle_verified' && session.personnel.length === 0 && session.transferObjects.length === 0)
+    ) {
+      return this.unknown(
+        'Personnel verification in progress; vehicle recently arrived',
+        { reason: 'personnel_exit_in_progress' }
+      );
+    }
+
     // If identity verification is not required, only check count
     if (!rules.requireIdentityVerification) {
       const personnelCount = session.personnel.filter(p => p.associatedWithVehicle).length;
