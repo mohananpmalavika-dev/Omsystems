@@ -705,3 +705,11 @@ export interface AnalyticsAlertSummary {
   critical: number;
   highPriority: number;
 }
+
+export interface AnalyticsAlertsAggregateSummary {
+  total: number;
+  active: number;
+  converted: number;
+  unconverted: number;
+  critical: number;
+}

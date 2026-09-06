@@ -136,7 +136,20 @@ export function IncidentMediaModal({
     }
   };
 
-  const resolvedImageUrl = imageUrl || snapshotUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/snapshot` : null);
+  const primaryImageUrl = imageUrl || snapshotUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/snapshot` : null);
+  const fallbackImageUrl = (alertId && primaryImageUrl !== `/api/control/v1/analytics/alerts/${alertId}/snapshot`)
+    ? `/api/control/v1/analytics/alerts/${alertId}/snapshot`
+    : (cameraId ? `/api/control/v1/media/snapshots/${cameraId}` : null);
+
+  const [currentImgUrl, setCurrentImgUrl] = useState<string | null>(primaryImageUrl);
+
+  useEffect(() => {
+    setCurrentImgUrl(primaryImageUrl);
+    setImgError(false);
+    setImgLoading(true);
+  }, [primaryImageUrl]);
+
+  const resolvedImageUrl = currentImgUrl || primaryImageUrl;
   const resolvedVideoUrl = videoUrl || videoClipUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/clip` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/clip` : null);
 
   return (
@@ -302,8 +315,13 @@ export function IncidentMediaModal({
                     alt={title}
                     onLoad={() => setImgLoading(false)}
                     onError={() => {
-                      setImgLoading(false);
-                      setImgError(true);
+                      if (currentImgUrl !== fallbackImageUrl && fallbackImageUrl) {
+                        setCurrentImgUrl(fallbackImageUrl);
+                        setImgLoading(true);
+                      } else {
+                        setImgLoading(false);
+                        setImgError(true);
+                      }
                     }}
                     className="max-h-[64vh] max-w-full object-contain rounded-lg shadow-2xl border border-slate-800/80"
                   />

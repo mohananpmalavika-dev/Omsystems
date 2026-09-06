@@ -29,10 +29,11 @@ import {
   Siren,
   Loader2
 } from "lucide-react";
-import type { AnalyticsAlert } from "@/lib/types";
+import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from "@/lib/types";
 
 export default function AiAlertsIncidentHubPage() {
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
+  const [summary, setSummary] = useState<AnalyticsAlertsAggregateSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -60,6 +61,9 @@ export default function AiAlertsIncidentHubPage() {
       const body = await res.json();
       const list = (body.data ?? []) as AnalyticsAlert[];
       setAlerts(list);
+      if (body.summary) {
+        setSummary(body.summary);
+      }
     } catch (err: any) {
       console.error("Failed to load AI alerts:", err);
       setError(err.message || "Failed to load alerts");
@@ -91,16 +95,6 @@ export default function AiAlertsIncidentHubPage() {
     return Array.from(map.values()).sort();
   }, [alerts]);
 
-  // Summary counts
-  const stats = useMemo(() => {
-    const total = alerts.length;
-    const active = alerts.filter((a) => !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
-    const converted = alerts.filter((a) => Boolean(a.incidentId || a.incidentNumber)).length;
-    const unconverted = alerts.filter((a) => !a.incidentId && !a.incidentNumber).length;
-    const critical = alerts.filter((a) => a.severity === "P1" || a.severity === "P2").length;
-    return { total, active, converted, unconverted, critical };
-  }, [alerts]);
-
   // Filtering
   const filteredAlerts = useMemo(() => {
     return alerts.filter((alert) => {
@@ -124,6 +118,22 @@ export default function AiAlertsIncidentHubPage() {
       return true;
     });
   }, [alerts, branchFilter, zoneFilter, severityFilter, statusFilter, conversionFilter, searchQuery]);
+
+  const isFiltered = branchFilter !== "all" || zoneFilter !== "all" || severityFilter !== "all" || statusFilter !== "all" || conversionFilter !== "all" || Boolean(searchQuery.trim());
+
+  // Summary counts - uses accurate PostgreSQL aggregate counts when unfiltered, and filtered slice when filters are applied
+  const stats = useMemo(() => {
+    if (!isFiltered && summary) {
+      return summary;
+    }
+    const target = isFiltered ? filteredAlerts : alerts;
+    const total = isFiltered ? target.length : (summary?.total ?? target.length);
+    const active = target.filter((a) => !["resolved", "false_alarm", "suppressed"].includes(a.status)).length;
+    const converted = target.filter((a) => Boolean(a.incidentId || a.incidentNumber)).length;
+    const unconverted = target.filter((a) => !a.incidentId && !a.incidentNumber).length;
+    const critical = target.filter((a) => a.severity === "P1" || a.severity === "P2").length;
+    return { total, active, converted, unconverted, critical };
+  }, [isFiltered, summary, filteredAlerts, alerts]);
 
   // Convert to incident handler
   const handleConvertIncident = async (alertId: string) => {
@@ -272,7 +282,7 @@ export default function AiAlertsIncidentHubPage() {
           >
             <div className="text-xs font-medium text-slate-400">Total AI Alerts</div>
             <div className="text-2xl font-bold text-slate-100 mt-1">{stats.total}</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">Across all fleet cameras</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{isFiltered ? "Active filtered results" : "Fleet-wide database total"}</div>
           </button>
 
           <button
@@ -631,7 +641,8 @@ export default function AiAlertsIncidentHubPage() {
 
           <div className="py-3 px-4 bg-slate-950/70 border-t border-slate-800 text-slate-400 text-xs flex items-center justify-between">
             <span>
-              Showing {filteredAlerts.length} of {alerts.length} alerts
+              Showing {filteredAlerts.length} of {alerts.length} loaded alerts
+              {summary?.total && summary.total > alerts.length ? ` (${summary.total} total in database)` : ""}
             </span>
             <span className="font-mono text-slate-500">Auto-refresh active (12s)</span>
           </div>
@@ -643,6 +654,7 @@ export default function AiAlertsIncidentHubPage() {
             isOpen={Boolean(activeMediaAlert)}
             onClose={() => setActiveMediaAlert(null)}
             imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
+            snapshotUrl={`/api/control/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
             videoUrl={activeMediaAlert.videoClipUrl || `/api/control/v1/analytics/alerts/${activeMediaAlert.id}/clip`}
             title={activeMediaAlert.title}
             cameraName={activeMediaAlert.cameraName}
