@@ -399,7 +399,10 @@ export async function registerSignedConfigRoutes(
       })),
     });
     const body = schema.parse(request.body);
-    const preview = goldenConfigurationTemplateService.previewApplication(body.templateId, body.targetCameras);
+    const preview = goldenConfigurationTemplateService.previewApplication(
+      body.templateId,
+      body.targetCameras as unknown as TargetCameraInput[],
+    );
     return { success: true, data: preview };
   });
 
@@ -420,7 +423,7 @@ export async function registerSignedConfigRoutes(
     const result = goldenConfigurationTemplateService.applyTemplate(
       body.templateId,
       body.branchId,
-      targetCameras,
+      body.targetCameras as unknown as TargetCameraInput[],
       request.currentUser.id || 'system-admin',
     );
     return { success: true, data: result };
