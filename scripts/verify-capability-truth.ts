@@ -7,8 +7,11 @@
  * 3. NOT_IMPLEMENTED capabilities cannot report runtime HEALTHY
  * 4. PRODUCTION capabilities must have backend, API, and unit test verification
  * 5. Unknown capability IDs fail closed
+ * 6. PRODUCTION capabilities with declared proof must verify that sourceFiles, testFiles, and migrations exist on disk
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
 import { PLATFORM_CAPABILITIES } from '../config/capabilities/platform-capabilities.js';
 import {
   CapabilityMaturity,
@@ -22,8 +25,10 @@ interface Violation {
 }
 
 function verifyCapabilityTruth(): void {
+  const repoRoot = path.resolve(import.meta.dirname, '..');
+
   console.log('===============================================================');
-  console.log('  SENTINEL GRID — CAPABILITY TRUTH MATRIX CI VERIFICATION');
+  console.log('  KRYPTOVISION — CAPABILITY TRUTH MATRIX CI VERIFICATION');
   console.log('===============================================================');
   console.log(`Auditing ${PLATFORM_CAPABILITIES.length} registered platform capabilities...\n`);
 
@@ -84,7 +89,7 @@ function verifyCapabilityTruth(): void {
       });
     }
 
-    // 5. PRODUCTION must have backend, API, and unit tests
+    // 5. PRODUCTION requirements
     if (cap.maturity === CapabilityMaturity.PRODUCTION) {
       if (!cap.implementation.backend) {
         violations.push({
@@ -114,6 +119,61 @@ function verifyCapabilityTruth(): void {
           message: `Capability marked PRODUCTION requires persistence but persistenceImplemented = false.`,
         });
       }
+
+      // Hardened domains require explicit proof
+      if (cap.category === 'EVIDENCE' || cap.id === 'recording.continuity_verification' || cap.id === 'recording.retention') {
+        if (!cap.verification.proof) {
+          violations.push({
+            capabilityId: cap.id,
+            rule: 'PRODUCTION_PROOF_MISSING',
+            message: `Production capability in critical domain '${cap.category}' must specify verification.proof.`,
+          });
+        }
+      }
+    }
+
+    // 6. Verify proof artifacts if declared
+    if (cap.verification.proof) {
+      const { sourceFiles, testFiles, migrations } = cap.verification.proof;
+
+      if (sourceFiles) {
+        for (const file of sourceFiles) {
+          const fullPath = path.join(repoRoot, file);
+          if (!fs.existsSync(fullPath)) {
+            violations.push({
+              capabilityId: cap.id,
+              rule: 'PROOF_SOURCE_FILE_NOT_FOUND',
+              message: `Declared proof source file does not exist on disk: '${file}'`,
+            });
+          }
+        }
+      }
+
+      if (testFiles) {
+        for (const file of testFiles) {
+          const fullPath = path.join(repoRoot, file);
+          if (!fs.existsSync(fullPath)) {
+            violations.push({
+              capabilityId: cap.id,
+              rule: 'PROOF_TEST_FILE_NOT_FOUND',
+              message: `Declared proof test file does not exist on disk: '${file}'`,
+            });
+          }
+        }
+      }
+
+      if (migrations) {
+        for (const file of migrations) {
+          const fullPath = path.join(repoRoot, file);
+          if (!fs.existsSync(fullPath)) {
+            violations.push({
+              capabilityId: cap.id,
+              rule: 'PROOF_MIGRATION_FILE_NOT_FOUND',
+              message: `Declared proof migration file does not exist on disk: '${file}'`,
+            });
+          }
+        }
+      }
     }
   }
 
@@ -139,7 +199,7 @@ function verifyCapabilityTruth(): void {
     process.exit(1);
   }
 
-  console.log('✅ SUCCESS: All capability definitions comply with release truth contracts.');
+  console.log('✅ SUCCESS: All capability definitions and referenced proof artifacts comply with release truth contracts.');
 }
 
 verifyCapabilityTruth();

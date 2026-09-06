@@ -18,6 +18,7 @@ import { StorageForecasterService, StorageForecastResult } from "./storage-forec
 import { DeletionPlannerService, DeletionPlanResult } from "./deletion-planner.service.js";
 import { PolicySimulationService } from "./policy-simulation.service.js";
 import { pool } from "../../database/pool.js";
+import type { EvidenceRepository } from "../../database/evidence-repository.js";
 
 export interface CameraComprehensiveRetentionStatus {
   cameraId: string;
@@ -63,7 +64,7 @@ export class RetentionEngineService {
   private legalHolds = new Map<string, LegalHold>();
   private cameraSegments = new Map<string, RetentionSegmentMetadata[]>();
 
-  constructor() {}
+  constructor(private readonly evidenceRepo?: EvidenceRepository) {}
 
   ingestSegments(cameraId: string, segments: RetentionSegmentMetadata[]) {
     this.cameraSegments.set(cameraId, segments);
@@ -131,6 +132,71 @@ export class RetentionEngineService {
       return active.filter((h) => !h.scope.branches || h.scope.branches.includes(branchId));
     }
     return active;
+  }
+
+  /**
+   * Calculates actual retention coverage and gaps for a requested compliance window.
+   */
+  calculateCoverage(input: {
+    start: Date;
+    end: Date;
+    segments: Array<{ startTime: Date; endTime: Date }>;
+  }): {
+    expectedSeconds: number;
+    recordedSeconds: number;
+    missingSeconds: number;
+    coveragePercent: number;
+    numberOfGaps: number;
+    largestGapSeconds: number;
+  } {
+    const startMs = input.start.getTime();
+    const endMs = input.end.getTime();
+    const expectedSeconds = Math.max(1, Math.round((endMs - startMs) / 1000));
+
+    const sorted = [...input.segments].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    let recordedSeconds = 0;
+    let numberOfGaps = 0;
+    let largestGapSeconds = 0;
+
+    let lastEndMs = startMs;
+
+    for (const seg of sorted) {
+      const segStartMs = Math.max(startMs, seg.startTime.getTime());
+      const segEndMs = Math.min(endMs, seg.endTime.getTime());
+
+      if (segStartMs > lastEndMs) {
+        const gapSec = Math.round((segStartMs - lastEndMs) / 1000);
+        if (gapSec > 0) {
+          numberOfGaps++;
+          largestGapSeconds = Math.max(largestGapSeconds, gapSec);
+        }
+      }
+
+      if (segEndMs > segStartMs) {
+        recordedSeconds += Math.round((segEndMs - segStartMs) / 1000);
+        lastEndMs = Math.max(lastEndMs, segEndMs);
+      }
+    }
+
+    if (endMs > lastEndMs) {
+      const gapSec = Math.round((endMs - lastEndMs) / 1000);
+      if (gapSec > 0) {
+        numberOfGaps++;
+        largestGapSeconds = Math.max(largestGapSeconds, gapSec);
+      }
+    }
+
+    const missingSeconds = Math.max(0, expectedSeconds - recordedSeconds);
+    const coveragePercent = Number(Math.min(100, Math.max(0, (recordedSeconds / expectedSeconds) * 100)).toFixed(2));
+
+    return {
+      expectedSeconds,
+      recordedSeconds,
+      missingSeconds,
+      coveragePercent,
+      numberOfGaps,
+      largestGapSeconds,
+    };
   }
 
   /**
@@ -358,20 +424,51 @@ export class RetentionEngineService {
     backendDeleteFn: (locator: any) => Promise<void>;
     actor: string;
     reason: string;
+    segmentStartTime?: Date;
   }): Promise<{ success: boolean; auditId: string }> {
     const { LegalHoldProtectedError } = await import("../../../packages/contracts/src/storage/storage-errors.js");
     const { retentionAuditService } = await import("./retention-audit.service.js");
 
-    // 1. Check persistent database Legal Holds first
+    const segTime = params.segmentStartTime || new Date();
+
+    // 1. Check persistent database Legal Holds via repository first if provided
+    if (this.evidenceRepo) {
+      const checkResult = await this.evidenceRepo.isSegmentProtected({
+        cameraId: params.cameraId,
+        timestamp: segTime,
+        branchId: params.branchId,
+        tenantId: params.tenantId,
+        segmentId: params.segmentId,
+      });
+      if (checkResult.protected) {
+        retentionAuditService.recordEvent({
+          tenantId: params.tenantId,
+          entityType: "CAMERA",
+          entityId: params.cameraId,
+          eventType: "DELETION_DENIED",
+          actorType: "SYSTEM",
+          actorId: params.actor,
+          notes: `DENIED deletion of segment ${params.segmentId}: ${checkResult.reason || 'protected by active Legal Hold'}`,
+        });
+
+        throw new LegalHoldProtectedError(
+          params.segmentId,
+          checkResult.hold?.id || "LEGAL_HOLD_ACTIVE",
+          `Cannot delete segment '${params.segmentId}': ${checkResult.reason || 'protected by active Legal Hold'}.`,
+        );
+      }
+    }
+
+    // 2. Check persistent database Legal Holds via direct database pool
     if (pool) {
       try {
-        const ts = new Date().toISOString();
+        const ts = segTime.toISOString();
         const dbRes = await pool.query(
           `SELECT id, case_number, reason FROM recording_legal_holds
            WHERE (status = 'active' OR status IS NULL)
              AND released_at IS NULL
              AND (
-               camera_id = $1::uuid
+               camera_id = $1
                OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $1 || '%')
              )
              AND (from_at IS NULL OR from_at <= $2::timestamptz OR start_time IS NULL OR start_time <= $2::timestamptz)
@@ -386,7 +483,7 @@ export class RetentionEngineService {
             tenantId: params.tenantId,
             entityType: "CAMERA",
             entityId: params.cameraId,
-            eventType: "VIOLATION_CREATED",
+            eventType: "DELETION_DENIED",
             actorType: "SYSTEM",
             actorId: params.actor,
             notes: `DENIED deletion of segment ${params.segmentId}: protected by persistent Legal Hold ${hold.id} (${hold.case_number || 'ACTIVE'})`,

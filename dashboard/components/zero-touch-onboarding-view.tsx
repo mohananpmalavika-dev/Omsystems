@@ -964,6 +964,22 @@ Write-Host "================================================================" -F
 
   return (
     <div className="space-y-6" role="main" aria-label="Zero-Touch Provisioning Control Plane">
+      <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300">Operational trust</p>
+            <h2 className="mt-1 text-base font-bold text-slate-100">Provisioning guardrails are active</h2>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-[11px] font-medium text-emerald-200">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            Zero-surprise recovery state
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-slate-300">
+          Command actions are validated, failover fallbacks are surfaced, and branch readiness is kept visible so operators never lose context during large provisioning windows.
+        </p>
+      </div>
+
       {/* Show loading skeleton on initial load */}
       {loading && branches.length === 0 && !error && (
         <div role="status" aria-live="polite" aria-label="Loading fleet data">
@@ -1173,13 +1189,15 @@ Write-Host "================================================================" -F
               {filteredBranches.length === 0 ? (
                 <tr key="fleet-empty-state">
                   <td colSpan={6} className="px-4 py-12 text-center">
-                    <Server className="mx-auto mb-3 h-8 w-8 text-slate-600" />
-                    <p className="font-semibold text-slate-300">
-                      {branches.length === 0 ? "No branches are available in this access scope" : "No branches match the current filters"}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {branches.length === 0 ? "Create or assign a branch in the organization hierarchy, then refresh this view." : "Clear the search or choose a different status filter."}
-                    </p>
+                    <div className="mx-auto flex max-w-md flex-col items-center rounded-2xl border border-dashed border-slate-700 bg-slate-950/50 p-6">
+                      <Server className="mb-3 h-8 w-8 text-slate-600" />
+                      <p className="font-semibold text-slate-200">
+                        {branches.length === 0 ? "No branches are available in this access scope" : "No branches match the current filters"}
+                      </p>
+                      <p className="mt-2 text-xs text-slate-400">
+                        {branches.length === 0 ? "Create or assign a branch in the organization hierarchy, then refresh this view." : "Clear the search or choose a different status filter to restore the fleet overview."}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : filteredBranches.map((branch) => (
