@@ -107,12 +107,16 @@ export class AnalyticsStatisticsRepository {
     `;
 
     const result = await this.pool.query(query, params);
-    const row = result.rows[0];
+    const row = result?.rows?.[0] || {
+      total_detections: "0",
+      average_confidence: null,
+      alerts: "0",
+    };
 
     return {
-      totalDetections: Number(row.total_detections),
-      averageConfidence: row.average_confidence === null ? null : Number(row.average_confidence),
-      alerts: Number(row.alerts),
+      totalDetections: Number(row.total_detections ?? 0),
+      averageConfidence: row.average_confidence === null || row.average_confidence === undefined ? null : Number(row.average_confidence),
+      alerts: Number(row.alerts ?? 0),
     };
   }
 

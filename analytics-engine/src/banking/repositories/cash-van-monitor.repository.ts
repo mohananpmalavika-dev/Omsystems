@@ -144,6 +144,31 @@ export class CashVanMonitorRepository {
   }
 
   /**
+   * Find monitor by any associated zone (arrival, unloading, secure entry, route)
+   */
+  async findByZone(tenantId: string, branchId: string, zoneId: string): Promise<CashVanMonitorConfig | null> {
+    const monitorIds = this.zoneIndex.get(zoneId);
+    if (!monitorIds) {
+      return null;
+    }
+
+    for (const monitorId of monitorIds) {
+      const monitor = this.monitors.get(monitorId);
+      if (
+        monitor &&
+        monitor.tenantId === tenantId &&
+        monitor.branchId === branchId &&
+        monitor.enabled
+      ) {
+        return monitor;
+      }
+    }
+
+    return null;
+  }
+
+
+  /**
    * Update monitor configuration
    */
   async update(monitorId: string, updates: Partial<CashVanMonitorConfig>): Promise<CashVanMonitorConfig | null> {

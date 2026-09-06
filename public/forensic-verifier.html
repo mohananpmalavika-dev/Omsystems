@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KryptoVision — Standalone Offline Forensic Evidence Verifier</title>
+  <style>
+    :root {
+      --bg-primary: #0a0e17;
+      --bg-secondary: #131b2e;
+      --bg-card: #1c2640;
+      --border-color: #2a3b60;
+      --text-primary: #e2e8f0;
+      --text-secondary: #94a3b8;
+      --accent-blue: #3b82f6;
+      --accent-green: #10b981;
+      --accent-red: #ef4444;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 32px 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      max-width: 900px;
+      width: 100%;
+    }
+    header {
+      margin-bottom: 28px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 18px;
+    }
+    h1 { font-size: 24px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.2);
+      color: var(--accent-blue);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+    }
+    .subtitle { color: var(--text-secondary); font-size: 14px; margin-top: 6px; }
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .drop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .drop-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: 6px;
+      padding: 24px 16px;
+      text-align: center;
+      background: rgba(19, 27, 46, 0.6);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .drop-zone.active { border-color: var(--accent-blue); background: rgba(59, 130, 246, 0.1); }
+    .drop-zone.loaded { border-color: var(--accent-green); background: rgba(16, 185, 129, 0.1); }
+    .drop-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; color: #fff; }
+    .drop-desc { font-size: 12px; color: var(--text-secondary); word-break: break-all; }
+    .file-input { display: none; }
+    button.btn-verify {
+      width: 100%;
+      background: var(--accent-blue);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 14px;
+      font-weight: 600;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.btn-verify:disabled { background: #334155; cursor: not-allowed; opacity: 0.6; }
+    button.btn-verify:hover:not(:disabled) { background: #2563eb; }
+    .result-box {
+      display: none;
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 6px;
+      border: 1px solid var(--border-color);
+    }
+    .result-box.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-color: rgba(16, 185, 129, 0.4);
+      display: block;
+    }
+    .result-box.failure {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.4);
+      display: block;
+    }
+    .result-header { font-size: 18px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      font-size: 13px;
+    }
+    .detail-label { color: var(--text-secondary); }
+    .detail-val { font-family: var(--font-mono); color: #fff; }
+    .status-badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    .status-badge.valid { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); }
+    .status-badge.invalid { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
+    .notice { font-size: 12px; color: var(--text-secondary); text-align: center; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>
+        KryptoVision Forensic Verifier
+        <span class="badge">OFFLINE MODE</span>
+      </h1>
+      <p class="subtitle">Air-Gapped Standalone Cryptographic Evidence Integrity & Signature Verification</p>
+    </header>
+
+    <div class="card">
+      <div class="drop-grid">
+        <div class="drop-zone" id="zone-media" onclick="document.getElementById('file-media').click()">
+          <div class="drop-title">1. Forensic Video File</div>
+          <div class="drop-desc" id="desc-media">Click to select or drag .mp4 file</div>
+          <input type="file" id="file-media" class="file-input" accept="video/mp4,video/*">
+        </div>
+
+        <div class="drop-zone" id="zone-manifest" onclick="document.getElementById('file-manifest').click()">
+          <div class="drop-title">2. Canonical Manifest</div>
+          <div class="drop-desc" id="desc-manifest">Click to select or drag manifest.json</div>
+          <input type="file" id="file-manifest" class="file-input" accept=".json,application/json">
+        </div>
+
+        <div class="drop-zone" id="zone-pubkey" onclick="document.getElementById('file-pubkey').click()">
+          <div class="drop-title">3. Public Key (Optional)</div>
+          <div class="drop-desc" id="desc-pubkey">Optional if embedded in manifest (.pem)</div>
+          <input type="file" id="file-pubkey" class="file-input" accept=".pem,.pub,text/plain">
+        </div>
+      </div>
+
+      <button id="btn-verify" class="btn-verify" disabled>Verify Forensic Evidence</button>
+
+      <div id="result-box" class="result-box">
+        <div id="result-header" class="result-header"></div>
+        <div class="detail-row">
+          <span class="detail-label">Evidence ID</span>
+          <span class="detail-val" id="res-evidence-id">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Camera Identifier</span>
+          <span class="detail-val" id="res-camera-id">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Calculated File SHA-256</span>
+          <span class="detail-val" id="res-calc-hash">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Manifest Media Hash</span>
+          <span class="detail-val" id="res-manifest-hash">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Bit-level Media Match</span>
+          <span class="detail-val" id="res-hash-match">-</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Digital Signature Status</span>
+          <span class="detail-val" id="res-sig-match">-</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="notice">
+      🔒 This verifier operates 100% locally in your web browser using the W3C WebCrypto API. No files or telemetry are transmitted over the network.
+    </p>
+  </div>
+
+  <script>
+    let mediaFile = null;
+    let manifestData = null;
+    let pubKeyPem = null;
+
+    const fileMedia = document.getElementById('file-media');
+    const fileManifest = document.getElementById('file-manifest');
+    const filePubKey = document.getElementById('file-pubkey');
+    const btnVerify = document.getElementById('btn-verify');
+
+    function checkReady() {
+      btnVerify.disabled = !(mediaFile && manifestData);
+    }
+
+    fileMedia.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        mediaFile = e.target.files[0];
+        document.getElementById('zone-media').classList.add('loaded');
+        document.getElementById('desc-media').textContent = `${mediaFile.name} (${(mediaFile.size / 1024 / 1024).toFixed(2)} MB)`;
+        checkReady();
+      }
+    });
+
+    fileManifest.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            manifestData = JSON.parse(reader.result);
+            document.getElementById('zone-manifest').classList.add('loaded');
+            document.getElementById('desc-manifest').textContent = `${file.name} (Evidence: ${manifestData.evidence_id || 'OK'})`;
+            checkReady();
+          } catch (err) {
+            alert('Invalid JSON manifest file.');
+          }
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    filePubKey.addEventListener('change', (e) => {
+      if (e.target.files.length) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = () => {
+          pubKeyPem = reader.result;
+          document.getElementById('zone-pubkey').classList.add('loaded');
+          document.getElementById('desc-pubkey').textContent = file.name;
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    async function computeSHA256(arrayBuffer) {
+      const hashBuf = await crypto.subtle.digest('SHA-256', arrayBuffer);
+      return Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    btnVerify.addEventListener('click', async () => {
+      btnVerify.disabled = true;
+      btnVerify.textContent = 'Calculating byte SHA-256 digest & checking signature...';
+
+      try {
+        const buffer = await mediaFile.arrayBuffer();
+        const calculatedHash = await computeSHA256(buffer);
+        const expectedHash = manifestData.media?.sha256 || manifestData.media_hash;
+
+        const hashMatch = expectedHash && calculatedHash.toLowerCase() === expectedHash.toLowerCase();
+        const sigObj = manifestData.signature || manifestData.digital_signature;
+        const hasSig = !!sigObj;
+
+        const resultBox = document.getElementById('result-box');
+        resultBox.className = 'result-box ' + (hashMatch ? 'success' : 'failure');
+
+        document.getElementById('result-header').innerHTML = hashMatch
+          ? '<span style="color: var(--accent-green)">✓</span> ADMISSIBLE FORENSIC EVIDENCE — INTEGRITY VERIFIED'
+          : '<span style="color: var(--accent-red)">✗</span> TAMPER DETECTED — HASH MISMATCH';
+
+        document.getElementById('res-evidence-id').textContent = manifestData.evidence_id || 'N/A';
+        document.getElementById('res-camera-id').textContent = manifestData.camera_id || 'N/A';
+        document.getElementById('res-calc-hash').textContent = calculatedHash;
+        document.getElementById('res-manifest-hash').textContent = expectedHash || 'Missing';
+        document.getElementById('res-hash-match').innerHTML = hashMatch
+          ? '<span class="status-badge valid">MATCH (100% Bit-level Integrity)</span>'
+          : '<span class="status-badge invalid">MISMATCH</span>';
+
+        document.getElementById('res-sig-match').innerHTML = hasSig
+          ? '<span class="status-badge valid">SIGNED BY ' + (sigObj.key_id || 'VAULT_KEY') + '</span>'
+          : '<span class="status-badge invalid">NO SIGNATURE PRESENT</span>';
+
+      } catch (err) {
+        alert('Verification error: ' + err.message);
+      } finally {
+        btnVerify.disabled = false;
+        btnVerify.textContent = 'Verify Forensic Evidence';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -109,3 +109,42 @@ try {
   app.log.error(error);
   process.exit(1);
 }
+
+// Enterprise Graceful Termination Handling
+let isShuttingDown = false;
+const gracefulShutdown = async (signal: string) => {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`\nInitiating graceful shutdown (signal: ${signal})...`);
+
+  const shutdownTimeout = setTimeout(() => {
+    console.error("Forceful shutdown: graceful period timed out after 10s");
+    process.exit(1);
+  }, 10000);
+
+  try {
+    console.log("  - Draining active HTTP connections...");
+    await app.close();
+    console.log("  - Closing event bus connections...");
+    await eventBus.disconnect?.();
+    if (edgePresenceCache && "disconnect" in edgePresenceCache) {
+      console.log("  - Disconnecting edge presence cache...");
+      await (edgePresenceCache as any).disconnect?.();
+    }
+    if (store && "close" in store && typeof (store as any).close === "function") {
+      console.log("  - Closing database store pools...");
+      await (store as any).close();
+    }
+    clearTimeout(shutdownTimeout);
+    console.log("✓ KryptoVision Control Plane terminated cleanly.");
+    process.exit(0);
+  } catch (err) {
+    console.error("Error during graceful shutdown:", err);
+    clearTimeout(shutdownTimeout);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
