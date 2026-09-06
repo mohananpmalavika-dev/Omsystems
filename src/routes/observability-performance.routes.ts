@@ -15,10 +15,9 @@ export async function performanceTrackingMiddleware(
   reply: FastifyReply
 ) {
   const startTime = Date.now();
-  
-  const onSend = async (payload: any) => {
+  reply.raw.once('finish', () => {
     const duration = Date.now() - startTime;
-    const isError = reply.statusCode >= 400;
+    const isError = reply.raw.statusCode >= 400;
     
     getPerformanceObserver().recordEndpointLatency(
       request.url,
@@ -26,11 +25,7 @@ export async function performanceTrackingMiddleware(
       duration,
       isError
     );
-
-    return payload;
-  };
-
-  reply.onSend(onSend);
+  });
 }
 export async function registerPerformanceObservabilityRoutes(app: FastifyInstance) {
   /**
@@ -43,7 +38,6 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
       const { method, path } = request.query as { method?: string; path?: string };
       const observer = getPerformanceObserver();
       const metrics = observer.getEndpointMetrics(path, method?.toUpperCase());
-      const observer = getPerformanceObserver();
       return reply.send({ success: true, data: metrics });
     }
   );
