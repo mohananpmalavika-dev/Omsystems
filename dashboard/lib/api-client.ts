@@ -1927,6 +1927,176 @@ export const deviceConfigurationApi = {
     fetchApi<{ success: boolean; data: any[] }>(
       `/v1/config/golden-templates/history${templateId ? `?templateId=${encodeURIComponent(templateId)}` : ''}`
     ),
+
+  convertGoldenTemplateToDraft: (
+    id: string,
+    payload: { branchId: string; versionNumber?: number; changeReason?: string }
+  ) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/golden-templates/${encodeURIComponent(id)}/draft`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+};
+
+export const signedConfigApi = {
+  listVersions: () =>
+    fetchApi<{ success: boolean; data: any[] }>(`/v1/config/versions`),
+
+  createDraft: (payload: {
+    version: number;
+    config: any;
+    changeReason: string;
+    ticketId?: string;
+    parentVersionId?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/versions`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  validateVersion: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/versions/${encodeURIComponent(id)}/validate`,
+      { method: 'POST' }
+    ),
+
+  approveVersion: (id: string, payload: { decision?: 'APPROVED' | 'REJECTED'; comments: string }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/versions/${encodeURIComponent(id)}/approve`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  signVersion: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/versions/${encodeURIComponent(id)}/sign`,
+      { method: 'POST' }
+    ),
+
+  cloneVersion: (id: string, payload: { modifications?: Record<string, any>; changeReason: string; ticketId?: string }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/versions/${encodeURIComponent(id)}/clone`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  revokeVersion: (id: string, payload: { reason: string }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/versions/${encodeURIComponent(id)}/revoke`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  getBranchState: (branchId: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/branches/${encodeURIComponent(branchId)}/state`
+    ),
+
+  getFleetOverview: () =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/fleet/overview`),
+
+  createRollout: (payload: { configVersionId: string; autoRollbackOnBreach?: boolean }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/rollouts`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  advanceRollout: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/rollouts/${encodeURIComponent(id)}/advance`,
+      { method: 'POST' }
+    ),
+
+  rollbackRollout: (id: string, payload: { targetVersion: number; reason: string; incidentId?: string }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/rollouts/${encodeURIComponent(id)}/rollback`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  recordBranchResult: (id: string, branchId: string, payload: { status: 'VERIFIED' | 'FAILED' | 'OFFLINE'; error?: string }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/rollouts/${encodeURIComponent(id)}/branches/${encodeURIComponent(branchId)}/result`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  reconcileFleet: (payload?: { policy?: 'REPORT_ONLY' | 'AUTO_REMEDIATE' | 'REQUIRE_APPROVAL' }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/reconcile`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+    }),
+
+  reportActualState: (payload: {
+    gatewayId: string;
+    branchId: string;
+    appliedVersion: number;
+    appliedPackageSha256: string;
+    gatewayVersion?: string;
+    actualConfig: any;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/actual/report`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  listGoldenTemplates: (category?: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/config/golden-templates${category ? `?category=${encodeURIComponent(category)}` : ''}`
+    ),
+
+  getGoldenTemplate: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/golden-templates/${encodeURIComponent(id)}`
+    ),
+
+  createGoldenTemplate: (template: any) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/golden-templates`, {
+      method: 'POST',
+      body: JSON.stringify(template),
+    }),
+
+  updateGoldenTemplate: (id: string, updates: any) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/golden-templates/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    ),
+
+  deleteGoldenTemplate: (id: string) =>
+    fetchApi<{ success: boolean; deleted: boolean }>(
+      `/v1/config/golden-templates/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    ),
+
+  exportGoldenTemplates: () =>
+    fetchApi<{ success: boolean; data: any[] }>(`/v1/config/golden-templates/export`),
+
+  importGoldenTemplates: (templates: any[]) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/golden-templates/import`, {
+      method: 'POST',
+      body: JSON.stringify({ templates }),
+    }),
+
+  previewGoldenTemplate: (payload: { templateId: string; targetCameras: any[] }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/golden-templates/preview`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  applyGoldenTemplate: (payload: { templateId: string; branchId: string; targetCameras: any[] }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/config/golden-templates/apply`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  convertGoldenTemplateToDraft: (
+    id: string,
+    payload: { branchId: string; versionNumber?: number; changeReason?: string }
+  ) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/golden-templates/${encodeURIComponent(id)}/draft`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  getGoldenTemplateHistory: (branchId?: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/config/golden-templates/history${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
+    ),
 };
 
 export { ApiError };
