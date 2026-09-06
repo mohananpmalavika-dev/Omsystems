@@ -7,6 +7,21 @@ import { branchConfigurationAgentService } from '../services/branch-configuratio
 import { goldenConfigurationTemplateService } from '../services/golden-configuration-template.service.js';
 import type { BranchConfiguration } from '../domain/signed-config.types.js';
 
+type GoldenTemplateTargetCamera = {
+  id: string;
+  name: string;
+  currentResolution?: string;
+  currentFps?: number;
+  currentBitrateKbps?: number;
+  currentCodec?: string;
+};
+
+type GoldenTemplateRequest = {
+  templateId: string;
+  branchId?: string;
+  targetCameras: GoldenTemplateTargetCamera[];
+};
+
 const cameraSchema = z.object({
   id: z.string().min(1),
   channel: z.number().int().min(1),
@@ -383,7 +398,7 @@ export async function registerSignedConfigRoutes(
         currentCodec: z.string().optional(),
       })),
     });
-    const body = schema.parse(request.body);
+    const body = schema.parse(request.body) as unknown as GoldenTemplateRequest;
     const preview = goldenConfigurationTemplateService.previewApplication(body.templateId, body.targetCameras);
     return { success: true, data: preview };
   });
@@ -401,7 +416,7 @@ export async function registerSignedConfigRoutes(
         currentCodec: z.string().optional(),
       })),
     });
-    const body = schema.parse(request.body);
+    const body = schema.parse(request.body) as unknown as GoldenTemplateRequest & { branchId: string };
     const result = goldenConfigurationTemplateService.applyTemplate(
       body.templateId,
       body.branchId,

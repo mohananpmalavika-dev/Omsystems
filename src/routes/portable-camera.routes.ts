@@ -23,15 +23,30 @@ export function registerPortableCameraRoutes(
   app: FastifyInstance,
   options: PortableCameraRouteOptions
 ) {
+  const resolveServiceUrl = (configured: string | undefined, environmentName: string, developmentFallback: string) => {
+    if (configured) return configured;
+    if (process.env.NODE_ENV !== "production") return developmentFallback;
+    throw new Error(`${environmentName} is required in production`);
+  };
   const {
     store,
     repository,
     leaseManager,
-    mediaGatewayUrl = process.env.MEDIA_GATEWAY_INTERNAL_URL || "http://127.0.0.1:8090",
-    publicDashboardUrl = process.env.PUBLIC_DASHBOARD_URL || "http://127.0.0.1:10000",
+    mediaGatewayUrl: configuredMediaGatewayUrl,
+    publicDashboardUrl: configuredPublicDashboardUrl,
     mediaNodeId = process.env.MEDIA_NODE_ID || "media-node-aws-01",
     mediaGatewaySharedKey = process.env.MEDIA_GATEWAY_SHARED_KEY,
   } = options;
+  const mediaGatewayUrl = resolveServiceUrl(
+    configuredMediaGatewayUrl || process.env.MEDIA_GATEWAY_INTERNAL_URL,
+    "MEDIA_GATEWAY_INTERNAL_URL",
+    "http://127.0.0.1:8090",
+  );
+  const publicDashboardUrl = resolveServiceUrl(
+    configuredPublicDashboardUrl || process.env.PUBLIC_DASHBOARD_URL,
+    "PUBLIC_DASHBOARD_URL",
+    "http://127.0.0.1:10000",
+  );
 
   function getUser(request: FastifyRequest) {
     const user = (request as any).currentUser;

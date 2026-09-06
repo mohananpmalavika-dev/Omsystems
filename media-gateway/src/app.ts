@@ -105,7 +105,7 @@ export async function buildMediaGateway(options: {
   }
 
   // WebRTC WHEP / WHIP listener proxy
-  const mediaMtxWebRtcUrl = options.mediaMtxWebRtcUrl || "http://127.0.0.1:8889";
+  const mediaMtxWebRtcUrl = options.mediaMtxWebRtcUrl || process.env.MEDIAMTX_WEBRTC_URL;
   app.route({
     method: ["GET", "POST", "OPTIONS", "PATCH", "DELETE", "HEAD"],
     url: "/webrtc/*",
@@ -113,6 +113,9 @@ export async function buildMediaGateway(options: {
       setWebRtcCorsHeaders(request.headers.origin, reply);
       if (request.method === "OPTIONS") {
         return reply.code(204).send();
+      }
+      if (!mediaMtxWebRtcUrl) {
+        return reply.code(503).send({ error: "media_webrtc_not_configured" });
       }
       const suffix = request.raw.url?.slice("/webrtc".length) || "/";
       const target = mediaTarget(suffix, mediaMtxWebRtcUrl);

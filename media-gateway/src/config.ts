@@ -12,7 +12,7 @@ const serviceUrl = z.preprocess((value) => {
   if (typeof value !== "string") return value;
   const str = value.trim();
   return /^[a-z][a-z\d+.-]*:\/\//i.test(str) ? str : `http://${str}`;
-}, httpUrl);
+}, httpUrl).describe("HTTP(S) service URL");
 
 const schema = z.object({
   HOST: z.string().default("0.0.0.0"),
