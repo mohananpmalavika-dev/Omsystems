@@ -77,6 +77,7 @@ import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useSta
 import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
 import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
+import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -236,7 +237,7 @@ export const navigation: NavGroup[] = [
 ];
 
 const unrestrictedRoles = new Set(["super_admin", "company_admin", "hq_admin", "admin", "superadmin"]);
-const roleWorkspacePaths: Record<string, string[]> = {
+const legacyRoleWorkspacePaths: Record<string, string[]> = {
   operator: [
     "/",
     "/control-room",
@@ -348,11 +349,7 @@ export function menuKey(item: NavItem) {
 }
 
 export function defaultMenuAccessForRole(role?: string) {
-  const normalizedRole = roleAliases[role ?? ""] ?? role ?? "operator";
-  const paths = roleWorkspacePaths[normalizedRole];
-  if (paths) return paths;
-  if (unrestrictedRoles.has(role ?? "")) return roleWorkspacePaths.admin;
-  return roleWorkspacePaths.operator;
+  return defaultRoleWorkspace(role);
 }
 
 function filterNavigationByAllowed(navigationItems: NavGroup[], allowed: Set<string>) {
