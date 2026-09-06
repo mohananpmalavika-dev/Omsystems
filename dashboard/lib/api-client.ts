@@ -1916,6 +1916,17 @@ export const deviceConfigurationApi = {
       `/v1/device-configuration/compliance/remediate${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`,
       { method: 'POST', body: JSON.stringify(payload) }
     ),
+
+  previewGoldenTemplate: (payload: { templateId: string; targetCameraIds: string[] }) =>
+    fetchApi<{ success: boolean; data: any }>(
+      `/v1/config/golden-templates/preview`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+
+  getGoldenTemplateHistory: (templateId?: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/config/golden-templates/history${templateId ? `?templateId=${encodeURIComponent(templateId)}` : ''}`
+    ),
 };
 
 export { ApiError };

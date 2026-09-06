@@ -90,6 +90,12 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
   const [decisionType, setDecisionType] = useState<string>("CONFIRMED_INTRUSION");
   const [decisionConfidence, setDecisionConfidence] = useState<string>("CONFIRMED");
   const [decisionNotes, setDecisionNotes] = useState<string>("");
+  const [falseAlarmCategory, setFalseAlarmCategory] = useState<string>("");
+  const [sopChecklist, setSopChecklist] = useState<Record<string, boolean>>({
+    cameraAngles: false,
+    accessLogs: false,
+    perimeterIntact: false,
+  });
 
   // Override Modal Form State
   const [showOverrideModal, setShowOverrideModal] = useState(false);
@@ -189,6 +195,8 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
           confidence: decisionConfidence,
           operatorNotes: decisionNotes || "Operator verified activity on surveillance cameras.",
           evidenceId: `clip-${incidentId}`,
+          falseAlarmCategory: decisionType === "FALSE_POSITIVE" ? falseAlarmCategory : undefined,
+          sopChecklist,
         }),
       });
 
@@ -198,6 +206,8 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
       } else {
         setShowDecisionModal(false);
         setDecisionNotes("");
+        setFalseAlarmCategory("");
+        setSopChecklist({ cameraAngles: false, accessLogs: false, perimeterIntact: false });
         await loadWorkspace();
       }
     } catch (err: any) {
@@ -589,6 +599,100 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
                   <option value="MEDIUM">MEDIUM</option>
                   <option value="LOW">LOW</option>
                 </select>
+              </div>
+
+              {decisionType === "FALSE_POSITIVE" && (
+                <div className="space-y-1.5 p-3 rounded-lg bg-slate-950/60 border border-amber-500/20">
+                  <label className="text-[11px] font-semibold text-amber-400 block">
+                    False Alarm Root Cause Feedback
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Lighting / Shadow",
+                      "Animal / Insect",
+                      "Foliage / Wind",
+                      "Inaccurate Bounding Box",
+                      "Authorized Staff",
+                      "Headlight Flare",
+                    ].map((reason) => (
+                      <button
+                        key={reason}
+                        type="button"
+                        onClick={() => {
+                          setFalseAlarmCategory(reason);
+                          if (!decisionNotes.includes(reason)) {
+                            setDecisionNotes((prev) =>
+                              prev
+                                ? `${prev}\n[Cause: ${reason}]`
+                                : `[Cause: ${reason}] Verified false alarm due to ${reason.toLowerCase()}.`
+                            );
+                          }
+                        }}
+                        className={`text-[10px] px-2.5 py-1 rounded-full border transition-all ${
+                          falseAlarmCategory === reason
+                            ? "bg-amber-500/20 border-amber-400 text-amber-300 font-semibold"
+                            : "bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600"
+                        }`}
+                      >
+                        {reason}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mandatory SOP Verification Checklist */}
+              <div className="space-y-1.5 p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+                <label className="text-[11px] font-semibold text-slate-300 block">
+                  Operator SOP Verification Checklist
+                </label>
+                <div className="space-y-1.5">
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sopChecklist.cameraAngles}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSopChecklist((prev) => ({ ...prev, cameraAngles: val }));
+                        if (val && !decisionNotes.includes("Verified primary & secondary camera angles")) {
+                          setDecisionNotes((prev) => (prev ? `${prev}\n- Verified primary & secondary camera angles` : "- Verified primary & secondary camera angles"));
+                        }
+                      }}
+                      className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span>Verified primary & secondary camera angles</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sopChecklist.accessLogs}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSopChecklist((prev) => ({ ...prev, accessLogs: val }));
+                        if (val && !decisionNotes.includes("Cross-referenced badge/keyholder access logs")) {
+                          setDecisionNotes((prev) => (prev ? `${prev}\n- Cross-referenced badge/keyholder access logs` : "- Cross-referenced badge/keyholder access logs"));
+                        }
+                      }}
+                      className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span>Cross-referenced badge/keyholder access logs</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sopChecklist.perimeterIntact}
+                      onChange={(e) => {
+                        const val = e.target.checked;
+                        setSopChecklist((prev) => ({ ...prev, perimeterIntact: val }));
+                        if (val && !decisionNotes.includes("Confirmed perimeter physical boundary is intact")) {
+                          setDecisionNotes((prev) => (prev ? `${prev}\n- Confirmed perimeter physical boundary is intact` : "- Confirmed perimeter physical boundary is intact"));
+                        }
+                      }}
+                      className="rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span>Confirmed perimeter physical boundary is intact</span>
+                  </label>
+                </div>
               </div>
 
               <div>

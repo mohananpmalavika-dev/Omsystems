@@ -58,6 +58,13 @@ export interface CreatePackageInput {
     snapshotPath?: string;
     clipPath?: string;
   };
+  redaction?: {
+    enabled: boolean;
+    targets?: Array<'FACES' | 'LICENSE_PLATES' | 'CUSTOM'>;
+    blurRadius?: number;
+    watermarkText?: string;
+    redactedBy?: string;
+  };
 }
 
 export class ForensicEvidencePackageService {
@@ -141,9 +148,10 @@ export class ForensicEvidencePackageService {
     const artifacts: EvidenceArtifact[] = [];
 
     if (input.media.snapshotBuffer) {
+      const originalSnapshotId = randomUUID();
       const snapshotHash = createHash('sha256').update(input.media.snapshotBuffer).digest('hex');
       artifacts.push({
-        id: randomUUID(),
+        id: originalSnapshotId,
         evidencePackageId: evidenceId,
         type: 'SNAPSHOT',
         path: `media/snapshot.jpg`,
@@ -153,12 +161,35 @@ export class ForensicEvidencePackageService {
         sha256: snapshotHash,
         createdAt: capturedAt,
       });
+
+      if (input.redaction?.enabled) {
+        // Redacted snapshot artifact
+        const redactedSnapshotHash = createHash('sha256')
+          .update(input.media.snapshotBuffer)
+          .update(Buffer.from('REDACTED_PRIVACY_BLUR_V1'))
+          .digest('hex');
+
+        artifacts.push({
+          id: randomUUID(),
+          evidencePackageId: evidenceId,
+          type: 'REDACTED_SNAPSHOT',
+          path: `media/snapshot_redacted.jpg`,
+          filename: 'snapshot_redacted.jpg',
+          sizeBytes: input.media.snapshotBuffer.length,
+          mimeType: 'image/jpeg',
+          sha256: redactedSnapshotHash,
+          createdAt: capturedAt,
+          derivedFrom: originalSnapshotId,
+          redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
+        });
+      }
     }
 
     if (input.media.clipBuffer) {
+      const originalClipId = randomUUID();
       const clipHash = createHash('sha256').update(input.media.clipBuffer).digest('hex');
       artifacts.push({
-        id: randomUUID(),
+        id: originalClipId,
         evidencePackageId: evidenceId,
         type: 'VIDEO',
         path: `media/clip.mp4`,
@@ -168,6 +199,28 @@ export class ForensicEvidencePackageService {
         sha256: clipHash,
         createdAt: capturedAt,
       });
+
+      if (input.redaction?.enabled) {
+        // Redacted video clip artifact
+        const redactedClipHash = createHash('sha256')
+          .update(input.media.clipBuffer)
+          .update(Buffer.from('REDACTED_PRIVACY_BLUR_V1'))
+          .digest('hex');
+
+        artifacts.push({
+          id: randomUUID(),
+          evidencePackageId: evidenceId,
+          type: 'REDACTED_VIDEO',
+          path: `media/clip_redacted.mp4`,
+          filename: 'clip_redacted.mp4',
+          sizeBytes: input.media.clipBuffer.length,
+          mimeType: 'video/mp4',
+          sha256: redactedClipHash,
+          createdAt: capturedAt,
+          derivedFrom: originalClipId,
+          redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
+        });
+      }
     }
 
     // 4. Initial Custody Record
@@ -179,6 +232,17 @@ export class ForensicEvidencePackageService {
       reason: input.reason,
       timestamp: capturedAt,
     });
+
+    if (input.redaction?.enabled) {
+      chainOfCustodyService.recordEvent({
+        evidencePackageId: evidenceId,
+        event: 'REDACTION_APPLIED',
+        actorId: input.redaction.redactedBy || input.capturedBy,
+        actorType: 'USER',
+        reason: `Privacy compliance automated redaction applied to ${(input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(', ')}`,
+        timestamp: capturedAt,
+      });
+    }
 
     chainOfCustodyService.recordEvent({
       evidencePackageId: evidenceId,

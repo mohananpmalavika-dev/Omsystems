@@ -75,7 +75,7 @@ export class EvidenceCapturePipelineService {
         clipSeconds: requestedDuration,
       });
       if (capture.state === "failed") {
-        return this.fail(record, "ARCHIVE_SEARCH_FAILED", capture.error ?? "Recording engine rejected evidence capture", startTime);
+        return this.fail(record, "RECORDING_NOT_FOUND", capture.error ?? "Recording engine rejected evidence capture", startTime);
       }
       if (capture.state === "queued" || capture.state === "capturing") {
         record.status = "CAPTURING";
@@ -97,6 +97,54 @@ export class EvidenceCapturePipelineService {
       if (record.status === "FAILED") {
         record.failureCode = "RECORDING_NOT_FOUND";
         record.failureReason = "Recording engine returned no evidence assets";
+      } else {
+        const manifestData = EvidenceHashVerifierService.generateManifest({
+          evidenceId: record.id,
+          alertId: record.alertId,
+          branchId: record.branchId,
+          cameraId: record.cameraId,
+          detectedAt: record.detectedAt.toISOString(),
+          requestedWindow: {
+            start: record.requestedStartAt.toISOString(),
+            end: record.requestedEndAt.toISOString(),
+          },
+          actualWindow: {
+            start: record.requestedStartAt.toISOString(),
+            end: record.requestedEndAt.toISOString(),
+          },
+          snapshot: record.snapshot
+            ? {
+                sha256: record.snapshot.sha256,
+                sizeBytes: record.snapshot.sizeBytes,
+                url: record.snapshot.url,
+              }
+            : undefined,
+          video: record.videoClip
+            ? {
+                sha256: record.videoClip.sha256,
+                durationSeconds: record.videoClip.durationSeconds ?? 0,
+                sizeBytes: record.videoClip.sizeBytes,
+                url: record.videoClip.url,
+              }
+            : undefined,
+          source: record.captureSource ?? "RECORDER_ARCHIVE",
+          generatedAt: new Date().toISOString(),
+        });
+        const manifestBuffer = Buffer.from(JSON.stringify(manifestData), "utf8");
+        record.manifest = {
+          id: `manifest-${record.id}`,
+          type: "MANIFEST",
+          storageKey: `evidence/${record.tenantId}/${record.id}/manifest.json`,
+          url: `/api/v1/evidence/${record.id}/manifest`,
+          mimeType: "application/json",
+          sizeBytes: manifestBuffer.length,
+          sha256: manifestData.manifestSha256,
+          capturedAt: new Date(),
+          verified: true,
+          assetType: "DERIVED",
+        };
+        record.manifestHash = manifestData.manifestSha256;
+        this.manifests.set(record.id, manifestData);
       }
       record.completedAt = new Date();
       record.latencyMs = Date.now() - startTime;

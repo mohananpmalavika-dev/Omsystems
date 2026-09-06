@@ -437,6 +437,14 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
+    const searchAliases: Record<string, string[]> = {
+      "/maintenance/device-configuration": ["golden", "templates", "hardware", "onvif", "ptz", "ntp", "imaging", "profiles", "standard"],
+      "/video-wall": ["wall", "tour", "grid", "presentation", "matrix", "cctv", "auto-rotation"],
+      "/evidence": ["redaction", "blur", "custody", "forensic", "court", "export", "hash", "tamper"],
+      "/operations/incidents": ["sop", "checklist", "false alarm", "intrusion", "alerts", "workflow", "review"],
+      "/admin/organization?tab=hierarchy": ["branches", "kochi", "mumbai", "delhi", "bkc", "zones", "facility"],
+    };
+
     if (!query) {
       const recentItems = recentHrefs
         .map((href) => searchableModules.find((item) => item.href === href))
@@ -450,9 +458,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           .map((item) => ({ ...item, recent: false })),
       ].slice(0, 12);
     }
-    return searchableModules.filter((item) =>
-      `${item.label} ${item.section} ${item.href}`.toLowerCase().includes(query)
-    ).slice(0, 12).map((item) => ({ ...item, recent: false }));
+    return searchableModules.filter((item) => {
+      const extra = (searchAliases[item.href] || []).join(" ");
+      return `${item.label} ${item.section} ${item.href} ${extra}`.toLowerCase().includes(query);
+    }).slice(0, 12).map((item) => ({ ...item, recent: false }));
   }, [commandQuery, recentHrefs, searchableModules]);
 
   useEffect(() => {

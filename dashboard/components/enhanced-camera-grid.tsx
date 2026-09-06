@@ -177,6 +177,8 @@ export function EnhancedCameraGrid({
   const [layoutFeedback, setLayoutFeedback] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [visibleRange, setVisibleRange] = useState<VisibleRange>({ start: 0, end: 50 });
   const [sequencing, setSequencing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [tourInterval, setTourInterval] = useState(15);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
 
@@ -222,6 +224,7 @@ export function EnhancedCameraGrid({
   };
 
   const totalPositions = gridSizeMap[gridSize];
+  const totalPages = Math.max(1, Math.ceil(cameras.length / totalPositions));
   const decoderCapacityOptions = useMemo(
     () => getDecoderCapacityOptions(maxConcurrentStreams),
     [maxConcurrentStreams],
@@ -497,39 +500,70 @@ export function EnhancedCameraGrid({
   }, []);
 
   // Initialize from a saved layout. If its camera IDs are no longer present
-  // Initialize from a saved layout or available cameras.
-  // Preserve existing positions so periodic camera refreshes do not shift or rotate positions.
+  useEffect(() => {
+    if (currentPage >= totalPages && totalPages > 0) {
+      setCurrentPage(0);
+    }
+  }, [currentPage, totalPages]);
+
+  // Initialize and slice cameras based on current page and grid size
   useEffect(() => {
     if (cameras.length === 0) {
       setGridPositions(new Map());
       return;
     }
 
-    setGridPositions((currentPositions) => {
-      // If we already have positions assigned and valid, preserve them!
-      if (currentPositions.size > 0) {
-        const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
-        const updated = new Map<number, { camera: Camera; stream: "main" | "sub"; priority?: number }>();
-        let hasValid = false;
-        for (const [pos, entry] of currentPositions.entries()) {
-          const freshCamera = camerasById.get(entry.camera.id);
-          if (freshCamera) {
-            updated.set(pos, { ...entry, camera: freshCamera });
-            hasValid = true;
-          }
-        }
-        if (hasValid) return updated;
+    const startIdx = currentPage * totalPositions;
+    const pageSlice = cameras.slice(startIdx, startIdx + totalPositions);
+    const stream = totalPositions >= 16 ? "sub" : "main";
+    const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
+    pageSlice.forEach((camera, index) => {
+      posMap.set(index, { camera, stream, priority: 0 });
+    });
+    setGridPositions(posMap);
+  }, [cameras, currentPage, totalPositions]);
+
+  // Video wall auto-tour rotation timer
+  useEffect(() => {
+    if (!sequencing || totalPages <= 1) return;
+    const intervalMs = Math.max(3, tourInterval) * 1000;
+    const timer = setInterval(() => {
+      setCurrentPage((prev) => (prev + 1) % totalPages);
+    }, intervalMs);
+    return () => clearInterval(timer);
+  }, [sequencing, totalPages, tourInterval]);
+
+  // Keyboard navigation shortcuts for presentation/monitoring mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") {
+        return;
       }
 
-      // Initial assignment: deterministic fixed order by camera array index
-      const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
-      const stream = totalPositions >= 16 ? "sub" : "main";
-      cameras.slice(0, totalPositions).forEach((camera, index) => {
-        posMap.set(index, { camera, stream, priority: 0 });
-      });
-      return posMap;
-    });
-  }, [cameras, totalPositions]);
+      if (e.code === "Space") {
+        e.preventDefault();
+        setSequencing((prev) => !prev);
+      } else if (e.code === "ArrowRight") {
+        e.preventDefault();
+        setCurrentPage((prev) => (prev + 1) % totalPages);
+      } else if (e.code === "ArrowLeft") {
+        e.preventDefault();
+        setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages);
+      } else if (e.key === "1") {
+        handleGridSizeChange("1x1");
+      } else if (e.key === "2") {
+        handleGridSizeChange("2x2");
+      } else if (e.key === "3") {
+        handleGridSizeChange("3x3");
+      } else if (e.key === "4") {
+        handleGridSizeChange("4x4");
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [totalPages]);
 
   useEffect(() => {
     const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
@@ -830,12 +864,51 @@ export function EnhancedCameraGrid({
             type="button"
             className={`btn-secondary ${sequencing ? "active-control" : ""}`}
             onClick={() => setSequencing((current) => !current)}
-            title={sequencing ? "Auto-rotation (tour) is ON. Click to lock camera positions" : "Camera positions are FIXED. Click to enable auto-rotation tour"}
+            title={sequencing ? "Auto-tour is running (Space to pause)" : "Auto-tour is paused (Space to start)"}
             aria-pressed={sequencing}
           >
-            <RotateCw size={16} />
-            {sequencing ? "Rotating: On" : "Positions: Fixed"}
+            <RotateCw size={16} className={sequencing ? "animate-spin" : ""} />
+            {sequencing ? `Tour (${tourInterval}s)` : "Tour: Off"}
           </button>
+          {sequencing && (
+            <label className="toolbar-control">
+              <span>Interval</span>
+              <select
+                value={tourInterval}
+                onChange={(e) => setTourInterval(Number(e.target.value))}
+                title="Tour cycle interval"
+              >
+                <option value={5}>5s</option>
+                <option value={10}>10s</option>
+                <option value={15}>15s</option>
+                <option value={30}>30s</option>
+                <option value={60}>60s</option>
+              </select>
+            </label>
+          )}
+          <div className="tour-pagination" title="Page navigation (Left/Right Arrow key or buttons)">
+            <button
+              type="button"
+              className="btn-page"
+              disabled={totalPages <= 1}
+              onClick={() => setCurrentPage((p) => (p - 1 + totalPages) % totalPages)}
+              aria-label="Previous camera page"
+            >
+              ◀
+            </button>
+            <span className="page-indicator">
+              Page {currentPage + 1}/{totalPages}
+            </span>
+            <button
+              type="button"
+              className="btn-page"
+              disabled={totalPages <= 1}
+              onClick={() => setCurrentPage((p) => (p + 1) % totalPages)}
+              aria-label="Next camera page"
+            >
+              ▶
+            </button>
+          </div>
           <span className="viewer-summary" title="Live decoders and snapshot fallbacks currently used by this wall">
             {activeDecoderCount}/{budget?.decoderBudget ?? capacity?.recommendedDecoderLimit ?? decoderLimit} live
             {snapshotCount > 0 ? ` · ${snapshotCount} snapshots` : ""}
@@ -1100,6 +1173,45 @@ export function EnhancedCameraGrid({
           border-color: #2563eb;
           background: #eff6ff;
           color: #1d4ed8;
+        }
+
+        .tour-pagination {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          background: #f1f5f9;
+          padding: 2px 6px;
+          border-radius: 6px;
+          border: 1px solid #cbd5e1;
+        }
+
+        .btn-page {
+          background: #ffffff;
+          border: 1px solid #cbd5e1;
+          color: #334155;
+          border-radius: 4px;
+          padding: 2px 6px;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .btn-page:hover:not(:disabled) {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+
+        .btn-page:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+
+        .page-indicator {
+          font-size: 11px;
+          font-weight: 700;
+          color: #334155;
+          padding: 0 4px;
+          white-space: nowrap;
         }
 
         .btn-primary,

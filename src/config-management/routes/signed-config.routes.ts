@@ -4,6 +4,7 @@ import { signedConfigService, SignedConfigService } from '../services/signed-con
 import { fleetRolloutControllerService } from '../services/fleet-rollout-controller.service.js';
 import { configReconciliationService } from '../services/config-reconciliation.service.js';
 import { branchConfigurationAgentService } from '../services/branch-configuration-agent.service.js';
+import { goldenConfigurationTemplateService } from '../services/golden-configuration-template.service.js';
 import type { BranchConfiguration } from '../domain/signed-config.types.js';
 
 const cameraSchema = z.object({
@@ -352,5 +353,67 @@ export async function registerSignedConfigRoutes(
     });
 
     return { success: true, data: report };
+  });
+
+  // 14. Golden Configuration Templates (Phase 9)
+  app.get('/v1/config/golden-templates', async (request: FastifyRequest) => {
+    const query = request.query as { category?: string };
+    const templates = goldenConfigurationTemplateService.listTemplates(query?.category);
+    return { success: true, data: templates };
+  });
+
+  app.get('/v1/config/golden-templates/:id', async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const template = goldenConfigurationTemplateService.getTemplate(id);
+    if (!template) {
+      return reply.status(404).send({ success: false, error: 'Golden template not found' });
+    }
+    return { success: true, data: template };
+  });
+
+  app.post('/v1/config/golden-templates/preview', async (request: FastifyRequest) => {
+    const schema = z.object({
+      templateId: z.string().min(1),
+      targetCameras: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        currentResolution: z.string().optional(),
+        currentFps: z.number().optional(),
+        currentBitrateKbps: z.number().optional(),
+        currentCodec: z.string().optional(),
+      })),
+    });
+    const body = schema.parse(request.body);
+    const preview = goldenConfigurationTemplateService.previewApplication(body.templateId, body.targetCameras);
+    return { success: true, data: preview };
+  });
+
+  app.post('/v1/config/golden-templates/apply', async (request: FastifyRequest) => {
+    const schema = z.object({
+      templateId: z.string().min(1),
+      branchId: z.string().min(1),
+      targetCameras: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        currentResolution: z.string().optional(),
+        currentFps: z.number().optional(),
+        currentBitrateKbps: z.number().optional(),
+        currentCodec: z.string().optional(),
+      })),
+    });
+    const body = schema.parse(request.body);
+    const result = goldenConfigurationTemplateService.applyTemplate(
+      body.templateId,
+      body.branchId,
+      body.targetCameras,
+      request.currentUser.id || 'system-admin',
+    );
+    return { success: true, data: result };
+  });
+
+  app.get('/v1/config/golden-templates/history', async (request: FastifyRequest) => {
+    const query = request.query as { branchId?: string };
+    const history = goldenConfigurationTemplateService.getApplicationHistory(query?.branchId);
+    return { success: true, data: history };
   });
 }

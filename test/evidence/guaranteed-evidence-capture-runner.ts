@@ -3,9 +3,17 @@
  */
 
 import { EvidenceCapturePipelineService } from "../../src/evidence/services/evidence-capture-pipeline.service.js";
+import { EvidenceStorageService } from "../../src/evidence/services/evidence-storage.service.js";
 import { EvidenceHashVerifierService } from "../../src/evidence/services/evidence-hash-verifier.service.js";
 import { registerEvidenceCaptureRoutes } from "../../src/routes/evidence-capture.routes.js";
 import Fastify from "fastify";
+import os from "node:os";
+import path from "node:path";
+import fs from "node:fs";
+
+const testStorageDir = path.join(os.tmpdir(), `sentinel-evidence-test-${Date.now()}`);
+fs.mkdirSync(testStorageDir, { recursive: true });
+process.env.EVIDENCE_STORAGE_PATH = testStorageDir;
 
 let passed = 0;
 let failed = 0;
@@ -25,7 +33,44 @@ async function runGuaranteedEvidenceTests() {
   console.log("  GUARANTEED EVIDENCE CAPTURE & VERIFICATION - VERIFICATION TEST RUNNER");
   console.log("================================================================================\n");
 
-  const pipeline = new EvidenceCapturePipelineService();
+  const mockRecordingClient = {
+    async capture(input: any) {
+      if (input.alertId.includes("unretrievable") || input.alertId.includes("fail")) {
+        return {
+          alertId: input.alertId,
+          cameraId: input.cameraId,
+          state: "failed" as const,
+          requestedAt: new Date().toISOString(),
+          snapshotAvailable: false,
+          clipAvailable: false,
+          error: "Recording not found on edge NVR",
+        };
+      }
+      return {
+        alertId: input.alertId,
+        cameraId: input.cameraId,
+        state: "ready" as const,
+        requestedAt: new Date().toISOString(),
+        snapshotAvailable: true,
+        clipAvailable: true,
+      };
+    },
+    async status(alertId: string) {
+      return new Response(JSON.stringify({ alertId, state: "ready" }), { status: 200 });
+    },
+    async asset(alertId: string, kind: string) {
+      const data = kind === "snapshot"
+        ? Buffer.from("DUMMY_JPEG_DATA_1234567890")
+        : Buffer.from("DUMMY_MP4_DATA_1234567890");
+      return new Response(data, {
+        status: 200,
+        headers: { "content-type": kind === "snapshot" ? "image/jpeg" : "video/mp4" },
+      });
+    },
+  };
+
+  const storageService = new EvidenceStorageService();
+  const pipeline = new EvidenceCapturePipelineService(undefined, storageService, mockRecordingClient as any);
   const now = new Date();
 
   // --------------------------------------------------------------------------
@@ -146,7 +191,7 @@ async function runGuaranteedEvidenceTests() {
   console.log("\nSuite 8: Backend REST Control-Plane Endpoints");
 
   const app = Fastify();
-  await registerEvidenceCaptureRoutes(app, undefined, pipeline);
+  await registerEvidenceCaptureRoutes(app, storageService, pipeline);
 
   // 1. POST /v1/evidence/jobs
   const jobRes = await app.inject({

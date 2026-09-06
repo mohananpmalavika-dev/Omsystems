@@ -152,6 +152,7 @@ export interface EvidencePackage {
 export type CustodyEventType =
   | 'CAPTURE_REQUESTED'
   | 'CAPTURED'
+  | 'REDACTION_APPLIED'
   | 'SEALED'
   | 'VIEWED'
   | 'DOWNLOADED'
