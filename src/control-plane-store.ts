@@ -1828,23 +1828,25 @@ export interface ControlPlaneStore {
 
   // Evidence Management
   createEvidenceCase(input: any): Promise<any>;
-  getEvidenceCase(id: string): Promise<any | undefined>;
+  getEvidenceCase(id: string, tenantId?: string): Promise<any | undefined>;
   listEvidenceCases(tenantId: string, filters?: any): Promise<any[]>;
-  updateEvidenceCaseStatus(id: string, status: any): Promise<any>;
-  addEvidenceItem(caseId: string, input: any): Promise<any>;
-  listEvidenceItems(caseId: string): Promise<any[]>;
+  updateEvidenceCaseStatus(id: string, status: any, tenantId?: string): Promise<any>;
+  addEvidenceItem(caseId: string, input: any, tenantId?: string): Promise<any>;
+  listEvidenceItems(caseId: string, tenantId?: string): Promise<any[]>;
   recordCustodyEvent(input: {
     evidenceId?: string;
     action: string;
     performedBy: string;
     sourceIp?: string;
     reason?: string;
+    tenantId?: string;
   }): Promise<any>;
-  getCustodyLog(evidenceId: string): Promise<any[]>;
+  getCustodyLog(evidenceId: string, tenantId?: string): Promise<any[]>;
   createLegalHold(input: any): Promise<any>;
-  releaseLegalHold(holdId: string, releasedBy: string): Promise<any | undefined>;
-  getEvidenceExport(exportId: string): Promise<any | undefined>;
-  getEvidenceManifest(manifestId: string): Promise<any | undefined>;
+  getLegalHold?(id: string, tenantId?: string): Promise<any | undefined>;
+  releaseLegalHold(holdId: string, releasedBy: string, tenantId?: string, reason?: string): Promise<any | undefined>;
+  getEvidenceExport(exportId: string, tenantId?: string): Promise<any | undefined>;
+  getEvidenceManifest(manifestId: string, tenantId?: string): Promise<any | undefined>;
   
   // Operational Alert Events
   recordOperationalAlertEvent(event: {

@@ -19,7 +19,7 @@ import { DeletionPlannerService, DeletionPlanResult } from "./deletion-planner.s
 import { PolicySimulationService } from "./policy-simulation.service.js";
 import { pool } from "../../database/pool.js";
 import { enterpriseStoragePool } from "../../storage/enterprise-storage-pool.js";
-import type { EvidenceRepository } from "../../database/evidence-repository.js";
+import { EvidenceRepository, LegalHoldStatusUnknownError } from "../../database/evidence-repository.js";
 import { retentionAuditService } from "./retention-audit.service.js";
 
 export interface CameraComprehensiveRetentionStatus {
@@ -63,8 +63,8 @@ export interface BranchRetentionOverview {
 
 export class RetentionEngineService {
   public readonly policyResolver = new PolicyResolverService();
-  private legalHolds = new Map<string, LegalHold>();
   private cameraSegments = new Map<string, RetentionSegmentMetadata[]>();
+  private localHolds: any[] = [];
 
   constructor(private readonly evidenceRepo?: EvidenceRepository) {}
 
@@ -72,68 +72,57 @@ export class RetentionEngineService {
     this.cameraSegments.set(cameraId, segments);
   }
 
-  createLegalHold(hold: Omit<LegalHold, "id" | "createdAt" | "status">): LegalHold {
-    const id = `hold-${randomUUID()}`;
-    const newHold: LegalHold = {
+  private getEffectiveEvidenceRepo(): EvidenceRepository {
+    if (this.evidenceRepo) return this.evidenceRepo;
+    if (pool) return new EvidenceRepository(pool);
+    throw new LegalHoldStatusUnknownError("LegalHoldAuthorityUnavailable: Database pool required for authoritative legal holds");
+  }
+
+  async createLegalHold(hold: Omit<LegalHold, "id" | "createdAt" | "status">): Promise<LegalHold> {
+    const repo = this.getEffectiveEvidenceRepo();
+    const created = await repo.createLegalHold({
+      caseNumber: hold.caseNumber,
+      reason: hold.reason,
+      requestedBy: hold.createdBy,
+      tenantId: hold.tenantId,
+      cameraIds: hold.scope.cameras || [],
+      startTime: hold.scope.startTime?.toISOString() || new Date().toISOString(),
+      endTime: hold.scope.endTime?.toISOString() || new Date().toISOString(),
+    });
+
+    const result: LegalHold = {
       ...hold,
-      id,
-      createdAt: new Date(),
+      id: created.id,
+      createdAt: new Date(created.createdAt),
       status: "ACTIVE",
     };
-    this.legalHolds.set(id, newHold);
-
-    // If pool is available, also insert into PostgreSQL
-    if (pool) {
-      pool.query(
-        `INSERT INTO recording_legal_holds (
-           id, tenant_id, case_number, reason, requested_by, camera_ids,
-           start_time, end_time, from_at, to_at, status, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $7, $8, 'active', now())`,
-        [
-          randomUUID(),
-          hold.tenantId,
-          hold.caseNumber,
-          hold.reason,
-          hold.createdBy,
-          JSON.stringify(hold.scope.cameras || []),
-          hold.scope.startTime?.toISOString() ?? null,
-          hold.scope.endTime?.toISOString() ?? null,
-        ],
-      ).catch(() => {});
-    }
-
-    return newHold;
+    this.localHolds.push(result);
+    return result;
   }
 
-  releaseLegalHold(holdId: string, approvedBy: string): LegalHold | undefined {
-    const hold = this.legalHolds.get(holdId);
-    if (hold) {
-      hold.status = "RELEASED";
-      hold.releaseApprovedBy = approvedBy;
-      hold.releasedAt = new Date();
-    }
-
-    if (pool) {
-      pool.query(
-        `UPDATE recording_legal_holds
-         SET status = 'released', released_by = $2, released_at = now()
-         WHERE id = $1 OR case_number = $1`,
-        [holdId, approvedBy],
-      ).catch(() => {});
-    }
-
-    return hold;
+  async releaseLegalHold(holdId: string, approvedBy: string, reason?: string): Promise<any> {
+    const repo = this.getEffectiveEvidenceRepo();
+    this.localHolds = this.localHolds.filter((h) => h.id !== holdId);
+    return repo.releaseLegalHold(holdId, approvedBy, reason);
   }
 
-  getLegalHolds(cameraId?: string, branchId?: string): LegalHold[] {
-    const active = Array.from(this.legalHolds.values()).filter((h) => h.status === "ACTIVE");
-    if (cameraId) {
-      return active.filter((h) => !h.scope.cameras || h.scope.cameras.includes(cameraId));
+  getLegalHoldsSync(cameraId?: string, branchId?: string): any[] {
+    return this.localHolds.filter((h) => {
+      if (h.status !== "ACTIVE") return false;
+      if (branchId && h.scope?.branches && !h.scope.branches.includes(branchId)) return false;
+      if (cameraId && h.scope?.cameras && !h.scope.cameras.includes(cameraId)) return false;
+      return true;
+    });
+  }
+
+  async getLegalHolds(cameraId?: string, branchId?: string, tenantId?: string): Promise<any[]> {
+    if (!pool && !this.evidenceRepo) return this.getLegalHoldsSync(cameraId, branchId);
+    try {
+      const repo = this.getEffectiveEvidenceRepo();
+      return await repo.listLegalHolds({ cameraId, branchId, tenantId, status: "active" });
+    } catch {
+      return this.getLegalHoldsSync(cameraId, branchId);
     }
-    if (branchId) {
-      return active.filter((h) => !h.scope.branches || h.scope.branches.includes(branchId));
-    }
-    return active;
   }
 
   /**
@@ -298,7 +287,7 @@ export class RetentionEngineService {
           status: (currentDays >= requiredDays ? "HEALTHY" : currentDays > 0 ? "WARNING" : "CRITICAL") as "HEALTHY" | "WARNING" | "CRITICAL",
         };
 
-    const activeHolds = this.getLegalHolds(context.cameraId, context.branchId);
+    const activeHolds = this.getLegalHoldsSync(context.cameraId, context.branchId);
 
     const status: "HEALTHY" | "WARNING" | "CRITICAL" =
       currentDays >= requiredDays && coveragePercent >= 98
@@ -336,7 +325,14 @@ export class RetentionEngineService {
    * Evaluates branch-level retention overview aggregated from actual camera metrics.
    */
   getBranchOverview(branchId: string, tenantId: string = "BANK-001"): BranchRetentionOverview {
-    const activeHolds = this.getLegalHolds(undefined, branchId);
+    const activeHolds = this.getLegalHoldsSync(undefined, branchId);
+    const effectivePolicy = this.policyResolver.resolve({
+      cameraId: "default",
+      branchId,
+      tenantId,
+    });
+    const requiredRetentionDays = effectivePolicy.minimumRetentionDays;
+    const warningRetentionDays = (effectivePolicy as any).warningRetentionDays ?? Math.max(1, requiredRetentionDays - 10);
 
     // Sum storage and ingest across all ingested cameras for this branch
     let usedStorageBytes = 0;
@@ -359,8 +355,8 @@ export class RetentionEngineService {
         const days = Math.max(0, (Date.now() - oldest.getTime()) / 86400_000);
         if (days < minRetentionDays) minRetentionDays = days;
 
-        if (days >= 90) compliantCount++;
-        else if (days >= 80) atRiskCount++;
+        if (days >= requiredRetentionDays) compliantCount++;
+        else if (days >= warningRetentionDays) atRiskCount++;
         else violationCount++;
       } else {
         violationCount++;
@@ -373,12 +369,6 @@ export class RetentionEngineService {
     }
 
     const currentRetentionDays = minRetentionDays === 999 ? 0 : Math.round(minRetentionDays * 10) / 10;
-    const effectivePolicy = this.policyResolver.resolve({
-      cameraId: "default",
-      branchId,
-      tenantId,
-    });
-    const requiredRetentionDays = effectivePolicy.minimumRetentionDays;
 
     let poolUsable = 0;
     let poolTotal = 0;
@@ -399,6 +389,10 @@ export class RetentionEngineService {
     const hasTelemetry = usedStorageBytes > 0 && dailyIngestBytes > 0;
     const daysUntilExhaustion = hasTelemetry ? Math.max(1, Math.round(freeStorageBytes / (dailyIngestBytes || 1))) : 0;
 
+    const recordingCoveragePercent = totalCameras > 0
+      ? Math.round((compliantCount / totalCameras) * 1000) / 10
+      : 0;
+
     return {
       branchId,
       tenantId,
@@ -410,12 +404,12 @@ export class RetentionEngineService {
       requiredRetentionDays,
       currentRetentionDays,
       projectedRetentionDays: currentRetentionDays,
-      recordingCoveragePercent: totalCameras > 0 && compliantCount === totalCameras ? 100 : 0,
+      recordingCoveragePercent,
       retentionViolationsCount: violationCount,
       retentionAtRiskCount: atRiskCount,
       daysUntilExhaustion,
       activeLegalHoldsCount: activeHolds.length,
-      status: currentRetentionDays >= requiredRetentionDays ? "HEALTHY" : currentRetentionDays > 0 ? "WARNING" : "CRITICAL",
+      status: currentRetentionDays >= requiredRetentionDays ? "HEALTHY" : currentRetentionDays >= warningRetentionDays ? "WARNING" : "CRITICAL",
       forecastStatus: hasTelemetry ? "SUFFICIENT_DATA" : "INSUFFICIENT_DATA",
     };
   }
@@ -460,100 +454,57 @@ export class RetentionEngineService {
 
     const segTime = params.segmentStartTime || new Date();
 
-    // 1. Check persistent database Legal Holds via repository first if provided
-    if (this.evidenceRepo) {
-      const checkResult = await this.evidenceRepo.isSegmentProtected({
+    // 1. Authoritative check: Persistent Legal Holds via EvidenceRepository
+    let checkResult: { protected: boolean; reason?: string; hold?: any };
+    try {
+      const repo = this.getEffectiveEvidenceRepo();
+      checkResult = await repo.isSegmentProtected({
         cameraId: params.cameraId,
         timestamp: segTime,
         branchId: params.branchId,
         tenantId: params.tenantId,
         segmentId: params.segmentId,
       });
-      if (checkResult.protected) {
-        retentionAuditService.recordEvent({
-          tenantId: params.tenantId,
-          entityType: "CAMERA",
-          entityId: params.cameraId,
-          eventType: "DELETION_DENIED",
-          actorType: "SYSTEM",
-          actorId: params.actor,
-          notes: `DENIED deletion of segment ${params.segmentId}: ${checkResult.reason || 'protected by active Legal Hold'}`,
-        });
-
-        throw new LegalHoldProtectedError(
-          params.segmentId,
-          checkResult.hold?.id || "LEGAL_HOLD_ACTIVE",
-          `Cannot delete segment '${params.segmentId}': ${checkResult.reason || 'protected by active Legal Hold'}.`,
-        );
-      }
-    }
-
-    // 2. Check persistent database Legal Holds via direct database pool
-    if (pool) {
-      try {
-        const ts = segTime.toISOString();
-        const dbRes = await pool.query(
-          `SELECT id, case_number, reason FROM recording_legal_holds
-           WHERE (status = 'active' OR status IS NULL)
-             AND released_at IS NULL
-             AND (
-               camera_id = $1
-               OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $1 || '%')
-             )
-             AND (from_at IS NULL OR from_at <= $2::timestamptz OR start_time IS NULL OR start_time <= $2::timestamptz)
-             AND (to_at IS NULL OR to_at >= $2::timestamptz OR end_time IS NULL OR end_time >= $2::timestamptz)
-           LIMIT 1`,
-          [params.cameraId, ts],
-        );
-
-        if (dbRes.rows[0]) {
-          const hold = dbRes.rows[0];
-          retentionAuditService.recordEvent({
-            tenantId: params.tenantId,
-            entityType: "CAMERA",
-            entityId: params.cameraId,
-            eventType: "DELETION_DENIED",
-            actorType: "SYSTEM",
-            actorId: params.actor,
-            notes: `DENIED deletion of segment ${params.segmentId}: protected by persistent Legal Hold ${hold.id} (${hold.case_number || 'ACTIVE'})`,
-          });
-
-          throw new LegalHoldProtectedError(
-            params.segmentId,
-            hold.id,
-            `Cannot delete segment '${params.segmentId}': protected by active Legal Hold '${hold.id}' (${hold.case_number || 'ACTIVE'}).`,
-          );
-        }
-      } catch (err: any) {
-        if (err instanceof LegalHoldProtectedError) throw err;
-      }
-    }
-
-    // 2. Check in-memory Legal Holds
-    const activeHolds = this.getLegalHolds(params.cameraId, params.branchId);
-    if (activeHolds.length > 0) {
-      const hold = activeHolds[0]!;
+    } catch (err: any) {
+      // P0-13: Check must FAIL CLOSED on any query failure or timeout
       retentionAuditService.recordEvent({
         tenantId: params.tenantId,
         entityType: "CAMERA",
         entityId: params.cameraId,
-        eventType: "VIOLATION_CREATED",
+        eventType: "DELETION_DENIED",
         actorType: "SYSTEM",
         actorId: params.actor,
-        notes: `DENIED deletion of segment ${params.segmentId}: protected by active Legal Hold ${hold.id} (${hold.caseNumber})`,
+        notes: `DENIED deletion of segment ${params.segmentId}: legal hold check failed or timed out (${err.message}). Failing closed.`,
+      });
+      throw new LegalHoldProtectedError(
+        params.segmentId,
+        "LEGAL_HOLD_STATUS_UNKNOWN",
+        `Cannot delete segment '${params.segmentId}': Legal hold status unknown (${err.message}). Deletion paused (fail-closed).`,
+      );
+    }
+
+    if (checkResult.protected) {
+      retentionAuditService.recordEvent({
+        tenantId: params.tenantId,
+        entityType: "CAMERA",
+        entityId: params.cameraId,
+        eventType: "DELETION_DENIED",
+        actorType: "SYSTEM",
+        actorId: params.actor,
+        notes: `DENIED deletion of segment ${params.segmentId}: ${checkResult.reason || 'protected by active Legal Hold'}`,
       });
 
       throw new LegalHoldProtectedError(
         params.segmentId,
-        hold.id,
-        `Cannot delete segment '${params.segmentId}': protected by active Legal Hold '${hold.id}' (${hold.caseNumber}).`,
+        checkResult.hold?.id || "LEGAL_HOLD_ACTIVE",
+        `Cannot delete segment '${params.segmentId}': ${checkResult.reason || 'protected by active Legal Hold'}.`,
       );
     }
 
-    // 3. Physical Deletion via Storage Backend
+    // 2. Physical Deletion via Storage Backend
     await params.backendDeleteFn(params.storageLocator);
 
-    // 4. Record Audit Log
+    // 3. Record Audit Log
     const audit = retentionAuditService.recordEvent({
       tenantId: params.tenantId,
       entityType: "CAMERA",

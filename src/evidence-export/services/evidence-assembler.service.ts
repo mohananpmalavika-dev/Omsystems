@@ -103,17 +103,16 @@ export class EvidenceAssemblerService {
     });
 
     // 4. Recording Gaps File
-    const gaps = [
-      {
-        start: new Date(new Date(request.startTime).getTime() + 60000).toISOString(),
-        end: new Date(new Date(request.startTime).getTime() + 68000).toISOString(),
-        durationMs: 8000,
-      },
-    ];
+    const gaps: Array<{ start: string; end: string; durationMs: number }> = [];
+    const requestedDurationSeconds = Math.max(1, Math.round((new Date(request.endTime).getTime() - new Date(request.startTime).getTime()) / 1000));
+    const totalGapsDurationMs = gaps.reduce((sum, g) => sum + g.durationMs, 0);
+    const availableDurationSeconds = Math.max(0, requestedDurationSeconds - Math.round(totalGapsDurationMs / 1000));
+    const coveragePercent = Math.min(100, Math.round((availableDurationSeconds / requestedDurationSeconds) * 1000) / 10);
+
     const gapsData = JSON.stringify({
-      requestedDurationSeconds: 900,
-      availableDurationSeconds: 892,
-      coveragePercent: 99.11,
+      requestedDurationSeconds,
+      availableDurationSeconds,
+      coveragePercent,
       gaps,
     });
     files.push({
@@ -125,11 +124,11 @@ export class EvidenceAssemblerService {
 
     // 5. Clock Observations File
     const clockObs = {
-      deviceTimestamp: new Date(new Date(request.startTime).getTime() + 5200).toISOString(),
+      deviceTimestamp: request.startTime,
       serverTimestamp: request.startTime,
-      estimatedClockOffsetMs: 5200,
-      clockSource: 'ONVIF',
-      clockConfidence: 0.98,
+      estimatedClockOffsetMs: 0,
+      clockSource: 'UNKNOWN',
+      clockConfidence: 1.0,
     };
     const clockData = JSON.stringify(clockObs);
     files.push({
@@ -167,9 +166,9 @@ export class EvidenceAssemblerService {
       files,
       sourceSegments,
       gaps,
-      coveragePercent: 99.11,
+      coveragePercent,
       clockObservations: clockObs,
-      timelineEventsCount: 4,
+      timelineEventsCount: JSON.parse(timelineData).length,
     };
   }
 }

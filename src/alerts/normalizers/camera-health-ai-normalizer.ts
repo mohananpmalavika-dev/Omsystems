@@ -45,7 +45,7 @@ export class CameraHealthAiNormalizer implements IAlertNormalizer {
       occurredAt: new Date(rawEvent.timestamp),
       title,
       description,
-      confidence: rawEvent.confidence ?? 0.94,
+      confidence: typeof rawEvent.confidence === "number" ? rawEvent.confidence : 0.8,
       attributes: rawEvent.attributes || {},
       snapshotReference: rawEvent.snapshotRef,
       clipReference: rawEvent.clipRef,

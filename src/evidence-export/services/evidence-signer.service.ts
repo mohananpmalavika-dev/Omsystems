@@ -31,15 +31,16 @@ export class EvidenceSignerService {
     return 'kryptovision-evidence-key-v1';
   }
 
+  private cachedPublicKey?: string;
+
   async getPublicKeyPemAsync(): Promise<string> {
-    return this.provider.getPublicKeyPem();
+    const key = await this.provider.getPublicKeyPem();
+    this.cachedPublicKey = key;
+    return key;
   }
 
   getPublicKeyPem(): string {
-    // Return cached / persistent public key if available
-    let pubKey = '';
-    this.provider.getPublicKeyPem().then((k) => { pubKey = k; }).catch(() => {});
-    return pubKey;
+    return this.cachedPublicKey ?? '';
   }
 
   /**

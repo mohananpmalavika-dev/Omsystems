@@ -100,7 +100,7 @@ export class DahuaDeviceEventAdapter extends BaseDeviceEventAdapter {
       details = {
         analytics: {
           analyticsType: codeUpper.includes("CROSSLINE") ? "LINE_CROSSING" : "INTRUSION",
-          confidence: 0.94,
+          confidence: typeof (data as Record<string, unknown>)?.Confidence === "number" ? ((data as Record<string, unknown>).Confidence as number) / 100 : 0.85,
           zoneName: (data.Name as string) || "Dahua SMD Perimeter",
           targetType: "HUMAN",
         },

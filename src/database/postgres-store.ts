@@ -567,22 +567,22 @@ export class PostgresStore
   }
   // Evidence repository delegations
   async createEvidenceCase(input: any) { return this.evidence.createCase(input); }
-  async getEvidenceCase(id: string) { return this.evidence.getCase(id); }
+  async getEvidenceCase(id: string, tenantId?: string) { return this.evidence.getCase(id, tenantId); }
   async listEvidenceCases(tenantId: string, filters?: any) { return this.evidence.listCases(tenantId, filters); }
-  async updateEvidenceCaseStatus(id: string, status: any) { return this.evidence.updateCaseStatus(id, status); }
-  async addEvidenceItem(caseId: string, input: any) { return this.evidence.addItem(caseId, input); }
-  async listEvidenceItems(caseId: string) { return this.evidence.listItems(caseId); }
-  async getEvidenceItem(itemId: string) { return this.evidence.getItem(itemId); }
-  async requestEvidenceExport(caseId: string, input: any) { return this.evidence.requestExport(caseId, input); }
-  async getEvidenceExport(exportId: string) { return this.evidence.getExport(exportId); }
-  async updateEvidenceExportStatus(exportId: string, status: any, details?: any) { return this.evidence.updateExportStatus(exportId, status, details); }
+  async updateEvidenceCaseStatus(id: string, status: any, tenantId?: string) { return this.evidence.updateCaseStatus(id, status, tenantId); }
+  async addEvidenceItem(caseId: string, input: any, tenantId?: string) { return this.evidence.addItem(caseId, input, tenantId); }
+  async listEvidenceItems(caseId: string, tenantId?: string) { return this.evidence.listItems(caseId, tenantId); }
+  async getEvidenceItem(itemId: string, tenantId?: string) { return this.evidence.getItem(itemId, tenantId); }
+  async requestEvidenceExport(caseId: string, input: any, tenantId?: string) { return this.evidence.requestExport(caseId, input, tenantId); }
+  async getEvidenceExport(exportId: string, tenantId?: string) { return this.evidence.getExport(exportId, tenantId); }
+  async updateEvidenceExportStatus(exportId: string, status: any, details?: any, tenantId?: string) { return this.evidence.updateExportStatus(exportId, status, details, tenantId); }
   async createEvidenceManifest(input: any) { return this.evidence.createManifest(input); }
-  async getEvidenceManifest(id: string) { return this.evidence.getManifest(id); }
+  async getEvidenceManifest(id: string, tenantId?: string) { return this.evidence.getManifest(id, tenantId); }
   async recordCustodyEvent(input: any) { return this.evidence.recordCustodyEvent(input); }
-  async getCustodyLog(evidenceId: string) { return this.evidence.getCustodyLog(evidenceId); }
+  async getCustodyLog(evidenceId: string, tenantId?: string) { return this.evidence.getCustodyLog(evidenceId, tenantId); }
   async createLegalHold(input: any) { return this.evidence.createLegalHold(input); }
-  async releaseLegalHold(id: string, releasedBy: string) { return this.evidence.releaseLegalHold(id, releasedBy); }
-  async getLegalHold(id: string) { return this.evidence.getLegalHold(id); }
+  async releaseLegalHold(id: string, releasedBy: string, tenantId?: string, reason?: string) { return this.evidence.releaseLegalHold(id, releasedBy, tenantId, reason); }
+  async getLegalHold(id: string, tenantId?: string) { return this.evidence.getLegalHold(id, tenantId); }
   async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
   async listRecordingStorageNodes(tenantId: string) { return this.recordings.listStorageNodes(tenantId); }
   async createRecordingHealthEvent(input: any) { return this.recordings.createHealthEvent(input); }

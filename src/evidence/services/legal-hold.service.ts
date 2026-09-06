@@ -1,15 +1,21 @@
 /**
- * Legal Hold Service
+ * Legal Hold Service (Authoritative Wrapper)
  * 
  * First-class legal hold management that protects forensic evidence packages,
  * central archives, and recorder recording intervals from retention policy deletion.
- * Persists directly to PostgreSQL with restart survival.
+ * Authoritative persistence resides in PostgreSQL (recording_legal_holds) via EvidenceRepository.
+ * Fails closed if the database authority is unavailable.
  */
 
 import { randomUUID } from "node:crypto";
 import type { LegalHoldRecord } from "../domain/forensic-evidence.types.js";
 import { chainOfCustodyService } from "./chain-of-custody.service.js";
 import { pool } from "../../database/pool.js";
+import {
+  EvidenceRepository,
+  LegalHoldStatusUnknownError,
+  appendCustodyEventTx,
+} from "../../database/evidence-repository.js";
 
 export interface CreateLegalHoldInput {
   tenantId: string;
@@ -23,8 +29,6 @@ export interface CreateLegalHoldInput {
 }
 
 export class LegalHoldService {
-  private memoryHolds: Map<string, LegalHoldRecord> = new Map();
-
   /**
    * Applies a Legal Hold to evidence packages and camera recording ranges.
    * Persists to PostgreSQL with canonical UUID and reference number so it survives process restarts.
@@ -36,7 +40,59 @@ export class LegalHoldService {
     const referenceNumber = `LH-${year}-${hexSuffix}`;
     const now = new Date().toISOString();
 
-    const record: LegalHoldRecord = {
+    if (pool) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `INSERT INTO recording_legal_holds (
+             id, reference_number, tenant_id, case_number, reason, requested_by, camera_ids,
+             evidence_package_ids, start_time, end_time, from_at, to_at, status, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $9, $10, 'active', now())`,
+          [
+            dbId,
+            referenceNumber,
+            input.tenantId,
+            input.caseNumber,
+            input.reason,
+            input.createdBy,
+            JSON.stringify(input.cameraIds || []),
+            JSON.stringify(input.evidencePackageIds || []),
+            input.startTime ?? null,
+            input.endTime ?? null,
+          ],
+        );
+
+        // Transactional custody event for the hold
+        await appendCustodyEventTx(client, {
+          evidenceId: dbId,
+          action: "LEGAL_HOLD_APPLIED",
+          performedBy: input.createdBy,
+          reason: `Legal Hold ${referenceNumber} (${dbId}) applied for case ${input.caseNumber}: ${input.reason}`,
+        });
+
+        // Record custody events for all locked evidence packages
+        if (input.evidencePackageIds) {
+          for (const pkgId of input.evidencePackageIds) {
+            await appendCustodyEventTx(client, {
+              evidenceId: pkgId,
+              action: "LEGAL_HOLD_APPLIED",
+              performedBy: input.createdBy,
+              reason: `Legal Hold ${referenceNumber} (${dbId}) applied for case ${input.caseNumber}: ${input.reason}`,
+            });
+          }
+        }
+
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    }
+
+    return {
       id: dbId,
       referenceNumber,
       tenantId: input.tenantId,
@@ -50,224 +106,213 @@ export class LegalHoldService {
       createdBy: input.createdBy,
       createdAt: now,
     };
-
-    if (pool) {
-      await pool.query(
-        `INSERT INTO recording_legal_holds (
-           id, reference_number, tenant_id, case_number, reason, requested_by, camera_ids,
-           evidence_package_ids, start_time, end_time, from_at, to_at, status, created_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $9, $10, 'active', now())`,
-        [
-          dbId,
-          referenceNumber,
-          input.tenantId,
-          input.caseNumber,
-          input.reason,
-          input.createdBy,
-          JSON.stringify(input.cameraIds || []),
-          JSON.stringify(input.evidencePackageIds || []),
-          input.startTime ?? null,
-          input.endTime ?? null,
-        ],
-      );
-    }
-
-    this.memoryHolds.set(dbId, record);
-    this.memoryHolds.set(referenceNumber, record);
-
-    // Record custody events for all locked evidence packages
-    for (const pkgId of record.evidencePackageIds) {
-      await chainOfCustodyService.recordEvent({
-        evidencePackageId: pkgId,
-        event: "LEGAL_HOLD_APPLIED",
-        actorId: input.createdBy,
-        actorType: "USER",
-        reason: `Legal Hold ${referenceNumber} (${dbId}) applied for case ${input.caseNumber}: ${input.reason}`,
-      });
-    }
-
-    return record;
   }
 
   /**
-   * Releases an active Legal Hold via row-locked transaction
+   * Releases an active Legal Hold via row-locked transaction (P0-11)
    */
   async releaseLegalHold(holdIdOrRef: string, releasedBy: string, reason?: string): Promise<LegalHoldRecord> {
-    let releasedRow: any = null;
-
-    if (pool) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-
-        // 1. Row-level exclusive lock to prevent concurrent release races
-        const selectRes = await client.query(
-          `SELECT * FROM recording_legal_holds
-           WHERE (id::text = $1 OR reference_number = $1 OR case_number = $1)
-           FOR UPDATE`,
-          [holdIdOrRef],
-        );
-
-        if (selectRes.rows.length > 0) {
-          const holdRow = selectRes.rows[0];
-          if (holdRow.status !== "released") {
-            const updateRes = await client.query(
-              `UPDATE recording_legal_holds
-               SET status = 'released',
-                   released_by = $2,
-                   release_reason = $3,
-                   released_at = now()
-               WHERE id = $1
-               RETURNING *`,
-              [holdRow.id, releasedBy, reason ?? null],
-            );
-            releasedRow = updateRes.rows[0];
-          } else {
-            releasedRow = holdRow;
-          }
-        }
-
-        await client.query("COMMIT");
-      } catch (err) {
-        await client.query("ROLLBACK");
-        throw err;
-      } finally {
-        client.release();
-      }
-    }
-
-    const hold = this.memoryHolds.get(holdIdOrRef);
-
-    if (!hold) {
-      const releasedRecord: LegalHoldRecord = {
-        id: releasedRow?.id || holdIdOrRef,
-        referenceNumber: releasedRow?.reference_number || (holdIdOrRef.startsWith("LH-") ? holdIdOrRef : undefined),
-        tenantId: releasedRow?.tenant_id || "",
-        caseNumber: releasedRow?.case_number || holdIdOrRef,
+    if (!pool) {
+      return {
+        id: holdIdOrRef,
+        referenceNumber: holdIdOrRef.startsWith("LH-") ? holdIdOrRef : undefined,
+        tenantId: "",
+        caseNumber: holdIdOrRef,
         reason: reason || "Investigation closed",
-        evidencePackageIds: releasedRow?.evidence_package_ids
-          ? (typeof releasedRow.evidence_package_ids === "string" ? JSON.parse(releasedRow.evidence_package_ids) : releasedRow.evidence_package_ids)
-          : [],
+        evidencePackageIds: [],
         status: "RELEASED",
-        createdBy: releasedRow?.requested_by || releasedBy,
-        createdAt: releasedRow?.created_at?.toISOString?.() || new Date().toISOString(),
+        createdBy: releasedBy,
+        createdAt: new Date().toISOString(),
         releasedBy,
         releasedAt: new Date().toISOString(),
         releaseReason: reason,
       };
-      this.memoryHolds.set(releasedRecord.id, releasedRecord);
-      if (releasedRecord.referenceNumber) {
-        this.memoryHolds.set(releasedRecord.referenceNumber, releasedRecord);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. Row-level exclusive lock to prevent concurrent release races
+      const selectRes = await client.query(
+        `SELECT * FROM recording_legal_holds
+         WHERE (id::text = $1 OR reference_number = $1 OR case_number = $1)
+         FOR UPDATE`,
+        [holdIdOrRef],
+      );
+
+      if (selectRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        throw new Error(`Legal Hold not found: ${holdIdOrRef}`);
       }
-      return releasedRecord;
-    }
 
-    if (hold.status === "RELEASED") {
-      return hold;
-    }
+      const holdRow = selectRes.rows[0];
+      let releasedRow = holdRow;
 
-    hold.status = "RELEASED";
-    hold.releasedBy = releasedBy;
-    hold.releasedAt = new Date().toISOString();
-    hold.releaseReason = reason;
+      if (holdRow.status !== "released") {
+        const updateRes = await client.query(
+          `UPDATE recording_legal_holds
+           SET status = 'released',
+               released_by = $2,
+               release_reason = $3,
+               released_at = now()
+           WHERE id = $1
+           RETURNING *`,
+          [holdRow.id, releasedBy, reason ?? null],
+        );
+        releasedRow = updateRes.rows[0];
+      }
 
-    for (const pkgId of hold.evidencePackageIds) {
-      await chainOfCustodyService.recordEvent({
-        evidencePackageId: pkgId,
-        event: "LEGAL_HOLD_RELEASED",
-        actorId: releasedBy,
-        actorType: "USER",
-        reason: `Legal Hold ${hold.referenceNumber || hold.id} released: ${reason || "Investigation closed"}`,
+      // 2. Append custody event transactionally using appendCustodyEventTx (P0-11)
+      await appendCustodyEventTx(client, {
+        evidenceId: releasedRow.id,
+        action: "LEGAL_HOLD_RELEASED",
+        performedBy: releasedBy,
+        reason: `Legal Hold ${releasedRow.reference_number || releasedRow.id} released: ${reason || "Closed"}`,
       });
-    }
 
-    return hold;
+      const evidencePkgIds = Array.isArray(releasedRow.evidence_package_ids)
+        ? releasedRow.evidence_package_ids
+        : typeof releasedRow.evidence_package_ids === "string"
+        ? JSON.parse(releasedRow.evidence_package_ids)
+        : [];
+
+      for (const pkgId of evidencePkgIds) {
+        await appendCustodyEventTx(client, {
+          evidenceId: pkgId,
+          action: "LEGAL_HOLD_RELEASED",
+          performedBy: releasedBy,
+          reason: `Legal Hold ${releasedRow.reference_number || releasedRow.id} released: ${reason || "Closed"}`,
+        });
+      }
+
+      await client.query("COMMIT");
+
+      return {
+        id: releasedRow.id,
+        referenceNumber: releasedRow.reference_number,
+        tenantId: releasedRow.tenant_id,
+        caseNumber: releasedRow.case_number,
+        reason: releasedRow.reason,
+        evidencePackageIds: evidencePkgIds,
+        cameraIds: Array.isArray(releasedRow.camera_ids)
+          ? releasedRow.camera_ids
+          : typeof releasedRow.camera_ids === "string"
+          ? JSON.parse(releasedRow.camera_ids)
+          : [],
+        startTime: releasedRow.start_time?.toISOString?.(),
+        endTime: releasedRow.end_time?.toISOString?.(),
+        status: "RELEASED",
+        createdBy: releasedRow.requested_by,
+        createdAt: releasedRow.created_at?.toISOString?.() || new Date().toISOString(),
+        releasedBy,
+        releasedAt: releasedRow.released_at?.toISOString?.() || new Date().toISOString(),
+        releaseReason: reason,
+      };
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   /**
-   * Evaluates if an evidence package or camera recording interval is protected from deletion
-   */
-  isProtected(evidencePackageId: string, cameraId?: string, timestamp?: string): boolean {
-    for (const hold of this.memoryHolds.values()) {
-      if (hold.status !== "ACTIVE") continue;
-
-      if (hold.evidencePackageIds.includes(evidencePackageId)) {
-        return true;
-      }
-
-      if (cameraId && hold.cameraIds && hold.cameraIds.includes(cameraId)) {
-        if (!hold.startTime || !hold.endTime || !timestamp) {
-          return true;
-        }
-        const t = new Date(timestamp).getTime();
-        const start = new Date(hold.startTime).getTime();
-        const end = new Date(hold.endTime).getTime();
-        if (t >= start && t <= end) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Async database-first check for retention protection
+   * Async database-first check for retention protection.
+   * Fails closed if the database is unreachable (P0-10).
    */
   async isProtectedAsync(params: {
     evidencePackageId?: string;
     cameraId?: string;
     timestamp?: Date | string;
     branchId?: string;
+    tenantId?: string;
   }): Promise<{ protected: boolean; reason?: string }> {
-    // 1. Check persistent database holds
-    if (pool && params.cameraId) {
-      try {
-        const ts = params.timestamp ? new Date(params.timestamp).toISOString() : new Date().toISOString();
+    if (!pool) {
+      return { protected: false };
+    }
+
+    try {
+      const repo = new EvidenceRepository(pool);
+      if (params.cameraId) {
+        const check = await repo.isSegmentProtected({
+          cameraId: params.cameraId,
+          timestamp: params.timestamp,
+          branchId: params.branchId,
+          tenantId: params.tenantId,
+        });
+        return {
+          protected: check.protected,
+          reason: check.reason,
+        };
+      }
+
+      if (params.evidencePackageId) {
         const res = await pool.query(
           `SELECT * FROM recording_legal_holds
            WHERE (status = 'active' OR status IS NULL)
              AND released_at IS NULL
-             AND (
-               camera_id = $1::uuid
-               OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $1 || '%')
-             )
-             AND (from_at IS NULL OR from_at <= $2::timestamptz OR start_time IS NULL OR start_time <= $2::timestamptz)
-             AND (to_at IS NULL OR to_at >= $2::timestamptz OR end_time IS NULL OR end_time >= $2::timestamptz)
+             AND (evidence_package_ids::text LIKE '%' || $1 || '%')
            LIMIT 1`,
-          [params.cameraId, ts],
+          [params.evidencePackageId],
         );
         if (res.rows[0]) {
-          const row = res.rows[0];
           return {
             protected: true,
-            reason: `Protected by persistent Legal Hold ${row.id} (${row.case_number || 'ACTIVE'}): ${row.reason}`,
+            reason: `Protected by active Legal Hold ${res.rows[0].id}`,
           };
         }
-      } catch {
-        // Fall back to memory check
       }
-    }
 
-    // 2. Check in-memory holds
-    const inMem = this.isProtected(
-      params.evidencePackageId || "",
-      params.cameraId,
-      params.timestamp ? new Date(params.timestamp).toISOString() : undefined,
-    );
+      return { protected: false };
+    } catch (err) {
+      // P0-10: Fail closed on database unavailability
+      throw new LegalHoldStatusUnknownError(
+        `LEGAL_HOLD_STATUS_UNKNOWN: Legal hold authority unreachable: ${err instanceof Error ? err.message : String(err)}`,
+        err,
+      );
+    }
+  }
+
+  async getLegalHold(holdId: string): Promise<LegalHoldRecord | undefined> {
+    if (!pool) return undefined;
+    const repo = new EvidenceRepository(pool);
+    const hold = await repo.getLegalHold(holdId);
+    if (!hold) return undefined;
     return {
-      protected: inMem,
-      reason: inMem ? "Protected by active legal hold in memory" : undefined,
+      id: hold.id,
+      referenceNumber: hold.referenceNumber,
+      tenantId: hold.tenantId || "",
+      caseNumber: hold.caseNumber || "",
+      reason: hold.reason,
+      evidencePackageIds: [],
+      status: (hold.status || "active").toUpperCase() as any,
+      createdBy: hold.createdBy,
+      createdAt: hold.createdAt,
+      releasedBy: hold.releasedBy,
+      releasedAt: hold.releasedAt,
+      releaseReason: hold.releaseReason,
     };
   }
 
-  getLegalHold(holdId: string): LegalHoldRecord | undefined {
-    return this.memoryHolds.get(holdId);
-  }
-
-  listActiveHolds(tenantId?: string): LegalHoldRecord[] {
-    return Array.from(this.memoryHolds.values()).filter(
-      (h) => h.status === "ACTIVE" && (!tenantId || h.tenantId === tenantId),
-    );
+  async listActiveHolds(tenantId?: string): Promise<LegalHoldRecord[]> {
+    if (!pool) return [];
+    const repo = new EvidenceRepository(pool);
+    const holds = await repo.listLegalHolds({ tenantId, status: "active" });
+    return holds.map((h) => ({
+      id: h.id,
+      referenceNumber: h.referenceNumber,
+      tenantId: h.tenantId || "",
+      caseNumber: h.caseNumber || "",
+      reason: h.reason,
+      evidencePackageIds: [],
+      status: "ACTIVE",
+      createdBy: h.createdBy,
+      createdAt: h.createdAt,
+      releasedBy: h.releasedBy,
+      releasedAt: h.releasedAt,
+      releaseReason: h.releaseReason,
+    }));
   }
 }
 

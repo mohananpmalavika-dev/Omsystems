@@ -66,7 +66,7 @@ export class EvidenceExportService {
     // 3. Optional: Bind Legal Hold with Retention Engine
     let legalHoldData;
     if (request.applyLegalHold !== false) {
-      const hold = retentionEngine.createLegalHold({
+      const hold = await retentionEngine.createLegalHold({
         tenantId: request.tenantId || 'BANK-001',
         caseNumber: request.caseNumber,
         reason: request.reason,

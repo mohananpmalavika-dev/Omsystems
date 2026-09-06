@@ -316,9 +316,19 @@ async function runRetentionTests() {
   console.log("\nSuite 9: REST API Endpoints Verification");
   await app.ready();
 
+  const authHeaders = { "x-user-id": "user-global-admin" };
+
+  // Verify anonymous requests are rejected with 401
+  const unauthResp = await app.inject({
+    method: "GET",
+    url: "/api/v1/retention/overview",
+  });
+  assert(unauthResp.statusCode === 401, "GET /api/v1/retention/overview without auth returns 401 Unauthorized");
+
   const overviewResp = await app.inject({
     method: "GET",
     url: "/api/v1/retention/overview",
+    headers: authHeaders,
   });
   assert(overviewResp.statusCode === 200, "GET /api/v1/retention/overview returns 200 OK");
   const overviewData = JSON.parse(overviewResp.body).data;
@@ -327,6 +337,7 @@ async function runRetentionTests() {
   const branchesResp = await app.inject({
     method: "GET",
     url: "/api/v1/retention/branches?limit=10",
+    headers: authHeaders,
   });
   assert(branchesResp.statusCode === 200, "GET /api/v1/retention/branches returns 200 OK");
   const branchesData = JSON.parse(branchesResp.body).data;
@@ -335,6 +346,7 @@ async function runRetentionTests() {
   const branchAssessResp = await app.inject({
     method: "GET",
     url: "/api/v1/branches/branch-178/retention/assessment",
+    headers: authHeaders,
   });
   assert(branchAssessResp.statusCode === 200, "GET /api/v1/branches/:branchId/retention/assessment returns 200 OK");
   const branchAssessData = JSON.parse(branchAssessResp.body).data;
@@ -344,6 +356,7 @@ async function runRetentionTests() {
   const cameraEvResp = await app.inject({
     method: "GET",
     url: "/api/v1/cameras/cam-178-04/retention/evidence",
+    headers: authHeaders,
   });
   assert(cameraEvResp.statusCode === 200, "GET /api/v1/cameras/:cameraId/retention/evidence returns 200 OK");
   const cameraEvData = JSON.parse(cameraEvResp.body).data;
@@ -352,6 +365,7 @@ async function runRetentionTests() {
   const reportResp = await app.inject({
     method: "GET",
     url: "/api/v1/retention/reports/daily",
+    headers: authHeaders,
   });
   assert(reportResp.statusCode === 200, "GET /api/v1/retention/reports/daily returns 200 OK");
   const reportData = JSON.parse(reportResp.body).data;

@@ -494,9 +494,13 @@ export function CameraGrid({
           if (!camera) {
             return (
               <div key={i} className="grid-empty-slot">
+                <div className="empty-slot-header">
+                  <span className="empty-slot-badge">Slot #{String(i + 1).padStart(2, "0")}</span>
+                </div>
                 <Settings size={24} className="opacity-30" />
                 <select
                   className="camera-selector"
+                  aria-label={`Camera for wall position ${i + 1}`}
                   onChange={(e) => {
                     const selectedCamera = cameras.find(
                       (c) => c.id === e.target.value
@@ -505,7 +509,7 @@ export function CameraGrid({
                   }}
                   value=""
                 >
-                  <option value="">Select camera...</option>
+                  <option value="">Select camera for Slot #{i + 1}...</option>
                   {cameras.map((cam) => (
                     <option key={cam.id} value={cam.id}>
                       {cam.name} - {cam.branchName}

@@ -153,7 +153,16 @@ export interface HsmConfiguration {
   algorithm?: string;
 }
 
+/**
+ * Hardware Security Module (HSM) Signing Provider.
+ *
+ * STATUS: BETA / EXPERIMENTAL
+ * NOTE: Production environments should use File (development), Vault (staging),
+ * or AWS KMS (cloud production) until physical HSM integration has completed
+ * end-to-end qualification with dedicated appliance hardware (e.g. Luna, Thales, YubiHSM).
+ */
 export class HsmSigningProvider implements EvidenceSigningProvider {
+  public readonly status = "BETA";
   private keyId: string;
   private algorithm: string;
   private publicKeyPem: string;
@@ -228,7 +237,10 @@ export class HsmSigningProvider implements EvidenceSigningProvider {
 /**
  * Production AWS Key Management Service (KMS) Signing Provider.
  * Uses KMS asymmetric signing keys (ECDSA / RSA) with standard AWS credential provider chain.
- * Satisfies P0.16 by performing actual asymmetric digital signing and verification.
+ *
+ * AWS KMS API REQUIREMENT:
+ * RAW is only supported for keys that perform server-side hashing; pre-hashed digests
+ * passed from forensic export pipelines MUST use MessageType: 'DIGEST'.
  */
 export class AwsKmsSigningProvider implements EvidenceSigningProvider {
   private keyId: string;
@@ -290,11 +302,14 @@ export class AwsKmsSigningProvider implements EvidenceSigningProvider {
   async signDigest(digest: Buffer): Promise<SignatureResult> {
     const client = await this.getClient();
     const { SignCommand } = await import("@aws-sdk/client-kms");
+    // Ensure digest buffer is exactly 32 bytes for SHA-256
+    const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
+
     const response = await client.send(
       new SignCommand({
         KeyId: this.keyId,
-        Message: digest,
-        MessageType: "RAW",
+        Message: digestBuffer,
+        MessageType: "DIGEST",
         SigningAlgorithm: this.algorithm as any,
       }),
     );
@@ -325,11 +340,13 @@ export class AwsKmsSigningProvider implements EvidenceSigningProvider {
 
       const client = await this.getClient();
       const { VerifyCommand } = await import("@aws-sdk/client-kms");
+      const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
+
       const res = await client.send(
         new VerifyCommand({
           KeyId: keyId || this.keyId,
-          Message: digest,
-          MessageType: "RAW",
+          Message: digestBuffer,
+          MessageType: "DIGEST",
           Signature: signature,
           SigningAlgorithm: this.algorithm as any,
         }),
