@@ -6,7 +6,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import { DestructiveActionClassifier } from "../safety/destructive-action-classifier.js";
+import { DestructiveActionClassifier } from "../safety/destructive-action-classifier";
 
 export interface DiscoveredDialog {
   isOpen: boolean;

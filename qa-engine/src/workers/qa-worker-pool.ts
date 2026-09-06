@@ -5,8 +5,8 @@
  * cancellation handles, and live status registry.
  */
 
-import { QARunWorker } from "./qa-run.worker.js";
-import type { QARunConfig, QARunProgressEvent } from "../types/qa.types.js";
+import { QARunWorker } from "./qa-run.worker";
+import type { QARunConfig, QARunProgressEvent } from "../types/qa.types";
 
 export class QAWorkerPool {
   private static instance: QAWorkerPool | null = null;

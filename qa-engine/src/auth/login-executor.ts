@@ -5,7 +5,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import type { LoginSignals } from "./login-detector.js";
+import type { LoginSignals } from "./login-detector";
 
 export interface LoginCredentials {
   username?: string;

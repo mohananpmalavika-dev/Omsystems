@@ -6,7 +6,7 @@
  */
 
 import type { Page, BrowserContext } from "@playwright/test";
-import type { QAAuthStatus } from "../types/qa.types.js";
+import type { QAAuthStatus } from "../types/qa.types";
 
 export interface AuthValidationResult {
   isAuthenticated: boolean;

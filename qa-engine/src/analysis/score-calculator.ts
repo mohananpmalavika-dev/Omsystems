@@ -12,7 +12,7 @@
  * 8. Coverage (5%)
  */
 
-import type { QAScoreBreakdown } from "../types/qa.types.js";
+import type { QAScoreBreakdown } from "../types/qa.types";
 
 export interface ScoreInput {
   criticalIssues: number;

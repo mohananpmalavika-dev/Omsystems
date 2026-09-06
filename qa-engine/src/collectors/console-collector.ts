@@ -5,8 +5,8 @@
  */
 
 import type { Page } from "@playwright/test";
-import type { QAConsoleEvent } from "../types/qa.types.js";
-import { maskSensitiveData } from "../safety/credential-vault.js";
+import type { QAConsoleEvent } from "../types/qa.types";
+import { maskSensitiveData } from "../safety/credential-vault";
 
 export class ConsoleCollector {
   private events: Map<string, QAConsoleEvent> = new Map();

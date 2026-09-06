@@ -4,7 +4,7 @@
  * Normalizes, prioritizes, and classifies QA issues into standardized findings.
  */
 
-import type { QAIssue, QASeverity, QAIssueCategory } from "../types/qa.types.js";
+import type { QAIssue, QASeverity, QAIssueCategory } from "../types/qa.types";
 
 export class IssueClassifier {
   private issueIndex = 0;

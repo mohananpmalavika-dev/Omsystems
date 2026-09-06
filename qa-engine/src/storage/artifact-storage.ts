@@ -7,7 +7,7 @@
 
 import { mkdirSync, writeFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { QAArtifact } from "../types/qa.types.js";
+import type { QAArtifact } from "../types/qa.types";
 
 export class ArtifactStorage {
   private baseDir: string;

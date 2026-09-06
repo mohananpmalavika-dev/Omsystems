@@ -526,7 +526,6 @@ export default function AiAlertsIncidentHubPage() {
                 False Alarms
               </button>
             </div>
-            </div>
           </div>
         </div>
 
@@ -882,7 +881,7 @@ export default function AiAlertsIncidentHubPage() {
             onClose={() => setActiveMediaAlert(null)}
             imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
             snapshotUrl={`/api/control/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
-            videoUrl={activeMediaAlert.videoClipUrl || `/api/control/v1/analytics/alerts/${activeMediaAlert.id}/clip`}
+            videoUrl={activeMediaAlert.videoClipUrl || ("/api/control/v1/analytics/alerts/" + activeMediaAlert.id + "/clip")}
             title={activeMediaAlert.title}
             cameraName={activeMediaAlert.cameraName}
             cameraId={activeMediaAlert.cameraId}

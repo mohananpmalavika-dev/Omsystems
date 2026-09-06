@@ -4,7 +4,7 @@
  * Generates structured, comprehensive JSON report export.
  */
 
-import type { HtmlReportData } from "./html-report.js";
+import type { HtmlReportData } from "./html-report";
 
 export class JsonReportGenerator {
   static generate(data: HtmlReportData): string {

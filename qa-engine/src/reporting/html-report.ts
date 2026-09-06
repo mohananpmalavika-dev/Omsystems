@@ -15,7 +15,7 @@ import type {
   QAAccessibilityViolation,
   QAPerformanceMetric,
   QAFlowEdge,
-} from "../types/qa.types.js";
+} from "../types/qa.types";
 
 export interface HtmlReportData {
   config: QARunConfig;

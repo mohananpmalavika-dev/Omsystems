@@ -6,7 +6,7 @@
  */
 
 import { chromium, firefox, webkit, type Browser, type BrowserContext, type Page } from "@playwright/test";
-import type { QABrowserType, QADeviceProfile } from "../types/qa.types.js";
+import type { QABrowserType, QADeviceProfile } from "../types/qa.types";
 import { mkdirSync } from "node:fs";
 
 export interface BrowserLaunchOptions {

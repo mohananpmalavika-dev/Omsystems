@@ -5,7 +5,7 @@
  * NEVER executes destructive actions (e.g. Delete, Wipe, Reset, Drop).
  */
 
-import type { QASafetyClassification } from "../types/qa.types.js";
+import type { QASafetyClassification } from "../types/qa.types";
 
 export const DESTRUCTIVE_KEYWORDS = [
   "delete",

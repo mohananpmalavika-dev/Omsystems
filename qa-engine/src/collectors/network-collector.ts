@@ -6,8 +6,8 @@
  */
 
 import type { Page, Request, Response } from "@playwright/test";
-import type { QANetworkEvent } from "../types/qa.types.js";
-import { maskSensitiveData } from "../safety/credential-vault.js";
+import type { QANetworkEvent } from "../types/qa.types";
+import { maskSensitiveData } from "../safety/credential-vault";
 
 export class NetworkCollector {
   private failedEvents: Map<string, QANetworkEvent> = new Map();

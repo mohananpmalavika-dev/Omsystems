@@ -14,34 +14,34 @@ import type {
   QAPageNode,
   QAFlowEdge,
   QAActionItem,
-} from "../types/qa.types.js";
-import { BrowserManager } from "../browser/browser-manager.js";
-import { LoginDetector } from "../auth/login-detector.js";
-import { LoginExecutor } from "../auth/login-executor.js";
-import { AuthValidator } from "../auth/auth-validator.js";
-import { UrlPolicy } from "../safety/url-policy.js";
-import { DestructiveActionClassifier } from "../safety/destructive-action-classifier.js";
-import { FormClassifier } from "../safety/form-classifier.js";
-import { PageFingerprintEngine } from "../crawler/page-fingerprint.js";
-import { CrawlQueue } from "../crawler/crawl-queue.js";
-import { ElementDiscovery } from "../discovery/element-discovery.js";
-import { TabDiscovery } from "../discovery/tab-discovery.js";
-import { DialogDiscovery } from "../discovery/dialog-discovery.js";
-import { ConsoleCollector } from "../collectors/console-collector.js";
-import { NetworkCollector } from "../collectors/network-collector.js";
-import { PerformanceCollector } from "../collectors/performance-collector.js";
-import { ScreenshotManager } from "../recorder/screenshot-manager.js";
-import { VideoRecorder } from "../recorder/video-recorder.js";
-import { TraceManager } from "../recorder/trace-manager.js";
-import { AxeRunner } from "../accessibility/axe-runner.js";
-import { BlankPageDetector } from "../analysis/blank-page-detector.js";
-import { BrokenNavigationDetector } from "../analysis/broken-navigation-detector.js";
-import { IssueClassifier } from "../analysis/issue-classifier.js";
-import { CoverageCalculator } from "../analysis/coverage-calculator.js";
-import { ScoreCalculator } from "../analysis/score-calculator.js";
-import { HtmlReportGenerator } from "../reporting/html-report.js";
-import { JsonReportGenerator } from "../reporting/json-report.js";
-import { ArtifactStorage } from "../storage/artifact-storage.js";
+} from "../types/qa.types";
+import { BrowserManager } from "../browser/browser-manager";
+import { LoginDetector } from "../auth/login-detector";
+import { LoginExecutor } from "../auth/login-executor";
+import { AuthValidator } from "../auth/auth-validator";
+import { UrlPolicy } from "../safety/url-policy";
+import { DestructiveActionClassifier } from "../safety/destructive-action-classifier";
+import { FormClassifier } from "../safety/form-classifier";
+import { PageFingerprintEngine } from "../crawler/page-fingerprint";
+import { CrawlQueue } from "../crawler/crawl-queue";
+import { ElementDiscovery } from "../discovery/element-discovery";
+import { TabDiscovery } from "../discovery/tab-discovery";
+import { DialogDiscovery } from "../discovery/dialog-discovery";
+import { ConsoleCollector } from "../collectors/console-collector";
+import { NetworkCollector } from "../collectors/network-collector";
+import { PerformanceCollector } from "../collectors/performance-collector";
+import { ScreenshotManager } from "../recorder/screenshot-manager";
+import { VideoRecorder } from "../recorder/video-recorder";
+import { TraceManager } from "../recorder/trace-manager";
+import { AxeRunner } from "../accessibility/axe-runner";
+import { BlankPageDetector } from "../analysis/blank-page-detector";
+import { BrokenNavigationDetector } from "../analysis/broken-navigation-detector";
+import { IssueClassifier } from "../analysis/issue-classifier";
+import { CoverageCalculator } from "../analysis/coverage-calculator";
+import { ScoreCalculator } from "../analysis/score-calculator";
+import { HtmlReportGenerator } from "../reporting/html-report";
+import { JsonReportGenerator } from "../reporting/json-report";
+import { ArtifactStorage } from "../storage/artifact-storage";
 
 export class QARunWorker extends EventEmitter {
   public status: QARunStatus = "QUEUED";

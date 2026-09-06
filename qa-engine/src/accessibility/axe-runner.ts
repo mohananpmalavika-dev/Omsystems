@@ -11,7 +11,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import type { QAAccessibilityViolation } from "../types/qa.types.js";
+import type { QAAccessibilityViolation } from "../types/qa.types";
 
 export class AxeRunner {
   /**

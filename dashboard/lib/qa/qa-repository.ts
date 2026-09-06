@@ -15,8 +15,8 @@ import type {
   QAConsoleEvent,
   QANetworkEvent,
   QAArtifact,
-} from "../../../qa-engine/src/types/qa.types.js";
-import { encryptCredential } from "../../../qa-engine/src/safety/credential-vault.js";
+} from "../../../qa-engine/src/types/qa.types";
+import { encryptCredential } from "../../../qa-engine/src/safety/credential-vault";
 
 // In-memory storage fallback
 interface InMemoryDB {

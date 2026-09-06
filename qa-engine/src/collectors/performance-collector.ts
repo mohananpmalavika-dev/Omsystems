@@ -6,7 +6,7 @@
  */
 
 import type { Page } from "@playwright/test";
-import type { QAPerformanceMetric } from "../types/qa.types.js";
+import type { QAPerformanceMetric } from "../types/qa.types";
 
 export class PerformanceCollector {
   private metrics: QAPerformanceMetric[] = [];

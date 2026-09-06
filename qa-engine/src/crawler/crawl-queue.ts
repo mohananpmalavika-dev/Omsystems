@@ -5,7 +5,7 @@
  * with limits on depth, pages, action counts, and runtime.
  */
 
-import type { QAActionType } from "../types/qa.types.js";
+import type { QAActionType } from "../types/qa.types";
 
 export type QueueItemPriority = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 

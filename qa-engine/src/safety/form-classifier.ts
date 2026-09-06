@@ -5,8 +5,8 @@
  * and mutating or destructive forms (create user, update settings, delete).
  */
 
-import type { QASafetyClassification } from "../types/qa.types.js";
-import { DESTRUCTIVE_KEYWORDS } from "./destructive-action-classifier.js";
+import type { QASafetyClassification } from "../types/qa.types";
+import { DESTRUCTIVE_KEYWORDS } from "./destructive-action-classifier";
 
 export const SAFE_FORM_TERMS = [
   "search",
