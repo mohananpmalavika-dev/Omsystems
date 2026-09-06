@@ -1168,13 +1168,21 @@ export interface RecordingLegalHold {
   id: string;
   tenantId: string;
   cameraId: string;
+  caseId?: string | undefined;
+  caseNumber?: string | undefined;
+  branchId?: string | undefined;
+  evidencePackageIds?: string[] | undefined;
   fromAt: string;
   toAt: string;
   reason: string;
+  status?: string | undefined;
   createdBy: string;
   createdAt: string;
+  reviewDate?: string | undefined;
+  expiryDate?: string | undefined;
   releasedBy?: string | undefined;
   releasedAt?: string | undefined;
+  releaseReason?: string | undefined;
 }
 
 export type RecordingRaidStatus = "healthy" | "degraded" | "rebuilding" | "failed" | "unknown";
