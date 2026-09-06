@@ -179,6 +179,7 @@ export interface EvidenceCustodyEvent {
 
 export interface LegalHoldRecord {
   id: string;
+  referenceNumber?: string;
   tenantId: string;
   caseNumber: string;
   reason: string;
@@ -191,6 +192,7 @@ export interface LegalHoldRecord {
   createdAt: string;
   releasedBy?: string;
   releasedAt?: string;
+  releaseReason?: string;
 }
 
 export interface EvidenceExportRecord {

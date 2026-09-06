@@ -142,6 +142,7 @@
     "node": ">=22"
   },
   "dependencies": {
+    "@aws-sdk/client-kms": "^3.1127.0",
     "@aws-sdk/client-ses": "^3.0.0",
     "@aws-sdk/client-sns": "^3.1109.0",
     "@fastify/cors": "^11.0.0",

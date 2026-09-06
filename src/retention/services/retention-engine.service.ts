@@ -18,6 +18,7 @@ import { StorageForecasterService, StorageForecastResult } from "./storage-forec
 import { DeletionPlannerService, DeletionPlanResult } from "./deletion-planner.service.js";
 import { PolicySimulationService } from "./policy-simulation.service.js";
 import { pool } from "../../database/pool.js";
+import { enterpriseStoragePool } from "../../storage/enterprise-storage-pool.js";
 import type { EvidenceRepository } from "../../database/evidence-repository.js";
 import { retentionAuditService } from "./retention-audit.service.js";
 
@@ -264,12 +265,23 @@ export class RetentionEngineService {
       }
     }
 
-    const usableStorageBytes = 10 * 1024 * 1024 * 1024 * 1024; // 10 TB baseline capacity
-    const usedStorageBytes = segments.reduce((sum, s) => sum + s.sizeBytes, 0);
+    let usableStorageBytes = 0;
+    try {
+      const { enterpriseStoragePool } = await import("../../storage/enterprise-storage-pool.js");
+      const nodes = enterpriseStoragePool.listNodes();
+      for (const node of nodes) {
+        if ((node as any).capacityBytes) {
+          usableStorageBytes += (node as any).capacityBytes;
+        }
+      }
+    } catch {}
 
-    const forecast = dailyIngestBytes > 0
+    const usedStorageBytes = segments.reduce((sum, s) => sum + s.sizeBytes, 0);
+    const effectiveUsableStorage = usableStorageBytes > 0 ? usableStorageBytes : usedStorageBytes;
+
+    const forecast = dailyIngestBytes > 0 && effectiveUsableStorage > 0
       ? StorageForecasterService.forecastRetention({
-          usableStorageBytes,
+          usableStorageBytes: effectiveUsableStorage,
           usedStorageBytes,
           ingestStats: {
             bytesLast24h: dailyIngestBytes,
@@ -362,10 +374,27 @@ export class RetentionEngineService {
     }
 
     const currentRetentionDays = minRetentionDays === 999 ? 0 : Math.round(minRetentionDays * 10) / 10;
-    const requiredRetentionDays = 90;
+    const effectivePolicy = this.policyResolver.resolve({
+      cameraId: "default",
+      branchId,
+      tenantId,
+    });
+    const requiredRetentionDays = effectivePolicy.minimumRetentionDays;
 
-    const usableStorageBytes = Math.max(usedStorageBytes * 1.5, 1024 * 1024 * 1024);
-    const totalStorageBytes = Math.round(usableStorageBytes * 1.1);
+    let poolUsable = 0;
+    let poolTotal = 0;
+    try {
+      const nodes = enterpriseStoragePool.listNodes();
+      for (const node of nodes) {
+        if ((node as any).capacityBytes) {
+          poolTotal += (node as any).capacityBytes;
+          poolUsable += (node as any).availableBytes || (node as any).capacityBytes;
+        }
+      }
+    } catch {}
+
+    const usableStorageBytes = poolUsable > 0 ? poolUsable : usedStorageBytes;
+    const totalStorageBytes = poolTotal > 0 ? poolTotal : usableStorageBytes;
     const freeStorageBytes = Math.max(0, usableStorageBytes - usedStorageBytes);
 
     const hasTelemetry = usedStorageBytes > 0 && dailyIngestBytes > 0;

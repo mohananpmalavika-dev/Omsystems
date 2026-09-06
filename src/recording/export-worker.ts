@@ -109,6 +109,9 @@ export interface ExportJob {
     audioIncluded?: boolean;
     password?: string;
     quality?: "original" | "high" | "medium";
+    strictSourceIntegrity?: boolean;
+    includeAuditTrail?: boolean;
+    includePlaybackPlayer?: boolean;
   };
   status:
     | "pending"
@@ -410,7 +413,7 @@ export class ExportWorker {
       }
 
       const missingSegments = validationResults.filter((v) => !v.exists);
-      if (missingSegments.length > 0 && job.options?.strictSourceIntegrity) {
+      if (missingSegments.length > 0 && (job.options as any)?.strictSourceIntegrity) {
         const err = new Error(
           `FAILED_SOURCE_INTEGRITY: ${missingSegments.length} indexed segments physically missing from storage`,
         );
@@ -1122,7 +1125,6 @@ export class ExportWorker {
        RETURNING id`,
     );
     return result.rowCount || 0;
-  }
   }
 
   async getExportJob(jobId: string): Promise<ExportJob | undefined> {
