@@ -10,7 +10,7 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
-import { AppLayout, getVisibleNavigation, menuKey, quickActions } from "@/components/app-layout";
+import { AppLayout, getAuthorizedNavigation, menuKey, quickActions } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 
 const groupDescriptions: Record<string, string> = {
@@ -33,7 +33,7 @@ export default function ModulesPage() {
       .then((data) => setUser(data?.user ?? data ?? null))
       .catch(() => setUser(null));
   }, []);
-  const visibleNavigation = getVisibleNavigation(user);
+  const visibleNavigation = getAuthorizedNavigation(user);
   const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
   const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
   const filteredGroups = useMemo(() => {

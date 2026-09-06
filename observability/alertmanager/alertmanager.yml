@@ -10,3 +10,6 @@ route:
 
 receivers:
   - name: default
+    webhook_configs:
+      - url: '${ALERTMANAGER_WEBHOOK_URL}'
+        send_resolved: true

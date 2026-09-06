@@ -5,19 +5,24 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 export default function Page() {
   return (
     <AppLayout>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="overview-page max-w-[1480px] mx-auto px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+        <div className="overview-heading mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-blue-400/80">
-              Security operations
+            <p className="eyebrow-label">
+              Operations workspace
             </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-100 sm:text-2xl">
-              Mission Control
+            <h2 className="overview-title mt-1 text-2xl font-bold text-slate-100 sm:text-3xl">
+              Command Center
             </h2>
+            <p className="overview-subtitle mt-1 max-w-2xl text-sm text-slate-400">
+              See what needs attention, move from signal to evidence, and keep every branch operational.
+            </p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-[11px] font-medium text-slate-300 shadow-sm shadow-slate-950/30">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            Live operations status · stable
+          <div className="overview-status" aria-label="Live operations status">
+            <span className="overview-status-dot" />
+            <span>Operational telemetry</span>
+            <span className="overview-status-divider" />
+            <span className="overview-status-muted">Truth state shown below</span>
           </div>
         </div>
 
