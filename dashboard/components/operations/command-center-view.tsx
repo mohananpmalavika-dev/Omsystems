@@ -42,6 +42,7 @@ import {
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
+import { getTelemetryFreshness } from "@/lib/telemetry-freshness";
 
 export function CommandCenterView() {
   const [summary, setSummary] = useState<any | null>(null);
@@ -188,6 +189,7 @@ export function CommandCenterView() {
     : Number(summary?.atRiskBranchesCount ?? 0);
   const totalCamerasCount = cameraTotals.total;
   const workingCamerasCount = cameraTotals.working;
+  const freshness = getTelemetryFreshness(summary?.lastTelemetryTimestamp);
 
   const filteredBranches = useMemo(() => {
     return branches.filter((b) => {
@@ -311,9 +313,9 @@ export function CommandCenterView() {
               <ShieldCheck className="w-6 h-6 text-blue-400" />
               Surveillance Command Center
             </h1>
-            <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Live ● {summary?.lastTelemetryTimestamp || "Ready"}
+            <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}>
+              <span className="telemetry-truth-dot" />
+              {freshness.label}
             </span>
             {totalBranchesCount > 0 && (
               <span className="text-xs text-slate-400 border-l border-slate-800 pl-3 hidden sm:inline">
@@ -321,6 +323,7 @@ export function CommandCenterView() {
               </span>
             )}
           </div>
+          <p className="telemetry-truth-detail">{freshness.detail}. Actions and counts below use confirmed data only.</p>
           <p className="text-xs text-slate-400 mt-1">
             {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Camera" : "Cameras"} • Real-Time VMS Telemetry & Triage
           </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
@@ -41,7 +41,7 @@ type IncidentFilters = {
   to?: string;
 };
 
-export default function IncidentsPage() {
+function IncidentsPageContent() {
   const searchParams = useSearchParams();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(false);
@@ -526,6 +526,14 @@ export default function IncidentsPage() {
         )}
       </div>
     </AppLayout>
+  );
+}
+
+export default function IncidentsPage() {
+  return (
+    <Suspense fallback={<div className="route-loading" aria-busy="true">Loading incident workspace...</div>}>
+      <IncidentsPageContent />
+    </Suspense>
   );
 }
 

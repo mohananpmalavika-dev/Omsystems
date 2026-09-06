@@ -17,6 +17,7 @@ import {
   Database,
   FileText,
   HardDrive,
+  HelpCircle,
   Key,
   RefreshCw,
   Shield,

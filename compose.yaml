@@ -5,7 +5,7 @@ services:
       HOST: 0.0.0.0
       PORT: 8080
       OTEL_PROMETHEUS_PORT: 9464
-      AUTH_MODE: development
+      AUTH_MODE: ${AUTH_MODE:-session}
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
       REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:?REPORT_DOWNLOAD_SECRET is required}
@@ -91,11 +91,11 @@ services:
       args:
         CONTROL_PLANE_INTERNAL_URL: http://api:8080
         MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
-        DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
+        DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:?DASHBOARD_DEV_USER_ID is required}
     environment:
       CONTROL_PLANE_INTERNAL_URL: http://api:8080
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
-      DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:-user-global-admin}
+      DASHBOARD_DEV_USER_ID: ${DASHBOARD_DEV_USER_ID:?DASHBOARD_DEV_USER_ID is required}
       RECORDING_ENGINE_INTERNAL_URL: http://recording-engine:8091
       RECORDING_ENGINE_SHARED_KEY: ${RECORDING_ENGINE_SHARED_KEY:?RECORDING_ENGINE_SHARED_KEY is required}
       EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
@@ -152,6 +152,11 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.28.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --config.expand-env
+    environment:
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:?ALERTMANAGER_WEBHOOK_URL is required}
     volumes:
       - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     ports:
@@ -160,8 +165,8 @@ services:
   grafana:
     image: grafana/grafana:12.1.1
     environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-sentinel-admin}
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - sentinel-grafana:/var/lib/grafana

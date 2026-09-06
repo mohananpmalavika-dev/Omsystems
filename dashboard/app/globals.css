@@ -2,6 +2,151 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Control-room visual foundation: quiet enough for repeated scanning, with a clear operational focus. */
+body {
+  font-family: "Aptos", "Segoe UI", sans-serif;
+  background: var(--canvas, #090d16);
+}
+
+.overview-page {
+  position: relative;
+}
+
+.overview-page::before {
+  content: "";
+  position: absolute;
+  inset: 0 1rem auto;
+  height: 180px;
+  pointer-events: none;
+  background: radial-gradient(circle at 14% 0%, rgba(59, 130, 246, .13), transparent 34%),
+    linear-gradient(90deg, rgba(148, 163, 184, .04) 1px, transparent 1px);
+  background-size: auto, 32px 32px;
+  mask-image: linear-gradient(to bottom, black, transparent);
+}
+
+.overview-heading,
+.command-center-page > * {
+  position: relative;
+}
+
+.eyebrow-label {
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+
+.overview-title {
+  letter-spacing: -.04em;
+}
+
+.overview-subtitle {
+  line-height: 1.55;
+}
+
+.overview-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  align-self: flex-start;
+  border: 1px solid color-mix(in srgb, var(--green) 26%, var(--card-border));
+  border-radius: 999px;
+  padding: 9px 13px;
+  background: color-mix(in srgb, var(--card-bg) 88%, var(--green));
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.overview-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--green) 16%, transparent), 0 0 14px color-mix(in srgb, var(--green) 65%, transparent);
+}
+
+.overview-status-divider {
+  width: 1px;
+  height: 14px;
+  background: var(--card-border);
+}
+
+.overview-status-muted {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.telemetry-truth-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.telemetry-truth-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.telemetry-truth-badge.fresh { color: #6ee7b7; background: rgba(6, 78, 59, .42); border-color: rgba(52, 211, 153, .35); }
+.telemetry-truth-badge.degraded { color: #fcd34d; background: rgba(120, 53, 15, .38); border-color: rgba(251, 191, 36, .35); }
+.telemetry-truth-badge.stale,
+.telemetry-truth-badge.unavailable { color: #fda4af; background: rgba(127, 29, 29, .36); border-color: rgba(251, 113, 133, .35); }
+.telemetry-truth-detail { margin: 0; color: var(--muted); font-size: 10px; }
+
+.command-center-hero {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--card-bg) 96%, var(--blue)), var(--card-bg) 68%, color-mix(in srgb, var(--card-bg) 90%, #020617)) !important;
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--card-border)) !important;
+  box-shadow: 0 18px 50px rgba(2, 6, 23, .18) !important;
+}
+
+.command-center-metrics > div {
+  min-height: 108px;
+  background: color-mix(in srgb, var(--card-bg) 94%, var(--blue)) !important;
+  border-color: var(--card-border) !important;
+  box-shadow: 0 8px 24px rgba(2, 6, 23, .08);
+}
+
+.command-center-metrics > div:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--blue) 48%, var(--card-border)) !important;
+}
+
+.command-center-fleet,
+.command-center-briefing,
+.command-center-ai-bar,
+.command-center-prediction {
+  border-color: color-mix(in srgb, var(--blue) 16%, var(--card-border)) !important;
+}
+
+.command-center-workflow {
+  border: 1px solid var(--card-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card-bg) 92%, var(--blue));
+  box-shadow: 0 10px 32px rgba(2, 6, 23, .1);
+}
+
+@media (max-width: 640px) {
+  .overview-status {
+    align-self: stretch;
+    justify-content: center;
+  }
+
+  .overview-status-muted,
+  .overview-status-divider {
+    display: none;
+  }
+
+  .command-center-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 :root,
 [data-theme="dark"],
 html.dark {
