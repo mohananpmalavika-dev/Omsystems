@@ -569,6 +569,7 @@ export interface ControlPlaneStore {
     type?: NodeType,
   ): Promise<ResourceNode[]>;
   getCamera(id: string): Promise<Camera | undefined>;
+  listCameras(tenantId: string): Promise<Camera[]>;
   listCamerasByIds(cameraIds: string[]): Promise<Camera[]>;
   listNodesByIds(ids: string[]): Promise<ResourceNode[]>;
   getDeviceIdentityByCamera(cameraId: string): Promise<DeviceIdentity | undefined>;

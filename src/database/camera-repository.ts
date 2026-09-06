@@ -140,6 +140,16 @@ export class CameraRepository {
     return result.rows.map(mapCamera);
   }
 
+  async listByTenant(tenantId: string) {
+    const result = await this.pool.query<CameraRow>(
+      `${selectCamera}
+       WHERE camera_node.tenant_id = $1::uuid
+       ORDER BY camera_node.name`,
+      [tenantId],
+    );
+    return result.rows.map(mapCamera);
+  }
+
   async listAuthorizedByBranch(
     userId: string,
     branchId: string,

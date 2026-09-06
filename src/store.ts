@@ -1361,6 +1361,13 @@ export class MemoryStore {
     return this.cameras.get(id);
   }
 
+  async listCameras(tenantId: string) {
+    return [...this.cameras.values()].filter((camera) => {
+      const branch = this.nodes.get(camera.branchId);
+      return branch?.tenantId === tenantId;
+    });
+  }
+
   async listCamerasByIds(cameraIds: string[]) {
     const ids = new Set(cameraIds);
     return [...this.cameras.values()].filter((camera) => ids.has(camera.id));
