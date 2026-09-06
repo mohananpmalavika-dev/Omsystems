@@ -384,7 +384,15 @@ export async function registerSignedConfigRoutes(
       })),
     });
     const body = schema.parse(request.body);
-    const preview = goldenConfigurationTemplateService.previewApplication(body.templateId, body.targetCameras);
+    const targetCameras: TargetCameraInput[] = body.targetCameras.map((cam) => ({
+      id: cam.id,
+      name: cam.name,
+      currentResolution: cam.currentResolution,
+      currentFps: cam.currentFps,
+      currentBitrateKbps: cam.currentBitrateKbps,
+      currentCodec: cam.currentCodec,
+    }));
+    const preview = goldenConfigurationTemplateService.previewApplication(body.templateId, targetCameras);
     return { success: true, data: preview };
   });
 
@@ -402,10 +410,18 @@ export async function registerSignedConfigRoutes(
       })),
     });
     const body = schema.parse(request.body);
+    const targetCameras: TargetCameraInput[] = body.targetCameras.map((cam) => ({
+      id: cam.id,
+      name: cam.name,
+      currentResolution: cam.currentResolution,
+      currentFps: cam.currentFps,
+      currentBitrateKbps: cam.currentBitrateKbps,
+      currentCodec: cam.currentCodec,
+    }));
     const result = goldenConfigurationTemplateService.applyTemplate(
       body.templateId,
       body.branchId,
-      body.targetCameras,
+      targetCameras,
       request.currentUser.id || 'system-admin',
     );
     return { success: true, data: result };
