@@ -13,7 +13,7 @@ export function generateAlertEvidenceSvg(
   const cameraName = (options?.cameraName || alert.cameraName || alert.cameraId).replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const branchName = (options?.branchName || alert.branchName || "Fleet Branch").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const zoneName = (options?.zoneName || alert.zoneName || "Monitoring Zone").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  const detectedAt = new Date(alert.lastDetectedAt || alert.firstDetectedAt || Date.now()).toLocaleString();
+  const detectedAt = new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt || Date.now()).toLocaleString();
   
   const sev = (alert.severity || "P2").toUpperCase();
   const sevColor = sev === "P1" ? "#f43f5e" : sev === "P2" ? "#f59e0b" : sev === "P3" ? "#38bdf8" : "#94a3b8";

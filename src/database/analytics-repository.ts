@@ -523,8 +523,9 @@ export class AnalyticsRepository {
          COUNT(*)::int AS total,
          COUNT(*) FILTER (WHERE alert.status NOT IN ('resolved','false_alarm','suppressed'))::int AS active,
          COUNT(*) FILTER (WHERE alert.incident_id IS NOT NULL)::int AS converted,
-         COUNT(*) FILTER (WHERE alert.incident_id IS NULL)::int AS unconverted,
-         COUNT(*) FILTER (WHERE alert.severity IN ('P1', 'P2'))::int AS critical
+         COUNT(*) FILTER (WHERE alert.incident_id IS NULL AND alert.status NOT IN ('resolved','false_alarm','suppressed'))::int AS unconverted,
+         COUNT(*) FILTER (WHERE alert.severity IN ('P1', 'P2'))::int AS critical,
+         COUNT(*) FILTER (WHERE alert.status = 'false_alarm')::int AS "falseAlarms"
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
@@ -539,6 +540,7 @@ export class AnalyticsRepository {
       converted: Number(row.converted ?? 0),
       unconverted: Number(row.unconverted ?? 0),
       critical: Number(row.critical ?? 0),
+      falseAlarms: Number(row.falseAlarms ?? 0),
     };
   }
 

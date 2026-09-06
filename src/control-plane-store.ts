@@ -515,6 +515,7 @@ export interface AnalyticsAlertsAggregateSummary {
   converted: number;
   unconverted: number;
   critical: number;
+  falseAlarms: number;
 }
 
 export interface AnalyticsEventInput {

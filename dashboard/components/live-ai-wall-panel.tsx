@@ -195,7 +195,7 @@ export function LiveAiWallPanel({
                     <div><strong>{alert.title}</strong><small>{cameraById.get(alert.cameraId)?.name ?? alert.cameraId}</small></div>
                     <b>{Math.round(alert.confidence * 100)}%</b>
                   </div>
-                  <p>{new Date(alert.lastDetectedAt).toLocaleString()} · {alert.status.replaceAll("_", " ")}</p>
+                  <p>{new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleString()} · {alert.status.replaceAll("_", " ")}</p>
                   <div className="live-ai-alert-actions">
                     {alert.status === "new" && <button disabled={busyId === alert.id} onClick={() => void mutateAlert(alert, "acknowledge")}><Check size={11} /> Ack</button>}
                     <button disabled={busyId === alert.id} onClick={() => void mutateAlert(alert, "investigating")}><Activity size={11} /> Investigate</button>

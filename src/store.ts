@@ -3646,6 +3646,7 @@ export class MemoryStore {
     let converted = 0;
     let unconverted = 0;
     let critical = 0;
+    let falseAlarms = 0;
     for (const alert of this.analyticsAlerts) {
       if (alert.tenantId !== inputTenantId) continue;
       if (filters?.cameraId && alert.cameraId !== filters.cameraId) continue;
@@ -3653,11 +3654,15 @@ export class MemoryStore {
       total += 1;
       const isActive = !["resolved", "false_alarm", "suppressed"].includes(alert.status);
       if (isActive) active += 1;
-      if (alert.incidentId) converted += 1;
-      else unconverted += 1;
+      if (alert.incidentId) {
+        converted += 1;
+      } else if (isActive) {
+        unconverted += 1;
+      }
       if (alert.severity === "P1" || alert.severity === "P2") critical += 1;
+      if (alert.status === "false_alarm") falseAlarms += 1;
     }
-    return { total, active, converted, unconverted, critical };
+    return { total, active, converted, unconverted, critical, falseAlarms };
   }
 
   async getAnalyticsAlert(id: string, inputTenantId: string) {
