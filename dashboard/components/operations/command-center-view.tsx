@@ -59,6 +59,12 @@ export function CommandCenterView() {
   const pendingLoad = useRef<AbortController | null>(null);
   const router = useRouter();
 
+  const handleQuickAction = (action: string, branchId: string) => {
+    if (action === "DISPATCH_TECH") {
+      router.push(`/maintenance/workorders?branchId=${encodeURIComponent(branchId)}&source=command-center`);
+    }
+  };
+
   const navigateTo = (href: string) => (e: React.MouseEvent) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
@@ -380,10 +386,14 @@ export function CommandCenterView() {
           </button>
         </form>
 
+        <p className="mt-2 pl-8 text-[11px] text-slate-500">
+          Guided telemetry queries · answers use confirmed Command Center data only
+        </p>
+
         {askSentinelResponse && (
           <div className="mt-2.5 p-2.5 bg-indigo-950/50 border border-indigo-800/50 rounded-lg text-xs text-indigo-200 flex items-start justify-between gap-2">
             <div>
-              <strong>Sentinel Intelligence:</strong> {askSentinelResponse}
+              <strong>Guided telemetry result:</strong> {askSentinelResponse}
             </div>
             <button onClick={() => setAskSentinelResponse(null)} className="text-slate-400 hover:text-white">
               <X className="w-3.5 h-3.5" />
@@ -413,12 +423,6 @@ export function CommandCenterView() {
           </button>
         </div>
       </div>
-
-      {actionSuccessMsg && (
-        <div className="p-3 bg-emerald-950/60 border border-emerald-600/60 rounded-xl text-xs font-semibold text-emerald-300 animate-fade-in">
-          {actionSuccessMsg}
-        </div>
-      )}
 
       {/* Row 1 & 2: Operational Intelligence Cards Grid */}
       <div className="command-center-metrics grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
@@ -599,7 +603,7 @@ export function CommandCenterView() {
                   onClick={() => handleQuickAction("DISPATCH_TECH", predicted.branchId)}
                   className="px-3 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow"
                 >
-                  Dispatch Technician
+                  Open Work Order
                 </button>
               </div>
             </div>

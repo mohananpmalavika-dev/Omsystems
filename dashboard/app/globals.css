@@ -3033,18 +3033,18 @@ select, textarea { font: inherit; }
   KryptonVision 2026 product design system
    ========================================================================== */
 :root {
-  --navy: #07162b;
-  --navy-2: #102950;
-  --ink: #14213d;
-  --muted: #53627a;
-  --line: #dce4ee;
-  --line-strong: #ccd7e5;
+  --navy: #17324a;
+  --navy-2: #244b65;
+  --ink: #17324a;
+  --muted: #5c7183;
+  --line: #d4e1e8;
+  --line-strong: #c0d2dc;
   --surface: #ffffff;
-  --surface-soft: #f7f9fc;
-  --canvas: #f3f6fa;
-  --blue: #356ff6;
-  --blue-dark: #214fca;
-  --cyan: #27b8c7;
+  --surface-soft: #f5f9fa;
+  --canvas: #edf4f6;
+  --blue: #147d8a;
+  --blue-dark: #0f6570;
+  --cyan: #18a7a5;
   --green: #16a776;
   --amber: #e99a18;
   --red: #dc4650;
@@ -3060,9 +3060,9 @@ body {
   min-width: 320px;
   color: var(--ink);
   background:
-    radial-gradient(circle at 88% -10%, rgba(53, 107, 245, .08), transparent 28rem),
+    radial-gradient(circle at 88% -10%, rgba(20, 125, 138, .1), transparent 28rem),
     var(--canvas);
-  font-family: Inter, "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+  font-family: "Aptos", "Trebuchet MS", sans-serif;
   font-size: 14px;
   line-height: 1.45;
   text-rendering: optimizeLegibility;
@@ -3081,12 +3081,12 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .sidebar {
   width: 286px;
   padding: 20px 16px 15px;
-  color: #d8e4f2;
+  color: #29465b;
   background:
-    radial-gradient(circle at 26% 0%, rgba(53, 111, 246, .22), transparent 20rem),
-    linear-gradient(180deg, #0a1d39 0%, var(--navy) 72%, #051121 100%);
-  border-right: 1px solid rgba(255, 255, 255, .07);
-  box-shadow: 18px 0 50px rgba(7, 17, 31, .08);
+    radial-gradient(circle at 26% 0%, rgba(24, 167, 165, .12), transparent 20rem),
+    linear-gradient(180deg, #f8fcfd 0%, #edf5f6 72%, #e6f0f2 100%);
+  border-right: 1px solid #d4e1e8;
+  box-shadow: 18px 0 50px rgba(31, 70, 88, .08);
 }
 .brand { min-height: 52px; padding: 0 8px 20px; gap: 12px; }
 .brand-mark {
@@ -3097,20 +3097,20 @@ button, a { -webkit-tap-highlight-color: transparent; }
   box-shadow: 0 12px 30px rgba(39, 89, 222, .34), inset 0 1px rgba(255,255,255,.24);
 }
 .brand-copy { min-width: 0; }
-.brand-copy strong { color: #fff; font-size: 16px; font-weight: 760; letter-spacing: -.3px; }
-.brand-copy span { margin-top: 1px; color: #8297b3; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
+.brand-copy strong { color: #17324a; font-size: 16px; font-weight: 760; letter-spacing: -.3px; }
+.brand-copy span { margin-top: 1px; color: #668392; font-size: 8px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; }
 .command-search {
   height: 42px;
   padding: 0 11px;
-  color: #99acc4;
-  border: 1px solid rgba(255,255,255,.105);
+  color: #557184;
+  border: 1px solid #cbdde4;
   border-radius: 11px;
-  background: rgba(255,255,255,.045);
+  background: rgba(255,255,255,.72);
   text-decoration: none;
   transition: border-color .18s ease, background .18s ease, color .18s ease;
 }
-.command-search:hover { color: #dce8f6; border-color: rgba(102,153,255,.3); background: rgba(255,255,255,.07); }
-.command-search kbd { color: #7084a0; }
+.command-search:hover { color: #17324a; border-color: #8fc4c8; background: #fff; }
+.command-search kbd { color: #6a8794; }
 .nav-shortcuts {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
