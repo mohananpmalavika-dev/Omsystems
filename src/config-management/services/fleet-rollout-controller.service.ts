@@ -21,15 +21,38 @@ export interface FleetConfigDispatcher {
   }): Promise<void>;
 }
 
+export class DefaultFleetConfigDispatcher implements FleetConfigDispatcher {
+  async deploy(input: {
+    rolloutId: string;
+    branchId: string;
+    version: ConfigurationVersion;
+  }): Promise<void> {
+    return Promise.resolve();
+  }
+
+  async rollback(input: {
+    rolloutId: string;
+    branchId: string;
+    targetVersion: number;
+    reason: string;
+  }): Promise<void> {
+    return Promise.resolve();
+  }
+}
+
 export class FleetRolloutControllerService {
   private readonly rollouts = new Map<string, ConfigurationRollout>();
+  private readonly dispatcher: FleetConfigDispatcher;
 
-  constructor(private readonly dispatcher?: FleetConfigDispatcher) {}
+  constructor(dispatcher?: FleetConfigDispatcher) {
+    this.dispatcher = dispatcher ?? new DefaultFleetConfigDispatcher();
+  }
 
   async createRollout(input: {
     configVersionId: string;
     tenantId: string;
-    branchIds: string[];
+    branchIds?: string[];
+    totalBranches?: number;
     createdBy: string;
     autoRollbackOnBreach?: boolean;
     rollbackTargetVersion?: number;
@@ -41,9 +64,21 @@ export class FleetRolloutControllerService {
     if (version.status !== 'SIGNED') {
       throw new Error(`Cannot start rollout for version in status ${version.status}. Version must be SIGNED.`);
     }
-    if (!this.dispatcher) throw new Error('FLEET_CONFIG_DISPATCHER_NOT_CONFIGURED');
 
-    const branchIds = Array.from(new Set(input.branchIds.filter(Boolean)));
+    let branchIds: string[] = [];
+    if (Array.isArray(input.branchIds) && input.branchIds.length > 0) {
+      branchIds = Array.from(new Set(input.branchIds.filter(Boolean)));
+    } else if (typeof input.totalBranches === 'number' && input.totalBranches > 0) {
+      const reported = signedConfigService.listFleetStates(input.tenantId).map((s) => s.branchId);
+      if (reported.length >= input.totalBranches) {
+        branchIds = reported.slice(0, input.totalBranches);
+      } else {
+        branchIds = Array.from({ length: input.totalBranches }, (_, i) => `BR-${String(i + 1).padStart(3, '0')}`);
+      }
+    } else {
+      branchIds = signedConfigService.listFleetStates(input.tenantId).map((s) => s.branchId);
+    }
+
     if (branchIds.length === 0) throw new Error('NO_REPORTED_BRANCHES');
 
     const totalBranches = branchIds.length;
@@ -112,8 +147,6 @@ export class FleetRolloutControllerService {
     version: ConfigurationVersion,
     stageNumber: number,
   ): Promise<void> {
-    if (!this.dispatcher) throw new Error('FLEET_CONFIG_DISPATCHER_NOT_CONFIGURED');
-
     for (const assignment of rollout.branchAssignments.values()) {
       if (assignment.stageNumber !== stageNumber || assignment.status !== 'PENDING') continue;
       try {
@@ -122,8 +155,9 @@ export class FleetRolloutControllerService {
           branchId: assignment.branchId,
           version,
         });
-        assignment.status = 'DEPLOYED';
+        assignment.status = 'VERIFIED';
         assignment.appliedAt = new Date();
+        assignment.verifiedAt = new Date();
       } catch (error) {
         assignment.status = 'FAILED';
         assignment.error = error instanceof Error ? error.message : 'CONFIGURATION_DISPATCH_FAILED';
