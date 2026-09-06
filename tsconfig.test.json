@@ -24,6 +24,7 @@
     "test/phase4-operational-reports.test.ts",
     "test/phase5-enterprise-readiness.test.ts",
     "test/phase6-testing-deployment.test.ts",
+    "test/observability/performance-observer.test.ts",
     "test/analytics.test.ts",
     "test/p1-voice-notifications.test.ts",
     "test/sms-gateway-integration.test.ts",
