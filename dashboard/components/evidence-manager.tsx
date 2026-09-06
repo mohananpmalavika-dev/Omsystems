@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { evidenceApi } from "@/lib/api-client";
 import { PageHero } from "@/components/page-hero";
 
@@ -52,6 +53,8 @@ interface ChainOfCustodyEvent {
 }
 
 export function EvidenceManager() {
+  const searchParams = useSearchParams();
+  const branchId = searchParams?.get("branchId");
   const [cases, setCases] = useState<EvidenceCase[]>([]);
   const [selectedCase, setSelectedCase] = useState<EvidenceCase | null>(null);
   const [items, setItems] = useState<EvidenceItem[]>([]);
@@ -79,6 +82,14 @@ export function EvidenceManager() {
         icon={Shield}
         actions={<button className="btn-primary" onClick={() => setShowCreateModal(true)}><Plus size={16} />New evidence case</button>}
       />
+
+      {branchId && (
+        <div className="workflow-context-banner" role="status">
+          <Shield size={14} />
+          <span>Branch context carried from Command Center</span>
+          <strong>{branchId}</strong>
+        </div>
+      )}
 
       <div className="evidence-layout">
         {/* Cases List */}

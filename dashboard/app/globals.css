@@ -6124,6 +6124,48 @@ body {
 
 /* Command center: a focused overview composition with clear scan paths. */
 .command-center-page { display: grid; gap: 18px !important; color: var(--ink) !important; }
+.command-center-workflow {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  padding: 11px;
+  border: 1px solid #cfe0e5;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fcfc, #edf6f7);
+  box-shadow: var(--shadow-sm);
+}
+.command-center-workflow-intro {
+  display: flex;
+  justify-content: center;
+  flex-direction: column;
+  padding: 8px 13px;
+  border-right: 1px solid #d7e7e9;
+}
+.command-center-workflow-intro span { color: #147d8a; font-size: 9px; font-weight: 800; letter-spacing: 1.25px; }
+.command-center-workflow-intro strong { margin-top: 4px; color: #17324a; font-size: 13px; line-height: 1.25; }
+.command-center-workflow-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.command-center-workflow-steps a {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 9px;
+  color: #557184;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  text-decoration: none;
+  transition: transform .16s ease, background .16s ease, border-color .16s ease;
+}
+.command-center-workflow-steps a:hover,
+.command-center-workflow-steps a.active { transform: translateY(-1px); border-color: #a9d7d8; background: #fff; box-shadow: 0 6px 16px rgba(31,70,88,.07); }
+.workflow-step-index { color: #18a7a5; font-size: 9px; font-weight: 800; }
+.command-center-workflow-steps a > span:nth-child(2) { min-width: 0; flex: 1; }
+.command-center-workflow-steps strong,
+.command-center-workflow-steps small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.command-center-workflow-steps strong { color: #17324a; font-size: 11px; }
+.command-center-workflow-steps small { margin-top: 2px; color: #748b97; font-size: 9px; }
+.workflow-step-icon { width: 15px; height: 15px; flex: 0 0 auto; color: #147d8a; }
 .command-center-hero { position: relative; overflow: hidden; min-height: 154px; padding: 27px 28px !important; border-color: rgba(126,166,255,.26) !important; border-radius: 22px !important; background: radial-gradient(circle at 88% -15%, rgba(92,145,255,.38), transparent 20rem), radial-gradient(circle at 45% 120%, rgba(38,187,180,.12), transparent 17rem), linear-gradient(135deg, #123866, #081a34 72%) !important; box-shadow: 0 24px 62px -34px rgba(9, 32, 70, .7) !important; }
 .command-center-hero::after { content: ""; position: absolute; width: 270px; height: 270px; right: -90px; bottom: -160px; border: 1px solid rgba(255,255,255,.12); border-radius: 50%; box-shadow: 0 0 0 35px rgba(255,255,255,.035), 0 0 0 70px rgba(255,255,255,.022); pointer-events: none; }
 .command-center-hero h1 { position: relative; z-index: 1; color: #fff !important; font-size: clamp(25px, 2.3vw, 34px); letter-spacing: -1.15px; }
@@ -6195,6 +6237,9 @@ body {
   .command-center-ai-bar form > button { width: 100%; }
   .command-center-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .command-center-metrics > div { min-height: 112px; }
+  .command-center-workflow { grid-template-columns: 1fr; gap: 8px; }
+  .command-center-workflow-intro { padding: 5px 8px 8px; border-right: 0; border-bottom: 1px solid #d7e7e9; }
+  .command-center-workflow-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (prefers-reduced-motion: reduce) { .command-center-metrics > div, .command-center-hero > div:last-child :where(a, button) { transition: none; } }
 
@@ -6553,6 +6598,22 @@ body {
   border-radius: 11px;
   box-shadow: 0 6px 18px rgba(133, 54, 54, .06);
 }
+
+.workflow-context-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: -4px 0 16px;
+  padding: 9px 12px;
+  color: #426c78;
+  border: 1px solid #c6e1e2;
+  border-radius: 10px;
+  background: #effafa;
+  font-size: 11px;
+}
+
+.workflow-context-banner svg { color: #147d8a; }
+.workflow-context-banner strong { color: #17324a; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 10px; }
 
 @media (max-width: 760px) {
   .incident-management-page,

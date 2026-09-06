@@ -14,6 +14,8 @@ import type {
 } from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
+const DEFAULT_API_TIMEOUT_MS = 8_000;
+const SESSION_API_TIMEOUT_MS = 3_000;
 let cookieRefreshPromise: Promise<boolean> | null = null;
 let loginRedirectInProgress = false;
 
@@ -97,6 +99,7 @@ export function refreshCookieBackedSession(): Promise<boolean> {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
+    signal: AbortSignal.timeout(3_000),
   })
     .then((response) => {
       if (response.ok) return true;
@@ -130,10 +133,14 @@ async function fetchApi<T>(
   }
 
   const isAuthEndpoint = isPublicAuthEndpoint(endpoint);
+  const requestSignal = options.signal ?? AbortSignal.timeout(
+    endpoint === '/v1/auth/me' ? SESSION_API_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
+  );
   const send = () => fetch(`${API_BASE}${endpoint}`, {
     ...options,
     credentials: "include",
     headers,
+    signal: requestSignal,
   });
 
   let response: Response;

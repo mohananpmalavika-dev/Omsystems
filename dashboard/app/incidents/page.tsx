@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { Plus, Siren, Camera, FileVideo, MapPin, Building2, Eye } from "lucide-react";
 import { IncidentMediaModal } from "@/components/incident-media-modal";
+import { useSearchParams } from "next/navigation";
 
 type Incident = {
   id: string;
@@ -41,9 +42,12 @@ type IncidentFilters = {
 };
 
 export default function IncidentsPage() {
+  const searchParams = useSearchParams();
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<IncidentFilters>({});
+  const [filters, setFilters] = useState<IncidentFilters>(() => ({
+    branchId: typeof window !== "undefined" ? searchParams?.get("branchId") || undefined : undefined,
+  }));
   const [stats, setStats] = useState<any>(null);
   const [view, setView] = useState<'all' | 'critical' | 'open' | 'sla-breach'>('all');
   const [error, setError] = useState<string | null>(null);
