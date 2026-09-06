@@ -406,17 +406,23 @@ export class EvidenceRepository {
     tenantId?: string;
     branchId?: string;
     evidencePackageIds?: string[];
+    referenceNumber?: string;
   }): Promise<RecordingLegalHold> {
     const id = randomUUID();
+    const year = new Date().getFullYear();
+    const hexSuffix = randomUUID().substring(0, 8).toUpperCase();
+    const referenceNumber = input.referenceNumber || `LH-${year}-${hexSuffix}`;
+
     const result = await this.pool.query(
       `INSERT INTO recording_legal_holds (
-         id, tenant_id, branch_id, case_number, reason, requested_by, camera_id, camera_ids,
+         id, reference_number, tenant_id, branch_id, case_number, reason, requested_by, camera_id, camera_ids,
          evidence_package_ids, start_time, end_time, from_at, to_at, review_date, expiry_date,
          status, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $10, $11, $12, $13, 'active', now())
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $11, $12, $13, $14, 'active', now())
        RETURNING *`,
       [
         id,
+        referenceNumber,
         input.tenantId ?? null,
         input.branchId ?? null,
         input.caseNumber,
@@ -435,26 +441,94 @@ export class EvidenceRepository {
   }
 
   async releaseLegalHold(
-    holdId: string,
+    holdIdOrRef: string,
     releasedBy: string,
     reason?: string,
+    auditContext?: { ipAddress?: string; workstationId?: string },
   ): Promise<RecordingLegalHold | undefined> {
-    const result = await this.pool.query(
-      `UPDATE recording_legal_holds
-       SET status = 'released',
-           released_by = $2,
-           release_reason = $3,
-           released_at = now()
-       WHERE id = $1
-       RETURNING *`,
-      [holdId, releasedBy, reason ?? null],
-    );
-    return result.rows[0] ? mapRecordingLegalHold(result.rows[0]) : undefined;
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      // 1. SELECT hold FOR UPDATE (lock row, confirm status = ACTIVE)
+      const selectRes = await client.query(
+        `SELECT * FROM recording_legal_holds
+         WHERE (id = $1 OR reference_number = $1 OR case_number = $1)
+         FOR UPDATE`,
+        [holdIdOrRef],
+      );
+
+      if (selectRes.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return undefined;
+      }
+
+      const holdRow = selectRes.rows[0];
+      if (holdRow.status === "released") {
+        await client.query("COMMIT");
+        return mapRecordingLegalHold(holdRow);
+      }
+
+      // 2. UPDATE status = 'released'
+      const updateRes = await client.query(
+        `UPDATE recording_legal_holds
+         SET status = 'released',
+             released_by = $2,
+             release_reason = $3,
+             released_at = now()
+         WHERE id = $1
+         RETURNING *`,
+        [holdRow.id, releasedBy, reason ?? null],
+      );
+
+      const updatedHold = mapRecordingLegalHold(updateRes.rows[0]);
+
+      // 3. Append custody event for any associated evidence packages
+      const evidencePkgIds = Array.isArray(holdRow.evidence_package_ids)
+        ? holdRow.evidence_package_ids
+        : typeof holdRow.evidence_package_ids === "string"
+        ? JSON.parse(holdRow.evidence_package_ids)
+        : [];
+
+      for (const pkgId of evidencePkgIds) {
+        const custodyPayload = JSON.stringify({
+          evidenceId: pkgId,
+          action: "LEGAL_HOLD_RELEASED",
+          performedBy: releasedBy,
+          reason: `Legal Hold ${updatedHold.referenceNumber || updatedHold.id} released: ${reason || "Closed"}`,
+          timestamp: new Date().toISOString(),
+        });
+        const { createHash } = await import("node:crypto");
+        const eventHash = createHash("sha256").update(custodyPayload).digest("hex");
+        await client.query(
+          `INSERT INTO chain_of_custody_events (
+             id, evidence_id, action, performed_by, actor_type, reason, source_ip, workstation_id, event_hash, created_at
+           ) VALUES ($1, $2, 'LEGAL_HOLD_RELEASED', $3, 'USER', $4, $5, $6, $7, now())`,
+          [
+            randomUUID(),
+            pkgId,
+            releasedBy,
+            reason ?? null,
+            auditContext?.ipAddress ?? null,
+            auditContext?.workstationId ?? null,
+            eventHash,
+          ],
+        );
+      }
+
+      await client.query("COMMIT");
+      return updatedHold;
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async getLegalHold(holdId: string): Promise<RecordingLegalHold | undefined> {
     const result = await this.pool.query(
-      `SELECT * FROM recording_legal_holds WHERE id = $1`,
+      `SELECT * FROM recording_legal_holds WHERE (id = $1 OR reference_number = $1)`,
       [holdId],
     );
     return result.rows[0] ? mapRecordingLegalHold(result.rows[0]) : undefined;
@@ -622,6 +696,7 @@ function mapChainOfCustodyEvent(row: any): ChainOfCustodyEvent {
 function mapRecordingLegalHold(row: any): RecordingLegalHold {
   return {
     id: row.id,
+    referenceNumber: row.reference_number ?? undefined,
     tenantId: row.tenant_id ?? undefined,
     cameraId: row.camera_id ?? undefined,
     caseNumber: row.case_number ?? undefined,
@@ -633,5 +708,6 @@ function mapRecordingLegalHold(row: any): RecordingLegalHold {
     createdAt: row.created_at.toISOString(),
     releasedBy: row.released_by ?? undefined,
     releasedAt: row.released_at?.toISOString(),
+    releaseReason: row.release_reason ?? undefined,
   };
 }

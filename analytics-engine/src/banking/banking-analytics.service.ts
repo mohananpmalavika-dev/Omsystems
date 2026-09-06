@@ -13,6 +13,7 @@ import {
 import {
   CashVanMonitorRepository,
   getCashVanMonitorRepository,
+  CreateCashVanMonitorInput,
 } from './repositories/cash-van-monitor.repository.js';
 
 import {
@@ -295,6 +296,20 @@ export class BankingAnalyticsService {
    */
   async getMonitors(tenantId: string, branchId: string): Promise<CashVanMonitorConfig[]> {
     return this.monitorRepo.findByBranch(tenantId, branchId);
+  }
+
+  /**
+   * Create a new monitor configuration
+   */
+  async createMonitor(input: CreateCashVanMonitorInput): Promise<CashVanMonitorConfig> {
+    return this.monitorRepo.create(input);
+  }
+
+  /**
+   * Get monitor repository
+   */
+  getMonitorRepository(): CashVanMonitorRepository {
+    return this.monitorRepo;
   }
 
   /**

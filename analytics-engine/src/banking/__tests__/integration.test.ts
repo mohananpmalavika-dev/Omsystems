@@ -14,14 +14,23 @@ describe('Banking Analytics Integration', () => {
   let eventBus: BankingEventBus;
 
   beforeEach(async () => {
-    eventBus = new BankingEventBus();
     service = new BankingAnalyticsService();
     await service.initialize();
+
+    // Create test monitor
+    await service.createMonitor({
+      tenantId: 'test-tenant',
+      branchId: 'test-branch',
+      name: 'Test Monitor',
+      arrivalZoneId: 'zone_arrival',
+      unloadingZoneId: 'zone_unloading',
+      secureEntryZoneId: 'zone_secure',
+      approvedRouteZones: ['zone_arrival', 'zone_unloading', 'zone_secure'],
+    });
   });
 
   afterEach(async () => {
     await service.shutdown();
-    eventBus.destroy();
   });
 
   it('should initialize successfully', async () => {

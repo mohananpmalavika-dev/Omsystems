@@ -1166,6 +1166,7 @@ export interface DbRecordingGap {
 
 export interface RecordingLegalHold {
   id: string;
+  referenceNumber?: string | undefined;
   tenantId: string;
   cameraId: string;
   caseId?: string | undefined;
