@@ -1787,15 +1787,26 @@ export type CustodyAction =
   | "downloaded"
   | "verified"
   | "hold_released"
-  | "archived";
+  | "archived"
+  | "export_requested"
+  | "export_approved"
+  | "export_completed"
+  | "export_downloaded"
+  | "source_verified"
+  | "package_hashed"
+  | "package_signed"
+  | "transferred";
 
 export interface ChainOfCustodyEvent {
   id: string;
   evidenceId?: string;
+  sequence?: number;
   action: CustodyAction;
   performedBy: string;
+  actorType?: "USER" | "SYSTEM" | "SERVICE";
   performedAt: string;
   sourceIp?: string;
+  workstationId?: string;
   reason?: string;
   previousHash?: string;
   eventHash: string;

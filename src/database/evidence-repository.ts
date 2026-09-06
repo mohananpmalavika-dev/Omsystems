@@ -217,97 +217,182 @@ export class EvidenceRepository {
     evidenceId?: string;
     action: CustodyAction;
     performedBy: string;
+    actorType?: "USER" | "SYSTEM" | "SERVICE";
     reason?: string;
     sourceIp?: string;
+    workstationId?: string;
   }): Promise<ChainOfCustodyEvent> {
-    // Get the previous event's hash for linkage
-    let previousHash: string | null = null;
-    if (input.evidenceId) {
-      const prevResult = await this.pool.query(
-        `SELECT event_hash FROM chain_of_custody_events 
-         WHERE evidence_id = $1
-         ORDER BY created_at DESC
-         LIMIT 1`,
-        [input.evidenceId],
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      let nextSequence = 1;
+      let previousHash: string | null = null;
+
+      if (input.evidenceId) {
+        // Prevent concurrent writer race conditions and ledger forking via transaction advisory lock
+        await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [input.evidenceId]);
+
+        const prevResult = await client.query(
+          `SELECT sequence, event_hash FROM chain_of_custody_events 
+           WHERE evidence_id = $1
+           ORDER BY sequence DESC NULLS LAST, created_at DESC
+           LIMIT 1`,
+          [input.evidenceId],
+        );
+
+        if (prevResult.rows[0]) {
+          nextSequence = (prevResult.rows[0].sequence || 0) + 1;
+          previousHash = prevResult.rows[0].event_hash || null;
+        }
+      }
+
+      const timestamp = new Date().toISOString();
+      const canonicalPayload = JSON.stringify({
+        evidenceId: input.evidenceId,
+        sequence: nextSequence,
+        action: input.action,
+        performedBy: input.performedBy,
+        actorType: input.actorType || "USER",
+        reason: input.reason || null,
+        sourceIp: input.sourceIp || null,
+        workstationId: input.workstationId || null,
+        timestamp,
+        previousHash: previousHash || "0".repeat(64),
+      });
+
+      const { createHash } = await import("node:crypto");
+      const eventHash = createHash("sha256")
+        .update(canonicalPayload + (previousHash || "0".repeat(64)))
+        .digest("hex");
+
+      const result = await client.query(
+        `INSERT INTO chain_of_custody_events (
+           id, evidence_id, sequence, action, performed_by, actor_type, reason, source_ip,
+           workstation_id, event_hash, previous_hash, created_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+         RETURNING *`,
+        [
+          randomUUID(),
+          input.evidenceId ?? null,
+          nextSequence,
+          input.action,
+          input.performedBy,
+          input.actorType || "USER",
+          input.reason ?? null,
+          input.sourceIp ?? null,
+          input.workstationId ?? null,
+          eventHash,
+          previousHash,
+        ],
       );
-      previousHash = prevResult.rows[0]?.event_hash ?? null;
+
+      await client.query("COMMIT");
+      return mapChainOfCustodyEvent(result.rows[0]);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // Create hash of this event
-    const eventData = JSON.stringify({
-      action: input.action,
-      performedBy: input.performedBy,
-      timestamp: new Date().toISOString(),
-      reason: input.reason,
-      sourceIp: input.sourceIp,
-      previousHash,
-    });
-    const eventHash = require("crypto")
-      .createHash("sha256")
-      .update(eventData)
-      .digest("hex");
-
-    const result = await this.pool.query(
-      `INSERT INTO chain_of_custody_events (
-         id, evidence_id, action, performed_by, reason, source_ip,
-         event_hash, previous_hash, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
-       RETURNING *`,
-      [
-        randomUUID(),
-        input.evidenceId ?? null,
-        input.action,
-        input.performedBy,
-        input.reason ?? null,
-        input.sourceIp ?? null,
-        eventHash,
-        previousHash,
-      ],
-    );
-    return mapChainOfCustodyEvent(result.rows[0]);
   }
 
   async getCustodyLog(evidenceId: string): Promise<ChainOfCustodyEvent[]> {
     const result = await this.pool.query(
       `SELECT * FROM chain_of_custody_events
        WHERE evidence_id = $1
-       ORDER BY created_at ASC`,
+       ORDER BY sequence ASC NULLS FIRST, created_at ASC`,
       [evidenceId],
     );
     return result.rows.map(mapChainOfCustodyEvent);
   }
 
+  async verifyCustodyChain(evidenceId: string): Promise<{
+    valid: boolean;
+    eventCount: number;
+    brokenSequence?: number;
+    error?: string;
+  }> {
+    const events = await this.getCustodyLog(evidenceId);
+    if (events.length === 0) return { valid: true, eventCount: 0 };
+
+    let expectedPrevHash = "0".repeat(64);
+
+    for (let i = 0; i < events.length; i++) {
+      const cur = events[i]!;
+      const expectedSeq = i + 1;
+      if (cur.sequence !== undefined && cur.sequence !== expectedSeq) {
+        return {
+          valid: false,
+          eventCount: events.length,
+          brokenSequence: cur.sequence,
+          error: `Sequence mismatch: expected ${expectedSeq}, got ${cur.sequence}`,
+        };
+      }
+
+      if (i > 0 && cur.previousHash !== expectedPrevHash) {
+        return {
+          valid: false,
+          eventCount: events.length,
+          brokenSequence: cur.sequence || expectedSeq,
+          error: `Hash link broken at sequence ${expectedSeq}`,
+        };
+      }
+
+      expectedPrevHash = cur.eventHash;
+    }
+
+    return { valid: true, eventCount: events.length };
+  }
+
   // Legal Holds
-  async createLegalHold(input: RecordingLegalHoldRequest & { requestedBy: string }): Promise<RecordingLegalHold> {
+  async createLegalHold(input: RecordingLegalHoldRequest & {
+    requestedBy: string;
+    tenantId?: string;
+    branchId?: string;
+    evidencePackageIds?: string[];
+  }): Promise<RecordingLegalHold> {
+    const id = randomUUID();
     const result = await this.pool.query(
       `INSERT INTO recording_legal_holds (
-         id, case_number, reason, requested_by, camera_ids, start_time, end_time,
-         review_date, expiry_date, status, created_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+         id, tenant_id, branch_id, case_number, reason, requested_by, camera_id, camera_ids,
+         evidence_package_ids, start_time, end_time, from_at, to_at, review_date, expiry_date,
+         status, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $10, $11, $12, $13, 'active', now())
        RETURNING *`,
       [
-        randomUUID(),
+        id,
+        input.tenantId ?? null,
+        input.branchId ?? null,
         input.caseNumber,
         input.reason,
         input.requestedBy,
-        JSON.stringify(input.cameraIds),
+        input.cameraIds?.[0] ?? null,
+        JSON.stringify(input.cameraIds || []),
+        JSON.stringify(input.evidencePackageIds || []),
         input.startTime,
         input.endTime,
         input.reviewDate ?? null,
         input.expiryDate ?? null,
-        "active",
       ],
     );
     return mapRecordingLegalHold(result.rows[0]);
   }
 
-  async releaseLegalHold(holdId: string, releasedBy: string): Promise<RecordingLegalHold | undefined> {
+  async releaseLegalHold(
+    holdId: string,
+    releasedBy: string,
+    reason?: string,
+  ): Promise<RecordingLegalHold | undefined> {
     const result = await this.pool.query(
       `UPDATE recording_legal_holds
-       SET status = $2, released_by = $3, released_at = now()
+       SET status = 'released',
+           released_by = $2,
+           release_reason = $3,
+           released_at = now()
        WHERE id = $1
        RETURNING *`,
-      [holdId, "released", releasedBy],
+      [holdId, releasedBy, reason ?? null],
     );
     return result.rows[0] ? mapRecordingLegalHold(result.rows[0]) : undefined;
   }
@@ -318,6 +403,81 @@ export class EvidenceRepository {
       [holdId],
     );
     return result.rows[0] ? mapRecordingLegalHold(result.rows[0]) : undefined;
+  }
+
+  async listLegalHolds(filters?: {
+    tenantId?: string;
+    cameraId?: string;
+    branchId?: string;
+    status?: string;
+  }): Promise<RecordingLegalHold[]> {
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+
+    if (filters?.tenantId) {
+      conditions.push(`tenant_id = $${idx++}`);
+      params.push(filters.tenantId);
+    }
+    if (filters?.cameraId) {
+      conditions.push(`(camera_id = $${idx} OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $${idx} || '%'))`);
+      params.push(filters.cameraId);
+      idx++;
+    }
+    if (filters?.branchId) {
+      conditions.push(`branch_id = $${idx++}`);
+      params.push(filters.branchId);
+    }
+    if (filters?.status) {
+      conditions.push(`status = $${idx++}`);
+      params.push(filters.status);
+    } else {
+      conditions.push(`(status = 'active' OR status IS NULL) AND released_at IS NULL`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const result = await this.pool.query(
+      `SELECT * FROM recording_legal_holds ${whereClause} ORDER BY created_at DESC`,
+      params,
+    );
+    return result.rows.map(mapRecordingLegalHold);
+  }
+
+  /**
+   * Evaluates if a segment/interval is protected under an active persistent legal hold
+   */
+  async isSegmentProtected(params: {
+    cameraId: string;
+    timestamp?: Date | string;
+    branchId?: string;
+    tenantId?: string;
+    segmentId?: string;
+  }): Promise<{ protected: boolean; hold?: RecordingLegalHold; reason?: string }> {
+    const ts = params.timestamp ? new Date(params.timestamp).toISOString() : new Date().toISOString();
+    const result = await this.pool.query(
+      `SELECT * FROM recording_legal_holds
+       WHERE (status = 'active' OR status IS NULL)
+         AND released_at IS NULL
+         AND (
+           camera_id = $1::uuid
+           OR (camera_ids IS NOT NULL AND camera_ids::text LIKE '%' || $1 || '%')
+         )
+         AND (from_at IS NULL OR from_at <= $2::timestamptz OR start_time IS NULL OR start_time <= $2::timestamptz)
+         AND (to_at IS NULL OR to_at >= $2::timestamptz OR end_time IS NULL OR end_time >= $2::timestamptz)
+       LIMIT 1`,
+      [params.cameraId, ts],
+    );
+
+    if (result.rows[0]) {
+      const hold = mapRecordingLegalHold(result.rows[0]);
+      return {
+        protected: true,
+        hold,
+        reason: `Protected by active Legal Hold ${hold.id} (${hold.caseNumber || 'Active Case'}): ${hold.reason}`,
+      };
+    }
+
+    return { protected: false };
   }
 }
 
@@ -379,10 +539,10 @@ function mapEvidenceManifest(row: any): EvidenceManifest {
     caseId: row.case_id,
     exportedBy: row.exported_by,
     exportedAt: row.created_at.toISOString(),
-    sourceSegments: JSON.parse(row.source_segments),
-    destinationFile: JSON.parse(row.destination_file),
-    timestamp: JSON.parse(row.timestamp),
-    signature: row.signature ?? undefined,
+    sourceSegments: typeof row.source_segments === 'string' ? JSON.parse(row.source_segments) : row.source_segments,
+    destinationFile: typeof row.destination_file === 'string' ? JSON.parse(row.destination_file) : row.destination_file,
+    timestamp: typeof row.timestamp === 'string' ? JSON.parse(row.timestamp) : row.timestamp,
+    signature: row.signature ?? row.digital_signature ?? undefined,
   };
 }
 
@@ -390,10 +550,13 @@ function mapChainOfCustodyEvent(row: any): ChainOfCustodyEvent {
   return {
     id: row.id,
     evidenceId: row.evidence_id ?? undefined,
+    sequence: row.sequence !== null && row.sequence !== undefined ? Number(row.sequence) : undefined,
     action: row.action,
     performedBy: row.performed_by,
+    actorType: row.actor_type ?? "USER",
     performedAt: row.created_at.toISOString(),
     sourceIp: row.source_ip ?? undefined,
+    workstationId: row.workstation_id ?? undefined,
     reason: row.reason ?? undefined,
     previousHash: row.previous_hash ?? undefined,
     eventHash: row.event_hash,
@@ -406,9 +569,11 @@ function mapRecordingLegalHold(row: any): RecordingLegalHold {
     id: row.id,
     tenantId: row.tenant_id ?? undefined,
     cameraId: row.camera_id ?? undefined,
+    caseNumber: row.case_number ?? undefined,
     fromAt: (row.from_at ?? row.start_time)?.toISOString(),
     toAt: (row.to_at ?? row.end_time)?.toISOString(),
     reason: row.reason,
+    status: row.status ?? "active",
     createdBy: row.created_by ?? row.requested_by,
     createdAt: row.created_at.toISOString(),
     releasedBy: row.released_by ?? undefined,
