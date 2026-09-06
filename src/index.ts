@@ -7,7 +7,9 @@ import type { ControlPlaneStore } from "./control-plane-store.js";
 import { RedisEdgePresenceCache } from "./platform/edge-presence-cache.js";
 import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js";
 import { getEventBus } from "./infrastructure/event-bus/event-bus.js";
+import { initializeTelemetry } from "./observability/telemetry.js";
 
+await initializeTelemetry();
 const config = loadConfig();
 const controlPlanePublicUrl = config.CONTROL_PLANE_PUBLIC_URL;
 

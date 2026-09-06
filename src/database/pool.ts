@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { createDatabaseTlsConfig, validateDatabaseSecurityConfiguration } from "../security/tls/index.js";
+import { trackDatabaseQuery } from "../observability/performance-observer.js";
 
 export let pool: Pool | null = null;
 
@@ -26,6 +27,15 @@ export function createPool(connectionString: string) {
     application_name: "sentinel-control-plane",
     ssl,
   });
+
+  const query = pgPool.query.bind(pgPool) as (...args: any[]) => Promise<unknown>;
+  pgPool.query = ((...args: any[]) => {
+    const callback = args.at(-1);
+    if (typeof callback === "function") return query(...args);
+    const statement = typeof args[0] === "string" ? args[0] : args[0]?.text ?? "unknown";
+    return trackDatabaseQuery(statement, () => query(...args));
+  }) as Pool["query"];
+
   pool = pgPool;
   return pgPool;
 }
