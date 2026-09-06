@@ -35,6 +35,7 @@
     "test:config": "vitest run test/config/",
     "test:observability": "vitest run test/observability/performance-observer.test.ts",
     "test:telemetry-truth": "vitest run test/telemetry-freshness.test.ts",
+    "test:role-workspaces": "vitest run dashboard/test/role-workspaces.test.ts",
     "test": "vitest run",
     "test:unit": "vitest run test/ha/distributed-fencing.test.ts test/authorization.test.ts edge-agent/test/analog-signal-quality.test.ts dashboard/test/control-proxy.test.ts dashboard/test/proxy.test.ts dashboard/test/recording-proxy.test.ts",
     "test:integration": "vitest run test/live-view-flow.test.ts test/maintenance.routes.test.ts test/device-inventory.routes.test.ts",
