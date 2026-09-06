@@ -121,6 +121,7 @@ export const navigation: NavGroup[] = [
       { label: "Media Pipeline & Scheduler", href: "/operations/media-pipeline", icon: Layers },
       { label: "HA Failover Cluster", href: "/operations/ha-failover", icon: Server },
       { label: "Fleet Observability & SLO", href: "/operations/observability", icon: BarChart3 },
+       { label: "Performance Observability", href: "/performance", icon: Gauge },
     ],
   },
   {
