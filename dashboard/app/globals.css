@@ -6225,15 +6225,20 @@ body {
   max-width: 100%;
 }
 
-/* The sidebar is intentionally fixed-dark in every content theme. */
+/* Keep the operator shell coherent with the selected theme. */
 .sidebar {
-  color: var(--sidebar-copy);
+  color: #29465b;
+  background:
+    radial-gradient(circle at 22% -8%, rgba(24, 167, 165, .13), transparent 19rem),
+    linear-gradient(180deg, #fbfdfd 0%, #eef6f7 72%, #e7f0f2 100%);
+  border-right-color: #d4e1e8;
+  box-shadow: 18px 0 50px rgba(31, 70, 88, .08);
 }
 
 .sidebar .brand-copy strong,
 .sidebar .sidebar-status strong,
 .sidebar .sidebar-user strong {
-  color: var(--sidebar-ink);
+  color: #17324a;
 }
 
 .sidebar .brand-copy span,
@@ -6241,21 +6246,23 @@ body {
 .sidebar .sidebar-user span,
 .sidebar .sidebar-legal,
 .sidebar .nav-group-meta small {
-  color: var(--sidebar-muted-copy);
+  color: #668392;
 }
 
 .sidebar .mobile-close {
-  color: var(--sidebar-ink);
+  color: #29465b;
 }
 
 .sidebar .command-search {
-  color: var(--sidebar-copy);
+  color: #557184;
+  border-color: #cbdde4;
+  background: rgba(255,255,255,.76);
 }
 
 .sidebar .command-search kbd {
-  color: #9eb2ca;
-  border-color: rgba(255,255,255,.13);
-  background: rgba(255,255,255,.055);
+  color: #668392;
+  border-color: #cbdde4;
+  background: #f3f8f9;
 }
 
 .sidebar .nav-shortcuts a,
@@ -6263,7 +6270,7 @@ body {
 .sidebar .nav-group summary,
 .sidebar .main-nav a,
 .sidebar .sidebar-help {
-  color: var(--sidebar-copy);
+  color: #557184;
 }
 
 .sidebar .nav-shortcuts a:hover,
@@ -6271,7 +6278,86 @@ body {
 .sidebar .nav-group summary:hover,
 .sidebar .main-nav a:hover,
 .sidebar .sidebar-help:hover {
+  color: #17324a;
+  background: rgba(20, 125, 138, .07);
+}
+
+.sidebar .nav-shortcuts a,
+.sidebar .nav-utility > :where(a, button),
+.sidebar .main-nav a,
+.sidebar .sidebar-help {
+  border-color: transparent;
+}
+
+.sidebar .nav-shortcuts a.active,
+.sidebar .nav-utility > a.active,
+.sidebar .main-nav a.active {
+  color: #0f6570;
+  border-color: #a9d7d8;
+  background: linear-gradient(135deg, #dff5f4, #eefafa);
+  box-shadow: inset 3px 0 #18a7a5, 0 5px 14px rgba(24, 133, 145, .08);
+}
+
+.sidebar .nav-group[open] summary {
+  color: #17324a;
+}
+
+.sidebar .nav-group[open] summary .nav-group-label > svg {
+  color: #147d8a;
+}
+
+.sidebar .sidebar-status {
+  border-color: #c9e2e2;
+  background: rgba(255,255,255,.7);
+}
+
+.sidebar .sidebar-user {
+  border-top-color: #d4e1e8;
+}
+
+[data-theme="dark"] .sidebar,
+[data-theme="navy"] .sidebar,
+[data-theme="emerald"] .sidebar {
+  color: var(--sidebar-copy);
+  background: linear-gradient(180deg, #0a1d39 0%, var(--navy) 72%, #051121 100%);
+  border-right-color: rgba(255,255,255,.07);
+  box-shadow: 18px 0 50px rgba(7, 17, 31, .08);
+}
+
+[data-theme="dark"] .sidebar .brand-copy strong,
+[data-theme="navy"] .sidebar .brand-copy strong,
+[data-theme="emerald"] .sidebar .brand-copy strong,
+[data-theme="dark"] .sidebar .sidebar-status strong,
+[data-theme="navy"] .sidebar .sidebar-status strong,
+[data-theme="emerald"] .sidebar .sidebar-status strong,
+[data-theme="dark"] .sidebar .sidebar-user strong,
+[data-theme="navy"] .sidebar .sidebar-user strong,
+[data-theme="emerald"] .sidebar .sidebar-user strong {
   color: var(--sidebar-ink);
+}
+
+[data-theme="dark"] .sidebar .nav-shortcuts a.active,
+[data-theme="navy"] .sidebar .nav-shortcuts a.active,
+[data-theme="emerald"] .sidebar .nav-shortcuts a.active,
+[data-theme="dark"] .sidebar .nav-utility > a.active,
+[data-theme="navy"] .sidebar .nav-utility > a.active,
+[data-theme="emerald"] .sidebar .nav-utility > a.active,
+[data-theme="dark"] .sidebar .main-nav a.active,
+[data-theme="navy"] .sidebar .main-nav a.active,
+[data-theme="emerald"] .sidebar .main-nav a.active {
+  color: #fff;
+  border-color: rgba(83,132,255,.35);
+  background: linear-gradient(145deg, rgba(55,108,231,.32), rgba(31,67,139,.25));
+  box-shadow: inset 3px 0 #438cff;
+}
+
+@media (max-width: 680px) {
+  .sidebar { width: min(88vw, 320px); padding: 18px 14px 14px; }
+  .topbar { gap: 10px; }
+  .topbar-context { min-width: 0; }
+  .breadcrumbs { max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .topbar-actions { gap: 5px; }
+  .route-surface > * { max-width: 100%; }
 }
 
 .sidebar .nav-shortcuts a { font-size: 11px; }
