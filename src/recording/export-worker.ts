@@ -1123,7 +1123,6 @@ export class ExportWorker {
     );
     return result.rowCount || 0;
   }
-  }
 
   async getExportJob(jobId: string): Promise<ExportJob | undefined> {
     const result = await this.pool.query(

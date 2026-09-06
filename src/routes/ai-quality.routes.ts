@@ -164,7 +164,6 @@ export async function registerAiQualityRoutes(
     const recommendation = await platform.cameraTuning.generateThresholdRecommendation(
       id,
       detectorId,
-      0.18, // Simulated observed rate for recommendation preview
     );
 
     return { configuration: config, recommendation };

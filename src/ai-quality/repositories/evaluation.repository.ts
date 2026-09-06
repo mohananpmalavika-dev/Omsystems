@@ -102,12 +102,9 @@ export class EvaluationRepository {
   }
 
   async getLatestEvaluationForModel(modelVersionId: string): Promise<EvaluationRun | null> {
-    for (const run of this.runs.values()) {
-      if (run.modelVersionId === modelVersionId && run.status === "completed") {
-        return run;
-      }
-    }
-    return null;
+    return [...this.runs.values()].reverse()
+      .filter(run => run.modelVersionId === modelVersionId && run.status === "completed")
+      .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0] ?? null;
   }
 
   async listEvaluations(modelVersionId?: string): Promise<EvaluationRun[]> {
@@ -119,7 +116,7 @@ export class EvaluationRepository {
   }
 
   async saveEvaluationRun(run: EvaluationRun): Promise<void> {
-    this.runs.set(run.id, run);
+    this.runs.set(run.id, structuredClone(run));
   }
 
   async getCertification(modelVersionId: string): Promise<ModelCertification | null> {

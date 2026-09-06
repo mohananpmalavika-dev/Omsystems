@@ -150,6 +150,13 @@ export interface EvaluationRun {
   thresholdCurve: ThresholdCurvePoint[];
   startedAt: string;
   finishedAt?: string;
+  evidence?: {
+    source: "measured";
+    modelSha256: string;
+    datasetSha256: string;
+    sampleCount: number;
+    cameraHours: number;
+  };
 }
 
 export interface QualityGateRequirements {
@@ -186,6 +193,9 @@ export interface ModelCertification {
   approvedBy?: string;
   approvedAt?: string;
   expiresAt?: string;
+  evaluationRunId?: string;
+  modelSha256?: string;
+  threshold?: number;
 }
 
 export interface CameraDetectorConfiguration {
@@ -247,10 +257,10 @@ export interface DetectorRuntimeQuality {
   totalAlertsLast7Days: number;
   operatorConfirmedTPCount: number;
   operatorConfirmedFPCount: number;
-  observedFalseAlertRatePerHour: number;
-  baselineFalseAlertRatePerHour: number;
-  driftPercentage: number;
-  driftStatus: "HEALTHY" | "WARNING" | "CRITICAL_DRIFT";
+  observedFalseAlertRatePerHour: number | null;
+  baselineFalseAlertRatePerHour: number | null;
+  driftPercentage: number | null;
+  driftStatus: "HEALTHY" | "WARNING" | "CRITICAL_DRIFT" | "INSUFFICIENT_DATA";
   highFalseAlarmCameraIds: string[];
 }
 
