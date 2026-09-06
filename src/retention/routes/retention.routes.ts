@@ -155,9 +155,11 @@ async function loadLiveBranchRetentionSummaries(store: ControlPlaneStore | undef
         summaries.push(summary);
       }
     }
-    return summaries;
+      if (summaries.length > 0) {
+        return summaries;
+      }
+    }
   }
-}
 
   if (process.env.NODE_ENV === "test" || !store) {
     return getTestRetentionFixture();

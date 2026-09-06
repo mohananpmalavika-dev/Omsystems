@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react";
 import { PageHero } from "@/components/page-hero";
-import { AppLayout } from "@/components/app-layout";
 import {
   Server,
   Fingerprint,
@@ -84,8 +83,7 @@ export default function CompatibilityPage() {
   );
 
   return (
-    <AppLayout>
-      <main className="p-6 max-w-7xl mx-auto space-y-6">
+    <main className="p-6 max-w-7xl mx-auto space-y-6">
         <PageHero
           eyebrow="Device Intelligence & Telemetry"
           title="CP PLUS & Recorder Compatibility Layer"
@@ -232,6 +230,5 @@ export default function CompatibilityPage() {
           />
         )}
       </main>
-    </AppLayout>
   );
 }

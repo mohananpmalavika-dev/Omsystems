@@ -77,9 +77,7 @@ async function runCapacityBenchmarkTests() {
   await app.ready();
 
   const authHeaders = {
-    "x-user-id": "usr-admin-1",
-    "x-user-role": "SUPER_ADMIN",
-    "x-tenant-id": "bank-corp",
+    "x-user-id": "user-global-admin",
   };
 
   const getSloResp = await app.inject({
@@ -127,9 +125,7 @@ async function runCapacityBenchmarkTests() {
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);
   console.log("================================================================================\n");
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 runCapacityBenchmarkTests().catch((err) => {

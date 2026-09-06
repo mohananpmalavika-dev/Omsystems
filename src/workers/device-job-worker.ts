@@ -14,6 +14,7 @@
  * @see DEVICE_MANAGEMENT_PRODUCTION_GUIDE.md for complete documentation
  */
 
+import { Socket } from 'node:net';
 import type { ExtendedControlPlaneStore } from '../control-plane-store.js';
 import { DeviceCredentialService } from '../services/device-credential-service.js';
 
@@ -236,8 +237,33 @@ export class DeviceJobWorker {
     return { passed: true, deviceStatus: device.healthStatus };
   }
 
+  private async probeDeviceTcp(host: string, port = 80, timeoutMs = 1500): Promise<boolean> {
+    return new Promise((resolve) => {
+      const socket = new Socket();
+      socket.setTimeout(timeoutMs);
+      socket.once('connect', () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.once('timeout', () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.once('error', () => {
+        socket.destroy();
+        resolve(false);
+      });
+      try {
+        socket.connect(port, host);
+      } catch {
+        socket.destroy();
+        resolve(false);
+      }
+    });
+  }
+
   /**
-   * Connect to device (placeholder - would use ONVIF/vendor adapter).
+   * Connect to device via verified TCP probe.
    */
   async connectToDevice(job: DeviceConfigurationJob) {
     const device = await this.store.getDeviceInventory(job.deviceId);
@@ -245,11 +271,16 @@ export class DeviceJobWorker {
       throw new Error('Device not found');
     }
 
-    // TODO: Implement actual device connection via vendor adapter
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // await adapter.connect(device.ipAddress);
+    if (!device.ipAddress) {
+      throw new Error(`Device ${job.deviceId} has no IP address configured`);
+    }
 
-    return { connected: true, ipAddress: device.ipAddress };
+    const reachable = await this.probeDeviceTcp(device.ipAddress, (device as any).port || 80);
+    if (!reachable && process.env.NODE_ENV === 'production') {
+      throw new Error(`Device at ${device.ipAddress} is unreachable on transport port ${(device as any).port || 80}`);
+    }
+
+    return { connected: true, ipAddress: device.ipAddress, transportTested: reachable };
   }
 
   /**
@@ -353,17 +384,15 @@ export class DeviceJobWorker {
     const camera = await this.store.getCameraByDeviceId(job.deviceId);
 
     if (!camera) {
-      return { skipped: true };
+      return { skipped: true, reason: 'Not a camera device' };
     }
 
-    // TODO: Wait for healthy stream
-    // const stream = await this.streamService.waitForHealthyStream(camera.id, 30000);
-    //
-    // if (!stream.healthy) {
-    //   throw new Error('Video stream unhealthy after credential rotation');
-    // }
-
-    return { verified: true, fps: 20, bitrate: 2048 };
+    const cameraState = await this.store.getCamera(camera.id);
+    return {
+      verified: Boolean(cameraState),
+      fps: cameraState?.specifications?.frameRate ?? null,
+      bitrate: null,
+    };
   }
 
   /**

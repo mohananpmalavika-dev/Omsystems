@@ -70,7 +70,9 @@ export function CameraRetentionDetailModal({
           setAssessmentData(json.data.assessment);
         }
       })
-      .catch(() => {})
+      .catch((err: unknown) => {
+        console.error("Failed to load camera retention assessment", err);
+      })
       .finally(() => setLoading(false));
   }, [isOpen, cameraId, initialAssessment]);
 

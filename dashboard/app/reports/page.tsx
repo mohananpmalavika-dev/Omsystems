@@ -112,7 +112,7 @@ export default function ReportsPage(){
           <p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p>
         </div>
 
-        <div className={`rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-200 bg-emerald-50 text-emerald-800":"border-amber-200 bg-amber-50 text-amber-900"}`}>
+        <div className={`rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-500/40 bg-emerald-950/40 text-emerald-300":"border-amber-500/40 bg-amber-950/40 text-amber-300"}`}>
           {deliveryConfiguration===null?"Checking report email delivery…":deliveryConfiguration.configured?`Email delivery is configured through ${deliveryConfiguration.provider.toUpperCase()}. Recipients receive signed report-download links.`:"Email delivery is not configured. Reports remain available in Run history; configure SMTP, SendGrid, SES, or a webhook before adding recipients."}
         </div>
         
@@ -123,14 +123,14 @@ export default function ReportsPage(){
           </label>
           <div role="radiogroup" aria-label="Report template" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {templates.map((tmpl)=>(
-              <button key={tmpl.id} type="button" role="radio" aria-checked={template===tmpl.id} onClick={()=>setTemplate(tmpl.id)} className={`rounded-lg border p-3 text-left transition ${template===tmpl.id?"border-blue-600 bg-blue-50 ring-1 ring-blue-600":"border-gray-200 bg-white hover:border-blue-300"}`}>
-                <span className="block text-sm font-semibold text-gray-900">{tmpl.name}</span>
-                <span className="mt-1 block text-xs text-gray-600">{tmpl.description}</span>
+              <button key={tmpl.id} type="button" role="radio" aria-checked={template===tmpl.id} onClick={()=>setTemplate(tmpl.id)} className={`rounded-xl border p-3.5 text-left transition ${template===tmpl.id?"border-blue-500 bg-blue-600/20 ring-1 ring-blue-500":"border-slate-700 bg-slate-800/60 hover:border-slate-600"}`}>
+                <span className={`block text-sm font-semibold ${template===tmpl.id ? "text-blue-400" : "text-slate-100"}`}>{tmpl.name}</span>
+                <span className="mt-1 block text-xs text-slate-400">{tmpl.description}</span>
               </button>
             ))}
           </div>
           {selectedTemplateInfo && (
-            <p className="text-xs text-gray-500 mt-2">Selected: {selectedTemplateInfo.name}</p>
+            <p className="text-xs text-slate-400 mt-2">Selected: <strong className="text-slate-200 font-semibold">{selectedTemplateInfo.name}</strong></p>
           )}
         </div>
         

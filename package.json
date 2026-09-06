@@ -1,6 +1,6 @@
 {
   "name": "sentinel-grid",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0-rc.2",
   "private": true,
   "workspaces": [
     "dashboard",
@@ -94,6 +94,7 @@
     "test:stale:semantics": "tsx test/operational-health/stale-semantics-runner.ts",
     "test:surveillance:policy": "tsx test/surveillance-policy/surveillance-policy-runner.ts",
     "test:p0:readiness": "tsx test/p0-readiness/p0-implementation-runner.ts",
+    "test:acceptance:master": "tsx test/acceptance/master-acceptance-scenario.ts",
     "test:local:ai": "tsx test/ai/local-ai-pipeline.test.ts",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",
