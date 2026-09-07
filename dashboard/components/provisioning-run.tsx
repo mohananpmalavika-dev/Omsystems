@@ -24,6 +24,7 @@ export function ProvisioningRun({
   branchId,
   refreshing = false,
   onStart,
+  onStop,
   onInstallAgent,
   onProvideCredentials,
   onChanged,
@@ -32,6 +33,7 @@ export function ProvisioningRun({
   branchId: string;
   refreshing?: boolean;
   onStart: () => void;
+  onStop?: () => void;
   onInstallAgent: () => void;
   onProvideCredentials: () => void;
   onChanged?: () => void;
@@ -243,14 +245,14 @@ export function ProvisioningRun({
             </button>
           ) : null}
 
-          {run?.status === "running" || run?.status === "queued" || refreshing ? (
+          {refreshing && onStop ? (
             <button
               className="secondary-button"
               style={{ background: "rgba(239, 68, 68, 0.2)", color: "#f87171", borderColor: "#dc2626", fontWeight: 600 }}
-              onClick={() => { setNotice("Provisioning stopped."); setRun((curr) => curr ? { ...curr, status: "active" } : undefined); }}
-              title="Stop current provisioning run"
+              onClick={onStop}
+              title="Stop waiting for this scan; queued gateway work may still complete"
             >
-              <Square size={13} fill="#f87171" /> Stop Provisioning
+              <Square size={13} fill="currentColor" /> Stop waiting
             </button>
           ) : null}
           {run?.status === "waiting_for_input" ? <button className="primary-button" onClick={onProvideCredentials}>Provide credentials</button> : null}

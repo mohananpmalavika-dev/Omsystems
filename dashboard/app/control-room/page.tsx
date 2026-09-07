@@ -33,6 +33,7 @@ import { LiveAiWallPanel } from "@/components/live-ai-wall-panel";
 import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
 import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
+import { isLiveWallCameraOnline, selectLiveWallCameras } from "@/lib/live-wall-filters";
 import {
   endControlRoomActivity,
   startControlRoomActivity,
@@ -428,7 +429,7 @@ export default function ControlRoomPage() {
       }
       const item = branchMap.get(bId)!;
       item.cameraCount += 1;
-      if (camera.status !== "offline") {
+      if (isLiveWallCameraOnline(camera)) {
         item.onlineCount += 1;
       }
     }
@@ -477,56 +478,23 @@ export default function ControlRoomPage() {
     });
   }, [branchesList, selectedZone, selectedRegion, selectedArea]);
 
-  // Filtered Cameras based on all criteria
-  const filteredCameras = useMemo(() => {
-    const prioritySet = new Set(combinedPriorityCameraIds);
-    const query = searchQuery.trim().toLowerCase();
+  const wallSelection = useMemo(() => selectLiveWallCameras(
+    cameras, branchesList, combinedPriorityCameraIds,
+    {
+      zone: selectedZone, region: selectedRegion, area: selectedArea,
+      branchId: selectedBranchId, query: searchQuery, status: statusFilter,
+      hideUnavailable: hideUnavailableChannels,
+    },
+  ), [cameras, branchesList, combinedPriorityCameraIds, selectedZone, selectedRegion,
+    selectedArea, selectedBranchId, searchQuery, statusFilter, hideUnavailableChannels]);
+  const filteredCameras = wallSelection.cameras;
 
-    return cameras.filter((camera) => {
-      if (hideUnavailableChannels && statusFilter !== "OFFLINE" && camera.status === "offline") return false;
-      const bId = camera.branchId || "default-branch";
-      const bName = camera.branchName || `Branch ${bId}`;
-      const { zone, region, area } = inferHierarchy(bName, camera.name);
-
-      // Hierarchy filters
-      if (selectedBranchId !== "ALL") {
-        if (bId !== selectedBranchId) return false;
-      } else {
-        if (selectedZone !== "ALL" && zone !== selectedZone) return false;
-        if (selectedRegion !== "ALL" && region !== selectedRegion) return false;
-        if (selectedArea !== "ALL" && area !== selectedArea) return false;
-      }
-
-      // Status filter
-      if (statusFilter === "ONLINE" && camera.status === "offline") return false;
-      if (statusFilter === "OFFLINE" && camera.status !== "offline") return false;
-      if (statusFilter === "ALERT" && !prioritySet.has(camera.id)) return false;
-
-      // Text search query
-      if (query) {
-        const matchName = (camera.name || "").toLowerCase().includes(query);
-        const matchBranch = bName.toLowerCase().includes(query);
-        const matchIp = (camera.ipAddress || "").toLowerCase().includes(query);
-        const matchChannel = String(camera.channel || "").includes(query);
-        const matchVendor = (camera.vendor || "").toLowerCase().includes(query);
-        if (!matchName && !matchBranch && !matchIp && !matchChannel && !matchVendor) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [
-    cameras,
-    selectedZone,
-    selectedRegion,
-    selectedArea,
-    selectedBranchId,
-    statusFilter,
-    searchQuery,
-    combinedPriorityCameraIds,
-    hideUnavailableChannels,
-  ]);
+  useEffect(() => {
+    if (filteredCameras.length === 0) {
+      setActiveStreams(0);
+      setMonitoredCameraIds((current) => current.length ? [] : current);
+    }
+  }, [filteredCameras.length]);
 
   // Active filter count
   const isFilterActive =
@@ -535,7 +503,8 @@ export default function ControlRoomPage() {
     selectedArea !== "ALL" ||
     selectedBranchId !== "ALL" ||
     statusFilter !== "ALL" ||
-    searchQuery.trim().length > 0;
+    searchQuery.trim().length > 0 ||
+    hideUnavailableChannels;
 
   const resetAllFilters = useCallback(() => {
     setSelectedZone("ALL");
@@ -544,6 +513,7 @@ export default function ControlRoomPage() {
     setSelectedBranchId("ALL");
     setStatusFilter("ALL");
     setSearchQuery("");
+    setHideUnavailableChannels(false);
   }, []);
 
   // Selected Branch object (if single branch is chosen)
@@ -598,7 +568,7 @@ export default function ControlRoomPage() {
   const inventoryStats = useMemo(
     () => ({
       total: filteredCameras.length,
-      online: filteredCameras.filter((camera) => camera.status !== "offline").length,
+      online: filteredCameras.filter(isLiveWallCameraOnline).length,
     }),
     [filteredCameras]
   );
@@ -664,7 +634,7 @@ export default function ControlRoomPage() {
             place-content: center;
             justify-items: center;
             gap: 14px;
-            color: #475569;
+            color: var(--muted);
           }
           .control-room-loading p {
             margin: 0;
@@ -687,13 +657,15 @@ export default function ControlRoomPage() {
 
   return (
     <div className="control-room">
-      {/* 1. Dedicated Top Navigation Exit Bar */}
-      <nav className="control-room-nav-hub" aria-label="Quick operations navigation">
-        <div className="nav-hub-left">
-          <div className="brand-pill">
-            <Video size={16} />
-            <span>SENTINEL LIVE WALL</span>
+      <header className="control-room-nav-hub">
+        <div className="wall-heading">
+          <span className="brand-pill"><Video size={22} aria-hidden="true" /></span>
+          <div>
+            <h1>Live video wall</h1>
+            <p>Monitor cameras and detections across your branches.</p>
           </div>
+        </div>
+        <nav className="nav-hub-left" aria-label="Quick operations navigation">
           <a href="/" className="nav-link" title="Open Overview Dashboard">
             <LayoutDashboard size={14} />
             <span>Overview</span>
@@ -718,13 +690,13 @@ export default function ControlRoomPage() {
             <Layers size={14} />
             <span>Organization</span>
           </a>
-        </div>
+        </nav>
         <div className="nav-hub-right">
           <span className={`data-status ${dataMode}`}>
             <i />
             {dataMode === "live" ? "System Live" : dataMode === "partial" ? "Partial Sync" : "Offline Mode"}
           </span>
-          <HeaderClock />
+          <span className="wall-clock"><HeaderClock /></span>
           <button
             type="button"
             className="refresh-btn"
@@ -736,7 +708,7 @@ export default function ControlRoomPage() {
             <span>{refreshing ? "Refreshing" : "Refresh"}</span>
           </button>
         </div>
-      </nav>
+      </header>
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
       <section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
@@ -838,6 +810,7 @@ export default function ControlRoomPage() {
             <Search size={14} className="search-icon" />
             <input
               type="text"
+              aria-label="Search cameras by name, IP address, or channel"
               placeholder="Search camera, IP, channel..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -861,33 +834,37 @@ export default function ControlRoomPage() {
             <button
               type="button"
               className={`chip ${statusFilter === "ALL" ? "active" : ""}`}
+              aria-pressed={statusFilter === "ALL"}
               onClick={() => setStatusFilter("ALL")}
             >
-              All Feeds ({cameras.length})
+              All Feeds ({wallSelection.counts.total})
             </button>
             <button
               type="button"
               className={`chip green ${statusFilter === "ONLINE" ? "active" : ""}`}
+              aria-pressed={statusFilter === "ONLINE"}
               onClick={() => setStatusFilter("ONLINE")}
             >
               <span className="dot green" />
-              Online ({cameras.filter((c) => c.status !== "offline").length})
+              Online ({wallSelection.counts.online})
             </button>
             <button
               type="button"
               className={`chip red ${statusFilter === "OFFLINE" ? "active" : ""}`}
+              aria-pressed={statusFilter === "OFFLINE"}
               onClick={() => setStatusFilter("OFFLINE")}
             >
               <span className="dot red" />
-              Offline ({cameras.filter((c) => c.status === "offline").length})
+              Offline ({wallSelection.counts.offline})
             </button>
             <button
               type="button"
               className={`chip amber ${statusFilter === "ALERT" ? "active" : ""}`}
+              aria-pressed={statusFilter === "ALERT"}
               onClick={() => setStatusFilter("ALERT")}
             >
               <span className="dot amber" />
-              Alerts ({combinedPriorityCameraIds.length})
+              Alerts ({wallSelection.counts.alerts})
             </button>
           </div>
 
@@ -1012,7 +989,7 @@ export default function ControlRoomPage() {
         <div className="stat-card">
           <Building2 size={20} className="stat-icon blue" aria-hidden="true" />
           <div>
-            <strong>{isFilterActive ? availableBranches.length : branchesList.length}</strong>
+            <strong>{wallSelection.branchCount}</strong>
             <span>Branches in view</span>
           </div>
         </div>
@@ -1063,7 +1040,7 @@ export default function ControlRoomPage() {
       <section className="control-room-content" aria-label="Camera wall">
         {filteredCameras.length > 0 ? (
           <EnhancedCameraGrid
-            key={`grid-${selectedZone}-${selectedRegion}-${selectedArea}-${selectedBranchId}-${statusFilter}-${filteredCameras.length}`}
+            key={`grid-${filteredCameras.map((camera) => camera.id).join("|")}`}
             cameras={filteredCameras}
             initialLayout={initialLayout}
             maxConcurrentStreams={CONTROL_ROOM_MAX_CONCURRENT_STREAMS}
@@ -1087,7 +1064,7 @@ export default function ControlRoomPage() {
             </div>
             <h2>No cameras match current filter</h2>
             <p>
-              There are no cameras matching your selected Zone, Region, Area, or search query.
+              No cameras match the selected location, status, search, or availability filters.
             </p>
             <button type="button" className="primary-action" onClick={resetAllFilters}>
               Clear All Filters
@@ -1135,595 +1112,143 @@ export default function ControlRoomPage() {
 
       <style jsx>{`
         .control-room {
-          min-height: 100vh;
-          background: #0f172a;
-          display: flex;
-          flex-direction: column;
-          color: #f8fafc;
+          width: min(100%, 1680px); min-width: 0; min-height: calc(100dvh - 80px);
+          margin-inline: auto; padding: 24px; display: flex; flex-direction: column;
+          gap: 16px; color: var(--ink); background: var(--canvas);
         }
-
-        /* 1. Top Navigation Exit Hub */
         .control-room-nav-hub {
-          padding: 10px 20px;
-          background: #090e17;
-          border-bottom: 1px solid #1e293b;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          flex-wrap: wrap;
+          display: grid; grid-template-columns: minmax(0, 1fr) auto;
+          align-items: center; gap: 16px 24px;
         }
-        .nav-hub-left {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
+        .wall-heading { display: flex; align-items: center; min-width: 0; gap: 12px; }
+        .wall-heading h1 {
+          margin: 0; color: var(--ink); font-size: clamp(23px, 2.2vw, 28px);
+          font-weight: 750; line-height: 1.2; letter-spacing: -.7px;
         }
+        .wall-heading p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
         .brand-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          padding: 6px 12px;
-          background: linear-gradient(135deg, #1d4ed8, #2563eb);
-          border-radius: 6px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.5px;
-          color: white;
-          margin-right: 6px;
+          display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+          width: 46px; height: 46px; border: 1px solid var(--line); border-radius: 12px;
+          color: var(--blue-dark); background: var(--blue-soft);
         }
-        .nav-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          border-radius: 6px;
-          background: #1e293b;
-          border: 1px solid #334155;
-          color: #cbd5e1;
-          font-size: 12px;
-          font-weight: 600;
-          text-decoration: none;
-          transition: all 0.15s ease;
+        .nav-hub-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; }
+        .nav-link, .refresh-btn {
+          display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+          padding: 7px 11px; border: 1px solid var(--line); border-radius: 7px;
+          background: var(--surface); color: var(--muted); font-size: 12px;
+          font-weight: 600; text-decoration: none; cursor: pointer;
+          transition: background .15s ease, border-color .15s ease;
         }
-        .nav-link:hover {
-          background: #2563eb;
-          color: white;
-          border-color: #3b82f6;
+        .refresh-btn { color: var(--blue-dark); }
+        .nav-link:hover, .refresh-btn:hover:not(:disabled) { color: var(--blue-dark); background: var(--blue-soft); border-color: var(--blue); }
+        .refresh-btn:disabled { opacity: .6; cursor: wait; }
+        .nav-hub-right { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; grid-column: 2; grid-row: 1; justify-content: flex-end; }
+        .data-status, .wall-clock {
+          display: inline-flex; align-items: center; gap: 7px; min-height: 36px;
+          padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px;
+          background: var(--surface); font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap;
         }
-        .nav-hub-right {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .data-status,
-        .header-time {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          padding: 5px 10px;
-          border: 1px solid #334155;
-          border-radius: 6px;
-          background: #1e293b;
-          font-size: 11px;
-          font-weight: 600;
-          color: #94a3b8;
-          white-space: nowrap;
-        }
-        .data-status i {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #4ade80;
-          box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.2);
-        }
-        .data-status.partial i {
-          background: #fbbf24;
-          box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
-        }
-        .data-status.unavailable i {
-          background: #f87171;
-          box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.2);
-        }
-        .refresh-btn {
-          border: 1px solid #334155;
-          border-radius: 6px;
-          background: #1e293b;
-          color: #38bdf8;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 11px;
-          font-size: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-        .refresh-btn:hover:not(:disabled) {
-          background: #0284c7;
-          color: white;
-        }
-        .refresh-btn:disabled {
-          opacity: 0.6;
-          cursor: wait;
-        }
-
-        /* 2. Hierarchy Filter Toolbar */
+        .data-status i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+        .data-status.partial i { background: #f59e0b; }
+        .data-status.unavailable i { background: #ef4444; }
         .hierarchy-filter-bar {
-          background: #131d2e;
-          border-bottom: 1px solid #1e293b;
-          padding: 12px 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
+          display: flex; flex-direction: column; gap: 14px; padding: 16px;
+          background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
         }
-        .filter-controls-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        .filter-select-group {
-          display: flex;
-          align-items: center;
-          background: #0b111e;
-          border: 1px solid #27354a;
-          border-radius: 8px;
-          padding: 3px 8px;
-          gap: 6px;
-        }
-        .filter-select-group.highlight {
-          border-color: #3b82f6;
-          background: #0f1c34;
-        }
-        .filter-select-group label {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          font-size: 11px;
-          font-weight: 700;
-          color: #94a3b8;
-          text-transform: uppercase;
-          letter-spacing: 0.3px;
-        }
+        .filter-controls-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(200px, 1.4fr); align-items: end; gap: 10px; }
+        .filter-select-group { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+        .filter-select-group label { display: flex; align-items: center; gap: 4px; min-height: 18px; font-size: 12px; font-weight: 600; color: var(--muted); }
+        .filter-select-group.highlight label { color: var(--blue-dark); }
         .filter-select-group select {
-          background: transparent;
-          border: 0;
-          color: #f1f5f9;
-          font-size: 12px;
-          font-weight: 600;
-          padding: 5px 4px;
-          cursor: pointer;
-          outline: none;
+          width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px;
+          background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px;
+          color: var(--ink); font-size: 13px; font-weight: 600; cursor: pointer;
         }
-        .filter-select-group select option {
-          background: #0f172a;
-          color: #f8fafc;
-        }
+        .filter-select-group select option { background: var(--surface); color: var(--ink); }
         .filter-search-box {
-          position: relative;
-          display: flex;
-          align-items: center;
-          flex: 1;
-          min-width: 200px;
-          background: #0b111e;
-          border: 1px solid #27354a;
-          border-radius: 8px;
-          padding: 0 10px;
+          display: flex; align-items: center; min-width: 0; min-height: 40px; padding: 0 10px;
+          background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px;
         }
-        .filter-search-box .search-icon {
-          color: #64748b;
-          margin-right: 6px;
+        .filter-search-box .search-icon { color: var(--muted); margin-right: 6px; }
+        .filter-search-box input { width: 100%; min-width: 0; background: transparent; border: 0; color: var(--ink); font-size: 13px; padding: 8px 0; outline: none; }
+        .filter-search-box input::placeholder { color: var(--muted); }
+        .clear-search-btn { display: grid; place-items: center; min-width: 30px; min-height: 30px; background: transparent; border: 0; color: var(--muted); cursor: pointer; }
+        .filter-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-top: 14px; border-top: 1px solid var(--line); }
+        .status-chips, .ai-wall-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .chip, .ai-wall-controls button, .ai-engine-chip {
+          display: inline-flex; align-items: center; gap: 6px; min-height: 34px;
+          padding: 6px 10px; border-radius: 7px; background: var(--surface-soft);
+          border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 600;
         }
-        .filter-search-box input {
-          width: 100%;
-          background: transparent;
-          border: 0;
-          color: #f1f5f9;
-          font-size: 12px;
-          padding: 8px 0;
-          outline: none;
-        }
-        .filter-search-box input::placeholder {
-          color: #64748b;
-        }
-        .clear-search-btn {
-          background: transparent;
-          border: 0;
-          color: #94a3b8;
-          cursor: pointer;
-          padding: 4px;
-          display: grid;
-          place-items: center;
-        }
-
-        /* Filter Meta Row */
-        .filter-meta-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .status-chips {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 10px;
-          border-radius: 999px;
-          background: #1e293b;
-          border: 1px solid #334155;
-          color: #94a3b8;
-          font-size: 11px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-        .chip:hover {
-          background: #334155;
-          color: #f1f5f9;
-        }
-        .chip.active {
-          background: #2563eb;
-          border-color: #3b82f6;
-          color: white;
-        }
-        .dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-        }
-        .dot.green {
-          background: #22c55e;
-        }
-        .dot.red {
-          background: #ef4444;
-        }
-        .dot.amber {
-          background: #f59e0b;
-        }
-        .filter-summary {
-          display: flex;
-          align-items: center;
-          font-size: 12px;
-          color: #94a3b8;
-        }
-        .ai-wall-controls {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-        }
-        .ai-wall-controls button,
-        .ai-engine-chip {
-          min-height: 27px;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 0 8px;
-          color: #94a3b8;
-          border: 1px solid #334155;
-          border-radius: 6px;
-          background: #111c2e;
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: capitalize;
-        }
-        .ai-wall-controls button { cursor: pointer; }
-        .ai-wall-controls button.active {
-          color: #a5f3fc;
-          border-color: #0e7490;
-          background: #083344;
-        }
-        .ai-wall-controls .open-ai-panel {
-          color: #e0e7ff;
-          border-color: #4338ca;
-          background: #312e81;
-        }
-        .ai-engine-chip i {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: #64748b;
-        }
-        .ai-engine-chip.online i { background: #22c55e; box-shadow: 0 0 6px #22c55e; }
-        .ai-engine-chip.degraded i { background: #f59e0b; }
-        .ai-engine-chip.offline i,
-        .ai-engine-chip.unavailable i { background: #ef4444; }
-        .active-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: #1e3a8a;
-          border: 1px solid #2563eb;
-          color: #bfdbfe;
-          padding: 3px 10px;
-          border-radius: 6px;
-          font-size: 11px;
-        }
-        .active-pill strong {
-          color: white;
-        }
-        .active-pill em {
-          font-style: normal;
-          color: #93c5fd;
-          font-weight: 700;
-        }
-        .reset-btn {
-          margin-left: 6px;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-          background: #dc2626;
-          border: 0;
-          color: white;
-          padding: 2px 7px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 700;
-          cursor: pointer;
-        }
-        .reset-btn:hover {
-          background: #b91c1c;
-        }
-        .all-pill {
-          font-size: 11px;
-          color: #94a3b8;
-        }
-        .all-pill strong {
-          color: #f8fafc;
-          font-weight: 700;
-        }
-
-        /* 3. Single Branch Hero Banner */
-        .single-branch-banner {
-          margin: 12px 20px 0;
-          padding: 12px 18px;
-          background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
-          border: 1px solid #3b82f6;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-        }
-        .branch-info-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .branch-icon {
-          color: #93c5fd;
-        }
-        .branch-info-left h3 {
-          margin: 0;
-          font-size: 17px;
-          color: white;
-        }
-        .branch-info-left p {
-          margin: 3px 0 0;
-          font-size: 12px;
-          color: #bfdbfe;
-        }
-        .branch-manage-btn {
-          display: inline-flex;
-          align-items: center;
-          padding: 7px 14px;
-          background: white;
-          color: #1d4ed8;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 700;
-          text-decoration: none;
-          transition: all 0.15s ease;
-        }
-        .branch-manage-btn:hover {
-          background: #eff6ff;
-          color: #1e40af;
-        }
-
-        /* Warning Banners */
-        .data-banner {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 8px 16px;
-          background: #78350f;
-          border-bottom: 1px solid #92400e;
-          color: #fde68a;
-          font-size: 12px;
-        }
-        .data-banner.unavailable {
-          background: #7f1d1d;
-          border-color: #991b1b;
-          color: #fecaca;
-        }
-        .data-banner small {
-          margin-left: 6px;
-          opacity: 0.8;
-        }
-
-        /* Stats Bar */
-        .stats-bar {
-          display: grid;
-          grid-template-columns: repeat(7, minmax(110px, 1fr));
-          gap: 10px;
-          padding: 12px 20px;
-          background: #090e17;
-          border-bottom: 1px solid #1e293b;
-        }
-        .stat-card {
-          min-width: 0;
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 12px;
-          background: #131d2e;
-          border: 1px solid #1e293b;
-          border-radius: 8px;
-          color: inherit;
-          text-align: left;
-        }
+        .chip, .ai-wall-controls button { cursor: pointer; }
+        .chip:hover, .chip.active, .ai-wall-controls button:hover, .ai-wall-controls button.active, .ai-wall-controls .open-ai-panel { color: var(--blue-dark); border-color: var(--blue); background: var(--blue-soft); }
+        .ai-engine-chip { text-transform: capitalize; }
+        .dot, .ai-engine-chip i { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: #64748b; }
+        .dot.green, .ai-engine-chip.online i { background: #22c55e; }
+        .dot.red, .ai-engine-chip.offline i, .ai-engine-chip.unavailable i { background: #ef4444; }
+        .dot.amber, .ai-engine-chip.degraded i { background: #f59e0b; }
+        .filter-summary { display: flex; min-width: 0; align-items: center; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+        .active-pill { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; color: var(--blue-dark); background: var(--blue-soft); font-size: 12px; }
+        .active-pill strong, .all-pill strong { color: var(--ink); font-weight: 700; }
+        .active-pill em { font-style: normal; font-weight: 700; }
+        .all-pill { color: var(--muted); font-size: 12px; }
+        .reset-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; min-height: 30px; padding: 4px 7px; border: 1px solid var(--line); border-radius: 4px; color: var(--blue-dark); background: var(--surface); font-size: 12px; cursor: pointer; }
+        .reset-btn:hover { background: var(--blue-soft); }
+        .single-branch-banner { padding: 12px 16px; background: var(--blue-soft); border: 1px solid var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+        .branch-info-left { display: flex; align-items: center; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+        .branch-icon { color: var(--blue-dark); flex-shrink: 0; }
+        .branch-info-left h3 { margin: 0; font-size: 17px; color: var(--ink); }
+        .branch-info-left p { margin: 3px 0 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+        .branch-manage-btn { display: inline-flex; align-items: center; padding: 8px 12px; background: var(--surface); color: var(--blue-dark); border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-weight: 700; text-decoration: none; }
+        .branch-manage-btn:hover { background: var(--surface-soft); }
+        .data-banner { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px; background: #78350f; border: 1px solid #92400e; border-radius: 8px; color: #fde68a; font-size: 12px; }
+        .data-banner.unavailable { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
+        .data-banner small { opacity: .85; }
+        .stats-bar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+        .stat-card { min-width: 0; min-height: 84px; display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; color: inherit; text-align: left; }
         button.stat-card { cursor: pointer; }
-        button.stat-card:hover { border-color: #0e7490; background: #102538; }
-        .stat-card div {
-          display: flex;
-          min-width: 0;
-          flex-direction: column;
-        }
-        .stat-card strong {
-          font-size: 18px;
-          line-height: 1.15;
-          color: #f8fafc !important;
-          font-weight: 800;
-        }
-        .stat-card span {
-          overflow: hidden;
-          color: #94a3b8 !important;
-          font-size: 11px;
-          font-weight: 600;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .stat-icon {
-          flex: 0 0 auto;
-          color: #94a3b8;
-        }
-        .stat-icon.green {
-          color: #22c55e;
-        }
-        .stat-icon.red {
-          color: #ef4444;
-        }
-        .stat-icon.amber {
-          color: #f59e0b;
-        }
-        .stat-icon.blue {
-          color: #38bdf8;
-        }
-        .stat-icon.purple {
-          color: #a855f7;
-        }
-        .stat-icon.cyan { color: #22d3ee; }
-        .storage-warning {
-          margin: 10px 20px 0;
-          padding: 8px 12px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid #7c2d12;
-          border-radius: 8px;
-          background: #451a03;
-          color: #fed7aa;
-          font-size: 12px;
-        }
-
-        /* 5. Main Camera Content */
-        .control-room-content {
-          flex: 1;
-          min-height: 0;
-          padding: 14px 20px 20px;
-        }
-        .empty-control-room-card {
-          max-width: 480px;
-          margin: 40px auto;
-          padding: 36px 24px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          text-align: center;
-          background: #131d2e;
-          border: 1px solid #1e293b;
-          border-radius: 12px;
-        }
-        .empty-icon-wrap {
-          width: 64px;
-          height: 64px;
-          margin-bottom: 14px;
-          display: grid;
-          place-items: center;
-          border-radius: 50%;
-          background: #1e3a8a;
-          color: #60a5fa;
-        }
-        .empty-icon-wrap.error {
-          background: #450a0a;
-          color: #f87171;
-        }
-        .empty-control-room-card h2 {
-          margin: 0 0 8px;
-          font-size: 18px;
-          color: #f8fafc;
-        }
-        .empty-control-room-card p {
-          max-width: 380px;
-          margin: 0 0 18px;
-          color: #94a3b8;
-          font-size: 13px;
-          line-height: 1.5;
-        }
-        .primary-action {
-          min-height: 38px;
-          padding: 0 18px;
-          color: white;
-          background: #2563eb;
-          border: 0;
-          border-radius: 6px;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .primary-action:hover {
-          background: #1d4ed8;
-        }
-        .spin {
-          animation: spin 0.9s linear infinite;
-        }
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
+        button.stat-card:hover { border-color: var(--blue); background: var(--blue-soft); }
+        .stat-card div { display: flex; min-width: 0; flex-direction: column; }
+        .stat-card strong { font-size: 22px; line-height: 1.15; color: var(--ink); font-weight: 750; }
+        .stat-card span { margin-top: 4px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+        .stat-icon { flex: 0 0 auto; color: var(--muted); }
+        .stat-icon.green { color: #22c55e; }
+        .stat-icon.red { color: #ef4444; }
+        .stat-icon.amber { color: #f59e0b; }
+        .stat-icon.blue, .stat-icon.cyan { color: #0891b2; }
+        .stat-icon.purple { color: #a855f7; }
+        .storage-warning { padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border: 1px solid #7c2d12; border-radius: 8px; background: #451a03; color: #fed7aa; font-size: 12px; }
+        .control-room-content { flex: 1; min-width: 0; min-height: 0; padding: 12px; border: 1px solid #27354a; border-radius: 12px; background: #0b1424; color: #f8fafc; color-scheme: dark; }
+        .empty-control-room-card { max-width: 480px; margin: 32px auto; padding: 32px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; background: #131d2e; border: 1px solid #27354a; border-radius: 12px; }
+        .empty-icon-wrap { width: 64px; height: 64px; margin-bottom: 14px; display: grid; place-items: center; border-radius: 50%; background: #1e3a8a; color: #60a5fa; }
+        .empty-icon-wrap.error { background: #450a0a; color: #f87171; }
+        .empty-control-room-card h2 { margin: 0 0 8px; font-size: 18px; color: #f8fafc; }
+        .empty-control-room-card p { max-width: 380px; margin: 0 0 18px; color: #94a3b8; font-size: 13px; line-height: 1.5; }
+        .primary-action { min-height: 38px; padding: 0 18px; color: white; background: #2563eb; border: 0; border-radius: 6px; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+        .primary-action:hover { background: #1d4ed8; }
+        .control-room :is(button, a, select):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+        .filter-search-box:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+        .spin { animation: spin .9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
         @media (max-width: 1200px) {
-          .stats-bar {
-            grid-template-columns: repeat(3, 1fr);
-          }
+          .stats-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .filter-controls-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+          .filter-search-box { grid-column: 1 / -1; }
+          .wall-clock { display: none; }
         }
         @media (max-width: 768px) {
-          .control-room-nav-hub {
-            flex-direction: column;
-            align-items: flex-start;
-            padding: 10px 14px;
-          }
-          .hierarchy-filter-bar {
-            padding: 10px 14px;
-          }
-          .filter-controls-row {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .filter-select-group {
-            width: 100%;
-            justify-content: space-between;
-          }
-          .stats-bar {
-            grid-template-columns: repeat(2, 1fr);
-            padding: 10px 14px;
-          }
-          .control-room-content {
-            padding: 10px 14px 16px;
-          }
+          .control-room { padding: 16px 12px 24px; gap: 12px; }
+          .control-room-nav-hub { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+          .nav-hub-right { grid-column: 1; grid-row: 2; justify-content: flex-start; }
+          .nav-hub-left { grid-row: 3; }
+          .nav-link { flex: 1 1 auto; justify-content: center; }
+          .hierarchy-filter-bar { padding: 12px; }
+          .filter-controls-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .ai-stat { grid-column: 1 / -1; }
+          .chip, .ai-wall-controls button { min-height: 38px; }
+          .control-room-content { padding: 8px; }
+          .single-branch-banner { padding: 12px; }
         }
       `}</style>
     </div>
