@@ -374,6 +374,8 @@ export async function registerAlertCommandCenterRoutes(
       })),
       ...(input.quietHours ? { quietHours: {
         start: input.quietHours.start!, end: input.quietHours.end!, timezone: input.quietHours.timezone!,
+        enabled: input.quietHours.enabled,
+        bypassSeverities: input.quietHours.bypassSeverities,
       } } : {}),
       rateLimitPerMinute: input.rateLimitPerMinute,
       escalationAfterSeconds: input.escalationAfterSeconds,

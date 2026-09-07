@@ -133,6 +133,8 @@ export default function AlertNotificationPolicyPage() {
         },
       ],
     });
+    setIsDirty(true);
+    setSaveState("unsaved");
   };
 
   const removeSchedule = (index: number) => {
@@ -140,6 +142,8 @@ export default function AlertNotificationPolicyPage() {
     const schedules = [...input.onCallSchedules];
     schedules.splice(index, 1);
     setInput({ ...input, onCallSchedules: schedules });
+    setIsDirty(true);
+    setSaveState("unsaved");
   };
 
   const handleSubmit = async (mode: "draft" | "publish" = "draft") => {
@@ -293,7 +297,10 @@ export default function AlertNotificationPolicyPage() {
         <section className="card p-5 space-y-4">
           <header className="flex items-center gap-2 text-sm font-semibold text-slate-900">
             <Clock3 size={16} className="text-slate-700" />
-            <span>Quiet hours</span>
+            <div>
+              <span className="block">Alert delivery timing</span>
+              <span className="mt-0.5 block text-xs font-normal text-slate-500">Pause external delivery during quiet hours while the dashboard continues to show every alert.</span>
+            </div>
           </header>
           <div className="grid gap-4 md:grid-cols-5">
             <label className="field">
@@ -370,6 +377,39 @@ export default function AlertNotificationPolicyPage() {
               </div>
             </label>
           </div>
+          <fieldset className="border-t border-slate-200 pt-4">
+            <legend className="text-sm font-medium text-slate-900">Always notify for</legend>
+            <p className="mt-1 text-xs text-slate-500">Selected severities bypass quiet hours for SMS, email, and voice calls.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {(["P1", "P2", "P3", "P4", "P5"] as const).map((severity) => {
+                const selected = (input.quietHours?.bypassSeverities ?? ["P1"]).includes(severity);
+                return (
+                  <label key={severity} className="flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) => {
+                        const existing = input.quietHours?.bypassSeverities ?? ["P1"];
+                        const bypassSeverities = event.target.checked
+                          ? [...new Set([...existing, severity])]
+                          : existing.filter((item) => item !== severity);
+                        setInput({
+                          ...input,
+                          quietHours: {
+                            ...(input.quietHours ?? { start: "22:00", end: "06:00", timezone: "UTC", enabled: true }),
+                            bypassSeverities,
+                          },
+                        });
+                        setIsDirty(true);
+                        setSaveState("unsaved");
+                      }}
+                    />
+                    <span>{severity}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         </section>
 
         <section className="card p-5 space-y-4">
@@ -383,15 +423,19 @@ export default function AlertNotificationPolicyPage() {
                 <span className="text-sm font-medium text-slate-900 mb-1.5 block">{severity} escalation seconds</span>
                 <input 
                   type="number" 
-                  min={0} 
+                  min={10}
                   value={input.escalationAfterSeconds[severity] ?? 0} 
-                  onChange={(event) => setInput({
-                    ...input,
-                    escalationAfterSeconds: {
-                      ...input.escalationAfterSeconds,
-                      [severity]: Number(event.target.value),
-                    },
-                  })} 
+                  onChange={(event) => {
+                    setInput({
+                      ...input,
+                      escalationAfterSeconds: {
+                        ...input.escalationAfterSeconds,
+                        [severity]: Number(event.target.value),
+                      },
+                    });
+                    setIsDirty(true);
+                    setSaveState("unsaved");
+                  }}
                   className="field-input" 
                 />
               </label>

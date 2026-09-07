@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, useRef, useMemo } from "react";
+import { memo, useCallback, useEffect, useState, useRef, useMemo, type CSSProperties } from "react";
 import {
   Save,
   Settings,
@@ -181,6 +181,17 @@ export function EnhancedCameraGrid({
   const [tourInterval, setTourInterval] = useState(15);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
+  const [compactGrid, setCompactGrid] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches,
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 760px)");
+    const syncGridDensity = () => setCompactGrid(mediaQuery.matches);
+    syncGridDensity();
+    mediaQuery.addEventListener("change", syncGridDensity);
+    return () => mediaQuery.removeEventListener("change", syncGridDensity);
+  }, []);
 
   const handleDeleteCamera = useCallback(async (cameraId: string) => {
     if (onDeleteCamera) {
@@ -818,7 +829,10 @@ export function EnhancedCameraGrid({
   };
 
   const gridColumnCount = Number(gridSize.split("x")[0]);
-  const minimumTileWidth = gridColumnCount <= 2 ? 260 : gridColumnCount <= 4 ? 200 : gridColumnCount <= 6 ? 150 : 112;
+  const renderedColumnCount = compactGrid || (typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches)
+    ? 1
+    : gridColumnCount;
+  const minimumTileWidth = renderedColumnCount <= 2 ? 260 : renderedColumnCount <= 4 ? 200 : renderedColumnCount <= 6 ? 150 : 112;
 
   // Virtual scrolling: only render visible tiles
   const visibleTiles = useMemo(() => {
@@ -987,11 +1001,12 @@ export function EnhancedCameraGrid({
         ref={containerRef}
         className={`camera-grid ${gpuAccelClass}`}
         style={{
-          gridTemplateColumns: `repeat(${gridColumnCount}, minmax(${minimumTileWidth}px, 1fr))`,
+          "--camera-grid-columns": renderedColumnCount,
+          "--minimum-tile-width": `${minimumTileWidth}px`,
           gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
-            ? `repeat(${Math.ceil(totalPositions / parseInt(gridSize.split('x')[0]))}, minmax(0, 1fr))`
+            ? `repeat(${Math.ceil(totalPositions / renderedColumnCount)}, minmax(0, 1fr))`
             : undefined
-        }}
+        } as CSSProperties}
       >
         {visibleTiles.map((i) => {
           const entry = gridPositions.get(i);
@@ -1308,6 +1323,7 @@ export function EnhancedCameraGrid({
 
         .camera-grid {
           display: grid;
+          grid-template-columns: repeat(var(--camera-grid-columns), minmax(var(--minimum-tile-width), 1fr));
           gap: 12px;
           flex: 1;
           overflow: auto;
@@ -1436,6 +1452,7 @@ export function EnhancedCameraGrid({
           .viewer-summary { align-self: center; }
           .layout-save-panel { align-items: stretch; flex-direction: column; }
           .layout-name-input { min-height: 38px; }
+          .camera-grid { --camera-grid-columns: 1 !important; }
         }
       `}</style>
     </div>

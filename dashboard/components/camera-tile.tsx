@@ -620,7 +620,7 @@ function CameraTileComponent({
         </div>
         <div className="camera-channel">
           <Expand size={13} />
-          CH {String(camera.channel).padStart(2, "0")}
+          {camera.channel == null ? "Channel unavailable" : `CH ${String(camera.channel).padStart(2, "0")}`}
         </div>
         {onChangeRecordingMode && (
           <select className="recording-mode" aria-label={`${camera.name} recording mode`} value={recording?.mode ?? "continuous"} onChange={(event) => onChangeRecordingMode(event.target.value as RecordingMode)} disabled={recordingLoading}>

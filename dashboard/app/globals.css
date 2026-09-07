@@ -7725,3 +7725,132 @@ html.light .route-surface :where(
   color: var(--blue);
   background: var(--blue-soft);
 }
+
+/* Evidence Vault: the case register is the primary navigation, while the
+   detail panel reads as a quiet, auditable workspace. */
+.evidence-manager-container .evidence-layout {
+  align-items: stretch;
+  min-height: 530px;
+}
+
+.evidence-manager-container .cases-panel,
+.evidence-manager-container .details-panel {
+  overflow: hidden;
+}
+
+.evidence-manager-container .panel-header {
+  min-height: 70px;
+  padding: 14px 18px;
+}
+
+.evidence-manager-container .panel-header > div { min-width: 0; }
+.evidence-manager-container .panel-kicker {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.evidence-manager-container .panel-header h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+}
+
+.evidence-manager-container .panel-header h3 > span {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 6px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  font-size: 10px;
+}
+
+.case-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 118px;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface));
+}
+
+.case-search {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 38px;
+  gap: 7px;
+  padding-inline: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--surface);
+}
+
+.case-search:focus-within { outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent); outline-offset: 1px; }
+.case-search input { width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 12px; }
+.case-toolbar select { min-width: 0; height: 38px; padding: 0 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface); font-size: 11px; }
+
+.evidence-manager-container .case-item {
+  width: 100%;
+  padding: 15px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+}
+
+.evidence-manager-container .case-item:hover,
+.evidence-manager-container .case-item.active {
+  box-shadow: inset 3px 0 0 var(--blue);
+  transform: none;
+}
+
+.evidence-manager-container .case-item:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--blue); outline-offset: -2px; }
+.evidence-manager-container .case-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.evidence-manager-container .case-stats { margin-top: 7px; }
+.evidence-manager-container .status-badge { border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.16); }
+
+.integrity-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid color-mix(in srgb, var(--green) 32%, var(--line));
+  border-radius: 999px;
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 9%, var(--surface));
+  font-size: 10px;
+  font-weight: 720;
+}
+
+.evidence-empty-details { display: grid; place-items: center; min-height: 530px; }
+.evidence-empty-details .empty-state { max-width: 390px; padding: 42px 26px; background: transparent; }
+.evidence-empty-details h2 { margin: 16px 0 8px; color: var(--ink); font-size: 18px; }
+.evidence-empty-details p { max-width: 330px; margin: 0 0 19px; line-height: 1.6; }
+.empty-vault-mark { display: grid; width: 58px; height: 58px; place-items: center; border: 1px solid color-mix(in srgb, var(--blue) 26%, var(--line)); border-radius: 18px; color: var(--blue); background: var(--blue-soft); box-shadow: 0 10px 24px color-mix(in srgb, var(--blue) 14%, transparent); }
+
+.evidence-load-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--red) 30%, var(--line)); border-radius: 11px; color: var(--red); background: color-mix(in srgb, var(--red) 8%, var(--surface)); font-size: 12px; }
+.evidence-load-error button { margin-left: auto; min-height: 30px; padding-inline: 9px; border: 1px solid currentColor; border-radius: 7px; color: inherit; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
+.evidence-manager-container .action-button:disabled { cursor: not-allowed; opacity: .45; }
+
+@media (max-width: 760px) {
+  .evidence-manager-container .evidence-layout { min-height: 0; }
+  .evidence-manager-container .cases-panel { min-height: 410px; }
+  .evidence-manager-container .details-panel { min-height: 0; }
+  .evidence-manager-container .panel-header { min-height: 64px; padding-inline: 14px; }
+  .case-toolbar { grid-template-columns: minmax(0, 1fr) 110px; padding: 10px; }
+  .evidence-empty-details { min-height: 310px; }
+  .integrity-status { font-size: 9px; }
+}

@@ -16,10 +16,11 @@ const browser = await chromium.launch({headless: true});
 const report = [];
 for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}]) {
   const context = await browser.newContext({viewport});
-  await context.addInitScript(({user}) => {
+  await context.addInitScript(({user, theme}) => {
+    localStorage.setItem('sentinel-grid-active-theme', theme);
     sessionStorage.setItem('sentinel_browser_session', 'active');
     localStorage.setItem('user', JSON.stringify(user));
-  }, {user});
+  }, {user, theme: process.argv[3] || 'light'});
   const calls = [];
   await context.route('**/*', async route => {
     const req = route.request();
@@ -45,13 +46,17 @@ for (const viewport of [{width: 1440, height: 1000}, {width: 390, height: 844}])
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(`http://localhost:3000/${target}`, {waitUntil: 'domcontentloaded'});
     await page.waitForTimeout(3000);
+    if (target === 'control-room') {
+      await page.getByRole('button', {name: 'Clear All Filters', exact: true}).click();
+      await page.locator('.grid-camera-slot').first().waitFor();
+    }
     const path = `${out}/${label}-${target.replaceAll('/', '-')}-${viewport.width}.png`;
     await page.screenshot({path, fullPage: true});
     const info = await page.evaluate(() => ({
       title: document.title,
       width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth,
       text: document.body.innerText.slice(0, 9000),
-      overflow: [...document.querySelectorAll('body *')].map(el => ({tag: el.tagName, text: el.innerText?.slice(0,100), class: el.className, rect: el.getBoundingClientRect().toJSON()})).filter(x => x.rect.width > 0 && (x.rect.right > innerWidth + 2 || x.rect.left < -2)).slice(0, 25),
+      overflow: [...document.querySelectorAll('.route-surface *')].map(el => ({tag: el.tagName, text: el.innerText?.slice(0,100), class: el.className, rect: el.getBoundingClientRect().toJSON()})).filter(x => x.rect.width > 0 && (x.rect.right > innerWidth + 2 || x.rect.left < -2)).slice(0, 25),
     }));
     report.push({target, viewport, path, url: page.url(), errors, ...info});
     await page.close();

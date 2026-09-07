@@ -9,14 +9,13 @@ import {
   Eye,
   FileText,
   Lock,
-  MoreVertical,
   Plus,
   Search,
   Shield,
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { evidenceApi } from "@/lib/api-client";
 import { PageHero } from "@/components/page-hero";
@@ -63,6 +62,9 @@ export function EvidenceManager() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [custodyLog, setCustodyLog] = useState<ChainOfCustodyEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [caseQuery, setCaseQuery] = useState("");
+  const [caseStatus, setCaseStatus] = useState<"all" | EvidenceCase["status"]>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCustodyModal, setShowCustodyModal] = useState(false);
 
@@ -72,6 +74,20 @@ export function EvidenceManager() {
     closed: "#10B981",
     archived: "#6B7280",
   };
+
+  const filteredCases = useMemo(() => {
+    const query = caseQuery.trim().toLowerCase();
+    return cases.filter((evCase) => {
+      const matchesQuery = !query || [evCase.caseNumber, evCase.title, evCase.description]
+        .filter(Boolean)
+        .some((value) => value!.toLowerCase().includes(query));
+      return matchesQuery && (caseStatus === "all" || evCase.status === caseStatus);
+    });
+  }, [caseQuery, caseStatus, cases]);
+
+  useEffect(() => {
+    void loadCases();
+  }, []);
 
   return (
     <div className="evidence-manager-container">
@@ -91,29 +107,64 @@ export function EvidenceManager() {
         </div>
       )}
 
-      <div className="evidence-layout">
+      {loadError && (
+        <div className="evidence-load-error" role="alert">
+          <AlertTriangle size={16} />
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadCases()}>Try again</button>
+        </div>
+      )}
+
+      <div className="evidence-layout" aria-busy={loading}>
         {/* Cases List */}
         <div className="cases-panel">
           <div className="panel-header">
-            <h3>Evidence Cases</h3>
+            <div>
+              <span className="panel-kicker">Case register</span>
+              <h3>Evidence Cases <span>{cases.length}</span></h3>
+            </div>
             <button className="primary-button" onClick={() => setShowCreateModal(true)}>
               <Plus size={16} />
               New Case
             </button>
           </div>
 
+          <div className="case-toolbar">
+            <label className="case-search">
+              <Search size={15} aria-hidden="true" />
+              <input
+                type="search"
+                value={caseQuery}
+                onChange={(event) => setCaseQuery(event.target.value)}
+                placeholder="Find a case or reference"
+                aria-label="Search evidence cases"
+              />
+            </label>
+            <select value={caseStatus} onChange={(event) => setCaseStatus(event.target.value as typeof caseStatus)} aria-label="Filter evidence cases by status">
+              <option value="all">All statuses</option>
+              <option value="open">Open</option>
+              <option value="investigating">Investigating</option>
+              <option value="closed">Closed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
+
           <div className="cases-list">
-            {cases.length === 0 ? (
+            {loading && cases.length === 0 ? (
+              <div className="empty-state" role="status"><Clock size={32} /><p>Loading evidence cases…</p></div>
+            ) : filteredCases.length === 0 ? (
               <div className="empty-state">
                 <FileText size={32} />
-                <p>No evidence cases found</p>
-                <button onClick={() => setShowCreateModal(true)}>Create your first case</button>
+                <p>{cases.length === 0 ? "No evidence cases found" : "No cases match this view"}</p>
+                {cases.length === 0 ? <button onClick={() => setShowCreateModal(true)}>Create your first case</button> : <button onClick={() => { setCaseQuery(""); setCaseStatus("all"); }}>Clear filters</button>}
               </div>
             ) : (
-              cases.map((evCase) => (
-                <div
+              filteredCases.map((evCase) => (
+                <button
+                  type="button"
                   key={evCase.id}
                   className={`case-item ${selectedCase?.id === evCase.id ? "active" : ""}`}
+                  aria-pressed={selectedCase?.id === evCase.id}
                   onClick={() => {
                     setSelectedCase(evCase);
                     void loadCaseDetails(evCase.id);
@@ -140,18 +191,21 @@ export function EvidenceManager() {
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
         </div>
 
         {/* Case Details */}
-        {selectedCase && (
+        {selectedCase ? (
           <div className="details-panel">
             <div className="panel-header">
-              <h3>{selectedCase.title}</h3>
-              <MoreVertical size={16} />
+              <div>
+                <span className="panel-kicker">Case details</span>
+                <h3>{selectedCase.title}</h3>
+              </div>
+              <span className="integrity-status"><CheckCircle size={14} /> Auditable record</span>
             </div>
 
             <div className="case-details">
@@ -298,17 +352,34 @@ export function EvidenceManager() {
                 <Shield size={16} />
                 Verify Integrity
               </button>
-              <button className="action-button secondary danger">
+              <button className="action-button secondary danger" disabled title="Evidence case deletion is managed by retention policy">
                 <Trash2 size={16} />
                 Delete Case
               </button>
+            </div>
+          </div>
+        ) : (
+          <div className="details-panel evidence-empty-details">
+            <div className="empty-state">
+              <span className="empty-vault-mark"><Shield size={27} /></span>
+              <h2>Open an evidence case</h2>
+              <p>Select a case to inspect its artifacts, integrity checks, custody history and export activity.</p>
+              <button className="primary-button" onClick={() => setShowCreateModal(true)}><Plus size={16} />New evidence case</button>
             </div>
           </div>
         )}
       </div>
 
       {/* Create Case Modal */}
-      {showCreateModal && <CreateCaseModal onClose={() => setShowCreateModal(false)} />}
+      {showCreateModal && (
+        <CreateCaseModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={async () => {
+            setShowCreateModal(false);
+            await loadCases();
+          }}
+        />
+      )}
 
       {/* Custody Log Modal */}
       {showCustodyModal && (
@@ -317,17 +388,20 @@ export function EvidenceManager() {
     </div>
   );
 
-  useEffect(() => {
-    void loadCases();
-  }, []);
-
   async function loadCases() {
     setLoading(true);
+    setLoadError(null);
     try {
       const caseResponse = await evidenceApi.listCases();
-      setCases(caseResponse.data || []);
+      const nextCases = caseResponse.data || [];
+      setCases(nextCases);
+      if (!selectedCase && nextCases.length > 0) {
+        setSelectedCase(nextCases[0]);
+        void loadCaseDetails(nextCases[0].id);
+      }
     } catch (error) {
       console.error("Failed to load evidence cases:", error);
+      setLoadError("The evidence register could not be loaded. Check the connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -347,6 +421,7 @@ export function EvidenceManager() {
       setExports(exportsResponse.data || []);
     } catch (error) {
       console.error("Failed to load case details:", error);
+      setLoadError("The selected case could not be fully loaded. You can retry from the case register.");
     } finally {
       setLoading(false);
     }
@@ -372,7 +447,7 @@ export function EvidenceManager() {
   }
 }
 
-function CreateCaseModal({ onClose }: { onClose: () => void }) {
+function CreateCaseModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => Promise<void> }) {
   const [formData, setFormData] = useState({
     caseNumber: "",
     title: "",
@@ -387,15 +462,8 @@ function CreateCaseModal({ onClose }: { onClose: () => void }) {
     setError(null);
 
     try {
-      const response = await fetch("/api/control/v1/evidence/cases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) throw new Error("Failed to create case");
-
-      onClose();
+      await evidenceApi.createCase(formData);
+      await onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create case");
     } finally {

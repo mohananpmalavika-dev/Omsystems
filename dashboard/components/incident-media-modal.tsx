@@ -166,9 +166,9 @@ export function IncidentMediaModal({
     }
   };
 
-  const primaryImageUrl = imageUrl || snapshotUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/snapshot` : null);
-  const fallbackImageUrl = (alertId && primaryImageUrl !== `/api/control/v1/analytics/alerts/${alertId}/snapshot`)
-    ? `/api/control/v1/analytics/alerts/${alertId}/snapshot`
+  const primaryImageUrl = imageUrl || snapshotUrl || (alertId ? `/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/v1/incidents/${incidentId}/snapshot` : null);
+  const fallbackImageUrl = (alertId && primaryImageUrl !== `/v1/analytics/alerts/${alertId}/snapshot`)
+    ? `/v1/analytics/alerts/${alertId}/snapshot`
     : (cameraId ? `/api/control/v1/media/snapshots/${cameraId}` : null);
 
   const [currentImgUrl, setCurrentImgUrl] = useState<string | null>(primaryImageUrl);
@@ -180,7 +180,7 @@ export function IncidentMediaModal({
   }, [primaryImageUrl]);
 
   const resolvedImageUrl = currentImgUrl || primaryImageUrl;
-  const resolvedVideoUrl = videoUrl || videoClipUrl || (alertId ? `/api/control/v1/analytics/alerts/${alertId}/clip` : null) || (incidentId ? `/api/control/v1/incidents/${incidentId}/clip` : null);
+  const resolvedVideoUrl = videoUrl || videoClipUrl || (alertId ? `/v1/analytics/alerts/${alertId}/clip` : null) || (incidentId ? `/v1/incidents/${incidentId}/clip` : null);
 
   return (
     <div

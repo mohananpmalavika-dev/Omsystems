@@ -111,7 +111,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     setLoading(true);
     setErrorMessage(null);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/workspace`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/workspace`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -155,7 +155,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     }
 
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/playbook/steps/${step.stepId}/complete`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/playbook/steps/${step.stepId}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -184,7 +184,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/playbook/decision`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/playbook/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -223,7 +223,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/playbook/steps/${selectedOverrideStepId}/override`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/playbook/steps/${selectedOverrideStepId}/override`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -253,7 +253,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/resolve`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/resolve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

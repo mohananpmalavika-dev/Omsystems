@@ -26,6 +26,8 @@ const detectionOptions: Array<{ value: AnalyticsDetectionType; label: string }> 
   { value: "camera-tampering", label: "Camera tampering" },
   { value: "video-loss", label: "Video loss" },
   { value: "fire-smoke", label: "Fire / smoke" },
+  { value: "face-recognition", label: "Known face recognition" },
+  { value: "unknown-person", label: "Outsider / unknown face" },
 ];
 
 const emptySummary: AnalyticsAlertSummary = {
@@ -530,6 +532,10 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
   const [zoneShape, setZoneShape] = useState<"polygon" | "line">("polygon");
   const [points, setPoints] = useState("0.10,0.10; 0.90,0.10; 0.90,0.90; 0.10,0.90");
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduleDays, setScheduleDays] = useState<number[]>([1, 2, 3, 4, 5]);
+  const [scheduleStart, setScheduleStart] = useState("09:00");
+  const [scheduleEnd, setScheduleEnd] = useState("18:00");
+  const [scheduleTimezone, setScheduleTimezone] = useState("Asia/Kolkata");
   const [formError, setFormError] = useState<string>();
 
   const submit = async (event: React.FormEvent) => {
@@ -555,7 +561,7 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
         recordingPolicy, preRollSeconds: 30, postRollSeconds: 120,
         ...(zoneEnabled ? { zone: { name: `${name} zone`, shape: zoneShape, points: zonePoints } } : {}),
         ...(scheduleEnabled ? { schedule: {
-          days: [1, 2, 3, 4, 5], start: "09:00", end: "18:00", timezone: "Asia/Kolkata",
+          days: scheduleDays, start: scheduleStart, end: scheduleEnd, timezone: scheduleTimezone,
         } } : {}),
       });
     } catch (error) {
@@ -587,6 +593,12 @@ function RuleForm({ cameraId, saving, initialDetection, detectionOptions: availa
           <label><input type="checkbox" checked={scheduleEnabled} onChange={(event) => setScheduleEnabled(event.target.checked)} /> Weekdays, 09:00–18:00 IST</label>
         </div>
         {zoneEnabled && <div className="analytics-zone-row"><select value={zoneShape} onChange={(event) => setZoneShape(event.target.value as "polygon" | "line")}><option value="polygon">Polygon</option><option value="line">Line</option></select><input value={points} onChange={(event) => setPoints(event.target.value)} aria-label="Normalized zone points" /><small>Format: x,y; x,y using 0–1 frame coordinates</small></div>}
+        {scheduleEnabled && <div className="analytics-schedule-row">
+          <fieldset><legend>Active days</legend>{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day, index) => <label key={day}><input type="checkbox" checked={scheduleDays.includes(index)} onChange={(event) => setScheduleDays((current) => event.target.checked ? [...current, index].sort() : current.filter((value) => value !== index))} />{day}</label>)}</fieldset>
+          <label>Start<input type="time" value={scheduleStart} onChange={(event) => setScheduleStart(event.target.value)} /></label>
+          <label>End<input type="time" value={scheduleEnd} onChange={(event) => setScheduleEnd(event.target.value)} /></label>
+          <label>Timezone<select value={scheduleTimezone} onChange={(event) => setScheduleTimezone(event.target.value)}><option value="Asia/Kolkata">Asia/Kolkata</option><option value="UTC">UTC</option><option value="Asia/Dubai">Asia/Dubai</option></select></label>
+        </div>}
         <div className="modal-actions">
           <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
           <button type="submit" className="primary-action" disabled={saving}><Save size={14} />{saving ? "Saving..." : "Create rule"}</button>

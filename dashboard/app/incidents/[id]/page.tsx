@@ -119,7 +119,7 @@ export default function IncidentDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/workspace`);
+      const res = await fetch(`/v1/incidents/${incidentId}/workspace`);
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         throw new Error(body?.message || body?.error || "Failed to load incident workspace");
@@ -166,7 +166,7 @@ export default function IncidentDetailPage() {
     e.preventDefault();
     setSavingEdit(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}`, {
+      const res = await fetch(`/v1/incidents/${incidentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +202,7 @@ export default function IncidentDetailPage() {
     setTransitioning(true);
     setTransitionError(null);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/transition`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/transition`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -234,7 +234,7 @@ export default function IncidentDetailPage() {
   async function handleDirectClose() {
     setClosing(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/close`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/close`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notes: closeNotes.trim() || undefined }),
@@ -264,7 +264,7 @@ export default function IncidentDetailPage() {
     }
     setReopening(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/reopen`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/reopen`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: reopenReason.trim() }),
@@ -294,7 +294,7 @@ export default function IncidentDetailPage() {
     }
     setMarkingFp(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/mark-false-positive`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/mark-false-positive`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -353,7 +353,7 @@ export default function IncidentDetailPage() {
     if (!newTaskForm.taskName.trim()) return;
     setAddingTask(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/tasks`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -386,7 +386,7 @@ export default function IncidentDetailPage() {
     if (!newNoteContent.trim()) return;
     setAddingNote(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/notes`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -414,7 +414,7 @@ export default function IncidentDetailPage() {
   async function handleGenerateReport(reportType: "investigation" | "final" = "investigation") {
     setGeneratingReport(true);
     try {
-      const res = await fetch(`/api/control/v1/incidents/${incidentId}/generate-report`, {
+      const res = await fetch(`/v1/incidents/${incidentId}/generate-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

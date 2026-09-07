@@ -13,7 +13,7 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cameraInventoryApi, provisioningApi } from "@/lib/api-client";
 import { requestInstalledEdgeStart } from "@/lib/local-edge-autostart";
 import type { ProvisioningRun as ProvisioningRunModel, ProvisioningStepStatus } from "@/lib/types";
@@ -39,6 +39,12 @@ export function ProvisioningRun({
   onChanged?: () => void;
   hasEnrolledAgent: boolean;
 }) {
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const [run, setRun] = useState<ProvisioningRunModel>();
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
@@ -51,12 +57,12 @@ export function ProvisioningRun({
   const load = async (cancelledRef = { current: false }) => {
     try {
       const response = await provisioningApi.getLatest(branchId);
-      if (cancelledRef.current) return;
+      if (cancelledRef.current || !mountedRef.current) return;
       setRun(response.run);
       setError(undefined);
       return response.run;
     } catch (reason) {
-      if (!cancelledRef.current) setError(reason instanceof Error ? reason.message : "Provisioning evidence is unavailable.");
+      if (!cancelledRef.current && mountedRef.current) setError(reason instanceof Error ? reason.message : "Provisioning evidence is unavailable.");
     }
   };
 
@@ -95,6 +101,7 @@ export function ProvisioningRun({
 
     try {
       const res = await provisioningApi.activateEdgeOnline(branchId);
+      if (!mountedRef.current) return;
       if (res.status === "not-enrolled" || res.installRequired) {
         setNotice("No edge agent is enrolled for this branch. Use Install Branch Gateway to perform the first installation.");
         onInstallAgent();
@@ -103,25 +110,27 @@ export function ProvisioningRun({
       if (res.status === "online") {
         setNotice(res.message || "The installed branch edge agent is already online.");
         await load();
-        onChanged?.();
+        if (mountedRef.current) onChanged?.();
         return;
       }
 
       const deadline = Date.now() + edgeActivationTimeoutMs;
-      while (Date.now() < deadline) {
+      while (mountedRef.current && Date.now() < deadline) {
         const gateways = await cameraInventoryApi.listGateways(branchId);
+        if (!mountedRef.current) return;
         const online = gateways.data.find((agent: any) =>
           agent.id === res.agent?.id && agent.status === "online"
         );
         if (online) {
           setNotice(`${online.name || "The installed edge agent"} started and authenticated successfully.`);
           await load();
-          onChanged?.();
+          if (mountedRef.current) onChanged?.();
           return;
         }
         await new Promise((resolve) => window.setTimeout(resolve, 1_000));
       }
 
+      if (!mountedRef.current) return;
       throw new Error("The installed KryptonVision Edge Agent did not come online. Approve the browser's Open KryptonVision Scanner prompt, then retry. Use Repair only if the installed task cannot start.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Failed to activate Edge Agent online.");
@@ -148,9 +157,10 @@ export function ProvisioningRun({
         return;
       }
       const res = await provisioningApi.executeStep(branchId, stepId);
+      if (!mountedRef.current) return;
       setNotice(res.message || `Step ${stepId} executed successfully.`);
       await load();
-      onChanged?.();
+      if (mountedRef.current) onChanged?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : `Failed to execute step ${stepId}.`);
     } finally {
@@ -164,8 +174,9 @@ export function ProvisioningRun({
     setError(undefined);
     try {
       const response = await provisioningApi.retry(branchId, run.id);
+      if (!mountedRef.current) return;
       setRun(response.run);
-      onChanged?.();
+      if (mountedRef.current) onChanged?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to retry provisioning.");
     } finally {
@@ -179,8 +190,9 @@ export function ProvisioningRun({
     setError(undefined);
     try {
       const response = await provisioningApi.skipCredentials(branchId, run.id);
+      if (!mountedRef.current) return;
       setRun(response.run);
-      onChanged?.();
+      if (mountedRef.current) onChanged?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to defer the unavailable device credentials.");
     } finally {
@@ -194,8 +206,9 @@ export function ProvisioningRun({
     setError(undefined);
     try {
       const response = await provisioningApi.skipStage(branchId, run.id, stageId);
+      if (!mountedRef.current) return;
       setRun(response.run);
-      onChanged?.();
+      if (mountedRef.current) onChanged?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to skip this provisioning stage.");
     } finally {
