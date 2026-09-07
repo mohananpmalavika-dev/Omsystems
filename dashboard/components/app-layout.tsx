@@ -490,6 +490,9 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const router = useRouter();
   const searchParams = useSearchParams();
   const { branding } = useOrgBranding();
+  const mainNavRef = useRef<HTMLElement>(null);
+  const NAV_SCROLL_KEY = "sentinel-grid-nav-scroll-top";
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -520,10 +523,26 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         }
       })
       .catch(() => {});
+
+    // Restore previously open navigation groups from localStorage
     try {
-      window.localStorage.removeItem(OPEN_GROUPS_STORAGE_KEY);
+      const savedGroups = window.localStorage.getItem(OPEN_GROUPS_STORAGE_KEY);
+      if (savedGroups) {
+        const parsed = JSON.parse(savedGroups);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOpenGroups(new Set(parsed));
+        }
+      }
     } catch {}
   }, []);
+
+  const handleNavScroll = () => {
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+  };
 
   const pathname = usePathname() || "/";
   const visibleNavigation = getVisibleNavigation(operator);
@@ -577,12 +596,36 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   }, [commandQuery, recentHrefs, searchableModules]);
 
   useEffect(() => {
-    if (activeGroup) {
-      setOpenGroups(new Set([activeGroup.label]));
-    } else {
-      setOpenGroups(new Set());
+    if (activeGroup?.label) {
+      setOpenGroups((prev) => {
+        if (prev.has(activeGroup.label)) return prev;
+        const next = new Set(prev);
+        next.add(activeGroup.label);
+        try {
+          window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+        } catch {}
+        return next;
+      });
     }
   }, [pathname, activeGroup?.label]);
+
+  // Restore sidebar navigation scroll position so the menu stays in position
+  useEffect(() => {
+    const nav = mainNavRef.current;
+    if (!nav) return;
+    try {
+      const saved = sessionStorage.getItem(NAV_SCROLL_KEY);
+      if (saved !== null) {
+        const top = parseInt(saved, 10);
+        if (!isNaN(top)) {
+          nav.scrollTop = top;
+          requestAnimationFrame(() => {
+            if (nav) nav.scrollTop = top;
+          });
+        }
+      }
+    } catch {}
+  }, [pathname]);
 
   useEffect(() => {
     try {
@@ -682,6 +725,13 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     e.preventDefault();
     closeSidebar();
 
+    // Preserve the menu's scroll position before navigating
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+
     const targetPath = routePath(href);
     const currentPath = routePath(pathname);
     if (targetPath === currentPath && href === activeRoute) {
@@ -695,12 +745,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return;
     }
 
-    // High-reliability watchdog: if Next client router did not navigate within 120ms, force navigation
+    // High-reliability watchdog: only force full reload if client router genuinely stalls (> 4000ms)
     setTimeout(() => {
       if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
         window.location.assign(href);
       }
-    }, 120);
+    }, 4000);
   };
 
   const createMenuRef = useRef<HTMLDivElement>(null);
@@ -753,7 +803,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           if (window.location.pathname !== targetPath) {
             window.location.assign(anchor.href);
           }
-        }, 150);
+        }, 4000);
 
         const clearTimer = () => window.clearTimeout(timer);
         window.addEventListener("beforeunload", clearTimer, { once: true });
@@ -770,17 +820,40 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       window.localStorage.setItem(OPEN_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
     } catch {}
   };
-  const toggleAllGroups = () => {
-    setOpenGroups((prev) =>
-      prev.size > 0
-        ? new Set()
-        : new Set(activeGroup ? [activeGroup.label] : visibleNavigation.map((group) => group.label))
-    );
+
+  const toggleGroup = (groupLabel: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupLabel)) {
+        next.delete(groupLabel);
+      } else {
+        next.add(groupLabel);
+      }
+      persistOpenGroups(next);
+      return next;
+    });
   };
+
+  const toggleAllGroups = () => {
+    setOpenGroups((prev) => {
+      const allLabels = visibleNavigation.map((group) => group.label);
+      const next = prev.size > 0 ? new Set<string>() : new Set<string>(allLabels);
+      persistOpenGroups(next);
+      return next;
+    });
+  };
+
   const openCommandResult = (href: string) => {
     setCommandOpen(false);
     setCommandQuery("");
     closeSidebar();
+
+    if (mainNavRef.current) {
+      try {
+        sessionStorage.setItem(NAV_SCROLL_KEY, String(mainNavRef.current.scrollTop));
+      } catch {}
+    }
+
     const targetPath = routePath(href);
     try {
       router.push(href);
@@ -792,7 +865,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
         window.location.assign(href);
       }
-    }, 120);
+    }, 4000);
   };
 
   return (
@@ -864,7 +937,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </button>
         </div>
 
-        <nav className="main-nav" aria-label="Main navigation">
+        <nav ref={mainNavRef} onScroll={handleNavScroll} className="main-nav" aria-label="Main navigation">
           {(Array.isArray(visibleNavigation) ? visibleNavigation : navigation).map((group) => {
             if (!group) return null;
             const items = Array.isArray(group.items) ? group.items : [];
@@ -880,10 +953,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               <summary
                 onClick={(e) => {
                   e.preventDefault();
-                  setOpenGroups((prev) => {
-                    const isAlreadyOpen = prev.has(group.label);
-                    return isAlreadyOpen ? new Set() : new Set([group.label]);
-                  });
+                  toggleGroup(group.label);
                 }}
               >
                 <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{group.label}</span></span>
