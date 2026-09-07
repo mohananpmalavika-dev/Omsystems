@@ -254,6 +254,8 @@ export function DeviceManager() {
   const [deletingCamera, setDeletingCamera] = useState(false);
 
   // Portable Camera Subsystem State
+  const portableRequestRef = useRef(0);
+  const qrRequestRef = useRef(0);
   const [portableDevices, setPortableDevices] = useState<any[]>([]);
   const [revokedPortableDevices, setRevokedPortableDevices] = useState<any[]>([]);
   const [showQrModal, setShowQrModal] = useState(false);
@@ -279,15 +281,17 @@ export function DeviceManager() {
     return h;
   }
 
-  async function loadPortableDevices() {
-    if (!selectedBranch) return;
+  async function loadPortableDevices(branchId = selectedBranch) {
+    if (!branchId || selectedBranchRef.current !== branchId) return;
+    const requestId = ++portableRequestRef.current;
     try {
-      const res = await fetch(`/api/portable-camera/devices?branchId=${encodeURIComponent(selectedBranch)}`, {
+      const res = await fetch(`/api/portable-camera/devices?branchId=${encodeURIComponent(branchId)}`, {
         credentials: "include",
         headers: getPortableAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
+        if (selectedBranchRef.current !== branchId || portableRequestRef.current !== requestId) return;
         setPortableDevices(data.devices || []);
         setRevokedPortableDevices(data.revokedDevices || []);
       }
@@ -296,7 +300,12 @@ export function DeviceManager() {
 
   async function generateEnrollmentQr(branchId = portableEnrollmentBranch) {
     if (!branchId) return;
+    const requestId = ++qrRequestRef.current;
     setQrLoading(true);
+    setQrDataUrl("");
+    setQrToken("");
+    setQrEnrollmentUrl("");
+    setQrExpiresAt("");
     try {
       const res = await fetch("/api/portable-camera/enrollments", {
         method: "POST",
@@ -306,16 +315,17 @@ export function DeviceManager() {
       });
       if (res.ok) {
         const data = await res.json();
+        const url = await QRCode.toDataURL(data.enrollmentUrl, { width: 280, margin: 2 });
+        if (qrRequestRef.current !== requestId) return;
         setQrToken(data.token);
         setQrExpiresAt(data.expiresAt);
         setQrEnrollmentUrl(data.enrollmentUrl);
-        const url = await QRCode.toDataURL(data.enrollmentUrl, { width: 280, margin: 2 });
         setQrDataUrl(url);
       }
     } catch (e) {
       console.error(e);
     } finally {
-      setQrLoading(false);
+      if (qrRequestRef.current === requestId) setQrLoading(false);
     }
   }
 
@@ -388,7 +398,7 @@ export function DeviceManager() {
     scanAbortedRef.current = true;
     setScanning(false);
     setSaving(false);
-    setNotice("Camera scanning was stopped.");
+    setNotice("Stopped waiting for this scan. Work already queued on the gateway may still complete.");
   }
 
   async function publishDirectProbeDiscoveries(results: DirectProbeResult[], allowPrivateOffline = false) {
@@ -795,7 +805,19 @@ export function DeviceManager() {
   useEffect(() => {
     selectedBranchRef.current = selectedBranch;
     refreshRequestRef.current += 1;
+    portableRequestRef.current += 1;
+    qrRequestRef.current += 1;
     scanAbortedRef.current = true;
+    setPortableDevices([]);
+    setRevokedPortableDevices([]);
+    setSelectedPortableDevice(null);
+    setCameraToDelete(null);
+    setShowQrModal(false);
+    setQrLoading(false);
+    setQrDataUrl("");
+    setQrToken("");
+    setQrEnrollmentUrl("");
+    setQrExpiresAt("");
     setGateways([]);
     setCameras([]);
     setInventoryRecords([]);
@@ -875,6 +897,7 @@ export function DeviceManager() {
   }, [scanning]);
 
   async function refreshBranch(branchId: string) {
+    if (!branchId || selectedBranchRef.current !== branchId) return [];
     const requestId = ++refreshRequestRef.current;
     setLoading(true);
     setError(undefined);
@@ -1338,7 +1361,7 @@ export function DeviceManager() {
     setSaving(false);
     setScanning(false);
     setLoadingDiscoveries(false);
-    setNotice("Operation stopped by user.");
+    setNotice("Stopped waiting for this operation. Work already queued on the gateway may still complete.");
   }
 
   async function approveDiscoveredCamera(discovered: any) {
@@ -1689,8 +1712,16 @@ export function DeviceManager() {
     <div className="device-manager">
       <div className="device-toolbar">
         <div>
-          <h2>Branches & devices</h2>
-          <p>One automatic scan checks the branch network, saved VPN routes, and managed tunnel access.</p>
+          <h2>Connect branch cameras</h2>
+          <p>Select a branch, then scan for cameras or choose another enrollment method.</p>
+        </div>
+        <div className="device-scope">
+          <label htmlFor="device-branch">Branch location</label>
+          <select id="device-branch" value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} disabled={scanning || saving || (loading && branches.length === 0)}>
+            {branches.length === 0 ? <option value="">{loading ? "Loading branches…" : "No configurable branches"}</option> : null}
+            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+          </select>
+          {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
         </div>
         <div className="device-toolbar-actions">
           {scanning ? (
@@ -1698,9 +1729,9 @@ export function DeviceManager() {
               type="button"
               className="secondary-button scan-stop-button"
               onClick={stopScanning}
-              title="Stop the current camera scan"
+              title="Stop waiting for the current scan; queued gateway work may still complete"
             >
-              <Square size={14} fill="currentColor" /> Stop scan
+              <Square size={14} fill="currentColor" /> Stop waiting
             </button>
           ) : (
             <button type="button" className="primary-button" onClick={() => void scanCameras()} disabled={!selectedBranch || saving} title="Automatically search local network, VPN routes, and the managed tunnel">
@@ -1711,7 +1742,7 @@ export function DeviceManager() {
             <Wifi size={15} /> Direct IP Probe
           </button>
           <button type="button" className="secondary-button" onClick={() => setShowImportExportModal(true)} title="Import cameras from Excel/CSV with credentials or export current inventory">
-            <FileSpreadsheet size={15} /> Import / Export (Excel)
+            <FileSpreadsheet size={15} /> Import / Export
           </button>
           <button className="secondary-button" type="button" onClick={() => void refreshBranch(selectedBranch)} disabled={!selectedBranch || loading} title="Refresh this branch inventory">
             <RefreshCw size={15} className={loading ? "spin" : undefined} /> Refresh
@@ -1723,7 +1754,7 @@ export function DeviceManager() {
             disabled={saving}
             title="Enroll a mobile phone, laptop, or browser camera as a temporary or permanent CCTV source"
           >
-            <Smartphone size={15} /> Enroll Portable Camera
+            <Smartphone size={15} /> Enroll portable camera
           </button>
 
           <button type="button" className="secondary-button" onClick={openScannerInstaller} disabled={saving || !selectedBranch} title="Get 1-line commands or standalone installer">
@@ -1734,7 +1765,7 @@ export function DeviceManager() {
           gateways.length === 0 ? (
             <p className="device-toolbar-note">First use: select Install scanner, then run the downloaded installer once.</p>
           ) : (
-            <p className="device-toolbar-note">Scanner: {onlineGateway?.name || gateways[0]?.name || "Not installed"} · {onlineGateway ? "Ready to scan" : "Installed but offline — select Repair scanner"}</p>
+            <p className="device-toolbar-note">Scanner: {onlineGateway?.name || gateways[0]?.name || "Not installed"} · {onlineGateway ? "Ready to scan" : "Offline · open Agent Commands to reconnect or repair"}</p>
           )
         ) : null}
       </div>
@@ -1745,21 +1776,14 @@ export function DeviceManager() {
       <div className="remote-camera-note">
         <Network size={19} />
         <div>
-          <strong>One automatic camera search</strong>
-          <span>The module uses each device's own saved credentials and checks local cameras first, then VPN routes, then tunnel-connected access. Unknown devices are listed so their login can be entered individually.</span>
+          <strong>Discover, verify, approve</strong>
+          <span>A scan checks the local network, VPN routes, and managed tunnels. Devices with missing credentials stay in review until you verify their login.</span>
         </div>
       </div>
 
-      <div className="device-scope">
-        <label htmlFor="device-branch">Branch location</label>
-        <select id="device-branch" value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} disabled={loading && branches.length === 0}>
-          {branches.length === 0 ? <option value="">{loading ? "Loading branches…" : "No configurable branches"}</option> : null}
-          {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-        </select>
-        {branches.length === 0 && !loading && <span>You do not have device configuration permission for any branch.</span>}
-      </div>
-
       <ProvisioningRun
+        key={selectedBranch}
+        onStop={stopScanning}
         branchId={selectedBranch}
         refreshing={scanning}
         hasEnrolledAgent={gateways.length > 0}
@@ -1869,7 +1893,7 @@ export function DeviceManager() {
                 <span className="camera-device-icon"><Camera size={15} /></span>
                 <div><strong>{camera.name}</strong><small>{camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : `${camera.vendor} · ${camera.model} · channel ${camera.channel}`}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
-                <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                <div className="camera-inventory-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <button
                     type="button"
                     className="secondary-button"
@@ -1894,11 +1918,11 @@ export function DeviceManager() {
             ))}
           </section>
 
-          <section className="device-card" style={{ gridColumn: "1 / -1", marginTop: "12px" }}>
+          <section className="device-card portable-camera-section" style={{ gridColumn: "1 / -1" }}>
             <div className="device-card-heading">
               <Smartphone size={18} />
               <div>
-                <h3>Portable &amp; Software Cameras</h3>
+                <h3>Portable &amp; software cameras</h3>
                 <p>{portableDevices.length} active device{portableDevices.length !== 1 ? "s" : ""} for {activeBranch?.name ?? "the selected branch"}</p>
               </div>
               <div style={{ marginLeft: "auto" }}>
@@ -2084,7 +2108,7 @@ export function DeviceManager() {
               {pendingReviewCount > 0 && approvableDiscoveryCount === 0 ? <span className="credential-pending-note">{pendingReviewCount} need review or login</span> : null}
               {(saving || scanning) && (
                 <button type="button" className="secondary-button danger-button" onClick={handleStopOperation}>
-                  ⛔ Stop / Cancel
+                  <Square size={13} fill="currentColor" /> Stop waiting
                 </button>
               )}
             </div>
@@ -2177,7 +2201,7 @@ export function DeviceManager() {
         <summary className="device-card-heading cursor-pointer list-none">
           <Network size={18} />
           <div><h3>Advanced device inventory</h3><p>{inventoryRecords.length} records · optional manual registry</p></div>
-          <span className="ml-auto rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Open advanced tools</span>
+          <span className="inventory-advanced-toggle" aria-hidden="true" />
         </summary>
         <div className="mt-4 border-t border-slate-100 pt-4">
         <form className="modal-form" onSubmit={addInventoryRecord}>

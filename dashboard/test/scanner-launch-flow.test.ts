@@ -8,7 +8,7 @@ describe("website scanner launch flow", () => {
     expect(source).not.toContain("sentinel-grid-scanner://");
     expect(source).not.toContain("window.location.assign");
     expect(source).toContain("const scannerStartupTimeoutMs = 12_000");
-    expect(source).toContain("Installed but offline — select Repair scanner");
+    expect(source).toContain("Offline · open Agent Commands to reconnect or repair");
     expect(source).toContain('gateways.length > 0 ? "Agent Commands" : "Install Scanner"');
   });
 

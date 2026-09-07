@@ -1,19 +1,18 @@
 import { AppLayout } from "@/components/app-layout";
 import { DeviceManager } from "@/components/device-manager";
+import styles from "./branch-onboarding.module.css";
 
 export default function BranchOnboardingPage() {
-  return <AppLayout>
-    <main className="admin-shell">
-      <header className="admin-header">
-        <div className="admin-title">
-          <div>
-            <h1>Branch camera onboarding</h1>
-            <p>Enroll an unattended gateway, discover cameras and DVRs, then approve verified devices.</p>
-          </div>
-        </div>
-      </header>
-      <section className="admin-panel"><DeviceManager/></section>
-    </main>
-  </AppLayout>;
+  return (
+    <AppLayout>
+      <main className={styles.page}>
+        <header className={styles.header}>
+          <p className={styles.eyebrow}>Branch setup</p>
+          <h1>Branch camera onboarding</h1>
+          <p>Connect a gateway, discover cameras and recorders, then approve verified devices.</p>
+        </header>
+        <DeviceManager />
+      </main>
+    </AppLayout>
+  );
 }
-

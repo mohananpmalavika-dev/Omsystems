@@ -1,0 +1,220 @@
+.page {
+  width: min(1480px, 100%);
+  min-width: 0;
+  margin-inline: auto;
+  padding: 28px clamp(16px, 2.5vw, 36px) 40px;
+  color: var(--ink);
+  container: onboarding / inline-size;
+}
+
+.header { margin-bottom: 24px; }
+.header h1 { margin: 4px 0 8px; font-size: clamp(24px, 2.4vw, 30px); line-height: 1.2; letter-spacing: -.7px; }
+.header > p { max-width: 760px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.header .eyebrow { color: var(--blue); font-size: 11px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+
+.page :global(.device-manager) { gap: 20px; min-width: 0; font-size: 13px; }
+.page :global(.device-manager) > * { min-width: 0; }
+.page :global(.device-toolbar) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+  align-items: center;
+  gap: 18px 24px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.page :global(.device-toolbar) > div { min-width: 0; }
+.page :global(.device-toolbar) h2 { color: var(--ink); font-size: 18px; }
+.page :global(.device-toolbar) p { max-width: 580px; line-height: 1.6; }
+.page :global(.device-scope) { display: grid; gap: 7px; padding: 0; border: 0; background: transparent; }
+.page :global(.device-scope) label { color: var(--muted); }
+.page :global(.device-scope) select { width: 100%; min-width: 0; min-height: 42px; }
+.page :global(.device-scope) span { color: var(--amber); }
+.page :global(.device-toolbar-actions) { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.page :global(.device-toolbar-actions) button { flex: 0 1 auto; }
+.page :global(.device-toolbar-note) { grid-column: 1 / -1; max-width: none !important; margin: -5px 0 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-soft); overflow-wrap: anywhere; }
+.page :global(.primary-button),
+.page :global(.secondary-button) { min-height: 38px; height: auto; padding: 9px 12px; gap: 7px; line-height: 1.4; white-space: normal; text-align: center; }
+.page :global(.primary-button) > svg,
+.page :global(.secondary-button) > svg { flex-shrink: 0; }
+.page :global(.device-manager) :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+.page :global(.remote-camera-note) { align-items: flex-start; padding: 15px 18px; color: var(--blue); border-color: color-mix(in srgb, var(--blue) 24%, var(--line)); background: var(--blue-soft); }
+.page :global(.remote-camera-note) strong { color: var(--ink); font-size: 13px; }
+.page :global(.remote-camera-note) span { color: var(--muted); line-height: 1.6; }
+.page :global(.device-message) { align-items: flex-start; line-height: 1.6; overflow-wrap: anywhere; }
+.page :global(.device-message) > svg { flex-shrink: 0; margin-top: 2px; }
+.page :global(.device-message) button { flex-shrink: 0; min-width: 28px; min-height: 28px; }
+.page :global(.device-message.error) { color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
+.page :global(.device-message.success) { color: var(--green) !important; background: color-mix(in srgb, var(--green) 10%, var(--surface)) !important; }
+
+.page :global(.device-card),
+.page :global(.device-advanced),
+.page :global(.ztp-panel) { min-width: 0; border-color: var(--line); background: var(--surface); color: var(--ink); border-radius: 14px; }
+.page :global(.device-card) { min-height: 0; padding: 20px; }
+.page :global(.device-card-heading) { align-items: flex-start; gap: 10px; padding-bottom: 14px; border-color: var(--line); }
+.page :global(.device-card-heading) > svg { flex-shrink: 0; margin-top: 2px; color: var(--blue); }
+.page :global(.device-card-heading) > div { min-width: 0; }
+.page :global(.device-card-heading) h3 { color: var(--ink); font-size: 15px; }
+.page :global(.device-card-heading) p { color: var(--muted); }
+.page :global(.device-empty) { min-height: 170px; padding: 26px 12px 14px; color: var(--muted); gap: 9px; }
+.page :global(.device-empty) strong { color: var(--ink); font-size: 14px; }
+.page :global(.device-empty) span { max-width: 370px; line-height: 1.6; }
+.page :global(.device-advanced) summary { padding: 16px 18px; color: var(--ink); }
+.page :global(.device-advanced-content) { padding: 18px; }
+.page :global(.device-advanced-content) > p { color: var(--muted); }
+.page :global(.device-card) > summary { cursor: pointer; }
+.page :global(.device-card):not([open]) > summary { padding-bottom: 0; border-bottom: 0; }
+.page :global(.inventory-advanced-toggle) { flex-shrink: 0; width: 9px; height: 9px; margin: 6px 4px 0 auto; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); }
+.page :global(.device-card)[open] :global(.inventory-advanced-toggle) { transform: rotate(225deg); margin-top: 10px; }
+
+.page :global(.device-columns) { gap: 20px; }
+.page :global(.gateway-row),
+.page :global(.camera-inventory-row) { flex-wrap: wrap; gap: 10px; padding: 14px 0; border-color: var(--line); }
+.page :global(.gateway-row) > div:not(:global(.gateway-actions)),
+.page :global(.camera-inventory-row) > div:not(:global(.camera-inventory-actions)) { flex: 1 1 150px; }
+.page :global(.gateway-row) strong,
+.page :global(.camera-inventory-row) strong { overflow-wrap: anywhere; }
+.page :global(.gateway-row) small,
+.page :global(.camera-inventory-row) small { color: var(--muted); overflow-wrap: anywhere; }
+.page :global(.gateway-row) > :global(.gateway-actions) { display: flex; flex-wrap: wrap; flex: 1 1 100%; padding-left: 29px; }
+.page :global(.gateway-actions) button { width: 34px; height: 34px; border-color: var(--line); color: var(--blue); background: var(--surface-soft); }
+.page :global(.gateway-actions) :global(.gateway-action-text) { width: auto; height: auto; min-height: 34px; color: var(--blue); border-color: var(--line); background: var(--surface-soft); white-space: normal; }
+.page :global(.gateway-row) code { max-width: 100%; color: var(--muted); background: var(--surface-soft); }
+.page :global(.camera-inventory-row) > :global(.camera-inventory-actions) { flex: 1 1 100%; flex-wrap: wrap; padding-left: 43px; }
+.page :global(.camera-device-icon) { color: var(--blue); background: var(--blue-soft); }
+.page :global(.inventory-status) { display: inline-flex; flex-shrink: 0; color: var(--muted); background: var(--surface-strong); white-space: nowrap; }
+.page :global(.inventory-status.online) { color: var(--green); background: color-mix(in srgb, var(--green) 12%, var(--surface)); }
+.page :global(.inventory-status.offline) { color: var(--red); background: color-mix(in srgb, var(--red) 12%, var(--surface)); }
+.page :global(.inventory-status.degraded) { color: var(--amber); background: color-mix(in srgb, var(--amber) 12%, var(--surface)); }
+.page :global(.portable-camera-section) :global(.device-card-heading) { flex-wrap: wrap; }
+.page :global(.portable-camera-table) { min-width: 1050px; }
+
+.page :global(.ztp-panel) { margin: 0; padding: 22px; gap: 18px; box-shadow: none; }
+.page :global(.ztp-header) { align-items: flex-start; flex-wrap: wrap; }
+.page :global(.ztp-title) { align-items: flex-start; min-width: 0; flex: 1 1 320px; }
+.page :global(.ztp-title) > div { min-width: 0; }
+.page :global(.ztp-title) h3 { color: var(--ink); font-size: 17px; }
+.page :global(.ztp-title) p { color: var(--muted); line-height: 1.6; }
+.page :global(.ztp-mark) { flex-shrink: 0; color: var(--blue); background: var(--blue-soft); }
+.page :global(.ztp-actions) { flex-wrap: wrap; min-width: 0; }
+.page :global(.ztp-progress-copy),
+.page :global(.ztp-skip-note),
+.page :global(.ztp-empty) { color: var(--muted); font-size: 13px; }
+.page :global(.ztp-progress-copy) strong { color: var(--ink); }
+.page :global(.ztp-progress) { background: var(--surface-strong); }
+.page :global(.ztp-summary) > div { min-width: 0; padding: 13px; border-color: var(--line); background: var(--surface-soft); }
+.page :global(.ztp-summary) span { color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+.page :global(.ztp-summary) strong { color: var(--ink); font-size: 23px; }
+.page :global(.ztp-steps) { gap: 10px; }
+.page :global(.ztp-step) { align-items: flex-start; flex-wrap: wrap; padding: 14px; border-color: var(--line); background: var(--surface); }
+.page :global(.ztp-step) > svg { flex-shrink: 0; margin-top: 2px; }
+.page :global(.ztp-step) > div:not(:global(.ztp-step-state)) { flex: 1 1 160px; }
+.page :global(.ztp-step) strong { color: var(--ink); font-size: 13px; line-height: 1.5; }
+.page :global(.ztp-step) span { color: var(--muted); font-size: 12px; line-height: 1.6; white-space: normal; overflow-wrap: anywhere; }
+.page :global(.ztp-step) > :global(.ztp-step-state) { flex: 0 1 auto; flex-direction: row; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; }
+.page :global(.ztp-step) button span { color: inherit; }
+.page :global(.ztp-step.completed) { color: var(--green); border-color: color-mix(in srgb, var(--green) 30%, var(--line)); }
+.page :global(.ztp-step.running) { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, var(--line)); }
+.page :global(.ztp-step.warning) { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 35%, var(--line)); }
+.page :global(.ztp-step.blocked),
+.page :global(.ztp-step.failed) { color: var(--red); border-color: color-mix(in srgb, var(--red) 35%, var(--line)); }
+.page :global(.ztp-stage-skip) { min-height: 32px; color: var(--muted); border-color: var(--line); background: var(--surface-soft); }
+.page :global(.ztp-issues) article { align-items: flex-start; color: var(--amber); background: color-mix(in srgb, var(--amber) 10%, var(--surface)); }
+.page :global(.ztp-issues) :global(article.blocker) { color: var(--red); background: color-mix(in srgb, var(--red) 10%, var(--surface)); }
+.page :global(.ztp-issues) strong { font-size: 12px; }
+.page :global(.ztp-issues) span { color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+.page :global(.branch-connectivity-panel),
+.page :global(.connectivity-option),
+.page :global(.connectivity-guidance),
+.page :global(.discovery-camera-card),
+.page :global(.discovery-details-grid) > div,
+.page :global(.discovery-status-metrics) > div { color: var(--ink); border-color: var(--line); background: var(--surface-soft); }
+.page :global(.branch-connectivity-heading) { flex-wrap: wrap; }
+.page :global(.branch-connectivity-heading) h3,
+.page :global(.connectivity-option) strong,
+.page :global(.discovery-status-copy) strong,
+.page :global(.discovery-status-metrics) strong,
+.page :global(.discovery-camera-head) strong,
+.page :global(.discovery-details-grid) strong { color: var(--ink); }
+.page :global(.branch-connectivity-heading) p,
+.page :global(.connectivity-option) small,
+.page :global(.connectivity-fields) label,
+.page :global(.connectivity-guidance) p,
+.page :global(.connectivity-empty),
+.page :global(.discovery-status-copy) p,
+.page :global(.discovery-status-metrics) span,
+.page :global(.discovery-camera-head) span,
+.page :global(.discovery-details-grid) span,
+.page :global(.discovery-footnote) { color: var(--muted); line-height: 1.6; }
+.page :global(.connectivity-option.selected) { border-color: var(--blue); background: var(--blue-soft); }
+.page :global(.connectivity-fields) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.page :global(.connectivity-fields) label:last-child { grid-column: 1 / -1; }
+.page :global(.discovery-status-panel) { gap: 18px; margin-top: 16px; padding: 18px; border-color: var(--line); background: var(--surface-soft); }
+.page :global(.discovery-status-panel.idle) { border-color: color-mix(in srgb, var(--amber) 30%, var(--line)); }
+.page :global(.discovery-status-copy) { min-width: 0; }
+.page :global(.discovery-status-metrics) { flex-wrap: wrap; }
+.page :global(.discovery-status-metrics) span,
+.page :global(.discovery-details-grid) span { font-size: 11px; }
+.page :global(.discovery-status-metrics) strong,
+.page :global(.discovery-details-grid) strong { font-size: 13px; }
+.page :global(.discovery-details-grid) > div { min-width: 0; overflow-wrap: anywhere; }
+.page :global(.discovery-camera-card) { padding: 16px; }
+.page :global(.discovery-camera-head) { flex-wrap: wrap; }
+.page :global(.discovery-camera-head) strong { font-size: 14px; }
+.page :global(.discovery-camera-head) span { font-size: 12px; }
+.page :global(.discovery-primary-actions) { flex-wrap: wrap; }
+
+/* Legacy modal styles force white surfaces; keep all onboarding forms in the selected theme. */
+.page :global(.modal-container),
+.page :global(.modal-header),
+.page :global(.modal-form),
+.page :global(.modal-body),
+.page :global(.modal-actions) { color: var(--ink) !important; border-color: var(--line); background: var(--surface) !important; }
+.page :global(.modal-header) :is(h2, h3),
+.page :global(.form-section) h3,
+.page :global(.form-group) label { color: var(--ink) !important; }
+.page :global(.form-group),
+.page :global(.form-row) { min-width: 0; }
+.page :global(.form-group) :is(input, select, textarea) { min-width: 0; max-width: 100%; }
+.page :global(.modal-actions) { flex-wrap: wrap; gap: 8px; }
+.page :global(.setup-description),
+.page :global(.field-help) { color: var(--muted); }
+.page :global(.modal-header) :global(.icon-button) { flex-shrink: 0; color: var(--muted); background: var(--surface-soft); }
+
+@container onboarding (max-width: 1000px) {
+  .page :global(.device-columns),
+  .page :global(.ztp-steps) { grid-template-columns: minmax(0, 1fr); }
+  .page :global(.ztp-summary) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .page :global(.ztp-title) { flex-basis: auto; }
+  .page :global(.gateway-row) > :global(.gateway-actions) { flex: 0 1 auto; padding-left: 0; }
+  .page :global(.camera-inventory-row) > :global(.camera-inventory-actions) { flex: 0 1 auto; padding-left: 0; }
+}
+
+@container onboarding (max-width: 680px) {
+  .page :global(.device-toolbar) { grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .page :global(.device-toolbar-actions) button { flex: 1 1 160px; justify-content: center; }
+  .page :global(.device-card),
+  .page :global(.ztp-panel) { padding: 16px; }
+  .page :global(.ztp-actions) { width: 100%; }
+  .page :global(.ztp-actions) button { flex: 1 1 170px; justify-content: center; }
+  .page :global(.discovery-status-panel) { flex-direction: column; align-items: stretch; }
+  .page :global(.discovery-status-actions) { align-items: flex-start; }
+  .page :global(.discovery-status-metrics) > div { flex: 1; min-width: 0; }
+  .page :global(.connectivity-option-grid),
+  .page :global(.connectivity-fields),
+  .page :global(.form-row),
+  .page :global(.form-row.form-row-three) { grid-template-columns: minmax(0, 1fr); }
+  .page :global(.discovery-details-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page :global(.gateway-row) > :global(.gateway-actions),
+  .page :global(.camera-inventory-row) > :global(.camera-inventory-actions) { flex-basis: 100%; }
+  .page :global(.device-advanced-actions) > button { flex: 1 1 180px; justify-content: center; }
+}
+
+@media (max-width: 600px) {
+  .page { padding: 20px 14px 32px; }
+  .header { margin-bottom: 20px; }
+}
