@@ -447,17 +447,16 @@ export class TamperDetectionService {
     description: string,
     evidenceUrls: string[]
   ): Promise<TamperAIAnalysis> {
-    // Rule-based classification with confidence derived from actual evidence
-    // Note: This is intent classification confidence, not model inference confidence
+    // Rule-based classification is not calibrated model inference.
     
     let intent: 'ACCIDENTAL' | 'INTENTIONAL' = 'ACCIDENTAL';
-    let confidence = 0; // Start from 0, build confidence based on actual evidence
+    let heuristicScore = 0;
     const patterns: string[] = [];
     const recommendations: string[] = [];
 
-    // Base confidence from having tamper event with description
+    // Base heuristic score from having a descriptive tamper event
     if (description && description.length > 10) {
-      confidence = 0.4; // Base confidence for having observable tamper event
+      heuristicScore = 0.4;
     }
 
     // Critical tampers indicate intentional action with high confidence
@@ -467,7 +466,7 @@ export class TamperDetectionService {
       TamperType.USB_INSERTED
     ].includes(tamperType)) {
       intent = 'INTENTIONAL';
-      confidence = 0.9; // High confidence - these actions require deliberate effort
+      heuristicScore = 0.9;
       patterns.push('Physical device manipulation requiring deliberate action');
       recommendations.push('Investigate immediately - potential security breach');
       recommendations.push('Review security footage for 2 hours before event');
@@ -478,7 +477,7 @@ export class TamperDetectionService {
     // Time-based behavioral analysis
     const hour = new Date().getHours();
     if (hour < 6 || hour > 22) {
-      confidence = Math.min(confidence + 0.15, 0.95);
+      heuristicScore = Math.min(heuristicScore + 0.15, 0.95);
       patterns.push('Occurred outside business hours (suspicious timing)');
       if (intent === 'ACCIDENTAL') {
         intent = 'INTENTIONAL'; // Off-hours tamper suggests deliberate action
@@ -491,7 +490,7 @@ export class TamperDetectionService {
     });
 
     if (recentEvents.length > 5) {
-      confidence = Math.min(confidence + 0.2, 0.95);
+      heuristicScore = Math.min(heuristicScore + 0.2, 0.95);
       patterns.push(`Multiple tamper events in short period (${recentEvents.length} events in 1 hour)`);
       intent = 'INTENTIONAL';
       recommendations.push('CRITICAL: Possible coordinated attack in progress');
@@ -501,14 +500,15 @@ export class TamperDetectionService {
 
     // Evidence-based confidence boost
     if (evidenceUrls && evidenceUrls.length > 0) {
-      confidence = Math.min(confidence + 0.1, 0.95);
+      heuristicScore = Math.min(heuristicScore + 0.1, 0.95);
       patterns.push(`Visual evidence available (${evidenceUrls.length} sources)`);
     }
 
-    const riskScore = Math.round((confidence * 100));
+    const riskScore = Math.round(heuristicScore * 100);
 
     return {
-      confidence: Math.min(confidence, 0.95), // Cap at 95% - never 100% certain without human review
+      confidence: null,
+      status: 'UNKNOWN',
       intent,
       riskScore,
       patterns,

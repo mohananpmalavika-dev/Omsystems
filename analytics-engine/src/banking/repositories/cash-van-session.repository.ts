@@ -247,7 +247,7 @@ export class CashVanSessionRepository {
       session.transferCompletedAt = update.transferCompletedAt;
     }
     if (update.vehicleDepartedAt !== undefined) {
-      session.vehicleDepartedAt = update.vehicleDepartedAt;
+      session.departedAt = update.vehicleDepartedAt;
     }
 
     if (update.state === 'unloading' && !session.unloadingStartedAt) {
@@ -256,8 +256,8 @@ export class CashVanSessionRepository {
     if (update.state === 'transfer_complete' && !session.transferCompletedAt) {
       session.transferCompletedAt = update.transferCompletedAt || now;
     }
-    if (update.state === 'departed' && !session.vehicleDepartedAt) {
-      session.vehicleDepartedAt = update.vehicleDepartedAt || now;
+    if (update.state === 'departed' && !session.departedAt) {
+      session.departedAt = update.vehicleDepartedAt || now;
     }
 
     // Update vehicle

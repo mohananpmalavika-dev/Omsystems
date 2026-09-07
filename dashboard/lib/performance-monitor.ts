@@ -107,7 +107,7 @@ class PerformanceMonitor {
     }
 
     // Calculate derived metrics
-    if ((nav as unknown as { firstPaint?: number }).firstPaint || nav.responseStart) {
+    if (nav.firstPaint) {
       this.pageMetrics.metrics.ttfb = nav.responseStart - nav.fetchStart;
       this.pageMetrics.metrics.fcp = (performance.getEntriesByName('first-contentful-paint')[0] as PerformancePaintTiming)?.startTime ?? 0;
     }
