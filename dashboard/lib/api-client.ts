@@ -872,6 +872,16 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}/rename`,
       { method: 'PATCH', body: JSON.stringify(data) }
     ),
+  deleteDiscovery: (branchId: string, discoveryId: string) =>
+    fetchApi<{ success: boolean; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/${encodeURIComponent(discoveryId)}`,
+      { method: 'DELETE' }
+    ),
+  clearDiscoveredCameras: (branchId: string) =>
+    fetchApi<{ success: boolean; deleted: number; message: string }>(
+      `/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`,
+      { method: 'DELETE' }
+    ),
   bulkImport: (branchId: string, csv: string) =>
     fetchApi<any>(
       `/v1/branches/${encodeURIComponent(branchId)}/cameras/bulk-import`,

@@ -419,6 +419,22 @@ export class PostgresStore
   async listDiscoveredCameras(branchId: string) {
     return this.agents.listDiscoveries(branchId);
   }
+  async deleteDiscovery(branchId: string, discoveryId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      `DELETE FROM camera_discoveries
+       WHERE id = $1 AND branch_node_id = $2 AND status <> 'approved'`,
+      [discoveryId, branchId]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+  async clearDiscoveredCameras(branchId: string): Promise<number> {
+    const result = await this.pool.query(
+      `DELETE FROM camera_discoveries
+       WHERE branch_node_id = $1 AND status <> 'approved'`,
+      [branchId]
+    );
+    return result.rowCount ?? 0;
+  }
   async approveCamera(branchId: string, input: CameraApprovalInput) {
     const camera = await this.cameras.approve(branchId, input);
     if (camera) {

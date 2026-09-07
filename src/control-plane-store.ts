@@ -700,6 +700,8 @@ export interface ControlPlaneStore {
   listDiscoveredCameras(branchId: string): Promise<DiscoveredCamera[]>;
   rejectDiscovery(discoveryId: string, reason?: string): Promise<DiscoveredCamera | undefined>;
   renameDiscovery(discoveryId: string, displayName: string): Promise<DiscoveredCamera | undefined>;
+  deleteDiscovery(branchId: string, discoveryId: string): Promise<boolean>;
+  clearDiscoveredCameras(branchId: string): Promise<number>;
   approveCamera(
     branchId: string,
     input: CameraApprovalInput,

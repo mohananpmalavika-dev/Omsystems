@@ -7,7 +7,7 @@ git fetch origin main
 git reset --hard origin/main
 
 echo "=== 1.5. Freeing build cache to prevent ENOSPC ==="
-docker builder prune -af --filter until=2h || true
+docker builder prune -af || true
 docker image prune -f || true
 
 echo "=== 1.8. Applying Database Migrations ==="

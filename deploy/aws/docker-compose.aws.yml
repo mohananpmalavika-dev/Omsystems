@@ -151,6 +151,7 @@ services:
       CONTROL_PLANE_URL: http://control-plane:8080
       CONTROL_PLANE_INTERNAL_URL: http://control-plane:8080
       MEDIA_GATEWAY_INTERNAL_URL: http://media-gateway:8090
+      DATABASE_URL: ${DATABASE_URL:-postgresql://sentinel_admin:${DB_PASSWORD:-SentinelGridDbMaster2026}@postgres:5432/sentinel_grid?sslmode=disable}
       NEXT_PUBLIC_APP_NAME: Sentinel Grid
     ports:
       - "10000:10000"

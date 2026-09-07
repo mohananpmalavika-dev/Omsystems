@@ -600,6 +600,48 @@ export async function registerCameraDiscoveryRoutes(
     return { success: true, message: "Display name updated" };
   });
 
+  app.delete("/v1/branches/:branchId/cameras/discovered/:discoveryId", async (request, reply) => {
+    const { branchId, discoveryId } = discoveryParams.parse(request.params);
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") {
+      return reply.code(404).send({ error: "branch_not_found" });
+    }
+    const decision = await store.checkAccess(
+      request.currentUser, "device:configure", branchId,
+    );
+    if (!decision?.allowed) {
+      return reply.code(403).send({
+        error: "forbidden", reason: decision?.reason ?? "no_matching_grant",
+      });
+    }
+
+    const deleted = await store.deleteDiscovery(branchId, discoveryId);
+    if (!deleted) {
+      return reply.code(404).send({ error: "discovery_not_found_or_already_approved" });
+    }
+
+    return { success: true, message: "Camera discovery removed. It will be re-discovered on next scan." };
+  });
+
+  app.delete("/v1/branches/:branchId/cameras/discovered", async (request, reply) => {
+    const { branchId } = branchParams.parse(request.params);
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") {
+      return reply.code(404).send({ error: "branch_not_found" });
+    }
+    const decision = await store.checkAccess(
+      request.currentUser, "device:configure", branchId,
+    );
+    if (!decision?.allowed) {
+      return reply.code(403).send({
+        error: "forbidden", reason: decision?.reason ?? "no_matching_grant",
+      });
+    }
+
+    const count = await store.clearDiscoveredCameras(branchId);
+    return { success: true, deleted: count, message: `${count} unapproved camera discoveries removed. They will be re-discovered on next scan.` };
+  });
+
   app.post("/v1/cameras/probe-direct/range", async (request, reply) => {
     const body = z.object({
       branchId: z.string().min(1),

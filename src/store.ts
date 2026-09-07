@@ -2224,6 +2224,24 @@ export class MemoryStore {
     return discovery;
   }
 
+  async deleteDiscovery(branchId: string, discoveryId: string): Promise<boolean> {
+    const discovery = this.discoveries.get(discoveryId);
+    if (!discovery || discovery.branchId !== branchId) return false;
+    this.discoveries.delete(discoveryId);
+    return true;
+  }
+
+  async clearDiscoveredCameras(branchId: string): Promise<number> {
+    let deleted = 0;
+    for (const [id, disc] of Array.from(this.discoveries.entries())) {
+      if (disc.branchId === branchId && disc.status !== "approved") {
+        this.discoveries.delete(id);
+        deleted++;
+      }
+    }
+    return deleted;
+  }
+
   async approveCamera(branchId: string, input: CameraApprovalInput) {
     const discovery = this.discoveries.get(input.discoveryId);
     const branch = this.nodes.get(branchId);
