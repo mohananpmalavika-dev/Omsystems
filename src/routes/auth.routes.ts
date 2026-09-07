@@ -783,63 +783,6 @@ export async function registerAuthRoutes(
         isCurrentSession,
       });
   });
-
-  // EMERGENCY SUPERADMIN UNLOCK & PASSWORD RESET
-  // Protected by the same BOOTSTRAP_SUPERADMIN_PASSWORD that seeded the account.
-  // DELETE THIS ENDPOINT after use.
-  app.post(
-    "/v1/auth/emergency-reset",
-    { config: { noAuth: true } },
-    async (request, reply) => {
-      try {
-        const bootstrapPassword = process.env.BOOTSTRAP_SUPERADMIN_PASSWORD;
-        if (!bootstrapPassword) {
-          return reply.code(503).send({ error: "emergency_reset_unavailable" });
-        }
-        const body = z.object({
-          bootstrapPassword: z.string().min(1),
-          newPassword: z.string().min(8).max(100),
-        }).parse(request.body);
-
-        const { timingSafeEqual } = await import("node:crypto");
-        const expectedBuf = Buffer.from(bootstrapPassword);
-        const providedBuf = Buffer.from(body.bootstrapPassword);
-        const match = expectedBuf.length === providedBuf.length &&
-          timingSafeEqual(expectedBuf, providedBuf);
-        if (!match) {
-          return reply.code(401).send({ error: "invalid_bootstrap_password" });
-        }
-
-        const user = await store.findUserByUsername(PERMANENT_SUPERADMIN.username);
-        if (!user) {
-          return reply.code(404).send({ error: "superadmin_not_found" });
-        }
-
-        const newHash = await hashPassword(body.newPassword);
-        const pool = (store as any).pool ?? (store as any).db;
-        if (!pool?.query) {
-          return reply.code(503).send({ error: "db_access_unavailable" });
-        }
-        await pool.query(
-          `UPDATE users SET password_hash=$1, login_attempts=0, locked_until=NULL, updated_at=now() WHERE id=$2::uuid`,
-          [newHash, user.id],
-        );
-
-        app.log.warn({ userId: user.id }, "Emergency superadmin password reset performed");
-        return reply.code(200).send({
-          success: true,
-          message: "Password reset and account unlocked. DELETE /v1/auth/emergency-reset from the codebase immediately.",
-          username: user.username,
-        });
-      } catch (error) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
-        }
-        app.log.error({ err: error }, "Emergency reset failed");
-        return reply.code(500).send({ error: "internal_error" });
-      }
-    },
-  );
 }
 
 // Helper functions
