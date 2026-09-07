@@ -83,7 +83,8 @@ describe("website scanner launch flow", () => {
   it("scopes gateway credentials to one camera or recorder address", async () => {
     const source = await readFile("dashboard/components/camera-credential-manager.tsx", "utf8");
 
-    expect(source).toContain("cameraIp: cameraIp.trim()");
+    expect(source).toContain("const normalizedCameraIp = normalizeCameraIp(cameraIp)");
+    expect(source).toContain("cameraIp: normalizedCameraIp");
     expect(source).toContain("This login is used only for this address");
     expect(source).not.toContain("Branch default");
   });

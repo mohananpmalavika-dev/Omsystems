@@ -247,6 +247,7 @@ export function DeviceManager() {
   const [probeResult, setProbeResult] = useState<DirectProbeResult | null>(null);
   const [probeResults, setProbeResults] = useState<DirectProbeResult[]>([]);
   const scanAbortedRef = useRef(false);
+  const scanCancellationRef = useRef(0);
   const credentialDeepLinkHandledRef = useRef(false);
   const selectedBranchRef = useRef("");
   const refreshRequestRef = useRef(0);
@@ -347,7 +348,8 @@ export function DeviceManager() {
         headers: getPortableAuthHeaders(),
       });
       await loadPortableDevices();
-      setSelectedPortableDevice(null);
+      if (selectedBranchRef.current !== selectedBranch) return;
+      setSelectedPortableDevice((current: any) => current?.id === deviceId ? null : current);
     } catch (e) {
       console.error(e);
     } finally {
@@ -365,12 +367,10 @@ export function DeviceManager() {
         body: JSON.stringify({ reason: "operator_stopped_from_device_manager" }),
       });
       await loadPortableDevices();
-      if (selectedPortableDevice?.activeSession) {
-        setSelectedPortableDevice({
-          ...selectedPortableDevice,
-          activeSession: null,
-        });
-      }
+      if (selectedBranchRef.current !== selectedBranch) return;
+      setSelectedPortableDevice((current: any) => current?.activeSession?.id === sessionId
+        ? { ...current, activeSession: null }
+        : current);
     } catch (e) {
       console.error(e);
     } finally {
@@ -396,6 +396,7 @@ export function DeviceManager() {
 
   function stopScanning() {
     scanAbortedRef.current = true;
+    scanCancellationRef.current += 1;
     setScanning(false);
     setSaving(false);
     setNotice("Stopped waiting for this scan. Work already queued on the gateway may still complete.");
@@ -808,6 +809,7 @@ export function DeviceManager() {
     portableRequestRef.current += 1;
     qrRequestRef.current += 1;
     scanAbortedRef.current = true;
+    scanCancellationRef.current += 1;
     setPortableDevices([]);
     setRevokedPortableDevices([]);
     setSelectedPortableDevice(null);
@@ -981,26 +983,24 @@ export function DeviceManager() {
 
   async function completeCameraScan(scanId: string, fallbackEdgeAgentId?: string) {
     if (!selectedBranch) return { found: 0, provisioned: 0, credentialsRequired: 0 };
+    const scanBranchId = selectedBranch;
+    const cancellationId = scanCancellationRef.current;
+    const stopped = () => scanAbortedRef.current || scanCancellationRef.current !== cancellationId || selectedBranchRef.current !== scanBranchId;
     setLastScanAt(new Date().toISOString());
     // 300 s window: edge agents claim jobs only on heartbeat (up to ~60 s latency)
     // plus ONVIF WS-Discovery can take 20-40 s on a large subnet.
     const deadline = Date.now() + 300_000;
     let job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => ({ status: "running" })) as EdgeScanJob;
     while (job.status === "queued" || job.status === "running") {
-      if (scanAbortedRef.current) {
-        setNotice("Camera scan was stopped.");
-        return { found: 0, provisioned: 0, credentialsRequired: 0 };
-      }
+      if (stopped()) return null;
       if (Date.now() >= deadline) {
         break;
       }
       await wait(1_500);
-      if (scanAbortedRef.current) {
-        setNotice("Camera scan was stopped.");
-        return { found: 0, provisioned: 0, credentialsRequired: 0 };
-      }
+      if (stopped()) return null;
       try {
         const liveDiscovered = await cameraInventoryApi.listDiscovered(selectedBranch);
+        if (stopped()) return null;
         if (liveDiscovered?.data?.length > 0) {
           setDiscoveredCameras(liveDiscovered.data);
         }
@@ -1008,6 +1008,7 @@ export function DeviceManager() {
       job = await cameraInventoryApi.getScan(selectedBranch, scanId).catch(() => job) as EdgeScanJob;
     }
 
+    if (stopped()) return null;
     if (job.status === "queued" || job.status === "running") {
       throw new Error("The branch scan timed out before the edge agent completed it. Confirm the scanner remains online, then retry.");
     }
@@ -1032,6 +1033,7 @@ export function DeviceManager() {
       } catch {}
     }
 
+    if (stopped()) return null;
     const mappedResults = rawResults.map((item: any) => ({
       ...item,
       id: item.discoveryId ?? item.id,
@@ -1072,6 +1074,7 @@ export function DeviceManager() {
     const deadline = Date.now() + scannerStartupTimeoutMs;
     while (Date.now() < deadline) {
       const response = await cameraInventoryApi.listGateways(branchId);
+      if (scanAbortedRef.current || selectedBranchRef.current !== branchId) return undefined;
       setGateways(response.data);
       const gateway = response.data.find(isGatewayReady);
       if (gateway) return gateway;
@@ -1083,15 +1086,18 @@ export function DeviceManager() {
 
   async function startConnectedCameraScan(gateway: EdgeAgent) {
     if (!selectedBranch) return;
+    const cancellationId = scanCancellationRef.current;
     // Use the device-scan API (not the provisioning API) so the edge agent
     // picks up the job via its heartbeat poll and we track the right scan ID.
     const job = await cameraInventoryApi.startScan(selectedBranch, gateway.id);
+    if (scanAbortedRef.current || scanCancellationRef.current !== cancellationId || selectedBranchRef.current !== selectedBranch) return;
     const outcome = await completeCameraScan(job.id, gateway.id);
+    if (!outcome || scanAbortedRef.current || scanCancellationRef.current !== cancellationId || selectedBranchRef.current !== selectedBranch) return;
     setNotice(`Camera scan completed. Found ${outcome.found} devices. Review them in Device discovery; nothing is added until you approve it here${outcome.credentialsRequired ? `; ${outcome.credentialsRequired} need credentials` : ``}.`);
   }
 
   function openScannerInstaller() {
-    if (!selectedBranch) return;
+    if (!selectedBranch || selectedBranchRef.current !== selectedBranch) return;
     setGatewayActivation(undefined);
     setGatewayName(`${activeBranch?.name ?? "Branch"} Scanner`);
     setError(undefined);
@@ -1099,7 +1105,8 @@ export function DeviceManager() {
   }
 
   async function scanCameras() {
-    if (!selectedBranch) return;
+    if (!selectedBranch || scanning || saving || selectedBranchRef.current !== selectedBranch) return;
+    const cancellationId = scanCancellationRef.current;
     if (gateways.length === 0) {
       openScannerInstaller();
       setNotice("Install the KryptonVision Scanner once on this PC to enable automatic branch scans.");
@@ -1112,22 +1119,22 @@ export function DeviceManager() {
     try {
       const gateway = onlineGateway ?? await waitForWebsiteScanner(selectedBranch);
       if (!gateway) throw new Error("No online edge agent is registered for this branch.");
-      if (scanAbortedRef.current) return;
+      if (scanAbortedRef.current || scanCancellationRef.current !== cancellationId || selectedBranchRef.current !== selectedBranch) return;
       try {
         await startConnectedCameraScan(gateway);
       } catch (reason) {
         if (!isScannerUnavailable(reason)) throw reason;
         const reconnectedGateway = await waitForWebsiteScanner(selectedBranch);
         if (!reconnectedGateway) throw new Error("No online edge agent is registered for this branch.");
-        if (scanAbortedRef.current) return;
+        if (scanAbortedRef.current || scanCancellationRef.current !== cancellationId || selectedBranchRef.current !== selectedBranch) return;
         await startConnectedCameraScan(reconnectedGateway);
       }
     } catch (reason) {
-      if (!scanAbortedRef.current) {
+      if (!scanAbortedRef.current && scanCancellationRef.current === cancellationId && selectedBranchRef.current === selectedBranch) {
         setError(messageOf(reason, "Camera scan failed."));
       }
     } finally {
-      setScanning(false);
+      if (scanCancellationRef.current === cancellationId && selectedBranchRef.current === selectedBranch) setScanning(false);
     }
   }
 
@@ -1232,12 +1239,13 @@ export function DeviceManager() {
   }
 
   async function openPendingCredentials() {
-    if (!selectedBranch) return;
+    if (!selectedBranch || selectedBranchRef.current !== selectedBranch) return;
     setLoadingDiscoveries(true);
     setShowDiscoveredList(true);
     setError(undefined);
     try {
       const response = await cameraInventoryApi.listDiscovered(selectedBranch);
+      if (selectedBranchRef.current !== selectedBranch) return;
       const discoveries = response.data ?? [];
       setDiscoveredCameras(discoveries);
       updateDiscoveryReviewState(discoveries);
@@ -1250,10 +1258,11 @@ export function DeviceManager() {
         setError("No pending device login was returned. Run the camera scan again to refresh the provisioning evidence.");
       }
     } catch (reason) {
+      if (selectedBranchRef.current !== selectedBranch) return;
       setShowDiscoveredList(false);
       setError(messageOf(reason, "Unable to load devices that require credentials."));
     } finally {
-      setLoadingDiscoveries(false);
+      if (selectedBranchRef.current === selectedBranch) setLoadingDiscoveries(false);
     }
   }
 
@@ -1302,7 +1311,8 @@ export function DeviceManager() {
       await waitForCredentialCommand(activation.commandId);
       if (activation.scanId) {
         setCredentialVerificationStatus("Refreshing this device with the verified login…");
-        await completeCameraScan(activation.scanId, targetAgentId);
+        const outcome = await completeCameraScan(activation.scanId, targetAgentId);
+        if (!outcome) return;
       }
       setCredentialVerificationStatus("Verification completed. Loading the discovered channels…");
       const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
@@ -1358,6 +1368,7 @@ export function DeviceManager() {
 
   function handleStopOperation() {
     scanAbortedRef.current = true;
+    scanCancellationRef.current += 1;
     setSaving(false);
     setScanning(false);
     setLoadingDiscoveries(false);
@@ -1891,7 +1902,13 @@ export function DeviceManager() {
             ) : cameras.map((camera) => (
               <article className="camera-inventory-row" key={camera.id}>
                 <span className="camera-device-icon"><Camera size={15} /></span>
-                <div><strong>{camera.name}</strong><small>{camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""} · channel ${camera.recorderChannel ?? camera.channel}` : `${camera.vendor} · ${camera.model} · channel ${camera.channel}`}</small></div>
+                <div><strong>{camera.name}</strong><small>{[
+                  camera.sourceType === "analog-dvr-channel" ? `Analog via DVR ${camera.recorderId ?? ""}`.trim()
+                    : camera.sourceType === "nvr-channel" ? `NVR ${camera.recorderId ?? ""}`.trim()
+                    : [camera.vendor, camera.model].filter(Boolean).join(" · "),
+                  (camera.recorderChannel ?? camera.channel) != null
+                    ? `Channel ${camera.recorderChannel ?? camera.channel}` : null,
+                ].filter(Boolean).join(" · ") || "IP camera"}</small></div>
                 <span className={`inventory-status ${camera.status}`}>{camera.status}</span>
                 <div className="camera-inventory-actions" style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   <button
@@ -2982,7 +2999,7 @@ export function DeviceManager() {
                 type="button"
                 className="icon-button"
                 aria-label="Close QR modal"
-                onClick={() => setShowQrModal(false)}
+                onClick={() => { qrRequestRef.current += 1; setShowQrModal(false); setQrLoading(false); }}
               >
                 <X size={20} />
               </button>
@@ -3079,7 +3096,7 @@ export function DeviceManager() {
               <button
                 type="button"
                 className="primary-button"
-                onClick={() => setShowQrModal(false)}
+                onClick={() => { qrRequestRef.current += 1; setShowQrModal(false); setQrLoading(false); }}
               >
                 Done
               </button>

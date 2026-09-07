@@ -1,0 +1,788 @@
+[
+  {
+    "target": "control-room",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "path": "C:/Omsystems/tmp/design-qa/after-control-room-1440.png",
+    "url": "http://localhost:3000/control-room",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\nKryptonVision\nOPERATIONS\n\nLive Video Wall\n\nLive operations\nIST\nPlatinum Light\nAUDIO: ON\nCreate\nLive video wall\n\nMonitor cameras and detections across your branches.\n\nOverview\nBranches\nAlerts\nAnalytics\nMaintenance\nOrganization\nSystem Live\n07/09/2026, 16:25:22\nRefresh\nZone:\nAll Zones (1)\nCentral Zone\nRegion:\nAll Regions (1)\nTamil Nadu\nArea / District:\nAll Areas (1)\nChennai Metro\nBranch:\nAll Branches (1)\nChennai Central (6 cams)\nAll Feeds (6)\nOnline (0)\nOffline (6)\nAlerts (0)\nShowing 0 of 6 cameras\nReset\nAI Offline\nOverlays on\nAI priority off\nUnavailable hidden\n0 detections\n0/0\nFiltered online\n0\nActive streams\n0\nBranches in view\n0\nOpen incidents\n0\nUnacknowledged\n0%\nStorage used\n0\nAI rules · 0 open\nNo cameras match current filter\n\nNo cameras match the selected location, status, search, or availability filters.\n\nClear All Filters",
+    "overflow": []
+  },
+  {
+    "target": "admin/branch-onboarding",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "path": "C:/Omsystems/tmp/design-qa/after-admin-branch-onboarding-1440.png",
+    "url": "http://localhost:3000/admin/branch-onboarding",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nOrganization & Location Hierarchy\nEmployees & Location Grants\nRole vs Menu Permissions\nBranch Onboarding Wizard\nZero-Touch Provisioning (ZTP)\nDevice Configuration Center\nDevice Registry & ONVIF\nThird-Party Integrations\nSystem Management & OTA\nAccount & Security Settings\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\nKryptonVision\nADMINISTRATION\n\nBranch Onboarding Wizard\n\nLive operations\nIST\nPlatinum Light\nAUDIO: ON\nCreate\n\nBRANCH SETUP\n\nBranch camera onboarding\n\nConnect a gateway, discover cameras and recorders, then approve verified devices.\n\nConnect branch cameras\n\nSelect a branch, then scan for cameras or choose another enrollment method.\n\nBranch location\nChennai Central\nScan cameras\nDirect IP Probe\nImport / Export\nRefresh\nEnroll portable camera\nInstall Scanner\n\nFirst use: select Install scanner, then run the downloaded installer once.\n\nDiscover, verify, approve\nA scan checks the local network, VPN routes, and managed tunnels. Devices with missing credentials stay in review until you verify their login.\nReady for zero-touch provisioning\n\nEnroll an edge agent, discover the CCTV estate, and activate only from real evidence.\n\nStart provisioning\nNo provisioning run has started for this branch.\nAdvanced connection setup\nBranch Gateway status\n\n0 appliances enrolled\n\nNo Branch Gateway enrolled\nThat is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.\nCamera inventory\n\n6 devices\n\nMain entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nReception\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nService counter\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nParking entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nCash room\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nEast corridor\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nPortable & software cameras\n\n0 active devices for Chennai Central\n\nEnroll Device\nNo portable cameras enrolled\nConvert a mobile phone, laptop webcam, USB capture card, or browser tab into a temporary CCTV source with QR enrollment.\nDevice discovery\n\n0 awaiting review · 0 approved\n\nScanner connection required\n\nThe cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network.\n\nAWAITING SCAN\nFOUND\n0\nPENDING\n0\nAPPROVED\n0\nNo pending discoveries\nUse the single camera scan to search the branch network without entering IP addresses manually.\nAdvanced device inventory\n\n0 records · optional manual registry",
+    "overflow": []
+  },
+  {
+    "target": "control-room",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "C:/Omsystems/tmp/design-qa/after-control-room-390.png",
+    "url": "http://localhost:3000/control-room",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 390,
+    "scrollWidth": 390,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\n\nLive Video Wall\n\nAUDIO: ON\nLive video wall\n\nMonitor cameras and detections across your branches.\n\nOverview\nBranches\nAlerts\nAnalytics\nMaintenance\nOrganization\nSystem Live\nRefresh\nZone:\nAll Zones (1)\nCentral Zone\nRegion:\nAll Regions (1)\nTamil Nadu\nArea / District:\nAll Areas (1)\nChennai Metro\nBranch:\nAll Branches (1)\nChennai Central (6 cams)\nAll Feeds (6)\nOnline (0)\nOffline (6)\nAlerts (0)\nShowing 0 of 6 cameras\nReset\nAI Offline\nOverlays on\nAI priority off\nUnavailable hidden\n0 detections\n0/0\nFiltered online\n0\nActive streams\n0\nBranches in view\n0\nOpen incidents\n0\nUnacknowledged\n0%\nStorage used\n0\nAI rules · 0 open\nNo cameras match current filter\n\nNo cameras match the selected location, status, search, or availability filters.\n\nClear All Filters",
+    "overflow": [
+      {
+        "tag": "ASIDE",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERA",
+        "class": "sidebar ",
+        "rect": {
+          "x": -336,
+          "y": 0,
+          "width": 320,
+          "height": 844,
+          "top": 0,
+          "right": -16,
+          "bottom": 844,
+          "left": -336
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS",
+        "class": "brand",
+        "rect": {
+          "x": -322,
+          "y": 18,
+          "width": 291,
+          "height": 62.484375,
+          "top": 18,
+          "right": -31,
+          "bottom": 80.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "",
+        "class": "brand-mark",
+        "rect": {
+          "x": -314,
+          "y": 18.234375,
+          "width": 43,
+          "height": 43,
+          "top": 18.234375,
+          "right": -271,
+          "bottom": 61.234375,
+          "left": -314
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -303.5,
+          "y": 28.734375,
+          "width": 22,
+          "height": 22,
+          "top": 28.734375,
+          "right": -281.5,
+          "bottom": 50.734375,
+          "left": -303.5
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -299.8333435058594,
+          "y": 30.567296981811523,
+          "width": 14.66668701171875,
+          "height": 18.33640480041504,
+          "top": 30.567296981811523,
+          "right": -285.1666564941406,
+          "bottom": 48.90370178222656,
+          "left": -299.8333435058594
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -295.25,
+          "y": 37.90104293823242,
+          "width": 5.5,
+          "height": 3.6666641235351562,
+          "top": 37.90104293823242,
+          "right": -289.75,
+          "bottom": 41.56770706176758,
+          "left": -295.25
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS",
+        "class": "brand-copy",
+        "rect": {
+          "x": -259,
+          "y": 18,
+          "width": 160.5625,
+          "height": 43.484375,
+          "top": 18,
+          "right": -98.4375,
+          "bottom": 61.484375,
+          "left": -259
+        }
+      },
+      {
+        "tag": "STRONG",
+        "text": "KryptonVision",
+        "class": "",
+        "rect": {
+          "x": -259,
+          "y": 18,
+          "width": 160.5625,
+          "height": 23.1875,
+          "top": 18,
+          "right": -98.4375,
+          "bottom": 41.1875,
+          "left": -259
+        }
+      },
+      {
+        "tag": "SPAN",
+        "text": "ENTERPRISE SURVEILLANCE OS",
+        "class": "",
+        "rect": {
+          "x": -259,
+          "y": 48.1875,
+          "width": 160.5625,
+          "height": 10,
+          "top": 48.1875,
+          "right": -98.4375,
+          "bottom": 58.1875,
+          "left": -259
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "class": "mobile-close",
+        "rect": {
+          "x": -58,
+          "y": 30.234375,
+          "width": 19,
+          "height": 19,
+          "top": 30.234375,
+          "right": -39,
+          "bottom": 49.234375,
+          "left": -58
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -58,
+          "y": 30.234375,
+          "width": 19,
+          "height": 19,
+          "top": 30.234375,
+          "right": -39,
+          "bottom": 49.234375,
+          "left": -58
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -53.25,
+          "y": 34.984375,
+          "width": 9.5,
+          "height": 9.5,
+          "top": 34.984375,
+          "right": -43.75,
+          "bottom": 44.484375,
+          "left": -53.25
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -53.25,
+          "y": 34.984375,
+          "width": 9.5,
+          "height": 9.5,
+          "top": 34.984375,
+          "right": -43.75,
+          "bottom": 44.484375,
+          "left": -53.25
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Find any module or workflow\nK",
+        "class": "command-search",
+        "rect": {
+          "x": -322,
+          "y": 80.484375,
+          "width": 291,
+          "height": 43,
+          "top": 80.484375,
+          "right": -31,
+          "bottom": 123.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -310,
+          "y": 94.484375,
+          "width": 15,
+          "height": 15,
+          "top": 94.484375,
+          "right": -295,
+          "bottom": 109.484375,
+          "left": -310
+        }
+      },
+      {
+        "tag": "circle",
+        "class": {},
+        "rect": {
+          "x": -308.125,
+          "y": 96.359375,
+          "width": 10,
+          "height": 10,
+          "top": 96.359375,
+          "right": -298.125,
+          "bottom": 106.359375,
+          "left": -308.125
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -299.5625,
+          "y": 104.921875,
+          "width": 2.6875,
+          "height": 2.6875,
+          "top": 104.921875,
+          "right": -296.875,
+          "bottom": 107.609375,
+          "left": -299.5625
+        }
+      },
+      {
+        "tag": "SPAN",
+        "text": "Find any module or workflow",
+        "class": "",
+        "rect": {
+          "x": -286,
+          "y": 93.28125,
+          "width": 204.046875,
+          "height": 17.390625,
+          "top": 93.28125,
+          "right": -81.953125,
+          "bottom": 110.671875,
+          "left": -286
+        }
+      },
+      {
+        "tag": "KBD",
+        "text": "K",
+        "class": "",
+        "rect": {
+          "x": -72.953125,
+          "y": 91.453125,
+          "width": 29.953125,
+          "height": 21.046875,
+          "top": 91.453125,
+          "right": -43,
+          "bottom": 112.5,
+          "left": -72.953125
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -66.953125,
+          "y": 96.46875,
+          "width": 11,
+          "height": 11,
+          "top": 96.46875,
+          "right": -55.953125,
+          "bottom": 107.46875,
+          "left": -66.953125
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -65.578125,
+          "y": 97.84375,
+          "width": 8.25,
+          "height": 8.25,
+          "top": 97.84375,
+          "right": -57.328125,
+          "bottom": 106.09375,
+          "left": -65.578125
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Overview",
+        "class": "nav-shortcuts",
+        "rect": {
+          "x": -322,
+          "y": 134.484375,
+          "width": 291,
+          "height": 49,
+          "top": 134.484375,
+          "right": -31,
+          "bottom": 183.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "A",
+        "text": "Overview",
+        "class": "",
+        "rect": {
+          "x": -322,
+          "y": 134.484375,
+          "width": 92.328125,
+          "height": 49,
+          "top": 134.484375,
+          "right": -229.671875,
+          "bottom": 183.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -283.34375,
+          "y": 141.515625,
+          "width": 15,
+          "height": 15,
+          "top": 141.515625,
+          "right": -268.34375,
+          "bottom": 156.515625,
+          "left": -283.34375
+        }
+      },
+      {
+        "tag": "rect",
+        "class": {},
+        "rect": {
+          "x": -281.46875,
+          "y": 143.390625,
+          "width": 4.375,
+          "height": 5.625,
+          "top": 143.390625,
+          "right": -277.09375,
+          "bottom": 149.015625,
+          "left": -281.46875
+        }
+      }
+    ]
+  },
+  {
+    "target": "admin/branch-onboarding",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "C:/Omsystems/tmp/design-qa/after-admin-branch-onboarding-390.png",
+    "url": "http://localhost:3000/admin/branch-onboarding",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 390,
+    "scrollWidth": 390,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nOrganization & Location Hierarchy\nEmployees & Location Grants\nRole vs Menu Permissions\nBranch Onboarding Wizard\nZero-Touch Provisioning (ZTP)\nDevice Configuration Center\nDevice Registry & ONVIF\nThird-Party Integrations\nSystem Management & OTA\nAccount & Security Settings\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\n\nBranch Onboarding Wizard\n\nAUDIO: ON\n\nBRANCH SETUP\n\nBranch camera onboarding\n\nConnect a gateway, discover cameras and recorders, then approve verified devices.\n\nConnect branch cameras\n\nSelect a branch, then scan for cameras or choose another enrollment method.\n\nBranch location\nChennai Central\nScan cameras\nDirect IP Probe\nImport / Export\nRefresh\nEnroll portable camera\nInstall Scanner\n\nFirst use: select Install scanner, then run the downloaded installer once.\n\nDiscover, verify, approve\nA scan checks the local network, VPN routes, and managed tunnels. Devices with missing credentials stay in review until you verify their login.\nReady for zero-touch provisioning\n\nEnroll an edge agent, discover the CCTV estate, and activate only from real evidence.\n\nStart provisioning\nNo provisioning run has started for this branch.\nAdvanced connection setup\nBranch Gateway status\n\n0 appliances enrolled\n\nNo Branch Gateway enrolled\nThat is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.\nCamera inventory\n\n6 devices\n\nMain entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nReception\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nService counter\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nParking entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nCash room\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nEast corridor\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nPortable & software cameras\n\n0 active devices for Chennai Central\n\nEnroll Device\nNo portable cameras enrolled\nConvert a mobile phone, laptop webcam, USB capture card, or browser tab into a temporary CCTV source with QR enrollment.\nDevice discovery\n\n0 awaiting review · 0 approved\n\nScanner connection required\n\nThe cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network.\n\nAWAITING SCAN\nFOUND\n0\nPENDING\n0\nAPPROVED\n0\nNo pending discoveries\nUse the single camera scan to search the branch network without entering IP addresses manually.\nAdvanced device inventory\n\n0 records · optional manual registry",
+    "overflow": [
+      {
+        "tag": "ASIDE",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERA",
+        "class": "sidebar ",
+        "rect": {
+          "x": -336,
+          "y": 0,
+          "width": 320,
+          "height": 844,
+          "top": 0,
+          "right": -16,
+          "bottom": 844,
+          "left": -336
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS",
+        "class": "brand",
+        "rect": {
+          "x": -322,
+          "y": 18,
+          "width": 291,
+          "height": 62.484375,
+          "top": 18,
+          "right": -31,
+          "bottom": 80.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "",
+        "class": "brand-mark",
+        "rect": {
+          "x": -314,
+          "y": 18.234375,
+          "width": 43,
+          "height": 43,
+          "top": 18.234375,
+          "right": -271,
+          "bottom": 61.234375,
+          "left": -314
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -303.5,
+          "y": 28.734375,
+          "width": 22,
+          "height": 22,
+          "top": 28.734375,
+          "right": -281.5,
+          "bottom": 50.734375,
+          "left": -303.5
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -299.8333435058594,
+          "y": 30.567296981811523,
+          "width": 14.66668701171875,
+          "height": 18.33640480041504,
+          "top": 30.567296981811523,
+          "right": -285.1666564941406,
+          "bottom": 48.90370178222656,
+          "left": -299.8333435058594
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -295.25,
+          "y": 37.90104293823242,
+          "width": 5.5,
+          "height": 3.6666641235351562,
+          "top": 37.90104293823242,
+          "right": -289.75,
+          "bottom": 41.56770706176758,
+          "left": -295.25
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "KryptonVision\nENTERPRISE SURVEILLANCE OS",
+        "class": "brand-copy",
+        "rect": {
+          "x": -259,
+          "y": 18,
+          "width": 160.5625,
+          "height": 43.484375,
+          "top": 18,
+          "right": -98.4375,
+          "bottom": 61.484375,
+          "left": -259
+        }
+      },
+      {
+        "tag": "STRONG",
+        "text": "KryptonVision",
+        "class": "",
+        "rect": {
+          "x": -259,
+          "y": 18,
+          "width": 160.5625,
+          "height": 23.1875,
+          "top": 18,
+          "right": -98.4375,
+          "bottom": 41.1875,
+          "left": -259
+        }
+      },
+      {
+        "tag": "SPAN",
+        "text": "ENTERPRISE SURVEILLANCE OS",
+        "class": "",
+        "rect": {
+          "x": -259,
+          "y": 48.1875,
+          "width": 160.5625,
+          "height": 10,
+          "top": 48.1875,
+          "right": -98.4375,
+          "bottom": 58.1875,
+          "left": -259
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "class": "mobile-close",
+        "rect": {
+          "x": -58,
+          "y": 30.234375,
+          "width": 19,
+          "height": 19,
+          "top": 30.234375,
+          "right": -39,
+          "bottom": 49.234375,
+          "left": -58
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -58,
+          "y": 30.234375,
+          "width": 19,
+          "height": 19,
+          "top": 30.234375,
+          "right": -39,
+          "bottom": 49.234375,
+          "left": -58
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -53.25,
+          "y": 34.984375,
+          "width": 9.5,
+          "height": 9.5,
+          "top": 34.984375,
+          "right": -43.75,
+          "bottom": 44.484375,
+          "left": -53.25
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -53.25,
+          "y": 34.984375,
+          "width": 9.5,
+          "height": 9.5,
+          "top": 34.984375,
+          "right": -43.75,
+          "bottom": 44.484375,
+          "left": -53.25
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Find any module or workflow\nK",
+        "class": "command-search",
+        "rect": {
+          "x": -322,
+          "y": 80.484375,
+          "width": 291,
+          "height": 43,
+          "top": 80.484375,
+          "right": -31,
+          "bottom": 123.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -310,
+          "y": 94.484375,
+          "width": 15,
+          "height": 15,
+          "top": 94.484375,
+          "right": -295,
+          "bottom": 109.484375,
+          "left": -310
+        }
+      },
+      {
+        "tag": "circle",
+        "class": {},
+        "rect": {
+          "x": -308.125,
+          "y": 96.359375,
+          "width": 10,
+          "height": 10,
+          "top": 96.359375,
+          "right": -298.125,
+          "bottom": 106.359375,
+          "left": -308.125
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -299.5625,
+          "y": 104.921875,
+          "width": 2.6875,
+          "height": 2.6875,
+          "top": 104.921875,
+          "right": -296.875,
+          "bottom": 107.609375,
+          "left": -299.5625
+        }
+      },
+      {
+        "tag": "SPAN",
+        "text": "Find any module or workflow",
+        "class": "",
+        "rect": {
+          "x": -286,
+          "y": 93.28125,
+          "width": 204.046875,
+          "height": 17.390625,
+          "top": 93.28125,
+          "right": -81.953125,
+          "bottom": 110.671875,
+          "left": -286
+        }
+      },
+      {
+        "tag": "KBD",
+        "text": "K",
+        "class": "",
+        "rect": {
+          "x": -72.953125,
+          "y": 91.453125,
+          "width": 29.953125,
+          "height": 21.046875,
+          "top": 91.453125,
+          "right": -43,
+          "bottom": 112.5,
+          "left": -72.953125
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -66.953125,
+          "y": 96.46875,
+          "width": 11,
+          "height": 11,
+          "top": 96.46875,
+          "right": -55.953125,
+          "bottom": 107.46875,
+          "left": -66.953125
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": -65.578125,
+          "y": 97.84375,
+          "width": 8.25,
+          "height": 8.25,
+          "top": 97.84375,
+          "right": -57.328125,
+          "bottom": 106.09375,
+          "left": -65.578125
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Overview",
+        "class": "nav-shortcuts",
+        "rect": {
+          "x": -322,
+          "y": 134.484375,
+          "width": 291,
+          "height": 49,
+          "top": 134.484375,
+          "right": -31,
+          "bottom": 183.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "A",
+        "text": "Overview",
+        "class": "",
+        "rect": {
+          "x": -322,
+          "y": 134.484375,
+          "width": 92.328125,
+          "height": 49,
+          "top": 134.484375,
+          "right": -229.671875,
+          "bottom": 183.484375,
+          "left": -322
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": -283.34375,
+          "y": 141.515625,
+          "width": 15,
+          "height": 15,
+          "top": 141.515625,
+          "right": -268.34375,
+          "bottom": 156.515625,
+          "left": -283.34375
+        }
+      },
+      {
+        "tag": "rect",
+        "class": {},
+        "rect": {
+          "x": -281.46875,
+          "y": 143.390625,
+          "width": 4.375,
+          "height": 5.625,
+          "top": 143.390625,
+          "right": -277.09375,
+          "bottom": 149.015625,
+          "left": -281.46875
+        }
+      }
+    ]
+  }
+]

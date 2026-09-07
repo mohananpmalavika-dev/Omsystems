@@ -1,0 +1,434 @@
+[
+  {
+    "target": "control-room",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "path": "C:/Omsystems/tmp/design-qa/dark-control-room-1440.png",
+    "url": "http://localhost:3000/control-room",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\nKryptonVision\nOPERATIONS\n\nLive Video Wall\n\nLive operations\nIST\nObsidian Dark\nAUDIO: ON\nCreate\nLive video wall\n\nMonitor cameras and detections across your branches.\n\nOverview\nBranches\nAlerts\nAnalytics\nMaintenance\nOrganization\nSystem Live\n07/09/2026, 17:14:32\nRefresh\nZone:\nAll Zones (1)\nCentral Zone\nRegion:\nAll Regions (1)\nTamil Nadu\nArea / District:\nAll Areas (1)\nChennai Metro\nBranch:\nAll Branches (1)\nChennai Central (6 cams)\nAll Feeds (6)\nOnline (0)\nOffline (6)\nAlerts (0)\nShowing all 6 cameras across 1 branches\nAI Offline\nOverlays on\nAI priority off\nUnavailable shown\n0 detections\n0/6\nCameras online\n6\nActive streams\n1\nBranches in view\n0\nOpen incidents\n0\nUnacknowledged\n0%\nStorage used\n0\nAI rules · 0 open\nGrid\n1x1 · 1 cameras\n2x2 · 4 cameras\n3x3 · 9 cameras\n4x4 · 16 cameras\n5x5 · 25 cameras\n6x6 · 36 cameras\n7x7 · 49 cameras\n8x8 · 64 cameras\n9x9 · 81 cameras\n10x10 · 100 cameras\n11x11 · 121 cameras\n12x12 · 144 cameras\nLive capacity\n16 streams\n25 streams\nTour: Off\n◀\nPage 1/1\n▶\n0/37 live\nSave Layout\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#01\nOFFLINE\nCamera offline\nDevice Offline\nMain entrance\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Offline\nReception\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#03\nOFFLINE\nCamera offline\ndevice Offline\nService counter\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#04\nOFFLINE\nCamera offline\ndevice Offline\nParking entrance\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#05\nOFFLINE\nCamera offline\ndevice Offline\nCash room\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#06\nOFFLINE\nCamera offline\ndevice Offline\nEast corridor\nChennai Central\nCH undefined\nSlot #07\nSelect camera for Slot #7...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central\nSlot #08\nSelect camera for Slot #8...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central\nSlot #09\nSelect camera for Slot #9...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central",
+    "overflow": []
+  },
+  {
+    "target": "admin/branch-onboarding",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "path": "C:/Omsystems/tmp/design-qa/dark-admin-branch-onboarding-1440.png",
+    "url": "http://localhost:3000/admin/branch-onboarding",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nOrganization & Location Hierarchy\nEmployees & Location Grants\nRole vs Menu Permissions\nBranch Onboarding Wizard\nZero-Touch Provisioning (ZTP)\nDevice Configuration Center\nDevice Registry & ONVIF\nThird-Party Integrations\nSystem Management & OTA\nAccount & Security Settings\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\nKryptonVision\nADMINISTRATION\n\nBranch Onboarding Wizard\n\nLive operations\nIST\nObsidian Dark\nAUDIO: ON\nCreate\n\nBRANCH SETUP\n\nBranch camera onboarding\n\nConnect a gateway, discover cameras and recorders, then approve verified devices.\n\nConnect branch cameras\n\nSelect a branch, then scan for cameras or choose another enrollment method.\n\nBranch location\nChennai Central\nScan cameras\nDirect IP Probe\nImport / Export\nRefresh\nEnroll portable camera\nInstall Scanner\n\nFirst use: select Install scanner, then run the downloaded installer once.\n\nDiscover, verify, approve\nA scan checks the local network, VPN routes, and managed tunnels. Devices with missing credentials stay in review until you verify their login.\nReady for zero-touch provisioning\n\nEnroll an edge agent, discover the CCTV estate, and activate only from real evidence.\n\nStart provisioning\nNo provisioning run has started for this branch.\nAdvanced connection setup\nBranch Gateway status\n\n0 appliances enrolled\n\nNo Branch Gateway enrolled\nThat is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.\nCamera inventory\n\n6 devices\n\nMain entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nReception\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nService counter\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nParking entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nCash room\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nEast corridor\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nPortable & software cameras\n\n0 active devices for Chennai Central\n\nEnroll Device\nNo portable cameras enrolled\nConvert a mobile phone, laptop webcam, USB capture card, or browser tab into a temporary CCTV source with QR enrollment.\nDevice discovery\n\n0 awaiting review · 0 approved\n\nScanner connection required\n\nThe cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network.\n\nAWAITING SCAN\nFOUND\n0\nPENDING\n0\nAPPROVED\n0\nNo pending discoveries\nUse the single camera scan to search the branch network without entering IP addresses manually.\nAdvanced device inventory\n\n0 records · optional manual registry",
+    "overflow": []
+  },
+  {
+    "target": "control-room",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "C:/Omsystems/tmp/design-qa/dark-control-room-390.png",
+    "url": "http://localhost:3000/control-room",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 390,
+    "scrollWidth": 390,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\n\nLive Video Wall\n\nAUDIO: ON\nLive video wall\n\nMonitor cameras and detections across your branches.\n\nOverview\nBranches\nAlerts\nAnalytics\nMaintenance\nOrganization\nSystem Live\nRefresh\nZone:\nAll Zones (1)\nCentral Zone\nRegion:\nAll Regions (1)\nTamil Nadu\nArea / District:\nAll Areas (1)\nChennai Metro\nBranch:\nAll Branches (1)\nChennai Central (6 cams)\nAll Feeds (6)\nOnline (0)\nOffline (6)\nAlerts (0)\nShowing all 6 cameras across 1 branches\nAI Offline\nOverlays on\nAI priority off\nUnavailable shown\n0 detections\n0/6\nCameras online\n6\nActive streams\n1\nBranches in view\n0\nOpen incidents\n0\nUnacknowledged\n0%\nStorage used\n0\nAI rules · 0 open\nGrid\n1x1 · 1 cameras\n2x2 · 4 cameras\n3x3 · 9 cameras\n4x4 · 16 cameras\n5x5 · 25 cameras\n6x6 · 36 cameras\n7x7 · 49 cameras\n8x8 · 64 cameras\n9x9 · 81 cameras\n10x10 · 100 cameras\n11x11 · 121 cameras\n12x12 · 144 cameras\nLive capacity\n16 streams\n25 streams\nTour: Off\n◀\nPage 1/1\n▶\n0/37 live\nSave Layout\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#01\nOFFLINE\nCamera offline\nDevice Offline\nMain entrance\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Offline\nReception\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#03\nOFFLINE\nCamera offline\ndevice Offline\nService counter\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#04\nOFFLINE\nCamera offline\ndevice Offline\nParking entrance\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#05\nOFFLINE\nCamera offline\ndevice Offline\nCash room\nChennai Central\nCH undefined\nMAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#06\nOFFLINE\nCamera offline\ndevice Offline\nEast corridor\nChennai Central\nCH undefined\nSlot #07\nSelect camera for Slot #7...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central\nSlot #08\nSelect camera for Slot #8...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central\nSlot #09\nSelect camera for Slot #9...\nMain entrance - Chennai Central\nReception - Chennai Central\nService counter - Chennai Central\nParking entrance - Chennai Central\nCash room - Chennai Central\nEast corridor - Chennai Central",
+    "overflow": [
+      {
+        "tag": "DIV",
+        "text": "",
+        "class": "tile-actions",
+        "rect": {
+          "x": -5.559999465942383,
+          "y": 694.08251953125,
+          "width": 223.37998962402344,
+          "height": 27.53997802734375,
+          "top": 694.08251953125,
+          "right": 217.81999015808105,
+          "bottom": 721.6224975585938,
+          "left": -5.559999465942383
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "class": "",
+        "rect": {
+          "x": -5.559999465942383,
+          "y": 694.08251953125,
+          "width": 27.53999900817871,
+          "height": 27.53997802734375,
+          "top": 694.08251953125,
+          "right": 21.979999542236328,
+          "bottom": 721.6224975585938,
+          "left": -5.559999465942383
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "MAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Off",
+        "class": "",
+        "rect": {
+          "x": 237,
+          "y": 620.15625,
+          "width": 200,
+          "height": 168.125,
+          "top": 620.15625,
+          "right": 437,
+          "bottom": 788.28125,
+          "left": 237
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "MAIN\n×\nCamera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Off",
+        "class": "jsx-e6896c069ff09a35 grid-camera-slot",
+        "rect": {
+          "x": 237,
+          "y": 620.15625,
+          "width": 200,
+          "height": 168.125,
+          "top": 620.15625,
+          "right": 437,
+          "bottom": 788.28125,
+          "left": 237
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "MAIN\n×",
+        "class": "jsx-e6896c069ff09a35 slot-controls",
+        "rect": {
+          "x": 336.875,
+          "y": 628.15625,
+          "width": 92.125,
+          "height": 25.9375,
+          "top": 628.15625,
+          "right": 429,
+          "bottom": 654.09375,
+          "left": 336.875
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "MAIN",
+        "class": "jsx-e6896c069ff09a35 stream-toggle",
+        "rect": {
+          "x": 352.875,
+          "y": 628.15625,
+          "width": 43.578125,
+          "height": 25.9375,
+          "top": 628.15625,
+          "right": 396.453125,
+          "bottom": 654.09375,
+          "left": 352.875
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "×",
+        "class": "jsx-e6896c069ff09a35 remove-camera",
+        "rect": {
+          "x": 400.453125,
+          "y": 628.15625,
+          "width": 28.546875,
+          "height": 25.9375,
+          "top": 628.15625,
+          "right": 429,
+          "bottom": 654.09375,
+          "left": 400.453125
+        }
+      },
+      {
+        "tag": "ARTICLE",
+        "text": "Camera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Offline\nRe",
+        "class": "camera-tile",
+        "rect": {
+          "x": 237,
+          "y": 620.15625,
+          "width": 200,
+          "height": 168.125,
+          "top": 620.15625,
+          "right": 437,
+          "bottom": 788.28125,
+          "left": 237
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Camera offline\nWaiting for the edge camera to reconnect\n#02\nOFFLINE\nCamera offline\nDevice Offline",
+        "class": "feed-stage",
+        "rect": {
+          "x": 238,
+          "y": 621.15625,
+          "width": 198,
+          "height": 110.125,
+          "top": 621.15625,
+          "right": 436,
+          "bottom": 731.28125,
+          "left": 238
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Camera offline\nWaiting for the edge camera to reconnect",
+        "class": "zoom-stage",
+        "rect": {
+          "x": 238,
+          "y": 621.15625,
+          "width": 198,
+          "height": 110.125,
+          "top": 621.15625,
+          "right": 436,
+          "bottom": 731.28125,
+          "left": 238
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Camera offline\nWaiting for the edge camera to reconnect",
+        "class": "camera-feed-placeholder ",
+        "rect": {
+          "x": 238,
+          "y": 621.15625,
+          "width": 198,
+          "height": 190,
+          "top": 621.15625,
+          "right": 436,
+          "bottom": 811.15625,
+          "left": 238
+        }
+      },
+      {
+        "tag": "SPAN",
+        "text": "Camera offline",
+        "class": "",
+        "rect": {
+          "x": 254,
+          "y": 705.953125,
+          "width": 166,
+          "height": 17.390625,
+          "top": 705.953125,
+          "right": 420,
+          "bottom": 723.34375,
+          "left": 254
+        }
+      },
+      {
+        "tag": "SMALL",
+        "text": "Waiting for the edge camera to reconnect",
+        "class": "",
+        "rect": {
+          "x": 254,
+          "y": 729.34375,
+          "width": 166,
+          "height": 29,
+          "top": 729.34375,
+          "right": 420,
+          "bottom": 758.34375,
+          "left": 254
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "#02\nOFFLINE",
+        "class": "tile-topline",
+        "rect": {
+          "x": 247,
+          "y": 630.15625,
+          "width": 180,
+          "height": 22,
+          "top": 630.15625,
+          "right": 427,
+          "bottom": 652.15625,
+          "left": 247
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "Camera offline",
+        "class": "absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100",
+        "rect": {
+          "x": 238,
+          "y": 621.15625,
+          "width": 198,
+          "height": 110.125,
+          "top": 621.15625,
+          "right": 436,
+          "bottom": 731.28125,
+          "left": 238
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "Camera offline",
+        "class": "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur",
+        "rect": {
+          "x": 272.265625,
+          "y": 662.21875,
+          "width": 129.46875,
+          "height": 28,
+          "top": 662.21875,
+          "right": 401.734375,
+          "bottom": 690.21875,
+          "left": 272.265625
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "",
+        "class": "tile-actions",
+        "rect": {
+          "x": 209,
+          "y": 696.28125,
+          "width": 219,
+          "height": 27,
+          "top": 696.28125,
+          "right": 428,
+          "bottom": 723.28125,
+          "left": 209
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "class": "",
+        "rect": {
+          "x": 370,
+          "y": 696.28125,
+          "width": 27,
+          "height": 27,
+          "top": 696.28125,
+          "right": 397,
+          "bottom": 723.28125,
+          "left": 370
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "text": "",
+        "class": "",
+        "rect": {
+          "x": 401,
+          "y": 696.28125,
+          "width": 27,
+          "height": 27,
+          "top": 696.28125,
+          "right": 428,
+          "bottom": 723.28125,
+          "left": 401
+        }
+      },
+      {
+        "tag": "svg",
+        "class": {},
+        "rect": {
+          "x": 407,
+          "y": 702.28125,
+          "width": 15,
+          "height": 15,
+          "top": 702.28125,
+          "right": 422,
+          "bottom": 717.28125,
+          "left": 407
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": 408.875,
+          "y": 706.03125,
+          "width": 11.25,
+          "height": 0,
+          "top": 706.03125,
+          "right": 420.125,
+          "bottom": 706.03125,
+          "left": 408.875
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": 410.125,
+          "y": 706.03125,
+          "width": 8.75,
+          "height": 10,
+          "top": 706.03125,
+          "right": 418.875,
+          "bottom": 716.03125,
+          "left": 410.125
+        }
+      },
+      {
+        "tag": "path",
+        "class": {},
+        "rect": {
+          "x": 412,
+          "y": 703.53125,
+          "width": 5,
+          "height": 2.5,
+          "top": 703.53125,
+          "right": 417,
+          "bottom": 706.03125,
+          "left": 412
+        }
+      },
+      {
+        "tag": "FOOTER",
+        "text": "Reception\nChennai Central\nCH undefined",
+        "class": "camera-meta",
+        "rect": {
+          "x": 238,
+          "y": 731.28125,
+          "width": 198,
+          "height": 56,
+          "top": 731.28125,
+          "right": 436,
+          "bottom": 787.28125,
+          "left": 238
+        }
+      },
+      {
+        "tag": "DIV",
+        "text": "CH undefined",
+        "class": "camera-channel",
+        "rect": {
+          "x": 320.234375,
+          "y": 747.8125,
+          "width": 103.765625,
+          "height": 23.9375,
+          "top": 747.8125,
+          "right": 424,
+          "bottom": 771.75,
+          "left": 320.234375
+        }
+      }
+    ]
+  },
+  {
+    "target": "admin/branch-onboarding",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "path": "C:/Omsystems/tmp/design-qa/dark-admin-branch-onboarding-390.png",
+    "url": "http://localhost:3000/admin/branch-onboarding",
+    "errors": [],
+    "title": "KryptonVision | Security Operations",
+    "width": 390,
+    "scrollWidth": 390,
+    "text": "Skip to main content\nKryptonVision\nENTERPRISE SURVEILLANCE OS\nFind any module or workflow\nK\nOverview\nAll modules\n12\nOPERATIONS\n1\nFLEET MAINTENANCE\n1\nADMINISTRATION\n10\nOrganization & Location Hierarchy\nEmployees & Location Grants\nRole vs Menu Permissions\nBranch Onboarding Wizard\nZero-Touch Provisioning (ZTP)\nDevice Configuration Center\nDevice Registry & ONVIF\nThird-Party Integrations\nSystem Management & OTA\nAccount & Security Settings\nHelp & support\nPrivacy\n•\nTerms\nPlatform status\nOpen infrastructure health\nR\nreviewer@example.test\nSuper Admin\n\nBranch Onboarding Wizard\n\nAUDIO: ON\n\nBRANCH SETUP\n\nBranch camera onboarding\n\nConnect a gateway, discover cameras and recorders, then approve verified devices.\n\nConnect branch cameras\n\nSelect a branch, then scan for cameras or choose another enrollment method.\n\nBranch location\nChennai Central\nScan cameras\nDirect IP Probe\nImport / Export\nRefresh\nEnroll portable camera\nInstall Scanner\n\nFirst use: select Install scanner, then run the downloaded installer once.\n\nDiscover, verify, approve\nA scan checks the local network, VPN routes, and managed tunnels. Devices with missing credentials stay in review until you verify their login.\nReady for zero-touch provisioning\n\nEnroll an edge agent, discover the CCTV estate, and activate only from real evidence.\n\nStart provisioning\nNo provisioning run has started for this branch.\nAdvanced connection setup\nBranch Gateway status\n\n0 appliances enrolled\n\nNo Branch Gateway enrolled\nThat is expected for VPN-direct branches. Enroll one only for tunnel-based discovery and local proxying.\nCamera inventory\n\n6 devices\n\nMain entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nReception\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nService counter\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nParking entrance\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nCash room\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nEast corridor\nAxis · M2025 · Channel Undefined\nOffline\nUpdate login\nRemove\nPortable & software cameras\n\n0 active devices for Chennai Central\n\nEnroll Device\nNo portable cameras enrolled\nConvert a mobile phone, laptop webcam, USB capture card, or browser tab into a temporary CCTV source with QR enrollment.\nDevice discovery\n\n0 awaiting review · 0 approved\n\nScanner connection required\n\nThe cloud service cannot access cameras until a Branch Gateway or local scanner is running on the same network.\n\nAWAITING SCAN\nFOUND\n0\nPENDING\n0\nAPPROVED\n0\nNo pending discoveries\nUse the single camera scan to search the branch network without entering IP addresses manually.\nAdvanced device inventory\n\n0 records · optional manual registry",
+    "overflow": []
+  }
+]
