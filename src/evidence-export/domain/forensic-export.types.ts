@@ -52,16 +52,16 @@ export interface EvidencePackageManifest {
   };
 
   clock: {
-    deviceTimestamp: string;
-    serverTimestamp: string;
-    estimatedClockOffsetMs: number;
+    deviceTimestamp: string | null;
+    serverTimestamp: string | null;
+    estimatedClockOffsetMs: number | null;
     clockSource: string;
-    clockConfidence: number;
+    clockConfidence: number | null;
   };
 
   recordingCoverage: {
     complete: boolean;
-    coveragePercent: number;
+    coveragePercent: number | null;
     gapCount: number;
     largestGapMs: number;
     gaps: Array<{ start: string; end: string; durationMs: number }>;
@@ -119,6 +119,6 @@ export interface EvidenceVerificationResult {
   chainOfCustodyValid: boolean;
   custodyEventsCount: number;
   recordingCoverageComplete: boolean;
-  coveragePercent: number;
+  coveragePercent: number | null;
   verifiedAt: string;
 }

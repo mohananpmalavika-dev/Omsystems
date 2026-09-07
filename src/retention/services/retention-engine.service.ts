@@ -54,6 +54,7 @@ export interface BranchRetentionOverview {
   requiredRetentionDays: number;
   currentRetentionDays: number;
   projectedRetentionDays: number;
+  retentionCompliancePercent: number;
   recordingCoveragePercent: number;
   missingSeconds?: number;
   gapCount?: number;

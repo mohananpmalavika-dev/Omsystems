@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { authApi } from '@/lib/api-client';
 import { setupSessionGuard, teardownSessionGuard, redirectToLogin } from '@/lib/session-guard';
 import { isPublicDashboardRoute } from '@/lib/session-navigation';
+import { redirectToLogin } from '@/lib/session-guard';
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

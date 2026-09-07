@@ -14,13 +14,13 @@ export interface AssembledArtifacts {
   files: EvidenceFileEntry[];
   sourceSegments: Array<{ segmentId: string; sha256: string }>;
   gaps: Array<{ start: string; end: string; durationMs: number }>;
-  coveragePercent: number;
+  coveragePercent: number | null;
   clockObservations: {
-    deviceTimestamp: string;
-    serverTimestamp: string;
-    estimatedClockOffsetMs: number;
+    deviceTimestamp: string | null;
+    serverTimestamp: string | null;
+    estimatedClockOffsetMs: number | null;
     clockSource: string;
-    clockConfidence: number;
+    clockConfidence: number | null;
   };
   timelineEventsCount: number;
 }
@@ -88,12 +88,10 @@ export class EvidenceAssemblerService {
       sha256: createHash('sha256').update(metaData).digest('hex'),
     });
 
-    // 3. Incident Timeline File
+    // 3. Timeline File: only include events known from the export request.
     const timelineData = JSON.stringify([
-      { timestamp: request.startTime, type: 'RECORDING_START' },
-      { timestamp: new Date(new Date(request.startTime).getTime() + 12000).toISOString(), type: 'PERSON_DETECTED', confidence: 0.98 },
-      { timestamp: new Date(new Date(request.startTime).getTime() + 15000).toISOString(), type: 'DOOR_OPENED', doorId: 'DOOR-VAULT-01' },
-      { timestamp: new Date(new Date(request.startTime).getTime() + 25000).toISOString(), type: 'P1_INTRUSION_ALERT' },
+      { timestamp: request.startTime, type: 'RECORDING_WINDOW_REQUESTED' },
+      { timestamp: request.endTime, type: 'RECORDING_WINDOW_ENDED' },
     ]);
     files.push({
       path: 'timeline.json',
@@ -102,40 +100,23 @@ export class EvidenceAssemblerService {
       sha256: createHash('sha256').update(timelineData).digest('hex'),
     });
 
-    // 4. Recording Gaps File
-    const gaps = [
-      {
-        start: new Date(new Date(request.startTime).getTime() + 60000).toISOString(),
-        end: new Date(new Date(request.startTime).getTime() + 68000).toISOString(),
-        durationMs: 8000,
-      },
-    ];
-    const requestedDurationSeconds = Math.max(1, Math.round((new Date(request.endTime).getTime() - new Date(request.startTime).getTime()) / 1000));
-    const totalGapsDurationMs = gaps.reduce((sum, g) => sum + g.durationMs, 0);
-    const availableDurationSeconds = Math.max(0, requestedDurationSeconds - Math.round(totalGapsDurationMs / 1000));
-    const coveragePercent = Number(Math.min(100, Math.max(0, (availableDurationSeconds / requestedDurationSeconds) * 100)).toFixed(2));
+    const gaps: Array<{ start: string; end: string; durationMs: number }> = [];
+    const coveragePercent: number | null = null;
+    const clockObs = {
+      deviceTimestamp: null,
+      serverTimestamp: null,
+      estimatedClockOffsetMs: null,
+      clockSource: 'UNAVAILABLE',
+      clockConfidence: null,
+    };
 
-    const gapsData = JSON.stringify({
-      requestedDurationSeconds,
-      availableDurationSeconds,
-      coveragePercent,
-      gaps,
-    });
+    const gapsData = JSON.stringify(gaps);
     files.push({
-      path: 'recording-gaps.json',
+      path: 'gaps.json',
       fileType: 'GAPS',
       sizeBytes: Buffer.byteLength(gapsData),
       sha256: createHash('sha256').update(gapsData).digest('hex'),
     });
-
-    // 5. Clock Observations File
-    const clockObs = {
-      deviceTimestamp: new Date(new Date(request.startTime).getTime() + 5200).toISOString(),
-      serverTimestamp: request.startTime,
-      estimatedClockOffsetMs: 5200,
-      clockSource: 'ONVIF',
-      clockConfidence: 0.98,
-    };
     const clockData = JSON.stringify(clockObs);
     files.push({
       path: 'clock-observations.json',
@@ -174,7 +155,7 @@ export class EvidenceAssemblerService {
       gaps,
       coveragePercent,
       clockObservations: clockObs,
-      timelineEventsCount: 4,
+      timelineEventsCount: 2,
     };
   }
 }
