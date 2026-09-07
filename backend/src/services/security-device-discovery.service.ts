@@ -599,6 +599,48 @@ export class SecurityDeviceDiscoveryService {
   }
 
   /**
+   * Delete a discovered device from the staging table.
+   * This allows the device to be re-discovered in future scans.
+   */
+  async deleteDiscoveredDevice(
+    tenantId: string,
+    discoveredId: string
+  ): Promise<void> {
+    const result = await this.pool.query(
+      `DELETE FROM security_discovered_devices
+       WHERE id = $1 AND tenant_id = $2
+         AND enrollment_status = 'PENDING_REVIEW'`,
+      [discoveredId, tenantId]
+    );
+    if (result.rowCount === 0) {
+      throw new Error('discovered_device_not_found_or_not_pending');
+    }
+  }
+
+  /**
+   * Delete ALL pending-review discovered devices for this tenant (and optionally a branch).
+   * Devices deleted this way will be re-discovered on the next scan.
+   */
+  async deleteAllPendingDiscoveredDevices(
+    tenantId: string,
+    branchId?: string
+  ): Promise<number> {
+    const params: any[] = [tenantId];
+    let branchFilter = '';
+    if (branchId) {
+      params.push(branchId);
+      branchFilter = ` AND branch_id = $2`;
+    }
+    const result = await this.pool.query(
+      `DELETE FROM security_discovered_devices
+       WHERE tenant_id = $1${branchFilter}
+         AND enrollment_status = 'PENDING_REVIEW'`,
+      params
+    );
+    return result.rowCount ?? 0;
+  }
+
+  /**
    * Generate device name from discovered device
    */
   private generateDeviceName(device: DiscoveredDevice): string {

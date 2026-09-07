@@ -185,54 +185,48 @@ export default function DeviceDiscoveryPage() {
     }
   };
 
-  const handleRejectDevice = async (deviceId: string) => {
+  const handleDeleteDevice = async (deviceId: string) => {
     setActionBusy(true);
     setError(null);
     try {
-      const response = await fetch(`/api/security-devices/discovery/devices/${deviceId}/reject`, {
-        method: 'POST',
+      const response = await fetch(`/api/security-devices/discovery/devices/${deviceId}`, {
+        method: 'DELETE',
       });
 
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.message || 'Failed to reject device');
-      setNotice('Device rejected.');
+      if (!response.ok) throw new Error(payload.message || 'Failed to delete device');
+      setNotice('Device removed from list. It will be re-discovered on the next scan.');
       await loadDiscoveryData();
     } catch (error) {
-      console.error('Failed to reject device:', error);
-      setError(error instanceof Error ? error.message : 'Failed to reject device');
+      console.error('Failed to delete device:', error);
+      setError(error instanceof Error ? error.message : 'Failed to delete device');
     } finally {
       setActionBusy(false);
     }
   };
 
-  const handleApproveHighConfidence = async () => {
-    const eligibleIds = discoveredDevices
-      .filter((device) => Number(device.confidence) >= 90)
-      .map((device) => device.id);
-    if (eligibleIds.length === 0) {
-      setNotice('No pending devices meet the 90% confidence threshold.');
+  const handleDeleteAllPending = async () => {
+    if (discoveredDevices.length === 0) {
+      setNotice('No pending devices to remove.');
       return;
     }
     setActionBusy(true);
     setError(null);
     setNotice(null);
     try {
-      const response = await fetch('/api/security-devices/discovery/devices/approve-high-confidence', {
+      const response = await fetch('/api/security-devices/discovery/devices/delete-pending', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threshold: 90, deviceIds: eligibleIds }),
+        body: JSON.stringify({}),
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok && response.status !== 207) {
-        throw new Error(payload.message || 'Bulk approval failed');
+      if (!response.ok) {
+        throw new Error(payload.message || 'Bulk delete failed');
       }
-      setNotice(`${payload.approved || 0} high-confidence device${payload.approved === 1 ? '' : 's'} approved.`);
-      if (Array.isArray(payload.failures) && payload.failures.length > 0) {
-        setError(`${payload.failures.length} device approval${payload.failures.length === 1 ? '' : 's'} failed.`);
-      }
+      setNotice(`${payload.deleted ?? 0} device${payload.deleted === 1 ? '' : 's'} removed. They will be re-discovered on the next scan.`);
       await loadDiscoveryData();
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Bulk approval failed');
+      setError(error instanceof Error ? error.message : 'Bulk delete failed');
     } finally {
       setActionBusy(false);
     }
@@ -319,13 +313,15 @@ export default function DeviceDiscoveryPage() {
             <h2 className="text-xl font-semibold text-gray-900">
               Pending Device Approvals ({pendingDevices})
             </h2>
+          <div className="flex items-center gap-3">
             <button
-              onClick={() => void handleApproveHighConfidence()}
+              onClick={() => void handleDeleteAllPending()}
               disabled={actionBusy}
-              className="text-sm text-blue-600 hover:text-blue-700 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+              className="text-sm text-red-600 hover:text-red-700 font-semibold disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Approve All High Confidence
+              Delete All Pending
             </button>
+          </div>
           </div>
 
           <div className="space-y-3">
@@ -367,12 +363,12 @@ export default function DeviceDiscoveryPage() {
                     Approve
                   </button>
                   <button
-                    onClick={() => void handleRejectDevice(device.id)}
+                    onClick={() => void handleDeleteDevice(device.id)}
                     disabled={actionBusy}
                     className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 flex items-center gap-2"
                   >
                     <X className="w-4 h-4" />
-                    Reject
+                    Delete
                   </button>
                 </div>
               </div>
