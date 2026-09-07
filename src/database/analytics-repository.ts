@@ -17,6 +17,7 @@ import type {
   AnalyticsRuleInput,
 } from "../control-plane-store.js";
 import {
+  analyticsAlertDescription,
   analyticsAlertTitle,
   eventDetectionTypes,
   isTerminalAlertStatus,
@@ -377,7 +378,7 @@ export class AnalyticsRepository {
            RETURNING *`,
           [
             alertId, input.tenantId, input.cameraId, rule.id, eventId,
-            analyticsAlertTitle(rule), `Rule \"${rule.name}\" matched.`,
+            analyticsAlertTitle(rule, input.metadata), analyticsAlertDescription(rule, input.metadata),
             effectiveSeverity, input.confidence,
             JSON.stringify([...new Set(input.objects.map((object) => object.label))]),
             input.modelVersion, input.snapshotReference ?? `/v1/alerts/${alertId}/evidence/snapshot`,

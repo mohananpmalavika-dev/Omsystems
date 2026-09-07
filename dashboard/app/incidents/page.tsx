@@ -66,7 +66,7 @@ function IncidentsPageContent() {
       if (filters.from) params.set('from', filters.from);
       if (filters.to) params.set('to', filters.to);
       
-      const res = await fetch(`/api/control/v1/incidents?${params.toString()}`);
+      const res = await fetch(`/v1/incidents?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load incidents');
       const data = await res.json();
       setIncidents(data.data ?? []);
@@ -79,7 +79,7 @@ function IncidentsPageContent() {
 
   async function loadDashboard() {
     try {
-      const res = await fetch('/api/control/v1/incidents/dashboard');
+      const res = await fetch('/v1/incidents/dashboard');
       if (!res.ok) throw new Error('Failed to load dashboard');
       const data = await res.json();
       setStats(data);
@@ -424,8 +424,8 @@ function IncidentsPageContent() {
             isOpen={!!selectedIncidentForMedia}
             onClose={() => setSelectedIncidentForMedia(null)}
             initialTab={mediaModalTab}
-            snapshotUrl={selectedIncidentForMedia.snapshotUrl || `/api/control/v1/incidents/${selectedIncidentForMedia.id}/snapshot`}
-            videoClipUrl={selectedIncidentForMedia.videoClipUrl || `/api/control/v1/incidents/${selectedIncidentForMedia.id}/clip`}
+            snapshotUrl={selectedIncidentForMedia.snapshotUrl || `/v1/incidents/${selectedIncidentForMedia.id}/snapshot`}
+            videoClipUrl={selectedIncidentForMedia.videoClipUrl || `/v1/incidents/${selectedIncidentForMedia.id}/clip`}
             title={`${selectedIncidentForMedia.incidentNumber}: ${selectedIncidentForMedia.title}`}
             cameraName={selectedIncidentForMedia.cameraName || "Incident Camera"}
             branchName={selectedIncidentForMedia.branchName || selectedIncidentForMedia.branchId || "Facility"}

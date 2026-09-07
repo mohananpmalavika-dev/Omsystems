@@ -1620,7 +1620,13 @@ export interface AlertNotificationPolicy {
     timezone: string;
     recipients: Partial<Record<"sms" | "email" | "voice", string[]>>;
   }>;
-  quietHours?: { start: string; end: string; timezone: string } | undefined;
+  quietHours?: {
+    start: string;
+    end: string;
+    timezone: string;
+    enabled?: boolean;
+    bypassSeverities?: AnalyticsSeverity[];
+  } | undefined;
   rateLimitPerMinute: number;
   escalationAfterSeconds: Partial<Record<AnalyticsSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>> | undefined;

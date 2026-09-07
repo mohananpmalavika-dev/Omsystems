@@ -95,7 +95,7 @@ export function AIEvidenceBuilder({ incidentId }: { incidentId: string }) {
   const loadPackages = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/control/v1/incidents/${incidentId}/evidence-packages`, { credentials: "include" });
+      const response = await fetch(`/v1/incidents/${incidentId}/evidence-packages`, { credentials: "include" });
       if (response.ok) {
         const data = await response.json();
         if (Array.isArray(data)) {

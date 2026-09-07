@@ -43,6 +43,7 @@ import type {
 } from "./domain/models.js";
 import { authorize } from "./domain/authorization.js";
 import {
+  analyticsAlertDescription,
   analyticsAlertTitle,
   isTerminalAlertStatus,
   sortedMatchingRules,
@@ -3553,8 +3554,8 @@ export class MemoryStore {
       }
       const alert: AnalyticsAlert = {
         id: randomUUID(), tenantId: input.tenantId, cameraId: input.cameraId,
-        ruleId: rule.id, eventId, title: analyticsAlertTitle(rule),
-        description: `Rule \"${rule.name}\" matched on camera ${camera.name}.`,
+        ruleId: rule.id, eventId, title: analyticsAlertTitle(rule, input.metadata),
+        description: analyticsAlertDescription(rule, input.metadata),
         severity: effectiveSeverity, status: "new", confidence: input.confidence,
         objectClasses: [...new Set(input.objects.map((object) => object.label))],
         modelVersion: input.modelVersion,

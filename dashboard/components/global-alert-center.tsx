@@ -231,7 +231,7 @@ export function GlobalAlertCenter() {
     setBusy(true);
     setError(undefined);
     try {
-      const response = await fetch(`/api/control/v1/analytics/alerts/${alert.id}/${action}`, {
+      const response = await fetch(`/v1/analytics/alerts/${alert.id}/${action}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

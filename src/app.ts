@@ -616,7 +616,34 @@ export async function buildApp(options?: {
       ? new RecordingFederationSearchProvider(searchService)
       : new EmptyFederationLocalSearchProvider());
 
-  await app.register(cors, { origin: false });
+  const configuredCorsOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const allowCloudflareManagedOrigins = process.env.CORS_ALLOW_CLOUDFLARE === "true";
+  const isAllowedCorsOrigin = (origin: string): boolean => {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.protocol !== "https:") return false;
+      if (configuredCorsOrigins.includes(origin)) return true;
+      if (!allowCloudflareManagedOrigins) return false;
+      const hostname = parsed.hostname.toLowerCase();
+      return hostname.endsWith(".pages.dev")
+        || hostname.endsWith(".workers.dev")
+        || hostname.endsWith(".trycloudflare.com");
+    } catch {
+      return false;
+    }
+  };
+
+  await app.register(cors, {
+    credentials: true,
+    origin: (origin, callback) => {
+      // Non-browser requests do not send Origin and remain valid API clients.
+      if (!origin) return callback(null, true);
+      return callback(null, isAllowedCorsOrigin(origin));
+    },
+  });
 
   app.decorateRequest("currentUser");
     app.addHook("preHandler", performanceTrackingMiddleware);

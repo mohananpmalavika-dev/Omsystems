@@ -63,7 +63,7 @@ export default function CreateIncidentPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const response = await fetch("/api/control/v1/incidents", {
+      const response = await fetch("/v1/incidents", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

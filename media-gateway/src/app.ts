@@ -35,6 +35,31 @@ export async function buildMediaGateway(options: {
   logger?: boolean;
 }) {
   const app = Fastify({ logger: options.logger ?? false });
+  const configuredCorsOrigins = (process.env.CORS_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/$/, ""))
+    .filter(Boolean);
+  const allowCloudflareManagedOrigins = process.env.CORS_ALLOW_CLOUDFLARE === "true";
+  const isAllowedCorsOrigin = (origin: string): boolean => {
+    try {
+      const parsed = new URL(origin);
+      if (parsed.protocol !== "https:") return false;
+      if (configuredCorsOrigins.includes(origin)) return true;
+      if (!allowCloudflareManagedOrigins) return false;
+      const hostname = parsed.hostname.toLowerCase();
+      return hostname.endsWith(".pages.dev")
+        || hostname.endsWith(".workers.dev")
+        || hostname.endsWith(".trycloudflare.com");
+    } catch {
+      return false;
+    }
+  };
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (request.method !== "OPTIONS" || !origin || !isAllowedCorsOrigin(origin)) return;
+    setCorsHeaders(origin, request.headers["access-control-request-headers"], reply);
+    return reply.code(204).send();
+  });
   const access = new AccessRegistry(options.router, options.accessTtlMs, (error) => {
     app.log.error({ err: error }, "Media session cleanup failed");
   });
@@ -342,14 +367,7 @@ function setHlsCorsHeaders(
   privateNetworkRequest: string | string[] | undefined,
   reply: { header(name: string, value: string): unknown },
 ) {
-  if (origin) {
-    reply.header("access-control-allow-origin", origin);
-    reply.header("access-control-allow-credentials", "true");
-    reply.header("vary", "Origin");
-  } else {
-    reply.header("access-control-allow-origin", "*");
-  }
-  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range");
+  setCorsHeaders(origin, undefined, reply);
   reply.header("access-control-allow-methods", "GET, HEAD, OPTIONS");
   reply.header("access-control-expose-headers", "Accept-Ranges, Content-Range, Content-Length, ETag");
   const requestsPrivateNetwork = Array.isArray(privateNetworkRequest)
@@ -364,20 +382,22 @@ function setWebRtcCorsHeaders(
   origin: string | undefined,
   reply: { header(name: string, value: string): unknown },
 ) {
-  if (origin) {
-    reply.header("access-control-allow-origin", origin);
-    reply.header("access-control-allow-credentials", "true");
-    reply.header("vary", "Origin");
-  } else {
-    reply.header("access-control-allow-origin", "*");
-  }
-  reply.header("access-control-allow-headers", "Authorization, Content-Type, Range, Id, If-Match");
+  setCorsHeaders(origin, undefined, reply);
   reply.header("access-control-expose-headers", "Location, ETag, Id, Link, Accept-Patch");
   reply.header("access-control-allow-methods", "GET, POST, OPTIONS, PATCH, DELETE, HEAD");
 }
 
 function setLiveSessionCorsHeaders(
   origin: string | undefined,
+  reply: { header(name: string, value: string): unknown },
+) {
+  setCorsHeaders(origin, undefined, reply);
+  reply.header("access-control-allow-methods", "DELETE, OPTIONS");
+}
+
+function setCorsHeaders(
+  origin: string | undefined,
+  requestedHeaders: string | string[] | undefined,
   reply: { header(name: string, value: string): unknown },
 ) {
   if (origin) {
@@ -387,8 +407,8 @@ function setLiveSessionCorsHeaders(
   } else {
     reply.header("access-control-allow-origin", "*");
   }
-  reply.header("access-control-allow-headers", "Authorization, Content-Type");
-  reply.header("access-control-allow-methods", "DELETE, OPTIONS");
+  const headers = Array.isArray(requestedHeaders) ? requestedHeaders.join(", ") : requestedHeaders;
+  reply.header("access-control-allow-headers", headers || "Authorization, Content-Type, Range, Id, If-Match");
 }
 
 function forwardWebRtcHeaders(headers: Record<string, unknown>) {

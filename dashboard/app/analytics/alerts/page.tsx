@@ -57,7 +57,7 @@ export default function AiAlertsIncidentHubPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/control/v1/analytics/alerts?limit=200", {
+      const res = await fetch("/v1/analytics/alerts?limit=200", {
         cache: "no-store",
         credentials: "include",
       });
@@ -149,7 +149,7 @@ export default function AiAlertsIncidentHubPage() {
     setConvertingId(alertId);
     setActionMessage(null);
     try {
-      const res = await fetch(`/api/control/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
+      const res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ notes: "Converted via AI Alerts Incident Hub" }),
@@ -194,7 +194,7 @@ export default function AiAlertsIncidentHubPage() {
     setSubmittingFalseAlarm(true);
     setActionMessage(null);
     try {
-      const res = await fetch(`/api/control/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
+      const res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -878,8 +878,8 @@ export default function AiAlertsIncidentHubPage() {
             isOpen={Boolean(activeMediaAlert)}
             onClose={() => setActiveMediaAlert(null)}
             imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
-            snapshotUrl={`/api/control/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
-            videoUrl={activeMediaAlert.videoClipUrl || ("/api/control/v1/analytics/alerts/" + activeMediaAlert.id + "/clip")}
+            snapshotUrl={`/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
+            videoUrl={activeMediaAlert.videoClipUrl || ("/v1/analytics/alerts/" + activeMediaAlert.id + "/clip")}
             title={activeMediaAlert.title}
             cameraName={activeMediaAlert.cameraName}
             cameraId={activeMediaAlert.cameraId}

@@ -152,7 +152,12 @@ export async function enqueueAlertMatrix(
   rule?: AnalyticsRule,
 ) {
   const policy = await store.getAlertNotificationPolicy(alert.tenantId);
-  const channels = NOTIFICATION_MATRIX[alert.severity] ?? ["log"];
+  const configuredChannels = NOTIFICATION_MATRIX[alert.severity] ?? ["log"];
+  // Dashboard visibility is never muted. Quiet hours only delay external
+  // notification channels, with P1 bypassing by default.
+  const channels = isQuietHoursActive(policy, alert.severity)
+    ? configuredChannels.filter((channel) => channel === "dashboard" || channel === "log")
+    : configuredChannels;
   const now = Date.now();
   const targets = channels.flatMap((channel) => recipientsFor(channel, rule?.recipients ?? [], policy)
     .map((recipient, sequence) => ({ tenantId: alert.tenantId, alertId: alert.id, channel, recipient,
@@ -166,6 +171,27 @@ export async function enqueueAlertMatrix(
         subject: `${alert.severity} alert: ${alert.title}`, events: [{ status: "queued", occurredAt: new Date(now).toISOString() }] } } : {}),
     })));
   return store.enqueueAlertNotifications(targets);
+}
+
+function isQuietHoursActive(policy: AlertNotificationPolicy, severity: AnalyticsAlert["severity"]) {
+  const quietHours = policy.quietHours;
+  if (!quietHours || quietHours.enabled === false) return false;
+  if ((quietHours.bypassSeverities ?? ["P1"]).includes(severity)) return false;
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: quietHours.timezone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const time = `${parts.find((part) => part.type === "hour")?.value}:${parts.find((part) => part.type === "minute")?.value}`;
+    return quietHours.start <= quietHours.end
+      ? time >= quietHours.start && time < quietHours.end
+      : time >= quietHours.start || time < quietHours.end;
+  } catch {
+    // A bad timezone must not prevent delivery of a security alert.
+    return false;
+  }
 }
 
 export class AlertNotificationDispatcher {

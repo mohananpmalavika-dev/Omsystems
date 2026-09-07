@@ -24,12 +24,19 @@ export function sortedMatchingRules(
 
 export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
   const types = [event.detectionType];
-  if (event.detectionType !== "anpr" || !Array.isArray(event.metadata?.matches)) return types;
-  const hasAlertingMatch = event.metadata.matches.some((value) =>
-    value !== null && typeof value === "object" && !Array.isArray(value) &&
-    (value as Record<string, unknown>).alertOnMatch !== false
-  );
-  if (hasAlertingMatch) types.push("watchlist-match");
+  if (event.detectionType === "anpr" && Array.isArray(event.metadata?.matches)) {
+    const hasAlertingMatch = event.metadata.matches.some((value) =>
+      value !== null && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).alertOnMatch !== false
+    );
+    if (hasAlertingMatch) types.push("watchlist-match");
+  }
+  if (["face", "face-detection", "face-recognition"].includes(event.detectionType)) {
+    const identity = event.metadata?.identityMatch;
+    const matched = identity !== null && typeof identity === "object" && !Array.isArray(identity) &&
+      (identity as Record<string, unknown>).matched === true;
+    types.push(matched ? "face-recognition" : "unknown-person");
+  }
   return types;
 }
 
@@ -37,9 +44,31 @@ export function isTerminalAlertStatus(status: AnalyticsAlertStatus) {
   return status === "resolved" || status === "false_alarm" || status === "suppressed";
 }
 
-export function analyticsAlertTitle(rule: AnalyticsRule) {
+export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
+  if (rule.detectionType === "face-recognition") {
+    const identity = metadata?.identityMatch;
+    const name = identity && typeof identity === "object" && !Array.isArray(identity)
+      ? (identity as Record<string, unknown>).personName : undefined;
+    return typeof name === "string" && name.trim()
+      ? `${name.trim()} recognised`
+      : "Known person recognised";
+  }
+  if (rule.detectionType === "unknown-person") return "Outsider detected";
   const label = rule.detectionType.replaceAll("-", " ");
   return `${label.charAt(0).toUpperCase()}${label.slice(1)} detected`;
+}
+
+export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
+  if (rule.detectionType === "face-recognition") {
+    const identity = metadata?.identityMatch;
+    const name = identity && typeof identity === "object" && !Array.isArray(identity)
+      ? (identity as Record<string, unknown>).personName : undefined;
+    return typeof name === "string" && name.trim()
+      ? `${name.trim()} was recognised by this camera.`
+      : "A known identity was recognised by this camera.";
+  }
+  if (rule.detectionType === "unknown-person") return "An unrecognised face was detected in this configured camera area.";
+  return `Rule \"${rule.name}\" matched.`;
 }
 
 function objectClassesMatch(rule: AnalyticsRule, event: AnalyticsEventInput) {
