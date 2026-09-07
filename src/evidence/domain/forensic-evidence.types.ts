@@ -83,7 +83,7 @@ export interface EvidenceTimeSync {
   ntpServer?: string;
   lastSyncAt?: string;
   clockDriftMsPerDay?: number;
-  clockHealthStatus?: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+  clockHealthStatus?: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'DEGRADED';
   forensicConfidence?: 'HIGH' | 'MEDIUM' | 'DEGRADED';
 }
 
