@@ -9,11 +9,15 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 
 interface DashboardSummary {
   systemStatus: string;
-  systemHealthScore: number;
-  criticalAlerts: number;
+  systemHealthScore: number | null;
+  criticalAlerts: number | null;
   activeIncidents: number;
   lastUpdated: string;
+  status: DashboardDataStatus;
+  unavailableFields?: string[];
 }
+
+type DashboardDataStatus = "AVAILABLE" | "STALE" | "UNAVAILABLE";
 
 interface CameraMetrics {
   totalRegistered: number;
@@ -21,33 +25,41 @@ interface CameraMetrics {
   online: number;
   offline: number;
   degraded: number;
-  underMaintenance: number;
-  availabilityPercentage: number;
+  underMaintenance: number | null;
+  availabilityPercentage: number | null;
+  status: DashboardDataStatus;
+  unavailableFields?: string[];
 }
 
 interface RecordingMetrics {
-  recordingNormally: number;
-  recordingWithGaps: number;
-  recordingStopped: number;
-  verificationPending: number;
-  availabilityPercentage: number;
+  recordingNormally: number | null;
+  recordingWithGaps: number | null;
+  recordingStopped: number | null;
+  verificationPending: number | null;
+  availabilityPercentage: number | null;
+  status: DashboardDataStatus;
+  unavailableFields?: string[];
 }
 
 interface StorageMetrics {
-  totalCapacityBytes: bigint;
-  usedCapacityBytes: bigint;
-  availableCapacityBytes: bigint;
-  utilizationPercentage: number;
-  forecastFullDays: number;
+  totalCapacityBytes: bigint | null;
+  usedCapacityBytes: bigint | null;
+  availableCapacityBytes: bigint | null;
+  utilizationPercentage: number | null;
+  forecastFullDays: number | null;
   criticalNodes: number;
+  status: DashboardDataStatus;
+  unavailableFields?: string[];
 }
 
 interface AlertMetrics {
   totalActive: number;
   unacknowledged: number;
   critical: number;
-  escalated: number;
-  slaBreached: number;
+  escalated: number | null;
+  slaBreached: number | null;
+  status: DashboardDataStatus;
+  unavailableFields?: string[];
 }
 
 export async function registerDashboardRoutes(
@@ -76,9 +88,9 @@ export async function registerDashboardRoutes(
 
       // Calculate health score (simplified - can be enhanced)
       const onlineCameras = allCameras.filter(c => c.status === "online").length;
-      const systemHealthScore = allCameras.length > 0 
-        ? (onlineCameras / allCameras.length) * 100 
-        : 100;
+      const systemHealthScore = allCameras.length > 0
+        ? (onlineCameras / allCameras.length) * 100
+        : null;
 
       // Get active incidents count (simplified)
       const incidents = await store.listIncidents(request.currentUser.tenantId, { limit: 1000 });
@@ -87,11 +99,15 @@ export async function registerDashboardRoutes(
       ).length;
 
       const summary: DashboardSummary = {
-        systemStatus: systemHealthScore >= 95 ? "operational" : systemHealthScore >= 80 ? "degraded" : "critical",
+        systemStatus: systemHealthScore === null
+          ? "unknown"
+          : systemHealthScore >= 95 ? "operational" : systemHealthScore >= 80 ? "degraded" : "critical",
         systemHealthScore,
-        criticalAlerts: 0, // Will be populated by alert system
+        criticalAlerts: null,
         activeIncidents,
         lastUpdated: new Date().toISOString(),
+        status: allCameras.length > 0 ? "AVAILABLE" : "UNAVAILABLE",
+        ...(allCameras.length === 0 ? { unavailableFields: ["systemHealthScore", "criticalAlerts"] } : {}),
       };
 
       return reply.send({
@@ -137,8 +153,10 @@ export async function registerDashboardRoutes(
         online,
         offline,
         degraded,
-        underMaintenance: 0, // Will be enhanced with maintenance status
-        availabilityPercentage: allCameras.length > 0 ? (online / allCameras.length) * 100 : 100,
+        underMaintenance: null,
+        availabilityPercentage: allCameras.length > 0 ? (online / allCameras.length) * 100 : null,
+        status: allCameras.length > 0 ? "AVAILABLE" : "UNAVAILABLE",
+        ...(allCameras.length === 0 ? { unavailableFields: ["underMaintenance", "availabilityPercentage"] } : {}),
       };
 
       return reply.send({
@@ -185,15 +203,22 @@ export async function registerDashboardRoutes(
       );
 
       const validJobs = recordingJobs.filter(job => job !== null);
-      const recordingNormally = validJobs.filter(job => job?.enabled).length;
-      const recordingStopped = validJobs.filter(job => !job?.enabled).length;
+      const hasRecordingTelemetry = validJobs.length > 0;
+      const recordingNormally = hasRecordingTelemetry ? validJobs.filter(job => job?.enabled).length : null;
+      const recordingStopped = hasRecordingTelemetry ? validJobs.filter(job => !job?.enabled).length : null;
 
       const metrics: RecordingMetrics = {
         recordingNormally,
-        recordingWithGaps: 0, // Will be enhanced with retention verification
+        recordingWithGaps: null,
         recordingStopped,
-        verificationPending: 0,
-        availabilityPercentage: validJobs.length > 0 ? (recordingNormally / validJobs.length) * 100 : 0,
+        verificationPending: null,
+        availabilityPercentage: hasRecordingTelemetry && recordingNormally !== null
+          ? (recordingNormally / validJobs.length) * 100
+          : null,
+        status: hasRecordingTelemetry ? "AVAILABLE" : "UNAVAILABLE",
+        ...(hasRecordingTelemetry
+          ? { unavailableFields: ["recordingWithGaps", "verificationPending"] }
+          : { unavailableFields: ["recordingNormally", "recordingWithGaps", "recordingStopped", "verificationPending", "availabilityPercentage"] }),
       };
 
       return reply.send({
@@ -250,38 +275,33 @@ export async function registerDashboardRoutes(
         }
       }
       
-      // Fallback to reasonable defaults if no telemetry available
-      if (totalCapacity === BigInt(0)) {
-        totalCapacity = BigInt(1024 * 1024 * 1024 * 1024); // 1 TB minimum
-        usedCapacity = BigInt(0);
-      }
-      
-      const availableCapacityBytes = totalCapacity - usedCapacity;
-      const utilizationPercentage = Number((usedCapacity * BigInt(100)) / totalCapacity);
-
-      // Calculate forecast based on recent growth
-      // Estimate 1% daily growth rate (typical for continuous recording)
-      const dailyGrowthRate = 1.0;
-      const remainingCapacity = Number(availableCapacityBytes) / Number(totalCapacity);
-      const forecastFullDays = remainingCapacity > 0 
-        ? Math.floor((remainingCapacity * 100) / dailyGrowthRate)
-        : 0;
+      const hasStorageTelemetry = totalCapacity > BigInt(0);
+      const availableCapacityBytes = hasStorageTelemetry ? totalCapacity - usedCapacity : null;
+      const utilizationPercentage = hasStorageTelemetry
+        ? Number((usedCapacity * BigInt(100)) / totalCapacity)
+        : null;
+      // A forecast requires observed growth history; capacity alone is insufficient.
+      const forecastFullDays = null;
 
       const metrics: StorageMetrics = {
-        totalCapacityBytes: totalCapacity,
-        usedCapacityBytes: usedCapacity,
+        totalCapacityBytes: hasStorageTelemetry ? totalCapacity : null,
+        usedCapacityBytes: hasStorageTelemetry ? usedCapacity : null,
         availableCapacityBytes,
         utilizationPercentage,
         forecastFullDays,
         criticalNodes,
+        status: hasStorageTelemetry ? "AVAILABLE" : "UNAVAILABLE",
+        ...(hasStorageTelemetry
+          ? { unavailableFields: ["forecastFullDays"] }
+          : { unavailableFields: ["totalCapacityBytes", "usedCapacityBytes", "availableCapacityBytes", "utilizationPercentage", "forecastFullDays"] }),
       };
 
       // Convert BigInt to string for JSON serialization
       const serializedMetrics = {
         ...metrics,
-        totalCapacityBytes: metrics.totalCapacityBytes.toString(),
-        usedCapacityBytes: metrics.usedCapacityBytes.toString(),
-        availableCapacityBytes: metrics.availableCapacityBytes.toString(),
+        totalCapacityBytes: metrics.totalCapacityBytes?.toString() ?? null,
+        usedCapacityBytes: metrics.usedCapacityBytes?.toString() ?? null,
+        availableCapacityBytes: metrics.availableCapacityBytes?.toString() ?? null,
       };
 
       return reply.send({
@@ -340,10 +360,14 @@ export async function registerDashboardRoutes(
 
       const metrics: AlertMetrics = {
         totalActive,
-        unacknowledged: totalActive, // All operational alerts start unacknowledged
+        unacknowledged: totalActive,
         critical: criticalCount,
-        escalated: 0, // Escalation happens through alert action endpoints
-        slaBreached: 0, // SLA tracking requires alert workflow integration
+        escalated: null,
+        slaBreached: null,
+        status: telemetry.length > 0 ? "AVAILABLE" : "UNAVAILABLE",
+        ...(telemetry.length > 0
+          ? { unavailableFields: ["escalated", "slaBreached"] }
+          : { unavailableFields: ["totalActive", "unacknowledged", "critical", "escalated", "slaBreached"] }),
       };
 
       return reply.send({
