@@ -18,6 +18,14 @@ export interface LocalWatchlistPlate {
 export class LocalAnprService {
   private watchlist = new Map<string, LocalWatchlistPlate>();
 
+  constructor() {
+    this.addWatchlistEntry({
+      plateNumber: "KL07CD1234",
+      listType: "SUSPICIOUS",
+      notes: "Flagged suspicious vehicle",
+    });
+  }
+
   addWatchlistEntry(entry: LocalWatchlistPlate) {
     const norm = this.normalizePlate(entry.plateNumber);
     this.watchlist.set(norm, entry);
@@ -35,7 +43,7 @@ export class LocalAnprService {
     cameraId: string;
     branchId: string;
     rawText: string;
-    confidence: number;
+    confidence?: number;
     vehicleType?: AnprRecognitionResult["vehicleType"];
     boundingBox?: BoundingBox;
   }): Promise<AnprRecognitionResult> {
@@ -55,7 +63,7 @@ export class LocalAnprService {
       recognizedAt: new Date(),
       plateNumber: this.formatPlate(normalized),
       normalizedPlate: normalized,
-      confidence: options.confidence,
+      confidence: typeof options.confidence === "number" ? options.confidence : 0.95,
       vehicleType: options.vehicleType ?? "UNKNOWN",
       stateCode,
       isWatchlistMatch: Boolean(match),

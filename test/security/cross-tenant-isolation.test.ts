@@ -262,4 +262,79 @@ describe("Cross-Tenant Isolation & Anti-Enumeration Hardening (P0-17, P0-18, P0-
     expect(alphaReleaseHold.statusCode).toBe(200);
     expect(JSON.parse(alphaReleaseHold.body).releasedBy).toBe("user-alpha-officer");
   });
+
+  it("strictly prevents Tenant A from referencing Tenant B's camera in evidence export (P0-01 invariant)", async () => {
+    const camAId = randomUUID();
+    const camBId = randomUUID();
+    const branchAId = "branch-alpha-node";
+    const branchBId = "branch-bravo-node";
+
+    // Setup Camera A for Tenant Alpha
+    (store as any).cameras.set(camAId, {
+      id: camAId,
+      tenantId: "tenant-alpha",
+      nodeId: branchAId,
+      name: "Alpha Cam A",
+    });
+    (store as any).nodes.set(branchAId, {
+      id: branchAId,
+      tenantId: "tenant-alpha",
+      type: "branch",
+      name: "Alpha Branch",
+    });
+
+    // Setup Camera B for Tenant Bravo
+    (store as any).cameras.set(camBId, {
+      id: camBId,
+      tenantId: "tenant-bravo",
+      nodeId: branchBId,
+      name: "Bravo Cam B",
+    });
+    (store as any).nodes.set(branchBId, {
+      id: branchBId,
+      tenantId: "tenant-bravo",
+      type: "branch",
+      name: "Bravo Branch",
+    });
+
+    // 1. Tenant Alpha creates Case A
+    const createCaseResp = await app.inject({
+      method: "POST",
+      url: "/v1/evidence/cases",
+      headers: tenantAlphaHeaders,
+      payload: {
+        caseNumber: "CASE-ALPHA-P1",
+        title: "Alpha Case A",
+      },
+    });
+    expect(createCaseResp.statusCode).toBe(200);
+    const caseAId = JSON.parse(createCaseResp.body).id;
+
+    // 2. Tenant Alpha attempts to add Tenant B's camera item to Case A -> 404
+    const addCrossCameraResp = await app.inject({
+      method: "POST",
+      url: `/v1/evidence/cases/${caseAId}/items`,
+      headers: tenantAlphaHeaders,
+      payload: {
+        type: "recording",
+        cameraId: camBId,
+        description: "Attempted cross-tenant camera item addition",
+      },
+    });
+    expect(addCrossCameraResp.statusCode).toBe(404);
+    expect(JSON.parse(addCrossCameraResp.body).error).toBe("camera_not_found");
+
+    // 3. Attempting to export case A without authorized camera items is rejected
+    const exportCrossCameraResp = await app.inject({
+      method: "POST",
+      url: `/v1/evidence/cases/${caseAId}/exports`,
+      headers: tenantAlphaHeaders,
+      payload: {
+        format: "mp4",
+        reason: "Unauthorized cross-tenant export attempt",
+      },
+    });
+    expect(exportCrossCameraResp.statusCode).toBe(400);
+    expect(JSON.parse(exportCrossCameraResp.body).error).toBe("no_recording_items");
+  });
 });

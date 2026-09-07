@@ -91,11 +91,17 @@ export class StorageForecasterService {
     let idx = 1;
 
     if (params.tenantId) {
-      conditions.push(`tenant_id = $${idx++}`);
+      conditions.push(`(c.tenant_id = $${idx} OR rn.tenant_id = $${idx})`);
       values.push(params.tenantId);
+      idx++;
+    }
+    if (params.branchId) {
+      conditions.push(`(c.branch_node_id = $${idx} OR c.branch_id = $${idx} OR c.node_id = $${idx})`);
+      values.push(params.branchId);
+      idx++;
     }
     if (params.cameraId) {
-      conditions.push(`camera_id = $${idx++}`);
+      conditions.push(`rs.camera_id = $${idx++}`);
       values.push(params.cameraId);
     }
 
@@ -104,12 +110,14 @@ export class StorageForecasterService {
     try {
       const res = await params.pool.query(
         `SELECT
-           COALESCE(SUM(CASE WHEN start_time >= NOW() - INTERVAL '24 hours' THEN size_bytes ELSE 0 END), 0)::bigint AS bytes_24h,
-           COALESCE(SUM(CASE WHEN start_time >= NOW() - INTERVAL '7 days' THEN size_bytes ELSE 0 END), 0)::bigint AS bytes_7d,
-           COALESCE(SUM(CASE WHEN start_time >= NOW() - INTERVAL '30 days' THEN size_bytes ELSE 0 END), 0)::bigint AS bytes_30d,
-           EXTRACT(DAY FROM (NOW() - MIN(start_time)))::int AS history_days,
-           COUNT(DISTINCT DATE_TRUNC('day', start_time))::int AS active_days
-         FROM recording_segments
+           COALESCE(SUM(CASE WHEN rs.started_at >= NOW() - INTERVAL '24 hours' THEN rs.size_bytes ELSE 0 END), 0)::bigint AS bytes_24h,
+           COALESCE(SUM(CASE WHEN rs.started_at >= NOW() - INTERVAL '7 days' THEN rs.size_bytes ELSE 0 END), 0)::bigint AS bytes_7d,
+           COALESCE(SUM(CASE WHEN rs.started_at >= NOW() - INTERVAL '30 days' THEN rs.size_bytes ELSE 0 END), 0)::bigint AS bytes_30d,
+           EXTRACT(DAY FROM (NOW() - MIN(rs.started_at)))::int AS history_days,
+           COUNT(DISTINCT DATE_TRUNC('day', rs.started_at))::int AS active_days
+         FROM recording_segments rs
+         JOIN cameras c ON c.id = rs.camera_id
+         LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
          WHERE ${whereClause}`,
         values
       );
@@ -141,7 +149,10 @@ export class StorageForecasterService {
         historyDaysAvailable: effectiveDays,
         dataSource,
       };
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV !== "test") {
+        throw new Error(`STORAGE_INGEST_QUERY_FAILED: Failed querying ingest history from authoritative recording schema: ${err instanceof Error ? err.message : String(err)}`);
+      }
       return {
         bytesLast24h: 0,
         avgDailyBytes7d: null,

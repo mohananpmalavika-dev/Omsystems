@@ -73,6 +73,7 @@ type ApprovalDiscoveryRow = {
 function mapCamera(row: CameraRow): Camera {
   return {
     id: row.id,
+    ...(row.tenant_id ? { tenantId: row.tenant_id } : {}),
     deviceIdentityId: row.device_identity_id,
     name: row.name,
     nodeId: row.resource_node_id,
@@ -104,7 +105,7 @@ function mapCamera(row: CameraRow): Camera {
 }
 
 const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
-  cameras.resource_node_id::text,
+  cameras.resource_node_id::text, camera_node.tenant_id::text AS tenant_id,
   cameras.branch_node_id::text, cameras.edge_agent_id::text, camera_node.name, cameras.vendor,
   cameras.model, cameras.channel, cameras.protocol, cameras.status,
   cameras.profiles, cameras.capabilities, cameras.connection_secret_ref,

@@ -35,19 +35,36 @@ export interface BoundingBox {
   height: number; // 0.0 to 1.0
 }
 
+export interface AiEventTelemetry {
+  model: string;
+  modelVersion: string;
+  inferenceEngine: string;
+  confidence: number | null;
+  timestamp: string;
+  cameraId: string;
+  processingTime: number;
+  status?: "SUCCESS" | "MODEL_UNAVAILABLE" | "INFERENCE_FAILED";
+}
+
 export interface LocalVisionDetection {
   id: string;
   cameraId: string;
   branchId: string;
   detectedAt: Date;
   classification: DetectedObjectClass;
-  confidence: number; // 0.0 to 1.0
+  confidence: number | null; // 0.0 to 1.0 or null if unavailable/failed
   boundingBox?: BoundingBox;
   trackId?: string;
   zone?: "VAULT" | "ENTRANCE" | "CASH_COUNTER" | "ATM_LOBBY" | "PERIMETER" | "PARKING" | "GENERAL";
   motionVector?: { dx: number; dy: number; speed: number };
   attributes?: Record<string, unknown>;
   modelUsed: LocalAiModelType;
+  model: string;
+  modelVersion: string;
+  inferenceEngine: string;
+  timestamp: string;
+  processingTime: number;
+  status?: "SUCCESS" | "MODEL_UNAVAILABLE" | "INFERENCE_FAILED";
 }
 
 export interface CameraTamperResult {

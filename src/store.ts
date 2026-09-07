@@ -1358,7 +1358,13 @@ export class MemoryStore {
   }
 
   async getCamera(id: string) {
-    return this.cameras.get(id);
+    const cam = this.cameras.get(id);
+    if (!cam) return undefined;
+    const branch = this.nodes.get(cam.branchId) || this.nodes.get(cam.nodeId);
+    return {
+      ...cam,
+      tenantId: cam.tenantId || branch?.tenantId,
+    };
   }
 
   async listCameras(tenantId: string) {

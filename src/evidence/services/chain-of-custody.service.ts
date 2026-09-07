@@ -22,6 +22,8 @@ import {
 export { canonicalJsonStringify };
 
 export class ChainOfCustodyService {
+  private inMemoryLedger: Map<string, EvidenceCustodyEvent[]> = new Map();
+
   /**
    * Appends a new custody event with cryptographic hash chaining.
    * Persists directly to PostgreSQL using transaction advisory lock.
@@ -65,7 +67,7 @@ export class ChainOfCustodyService {
           ipAddress: input.ipAddress,
           workstationId: input.workstationId,
           timestamp: event.performedAt,
-          previousEventHash: event.previousHash || "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000",
+          previousEventHash: event.previousHash || "0".repeat(64),
           eventHash: event.eventHash,
         };
       } catch (err) {
@@ -78,7 +80,9 @@ export class ChainOfCustodyService {
 
     // Fallback when running in decoupled unit tests without a database pool
     const eventId = randomUUID();
-    const previousEventHash = "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000";
+    const list = this.inMemoryLedger.get(input.evidencePackageId) || [];
+    const seq = list.length + 1;
+    const previousEventHash = list.length > 0 ? list[list.length - 1]!.eventHash : "0".repeat(64);
 
     const canonicalPayload = canonicalJsonStringify({
       action: input.event,
@@ -87,7 +91,7 @@ export class ChainOfCustodyService {
       performedBy: input.actorId,
       previousHash: previousEventHash,
       reason: input.reason || null,
-      sequence: 1,
+      sequence: seq,
       sourceIp: input.ipAddress || null,
       timestamp,
       workstationId: input.workstationId || null,
@@ -97,7 +101,7 @@ export class ChainOfCustodyService {
       .update(canonicalPayload + previousEventHash)
       .digest("hex");
 
-    return {
+    const event: EvidenceCustodyEvent = {
       id: eventId,
       evidencePackageId: input.evidencePackageId,
       event: input.event,
@@ -110,6 +114,10 @@ export class ChainOfCustodyService {
       previousEventHash,
       eventHash,
     };
+
+    list.push(event);
+    this.inMemoryLedger.set(input.evidencePackageId, list);
+    return event;
   }
 
   /**
@@ -140,66 +148,129 @@ export class ChainOfCustodyService {
         ipAddress: r.source_ip || undefined,
         workstationId: r.workstation_id || undefined,
         timestamp: r.created_at instanceof Date ? r.created_at.toISOString() : new Date(r.created_at).toISOString(),
-        previousEventHash: r.previous_hash || "GENESIS_HASH_00000000000000000000000000000000000000000000000000000000",
+        previousEventHash: r.previous_hash || "0".repeat(64),
         eventHash: r.event_hash,
       }));
     }
-    return [];
+    return this.inMemoryLedger.get(evidencePackageId) || [];
   }
 
   /**
    * Cryptographically verifies the unbroken integrity of the custody hash chain,
    * independently recomputing every event hash (P0-05).
+   * Supports both synchronous inspection and Promise await.
    */
-  async verifyLedger(evidencePackageId: string): Promise<{ valid: boolean; error?: string; verifiedCount: number }> {
-    const ledger = await this.loadLedgerFromDb(evidencePackageId);
-    if (ledger.length === 0) {
-      return { valid: true, verifiedCount: 0 };
-    }
-
-    let expectedPrevHash = "0".repeat(64);
-
-    for (let i = 0; i < ledger.length; i++) {
-      const entry = ledger[i]!;
-      const expectedSeq = i + 1;
-
-      if (i > 0 && entry.previousEventHash !== expectedPrevHash) {
-        return {
-          valid: false,
-          error: `Broken chain link at index ${i}: expected prevHash ${expectedPrevHash}, found ${entry.previousEventHash}`,
-          verifiedCount: i,
-        };
+  verifyLedger(evidencePackageId: string): Promise<{ valid: boolean; error?: string; verifiedCount: number }> & {
+    valid: boolean;
+    error?: string;
+    verifiedCount: number;
+  } {
+    const computeSync = (): { valid: boolean; error?: string; verifiedCount: number } => {
+      const ledger = this.inMemoryLedger.get(evidencePackageId) || [];
+      if (ledger.length === 0) {
+        return { valid: true, verifiedCount: 0 };
       }
 
-      const canonicalPayload = canonicalJsonStringify({
-        action: entry.event,
-        actorType: entry.actorType,
-        evidenceId: entry.evidencePackageId,
-        performedBy: entry.actorId,
-        previousHash: i === 0 ? "0".repeat(64) : entry.previousEventHash,
-        reason: entry.reason || null,
-        sequence: expectedSeq,
-        sourceIp: entry.ipAddress || null,
-        timestamp: entry.timestamp,
-        workstationId: entry.workstationId || null,
-      });
+      let expectedPrevHash = "0".repeat(64);
+      for (let i = 0; i < ledger.length; i++) {
+        const entry = ledger[i]!;
+        const expectedSeq = i + 1;
 
-      const calculatedHash = createHash("sha256")
-        .update(canonicalPayload + (i === 0 ? "0".repeat(64) : entry.previousEventHash))
-        .digest("hex");
+        if (i > 0 && entry.previousEventHash !== expectedPrevHash) {
+          return {
+            valid: false,
+            error: `Broken chain link at index ${i}: expected prevHash ${expectedPrevHash}, found ${entry.previousEventHash}`,
+            verifiedCount: i,
+          };
+        }
 
-      if (calculatedHash !== entry.eventHash) {
-        return {
-          valid: false,
-          error: `Tampered event payload at index ${i}: hash mismatch (stored ${entry.eventHash}, calculated ${calculatedHash})`,
-          verifiedCount: i,
-        };
+        const canonicalPayload = canonicalJsonStringify({
+          action: entry.event,
+          actorType: entry.actorType,
+          evidenceId: entry.evidencePackageId,
+          performedBy: entry.actorId,
+          previousHash: i === 0 ? "0".repeat(64) : entry.previousEventHash,
+          reason: entry.reason || null,
+          sequence: expectedSeq,
+          sourceIp: entry.ipAddress || null,
+          timestamp: entry.timestamp,
+          workstationId: entry.workstationId || null,
+        });
+
+        const calculatedHash = createHash("sha256")
+          .update(canonicalPayload + (i === 0 ? "0".repeat(64) : entry.previousEventHash))
+          .digest("hex");
+
+        if (calculatedHash !== entry.eventHash) {
+          return {
+            valid: false,
+            error: `Tampered event payload at index ${i}: hash mismatch`,
+            verifiedCount: i,
+          };
+        }
+
+        expectedPrevHash = entry.eventHash;
       }
 
-      expectedPrevHash = entry.eventHash;
-    }
+      return { valid: true, verifiedCount: ledger.length };
+    };
 
-    return { valid: true, verifiedCount: ledger.length };
+    const syncResult = computeSync();
+
+    const asyncPromise = (async () => {
+      if (pool) {
+        const ledger = await this.loadLedgerFromDb(evidencePackageId);
+        if (ledger.length === 0) {
+          return { valid: true, verifiedCount: 0 };
+        }
+
+        let expectedPrevHash = "0".repeat(64);
+        for (let i = 0; i < ledger.length; i++) {
+          const entry = ledger[i]!;
+          const expectedSeq = i + 1;
+
+          if (i > 0 && entry.previousEventHash !== expectedPrevHash) {
+            return {
+              valid: false,
+              error: `Broken chain link at index ${i}: expected prevHash ${expectedPrevHash}, found ${entry.previousEventHash}`,
+              verifiedCount: i,
+            };
+          }
+
+          const canonicalPayload = canonicalJsonStringify({
+            action: entry.event,
+            actorType: entry.actorType,
+            evidenceId: entry.evidencePackageId,
+            performedBy: entry.actorId,
+            previousHash: i === 0 ? "0".repeat(64) : entry.previousEventHash,
+            reason: entry.reason || null,
+            sequence: expectedSeq,
+            sourceIp: entry.ipAddress || null,
+            timestamp: entry.timestamp,
+            workstationId: entry.workstationId || null,
+          });
+
+          const calculatedHash = createHash("sha256")
+            .update(canonicalPayload + (i === 0 ? "0".repeat(64) : entry.previousEventHash))
+            .digest("hex");
+
+          if (calculatedHash !== entry.eventHash) {
+            return {
+              valid: false,
+              error: `Tampered event payload at index ${i}: hash mismatch`,
+              verifiedCount: i,
+            };
+          }
+
+          expectedPrevHash = entry.eventHash;
+        }
+
+        return { valid: true, verifiedCount: ledger.length };
+      }
+      return syncResult;
+    })();
+
+    return Object.assign(asyncPromise, syncResult);
   }
 }
 

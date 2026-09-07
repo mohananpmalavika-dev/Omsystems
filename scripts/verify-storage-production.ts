@@ -33,11 +33,13 @@ async function main() {
       recordingRoot: process.cwd(),
     });
     const metrics = await local.getMetrics();
+    const probe = await local.runWriteProbe();
     const isFs = local.backendKind === "FILESYSTEM";
+    const isProbeValid = probe.status === "passed" && probe.checksum.length === 64;
     checks.push({
-      name: "Local Filesystem Storage Backend",
-      passed: isFs && metrics.capacity.type === "FIXED",
-      details: `Backend Kind: ${local.backendKind}, Capacity Type: ${metrics.capacity.type}`,
+      name: "Local Filesystem Storage Backend (Live I/O & SHA-256 Verification)",
+      passed: isFs && metrics.capacity.type === "FIXED" && isProbeValid,
+      details: `Backend Kind: ${local.backendKind}, Capacity Type: ${metrics.capacity.type}, Probe: ${probe.status} (${probe.latencyMs}ms, SHA-256: ${probe.checksum.slice(0, 16)}...)`,
     });
   } catch (err: any) {
     passed = false;

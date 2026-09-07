@@ -4,7 +4,7 @@
  * First-class legal hold management that protects forensic evidence packages,
  * central archives, and recorder recording intervals from retention policy deletion.
  * Authoritative persistence resides in PostgreSQL (recording_legal_holds) via EvidenceRepository.
- * Fails closed if the database authority is unavailable.
+ * Fails closed (LEGAL_HOLD_AUTHORITY_UNAVAILABLE) if the database authority is unavailable.
  */
 
 import { randomUUID } from "node:crypto";
@@ -29,9 +29,12 @@ export interface CreateLegalHoldInput {
 }
 
 export class LegalHoldService {
+  private testHolds = new Map<string, LegalHoldRecord>();
+
   /**
    * Applies a Legal Hold to evidence packages and camera recording ranges.
    * Persists to PostgreSQL with canonical UUID and reference number so it survives process restarts.
+   * In production, strictly fails closed (503 LEGAL_HOLD_AUTHORITY_UNAVAILABLE) if DB is unavailable.
    */
   async createLegalHold(input: CreateLegalHoldInput): Promise<LegalHoldRecord> {
     const dbId = randomUUID();
@@ -90,6 +93,32 @@ export class LegalHoldService {
       } finally {
         client.release();
       }
+    } else {
+      if (process.env.NODE_ENV !== "test") {
+        const err = new Error("LEGAL_HOLD_AUTHORITY_UNAVAILABLE: PostgreSQL database authority is unreachable");
+        (err as any).code = "LEGAL_HOLD_AUTHORITY_UNAVAILABLE";
+        (err as any).statusCode = 503;
+        throw err;
+      }
+
+      // Unit test fallback in test environment
+      const record: LegalHoldRecord = {
+        id: dbId,
+        referenceNumber,
+        tenantId: input.tenantId,
+        caseNumber: input.caseNumber,
+        reason: input.reason,
+        evidencePackageIds: input.evidencePackageIds || [],
+        cameraIds: input.cameraIds,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        status: "ACTIVE",
+        createdBy: input.createdBy,
+        createdAt: now,
+      };
+      this.testHolds.set(dbId, record);
+      if (referenceNumber) this.testHolds.set(referenceNumber, record);
+      return record;
     }
 
     return {
@@ -109,24 +138,28 @@ export class LegalHoldService {
   }
 
   /**
-   * Releases an active Legal Hold via row-locked transaction (P0-11)
+   * Releases an active Legal Hold via row-locked transaction (P0-11).
+   * In production, strictly fails closed (503 LEGAL_HOLD_AUTHORITY_UNAVAILABLE) if DB is unavailable.
    */
   async releaseLegalHold(holdIdOrRef: string, releasedBy: string, reason?: string): Promise<LegalHoldRecord> {
     if (!pool) {
-      return {
-        id: holdIdOrRef,
-        referenceNumber: holdIdOrRef.startsWith("LH-") ? holdIdOrRef : undefined,
-        tenantId: "",
-        caseNumber: holdIdOrRef,
-        reason: reason || "Investigation closed",
-        evidencePackageIds: [],
-        status: "RELEASED",
-        createdBy: releasedBy,
-        createdAt: new Date().toISOString(),
-        releasedBy,
-        releasedAt: new Date().toISOString(),
-        releaseReason: reason,
-      };
+      if (process.env.NODE_ENV !== "test") {
+        const err = new Error("LEGAL_HOLD_AUTHORITY_UNAVAILABLE: PostgreSQL database authority is unreachable");
+        (err as any).code = "LEGAL_HOLD_AUTHORITY_UNAVAILABLE";
+        (err as any).statusCode = 503;
+        throw err;
+      }
+
+      // Unit test release
+      const hold = this.testHolds.get(holdIdOrRef);
+      if (hold) {
+        hold.status = "RELEASED";
+        hold.releasedBy = releasedBy;
+        hold.releasedAt = new Date().toISOString();
+        hold.releaseReason = reason;
+        return hold;
+      }
+      throw new Error(`Legal Hold not found: ${holdIdOrRef}`);
     }
 
     const client = await pool.connect();
@@ -219,7 +252,7 @@ export class LegalHoldService {
 
   /**
    * Async database-first check for retention protection.
-   * Fails closed if the database is unreachable (P0-10).
+   * Fails closed if the database is unreachable (P0-04, P0-10).
    */
   async isProtectedAsync(params: {
     evidencePackageId?: string;
@@ -229,6 +262,23 @@ export class LegalHoldService {
     tenantId?: string;
   }): Promise<{ protected: boolean; reason?: string }> {
     if (!pool) {
+      if (process.env.NODE_ENV !== "test") {
+        throw new LegalHoldStatusUnknownError(
+          "LEGAL_HOLD_AUTHORITY_UNAVAILABLE: PostgreSQL authority unreachable. Legal hold status unknown (failing closed to prevent destructive retention).",
+        );
+      }
+
+      // Unit test fallback
+      for (const hold of this.testHolds.values()) {
+        if (hold.status === "ACTIVE") {
+          if (params.evidencePackageId && hold.evidencePackageIds?.includes(params.evidencePackageId)) {
+            return { protected: true, reason: `Protected by test hold ${hold.id}` };
+          }
+          if (params.cameraId && hold.cameraIds?.includes(params.cameraId)) {
+            return { protected: true, reason: `Protected by test hold ${hold.id}` };
+          }
+        }
+      }
       return { protected: false };
     }
 
@@ -274,8 +324,37 @@ export class LegalHoldService {
     }
   }
 
+  /**
+   * Synchronous check used by tests and fast memory validations.
+   * In production with database pool, requires isProtectedAsync to ensure authoritative correctness.
+   */
+  isProtected(evidencePackageId?: string, cameraId?: string, timestamp?: Date | string): boolean {
+    if (!pool) {
+      if (process.env.NODE_ENV !== "test") {
+        throw new LegalHoldStatusUnknownError("LEGAL_HOLD_AUTHORITY_UNAVAILABLE: Fail closed in production");
+      }
+      for (const hold of this.testHolds.values()) {
+        if (hold.status === "ACTIVE") {
+          if (evidencePackageId && (hold.evidencePackageIds?.includes(evidencePackageId) || hold.id === evidencePackageId)) {
+            return true;
+          }
+          if (cameraId && hold.cameraIds?.includes(cameraId)) {
+            if (!timestamp) return true;
+            const ts = new Date(timestamp).getTime();
+            const from = hold.startTime ? new Date(hold.startTime).getTime() : 0;
+            const to = hold.endTime ? new Date(hold.endTime).getTime() : Infinity;
+            if (ts >= from && ts <= to) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    throw new LegalHoldStatusUnknownError("Synchronous legal hold check not permitted against live database; use isProtectedAsync");
+  }
+
   async getLegalHold(holdId: string): Promise<LegalHoldRecord | undefined> {
-    if (!pool) return undefined;
+    if (!pool) return this.testHolds.get(holdId);
     const repo = new EvidenceRepository(pool);
     const hold = await repo.getLegalHold(holdId);
     if (!hold) return undefined;
@@ -296,7 +375,9 @@ export class LegalHoldService {
   }
 
   async listActiveHolds(tenantId?: string): Promise<LegalHoldRecord[]> {
-    if (!pool) return [];
+    if (!pool) {
+      return Array.from(this.testHolds.values()).filter((h) => h.status === "ACTIVE" && (!tenantId || h.tenantId === tenantId));
+    }
     const repo = new EvidenceRepository(pool);
     const holds = await repo.listLegalHolds({ tenantId, status: "active" });
     return holds.map((h) => ({

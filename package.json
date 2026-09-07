@@ -95,6 +95,8 @@
     "test:surveillance:policy": "tsx test/surveillance-policy/surveillance-policy-runner.ts",
     "test:p0:readiness": "tsx test/p0-readiness/p0-implementation-runner.ts",
     "test:acceptance:master": "tsx test/acceptance/master-acceptance-scenario.ts",
+    "test:scale:500": "tsx test/performance/500-branch-scale-runner.ts",
+    "test:chaos:12vectors": "tsx test/chaos/comprehensive-failure-injection.ts",
     "test:local:ai": "tsx test/ai/local-ai-pipeline.test.ts",
     "test:hdd:collect": "tsx test/hdd-health/test-runner.ts collect",
     "test:hdd:thresholds": "tsx test/hdd-health/test-runner.ts thresholds",

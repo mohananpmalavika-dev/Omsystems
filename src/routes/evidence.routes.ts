@@ -201,6 +201,13 @@ export async function registerEvidenceRoutes(
       return reply.code(404).send({ error: "case_not_found" });
     }
 
+    if (body.cameraId) {
+      const camera = await store.getCamera(body.cameraId);
+      if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+        return reply.code(404).send({ error: "camera_not_found", message: "Camera not found or tenant unauthorized" });
+      }
+    }
+
     try {
       const item = await store.addEvidenceItem(caseId, {
         type: body.type,
@@ -277,6 +284,17 @@ export async function registerEvidenceRoutes(
     const cameras = inferRecordingCameras(items);
     if (cameras.length === 0) {
       return reply.code(400).send({ error: "no_recording_items", message: "No recording items found for this case." });
+    }
+
+    // Defense-in-depth: Verify all referenced cameras belong to request.currentUser.tenantId
+    for (const cam of cameras) {
+      const camera = await store.getCamera(cam.cameraId);
+      if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+        return reply.code(404).send({
+          error: "camera_not_found",
+          message: `Camera ${cam.cameraId} not found or tenant unauthorized`,
+        });
+      }
     }
 
     let accessNodeId = caseRecord.id;
@@ -752,7 +770,7 @@ export async function registerEvidenceRoutes(
 
         const filename = basename(filePath);
         const ext = extname(filename).toLowerCase();
-        const mimeType = ext === ".mp4" ? "video/mp4" : ext === ".tar" ? "application/x-tar" : ext === ".json" ? "application/json" : "application/octet-stream";
+        const mimeType = ext === ".mp4" ? "video/mp4" : ext === ".zip" ? "application/zip" : ext === ".tar" ? "application/x-tar" : ext === ".json" ? "application/json" : "application/octet-stream";
         reply.header("Content-Type", mimeType);
         reply.header("Content-Disposition", `attachment; filename="${filename}"`);
         reply.header("Content-Length", stats.size);
