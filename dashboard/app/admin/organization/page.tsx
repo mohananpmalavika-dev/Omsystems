@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Building2,
   Globe2,
@@ -118,7 +119,21 @@ async function fetchWithAuth(url: string, options: RequestInit = {}) {
 }
 
 export default function OrganizationHierarchyPage() {
-  const [activeTab, setActiveTab] = useState<"hierarchy" | "employees" | "roles" | "branding">("hierarchy");
+  const searchParams = useSearchParams();
+  const validTabs = ["hierarchy", "employees", "roles", "branding"] as const;
+  type TabKey = typeof validTabs[number];
+  const tabFromUrl = searchParams?.get("tab");
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    validTabs.includes(tabFromUrl as TabKey) ? (tabFromUrl as TabKey) : "hierarchy",
+  );
+
+  // Keep the tab in sync when the user navigates via the sidebar.
+  useEffect(() => {
+    const t = searchParams?.get("tab");
+    if (t && validTabs.includes(t as TabKey)) {
+      setActiveTab(t as TabKey);
+    }
+  }, [searchParams]);
   const { branding, organizations, selectOrganization, updateBranding } = useOrgBranding();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

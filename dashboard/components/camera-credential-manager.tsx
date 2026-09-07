@@ -48,7 +48,7 @@ export function CameraCredentialManager({
           body: JSON.stringify({
             username: username.trim(),
             password,
-            cameraIp: normalizedCameraIp,
+            cameraIp: cameraIp.trim(),
           }),
         },
       );
