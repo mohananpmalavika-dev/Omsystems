@@ -69,6 +69,32 @@ export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscove
 		}));
 	}
 
+	/**
+	 * Delete a single pending discovered device so it can be re-discovered on the next scan.
+	 */
+	deleteDiscoveredDevice(tenantId: string, deviceId: string): Promise<void>;
+	deleteDiscoveredDevice(deviceId: string): Promise<void>;
+	async deleteDiscoveredDevice(first: string, second?: string): Promise<void> {
+		return second
+			? super.deleteDiscoveredDevice(first, second)
+			: super.deleteDiscoveredDevice(this.tenantId, first);
+	}
+
+	/**
+	 * Delete all pending discovered devices so they can be re-discovered on the next scan.
+	 */
+	deleteAllPendingDiscoveredDevices(tenantId: string, branchId?: string): Promise<number>;
+	deleteAllPendingDiscoveredDevices(branchId?: string): Promise<number>;
+	async deleteAllPendingDiscoveredDevices(first?: string, second?: string): Promise<number> {
+		// If called with (tenantId, branchId) from super — two string args where first looks like a UUID tenant
+		// We distinguish by checking if a second arg is provided and first is not our tenant.
+		if (second !== undefined) {
+			return super.deleteAllPendingDiscoveredDevices(first!, second);
+		}
+		// Single optional arg = branchId
+		return super.deleteAllPendingDiscoveredDevices(this.tenantId, first);
+	}
+
 	listDiscoveryJobs(tenantId: string, filters: any): Promise<any>;
 	listDiscoveryJobs(status?: string): Promise<any[]>;
 	async listDiscoveryJobs(first?: string, filters?: any): Promise<any> {
