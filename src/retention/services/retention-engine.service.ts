@@ -133,8 +133,12 @@ export class RetentionEngineService {
     });
   }
 
-  async getLegalHolds(cameraId?: string, branchId?: string, tenantId?: string): Promise<any[]> {
+  getLegalHolds(cameraId?: string, branchId?: string, tenantId?: string): any[] | Promise<any[]> {
     if (!pool && !this.evidenceRepo) return this.getLegalHoldsSync(cameraId, branchId);
+    return this.getLegalHoldsAsync(cameraId, branchId, tenantId);
+  }
+
+  async getLegalHoldsAsync(cameraId?: string, branchId?: string, tenantId?: string): Promise<any[]> {
     try {
       const repo = this.getEffectiveEvidenceRepo();
       return await repo.listLegalHolds({ cameraId, branchId, tenantId, status: "active" });
@@ -145,6 +149,8 @@ export class RetentionEngineService {
 
   /**
    * Calculates actual retention coverage and gaps for a requested compliance window.
+   * Merges overlapping and adjacent intervals before computing recorded seconds,
+   * missing seconds, and gap detection (P0-16).
    */
   calculateCoverage(input: {
     start: Date;
@@ -162,36 +168,74 @@ export class RetentionEngineService {
     const endMs = input.end.getTime();
     const expectedSeconds = Math.max(1, Math.round((endMs - startMs) / 1000));
 
-    const sorted = [...input.segments].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    // 1. Clamp segments to the query window and filter out invalid/inverted segments
+    const validClamped: Array<{ startMs: number; endMs: number }> = [];
+    for (const seg of input.segments) {
+      const sStart = Math.max(startMs, seg.startTime.getTime());
+      const sEnd = Math.min(endMs, seg.endTime.getTime());
+      if (sEnd > sStart) {
+        validClamped.push({ startMs: sStart, endMs: sEnd });
+      }
+    }
+
+    // 2. Sort clamped segments by startMs ascending, then endMs ascending
+    validClamped.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
+
+    // 3. Merge overlapping and contiguous segments (P0-16)
+    const merged: Array<{ startMs: number; endMs: number }> = [];
+    for (const seg of validClamped) {
+      if (merged.length === 0) {
+        merged.push({ startMs: seg.startMs, endMs: seg.endMs });
+      } else {
+        const last = merged[merged.length - 1]!;
+        if (seg.startMs <= last.endMs) {
+          // Overlapping or adjacent interval: extend endMs
+          last.endMs = Math.max(last.endMs, seg.endMs);
+        } else {
+          merged.push({ startMs: seg.startMs, endMs: seg.endMs });
+        }
+      }
+    }
+
+    // 4. Calculate total recorded seconds without double-counting overlaps
     let recordedSeconds = 0;
+    for (const m of merged) {
+      recordedSeconds += Math.round((m.endMs - m.startMs) / 1000);
+    }
+
+    // 5. Detect and measure gaps
     let numberOfGaps = 0;
     let largestGapSeconds = 0;
 
-    let lastEndMs = startMs;
+    if (merged.length === 0) {
+      numberOfGaps = 1;
+      largestGapSeconds = expectedSeconds;
+    } else {
+      // Check gap before first recording
+      if (merged[0]!.startMs > startMs) {
+        const initialGapSec = Math.round((merged[0]!.startMs - startMs) / 1000);
+        if (initialGapSec > 0) {
+          numberOfGaps++;
+          largestGapSeconds = Math.max(largestGapSeconds, initialGapSec);
+        }
+      }
 
-    for (const seg of sorted) {
-      const segStartMs = Math.max(startMs, seg.startTime.getTime());
-      const segEndMs = Math.min(endMs, seg.endTime.getTime());
-
-      if (segStartMs > lastEndMs) {
-        const gapSec = Math.round((segStartMs - lastEndMs) / 1000);
+      // Check gaps between merged segments
+      for (let i = 1; i < merged.length; i++) {
+        const gapSec = Math.round((merged[i]!.startMs - merged[i - 1]!.endMs) / 1000);
         if (gapSec > 0) {
           numberOfGaps++;
           largestGapSeconds = Math.max(largestGapSeconds, gapSec);
         }
       }
 
-      if (segEndMs > segStartMs) {
-        recordedSeconds += Math.round((segEndMs - segStartMs) / 1000);
-        lastEndMs = Math.max(lastEndMs, segEndMs);
-      }
-    }
-
-    if (endMs > lastEndMs) {
-      const gapSec = Math.round((endMs - lastEndMs) / 1000);
-      if (gapSec > 0) {
-        numberOfGaps++;
-        largestGapSeconds = Math.max(largestGapSeconds, gapSec);
+      // Check gap after last recording
+      if (endMs > merged[merged.length - 1]!.endMs) {
+        const finalGapSec = Math.round((endMs - merged[merged.length - 1]!.endMs) / 1000);
+        if (finalGapSec > 0) {
+          numberOfGaps++;
+          largestGapSeconds = Math.max(largestGapSeconds, finalGapSec);
+        }
       }
     }
 
@@ -234,26 +278,44 @@ export class RetentionEngineService {
       const now = Date.now();
       currentDays = Math.max(0, Math.round(((now - oldestRecordingAt.getTime()) / 86400_000) * 10) / 10);
 
-      // Calculate total recorded seconds and gaps
-      let recordedSeconds = 0;
-      let totalGapSeconds = 0;
+      // Calculate total recorded seconds and gaps using merged intervals (P0-16)
+      const validClamped: Array<{ startMs: number; endMs: number }> = [];
+      for (const seg of sorted) {
+        const sStart = seg.startTime.getTime();
+        const sEnd = seg.endTime.getTime();
+        if (sEnd > sStart) {
+          validClamped.push({ startMs: sStart, endMs: sEnd });
+        }
+      }
+      validClamped.sort((a, b) => a.startMs - b.startMs || a.endMs - b.endMs);
 
-      for (let i = 0; i < sorted.length; i++) {
-        const seg = sorted[i]!;
-        const segDuration = Math.max(0, Math.round((seg.endTime.getTime() - seg.startTime.getTime()) / 1000));
-        recordedSeconds += segDuration;
-
-        if (i > 0) {
-          const prevEnd = sorted[i - 1]!.endTime.getTime();
-          const curStart = seg.startTime.getTime();
-          if (curStart - prevEnd > 5000) {
-            totalGapSeconds += Math.round((curStart - prevEnd) / 1000);
+      const merged: Array<{ startMs: number; endMs: number }> = [];
+      for (const seg of validClamped) {
+        if (merged.length === 0) {
+          merged.push({ startMs: seg.startMs, endMs: seg.endMs });
+        } else {
+          const last = merged[merged.length - 1]!;
+          if (seg.startMs <= last.endMs) {
+            last.endMs = Math.max(last.endMs, seg.endMs);
+          } else {
+            merged.push({ startMs: seg.startMs, endMs: seg.endMs });
           }
         }
       }
 
-      const lastSegDuration = Math.max(0, Math.round((sorted[sorted.length - 1]!.endTime.getTime() - sorted[sorted.length - 1]!.startTime.getTime()) / 1000));
-      const totalExpectedSeconds = Math.max(1, Math.round((newestRecordingAt.getTime() - oldestRecordingAt.getTime()) / 1000) + lastSegDuration);
+      let recordedSeconds = 0;
+      let totalGapSeconds = 0;
+      for (let i = 0; i < merged.length; i++) {
+        recordedSeconds += Math.round((merged[i]!.endMs - merged[i]!.startMs) / 1000);
+        if (i > 0) {
+          const gapMs = merged[i]!.startMs - merged[i - 1]!.endMs;
+          if (gapMs > 5000) {
+            totalGapSeconds += Math.round(gapMs / 1000);
+          }
+        }
+      }
+
+      const totalExpectedSeconds = Math.max(1, Math.round((sorted[sorted.length - 1]!.endTime.getTime() - oldestRecordingAt.getTime()) / 1000));
       coveragePercent = Math.min(100, Math.max(0, Math.round((recordedSeconds / totalExpectedSeconds) * 10000) / 100));
 
       const continuousSeconds = Math.max(0, totalExpectedSeconds - totalGapSeconds);
@@ -606,8 +668,53 @@ export class RetentionEngineService {
       );
     }
 
-    // 2. Physical Deletion via Storage Backend
-    await params.backendDeleteFn(params.storageLocator);
+    // 2. Regulatory Minimum Floor Check (P0-14: Enforce regulatory floor before allowing prune)
+    if (params.segmentStartTime) {
+      const effectivePolicy = this.policyResolver.resolve({
+        cameraId: params.cameraId,
+        branchId: params.branchId,
+        tenantId: params.tenantId,
+      });
+      const minimumFloorDays = effectivePolicy.minimumRetentionDays || 90;
+      const minRetainUntil = new Date(segTime.getTime() + minimumFloorDays * 86400_000);
+      const now = new Date();
+      if (minRetainUntil.getTime() > now.getTime()) {
+        retentionAuditService.recordEvent({
+          tenantId: params.tenantId,
+          entityType: "CAMERA",
+          entityId: params.cameraId,
+          eventType: "DELETION_DENIED",
+          actorType: "SYSTEM",
+          actorId: params.actor,
+          notes: `DENIED deletion of segment ${params.segmentId}: age is within regulatory minimum retention floor (${minimumFloorDays} days required by policy).`,
+        });
+        throw new Error(
+          `RegulatoryRetentionFloorViolation: Segment '${params.segmentId}' cannot be deleted. Required retention floor is ${minimumFloorDays} days (protected until ${minRetainUntil.toISOString()}).`
+        );
+      }
+    }
+
+    // 3. Physical & Transactional Database Deletion (P0-13)
+    if (pool) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`SELECT id FROM recording_segments WHERE id = $1 FOR UPDATE`, [params.segmentId]);
+        await params.backendDeleteFn(params.storageLocator);
+        await client.query(
+          `UPDATE recording_segments SET status = 'deleted', updated_at = now() WHERE id = $1`,
+          [params.segmentId],
+        );
+        await client.query("COMMIT");
+      } catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+      } finally {
+        client.release();
+      }
+    } else {
+      await params.backendDeleteFn(params.storageLocator);
+    }
 
     // 3. Record Audit Log
     const audit = retentionAuditService.recordEvent({
