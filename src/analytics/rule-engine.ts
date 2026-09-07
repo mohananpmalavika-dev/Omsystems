@@ -32,7 +32,7 @@ export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
     if (hasAlertingMatch) types.push("watchlist-match");
   }
   if (["face", "face-detection", "face-recognition"].includes(event.detectionType)) {
-    const identity = event.metadata?.identityMatch;
+    const identity = faceIdentity(event.metadata);
     const matched = identity !== null && typeof identity === "object" && !Array.isArray(identity) &&
       (identity as Record<string, unknown>).matched === true;
     types.push(matched ? "face-recognition" : "unknown-person");
@@ -46,7 +46,7 @@ export function isTerminalAlertStatus(status: AnalyticsAlertStatus) {
 
 export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
   if (rule.detectionType === "face-recognition") {
-    const identity = metadata?.identityMatch;
+    const identity = faceIdentity(metadata);
     const name = identity && typeof identity === "object" && !Array.isArray(identity)
       ? (identity as Record<string, unknown>).personName : undefined;
     return typeof name === "string" && name.trim()
@@ -60,7 +60,7 @@ export function analyticsAlertTitle(rule: AnalyticsRule, metadata?: Record<strin
 
 export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record<string, unknown>) {
   if (rule.detectionType === "face-recognition") {
-    const identity = metadata?.identityMatch;
+    const identity = faceIdentity(metadata);
     const name = identity && typeof identity === "object" && !Array.isArray(identity)
       ? (identity as Record<string, unknown>).personName : undefined;
     return typeof name === "string" && name.trim()
@@ -69,6 +69,20 @@ export function analyticsAlertDescription(rule: AnalyticsRule, metadata?: Record
   }
   if (rule.detectionType === "unknown-person") return "An unrecognised face was detected in this configured camera area.";
   return `Rule \"${rule.name}\" matched.`;
+}
+
+function faceIdentity(metadata?: Record<string, unknown>) {
+  const source = metadata?.identityMatch ?? metadata?.faceMatch;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined;
+  const value = source as Record<string, unknown>;
+  const candidate = value.candidate;
+  const candidateName = candidate && typeof candidate === "object" && !Array.isArray(candidate)
+    ? (candidate as Record<string, unknown>).name : undefined;
+  return {
+    ...value,
+    matched: value.matched === true || Boolean(candidateName),
+    personName: typeof value.personName === "string" ? value.personName : candidateName,
+  };
 }
 
 function objectClassesMatch(rule: AnalyticsRule, event: AnalyticsEventInput) {
