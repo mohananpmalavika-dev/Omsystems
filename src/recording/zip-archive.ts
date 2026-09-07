@@ -11,7 +11,9 @@ import {
 } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { Transform, PassThrough } from "node:stream";
-import * as archiver from "archiver";
+import * as archiverNamespace from "archiver";
+type ArchiverFactory = (format: string, options?: archiverNamespace.ArchiverOptions) => archiverNamespace.Archiver;
+const archiver = ((archiverNamespace as any).default || archiverNamespace) as unknown as ArchiverFactory;
 
 export interface ZipEntry {
   name: string;
@@ -151,7 +153,7 @@ export async function packageEvidenceToZip64(
       },
     });
 
-    const archive = new archiver.ZipArchive({
+    const archive = archiver("zip", {
       zlib: { level: 9 },
       forceZip64: true, // Mandatory ZIP64 support (P0-02)
     });
@@ -224,7 +226,7 @@ export async function packageDirectoryToZip(
  */
 export async function createZipArchiveAsync(entries: ZipEntry[]): Promise<Buffer> {
   return new Promise((resolvePromise, rejectPromise) => {
-    const archive = new archiver.ZipArchive({
+    const archive = archiver("zip", {
       zlib: { level: 9 },
       forceZip64: true,
     });
