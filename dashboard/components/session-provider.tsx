@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { authApi } from '@/lib/api-client';
 import { setupSessionGuard, teardownSessionGuard } from '@/lib/session-guard';
 import { isPublicDashboardRoute } from '@/lib/session-navigation';
+import { redirectToLogin } from '@/lib/session-guard';
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -39,7 +40,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // The API client handles confirmed invalid sessions and preserves the
         // destination. An unavailable auth service must not cause a login loop.
         const status = (error as { statusCode?: number })?.statusCode;
-        if (status === 401 || status === 403) return;
+        if (status === 400 || status === 401 || status === 403) {
+        setConnectionError(false);
+        redirectToLogin('expired');
+        return;
+      }
         setConnectionError(true);
         retryTimer = setTimeout(() => void validateSession(), 5000);
       }

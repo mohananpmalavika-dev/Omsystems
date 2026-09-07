@@ -96,7 +96,20 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   }
   if (routePath === "/v1/auth/refresh") {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
-    if (refreshToken) requestBody = JSON.stringify({ refreshToken });
+    if (refreshToken) {
+      requestBody = JSON.stringify({ refreshToken });
+    } else {
+      let parsedBody: any = null;
+      try {
+        parsedBody = requestBody ? JSON.parse(requestBody) : null;
+      } catch {}
+      if (!parsedBody?.refreshToken) {
+        return Response.json(
+          { error: "no_refresh_token", message: "No refresh token available" },
+          { status: 401, headers: { "cache-control": "no-store" } },
+        );
+      }
+    }
   }
 
   // Only include Content-Type and send a body when the body is non-empty
