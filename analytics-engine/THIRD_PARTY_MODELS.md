@@ -6,6 +6,8 @@ not call a paid inference API.
 
 ## YOLOX Tiny COCO object detector
 
+
+
 - Project: Megvii YOLOX
 - Upstream: https://github.com/Megvii-BaseDetection/YOLOX
 - Artifact: official `0.1.1rc0` `yolox_tiny.onnx` release asset
