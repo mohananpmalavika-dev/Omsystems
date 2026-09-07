@@ -68,7 +68,7 @@ export function GlobalAlertCenter() {
   const load = useCallback(async () => {
     if (!enabledForRoute) return;
     try {
-      const response = await fetch("/api/control/v1/alerts/command-center?limit=200", {
+      const response = await fetch("/v1/alerts/command-center?limit=200", {
         cache: "no-store",
         credentials: "include",
         signal: AbortSignal.timeout(3_000),
@@ -97,7 +97,7 @@ export function GlobalAlertCenter() {
     if (!enabledForRoute) return;
     void load();
 
-    const events = new EventSource("/api/control/v1/alerts/events", { withCredentials: true });
+    const events = new EventSource("/v1/alerts/events", { withCredentials: true });
 
     // On created — fetch enriched single alert and insert
     events.addEventListener("alert.created", async (ev: MessageEvent) => {
@@ -105,7 +105,7 @@ export function GlobalAlertCenter() {
         const payload = JSON.parse(ev.data);
         const alertId = payload.alertId as string;
         if (!alertId) return;
-        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
+        const response = await fetch(`/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
           cache: "no-store",
           credentials: "include",
           signal: AbortSignal.timeout(3_000),
@@ -143,7 +143,7 @@ export function GlobalAlertCenter() {
         const payload = JSON.parse(ev.data);
         const alertId = payload.alertId as string;
         if (!alertId) return;
-        const response = await fetch(`/api/control/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
+        const response = await fetch(`/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
           cache: "no-store",
           credentials: "include",
           signal: AbortSignal.timeout(3_000),
@@ -195,6 +195,31 @@ export function GlobalAlertCenter() {
     setError(undefined);
     setShowImageModal(false);
     setEvidenceMode("live");
+  }, [current?.id]);
+
+  useEffect(() => {
+    if (!current || !hasManagedEvidence(current)) return;
+    let cancelled = false;
+    let timer: number | undefined;
+    const refreshEvidence = async () => {
+      try {
+        const response = await fetch(`/v1/alerts/${encodeURIComponent(current.id)}/evidence/status`, {
+          cache: "no-store", credentials: "include", signal: AbortSignal.timeout(3_000),
+        });
+        if (!response.ok || cancelled) return;
+        const status = await response.json() as AlertEvidenceCaptureStatus;
+        if (cancelled) return;
+        setEvidenceStatus(status);
+        if (["queued", "capturing"].includes(status.state)) {
+          timer = window.setTimeout(refreshEvidence, 4_000);
+        }
+      } catch {
+        // The snapshot endpoint supplies a generated, reviewable fallback when
+        // evidence capture is unavailable, so this must not block triage.
+      }
+    };
+    void refreshEvidence();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
   }, [current?.id]);
 
   const startLive = useCallback(async (alert: CommandAlert) => {
@@ -380,7 +405,7 @@ export function GlobalAlertCenter() {
                     title="Click to enlarge snapshot image"
                   >
                     <img
-                      src={`/api/control/v1/alerts/${current.id}/evidence/snapshot`}
+                      src={dashboardEvidenceUrl(current.snapshotReference ?? `/v1/alerts/${current.id}/evidence/snapshot`)}
                       alt={current.title}
                       className="max-h-full max-w-full object-contain"
                     />
@@ -391,6 +416,15 @@ export function GlobalAlertCenter() {
                       </span>
                     </div>
                   </div>
+                ) : evidenceMode === "clip" ? (
+                  <video
+                    className="h-full w-full bg-black object-contain"
+                    controls
+                    playsInline
+                    src={dashboardEvidenceUrl(current.clipReference ?? `/v1/alerts/${current.id}/evidence/clip`)}
+                  >
+                    Your browser cannot play this evidence clip.
+                  </video>
                 ) : session?.hls?.url ? (
                   <HlsPlayer
                     url={session.hls.url}
@@ -503,7 +537,7 @@ export function GlobalAlertCenter() {
         <IncidentImageModal
           isOpen={showImageModal}
           onClose={() => setShowImageModal(false)}
-          imageUrl={`/api/control/v1/alerts/${current.id}/evidence/snapshot`}
+          imageUrl={dashboardEvidenceUrl(current.snapshotReference ?? `/v1/alerts/${current.id}/evidence/snapshot`)}
           title={current.title}
           cameraName={current.cameraName || current.cameraId}
           branchName={current.branchName || current.branchId}

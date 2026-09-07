@@ -969,7 +969,7 @@ export default function IncidentDetailPage() {
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`/api/control/v1/alerts/${incident.id}/evidence/snapshot`}
+                    src={`/v1/incidents/${incident.id}/snapshot`}
                     alt={incident.title || "Incident snapshot"}
                     style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
@@ -1903,7 +1903,7 @@ export default function IncidentDetailPage() {
         <IncidentImageModal
           isOpen={showImageModal}
           onClose={() => setShowImageModal(false)}
-          imageUrl={`/api/control/v1/alerts/${incident.id}/evidence/snapshot`}
+          imageUrl={`/v1/incidents/${incident.id}/snapshot`}
           title={incident.title || "Incident Visual Snapshot"}
           cameraName={incident.branchId || "Incident Camera"}
           branchName={incident.branchId}

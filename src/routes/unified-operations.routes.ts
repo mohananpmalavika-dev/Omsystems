@@ -75,7 +75,10 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
     const params = request.params as any;
     const user = requireUser(request, reply);
     if (!user) return;
-    const decision = store ? await store.checkAccess(user, "recording:view", params.id) : undefined;
+    // The fleet board is scoped with live:view. Use the same branch-level
+    // capability for its telemetry workspace so an operator is not sent to a
+    // link they are already authorized to see and then rejected on arrival.
+    const decision = store ? await store.checkAccess(user, "live:view", params.id) : undefined;
     if (!decision?.allowed) return reply.code(403).send({ success: false, error: "Access denied" });
     const workspace = await unifiedOperationsService.getBranch360Workspace(params.id, user.tenantId, store, user);
     if (!workspace) return reply.code(404).send({ success: false, error: "Branch workspace not found" });

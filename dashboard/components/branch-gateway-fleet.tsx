@@ -45,7 +45,7 @@ export function BranchGatewayFleet() {
       let offset = 0;
       let total = 0;
       do {
-        const response = await fetch(`/api/control/v1/operations/health/branches?limit=${PAGE_SIZE}&offset=${offset}`, { cache: "no-store" });
+        const response = await fetch(`/v1/operations/health/branches?limit=${PAGE_SIZE}&offset=${offset}`, { cache: "no-store", credentials: "include" });
         if (!response.ok) throw new Error("gateway_fleet_unavailable");
         const body = await response.json() as { data: BranchPage };
         collected.push(...body.data.branches);

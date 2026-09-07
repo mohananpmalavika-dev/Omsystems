@@ -877,7 +877,7 @@ export default function AiAlertsIncidentHubPage() {
           <IncidentMediaModal
             isOpen={Boolean(activeMediaAlert)}
             onClose={() => setActiveMediaAlert(null)}
-            imageUrl={`/api/control/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
+            imageUrl={`/v1/alerts/${activeMediaAlert.id}/evidence/snapshot`}
             snapshotUrl={`/v1/analytics/alerts/${activeMediaAlert.id}/snapshot`}
             videoUrl={activeMediaAlert.videoClipUrl || ("/v1/analytics/alerts/" + activeMediaAlert.id + "/clip")}
             title={activeMediaAlert.title}
