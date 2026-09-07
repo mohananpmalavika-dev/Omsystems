@@ -574,9 +574,11 @@ export function CameraGrid({
           justify-content: space-between;
           align-items: center;
           padding: 12px 16px;
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+          background: #0d1a2d;
+          border-radius: 10px;
+          border: 1px solid #1c324f;
+          box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+          color: #cbd5e1;
         }
 
         .grid-size-selector {
@@ -586,9 +588,10 @@ export function CameraGrid({
 
         .grid-size-selector button {
           padding: 8px 12px;
-          border: 1px solid #e5e7eb;
+          border: 1px solid #1c324f;
           border-radius: 6px;
-          background: white;
+          background: #11223b;
+          color: #f8fafc;
           cursor: pointer;
           display: flex;
           align-items: center;

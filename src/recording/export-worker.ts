@@ -578,9 +578,6 @@ export class ExportWorker {
         if (cameras.length > 1 || job.exportType === "multi-camera") {
           for (const camera of cameras) {
             const camValidations = validationResults.filter((v) => v.cameraId === camera.cameraId);
-            const camValidSorted = camValidations
-              .filter((v) => v.isValid)
-              .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
             const camResult = await this.createViewingCopy(
               jobDir,
               camera.cameraId,
