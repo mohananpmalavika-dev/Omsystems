@@ -202,14 +202,23 @@ export async function registerRecordingIndexRoutes(
       try {
         const registered = await service.registerSegment({
           ...seg,
+          cameraId: seg.cameraId,
           tenantId: body.tenantId,
           branchId: body.branchId,
           startTime: new Date(seg.startTime),
           endTime: new Date(seg.endTime),
+          deviceStartTime: seg.deviceStartTime ? new Date(seg.deviceStartTime) : undefined,
+          deviceEndTime: seg.deviceEndTime ? new Date(seg.deviceEndTime) : undefined,
           storageTier: seg.storageTier as StorageTier | undefined,
           archiveState: seg.archiveState as ArchiveState | undefined,
+          keyframes: seg.keyframes?.map((k) => ({
+            timestamp: new Date(k.timestamp),
+            pts: k.pts,
+            dts: k.dts,
+            byteOffset: k.byteOffset,
+          })),
         });
-        results.push({ id: registered.id, status: "COMMITTED" });
+        results.push({ id: registered.segmentId, status: "COMMITTED" });
       } catch (err: any) {
         results.push({ id: seg.id || "unknown", status: "FAILED", error: err.message });
       }

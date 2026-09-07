@@ -171,8 +171,9 @@ export async function registerInvestigationWorkspaceRoutes(
       workspace.incident.tenantId &&
       request.currentUser?.tenantId &&
       workspace.incident.tenantId !== request.currentUser.tenantId &&
-      request.currentUser.role !== 'system' &&
-      request.currentUser.role !== 'global-admin'
+      (request.currentUser.role as string) !== 'system' &&
+      (request.currentUser.role as string) !== 'global-admin' &&
+      request.currentUser.role !== 'super_admin'
     ) {
       return reply.code(403).send({ error: 'access_denied' });
     }

@@ -272,6 +272,7 @@ export interface ExportManifest {
   }>;
   watermarkApplied: boolean;
   redactionApplied: boolean;
+  redactionProfile?: string;
   audioIncluded: boolean;
   signingAlgorithm: string;
   signingKeyId: string;

@@ -13,6 +13,7 @@ import type {
   EvidenceCustodyEvent,
   CustodyEventType,
 } from "../domain/forensic-evidence.types.js";
+import type { Pool } from "pg";
 import { pool } from "../../database/pool.js";
 import {
   canonicalJsonStringify,
