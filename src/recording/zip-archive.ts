@@ -11,7 +11,9 @@ import {
 } from "node:fs";
 import { basename, join, relative } from "node:path";
 import { Transform, PassThrough } from "node:stream";
-import archiver from "archiver";
+import * as archiverNamespace from "archiver";
+type ArchiverFactory = (format: string, options?: archiverNamespace.ArchiverOptions) => archiverNamespace.Archiver;
+const archiver = ((archiverNamespace as any).default || archiverNamespace) as unknown as ArchiverFactory;
 
 export interface ZipEntry {
   name: string;

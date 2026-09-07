@@ -181,6 +181,8 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
       { pattern: /fixed\s+branch\s+fleet/i, rule: "NO_FIXED_BRANCH_FLEET", message: "Production code must not use fixed branch fleets." },
       { pattern: /fixed\s+retention\s+percentages/i, rule: "NO_FIXED_RETENTION_METRICS", message: "Production code must not use fixed retention percentages." },
       { pattern: /fixed\s+compliance\s+figures/i, rule: "NO_FIXED_COMPLIANCE_FIGURES", message: "Production code must not use fixed compliance figures." },
+      { pattern: /Buffer\.from\(['"]REDACTED_PRIVACY_BLUR_V1['"]\)/, rule: "NO_FAKE_REDACTION_HASHING", message: "Synthetic redaction hashes are strictly forbidden in forensic evidence services (P0-07)." },
+      { pattern: /authority.*=\s*new\s+Map/i, rule: "NO_IN_MEMORY_MAP_AUTHORITY", message: "In-memory Map must never be used as authority for legal holds, custody, or retention." },
     ];
 
     for (const fp of forbiddenPatterns) {
@@ -205,6 +207,20 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
         line: lineNum,
         rule: "NO_SILENT_ERROR_SWALLOWING",
         message: "Forensic, custody, legal-hold, and retention operations must never silently swallow errors with empty catch blocks.",
+        snippet: line.trim(),
+      });
+    }
+
+    // Check 8: No full-file readFileSync buffer buffering into archive.append
+    if (
+      (relPath.includes("zip-archive") || relPath.includes("export-worker")) &&
+      /archive\.append\(\s*readFileSync\(/.test(line)
+    ) {
+      violations.push({
+        file: relPath,
+        line: lineNum,
+        rule: "NO_FULL_FILE_BUFFER_ZIP",
+        message: "ZIP packaging must stream files to disk using streaming pipes, never buffering entire files into memory (P0-01).",
         snippet: line.trim(),
       });
     }
@@ -265,7 +281,7 @@ export async function runProductionTruthVerification(baseDir = process.cwd()): P
 }
 
 async function main() {
-  console.log("🔍 Scanning Sentinel Grid codebase for production simulation and mock success violations...\n");
+  console.log("🔍 Scanning KryptoVision codebase for production simulation and mock success violations...\n");
   const result = await runProductionTruthVerification();
 
   console.log(`📁 Total production files scanned: ${result.totalFilesScanned}`);

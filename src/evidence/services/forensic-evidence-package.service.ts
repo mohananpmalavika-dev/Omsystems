@@ -148,7 +148,7 @@ export class ForensicEvidencePackageService {
       ntpSynchronized: clockManifest ? clockManifest.clockHealthStatus === 'HEALTHY' : (clockOffsetMs !== undefined ? Math.abs(clockOffsetMs) < 2000 : false),
       ntpServer: clockManifest?.ntpSource,
       clockDriftMsPerDay: undefined,
-      clockHealthStatus: clockManifest?.clockHealthStatus || (clockOffsetMs === undefined ? 'DEGRADED' : Math.abs(clockOffsetMs) > 30000 ? 'CRITICAL' : Math.abs(clockOffsetMs) > 5000 ? 'WARNING' : 'HEALTHY'),
+      clockHealthStatus: clockManifest?.clockHealthStatus || (clockOffsetMs === undefined ? 'CRITICAL' : Math.abs(clockOffsetMs) > 30000 ? 'CRITICAL' : Math.abs(clockOffsetMs) > 5000 ? 'WARNING' : 'HEALTHY'),
       forensicConfidence: clockManifest?.forensicTimestampConfidence || (clockOffsetMs === undefined ? 'DEGRADED' : Math.abs(clockOffsetMs) < 5000 ? 'HIGH' : Math.abs(clockOffsetMs) <= 30000 ? 'MEDIUM' : 'DEGRADED'),
     };
 
