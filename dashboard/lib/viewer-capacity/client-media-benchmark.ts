@@ -334,6 +334,7 @@ export async function runClientHardwareBenchmark(): Promise<ClientMeasuredProfil
     if (typeof fetch !== "undefined") {
       await fetch("/v1/media/scheduler/profile", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(profile),
       });

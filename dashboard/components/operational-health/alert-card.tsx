@@ -3,10 +3,8 @@
  * Displays operational alert with action buttons
  */
 
-import { useState } from "react";
-import { AlertTriangle, Clock, User, CheckCircle, Wrench, Camera } from "lucide-react";
+import { AlertTriangle, Clock, User, CheckCircle, Wrench } from "lucide-react";
 import { OperationalAlert, getTimeAgo } from "@/lib/types/operational-health";
-import { IncidentImageModal } from "@/components/incident-image-modal";
 
 interface AlertCardProps {
   alert: OperationalAlert;
@@ -25,7 +23,6 @@ export function AlertCard({
   onCreateWorkOrder,
   compact = false 
 }: AlertCardProps) {
-  const [showImage, setShowImage] = useState(false);
   const getSeverityColor = () => {
     switch (alert.severity) {
       case 'critical': return 'bg-red-50 border-red-200';
@@ -198,29 +195,11 @@ export function AlertCard({
               View Work Order
             </a>
           )}
-          <button
-            type="button"
-            onClick={() => setShowImage(true)}
-            className="btn-sm btn-secondary flex items-center gap-1 text-sky-600 dark:text-sky-400"
-            title="View camera snapshot"
-          >
-            <Camera size={14} />
-            View Image
-          </button>
         </div>
       )}
 
       {(alert.status === 'acknowledged' || alert.status === 'assigned') && (
         <div className="flex flex-wrap gap-2 pt-3 border-t border-current/10">
-          <button
-            type="button"
-            onClick={() => setShowImage(true)}
-            className="btn-sm btn-secondary flex items-center gap-1 text-sky-600 dark:text-sky-400"
-            title="View camera snapshot"
-          >
-            <Camera size={14} />
-            View Image
-          </button>
           {onResolve && (
             <button
               onClick={() => onResolve(alert.id)}
@@ -241,17 +220,6 @@ export function AlertCard({
           )}
         </div>
       )}
-
-      <IncidentImageModal
-        isOpen={showImage}
-        onClose={() => setShowImage(false)}
-        imageUrl={`/api/control/v1/alerts/${alert.id}/evidence/snapshot`}
-        title={alert.title}
-        cameraName={alert.deviceId || alert.componentType}
-        branchName={alert.branchName}
-        timestamp={alert.detectedAt}
-        severity={alert.severity.toUpperCase()}
-      />
     </div>
   );
 }

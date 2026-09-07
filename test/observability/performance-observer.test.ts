@@ -39,4 +39,21 @@ describe("performance observability", () => {
     expect(metric?.errorCount).toBe(1);
     expect(metric?.latencyPercentiles.count).toBe(2);
   });
+
+  it("normalizes numeric and string query literals to prevent high-cardinality telemetry", () => {
+    observer.recordQueryLatency("SELECT * FROM cameras WHERE branch_id = 101 AND name = 'Lobby'", 10);
+    observer.recordQueryLatency("SELECT * FROM cameras WHERE branch_id = 202 AND name = 'Vault'", 12);
+
+    const metrics = observer.getQueryMetrics();
+    expect(metrics).toHaveLength(1);
+    expect(metrics[0]?.totalExecutions).toBe(2);
+    expect(metrics[0]?.query).not.toContain("101");
+    expect(metrics[0]?.query).not.toContain("Lobby");
+  });
+
+  it("retains the timestamp of the latest observed endpoint sample", () => {
+    observer.recordEndpointLatency("/v1/cameras", "GET", 12);
+    const first = observer.getEndpointMetrics("/v1/cameras", "GET")[0]?.lastUpdated;
+    expect(first).toBeTruthy();
+  });
 });

@@ -41,11 +41,15 @@ export default function CreateIncidentPage() {
   useEffect(() => {
     async function loadBranches() {
       try {
-        const res = await fetch("/api/control/v1/branches");
+        const res = await fetch("/v1/operations/branches", { credentials: "include" });
         if (res.ok) {
           const json = await res.json();
           const list = Array.isArray(json) ? json : json.data || json.branches || [];
-          setBranches(list);
+          setBranches(list.map((branch: { id?: string; branchId?: string; name?: string; code?: string; branchCode?: string }) => ({
+            id: branch.id ?? branch.branchId ?? "",
+            name: branch.name ?? "Unnamed branch",
+            code: branch.code ?? branch.branchCode,
+          })).filter((branch: { id: string }) => Boolean(branch.id)));
         }
       } catch (err) {
         console.warn("Failed to fetch branches list:", err);

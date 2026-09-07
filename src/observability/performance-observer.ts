@@ -51,8 +51,8 @@ export interface PerformanceSnapshot {
 }
 
 class PerformanceObserver {
-  private endpointMetrics = new Map<string, { latencies: number[]; errors: number; successes: number }>();
-  private queryMetrics = new Map<string, { latencies: number[]; errors: number; executions: number }>();
+  private endpointMetrics = new Map<string, { latencies: number[]; errors: number; successes: number; lastUpdated: string }>();
+  private queryMetrics = new Map<string, { latencies: number[]; errors: number; executions: number; lastExecutedAt: string }>();
   private startTime = Date.now();
   private eventLoopLag = 0;
   private webVitals = new Map<string, number[]>();
@@ -64,20 +64,20 @@ class PerformanceObserver {
 
   private monitorEventLoop() {
     let lastCheck = Date.now();
-    setInterval(() => {
+    const timer = setInterval(() => {
       const now = Date.now();
-      const delta = now - lastCheck - 100; // 100ms interval
-      if (delta > 50) {
-        this.eventLoopLag = delta;
-      }
+      this.eventLoopLag = Math.max(0, now - lastCheck - 100);
       lastCheck = now;
     }, 100);
+    timer.unref();
   }
 
   recordEndpointLatency(path: string, method: string, durationMs: number, isError: boolean = false) {
+    if (!Number.isFinite(durationMs) || durationMs < 0) return;
     const key = `${method} ${path}`;
     if (!this.endpointMetrics.has(key)) {
-      this.endpointMetrics.set(key, { latencies: [], errors: 0, successes: 0 });
+      if (this.endpointMetrics.size >= 500) return;
+      this.endpointMetrics.set(key, { latencies: [], errors: 0, successes: 0, lastUpdated: new Date().toISOString() });
     }
 
     const metrics = this.endpointMetrics.get(key)!;
@@ -93,14 +93,17 @@ class PerformanceObserver {
     } else {
       metrics.successes++;
     }
+    metrics.lastUpdated = new Date().toISOString();
   }
 
   recordQueryLatency(query: string, durationMs: number, isError: boolean = false) {
+    if (!Number.isFinite(durationMs) || durationMs < 0) return;
     // Normalize query to group similar queries
     const normalizedQuery = this.normalizeQuery(query);
     
     if (!this.queryMetrics.has(normalizedQuery)) {
-      this.queryMetrics.set(normalizedQuery, { latencies: [], errors: 0, executions: 0 });
+      if (this.queryMetrics.size >= 500) return;
+      this.queryMetrics.set(normalizedQuery, { latencies: [], errors: 0, executions: 0, lastExecutedAt: new Date().toISOString() });
     }
 
     const metrics = this.queryMetrics.get(normalizedQuery)!;
@@ -115,6 +118,7 @@ class PerformanceObserver {
     if (isError) {
       metrics.errors++;
     }
+    metrics.lastExecutedAt = new Date().toISOString();
   }
 
   recordWebVital(metric: Record<string, unknown>) {
@@ -138,6 +142,9 @@ class PerformanceObserver {
       .replace(/\$\d+/g, '$N')
       .replace(/\$\d+::\w+/g, '$N::type')
       .replace(/'[^']*'/g, "'?'")
+      .replace(/\b\d+(?:\.\d+)?\b/g, '?')
+      .replace(/\s+/g, ' ')
+      .trim()
       .substring(0, 200);
   }
 
@@ -156,7 +163,7 @@ class PerformanceObserver {
           errorCount: v.errors,
           latencyPercentiles: this.calculatePercentiles(v.latencies),
           errorRate: v.errors > 0 ? (v.errors / (v.successes + v.errors)) * 100 : 0,
-          lastUpdated: new Date().toISOString(),
+          lastUpdated: v.lastUpdated,
         };
       });
   }
@@ -170,7 +177,7 @@ class PerformanceObserver {
         totalDurationMs: v.latencies.reduce((a, b) => a + b, 0),
         latencyPercentiles: this.calculatePercentiles(v.latencies),
         errorCount: v.errors,
-        lastExecutedAt: new Date().toISOString(),
+        lastExecutedAt: v.lastExecutedAt,
       }));
   }
 

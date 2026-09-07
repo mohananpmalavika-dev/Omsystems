@@ -485,7 +485,7 @@ export class AlertAudioService {
 
     // Forward to backend async
     if (typeof window !== "undefined" && typeof fetch !== "undefined") {
-      void fetch("/api/control/v1/alerts/audio/audit", {
+      void fetch("/v1/alerts/audio/audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

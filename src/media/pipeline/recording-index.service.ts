@@ -53,6 +53,9 @@ export class RecordingIndexService {
   }> {
     const fromTime = new Date(input.from).getTime();
     const toTime = new Date(input.to).getTime();
+    if (!Number.isFinite(fromTime) || !Number.isFinite(toTime) || fromTime > toTime) {
+      throw new Error("invalid_timeline_range");
+    }
 
     const result = input.cameraIds.map((cid) => {
       const camSegments = [...this.segments.values()].filter((s) => {
@@ -61,7 +64,11 @@ export class RecordingIndexService {
         return s.cameraId === cid && sEnd >= fromTime && sStart <= toTime;
       });
 
-      const camGaps = this.gaps.filter((g) => g.cameraId === cid);
+      const camGaps = this.gaps.filter((g) => {
+        const gapFrom = new Date(g.from).getTime();
+        const gapTo = new Date(g.to).getTime();
+        return g.cameraId === cid && Number.isFinite(gapFrom) && Number.isFinite(gapTo) && gapTo >= fromTime && gapFrom <= toTime;
+      });
 
       return {
         cameraId: cid,

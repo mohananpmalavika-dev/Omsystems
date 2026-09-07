@@ -43,7 +43,7 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
       return reply.send({ success: true, count: summary.attentionRequired?.length ?? 0, data: summary.attentionRequired ?? [] });
     } catch (err) {
       console.error("Failed to get attention required", err);
-      return reply.send({ success: true, count: 0, data: [] });
+      return reply.code(500).send({ success: false, error: "Failed to get attention required" });
     }
   };
 
@@ -61,7 +61,7 @@ export async function registerUnifiedOperationsRoutes(app: FastifyInstance, stor
     return reply.send({ success: true, count: branches.length, data: branches });
   } catch (err) {
     console.error('Failed to get branches', err);
-    return reply.send({ success: true, count: 0, data: [] });
+    return reply.code(500).send({ success: false, error: "Failed to get branch telemetry" });
   }
 };
 

@@ -332,6 +332,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.patch('/v1/incidents/:id', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = updateIncidentSchema.parse(request.body);
     
     const updated = await store.updateIncident(id, body);
@@ -355,6 +356,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.patch('/v1/incidents/:id/status', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = updateStatusSchema.parse(request.body);
     
     const updated = await store.updateIncidentStatus(id, body.status, request.currentUser.id, body.notes);
@@ -377,6 +379,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.post('/v1/incidents/:id/assign', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = assignSchema.parse(request.body);
     
     const updated = await store.assignIncident(id, body.userId, request.currentUser.id);
@@ -389,6 +392,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.post('/v1/incidents/:id/escalate', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = escalateSchema.parse(request.body);
     
     const updated = await store.escalateIncident(id, request.currentUser.id, body.reason, body.recipients);
@@ -401,6 +405,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.post('/v1/incidents/:id/close', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = z.object({ notes: z.string().max(2000).optional() }).parse(request.body);
     
     const updated = await store.closeIncident(id, request.currentUser.id, body.notes);
@@ -413,6 +418,7 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
 
   app.post('/v1/incidents/:id/reopen', async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    if (!await requireIncidentTenantAccess(request, reply, store, id)) return;
     const body = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(request.body);
     
     const updated = await store.reopenIncident(id, request.currentUser.id, body.reason);
@@ -1180,5 +1186,20 @@ export async function registerIncidentsRoutes(app: FastifyInstance, store: Contr
     
     return statistics;
   });
+}
+
+/** Keep mutation responses indistinguishable for missing and out-of-scope incidents. */
+async function requireIncidentTenantAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  incidentId: string,
+): Promise<boolean> {
+  const incident = await store.getIncident(incidentId);
+  if (!incident || incident.tenantId !== request.currentUser.tenantId) {
+    await reply.code(404).send({ error: "incident_not_found" });
+    return false;
+  }
+  return true;
 }
 

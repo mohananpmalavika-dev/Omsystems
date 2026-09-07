@@ -20,7 +20,7 @@ export async function performanceTrackingMiddleware(
     const isError = reply.raw.statusCode >= 400;
     
     getPerformanceObserver().recordEndpointLatency(
-      request.routeOptions.url ?? request.url,
+      request.routeOptions.url ?? request.url.split("?", 1)[0] ?? request.url,
       request.method,
       duration,
       isError
@@ -28,6 +28,10 @@ export async function performanceTrackingMiddleware(
   });
 }
 export async function registerPerformanceObservabilityRoutes(app: FastifyInstance) {
+  const boundedLimit = (value: string | undefined, fallback = 10) => {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, 50) : fallback;
+  };
   /**
    * GET /api/observability/performance/endpoints
    * Returns endpoint latency metrics with percentiles
@@ -111,7 +115,9 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
       
       // Calculate overall health score
       const endpoints = Array.from(snapshot.endpoints.values());
-      const avgErrorRate = endpoints.reduce((sum, e) => sum + e.errorRate, 0) / Math.max(1, endpoints.length);
+      const totalRequests = endpoints.reduce((sum, endpoint) => sum + endpoint.totalRequests, 0);
+      const totalErrors = endpoints.reduce((sum, endpoint) => sum + endpoint.errorCount, 0);
+      const avgErrorRate = totalRequests > 0 ? (totalErrors / totalRequests) * 100 : 0;
       const maxLatencyP99 = Math.max(...endpoints.map((e) => e.latencyPercentiles.p99), 0);
       
       const healthScore = Math.max(0, 100 - avgErrorRate - Math.min(maxLatencyP99 / 10, 50));
@@ -176,7 +182,7 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
       return reply.send({
         success: true,
         data: {
-          endpoints: metrics.slice(0, Math.min(parseInt(limit || '10'), 50)),
+          endpoints: metrics.slice(0, boundedLimit(limit)),
           timestamp: new Date().toISOString(),
         },
       });
@@ -200,7 +206,7 @@ export async function registerPerformanceObservabilityRoutes(app: FastifyInstanc
       return reply.send({
         success: true,
         data: {
-          queries: metrics.slice(0, Math.min(parseInt(limit || '10'), 50)),
+          queries: metrics.slice(0, boundedLimit(limit)),
           timestamp: new Date().toISOString(),
         },
       });

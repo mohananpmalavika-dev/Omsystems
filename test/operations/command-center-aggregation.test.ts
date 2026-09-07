@@ -14,7 +14,7 @@ describe("unified command center camera aggregation", () => {
     cameras[2]!.status = "degraded";
     cameras[3]!.status = "unknown";
 
-    const branches = await unifiedOperationsService.getFleetBranchSummaries("tenant-default", store, user);
+    const branches = await unifiedOperationsService.getFleetBranchSummaries(user!.tenantId, store, user);
     expect(branches).toHaveLength(1);
     expect(branches[0]!.cameras).toMatchObject({
       total: 8,
@@ -26,7 +26,7 @@ describe("unified command center camera aggregation", () => {
       unknown: 1,
     });
 
-    const summary = await unifiedOperationsService.getCommandCenterSummary("tenant-default", store, user);
+    const summary = await unifiedOperationsService.getCommandCenterSummary(user!.tenantId, store, user);
     expect(summary.branches.total).toBe(1);
     expect(summary.cameras).toMatchObject({ total: 8, working: 5, notWorking: 3 });
   });
@@ -34,7 +34,7 @@ describe("unified command center camera aggregation", () => {
   it("does not fall back to the full organization when a user has no live-view access", async () => {
     const store = new MemoryStore();
     const user = await store.getUser("user-evidence-officer");
-    const branches = await unifiedOperationsService.getFleetBranchSummaries("tenant-default", store, user);
+    const branches = await unifiedOperationsService.getFleetBranchSummaries(user!.tenantId, store, user);
 
     expect(branches).toHaveLength(0);
   });

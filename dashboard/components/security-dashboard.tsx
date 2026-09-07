@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -94,6 +94,7 @@ export default function SecurityDashboard() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     void fetchSecurityOperations();
@@ -102,10 +103,15 @@ export default function SecurityDashboard() {
   }, []);
 
   async function fetchSecurityOperations(isBackgroundRefresh = false) {
+    const sequence = ++requestSequence.current;
     if (!isBackgroundRefresh) setRefreshing(true);
 
     try {
-      const response = await fetch('/api/security/posture', { cache: 'no-store' });
+      const response = await fetch('/api/security/posture', {
+        cache: 'no-store',
+        credentials: 'include',
+        signal: AbortSignal.timeout(6_000),
+      });
       const data = await response.json().catch(() => null) as SecurityOperationsPosture | { message?: string } | null;
       if (!response.ok || !data || !('available' in data) || data.available !== true) {
         const message = data && 'message' in data && data.message
@@ -114,13 +120,19 @@ export default function SecurityDashboard() {
         throw new Error(message);
       }
 
-      setPosture(data);
-      setError(null);
+      if (sequence === requestSequence.current) {
+        setPosture(data);
+        setError(null);
+      }
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Unable to load live security operations data.');
+      if (sequence === requestSequence.current) {
+        setError(caught instanceof Error ? caught.message : 'Unable to load live security operations data.');
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (sequence === requestSequence.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }
 

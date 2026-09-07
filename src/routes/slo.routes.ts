@@ -92,7 +92,7 @@ export async function registerSloRoutes(app: FastifyInstance): Promise<void> {
     ) => {
       const body = req.body;
 
-      if (!body || typeof body.sloId !== "string") {
+      if (!body || typeof body.sloId !== "string" || typeof body.success !== "boolean") {
         return reply.status(400).send({
           error: "INVALID_BODY",
           message: "sloId (string) and success (boolean) are required",
@@ -104,6 +104,15 @@ export async function registerSloRoutes(app: FastifyInstance): Promise<void> {
           error: "UNKNOWN_SLO_ID",
           message: `Unknown SLO ID: ${body.sloId}`,
           validIds: SLO_ORDER,
+        });
+      }
+
+      const definition = SLO_DEFINITIONS[body.sloId as SloId];
+      if ((definition.kind === "LATENCY_P50_MS" || definition.kind === "LATENCY_P99_MS") &&
+          (!Number.isFinite(body.valueMs) || body.valueMs! < 0)) {
+        return reply.status(400).send({
+          error: "INVALID_LATENCY_VALUE",
+          message: `valueMs must be a non-negative number for ${body.sloId}`,
         });
       }
 

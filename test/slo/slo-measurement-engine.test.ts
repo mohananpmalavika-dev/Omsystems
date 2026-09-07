@@ -111,6 +111,16 @@ describe("SLO Measurement Engine — Unit Tests", () => {
     expect(win.errorBudgetUsedPct).toBeGreaterThan(100);
   });
 
+  it("derives latency success from the measured duration instead of caller input", () => {
+    for (let i = 0; i < 10; i++) {
+      engine.record(sample("TIMELINE_QUERY", 2_000, true));
+    }
+    const win = engine.computeWindow("TIMELINE_QUERY");
+    expect(win.goodSamples).toBe(0);
+    expect(win.badSamples).toBe(10);
+    expect(win.status).toBe("BREACH");
+  });
+
   it("reports WARNING when budget is 75-99% consumed for a latency SLO", () => {
     // Budget = 1% of 100 samples = 1 bad sample allowed
     // At exactly 1 bad sample: 100% used → BREACH

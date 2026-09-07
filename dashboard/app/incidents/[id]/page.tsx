@@ -325,7 +325,7 @@ export default function IncidentDetailPage() {
     if (!taskToComplete) return;
     setCompletingTask(true);
     try {
-      const res = await fetch(`/api/control/v1/tasks/${taskToComplete.id}/complete`, {
+      const res = await fetch(`/v1/tasks/${taskToComplete.id}/complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ completionNotes: taskCompletionNotes.trim() || undefined }),
@@ -441,7 +441,7 @@ export default function IncidentDetailPage() {
   // Approve Report
   async function handleApproveReport(reportId: string) {
     try {
-      const res = await fetch(`/api/control/v1/incident-reports/${reportId}/approve`, {
+      const res = await fetch(`/v1/incident-reports/${reportId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),

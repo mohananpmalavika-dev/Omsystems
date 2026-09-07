@@ -269,8 +269,11 @@ export function GlobalAlertCenter() {
       });
       if (response.status === 409) {
         setError("This alert was updated by another operator. The queue has been refreshed.");
+        await load();
+        return;
       } else if (!response.ok) {
-        throw new Error("alert_action_failed");
+        const body = await response.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+        throw new Error(typeof body?.message === "string" ? body.message : typeof body?.error === "string" ? body.error : "alert_action_failed");
       }
 
       // Stop repeating audio alarm immediately on successful ACK
@@ -281,8 +284,9 @@ export function GlobalAlertCenter() {
       setManualAlertId(undefined);
       setDismissed((items) => new Set(items).add(alert.id));
       await load();
-    } catch {
-      setError(`Unable to ${action} this alert. Check your permission and connection.`);
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : "Check your permission and connection.";
+      setError(`Unable to ${action} this alert: ${message}`);
     } finally {
       setBusy(false);
     }

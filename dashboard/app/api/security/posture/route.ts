@@ -11,7 +11,9 @@ const EDGE_BRIDGE_SHARED_KEY = process.env.EDGE_BRIDGE_SHARED_KEY || "";
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionToken = request.cookies.get("sentinel_access")?.value;
+    const bearerToken = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1];
+    const sessionToken = request.cookies.get("sentinel_access")?.value ??
+      request.headers.get("x-sentinel-session") ?? bearerToken;
     if (!sessionToken) {
       return NextResponse.json(
         { error: "unauthenticated", message: "Session token required" },
@@ -28,14 +30,15 @@ export async function GET(request: NextRequest) {
           : {}),
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(5_000),
     });
 
     if (!response.ok) {
       const message = `Control plane returned ${response.status}`;
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         return NextResponse.json(
-          { error: "unauthenticated", message },
-          { status: 401 },
+          { error: response.status === 401 ? "unauthenticated" : "forbidden", message },
+          { status: response.status },
         );
       }
       return NextResponse.json(
@@ -45,7 +48,9 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await response.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, {
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_error";
     console.error("Security posture API error:", message);

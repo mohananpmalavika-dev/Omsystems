@@ -149,7 +149,7 @@ export class VmsCounter {
 
 export class VmsHistogram {
   private buckets: number[];
-  private samples = new Map<string, { count: number; sum: number; bucketCounts: Map<number, number>; labels?: MetricLabels }>();
+  private samples = new Map<string, { count: number; sum: number; bucketCounts: Map<number, number>; values: number[]; labels?: MetricLabels }>();
 
   constructor(
     public readonly name: string,
@@ -165,12 +165,14 @@ export class VmsHistogram {
     if (!sample) {
       const bucketCounts = new Map<number, number>();
       for (const b of this.buckets) bucketCounts.set(b, 0);
-      sample = { count: 0, sum: 0, bucketCounts, labels };
+      sample = { count: 0, sum: 0, bucketCounts, values: [], labels };
       this.samples.set(key, sample);
     }
 
     sample.count++;
     sample.sum += value;
+    sample.values.push(value);
+    if (sample.values.length > 10_000) sample.values.splice(0, sample.values.length - 10_000);
 
     for (const b of this.buckets) {
       if (value <= b) {
@@ -207,6 +209,16 @@ export class VmsHistogram {
 
   clear(): void {
     this.samples.clear();
+  }
+
+  quantile(percentile: number, labels?: MetricLabels): number | null {
+    if (!Number.isFinite(percentile) || percentile < 0 || percentile > 1) return null;
+    const values = Array.from(this.samples.values())
+      .filter((sample) => !labels || Object.entries(labels).every(([key, value]) => String(sample.labels?.[key]) === String(value)))
+      .flatMap((sample) => sample.values)
+      .sort((a, b) => a - b);
+    if (values.length === 0) return null;
+    return values[Math.min(values.length - 1, Math.floor(values.length * percentile))] ?? null;
   }
 }
 
@@ -337,15 +349,22 @@ export class VmsMetricsRegistry {
    * Returns structured snapshot for Digital Twin & UI ingestion
    */
   public getMetricsSnapshot(): Record<string, unknown> {
+    const cameraFps = this.cameraStreamFps.entries().map((entry) => entry.value);
+    const cameraBitrates = this.cameraBitrateKbps.entries().map((entry) => entry.value);
+    const cameraLoss = this.cameraPacketLossPct.entries().map((entry) => entry.value);
+    const storageFreeBytes = this.storageFreeBytes.entries().reduce((total, entry) => total + entry.value, 0);
+    const storageTotalBytes = this.storageTotalBytes.entries().reduce((total, entry) => total + entry.value, 0);
+    const average = (values: number[]) => values.length ? values.reduce((total, value) => total + value, 0) / values.length : null;
+    const usagePct = storageTotalBytes > 0 ? ((storageTotalBytes - storageFreeBytes) / storageTotalBytes) * 100 : null;
     return {
       timestamp: new Date().toISOString(),
       cameras: {
         totalMonitored: this.cameraOnline.entries().length,
         onlineCount: this.cameraOnline.entries().filter((e) => e.value === 1).length,
         offlineCount: this.cameraOnline.entries().filter((e) => e.value === 0).length,
-        averageFps: 25,
-        averageBitrateKbps: 3200,
-        averagePacketLossPct: 0.02,
+        averageFps: average(cameraFps),
+        averageBitrateKbps: average(cameraBitrates),
+        averagePacketLossPct: average(cameraLoss),
       },
       recording: {
         totalSegmentsWritten: this.recordingSegmentsWritten.entries().reduce((a, b) => a + b.value, 0),
@@ -364,10 +383,10 @@ export class VmsMetricsRegistry {
         egressMbps: this.mediaNodeBandwidthEgress.get({ node_id: e.labels?.node_id }),
       })),
       storage: {
-        freeTb: Math.round((this.storageFreeBytes.get({ pool_id: "pool-san-01" }) / (1024 ** 4)) * 10) / 10,
-        totalTb: Math.round((this.storageTotalBytes.get({ pool_id: "pool-san-01" }) / (1024 ** 4)) * 10) / 10,
-        usagePct: 25,
-        p95WriteLatencyMs: 8.4,
+        freeTb: storageFreeBytes > 0 ? Math.round((storageFreeBytes / (1024 ** 4)) * 10) / 10 : null,
+        totalTb: storageTotalBytes > 0 ? Math.round((storageTotalBytes / (1024 ** 4)) * 10) / 10 : null,
+        usagePct,
+        p95WriteLatencyMs: this.storageWriteLatency.quantile(0.95),
       },
     };
   }

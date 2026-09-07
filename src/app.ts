@@ -3265,6 +3265,13 @@ async function buildLiveSecurityOperationsPosture(
     store.listLatestOperationalTelemetry(user.tenantId, branchIds),
   ]);
   const edgeAgents = edgeAgentsByBranch.flat();
+  // Inventory access alone is not evidence that a branch is presently
+  // monitored. Count only branches that have an enrolled edge agent or a
+  // current telemetry observation in the live security operations summary.
+  const observedBranchIds = new Set([
+    ...edgeAgents.map((agent) => agent.branchId),
+    ...telemetry.map((item) => item.branchId),
+  ].filter((branchId) => branchIds.includes(branchId)));
   const now = new Date().toISOString();
 
   const onlineCameras = cameras.filter((camera) => camera.status === "online");
@@ -3355,7 +3362,7 @@ async function buildLiveSecurityOperationsPosture(
     summary: {
       state,
       operationalCoverage,
-      branchCount: branches.length,
+      branchCount: observedBranchIds.size,
       liveSignalCount: cameras.length + edgeAgents.length + recordingJobs.length + storageNodes.length + telemetry.length,
       latestObservation,
       telemetryConnected: hasTelemetry,

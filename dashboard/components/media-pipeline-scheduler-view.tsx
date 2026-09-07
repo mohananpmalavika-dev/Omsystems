@@ -1,446 +1,70 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
-import {
-  Layers,
-  Cpu,
-  Activity,
-  Zap,
-  CheckCircle2,
-  AlertTriangle,
-  Play,
-  RefreshCw,
-  Sliders,
-  SlidersHorizontal,
-  Video,
-  MonitorPlay,
-  HardDrive,
-  BarChart3,
-  Sparkles,
-  ShieldCheck,
-  Flame,
-  ArrowRight,
-  TrendingDown,
-  Clock,
-} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, AlertTriangle, CheckCircle2, Cpu, Layers, RefreshCw, Video } from "lucide-react";
+import { type ClientMeasuredProfile, runClientHardwareBenchmark } from "@/lib/viewer-capacity/client-media-benchmark";
 
-interface CodecCapability {
-  codec: string;
-  isHardwareAccelerated: boolean;
-  maxResolution: string;
-  maxFps: number;
-}
-
-interface ClientHardwareProfile {
-  fingerprint: string;
-  gpuModel: string;
-  renderer: string;
-  hardwareDecoder: string;
-  cpuCores: number;
-  memoryGb: number;
-  measuredDownlinkMbps: number;
-  measuredRttMs: number;
-  measuredPacketLossPct: number;
-  supportedCodecs: CodecCapability[];
-  maxSimultaneousDecodes: number;
-}
-
-const DEFAULT_CODECS: CodecCapability[] = [
-  { codec: "H.264 / AVC (High Profile)", isHardwareAccelerated: true, maxResolution: "3840x2160 (4K UHD)", maxFps: 60 },
-  { codec: "H.265 / HEVC (Main10)", isHardwareAccelerated: true, maxResolution: "7680x4320 (8K UHD)", maxFps: 60 },
-  { codec: "AV1 (AOMedia Video 1)", isHardwareAccelerated: true, maxResolution: "3840x2160 (4K UHD)", maxFps: 60 },
-  { codec: "VP9 (Profile 0/2)", isHardwareAccelerated: true, maxResolution: "3840x2160 (4K UHD)", maxFps: 60 },
-  { codec: "MJPEG (Legacy Snapshot)", isHardwareAccelerated: false, maxResolution: "1920x1080 (1080p)", maxFps: 30 },
-];
+type StreamDecision = { streamTier: string; targetResolution: { width: number; height: number }; targetFps: number; targetBitrateKbps: number; playbackMode: "LIVE_DECODE" | "LOW_FPS_KEYFRAME" | "PAUSED"; reason: string };
+type Schedule = { schedules: Record<string, StreamDecision>; activeLiveDecodes: number; activeKeyframeStreams: number; pausedStreams: number; hardwareDecodersUsed: number; hardwareDecodersLimit: number; totalAllocatedBandwidthKbps: number; measuredDownlinkBandwidthKbps: number; bandwidthHeadroomPct: number; totalBandwidthSavedPct: number; systemHealthStatus: "OPTIMAL" | "THROTTLED" | "CONGESTED" | "CRITICAL_OVERLOAD"; diagnostics: { limitingFactor: string; adaptationActionApplied?: string } };
+const GRID_OPTIONS = [4, 9, 16, 36, 64];
+const gridDimensions = (count: number) => { const columns = Math.ceil(Math.sqrt(count)); return { rows: Math.ceil(count / columns), columns }; };
+function decisionAppearance(decision?: StreamDecision) { if (!decision || decision.playbackMode === "PAUSED") return "bg-slate-900 border-slate-700 text-slate-500"; if (decision.playbackMode === "LOW_FPS_KEYFRAME") return "bg-amber-950/40 border-amber-500/40 text-amber-200"; if (decision.streamTier === "MAINSTREAM_1080P") return "bg-emerald-950/60 border-emerald-500/50 text-emerald-200"; return "bg-cyan-950/40 border-cyan-500/40 text-cyan-200"; }
 
 export function MediaPipelineSchedulerView() {
-  const [profile, setProfile] = useState<ClientHardwareProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [gridSize, setGridSize] = useState<number>(16); // 16 cameras (4x4)
-  const [activeDecodes, setActiveDecodes] = useState<number>(16);
-  const [clientFps, setClientFps] = useState<number>(59.8);
-  const [eventLoopLag, setEventLoopLag] = useState<number>(4.2);
-  const [bandwidthSavedPct, setBandwidthSavedPct] = useState<number>(78);
-  const [optimizationMode, setOptimizationMode] = useState<"smart" | "performance" | "bandwidth">("smart");
+  const [profile, setProfile] = useState<ClientMeasuredProfile | null>(null);
+  const [schedule, setSchedule] = useState<Schedule | null>(null);
+  const [gridSize, setGridSize] = useState(16);
+  const [renderFps, setRenderFps] = useState<number | null>(null);
+  const [eventLoopLag, setEventLoopLag] = useState<number | null>(null);
+  const [state, setState] = useState<"measuring" | "scheduling" | "ready" | "error">("measuring");
+  const [error, setError] = useState<string | null>(null);
+  const runId = useRef(0);
+  const schedulerSessionId = useRef<string | null>(null);
+  const cameras = useMemo(() => Array.from({ length: gridSize }, (_, index) => ({ id: `preview-camera-${index + 1}`, name: `Preview camera ${index + 1}`, isOnline: true })), [gridSize]);
 
-  // Client WebGL and Hardware Detection
-  const detectClientHardware = useCallback(() => {
+  const refresh = async () => {
+    const currentRun = ++runId.current;
+    const currentSessionId = schedulerSessionId.current ?? crypto.randomUUID();
+    schedulerSessionId.current = currentSessionId;
+    setState("measuring"); setError(null);
     try {
-      let gpu = "Hardware Accelerated GPU (Direct3D11 / Metal)";
-      let renderer = "ANGLE (Direct3D11 / Vulkan Backend)";
-      let cores = navigator.hardwareConcurrency || 8;
-      let memory = 16; // default 16GB
+      const measured = await runClientHardwareBenchmark();
+      if (currentRun !== runId.current) return;
+      setProfile(measured); setState("scheduling");
+      const { rows, columns } = gridDimensions(gridSize);
+      const tileWidth = Math.max(1, Math.floor(1920 / columns)); const tileHeight = Math.max(1, Math.floor(1080 / rows));
+      const response = await fetch("/v1/media/scheduler/calculate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        fingerprint: measured.fingerprint, sessionId: currentSessionId, gridRows: rows, gridCols: columns, totalTiles: gridSize, cameras,
+        tiles: cameras.map((camera, tileIndex) => ({ cameraId: camera.id, widthPx: tileWidth, heightPx: tileHeight, tileIndex, isIntersecting: true })),
+        visibleCameraIds: cameras.map((camera) => camera.id), focusedCameraId: cameras[0]?.id,
+        liveTelemetry: { sessionId: currentSessionId, eventLoopLagMs: eventLoopLag ?? 0, totalRenderedFps: renderFps ?? 0, activeDecodedStreams: schedule?.activeLiveDecodes ?? 0, currentDownlinkMbps: measured.measuredDownlinkMbps, currentRttMs: measured.measuredRttMs, currentPacketLossPct: measured.measuredPacketLossPct },
+      }) });
+      if (!response.ok) throw new Error(`Scheduler request failed (${response.status})`);
+      const body = await response.json() as { schedule?: Schedule };
+      if (!body.schedule) throw new Error("Scheduler did not return a plan");
+      if (currentRun !== runId.current) return;
+      setSchedule(body.schedule); setState("ready");
+    } catch (cause) { if (currentRun !== runId.current) return; setState("error"); setError(cause instanceof Error ? cause.message : "Unable to measure this workstation"); }
+  };
 
-      if (typeof window !== "undefined") {
-        const canvas = document.createElement("canvas");
-        const gl = canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
-        if (gl) {
-          const webgl = gl as any;
-          const debugInfo = webgl.getExtension("WEBGL_debug_renderer_info");
-          if (debugInfo) {
-            gpu = webgl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || gpu;
-            renderer = webgl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || renderer;
-          }
-        }
-        if ((navigator as any).deviceMemory) {
-          memory = (navigator as any).deviceMemory;
-        }
-      }
-
-      const fingerprint = typeof window !== "undefined" && window.crypto?.randomUUID
-        ? `gpu-fp-${window.crypto.randomUUID().slice(0, 8)}`
-        : `gpu-fp-${Date.now().toString(36)}`;
-
-      const detected: ClientHardwareProfile = {
-        fingerprint,
-        gpuModel: gpu,
-        renderer: renderer,
-        hardwareDecoder: "NVDEC / Direct3D11 Video Acceleration",
-        cpuCores: cores,
-        memoryGb: memory,
-        measuredDownlinkMbps: 85.4,
-        measuredRttMs: 14,
-        measuredPacketLossPct: 0.0,
-        supportedCodecs: DEFAULT_CODECS,
-        maxSimultaneousDecodes: Math.min(cores * 4, 32),
-      };
-
-      setProfile(detected);
-    } catch {
-      setProfile({
-        fingerprint: "client-default-fp",
-        gpuModel: "Dedicated Hardware Video Decoder",
-        renderer: "WebGL 2.0 Video Engine",
-        hardwareDecoder: "D3D11VA / VAAPI Native",
-        cpuCores: 8,
-        memoryGb: 16,
-        measuredDownlinkMbps: 50.0,
-        measuredRttMs: 20,
-        measuredPacketLossPct: 0.0,
-        supportedCodecs: DEFAULT_CODECS,
-        maxSimultaneousDecodes: 24,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  useEffect(() => { void refresh(); }, [gridSize]);
   useEffect(() => {
-    detectClientHardware();
+    let frameCount = 0; let lastFrame = performance.now(); let animationFrame = 0;
+    const measureFrameRate = () => { frameCount += 1; const now = performance.now(); if (now - lastFrame >= 1000) { setRenderFps(Number(((frameCount * 1000) / (now - lastFrame)).toFixed(1))); frameCount = 0; lastFrame = now; } animationFrame = requestAnimationFrame(measureFrameRate); };
+    animationFrame = requestAnimationFrame(measureFrameRate);
+    let expected = performance.now() + 3000;
+    const timer = window.setInterval(() => { const now = performance.now(); setEventLoopLag(Number(Math.max(0, now - expected).toFixed(1))); expected = now + 3000; }, 3000);
+    return () => { cancelAnimationFrame(animationFrame); window.clearInterval(timer); };
+  }, []);
+  const statusText = state === "ready" ? "Authoritative plan ready" : state === "error" ? "Scheduler unavailable" : state === "measuring" ? "Measuring workstation" : "Calculating plan";
+  const statusClass = state === "ready" ? "text-emerald-300" : state === "error" ? "text-rose-300" : "text-amber-300";
 
-    let frameCount = 0;
-    let lastTime = typeof performance !== "undefined" ? performance.now() : Date.now();
-    let animId: number;
-
-    const measureFps = () => {
-      frameCount++;
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      if (now - lastTime >= 1000) {
-        const fps = (frameCount * 1000) / (now - lastTime);
-        setClientFps(Number(fps.toFixed(1)));
-        frameCount = 0;
-        lastTime = now;
-      }
-      animId = requestAnimationFrame(measureFps);
-    };
-    if (typeof window !== "undefined" && typeof requestAnimationFrame !== "undefined") {
-      animId = requestAnimationFrame(measureFps);
-    }
-
-    let lastTick = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const interval = setInterval(() => {
-      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
-      const expectedDelta = 3000;
-      const lag = Math.max(0, now - lastTick - expectedDelta);
-      setEventLoopLag(Number(lag.toFixed(1)));
-      lastTick = now;
-    }, 3000);
-
-    return () => {
-      if (animId && typeof cancelAnimationFrame !== "undefined") {
-        cancelAnimationFrame(animId);
-      }
-      clearInterval(interval);
-    };
-  }, [detectClientHardware]);
-
-  // Compute calculated stream matrix
-  const streamAllocation = useMemo(() => {
-    const totalTiles = gridSize;
-    let fullStreams = 0;
-    let subStreams = 0;
-    let keyframeOnly = 0;
-
-    if (optimizationMode === "performance") {
-      fullStreams = Math.min(totalTiles, 16);
-      subStreams = Math.max(0, totalTiles - 16);
-      keyframeOnly = 0;
-    } else if (optimizationMode === "bandwidth") {
-      fullStreams = 1; // only focused
-      subStreams = Math.min(totalTiles - 1, 8);
-      keyframeOnly = Math.max(0, totalTiles - 9);
-    } else {
-      // Smart Auto Mode
-      fullStreams = Math.min(totalTiles, 4);
-      subStreams = Math.min(Math.max(0, totalTiles - 4), 12);
-      keyframeOnly = Math.max(0, totalTiles - 16);
-    }
-
-    const unoptimizedBandwidth = totalTiles * 4.0; // 4 Mbps per full 1080p stream
-    const optimizedBandwidth = fullStreams * 4.0 + subStreams * 0.6 + keyframeOnly * 0.1;
-    const savings = Math.max(0, Math.round(((unoptimizedBandwidth - optimizedBandwidth) / unoptimizedBandwidth) * 100));
-
-    return {
-      fullStreams,
-      subStreams,
-      keyframeOnly,
-      unoptimizedBandwidth: unoptimizedBandwidth.toFixed(1),
-      optimizedBandwidth: optimizedBandwidth.toFixed(1),
-      savingsPct: savings,
-    };
-  }, [gridSize, optimizationMode]);
-
-  return (
-    <div className="space-y-6 text-slate-100">
-      {/* Header Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-indigo-400 text-xs font-mono font-bold uppercase tracking-widest">
-              <Layers className="w-4 h-4 text-cyan-400" />
-              <span>Intelligent Media Pipeline & Stream Scheduler</span>
-            </div>
-            <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
-              Client Hardware Video Decode & Dynamic Stream Allocation
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              GPU Hardware Accelerated Codec Pipelines • Zero Dropped Frames • Dynamic Tile Downlink Optimization • Sub-Stream Degradation Matrix
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400 font-bold font-mono text-xs flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Scheduler Active: 60 FPS Target
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Real-time Hardware Telemetry Gauges */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono text-xs text-center">
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">Render Framerate</div>
-          <div className="text-2xl font-bold text-emerald-400">{clientFps} FPS</div>
-          <div className="text-[9px] text-emerald-300">0 Dropped Frames</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">Event Loop Lag</div>
-          <div className="text-2xl font-bold text-cyan-400">{eventLoopLag} ms</div>
-          <div className="text-[9px] text-cyan-300">Zero UI Jitter</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">Hardware Decode</div>
-          <div className="text-2xl font-bold text-indigo-400">{profile?.cpuCores || 8} Cores</div>
-          <div className="text-[9px] text-indigo-300">WebCodecs NVDEC</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">WAN Downlink</div>
-          <div className="text-2xl font-bold text-emerald-400">{profile?.measuredDownlinkMbps || 85} Mbps</div>
-          <div className="text-[9px] text-slate-500">RTT: {profile?.measuredRttMs || 14}ms</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">Bandwidth Saved</div>
-          <div className="text-2xl font-bold text-emerald-400">{streamAllocation.savingsPct}%</div>
-          <div className="text-[9px] text-emerald-300">Sub-Stream Throttling</div>
-        </div>
-
-        <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1">
-          <div className="text-slate-400 text-[10px]">Decoded Sessions</div>
-          <div className="text-2xl font-bold text-white">{gridSize} / {profile?.maxSimultaneousDecodes || 32}</div>
-          <div className="text-[9px] text-slate-400">Concurrency Headroom</div>
-        </div>
-      </div>
-
-      {/* Stream Allocation Simulator & Controls */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Video Wall Simulation */}
-        <div className="lg:col-span-7 space-y-4">
-          <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">
-                <Video className="w-4 h-4 text-indigo-400" />
-                <span>Video Wall Stream Scheduling Simulator</span>
-              </div>
-
-              {/* Grid Selector */}
-              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-mono">
-                {[
-                  { label: "2x2 (4)", count: 4 },
-                  { label: "3x3 (9)", count: 9 },
-                  { label: "4x4 (16)", count: 16 },
-                  { label: "6x6 (36)", count: 36 },
-                  { label: "8x8 (64)", count: 64 },
-                ].map((g) => (
-                  <button
-                    key={g.count}
-                    onClick={() => setGridSize(g.count)}
-                    className={`px-2.5 py-1 rounded transition-all ${
-                      gridSize === g.count
-                        ? "bg-indigo-600 text-white font-bold shadow"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Mode Controls */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
-              <span className="text-slate-400">Scheduler Optimization Strategy:</span>
-              <div className="flex items-center gap-1">
-                {(["smart", "performance", "bandwidth"] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => setOptimizationMode(mode)}
-                    className={`px-2.5 py-1 rounded text-[11px] uppercase font-bold transition-all ${
-                      optimizationMode === mode
-                        ? "bg-cyan-600 text-white shadow"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    {mode}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Visual Tile Allocation Matrix */}
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono">
-              <div className="flex justify-between items-center text-[11px]">
-                <span className="text-slate-400">Active Camera Tiles ({gridSize} Total Channels)</span>
-                <div className="flex items-center gap-3 text-[10px]">
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                    Full 1080p/30fps ({streamAllocation.fullStreams})
-                  </span>
-                  <span className="flex items-center gap-1 text-cyan-400">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400" />
-                    Sub 720p/15fps ({streamAllocation.subStreams})
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-500">
-                    <span className="w-2 h-2 rounded-full bg-slate-600" />
-                    Keyframe 1fps ({streamAllocation.keyframeOnly})
-                  </span>
-                </div>
-              </div>
-
-              {/* Grid visualization */}
-              <div
-                className="grid gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800/80 max-h-64 overflow-y-auto"
-                style={{
-                  gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(gridSize))}, minmax(0, 1fr))`,
-                }}
-              >
-                {Array.from({ length: gridSize }).map((_, idx) => {
-                  const isFull = idx < streamAllocation.fullStreams;
-                  const isSub = !isFull && idx < streamAllocation.fullStreams + streamAllocation.subStreams;
-                  return (
-                    <div
-                      key={idx}
-                      className={`p-2 rounded border text-center text-[9px] font-bold transition-all ${
-                        isFull
-                          ? "bg-emerald-950/60 border-emerald-500/50 text-emerald-300"
-                          : isSub
-                          ? "bg-cyan-950/40 border-cyan-500/40 text-cyan-300"
-                          : "bg-slate-900 border-slate-800 text-slate-500"
-                      }`}
-                    >
-                      <div className="truncate">CAM-{idx + 1}</div>
-                      <div className="text-[8px] opacity-75 mt-0.5">
-                        {isFull ? "1080p @ 30" : isSub ? "720p @ 15" : "1 FPS Key"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Bandwidth Impact Comparison */}
-              <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <span className="text-[10px] text-slate-500 block">Raw Unthrottled WAN</span>
-                  <span className="text-base font-bold text-rose-400 font-mono">
-                    {streamAllocation.unoptimizedBandwidth} Mbps
-                  </span>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-900/80 border border-slate-800">
-                  <span className="text-[10px] text-emerald-500 block">Scheduled Optimized WAN</span>
-                  <span className="text-base font-bold text-emerald-400 font-mono">
-                    {streamAllocation.optimizedBandwidth} Mbps ({streamAllocation.savingsPct}% reduction)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Detected Client GPU & WebCodecs Capabilities */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl">
-            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">
-              <Cpu className="w-4 h-4 text-emerald-400" />
-              <span>Detected Client GPU & WebCodecs Profiles</span>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
-              <div className="text-slate-400">
-                GPU Engine: <span className="text-white font-bold">{profile?.gpuModel}</span>
-              </div>
-              <div className="text-slate-400">
-                Decoder API: <span className="text-emerald-400 font-semibold">{profile?.hardwareDecoder}</span>
-              </div>
-              <div className="text-slate-400">
-                CPU Threads: <span className="text-cyan-300">{profile?.cpuCores} Cores</span> • Memory: <span className="text-cyan-300">{profile?.memoryGb} GB</span>
-              </div>
-            </div>
-
-            {/* Supported Codecs List */}
-            <div className="space-y-2 font-mono text-xs">
-              <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
-                Hardware Accelerated Codec Matrix
-              </span>
-              <div className="space-y-2">
-                {DEFAULT_CODECS.map((codec, idx) => (
-                  <div
-                    key={idx}
-                    className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between"
-                  >
-                    <div>
-                      <div className="font-bold text-slate-200">{codec.codec}</div>
-                      <div className="text-[10px] text-slate-500">Max: {codec.maxResolution} @ {codec.maxFps}fps</div>
-                    </div>
-                    <span
-                      className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                        codec.isHardwareAccelerated
-                          ? "bg-emerald-950 text-emerald-300 border border-emerald-600/40"
-                          : "bg-slate-800 text-slate-400"
-                      }`}
-                    >
-                      {codec.isHardwareAccelerated ? "GPU ACCEL" : "SOFTWARE"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="space-y-6 text-slate-100">
+    <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 shadow-xl"><div className="flex flex-col md:flex-row md:items-center justify-between gap-4"><div><div className="flex items-center gap-2 text-indigo-300 text-xs font-mono font-bold uppercase tracking-widest"><Layers className="w-4 h-4 text-cyan-400" /> Media pipeline scheduler</div><h1 className="text-2xl font-bold text-white tracking-tight mt-1">Workstation capacity plan</h1><p className="text-xs text-slate-400 mt-1">Measured browser capability and an API-calculated stream plan for the selected wall size.</p></div><div className="flex items-center gap-3"><span className={`px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 font-bold font-mono text-xs flex items-center gap-1.5 ${statusClass}`}>{state === "ready" ? <CheckCircle2 className="w-3.5 h-3.5" /> : state === "error" ? <AlertTriangle className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5 animate-pulse" />}{statusText}</span><button onClick={() => void refresh()} className="p-2 rounded-lg bg-slate-950 border border-slate-700 text-slate-300 hover:text-white" aria-label="Re-measure and recalculate"><RefreshCw className="w-4 h-4" /></button></div></div></div>
+    {error && <div className="p-3 rounded-xl border border-rose-800/70 bg-rose-950/30 text-sm text-rose-200">{error}. The existing plan is retained until a new calculation succeeds.</div>}
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 font-mono text-xs text-center"><Metric label="Render framerate" value={renderFps === null ? "Measuring" : `${renderFps} FPS`} detail="Browser render loop" /><Metric label="Event loop lag" value={eventLoopLag === null ? "Measuring" : `${eventLoopLag} ms`} detail="Browser responsiveness" /><Metric label="Decoder budget" value={schedule ? `${schedule.hardwareDecodersUsed} / ${schedule.hardwareDecodersLimit}` : "—"} detail="Allocated decode sessions" /><Metric label="Measured downlink" value={profile ? `${profile.measuredDownlinkMbps} Mbps` : "—"} detail={profile ? `RTT ${profile.measuredRttMs} ms` : "Waiting for probe"} /><Metric label="Bandwidth saved" value={schedule ? `${schedule.totalBandwidthSavedPct}%` : "—"} detail="Against 1080p baseline" /><Metric label="Plan health" value={schedule?.systemHealthStatus ?? "—"} detail={schedule?.diagnostics.limitingFactor === "NONE" ? "No constraint detected" : schedule?.diagnostics.limitingFactor ?? "Waiting for plan"} /></div>
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6"><div className="lg:col-span-7"><div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl"><div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono"><Video className="w-4 h-4 text-indigo-400" /> Capacity-planning preview</div><div className="flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-mono">{GRID_OPTIONS.map((count) => <button key={count} onClick={() => setGridSize(count)} className={`px-2.5 py-1 rounded ${gridSize === count ? "bg-indigo-600 text-white font-bold" : "text-slate-400 hover:text-slate-200"}`}>{Math.sqrt(count) % 1 === 0 ? `${Math.sqrt(count)}×${Math.sqrt(count)}` : `${count} tiles`}</button>)}</div></div><p className="text-xs text-slate-400">This preview uses placeholder camera slots only. Live-wall camera priority, alarms, and visibility are supplied by the live wall when it requests a plan.</p><div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono"><div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-400"><span>{schedule?.activeLiveDecodes ?? 0} live decodes</span><span>{schedule?.activeKeyframeStreams ?? 0} keyframe streams</span><span>{schedule?.pausedStreams ?? 0} paused</span><span>{schedule ? `${(schedule.totalAllocatedBandwidthKbps / 1000).toFixed(1)} Mbps allocated` : "Awaiting plan"}</span></div><div className="grid gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800/80 max-h-72 overflow-y-auto" style={{ gridTemplateColumns: `repeat(${gridDimensions(gridSize).columns}, minmax(0, 1fr))` }}>{cameras.map((camera, index) => { const decision = schedule?.schedules[camera.id]; return <div key={camera.id} className={`p-2 rounded border text-center text-[9px] font-bold ${decisionAppearance(decision)}`}><div className="truncate">Slot {index + 1}</div><div className="text-[8px] opacity-80 mt-0.5">{decision ? `${decision.targetResolution.width}p · ${decision.targetFps} fps` : "Calculating"}</div></div>; })}</div></div></div></div>
+      <div className="lg:col-span-5"><div className="p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl"><div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono"><Cpu className="w-4 h-4 text-emerald-400" /> Measured client profile</div><div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs"><div className="text-slate-400">GPU: <span className="text-white font-bold">{profile?.gpuModel ?? "Measuring"}</span></div><div className="text-slate-400">Decoder: <span className="text-emerald-400 font-semibold">{profile?.hardwareDecoder ?? "—"}</span></div><div className="text-slate-400">CPU: <span className="text-cyan-300">{profile?.cpuCores ?? "—"} cores</span> · Memory: <span className="text-cyan-300">{profile?.memoryGb ?? "—"} GB</span></div></div><div className="space-y-2 font-mono text-xs"><span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">Detected codec support</span>{profile?.supportedCodecs.map((codec) => <div key={codec.codec} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between"><div><div className="font-bold text-slate-200">{codec.codec}</div><div className="text-[10px] text-slate-500">{codec.maxSupportedResolution.width}×{codec.maxSupportedResolution.height} @ {codec.maxFps} fps</div></div><span className={`px-2 py-0.5 rounded text-[9px] font-bold ${codec.isHardwareAccelerated ? "bg-emerald-950 text-emerald-300 border border-emerald-600/40" : "bg-slate-800 text-slate-400"}`}>{codec.isHardwareAccelerated ? "HARDWARE" : "SOFTWARE"}</span></div>)}</div>{schedule?.diagnostics.adaptationActionApplied && <div className="p-3 rounded-xl border border-amber-700/50 bg-amber-950/20 text-xs text-amber-100">{schedule.diagnostics.adaptationActionApplied}</div>}</div></div></div>
+  </div>;
 }
+function Metric({ label, value, detail }: { label: string; value: string; detail: string }) { return <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 space-y-1"><div className="text-slate-400 text-[10px]">{label}</div><div className="text-lg font-bold text-white truncate">{value}</div><div className="text-[9px] text-slate-500 truncate">{detail}</div></div>; }

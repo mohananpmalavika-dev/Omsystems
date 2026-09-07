@@ -127,4 +127,18 @@ describe("VMS-Grade Observability & Prometheus Instrumentation Test Suite", () =
     expect(snapshot.mediaNodes).toBeDefined();
     expect(snapshot.storage).toBeDefined();
   });
+
+  it("derives summary values from telemetry instead of static display defaults", () => {
+    registry.cameraStreamFps.set(20, { camera_id: "CAM-1" });
+    registry.cameraStreamFps.set(30, { camera_id: "CAM-2" });
+    registry.storageFreeBytes.set(75 * 1024 ** 4, { pool_id: "pool-1" });
+    registry.storageTotalBytes.set(100 * 1024 ** 4, { pool_id: "pool-1" });
+    registry.storageWriteLatency.observe(4, { pool_id: "pool-1" });
+    registry.storageWriteLatency.observe(40, { pool_id: "pool-1" });
+
+    const snapshot = registry.getMetricsSnapshot() as any;
+    expect(snapshot.cameras.averageFps).toBe(25);
+    expect(snapshot.storage.usagePct).toBe(25);
+    expect(snapshot.storage.p95WriteLatencyMs).toBe(40);
+  });
 });

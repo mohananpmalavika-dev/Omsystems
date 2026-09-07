@@ -205,6 +205,18 @@ describe("all-in-one edge live gateway", () => {
     expect(paths).toEqual([{ path: "camera-camera-1", source: "rtsp://admin:secret@192.168.1.20/stream" }]);
     expect(session.hls.url).toBe("https://branch-media.example.com/hls/camera-camera-1/index.m3u8");
 
+    const sessionCors = await fetch(`${baseUrl}/v1/live/${session.sessionId}`, {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://dashboard.example.com",
+        "access-control-request-method": "DELETE",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+    expect(sessionCors.status).toBe(204);
+    expect(sessionCors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+    expect(sessionCors.headers.get("access-control-allow-headers")).toBe("authorization,content-type");
+
     const mediaAuth = await fetch(`${baseUrl}/internal/mediamtx/auth`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "read", path: "camera-camera-1", query: `token=${session.hls.bearerToken}` }),

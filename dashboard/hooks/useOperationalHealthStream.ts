@@ -20,7 +20,7 @@ export function useOperationalHealthStream(onUpdate: (event: OperationalHealthEv
       setConnected(false);
       return;
     }
-    const stream = new EventSource("/api/control/v1/operations/events", { withCredentials: true });
+    const stream = new EventSource("/v1/operations/events", { withCredentials: true });
     const handle = (message: MessageEvent<string>) => {
       try { callback.current(JSON.parse(message.data) as OperationalHealthEvent); } catch { /* polling resync remains active */ }
     };

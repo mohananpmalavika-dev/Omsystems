@@ -89,7 +89,6 @@ function IncidentsPageContent() {
   }
 
   useEffect(() => {
-    loadIncidents();
     loadDashboard();
   }, []);
 

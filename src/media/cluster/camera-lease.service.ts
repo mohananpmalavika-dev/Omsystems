@@ -48,6 +48,24 @@ redis.call("SET", ownerKey, payload, "PX", ARGV[7])
 return payload
 `;
 
+const TAKEOVER_LUA = `
+local ownerKey = KEYS[1]
+local tokenKey = KEYS[2]
+local token = redis.call("INCR", tokenKey)
+local payload = cjson.encode({
+  tenantId = ARGV[1],
+  cameraId = ARGV[2],
+  nodeId = ARGV[3],
+  instanceId = ARGV[4],
+  leaseId = ARGV[5],
+  fencingToken = token,
+  acquiredAt = tonumber(ARGV[6]),
+  expiresAt = tonumber(ARGV[6]) + tonumber(ARGV[7])
+})
+redis.call("SET", ownerKey, payload, "PX", ARGV[7])
+return payload
+`;
+
 const RENEW_LUA = `
 local ownerKey = KEYS[1]
 local current = redis.call("GET", ownerKey)
@@ -166,6 +184,46 @@ export class CameraLeaseService implements CameraLeaseManager {
       expiresAt: now + ttlMs,
     };
     this.memoryLeases.set(key, { lease, expiresAt: now + ttlMs });
+    return lease;
+  }
+
+  async takeover(
+    tenantId: string,
+    cameraId: string,
+    nodeId: string,
+    instanceId: string,
+    ttlMs = this.defaultTtlMs,
+  ): Promise<CameraLease> {
+    const leaseId = randomUUID();
+    const now = Date.now();
+
+    if (this.redisClient) {
+      try {
+        const result = await this.redisClient.eval(
+          TAKEOVER_LUA,
+          2,
+          this.ownerKey(tenantId, cameraId),
+          this.tokenKey(tenantId, cameraId),
+          tenantId,
+          cameraId,
+          nodeId,
+          instanceId,
+          leaseId,
+          now,
+          ttlMs,
+        );
+        return typeof result === "string" ? JSON.parse(result) as CameraLease : result as CameraLease;
+      } catch (error) {
+        return this.redisFailure(error);
+      }
+    }
+
+    if (!this.useMemoryStore()) return this.failWithoutRedis();
+    const key = `${tenantId}:${cameraId}`;
+    const fencingToken = (this.memoryFencingTokens.get(key) ?? 0) + 1;
+    this.memoryFencingTokens.set(key, fencingToken);
+    const lease: CameraLease = { tenantId, cameraId, nodeId, instanceId, leaseId, fencingToken, acquiredAt: now, expiresAt: now + ttlMs };
+    this.memoryLeases.set(key, { lease, expiresAt: lease.expiresAt });
     return lease;
   }
 

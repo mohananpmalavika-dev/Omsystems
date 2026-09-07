@@ -53,8 +53,22 @@ export class SloMeasurementEngine {
   record(measurement: SloMeasurement): void {
     const buf = this.buffers.get(measurement.sloId);
     if (!buf) throw new Error(`Unknown SLO ID: ${measurement.sloId}`);
+    if (!(measurement.observedAt instanceof Date) || !Number.isFinite(measurement.observedAt.getTime())) {
+      throw new Error("SLO measurement must include a valid observation time");
+    }
 
-    buf.push(measurement);
+    const definition = getSloDefinition(measurement.sloId);
+    const normalized: SloMeasurement = { ...measurement };
+    if (definition.kind === "LATENCY_P50_MS" || definition.kind === "LATENCY_P99_MS") {
+      if (!Number.isFinite(measurement.valueMs) || measurement.valueMs! < 0) {
+        throw new Error(`Latency SLO ${measurement.sloId} requires a non-negative valueMs`);
+      }
+      // The measured duration is authoritative. Callers cannot mark an
+      // over-target operation successful and hide an SLO breach.
+      normalized.success = measurement.valueMs! <= definition.targetMs!;
+    }
+
+    buf.push(normalized);
 
     // Evict oldest samples if buffer is full
     if (buf.length > MAX_SAMPLES_PER_SLO) {

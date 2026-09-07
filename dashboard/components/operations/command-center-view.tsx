@@ -97,7 +97,7 @@ export function CommandCenterView() {
       ]);
       const sumData = sumRes ? await sumRes.json().catch(() => ({})) : {};
       const branchData = branchRes ? await branchRes.json().catch(() => ({})) : {};
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) throw new Error("Command Center refresh timed out");
       const unavailable: string[] = [];
 
       if (sumRes?.ok && sumData?.success && sumData?.data) {
@@ -120,7 +120,7 @@ export function CommandCenterView() {
     } finally {
       window.clearTimeout(timeout);
       if (pendingLoad.current === controller) pendingLoad.current = null;
-      if (!controller.signal.aborted) setLoading(false);
+      if (pendingLoad.current === null) setLoading(false);
     }
   };
 

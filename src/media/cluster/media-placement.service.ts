@@ -17,6 +17,10 @@ export class MediaPlacementService {
   calculateCapacityScore(node: MediaNodeInstance): number {
     if (node.status !== "HEALTHY") return 0;
 
+    if (node.capacity.maxCameras <= 0 || node.capacity.maxIngressMbps <= 0) {
+      return 0;
+    }
+
     const streamHeadroomPct = Math.max(
       0,
       ((node.capacity.maxCameras - node.capacity.currentCameras) / node.capacity.maxCameras) * 100,

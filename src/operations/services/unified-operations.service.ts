@@ -184,7 +184,6 @@ export class UnifiedOperationsService {
   }
 
   async getFleetBranchSummaries(tenantId: string, store?: ControlPlaneStore, user?: User): Promise<BranchOperationalView[]> {
-    try {
       if (!store) return [];
       const nodes = user
         ? await store.listAccessibleNodes(user, "live:view", "branch")
@@ -201,7 +200,7 @@ export class UnifiedOperationsService {
       const degraded = snapshot.cameras.warningCount;
       const lastReportedAt = snapshot.lastTelemetryAt ? new Date(snapshot.lastTelemetryAt) : undefined;
       const operationalState: BranchOperationalView["operationalState"] = snapshot.cameras.total === 0 ? "NOT_PROVISIONED"
-        : snapshot.telemetryFreshness === "OUTDATED" ? "STALE" : snapshot.overallState;
+        : snapshot.telemetryFreshness === "STALE" || snapshot.telemetryFreshness === "OUTDATED" ? "STALE" : snapshot.overallState;
       views.push({
         branchId: snapshot.branchId,
         branchCode: snapshot.branchCode,
@@ -255,10 +254,6 @@ export class UnifiedOperationsService {
       });
     }
       return views;
-    } catch (err) {
-      console.error("Failed to get fleet branch summaries:", err);
-      return [];
-    }
   }
 
   async getBranch360Workspace(branchId: string, tenantId: string, store?: ControlPlaneStore, user?: User): Promise<Branch360Workspace | null> {

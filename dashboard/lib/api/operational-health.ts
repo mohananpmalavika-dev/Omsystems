@@ -34,7 +34,18 @@ import {
   CreateWorkOrderPayload
 } from '../types/operational-health';
 
-const API_BASE = '/api/control/v1/operations';
+// Next.js rewrites /v1 directly to the control plane. The former
+// /api/control namespace is not a dashboard route and caused every
+// operational-alert mutation to fail before it reached the API.
+const API_BASE = '/v1/operations';
+
+async function responseError(response: Response, fallback: string): Promise<Error> {
+  const body = await response.json().catch(() => null) as { error?: unknown; message?: unknown } | null;
+  const message = typeof body?.message === 'string' ? body.message
+    : typeof body?.error === 'string' ? body.error
+      : `${fallback} (${response.status})`;
+  return new Error(message);
+}
 
 function getAuthHeaders(customHeaders?: HeadersInit): Headers {
   const headers = new Headers(customHeaders);
@@ -261,7 +272,7 @@ export async function fetchOperationalAlerts(filters?: AlertFilters) {
   if (filters?.offset) params.append('offset', filters.offset.toString());
   
   const response = await authFetch(`${API_BASE}/alerts?${params}`);
-  if (!response.ok) throw new Error('Failed to fetch operational alerts');
+  if (!response.ok) throw await responseError(response, 'Failed to fetch operational alerts');
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Invalid response');
   return data.data;
@@ -281,7 +292,7 @@ export async function acknowledgeAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload || {}),
   });
-  if (!response.ok) throw new Error('Failed to acknowledge alert');
+  if (!response.ok) throw await responseError(response, 'Failed to acknowledge alert');
 }
 
 /**
@@ -299,7 +310,7 @@ export async function assignAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error('Failed to assign alert');
+  if (!response.ok) throw await responseError(response, 'Failed to assign alert');
 }
 
 /**
@@ -317,7 +328,7 @@ export async function resolveAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error('Failed to resolve alert');
+  if (!response.ok) throw await responseError(response, 'Failed to resolve alert');
 }
 
 /**
@@ -332,7 +343,7 @@ export async function escalateAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error('Failed to escalate alert');
+  if (!response.ok) throw await responseError(response, 'Failed to escalate alert');
 }
 
 /**
@@ -347,7 +358,7 @@ export async function suppressAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error('Failed to suppress alert');
+  if (!response.ok) throw await responseError(response, 'Failed to suppress alert');
 }
 
 /**
@@ -362,7 +373,7 @@ export async function addAlertComment(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) throw new Error('Failed to add alert comment');
+  if (!response.ok) throw await responseError(response, 'Failed to add alert comment');
 }
 
 /**
@@ -370,7 +381,7 @@ export async function addAlertComment(
  */
 export async function getAlertTimeline(alertId: string): Promise<any[]> {
   const response = await authFetch(`${API_BASE}/alerts/${alertId}/timeline`);
-  if (!response.ok) throw new Error('Failed to fetch alert timeline');
+  if (!response.ok) throw await responseError(response, 'Failed to fetch alert timeline');
   const data = await response.json();
   return data.data;
 }
@@ -387,7 +398,7 @@ export async function createWorkOrderFromAlert(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
-  if (!response.ok) throw new Error('Failed to create work order');
+  if (!response.ok) throw await responseError(response, 'Failed to create work order');
   const data = await response.json();
   if (!data.success) throw new Error(data.error || 'Invalid response');
   return data.data;

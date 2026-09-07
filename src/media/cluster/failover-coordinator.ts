@@ -54,7 +54,7 @@ export class HaFailoverCoordinator {
       reason,
       timestamp: failureDetectedAt,
     };
-    this.events.unshift(startEvent);
+    this.recordEvent(startEvent);
 
     // 2. Select next eligible standby node
     const plan = this.placementService.getPlacementPlan(tenantId, cameraId);
@@ -76,20 +76,22 @@ export class HaFailoverCoordinator {
         reason: "No healthy standby media nodes available for failover",
         timestamp: new Date().toISOString(),
       };
-      this.events.unshift(failEvent);
+      this.recordEvent(failEvent);
       return { success: false, event: failEvent };
     }
 
-    // 3. Acquire new lease on target node (atomic Lua INCR generates higher fencing token)
-    const newLease = await this.leaseManager.acquire(
-      tenantId,
-      cameraId,
-      targetNode.nodeId,
-      targetNode.instanceId,
-      15_000,
-    );
-
-    if (!newLease) {
+    // 3. Atomically fence the previous owner and transfer the lease. A normal
+    // acquisition would wait for its TTL and leave the camera unavailable.
+    let newLease: CameraLease;
+    try {
+      newLease = await this.leaseManager.takeover(
+        tenantId,
+        cameraId,
+        targetNode.nodeId,
+        targetNode.instanceId,
+        15_000,
+      );
+    } catch (error) {
       const failEvent: HaEvent = {
         id: randomUUID(),
         type: "CAMERA_FAILOVER_FAILED",
@@ -98,10 +100,10 @@ export class HaFailoverCoordinator {
         previousNode,
         previousEpoch,
         newNode: targetNode.nodeId,
-        reason: "Target node failed to acquire distributed lease",
+        reason: `Target node could not commit fenced takeover: ${error instanceof Error ? error.message : "unknown error"}`,
         timestamp: new Date().toISOString(),
       };
-      this.events.unshift(failEvent);
+      this.recordEvent(failEvent);
       return { success: false, event: failEvent };
     }
 
@@ -131,7 +133,7 @@ export class HaFailoverCoordinator {
       },
       timestamp: streamRestoredAt,
     };
-    this.events.unshift(completeEvent);
+    this.recordEvent(completeEvent);
 
     return { success: true, event: completeEvent, newLease };
   }
@@ -161,7 +163,7 @@ export class HaFailoverCoordinator {
     };
   }
 
-  getMetrics(activeLeases: CameraLease[], tenantId: string): HaClusterMetrics {
+  getMetrics(activeLeases: CameraLease[] = [], tenantId = "default"): HaClusterMetrics {
     const allNodes = this.nodeRegistry.listAllNodes();
     const healthyNodes = allNodes.filter((n) => n.status === "HEALTHY");
 
@@ -209,5 +211,10 @@ export class HaFailoverCoordinator {
   getRecentEvents(limit = 20, tenantId?: string): HaEvent[] {
     const events = tenantId ? this.events.filter((event) => event.tenantId === tenantId) : this.events;
     return events.slice(0, limit);
+  }
+
+  private recordEvent(event: HaEvent): void {
+    this.events.unshift(event);
+    if (this.events.length > 1_000) this.events.length = 1_000;
   }
 }

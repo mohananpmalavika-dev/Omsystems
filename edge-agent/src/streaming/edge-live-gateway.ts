@@ -207,9 +207,19 @@ export class EdgeLiveGateway {
 
   private async handle(request: IncomingMessage, response: ServerResponse) {
     const url = new URL(request.url ?? "/", "http://edge.local");
-    if (url.pathname === "/v1/live/start" || url.pathname.startsWith("/v1/live/") || url.pathname === "/v1/talk/start" || url.pathname.startsWith("/v1/talk/")) {
+    const isBrowserMediaRoute = url.pathname === "/v1/live/start"
+      || url.pathname.startsWith("/v1/live/")
+      || url.pathname === "/v1/talk/start"
+      || url.pathname.startsWith("/v1/talk/");
+    if (isBrowserMediaRoute) {
       setCorsHeaders(request, response);
-      if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
+    }
+    // Handle every browser preflight before session lookup. This is important
+    // for DELETE /v1/live/:sessionId, where an expired session must still
+    // receive CORS headers instead of a bare 404/401 response.
+    if (isBrowserMediaRoute && request.method === "OPTIONS") {
+      response.writeHead(204).end();
+      return;
     }
     if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/health") {
       return sendJson(response, 200, { status: "ok", service: "sentinel-edge-media-gateway" });
@@ -769,7 +779,11 @@ function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
   response.setHeader("Access-Control-Allow-Origin", origin);
   response.setHeader("Access-Control-Allow-Credentials", "true");
-  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
+  const requestedHeaders = request.headers["access-control-request-headers"];
+  response.setHeader(
+    "Access-Control-Allow-Headers",
+    typeof requestedHeaders === "string" ? requestedHeaders : "Authorization, Content-Type, Range",
+  );
   response.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS, GET, HEAD");
   if (request.headers["access-control-request-private-network"] === "true") {
     response.setHeader("Access-Control-Allow-Private-Network", "true");

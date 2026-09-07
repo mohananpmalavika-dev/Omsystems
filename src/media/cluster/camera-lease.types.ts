@@ -158,6 +158,11 @@ export interface SegmentWriteResult {
 
 export interface CameraLeaseManager {
   acquire(tenantId: string, cameraId: string, nodeId: string, instanceId: string, ttlMs?: number): Promise<CameraLease | null>;
+  /**
+   * Transfers ownership during a verified failover. The replacement lease must
+   * receive a new fencing token so a partitioned previous owner cannot write.
+   */
+  takeover(tenantId: string, cameraId: string, nodeId: string, instanceId: string, ttlMs?: number): Promise<CameraLease>;
   renew(lease: CameraLease, ttlMs?: number): Promise<boolean>;
   release(lease: CameraLease): Promise<boolean>;
   getOwner(tenantId: string, cameraId: string): Promise<CameraLease | null>;

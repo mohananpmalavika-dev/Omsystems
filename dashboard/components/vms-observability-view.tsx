@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Activity,
   Server,
@@ -28,36 +28,36 @@ export function VmsObservabilityView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"visual" | "prometheus">("visual");
+  const requestSequence = useRef(0);
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = useCallback(async () => {
+    const sequence = ++requestSequence.current;
     try {
       const [snapRes, promRes] = await Promise.all([
-        fetch("/api/vms/observability/summary").catch(() => null),
+        fetch("/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null),
         fetch("/metrics").catch(() => null),
       ]);
-
-      if (snapRes && snapRes.ok) {
-        const data = await snapRes.json();
-        if (data.success) setMetricsSnapshot(data.data);
-      }
-      if (promRes && promRes.ok) {
-        const text = await promRes.text();
-        setRawPrometheusText(text);
-      }
-    } catch {
-      setMetricsSnapshot(null);
-      setRawPrometheusText("");
-      setError("Observability data is unavailable");
+      if (!snapRes || !snapRes.ok) throw new Error(`Structured telemetry request failed (${snapRes?.status ?? "network"})`);
+      const data = await snapRes.json();
+      if (!data?.success || !data.data) throw new Error("Observability service returned an invalid snapshot");
+      if (sequence !== requestSequence.current) return;
+      setMetricsSnapshot(data.data);
+      if (promRes?.ok) setRawPrometheusText(await promRes.text());
+      else setRawPrometheusText("");
+      setError(null);
+    } catch (reason) {
+      if (sequence !== requestSequence.current) return;
+      setError(reason instanceof Error ? reason.message : "Observability data is unavailable");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchMetrics]);
 
   if (loading && !metricsSnapshot) {
     return (
@@ -79,7 +79,7 @@ export function VmsObservabilityView() {
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-300">Operational trust</p>
-            <h2 className="mt-1 text-base font-bold text-slate-100">VMS observability is live and streaming</h2>
+            <h2 className="mt-1 text-base font-bold text-slate-100">{error ? "Observability requires attention" : "VMS observability is live"}</h2>
           </div>
           {!error && <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-[11px] font-medium text-emerald-200"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Prometheus metrics active</div>}
         </div>
@@ -158,7 +158,7 @@ export function VmsObservabilityView() {
                 <div className="text-2xl font-bold text-slate-100 font-mono">
                   {snap.recording?.totalSegmentsWritten?.toLocaleString() ?? "—"}
                 </div>
-                <span className="text-xs text-emerald-400 font-semibold">0 Failures</span>
+                <span className={`text-xs font-semibold ${(snap.recording?.totalWriteFailures ?? 0) > 0 ? "text-rose-400" : "text-emerald-400"}`}>{snap.recording?.totalWriteFailures ?? "—"} Failures</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
                 Active Gap: {snap.recording?.activeGapSecondsTotal ?? "—"}s (Fenced)
@@ -172,9 +172,9 @@ export function VmsObservabilityView() {
               </div>
               <div className="mt-2 flex items-baseline justify-between">
                 <div className="text-2xl font-bold text-slate-100 font-mono">
-                  705 / 900 Mbps
+                  {(snap.mediaNodes || []).reduce((total: number, node: any) => total + (Number(node.ingressMbps) || 0), 0).toFixed(1)} Mbps
                 </div>
-                <span className="text-xs text-indigo-400 font-semibold">3 Nodes</span>
+                <span className="text-xs text-indigo-400 font-semibold">{snap.mediaNodes?.length ?? 0} Nodes</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
                 {snap.playback?.activeSessions ?? "—"} Concurrent Playback Sessions
@@ -190,7 +190,7 @@ export function VmsObservabilityView() {
                 <div className="text-2xl font-bold text-slate-100 font-mono">
                   {snap.storage?.p95WriteLatencyMs ?? "—"} ms
                 </div>
-                <span className="text-xs text-emerald-400 font-semibold">P95 S.M.A.R.T</span>
+                <span className="text-xs text-emerald-400 font-semibold">Measured P95</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-mono">
                 {snap.storage?.freeTb ?? "—"} TB Free / {snap.storage?.totalTb ?? "—"} TB ({snap.storage?.usagePct ?? "—"}% Used)
