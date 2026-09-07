@@ -26,14 +26,18 @@ export async function GET(request: NextRequest) {
     }
 
     const body = await response.json() as { data?: Array<Record<string, unknown>> };
-    return NextResponse.json((body.data ?? []).map((agent) => ({
-      id: agent.id,
-      name: agent.name,
-      status: agent.status ?? 'unknown',
-      last_seen_at: agent.lastSeenAt ?? null,
-      branch_name: agent.branchName,
-      branch_id: agent.branchId,
-    })));
+    return NextResponse.json(
+      (body.data ?? [])
+        .filter((agent) => agent.credentialStatus !== 'revoked')
+        .map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          status: agent.status ?? 'unknown',
+          last_seen_at: agent.lastSeenAt ?? null,
+          branch_name: agent.branchName,
+          branch_id: agent.branchId,
+        })),
+    );
     
   } catch (error) {
     console.error('Error fetching gateways:', error);
