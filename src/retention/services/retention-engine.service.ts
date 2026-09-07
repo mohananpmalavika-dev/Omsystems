@@ -49,10 +49,16 @@ export interface BranchRetentionOverview {
   usedStorageBytes: number;
   freeStorageBytes: number;
   dailyIngestBytes: number;
+  avgDailyIngest7d?: number;
+  avgDailyIngest30d?: number;
   requiredRetentionDays: number;
   currentRetentionDays: number;
   projectedRetentionDays: number;
+  retentionCompliancePercent: number;
   recordingCoveragePercent: number;
+  missingSeconds?: number;
+  gapCount?: number;
+  largestGapSeconds?: number;
   retentionViolationsCount: number;
   retentionAtRiskCount: number;
   daysUntilExhaustion: number;

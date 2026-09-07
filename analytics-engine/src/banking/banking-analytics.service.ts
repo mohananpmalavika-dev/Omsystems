@@ -13,7 +13,7 @@ import {
 import {
   CashVanMonitorRepository,
   getCashVanMonitorRepository,
-  CreateCashVanMonitorInput,
+  CreateMonitorInput,
 } from './repositories/cash-van-monitor.repository.js';
 
 import {
@@ -301,7 +301,7 @@ export class BankingAnalyticsService {
   /**
    * Create a new monitor configuration
    */
-  async createMonitor(input: CreateCashVanMonitorInput): Promise<CashVanMonitorConfig> {
+  async createMonitor(input: CreateMonitorInput): Promise<CashVanMonitorConfig> {
     return this.monitorRepo.create(input);
   }
 

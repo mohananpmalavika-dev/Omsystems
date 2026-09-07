@@ -311,7 +311,8 @@ export enum TamperClassification {
 }
 
 export interface TamperAIAnalysis {
-  confidence: number;
+  confidence: number | null;
+  status: 'UNKNOWN' | 'HEURISTIC';
   intent: 'ACCIDENTAL' | 'INTENTIONAL';
   riskScore: number;
   patterns: string[];

@@ -4,7 +4,7 @@
  * Critical for construction sites and traffic enforcement
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, hasInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
 import {
   loadHelmetClassificationInference,
   modelUnavailableReason,
@@ -56,6 +56,31 @@ export class HelmetDetector extends BaseDetector {
   }
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
+    if (!this.isModelLoaded && !this.inference && !hasInferenceObjects(frame)) {
+      return [{
+        detectionType: "helmet",
+        status: "MODEL_UNAVAILABLE",
+        provenance: "LIVE_INFERENCE",
+        confidence: null,
+        objects: [],
+        metadata: {
+          status: "MODEL_UNAVAILABLE",
+          reason: this.modelLoadError ?? "Helmet detection model is not loaded",
+        },
+        executionMetadata: {
+          status: "MODEL_UNAVAILABLE",
+          provenance: "LIVE_INFERENCE",
+          modelId: "helmet-classifier",
+          modelVersion: this.modelVersion,
+          reason: this.modelLoadError ?? "Helmet detection model is not loaded",
+          simulated: false,
+          timestamp: new Date().toISOString(),
+          requiresReview: true,
+        },
+        requiresAlert: false,
+      }];
+    }
+
     const detections = await this.detectHelmetsInFrame(frame);
     
     const results: DetectionResult[] = [];
