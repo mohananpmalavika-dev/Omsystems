@@ -49,6 +49,10 @@ export class RCAStore {
       status?: StoredRCADiagnosis["status"];
     } = {}
   ): Promise<StoredRCADiagnosis> {
+    if (!options.incidentId) {
+      throw new Error("diagnosis_missing_incident");
+    }
+
     const now = new Date().toISOString();
     
     const stored: StoredRCADiagnosis = {
@@ -60,15 +64,12 @@ export class RCAStore {
       updatedAt: now,
     };
     
-    // Store in database
-    // Note: This would require a new table schema in your database
-    // For now, we'll use the control plane store's generic storage
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // await this.store.setMetadata(
-    //   `rca:diagnosis:${stored.id}`,
-    //   stored.tenantId,
-    //   stored
-    // );
+    await this.store.addIncidentNote({
+      incidentId: options.incidentId,
+      noteType: "rca_diagnosis",
+      content: JSON.stringify(stored),
+      createdBy: "system:rca",
+    });
     
     // Index by case fingerprint for similarity matching
     await this.indexByFingerprint(stored);
@@ -86,12 +87,16 @@ export class RCAStore {
     diagnosisId: string,
     tenantId: string
   ): Promise<StoredRCADiagnosis | null> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // const result = await this.store.getMetadata(
-    //   `rca:diagnosis:${diagnosisId}`,
-    //   tenantId
-    // );
-    // return result as StoredRCADiagnosis | null;
+    const incidents = await this.store.listIncidents(tenantId, { limit: 10_000 });
+    for (const incident of incidents) {
+      const notes = await this.store.listIncidentNotes(incident.id, "rca_diagnosis");
+      for (const note of notes) {
+        const diagnosis = parseNote<StoredRCADiagnosis>(note.content);
+        if (diagnosis?.id === diagnosisId && diagnosis.tenantId === tenantId) {
+          return diagnosis;
+        }
+      }
+    }
     return null;
   }
   
@@ -108,9 +113,25 @@ export class RCAStore {
       limit?: number;
     } = {}
   ): Promise<StoredRCADiagnosis[]> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // This would be a database query in production
-    return [];
+    const incidents = await this.store.listIncidents(tenantId, {
+      branchId,
+      from: options.from,
+      to: options.to,
+      limit: options.limit ? Math.max(options.limit, 1) * 10 : 10_000,
+    });
+    const diagnoses: StoredRCADiagnosis[] = [];
+    for (const incident of incidents) {
+      const notes = await this.store.listIncidentNotes(incident.id, "rca_diagnosis");
+      for (const note of notes) {
+        const diagnosis = parseNote<StoredRCADiagnosis>(note.content);
+        if (diagnosis && (!options.status || diagnosis.status === options.status)) {
+          diagnoses.push(diagnosis);
+        }
+      }
+    }
+    return diagnoses
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+      .slice(0, options.limit ?? diagnoses.length);
   }
   
   /**
@@ -125,9 +146,37 @@ export class RCAStore {
       limit?: number;
     } = {}
   ): Promise<HistoricalCase[]> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // Query diagnoses with similar fingerprints
-    return [];
+    const incidents = await this.store.listIncidents(tenantId, { limit: 10_000 });
+    const cases: HistoricalCase[] = [];
+    for (const incident of incidents) {
+      const notes = await this.store.listIncidentNotes(incident.id, "rca_diagnosis");
+      for (const note of notes) {
+        const diagnosis = parseNote<StoredRCADiagnosis>(note.content);
+        if (!diagnosis || diagnosis.caseFingerprint !== caseFingerprint ||
+            (options.rootCauseCode && diagnosis.primaryCause.code !== options.rootCauseCode) ||
+            (options.minConfidence !== undefined && diagnosis.confidenceScore < options.minConfidence)) {
+          continue;
+        }
+        cases.push({
+          caseId: diagnosis.id,
+          fingerprint: diagnosis.caseFingerprint,
+          rootCause: diagnosis.primaryCause.code,
+          confidence: diagnosis.confidenceScore,
+          affectedEntities: {
+            branches: diagnosis.blastRadius.summary.totalBranches,
+            cameras: diagnosis.blastRadius.summary.totalCameras,
+            dvrs: diagnosis.blastRadius.summary.totalDVRs,
+          },
+          resolution: {
+            action: diagnosis.resolutionNotes ?? "Not validated",
+            successful: diagnosis.status === "validated",
+            timeToResolveMinutes: 0,
+          },
+          occurredAt: diagnosis.generatedAt,
+        });
+      }
+    }
+    return cases.slice(0, options.limit ?? cases.length);
   }
   
   /**
@@ -160,13 +209,13 @@ export class RCAStore {
     diagnosis.validatedBy = outcome.validatedBy;
     diagnosis.updatedAt = now;
     
-    // Store updated diagnosis
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // await this.store.setMetadata(
-    //   `rca:diagnosis:${diagnosis.id}`,
-    //   tenantId,
-    //   diagnosis
-    // );
+    const incident = diagnosis.incidentId;
+    if (!incident) throw new Error("diagnosis_missing_incident");
+    const notes = await this.store.listIncidentNotes(incident, "rca_diagnosis");
+    const diagnosisNote = notes.find((note) => parseNote<StoredRCADiagnosis>(note.content)?.id === diagnosis.id);
+    if (!diagnosisNote) throw new Error("diagnosis_not_found");
+    const saved = await this.store.updateIncidentNote(diagnosisNote.id, JSON.stringify(diagnosis));
+    if (!saved) throw new Error("diagnosis_update_failed");
     
     // Store outcome for learning
     const caseOutcome: RCACaseOutcome = {
@@ -194,13 +243,14 @@ export class RCAStore {
     outcome: RCACaseOutcome,
     tenantId: string
   ): Promise<void> {
-    // Store outcome
-    // TODO: Implement proper metadata storage in ControlPlaneStore
-    // await this.store.setMetadata(
-    //   `rca:outcome:${outcome.diagnosisId}`,
-    //   tenantId,
-    //   outcome
-    // );
+    const diagnosis = await this.getDiagnosis(outcome.diagnosisId, tenantId);
+    if (!diagnosis?.incidentId) throw new Error("diagnosis_not_found");
+    await this.store.addIncidentNote({
+      incidentId: diagnosis.incidentId,
+      noteType: "rca_case_outcome",
+      content: JSON.stringify(outcome),
+      createdBy: outcome.validatedBy,
+    });
   }
   
   /**
@@ -221,13 +271,36 @@ export class RCAStore {
     avgConfidence: number;
     avgTimeToResolve: number;
   }> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
+    const incidents = await this.store.listIncidents(tenantId, {
+      from: options.from,
+      to: options.to,
+      limit: 10_000,
+    });
+    const diagnoses: StoredRCADiagnosis[] = [];
+    for (const incident of incidents) {
+      const notes = await this.store.listIncidentNotes(incident.id, "rca_diagnosis");
+      for (const note of notes) {
+        const diagnosis = parseNote<StoredRCADiagnosis>(note.content);
+        if (diagnosis && diagnosis.status === "validated" &&
+            (!options.rootCauseCode || diagnosis.primaryCause.code === options.rootCauseCode)) {
+          diagnoses.push(diagnosis);
+        }
+      }
+    }
+    const correctPredictions = diagnoses.filter((diagnosis) => diagnosis.actualRootCause === diagnosis.primaryCause.code).length;
+    const byRootCause: Record<string, { total: number; correct: number; accuracy: number }> = {};
+    for (const diagnosis of diagnoses) {
+      const entry = byRootCause[diagnosis.primaryCause.code] ??= { total: 0, correct: 0, accuracy: 0 };
+      entry.total += 1;
+      if (diagnosis.actualRootCause === diagnosis.primaryCause.code) entry.correct += 1;
+      entry.accuracy = entry.correct / entry.total * 100;
+    }
     return {
-      totalCases: 0,
-      correctPredictions: 0,
-      accuracyPercent: 0,
-      byRootCause: {},
-      avgConfidence: 0,
+      totalCases: diagnoses.length,
+      correctPredictions,
+      accuracyPercent: diagnoses.length ? correctPredictions / diagnoses.length * 100 : 0,
+      byRootCause,
+      avgConfidence: diagnoses.length ? diagnoses.reduce((sum, item) => sum + item.confidenceScore, 0) / diagnoses.length : 0,
       avgTimeToResolve: 0,
     };
   }
@@ -236,13 +309,22 @@ export class RCAStore {
    * Index diagnosis by fingerprint
    */
   private async indexByFingerprint(diagnosis: StoredRCADiagnosis): Promise<void> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
+    void diagnosis;
   }
   
   /**
    * Index diagnosis by branch
    */
   private async indexByBranch(diagnosis: StoredRCADiagnosis): Promise<void> {
-    // TODO: Implement proper metadata storage in ControlPlaneStore
+    void diagnosis;
+  }
+}
+
+function parseNote<T>(content: unknown): T | null {
+  if (typeof content !== "string") return null;
+  try {
+    return JSON.parse(content) as T;
+  } catch {
+    return null;
   }
 }

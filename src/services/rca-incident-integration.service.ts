@@ -91,11 +91,27 @@ export class RCAIncidentIntegrationService {
     if (!incident.branchId) {
       throw new Error("incident_missing_branch");
     }
+
+    const existingEnrichment = await this.getEnrichment(incidentId, user.tenantId);
+    if (existingEnrichment) {
+      const existingDiagnosis = await this.rcaStore.getDiagnosis(
+        existingEnrichment.diagnosisId,
+        user.tenantId,
+      );
+      if (existingDiagnosis) {
+        return {
+          diagnosis: existingDiagnosis,
+          enrichment: existingEnrichment,
+          remediationActions: await this.getRemediationActions(incidentId, user.tenantId),
+        };
+      }
+    }
     
     // Run RCA analysis
     const diagnosis = await this.runRCAForIncident(incident, user);
     
-    // Store diagnosis linked to incident
+    // Store diagnosis linked to incident before publishing enrichment metadata.
+    // This keeps the metadata from pointing at an unrecoverable diagnosis.
     await this.rcaStore.storeDiagnosis(diagnosis, {
       incidentId,
       status: "active",

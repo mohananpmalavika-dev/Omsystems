@@ -1,17 +1,19 @@
 import type { OperationalTelemetryEnvelope, TelemetryValue } from "./types.js";
 
 export function normalizeRecorderMetrics(metrics: Record<string, TelemetryValue>) {
-  const reachable = booleanMetric(metrics, "reachable") ?? metrics.status !== "offline";
-  const recording = stringMetric(metrics, "recordingStatus");
+  const reportedStatus = stringMetric(metrics, "status").toLowerCase();
+  const reachable = booleanMetric(metrics, "reachable") ?? (reportedStatus === "online" ? true : reportedStatus === "offline" ? false : null);
+  const recording = stringMetric(metrics, "recordingStatus").toLowerCase();
   const connected = numberMetric(metrics, "connectedCameras");
   const total = numberMetric(metrics, "totalCameras");
   const reasons: string[] = [];
-  let status = reachable ? "online" : "offline";
-  if (!reachable) reasons.push("recorder_unreachable");
-  if (reachable && (recording === "stopped" || recording === "error" || recording === "partial")) { status = "degraded"; reasons.push("recorder_not_recording"); }
-  if (reachable && (!recording || recording === "unknown")) { status = "degraded"; reasons.push("recorder_recording_unverified"); }
-  if (reachable && connected !== null && total !== null && connected < total) { status = "degraded"; reasons.push("recorder_channels_offline"); }
-  return { metrics: { ...metrics, status, reachable }, reasonCodes: reasons.length ? reasons : ["recorder_healthy"] };
+  let status: "online" | "offline" | "degraded" | "unknown" = reachable === false ? "offline" : reachable === true ? "online" : "unknown";
+  if (reachable === false) reasons.push("recorder_unreachable");
+  if (reachable === null) reasons.push("recorder_reachability_unverified");
+  if (reachable === true && (recording === "stopped" || recording === "error" || recording === "partial")) { status = "degraded"; reasons.push("recorder_not_recording"); }
+  if (reachable === true && (!recording || recording === "unknown")) { status = "degraded"; reasons.push("recorder_recording_unverified"); }
+  if (reachable === true && connected !== null && total !== null && (connected < total || connected > total)) { status = "degraded"; reasons.push(connected > total ? "recorder_channel_count_invalid" : "recorder_channels_offline"); }
+  return { metrics: { ...metrics, status, reachable, recordingStatus: recording || "unknown" }, reasonCodes: reasons.length ? reasons : ["recorder_healthy"] };
 }
 
 export function projectRecorderHealth(envelope: OperationalTelemetryEnvelope, branch: { id: string; name: string }) {
@@ -26,7 +28,7 @@ export function projectRecorderHealth(envelope: OperationalTelemetryEnvelope, br
     ipAddress: stringMetric(envelope.metrics, "ipAddress") || null,
     protocol: stringMetric(envelope.metrics, "protocol") || "onvif",
     status: recorderStatus(envelope.metrics.status),
-    reachable: booleanMetric(envelope.metrics, "reachable") ?? false,
+    reachable: booleanMetric(envelope.metrics, "reachable") ?? recorderStatus(envelope.metrics.status) === "online",
     latencyMs: numberMetric(envelope.metrics, "latencyMs"), uptimeSeconds: numberMetric(envelope.metrics, "uptimeSeconds"),
     recordingStatus: stringMetric(envelope.metrics, "recordingStatus") || "unknown",
     recordingChannels: numberMetric(envelope.metrics, "recordingChannels"),
@@ -54,7 +56,7 @@ export function projectRecorderChannelHealth(envelope: OperationalTelemetryEnvel
 
 function recorderStatus(value: TelemetryValue | undefined) { return value === "online" || value === "offline" || value === "degraded" ? value : "unknown" as const; }
 function channelStatus(value: TelemetryValue | undefined) { return value === "recording" || value === "stopped" ? value : "unknown" as const; }
-function numberMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "number" && Number.isFinite(value) ? value : null; }
+function numberMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null; }
 function stringMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "string" ? value : ""; }
 function nullableStringMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "string" ? value : null; }
 function booleanMetric(metrics: Record<string, TelemetryValue>, name: string) { const value = metrics[name]; return typeof value === "boolean" ? value : null; }

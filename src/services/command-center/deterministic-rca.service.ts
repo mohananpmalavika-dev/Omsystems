@@ -33,6 +33,32 @@ export class DeterministicRcaService {
     wanStatus: "ONLINE" | "DISCONNECTED" | "PACKET_LOSS";
   }): Promise<DeterministicRcaResult> {
     const now = new Date().toISOString();
+    const unreachableNodeIds = input.unreachableNodeIds.filter(Boolean);
+    const normalizedNodeIds = unreachableNodeIds.map((id) => id.toLowerCase());
+    const cameraCount = normalizedNodeIds.filter((id) => id.includes("cam")).length;
+    const recorderCount = normalizedNodeIds.filter((id) => id.includes("nvr") || id.includes("recorder") || id.includes("dvr")).length;
+    const suppressedAlertsCount = unreachableNodeIds.length;
+
+    if (input.powerStatus === "NORMAL" && input.wanStatus === "ONLINE" && unreachableNodeIds.length === 0) {
+      return {
+        incidentId: `rca-unknown-${input.branchId}`,
+        branchId: input.branchId,
+        rootCauseNodeId: `branch-${input.branchId}`,
+        rootCauseNodeType: "CAMERA",
+        rootCauseName: "No confirmed failed node",
+        failureType: "INSUFFICIENT_EVIDENCE",
+        detectedAt: now,
+        confidenceScore: 0,
+        blastRadius: {
+          suppressedAlertsCount: 0,
+          dependentRecordersCount: 0,
+          dependentCamerasCount: 0,
+          dependentAiPipelinesCount: 0,
+        },
+        remediationAction: "Collect current device, network, and power telemetry before dispatching remediation.",
+        narrativeExplanation: `No outage signal or unreachable node was provided for Branch ${input.branchId}. A root cause cannot be determined from the available evidence.`,
+      };
+    }
 
     // 1. Rule 1: Power Outage Root Cause
     if (input.powerStatus === "UPS_CRITICAL" || input.powerStatus === "MAINS_OUTAGE") {
@@ -46,18 +72,18 @@ export class DeterministicRcaService {
         detectedAt: now,
         confidenceScore: 0.99,
         blastRadius: {
-          suppressedAlertsCount: 48,
-          dependentRecordersCount: 1,
-          dependentCamerasCount: 20,
-          dependentAiPipelinesCount: 5,
+          suppressedAlertsCount,
+          dependentRecordersCount: recorderCount,
+          dependentCamerasCount: cameraCount,
+          dependentAiPipelinesCount: 0,
         },
         remediationAction: "Notify Branch Facilities & Electricity Board. Dispatch UPS AMC vendor.",
-        narrativeExplanation: `Branch ${input.branchId} is in outage due to AC Mains Power Loss and UPS Battery Depletion. All downstream recorders and cameras lost power. 48 cascading disconnect alerts were suppressed to prevent operator alarm storm.`,
+        narrativeExplanation: `Branch ${input.branchId} is in outage due to AC Mains Power Loss and UPS Battery Depletion. ${suppressedAlertsCount} unreachable node(s) were correlated as downstream impact.`,
       };
     }
 
     // 2. Rule 2: Primary WAN / Router Failure Root Cause
-    if (input.wanStatus === "DISCONNECTED" || input.unreachableNodeIds.some((id) => id.includes("router"))) {
+    if (input.wanStatus === "DISCONNECTED" || normalizedNodeIds.some((id) => id.includes("router"))) {
       return {
         incidentId: `rca-wan-${input.branchId}`,
         branchId: input.branchId,
@@ -68,18 +94,18 @@ export class DeterministicRcaService {
         detectedAt: now,
         confidenceScore: 0.98,
         blastRadius: {
-          suppressedAlertsCount: 24,
-          dependentRecordersCount: 1,
-          dependentCamerasCount: 16,
-          dependentAiPipelinesCount: 4,
+          suppressedAlertsCount,
+          dependentRecordersCount: recorderCount,
+          dependentCamerasCount: cameraCount,
+          dependentAiPipelinesCount: 0,
         },
         remediationAction: "Check ISP Primary Fiber link. Failover to 4G Secondary Backup WAN.",
-        narrativeExplanation: `Branch ${input.branchId} connectivity is interrupted because Router-01 became unreachable at ${new Date().toLocaleTimeString()}. The local NVR recorder and dependent cameras are operational locally but isolated from central surveillance. 24 downstream alerts were suppressed.`,
+        narrativeExplanation: `Branch ${input.branchId} connectivity is interrupted because a router became unreachable at ${now}. ${suppressedAlertsCount} downstream alert(s) were correlated.`,
       };
     }
 
     // 3. Rule 3: NVR Failure Root Cause
-    if (input.unreachableNodeIds.some((id) => id.includes("nvr") || id.includes("recorder"))) {
+    if (normalizedNodeIds.some((id) => id.includes("nvr") || id.includes("recorder") || id.includes("dvr"))) {
       return {
         incidentId: `rca-nvr-${input.branchId}`,
         branchId: input.branchId,
@@ -90,13 +116,34 @@ export class DeterministicRcaService {
         detectedAt: now,
         confidenceScore: 0.96,
         blastRadius: {
-          suppressedAlertsCount: 16,
-          dependentRecordersCount: 1,
-          dependentCamerasCount: 16,
-          dependentAiPipelinesCount: 3,
+          suppressedAlertsCount,
+          dependentRecordersCount: recorderCount,
+          dependentCamerasCount: cameraCount,
+          dependentAiPipelinesCount: 0,
         },
         remediationAction: "Perform remote soft reboot of NVR service via Edge Gateway daemon. If unresponsive, dispatch hardware technician.",
-        narrativeExplanation: `Branch ${input.branchId} recorder failed to respond to ONVIF/RTSP health checks. Cameras remain reachable over LAN switch. 16 camera recording drop alerts were correlated into this single NVR incident.`,
+        narrativeExplanation: `Branch ${input.branchId} recorder failed to respond to ONVIF/RTSP health checks. Cameras remain reachable over LAN switch. ${suppressedAlertsCount} recording alert(s) were correlated into this single NVR incident.`,
+      };
+    }
+
+    if (unreachableNodeIds.length === 0) {
+      return {
+        incidentId: `rca-unknown-${input.branchId}`,
+        branchId: input.branchId,
+        rootCauseNodeId: `branch-${input.branchId}`,
+        rootCauseNodeType: "CAMERA",
+        rootCauseName: "No confirmed failed node",
+        failureType: "INSUFFICIENT_EVIDENCE",
+        detectedAt: now,
+        confidenceScore: 0,
+        blastRadius: {
+          suppressedAlertsCount: 0,
+          dependentRecordersCount: 0,
+          dependentCamerasCount: 0,
+          dependentAiPipelinesCount: 0,
+        },
+        remediationAction: "Collect device-level failure telemetry before dispatching remediation.",
+        narrativeExplanation: `Branch ${input.branchId} has a network signal but no failed node was identified. A device root cause cannot be determined from the available evidence.`,
       };
     }
 
@@ -104,17 +151,17 @@ export class DeterministicRcaService {
     return {
       incidentId: `rca-cam-${input.branchId}`,
       branchId: input.branchId,
-      rootCauseNodeId: input.unreachableNodeIds[0] || "cam-01",
+      rootCauseNodeId: unreachableNodeIds[0]!,
       rootCauseNodeType: "CAMERA",
       rootCauseName: "Isolated Camera Unit",
       failureType: "POE_PORT_OR_CABLE_FAULT",
       detectedAt: now,
       confidenceScore: 0.92,
       blastRadius: {
-        suppressedAlertsCount: 1,
+        suppressedAlertsCount,
         dependentRecordersCount: 0,
         dependentCamerasCount: 1,
-        dependentAiPipelinesCount: 1,
+        dependentAiPipelinesCount: 0,
       },
       remediationAction: "Inspect PoE switch port and RJ45 connector on camera.",
       narrativeExplanation: `Isolated single camera drop on Branch ${input.branchId}. Upstream switch and NVR recorder are fully healthy.`,

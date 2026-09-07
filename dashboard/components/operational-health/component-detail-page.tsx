@@ -13,18 +13,22 @@ type Projection = BranchHealth & { components: Record<ComponentKey, { status: He
 export function ComponentDetailPage({ title, component }: { title: string; component: ComponentKey }) {
   const [branches, setBranches] = useState<Projection[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const data = await fetchBranchesHealth({ limit: 500 });
       setBranches((data.branches as Projection[]) ?? []);
-    } catch {
-      // ignore
+      setError(null);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Camera health data is unavailable");
     } finally { setLoading(false); }
   }, []);
   useEffect(() => { void load(); const timer = setInterval(load, 30_000); return () => clearInterval(timer); }, [load]);
   const live = useOperationalHealthStream(useCallback(() => { void load(); }, [load]));
   return <div className="page-container">
     <div className="flex justify-between items-start mb-6"><div><h1 className="text-2xl font-bold">{title}</h1><p className="text-sm text-gray-500">Branch-by-branch status · {live ? "live" : "polling fallback"}</p></div><button className="btn-secondary flex gap-2" onClick={load}><RefreshCw size={16} className={loading ? "animate-spin" : ""}/>Refresh</button></div>
+    {error && <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">Latest camera health data could not be refreshed: {error}</div>}
+    {!loading && !error && branches.length === 0 && <div className="card py-10 text-center text-gray-500">No branch camera health data is available for your current access scope.</div>}
     <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
       {branches.map((branch) => {
         const health = branch.components[component];

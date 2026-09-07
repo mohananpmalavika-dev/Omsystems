@@ -123,4 +123,20 @@ describe("Storage Failover Service & REST API Suite", () => {
     expect(eventsData[0].toStorageNodeId).toBe("node-video2");
     expect(eventsData[0].reason).toBe("STORAGE_OFFLINE");
   });
+
+  it("rejects invalid audit-event page sizes at the API boundary", async () => {
+    const app = Fastify();
+    await registerStorageFailoverRoutes(app, {
+      failoverService: new StorageFailoverService(undefined as any, new StorageFailoverRouter()),
+      failoverRouter: new StorageFailoverRouter(),
+    });
+    await app.ready();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/storage/failover/events?limit=201",
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
 });

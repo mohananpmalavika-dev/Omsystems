@@ -126,6 +126,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
     const snapshot = await snapshots.getBranchSnapshot(auth.tenantId, camera.branchId, false, auth.user);
     const health = snapshot?.cameraList?.find((item) => item.id === cameraId);
     if (!health) return reply.code(404).send({ success: false, error: "Camera health telemetry not found" });
+    const observedAt = new Date(health.observedAt || health.lastHeartbeat || Date.now());
 
     const evaluator = new CameraHealthEvaluator();
     const evaluatedHealth = evaluator.evaluate({
@@ -138,8 +139,7 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
         ipAddress: camera.ipAddress || "127.0.0.1",
       },
       network: { reachable: health.onlineStatus === "online", port: 554, latencyMs: health.latencyMs ?? 10, protocol: "TCP" },
-      stream: { reachable: health.streamAvailable, videoTrackPresent: health.streamAvailable },
-      decode: { decodable: health.streamAvailable, decodedFrames: 10, decodeErrors: 0 },
+      stream: health.state === "UNKNOWN" ? undefined : { reachable: health.streamAvailable, videoTrackPresent: health.streamAvailable },
       recorderChannel: {
         channelId: `ch-${camera.channel}`,
         channelNumber: Number(camera.channel) || 1,
@@ -151,10 +151,11 @@ export async function registerBranchCommandCenterRoutes(app: FastifyInstance, st
       },
       recording: {
         activelyWriting: health.recordingStatus === "recording",
-        recentSegmentsCount: 24,
-        archiveContinuityOk: true,
-        observedAt: new Date(health.observedAt || Date.now()),
+        recentSegmentsCount: health.recordingStatus === "recording" ? 1 : 0,
+        archiveContinuityOk: health.recordingStatus === "recording",
+        observedAt,
       },
+      observedAt,
     });
 
     return reply.send({

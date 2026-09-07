@@ -258,11 +258,17 @@ export class DVRNVRMonitorService extends EventEmitter {
       // Calculate latency
       healthData.latencyMs = Date.now() - startTime;
 
-      // Update device status
+      // Preserve the last successful heartbeat. A vendor poll that reports an
+      // offline device is a failed reachability observation, not a heartbeat.
       const previousStatus = device.status;
-      device.status = healthData.status;
-      device.lastHeartbeat = new Date();
-      device.consecutiveFailures = 0;
+      if (healthData.status === "offline") {
+        device.consecutiveFailures++;
+        device.status = device.consecutiveFailures >= 3 ? "offline" : "degraded";
+      } else {
+        device.status = healthData.status;
+        device.lastHeartbeat = new Date();
+        device.consecutiveFailures = 0;
+      }
 
       // Store health data
       this.healthCache.set(device.id, healthData);
@@ -562,9 +568,7 @@ export class DVRNVRMonitorService extends EventEmitter {
    * Get Basic Auth header
    */
   private getBasicAuth(credentials?: { username: string; password: string }): string {
-    if (!credentials) {
-      return "Basic " + Buffer.from("admin:admin12345").toString("base64");
-    }
+    if (!credentials) return "";
     return "Basic " + Buffer.from(`${credentials.username}:${credentials.password}`).toString("base64");
   }
 
@@ -711,16 +715,34 @@ export class DVRNVRMonitorService extends EventEmitter {
     return this.healthCache.get(deviceId);
   }
 
+  /** Runs a monitored device check immediately for an operator request. */
+  async checkNow(deviceId: string): Promise<DVRNVRHealthData | undefined> {
+    const device = this.devices.get(deviceId);
+    if (!device) throw new Error(`Device ${deviceId} not found`);
+    await this.pollDevice(device);
+    return this.healthCache.get(deviceId);
+  }
+
   /**
    * Get monitoring statistics
    */
   getStatistics(): MonitoringStats {
-    const devices = Array.from(this.devices.values());
+    return this.statisticsFor(Array.from(this.devices.values()));
+  }
+
+  getStatisticsForTenant(tenantId: string): MonitoringStats {
+    return this.statisticsFor(Array.from(this.devices.values()).filter((device) => device.tenantId === tenantId));
+  }
+
+  private statisticsFor(devices: DVRNVRDevice[]): MonitoringStats {
     const onlineDevices = devices.filter((d) => d.status === "online");
     const offlineDevices = devices.filter((d) => d.status === "offline");
     const degradedDevices = devices.filter((d) => d.status === "degraded");
 
-    const healthData = Array.from(this.healthCache.values());
+    const healthData = devices.flatMap((device) => {
+      const health = this.healthCache.get(device.id);
+      return health ? [health] : [];
+    });
     const avgLatencyMs = healthData.length > 0
       ? healthData.reduce((sum, h) => sum + (h.latencyMs || 0), 0) / healthData.length
       : 0;

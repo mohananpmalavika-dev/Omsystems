@@ -8,6 +8,9 @@ import type {
   CameraConfiguration,
   CameraHealth,
   BranchCameraHealthSummary,
+  StreamProbeResult,
+  DecodeProbeResult,
+  FreezeAnalysis,
 } from "./types.js";
 import { networkProbe, NetworkProbe } from "./network-probe.js";
 import { rtspProbe, RtspProbe } from "./rtsp-probe.js";
@@ -28,10 +31,18 @@ export class CameraHealthService {
     const observedAt = new Date();
 
     // 1. Layer 1: Network probe
-    const network = await this.netProbe.probe(camera);
+    let network;
+    try {
+      network = await this.netProbe.probe(camera);
+    } catch {
+      // A failed collector must be visible as missing evidence, never crash a
+      // branch sweep or be misclassified as a camera outage.
+      return this.evaluator.evaluate({ camera, observedAt });
+    }
 
-    // If network fails, evaluate immediately without wasting decoder/stream resources
-    if (!network.reachable && (camera.channelNumber === 4 || camera.id.includes("cam-04"))) {
+    // A failed TCP probe is sufficient evidence for a critical path fault; do
+    // not consume RTSP/decoder capacity for a camera that cannot be reached.
+    if (!network.reachable) {
       return this.evaluator.evaluate({
         camera,
         network,
@@ -40,32 +51,32 @@ export class CameraHealthService {
     }
 
     // 2. Layer 2: RTSP inspection
-    const stream = await this.streamProbe.inspect(camera);
+    let stream: StreamProbeResult | undefined;
+    try {
+      stream = await this.streamProbe.inspect(camera);
+    } catch {
+      return this.evaluator.evaluate({ camera, network, observedAt });
+    }
 
     // 3. Layer 3: Selective frame decode sample
-    const decode = stream.reachable ? await this.decProbe.sample(camera) : undefined;
+    let decode: DecodeProbeResult | undefined;
+    if (stream.reachable) {
+      try {
+        decode = await this.decProbe.sample(camera);
+      } catch {
+        return this.evaluator.evaluate({ camera, network, stream, observedAt });
+      }
+    }
 
     // 4. Layer 4: Freeze analysis
-    const freeze = decode?.decodable ? await this.frzDetector.analyze(camera) : undefined;
-
-    // 5. Layers 5-7: Recorder & Recording status
-    const recorderChannel = {
-      channelId: `ch-${camera.channelNumber}`,
-      channelNumber: camera.channelNumber,
-      configured: true,
-      connected: camera.channelNumber !== 4,
-      signalPresent: camera.channelNumber !== 4,
-      enabled: true,
-      observedAt,
-    };
-
-    const recording = {
-      activelyWriting: camera.channelNumber !== 7 && camera.channelNumber !== 4,
-      lastRecordedAt: new Date(),
-      recentSegmentsCount: 24,
-      archiveContinuityOk: true,
-      observedAt,
-    };
+    let freeze: FreezeAnalysis | undefined;
+    if (decode?.decodable) {
+      try {
+        freeze = await this.frzDetector.analyze(camera);
+      } catch {
+        return this.evaluator.evaluate({ camera, network, stream, decode, observedAt });
+      }
+    }
 
     return this.evaluator.evaluate({
       camera,
@@ -73,8 +84,6 @@ export class CameraHealthService {
       stream,
       decode,
       freeze,
-      recorderChannel,
-      recording,
       observedAt,
     });
   }

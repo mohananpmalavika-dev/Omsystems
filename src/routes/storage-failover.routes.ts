@@ -35,6 +35,17 @@ const triggerFailoverSchema = z.object({
   cameraId: z.string().uuid().optional(),
 });
 
+function parseRequest<T>(schema: z.ZodType<T>, value: unknown, reply: FastifyReply): T | undefined {
+  const parsed = schema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  reply.code(400).send({
+    success: false,
+    error: "invalid_request",
+    details: parsed.error.flatten(),
+  });
+  return undefined;
+}
+
 export async function registerStorageFailoverRoutes(
   app: FastifyInstance,
   options: {
@@ -50,10 +61,12 @@ export async function registerStorageFailoverRoutes(
    * Lists permitted recording targets and their priorities
    */
   app.get("/api/v1/storage/failover/targets", async (request: FastifyRequest, reply: FastifyReply) => {
-    const { mediaNodeId, cameraId } = z.object({
+    const input = parseRequest(z.object({
       mediaNodeId: z.string().min(1),
       cameraId: z.string().uuid().optional(),
-    }).parse(request.query || {});
+    }), request.query || {}, reply);
+    if (!input) return reply;
+    const { mediaNodeId, cameraId } = input;
 
     const targets = await service.getTargets(mediaNodeId, cameraId);
     const active = await router.getActiveTarget(mediaNodeId, cameraId);
@@ -74,7 +87,8 @@ export async function registerStorageFailoverRoutes(
    * Configures a permitted recording target with priority
    */
   app.post("/api/v1/storage/failover/targets", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = configureTargetSchema.parse(request.body);
+    const input = parseRequest(configureTargetSchema, request.body, reply);
+    if (!input) return reply;
     const entry = await service.configureTarget(input as any);
 
     return reply.code(201).send({
@@ -88,7 +102,8 @@ export async function registerStorageFailoverRoutes(
    * Triggers a failover on a target (e.g. simulated disk drop or manual re-route)
    */
   app.post("/api/v1/storage/failover/trigger", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = triggerFailoverSchema.parse(request.body);
+    const input = parseRequest(triggerFailoverSchema, request.body, reply);
+    if (!input) return reply;
     const result = await service.triggerFailover(
       input.mediaNodeId,
       input.targetId,
@@ -108,10 +123,12 @@ export async function registerStorageFailoverRoutes(
    * Lists historical failover audit events
    */
   app.get("/api/v1/storage/failover/events", async (request: FastifyRequest, reply: FastifyReply) => {
-    const { mediaNodeId, limit } = z.object({
+    const input = parseRequest(z.object({
       mediaNodeId: z.string().optional(),
-      limit: z.coerce.number().int().positive().default(50),
-    }).parse(request.query || {});
+      limit: z.coerce.number().int().min(1).max(200).default(50),
+    }), request.query || {}, reply);
+    if (!input) return reply;
+    const { mediaNodeId, limit } = input;
 
     const events = await service.listFailoverEvents(mediaNodeId, limit);
     return reply.code(200).send({

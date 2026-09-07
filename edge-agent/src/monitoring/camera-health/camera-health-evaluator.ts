@@ -1,183 +1,76 @@
-/**
- * Camera Health Evaluator & Classification Engine
- * 
- * Normalizes multi-layer probe observations into evidence-bearing HealthObservation<T>
- * and computes deterministic operational states with explainable reason codes.
- */
-
+/** Evidence-based seven-layer camera health classification. */
 import type {
-  CameraConfiguration,
-  CameraHealth,
-  CameraOperationalState,
-  CameraHealthReason,
-  HealthObservation,
-  NetworkProbeResult,
-  StreamProbeResult,
-  DecodeProbeResult,
-  FreezeAnalysis,
-  RecorderChannelStatus,
-  RecordingProbeResult,
+  CameraConfiguration, CameraHealth, CameraOperationalState, CameraHealthReason,
+  HealthObservation, NetworkProbeResult, StreamProbeResult, DecodeProbeResult,
+  FreezeAnalysis, RecorderChannelStatus, RecordingProbeResult,
 } from "./types.js";
 
 export const HEALTH_STALE_AFTER_MS = 90_000;
 
 export interface EvaluationInput {
   camera: CameraConfiguration;
-  network?: NetworkProbeResult | undefined;
-  stream?: StreamProbeResult | undefined;
-  decode?: DecodeProbeResult | undefined;
-  freeze?: FreezeAnalysis | undefined;
-  recorderChannel?: RecorderChannelStatus | undefined;
-  recording?: RecordingProbeResult | undefined;
-  observedAt?: Date | undefined;
+  network?: NetworkProbeResult;
+  stream?: StreamProbeResult;
+  decode?: DecodeProbeResult;
+  freeze?: FreezeAnalysis;
+  recorderChannel?: RecorderChannelStatus;
+  recording?: RecordingProbeResult;
+  observedAt?: Date;
+}
+
+function observation(available: boolean, passed: boolean | undefined, observedAt: Date, source: HealthObservation<boolean>["source"], confidence: number, errorCode?: string, latencyMs?: number): HealthObservation<boolean> {
+  return {
+    state: !available || passed === undefined ? "UNKNOWN" : passed ? "PASS" : "FAIL",
+    value: available ? passed : undefined,
+    observedAt, source, confidence: available ? confidence : 0,
+    errorCode: available && passed === false ? errorCode : undefined, latencyMs,
+  };
 }
 
 export class CameraHealthEvaluator {
   evaluate(input: EvaluationInput): CameraHealth {
     const observedAt = input.observedAt ?? new Date();
+    const observedAtMs = observedAt.getTime();
+    const isStale = !Number.isFinite(observedAtMs) || Date.now() - observedAtMs > HEALTH_STALE_AFTER_MS;
     const reasonCodes: CameraHealthReason[] = [];
 
-    // 1. Layer 1: Network Connectivity
-    const netReachable = input.network?.reachable ?? (input.camera.channelNumber !== 4);
-    const network: HealthObservation<boolean> = {
-      state: netReachable ? "PASS" : "FAIL",
-      value: netReachable,
-      observedAt,
-      source: "TCP",
-      confidence: 0.98,
-      latencyMs: input.network?.latencyMs ?? 12,
-      errorCode: netReachable ? undefined : "NETWORK_UNREACHABLE",
-    };
-    if (!netReachable) reasonCodes.push("NETWORK_UNREACHABLE");
-
-    // 2. Layer 2: RTSP Stream
-    const streamAvail = input.stream?.videoTrackPresent ?? (netReachable && input.camera.channelNumber !== 4);
-    const stream: HealthObservation<boolean> = {
-      state: streamAvail ? "PASS" : "FAIL",
-      value: streamAvail,
-      observedAt,
-      source: "RTSP",
-      confidence: 0.95,
-      latencyMs: input.stream?.latencyMs ?? 35,
-      errorCode: streamAvail ? undefined : "RTSP_UNREACHABLE",
-    };
-    if (!streamAvail) reasonCodes.push("RTSP_UNREACHABLE");
-
-    // 3. Layer 3: Video Decode
-    const decodable = input.decode?.decodable ?? streamAvail;
-    const decoding: HealthObservation<boolean> = {
-      state: decodable ? "PASS" : "FAIL",
-      value: decodable,
-      observedAt,
-      source: "FFMPEG",
-      confidence: 0.95,
-      latencyMs: input.decode?.latencyMs ?? 50,
-      errorCode: decodable ? undefined : "DECODE_FAILED",
-    };
-    if (!decodable) reasonCodes.push("DECODE_FAILED");
-
-    // 4. Layer 4: Video Freeze
-    const isFrozen = input.freeze?.frozen ?? false;
-    const freeze: HealthObservation<boolean> = {
-      state: isFrozen ? "FAIL" : "PASS",
-      value: !isFrozen,
-      observedAt,
-      source: "FFMPEG",
-      confidence: 0.9,
-      errorCode: isFrozen ? "VIDEO_FROZEN" : undefined,
-    };
-    if (isFrozen) reasonCodes.push("VIDEO_FROZEN");
-
-    // 5. Layer 5: Video Signal
-    const signalLost = input.camera.channelNumber === 4 || input.recorderChannel?.signalPresent === false;
-    const signal: HealthObservation<boolean> = {
-      state: signalLost ? "FAIL" : "PASS",
-      value: !signalLost,
-      observedAt,
-      source: "DAHUA_CGI",
-      confidence: 0.95,
-      errorCode: signalLost ? "SIGNAL_LOST" : undefined,
-    };
-    if (signalLost) reasonCodes.push("SIGNAL_LOST");
-
-    // 6. Layer 6: Recorder Channel Link
-    const recConnected = input.recorderChannel?.connected ?? true;
-    const recorderConnection: HealthObservation<boolean> = {
-      state: recConnected ? "PASS" : "FAIL",
-      value: recConnected,
-      observedAt,
-      source: "DAHUA_CGI",
-      confidence: 0.95,
-      errorCode: recConnected ? undefined : "RECORDER_CHANNEL_DISCONNECTED",
-    };
-    if (!recConnected) reasonCodes.push("RECORDER_CHANNEL_DISCONNECTED");
-
-    // 7. Layer 7: Recording Active
-    const isRecording = input.camera.channelNumber !== 7 && (input.recording?.activelyWriting ?? !signalLost);
-    const recording: HealthObservation<boolean> = {
-      state: isRecording ? "PASS" : "FAIL",
-      value: isRecording,
-      observedAt,
-      source: "RECORDER_ARCHIVE",
-      confidence: 0.95,
-      errorCode: isRecording ? undefined : "RECORDING_STOPPED",
-    };
-    if (!isRecording) reasonCodes.push("RECORDING_STOPPED");
-
-    // Freshness / Stale Check
-    const isStale = Date.now() - observedAt.getTime() > HEALTH_STALE_AFTER_MS;
+    const network = observation(Boolean(input.network), input.network?.reachable, observedAt, "TCP", 0.98, "NETWORK_UNREACHABLE", input.network?.latencyMs);
+    if (network.state === "FAIL") reasonCodes.push("NETWORK_UNREACHABLE");
+    const streamPassed = input.stream ? input.stream.reachable && input.stream.videoTrackPresent : undefined;
+    const streamError = input.stream?.errorCode === "AUTH_FAILED" ? "STREAM_AUTH_FAILED" : input.stream?.errorCode === "NO_VIDEO_TRACK" ? "NO_VIDEO_TRACK" : "RTSP_UNREACHABLE";
+    const stream = observation(Boolean(input.stream), streamPassed, observedAt, "RTSP", 0.95, streamError, input.stream?.latencyMs);
+    if (stream.state === "FAIL") reasonCodes.push(streamError as CameraHealthReason);
+    const decoding = observation(Boolean(input.decode), input.decode?.decodable, observedAt, "FFMPEG", 0.95,
+      input.decode?.errorCode === "CORRUPT_STREAM" ? "CORRUPT_STREAM" : input.decode?.errorCode === "UNSUPPORTED_CODEC" ? "UNSUPPORTED_CODEC" : "DECODE_FAILED", input.decode?.latencyMs);
+    if (decoding.state === "FAIL") reasonCodes.push((decoding.errorCode ?? "DECODE_FAILED") as CameraHealthReason);
+    const freeze = observation(Boolean(input.freeze), input.freeze ? !input.freeze.frozen : undefined, observedAt, "FFMPEG", input.freeze?.confidence ?? 0.9, "VIDEO_FROZEN");
+    if (freeze.state === "FAIL") reasonCodes.push("VIDEO_FROZEN");
+    const signal = observation(input.recorderChannel?.signalPresent != null, input.recorderChannel?.signalPresent ?? undefined, observedAt, "DAHUA_CGI", 0.95, "SIGNAL_LOST");
+    if (signal.state === "FAIL") reasonCodes.push("SIGNAL_LOST");
+    const recorderConnection = observation(input.recorderChannel?.connected != null, input.recorderChannel?.connected ?? undefined, observedAt, "DAHUA_CGI", 0.95, "RECORDER_CHANNEL_DISCONNECTED");
+    if (recorderConnection.state === "FAIL") reasonCodes.push("RECORDER_CHANNEL_DISCONNECTED");
+    const recordingPassed = input.recording ? input.recording.activelyWriting && input.recording.archiveContinuityOk : undefined;
+    const recording = observation(Boolean(input.recording), recordingPassed, observedAt, "RECORDER_ARCHIVE", 0.95, "RECORDING_STOPPED");
+    if (recording.state === "FAIL") reasonCodes.push("RECORDING_STOPPED");
     if (isStale) reasonCodes.push("STALE_OBSERVATION");
 
-    // Operational State Calculation Matrix
+    const layers = [network, stream, decoding, freeze, signal, recorderConnection, recording];
+    const criticalLayers = [network, stream, decoding, freeze, signal];
     let state: CameraOperationalState = "HEALTHY";
-
-    if (isStale) {
-      state = "UNKNOWN";
-    } else if (network.state === "FAIL" || stream.state === "FAIL" || decoding.state === "FAIL" || signal.state === "FAIL" || freeze.state === "FAIL") {
-      state = "CRITICAL";
-    } else if (recording.state === "FAIL" || recorderConnection.state === "FAIL") {
-      // Live video working (network + stream + decode), but recording has stopped -> WARNING/DEGRADED
-      state = "DEGRADED";
-    } else if (network.state === "UNKNOWN" || stream.state === "UNKNOWN") {
-      state = "UNKNOWN";
-    }
-
-    const now = new Date();
+    if (isStale) state = "UNKNOWN";
+    else if (criticalLayers.some((layer) => layer.state === "FAIL")) state = "CRITICAL";
+    else if ([recording, recorderConnection].some((layer) => layer.state === "FAIL")) state = "DEGRADED";
+    else if (layers.some((layer) => layer.state === "UNKNOWN")) state = "UNKNOWN";
 
     return {
-      cameraId: input.camera.id,
-      branchId: input.camera.branchId,
-      cameraName: input.camera.name,
-      channelNumber: input.camera.channelNumber,
-
-      network,
-      stream,
-      decoding,
-      freeze,
-      signal,
-      recorderConnection,
-      recording,
-
-      networkReachable: network.state === "PASS",
-      streamReachable: stream.state === "PASS",
-      framesDecodable: decoding.state === "PASS",
-      videoFrozen: isFrozen,
-      signalLost,
-      recorderConnected: recConnected,
-      recordingActive: isRecording,
-
-      streamLatencyMs: stream.latencyMs,
-      fps: 25,
-      bitrateKbps: 3500,
-      resolution: "1920x1080",
-      codec: "H.264",
-
-      lastFrameAt: decodable ? now : undefined,
-      lastRecordingAt: isRecording ? now : new Date(now.getTime() - 15 * 60_000),
-      observedAt,
-
-      state,
-      reasonCodes,
+      cameraId: input.camera.id, branchId: input.camera.branchId, cameraName: input.camera.name, channelNumber: input.camera.channelNumber,
+      network, stream, decoding, freeze, signal, recorderConnection, recording,
+      networkReachable: network.state === "PASS", streamReachable: stream.state === "PASS", framesDecodable: decoding.state === "PASS",
+      videoFrozen: freeze.state === "FAIL", signalLost: signal.state === "FAIL", recorderConnected: recorderConnection.state === "PASS", recordingActive: recording.state === "PASS",
+      streamLatencyMs: stream.latencyMs, fps: input.stream?.fps ?? input.decode?.fpsObserved, bitrateKbps: input.stream?.bitrateKbps,
+      resolution: input.stream?.width && input.stream?.height ? `${input.stream.width}x${input.stream.height}` : undefined,
+      codec: input.stream?.codec, lastFrameAt: input.decode?.lastFrameAt, lastRecordingAt: input.recording?.lastRecordedAt,
+      observedAt, state, reasonCodes: [...new Set(reasonCodes)],
     };
   }
 }

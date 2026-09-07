@@ -192,10 +192,10 @@ export class LabTestRunner {
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
 
-    const features = request.features ?? [...ALL_FEATURES];
+    const features = [...new Set(request.features ?? [...ALL_FEATURES])];
     const target = request.target;
     const conn = request.connection;
-    const timeout = request.probeTimeoutMs ?? 10_000;
+    const timeout = Math.min(30_000, Math.max(1_000, request.probeTimeoutMs ?? 10_000));
 
     // Select best auth mode
     const authMode =
@@ -219,9 +219,7 @@ export class LabTestRunner {
       mainCodec?.resolutions.find((r) => r.startsWith("1280") || r.startsWith("640"))
       ?? "1280x720";
 
-    const isPtz =
-      target.deviceClass === "PTZ_CAMERA" ||
-      target.codecSupport.some(() => false); // placeholder — real impl checks PTZ profile
+    const isPtz = target.deviceClass === "PTZ_CAMERA";
 
     const results: CompatibilityTestResult[] = [];
 
@@ -236,6 +234,7 @@ export class LabTestRunner {
         mainRes,
         subRes,
         isPtz,
+        request.allowDisruptive === true,
       );
       results.push(result);
     }
@@ -295,6 +294,7 @@ export class LabTestRunner {
     mainRes: string,
     subRes: string,
     hasPtz: boolean,
+    allowDisruptive: boolean,
   ): Promise<CompatibilityTestResult> {
     const base: Omit<CompatibilityTestResult, "status" | "latencyMs" | "note" | "firmwareNotes"> = {
       feature,
@@ -387,6 +387,13 @@ export class LabTestRunner {
         }
 
         case "REBOOT": {
+          if (!allowDisruptive) {
+            return {
+              ...base,
+              status: "NOT_TESTED",
+              note: "Remote reboot requires explicit maintenance-window approval",
+            };
+          }
           const { recovered, recoveryMs } = await this.transport.probeReboot(
             conn.host, conn.httpPort, auth, 5_000, 120_000,
           );

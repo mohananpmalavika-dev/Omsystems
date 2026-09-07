@@ -242,7 +242,8 @@ async function handleRequest(
       const statusCode = error.message === "unauthorized" ? 401
         : error.message.includes("not_found") ? 404
         : error.message.includes("invalid_remediation_action_transition") ||
-          error.message.includes("incident_missing_branch") ? 409
+          error.message.includes("incident_missing_branch") ||
+          error.message.includes("diagnosis_missing_incident") ? 409
         : 500;
       
       return reply.code(statusCode).send({

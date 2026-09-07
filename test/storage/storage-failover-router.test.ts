@@ -229,4 +229,35 @@ describe("Automatic Storage Failover Router Suite", () => {
     expect(active.storageNodeId).toBe("disk-video1");
     expect(active.priority).toBe(1);
   });
+
+  it("never writes through an unrelated pool node when a configured target is missing", async () => {
+    const storagePool = new EnterpriseStoragePool();
+    const router = new StorageFailoverRouter(storagePool);
+    const unrelatedDisk = new LocalDiskStorageProvider({
+      nodeId: "another-recorder-disk",
+      basePath: join(tempDir, "unrelated"),
+      storageTier: "hot",
+    });
+    storagePool.registerNode(unrelatedDisk);
+    router.registerTarget({
+      mediaNodeId: "edge-media-01",
+      storageNodeId: "missing-configured-disk",
+      targetName: "Missing configured disk",
+      targetPath: "/mnt/video1",
+      priority: 1,
+    });
+
+    await expect(router.writeSegmentWithFailover("edge-media-01", "camera/segment.mkv", Buffer.from("recording")))
+      .rejects.toThrow("missing-configured-disk");
+    expect(await unrelatedDisk.exists("camera/segment.mkv")).toBe(false);
+  });
+
+  it("rejects a failover request for a target outside the permitted route", async () => {
+    const router = new StorageFailoverRouter(new EnterpriseStoragePool());
+    router.registerTarget({
+      mediaNodeId: "edge-media-01", storageNodeId: "disk-video1", targetName: "Primary", targetPath: "/mnt/video1",
+    });
+    await expect(router.reportTargetFailure("edge-media-01", "unknown-target", "MANUAL_OVERRIDE"))
+      .rejects.toThrow("not configured");
+  });
 });

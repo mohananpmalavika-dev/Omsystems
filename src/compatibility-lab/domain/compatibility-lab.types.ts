@@ -224,6 +224,12 @@ export interface LabRunRequest {
   /** Timeout per individual feature probe, ms (default 10000) */
   probeTimeoutMs?: number;
 
+  /**
+   * Remote reboot interrupts recording and live viewing. It is disabled unless
+   * an operator has explicitly approved it for a maintenance window.
+   */
+  allowDisruptive?: boolean;
+
   sentinelVersion: string;
 }
 

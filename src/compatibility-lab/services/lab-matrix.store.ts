@@ -55,14 +55,15 @@ export function computeOverallRating(
 
   const passCount = entries.filter((r) => r.status === "PASS").length;
   const failCount = entries.filter((r) => r.status === "FAIL").length;
-  const notTestedCount = entries.filter((r) => r.status === "NOT_TESTED").length;
-
   if (failCount > 0) {
     return passCount >= 3 ? "LIMITED" : "INCOMPATIBLE";
   }
 
   // All tested features are PASS or NA, and all 8 have been tested
-  if (notTestedCount === 0 && entries.length === 8) {
+  if (
+    entries.length === ALL_FEATURES.length &&
+    entries.every((result) => result.status === "PASS" || result.status === "NA")
+  ) {
     return "CERTIFIED";
   }
 

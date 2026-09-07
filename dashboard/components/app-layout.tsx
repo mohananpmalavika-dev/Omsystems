@@ -78,6 +78,7 @@ import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
 import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
+import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -93,6 +94,7 @@ export type NavItem = {
 };
 
 export type MenuAccessUser = {
+  username?: string;
   role?: string;
   customRoleId?: string;
   customRoleName?: string;
@@ -109,6 +111,14 @@ export type NavGroup = {
 
 export const navigation: NavGroup[] = [
   {
+    label: "WORKSPACE",
+    icon: LayoutGrid,
+    items: [
+      { label: "Module Directory", href: "/modules", icon: LayoutGrid },
+      { label: "Support Center", href: "/support", icon: HelpCircle },
+    ],
+  },
+  {
     label: "OPERATIONS",
     icon: LayoutDashboard,
     items: [
@@ -117,12 +127,15 @@ export const navigation: NavGroup[] = [
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
       { label: "AI Alerts & Incidents", href: "/analytics/alerts", icon: BellRing },
       { label: "Alert Operations", href: "/operations/alerts", icon: Radio },
+      { label: "Alert Command Center", href: "/operations/alert-command-center", icon: Bell },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Media Pipeline & Scheduler", href: "/operations/media-pipeline", icon: Layers },
       { label: "HA Failover Cluster", href: "/operations/ha-failover", icon: Server },
+      { label: "Infrastructure Operations", href: "/operations/infrastructure", icon: Network },
+      { label: "Fleet Maintenance Command", href: "/operations/maintenance", icon: Wrench },
       { label: "Fleet Observability & SLO", href: "/operations/observability", icon: BarChart3 },
-       { label: "Performance Observability", href: "/performance", icon: Gauge },
+      { label: "Performance Observability", href: "/performance", icon: Gauge },
     ],
   },
   {
@@ -140,6 +153,11 @@ export const navigation: NavGroup[] = [
       { label: "Edge Gateways", href: "/operations/edge-agents", icon: Cpu },
       { label: "Device Connectivity", href: "/operations/device-connectivity", icon: Network },
       { label: "Diagnostic Scans & Health", href: "/maintenance/health", icon: Gauge },
+      { label: "Security Device Inventory", href: "/security-devices", icon: Server },
+      { label: "Network Device Discovery", href: "/security-devices/discovery", icon: Radar },
+      { label: "Branch Security Posture", href: "/security-devices/branch-posture", icon: ShieldCheck },
+      { label: "Security Device Integrations", href: "/security-devices/integrations", icon: Workflow },
+      { label: "Portable Camera Enrollment", href: "/portable-camera/enroll", icon: Camera },
     ],
   },
   {
@@ -188,10 +206,14 @@ export const navigation: NavGroup[] = [
     icon: ShieldCheck,
     items: [
       { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },
+      { label: "Compliance Dashboard", href: "/compliance/dashboard", icon: LayoutDashboard },
       { label: "Assessments & Audits", href: "/compliance/assessments", icon: ClipboardCheck },
       { label: "Controls & Remediation", href: "/compliance/controls", icon: SlidersHorizontal },
       { label: "Compliance Risk Register", href: "/compliance/risks", icon: ShieldAlert },
       { label: "Compliance Policies", href: "/compliance/policies", icon: FileText },
+      { label: "Compliance Evidence", href: "/compliance/evidence", icon: FileCheck2 },
+      { label: "Compliance Findings", href: "/compliance/findings", icon: AlertTriangle },
+      { label: "Compliance Certificates", href: "/compliance/certificates", icon: FileCheck2 },
       { label: "Privacy Governance (DPIA)", href: "/maintenance/privacy", icon: LockKeyhole },
       { label: "Privacy Breach Incident Log", href: "/maintenance/privacy/breaches", icon: ShieldAlert },
       { label: "Camera Privacy Controls", href: "/maintenance/privacy/cameras", icon: Camera },
@@ -218,7 +240,9 @@ export const navigation: NavGroup[] = [
       { label: "Platform Capability Matrix", href: "/admin/platform/capabilities", icon: ShieldCheck },
       { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
+      { label: "ZTP Fleet Diagnostics", href: "/admin/zero-touch/diagnostics", icon: Gauge },
       { label: "AI Quality & Model Registry", href: "/admin/ai-quality", icon: Sparkles },
+      { label: "HA Topology & Chaos Lab", href: "/admin/ha-topology", icon: Server },
       { label: "Automated UI Audit", href: "/admin/qa/ui-audit", icon: Sparkles },
       { label: "Database Tables & Data", href: "/admin/database", icon: Database },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
@@ -236,7 +260,6 @@ export const navigation: NavGroup[] = [
   },
 ];
 
-const unrestrictedRoles = new Set(["super_admin", "company_admin", "hq_admin", "admin", "superadmin"]);
 const legacyRoleWorkspacePaths: Record<string, string[]> = {
   operator: [
     "/",
@@ -380,6 +403,9 @@ export function getAuthorizedNavigation(user: MenuAccessUser | null | undefined)
 
 export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
   if (!user) return filterNavigationByAllowed(navigation, new Set(defaultMenuAccessForRole("operator")));
+  if (hasUnrestrictedMenuAccess(user)) {
+    return navigation;
+  }
   const authorized = getAuthorizedNavigation(user);
   const configuredValue =
     user.menuAccess ??

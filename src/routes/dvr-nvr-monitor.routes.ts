@@ -8,15 +8,31 @@ export async function registerDVRNVRMonitorRoutes(
   monitorService: DVRNVRMonitorService,
   pool: Pool
 ) {
+  const deviceForRequest = (request: FastifyRequest, reply: FastifyReply, id: string) => {
+    const device = monitorService.getDevice(id);
+    const user = request.currentUser;
+    if (!user) {
+      reply.code(401).send({ success: false, error: "authentication_required" });
+      return undefined;
+    }
+    if (!device || device.tenantId !== user.tenantId) {
+      reply.code(404).send({ success: false, error: "device_not_found" });
+      return undefined;
+    }
+    return device;
+  };
+
   // Get monitoring statistics
   app.get("/v1/dvr-nvr/monitor/stats", async (request, reply) => {
-    const stats = monitorService.getStatistics();
+    if (!request.currentUser) return reply.code(401).send({ success: false, error: "authentication_required" });
+    const stats = monitorService.getStatisticsForTenant(request.currentUser.tenantId);
     return { success: true, data: stats };
   });
 
   // Get all monitored devices
   app.get("/v1/dvr-nvr/monitor/devices", async (request, reply) => {
-    const devices = monitorService.getAllDevices();
+    if (!request.currentUser) return reply.code(401).send({ success: false, error: "authentication_required" });
+    const devices = monitorService.getAllDevices().filter((device) => device.tenantId === request.currentUser!.tenantId);
     return {
       success: true,
       data: devices.map((d) => ({
@@ -39,13 +55,8 @@ export async function registerDVRNVRMonitorRoutes(
   app.get("/v1/dvr-nvr/monitor/devices/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
 
-    const device = monitorService.getDevice(id);
-    if (!device) {
-      return reply.code(404).send({
-        success: false,
-        error: "Device not found",
-      });
-    }
+    const device = deviceForRequest(request, reply, id);
+    if (!device) return;
 
     const health = monitorService.getDeviceHealth(id);
 
@@ -75,7 +86,8 @@ export async function registerDVRNVRMonitorRoutes(
   // Get device health history
   app.get("/v1/dvr-nvr/monitor/devices/:id/history", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const { hours = 24 } = z.object({ hours: z.coerce.number().default(24) }).parse(request.query);
+    if (!deviceForRequest(request, reply, id)) return;
+    const { hours = 24 } = z.object({ hours: z.coerce.number().int().min(1).max(24 * 90).default(24) }).parse(request.query);
 
     try {
       const result = await pool.query(
@@ -95,10 +107,10 @@ export async function registerDVRNVRMonitorRoutes(
           error_message as "errorMessage"
         FROM dvr_nvr_health
         WHERE device_id = $1
-        AND timestamp >= NOW() - INTERVAL '${hours} hours'
+        AND timestamp >= NOW() - ($2 * INTERVAL '1 hour')
         ORDER BY timestamp DESC
         LIMIT 1000`,
-        [id]
+        [id, hours]
       );
 
       return {
@@ -116,7 +128,8 @@ export async function registerDVRNVRMonitorRoutes(
   // Get device uptime statistics
   app.get("/v1/dvr-nvr/monitor/devices/:id/uptime", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const { days = 7 } = z.object({ days: z.coerce.number().default(7) }).parse(request.query);
+    if (!deviceForRequest(request, reply, id)) return;
+    const { days = 7 } = z.object({ days: z.coerce.number().int().min(1).max(365).default(7) }).parse(request.query);
 
     try {
       const result = await pool.query(
@@ -134,8 +147,8 @@ export async function registerDVRNVRMonitorRoutes(
           MAX(timestamp) as period_end
         FROM dvr_nvr_health
         WHERE device_id = $1
-        AND timestamp >= NOW() - INTERVAL '${days} days'`,
-        [id]
+        AND timestamp >= NOW() - ($2 * INTERVAL '1 day')`,
+        [id, days]
       );
 
       return {
@@ -153,6 +166,7 @@ export async function registerDVRNVRMonitorRoutes(
   // Update device monitoring configuration
   app.patch("/v1/dvr-nvr/monitor/devices/:id/config", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
+    if (!deviceForRequest(request, reply, id)) return;
     const updateSchema = z.object({
       pollingInterval: z.number().min(10).max(3600).optional(),
       timeoutMs: z.number().min(1000).max(60000).optional(),
@@ -179,6 +193,10 @@ export async function registerDVRNVRMonitorRoutes(
   // Get branch-level statistics
   app.get("/v1/dvr-nvr/monitor/branches/:branchId/stats", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
+    const user = request.currentUser;
+    if (!user) return reply.code(401).send({ success: false, error: "authentication_required" });
+    const branchDevice = monitorService.getAllDevices().find((device) => device.branchId === branchId && device.tenantId === user.tenantId);
+    if (!branchDevice) return reply.code(404).send({ success: false, error: "branch_not_found" });
 
     try {
       const result = await pool.query(
@@ -212,6 +230,8 @@ export async function registerDVRNVRMonitorRoutes(
   // Get tenant-level statistics
   app.get("/v1/dvr-nvr/monitor/tenants/:tenantId/stats", async (request, reply) => {
     const { tenantId } = z.object({ tenantId: z.string().min(1) }).parse(request.params);
+    if (!request.currentUser) return reply.code(401).send({ success: false, error: "authentication_required" });
+    if (request.currentUser.tenantId !== tenantId) return reply.code(404).send({ success: false, error: "tenant_not_found" });
 
     try {
       const result = await pool.query(
@@ -250,24 +270,19 @@ export async function registerDVRNVRMonitorRoutes(
   app.post("/v1/dvr-nvr/monitor/devices/:id/check", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
 
-    const device = monitorService.getDevice(id);
-    if (!device) {
-      return reply.code(404).send({
-        success: false,
-        error: "Device not found",
-      });
-    }
+    const device = deviceForRequest(request, reply, id);
+    if (!device) return;
 
-    // Manual check will be performed on next poll cycle
-    // You could also implement immediate check here
+    const health = await monitorService.checkNow(id);
     return {
       success: true,
-      message: "Health check queued",
+      message: "Health check completed",
       device: {
         id: device.id,
         status: device.status,
         lastPolled: device.lastPolled,
       },
+      health,
     };
   });
 }

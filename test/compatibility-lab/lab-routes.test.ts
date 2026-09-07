@@ -269,7 +269,7 @@ describe("Compatibility Lab Routes", () => {
 
   // ── POST /run-test ────────────────────────────────────────────────────────
 
-  it("POST /run-test triggers an offline lab run and returns results", async () => {
+  it("POST /run-test rejects runs until a real hardware transport is configured", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -293,16 +293,12 @@ describe("Compatibility Lab Routes", () => {
           username: "admin",
           password: "Admin123!",
         },
-        offline: true,
       },
     });
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(501);
     const body = res.json();
-    expect(body.runId).toBeDefined();
-    expect(body.results).toHaveLength(3);
-    expect(body.overallRating).toBeDefined();
-    expect(body.durationMs).toBeGreaterThanOrEqual(0);
+    expect(body.error).toBe("compatibility_lab_transport_not_configured");
     await app.close();
   });
 

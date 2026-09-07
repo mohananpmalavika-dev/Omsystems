@@ -181,6 +181,20 @@ describe("LabMatrixStore", () => {
     expect(computeOverallRating(results)).toBe("CERTIFIED");
   });
 
+  it("does not certify a matrix containing partial results", () => {
+    const results = {
+      LIVE: makeResult("LIVE", "PASS"),
+      SUBSTREAM: makeResult("SUBSTREAM", "PASS"),
+      PLAYBACK: makeResult("PLAYBACK", "PARTIAL"),
+      EVENTS: makeResult("EVENTS", "PARTIAL"),
+      PTZ: makeResult("PTZ", "NA"),
+      HDD_HEALTH: makeResult("HDD_HEALTH", "PARTIAL"),
+      RETENTION: makeResult("RETENTION", "PARTIAL"),
+      REBOOT: makeResult("REBOOT", "PARTIAL"),
+    };
+    expect(computeOverallRating(results)).not.toBe("CERTIFIED");
+  });
+
   it("computes COMPATIBLE when ≥5 PASS, no FAIL, some NOT_TESTED", () => {
     // 5 features provided — HDD_HEALTH, RETENTION, REBOOT are NOT_TESTED (absent)
     const results: Partial<Record<CompatibilityTestResult["feature"], CompatibilityTestResult>> = {

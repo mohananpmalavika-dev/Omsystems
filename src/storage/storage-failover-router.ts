@@ -49,6 +49,7 @@ export class StorageFailoverRouter extends EventEmitter {
     const existingList = this.targetRegistry.get(routeKey) || [];
 
     const entryId = target.id || `target-${target.mediaNodeId}-${target.storageNodeId}`;
+    const existing = existingList.find((t) => t.id === entryId);
     const filtered = existingList.filter((t) => t.id !== entryId);
 
     const entry: FailoverTargetEntry = {
@@ -60,10 +61,13 @@ export class StorageFailoverRouter extends EventEmitter {
       targetPath: target.targetPath,
       priority: target.priority ?? (existingList.length + 1),
       isActive: target.isActive ?? true,
-      healthState: "HEALTHY",
+      // Updating a label, priority, or path must never erase a real failure state.
+      healthState: existing?.healthState ?? "HEALTHY",
       spilloverThresholdPercent: target.spilloverThresholdPercent ?? 95,
-      consecutiveFailures: 0,
-      lastCheckedAt: new Date(),
+      consecutiveFailures: existing?.consecutiveFailures ?? 0,
+      lastFailureReason: existing?.lastFailureReason,
+      lastErrorDetail: existing?.lastErrorDetail,
+      lastCheckedAt: existing?.lastCheckedAt ?? new Date(),
     };
 
     filtered.push(entry);
@@ -153,17 +157,19 @@ export class StorageFailoverRouter extends EventEmitter {
     const targets = this.getPermittedTargets(mediaNodeId, cameraId);
     const failedTarget = targets.find((t) => t.id === targetId);
 
-    if (failedTarget) {
-      failedTarget.consecutiveFailures++;
-      failedTarget.lastFailureReason = reason;
-      failedTarget.lastErrorDetail = errorDetail;
-      failedTarget.lastCheckedAt = new Date();
-
-      if (reason === "DISK_FULL") failedTarget.healthState = "FULL";
-      else if (reason === "READ_ONLY") failedTarget.healthState = "READ_ONLY";
-      else if (reason === "STORAGE_OFFLINE" || reason === "MOUNT_DISCONNECTED") failedTarget.healthState = "OFFLINE";
-      else failedTarget.healthState = "DEGRADED";
+    if (!failedTarget) {
+      throw new Error(`Storage target [${targetId}] is not configured for media node [${mediaNodeId}]`);
     }
+
+    failedTarget.consecutiveFailures++;
+    failedTarget.lastFailureReason = reason;
+    failedTarget.lastErrorDetail = errorDetail;
+    failedTarget.lastCheckedAt = new Date();
+
+    if (reason === "DISK_FULL") failedTarget.healthState = "FULL";
+    else if (reason === "READ_ONLY") failedTarget.healthState = "READ_ONLY";
+    else if (reason === "STORAGE_OFFLINE" || reason === "MOUNT_DISCONNECTED") failedTarget.healthState = "OFFLINE";
+    else failedTarget.healthState = "DEGRADED";
 
     // Find next available healthy target with lowest priority number
     const availableTargets = targets.filter(
@@ -249,7 +255,9 @@ export class StorageFailoverRouter extends EventEmitter {
     metadata?: Record<string, unknown>,
   ): Promise<StorageWriteResult & { activeTarget: FailoverTargetEntry }> {
     let attempts = 0;
-    const maxAttempts = 3;
+    // Only traverse the permitted route.  The shared pool may contain storage
+    // belonging to another recorder, so it is never a safe implicit fallback.
+    const maxAttempts = Math.max(1, this.getPermittedTargets(mediaNodeId, cameraId).length);
     let lastError: any;
 
     while (attempts < maxAttempts) {
@@ -259,13 +267,11 @@ export class StorageFailoverRouter extends EventEmitter {
       try {
         const storageNode = this.storagePool.getNode(target.storageNodeId);
         if (!storageNode) {
-          // If node not in pool, write directly using pool
-          const writeRes = await this.storagePool.writeSegment(key, data, "hot", {
-            ...metadata,
-            targetPath: target.targetPath,
-            mediaNodeId,
-          });
-          return { ...writeRes, activeTarget: target };
+          const error = Object.assign(
+            new Error(`Configured storage node [${target.storageNodeId}] is unavailable in the storage pool`),
+            { code: "ENOENT" },
+          );
+          throw error;
         }
 
         const writeRes = await storageNode.writeSegment(key, data, {

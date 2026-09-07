@@ -102,6 +102,7 @@ describe("LabTestRunner", () => {
     const result = await runner.runTests({
       target: makeNvrTarget(),
       connection: makeConnection(),
+      allowDisruptive: true,
       sentinelVersion: "0.1.0",
     });
 
@@ -117,6 +118,7 @@ describe("LabTestRunner", () => {
     await runner.runTests({
       target: makeNvrTarget(),
       connection: makeConnection(),
+      allowDisruptive: true,
       sentinelVersion: "0.1.0",
     });
 
@@ -287,11 +289,25 @@ describe("LabTestRunner", () => {
     const result = await runner.runTests({
       target: makeNvrTarget(),
       connection: makeConnection(),
+      allowDisruptive: true,
       sentinelVersion: "0.1.0",
     });
 
     // NVR — all 8 features should be PASS (offline transport)
     expect(result.overallRating).toBe("CERTIFIED");
+  });
+
+  it("does not reboot a recorder without explicit maintenance approval", async () => {
+    const reboot = vi.spyOn(transport, "probeReboot");
+    const result = await runner.runTests({
+      target: makeNvrTarget(),
+      features: ["REBOOT"],
+      connection: makeConnection(),
+      sentinelVersion: "0.1.0",
+    });
+
+    expect(reboot).not.toHaveBeenCalled();
+    expect(result.results[0]).toMatchObject({ feature: "REBOOT", status: "NOT_TESTED" });
   });
 
   // ── Incremental results ───────────────────────────────────────────────────

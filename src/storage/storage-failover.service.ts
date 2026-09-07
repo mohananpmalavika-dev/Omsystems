@@ -81,8 +81,8 @@ export class StorageFailoverService {
             target.storageTier || "hot",
             target.priority,
             target.isActive ?? true,
-            target.maxCapacityBytes || 0,
-            target.spilloverThresholdPercent || 95.0,
+            target.maxCapacityBytes ?? 0,
+            target.spilloverThresholdPercent ?? 95.0,
           ],
         );
       } catch (err) {
@@ -149,6 +149,7 @@ export class StorageFailoverService {
    */
   async listFailoverEvents(mediaNodeId?: string, limit = 50): Promise<StorageFailoverEvent[]> {
     if (!this.pool) return [];
+    const safeLimit = Math.min(200, Math.max(1, Math.trunc(limit)));
     try {
       let query = `SELECT * FROM storage_failover_events`;
       const params: any[] = [];
@@ -157,7 +158,7 @@ export class StorageFailoverService {
         params.push(mediaNodeId);
       }
       query += ` ORDER BY occurred_at DESC LIMIT $${params.length + 1}`;
-      params.push(limit);
+      params.push(safeLimit);
 
       const result = await this.pool.query(query, params);
       return result.rows.map((r) => ({

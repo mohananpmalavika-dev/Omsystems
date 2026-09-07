@@ -25,9 +25,8 @@ import type {
   CompatibilityMatrixEntry,
   CompatibilityVendor,
   DeviceClass,
-  FeatureStatus,
 } from "../compatibility-lab/domain/compatibility-lab.types.js";
-import { ALL_FEATURES } from "../compatibility-lab/domain/compatibility-lab.types.js";
+import { KNOWN_DEVICES } from "../compatibility-lab/fixtures/known-devices.js";
 
 // ─── Validation Schemas ───────────────────────────────────────────────────────
 
@@ -43,10 +42,6 @@ const AuthModeEnum = z.enum([
   "BASIC", "DIGEST", "ONVIF_WS_SECURITY", "ONVIF_WS_SECURITY_TOKEN", "BEARER_TOKEN", "NO_AUTH",
 ]);
 const CodecEnum = z.enum(["H264", "H265", "MJPEG", "AV1", "H264+", "H265+"]);
-const RatingEnum = z.enum([
-  "CERTIFIED", "COMPATIBLE", "LIMITED", "INCOMPATIBLE", "UNTESTED",
-]);
-
 const CodecEntrySchema = z.object({
   codec: CodecEnum,
   resolutions: z.array(z.string()),
@@ -94,12 +89,14 @@ const RunTestSchema = z.object({
     password: z.string().min(1),
   }),
   probeTimeoutMs: z.number().int().min(1000).max(30_000).optional(),
+  allowDisruptive: z.boolean().default(false),
 });
 
 // ─── Route Registration ───────────────────────────────────────────────────────
 
 export async function registerCompatibilityLabRoutes(app: FastifyInstance): Promise<void> {
   const store = getLabMatrixStore("0.1.0");
+  store.seedFromFixtures([...KNOWN_DEVICES]);
   const publisher = new MatrixPublisher(store, "0.1.0");
 
   // ── GET /matrix ───────────────────────────────────────────────────────────
