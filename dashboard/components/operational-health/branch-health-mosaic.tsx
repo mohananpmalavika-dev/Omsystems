@@ -89,7 +89,7 @@ export function BranchHealthMosaic({
         const pageParams = new URLSearchParams(params);
         pageParams.set("limit", String(limit));
         pageParams.set("offset", String(offset));
-        const response = await fetch(`/api/control/v1/operations/health/branches?${pageParams}`, {
+        const response = await fetch(`/v1/operations/health/branches?${pageParams}`, {
           cache: "no-store",
           credentials: "include",
           headers,

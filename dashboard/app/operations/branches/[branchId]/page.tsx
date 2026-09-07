@@ -38,7 +38,10 @@ export default function BranchWorkspacePage() {
     setError(null);
     try {
       if (!branchId) throw new Error("Branch identifier is missing");
-      const res = await fetch(`/api/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, { cache: "no-store" });
+      const res = await fetch(`/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, {
+        cache: "no-store",
+        credentials: "include",
+      });
       if (!res.ok) throw new Error(`Branch workspace request failed (${res.status})`);
       const data = await res.json();
       if (!data.success || !data.data) throw new Error("No authoritative branch workspace was returned");
@@ -77,7 +80,7 @@ export default function BranchWorkspacePage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href="/operations/branches"
               className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -202,7 +205,7 @@ export default function BranchWorkspacePage() {
                 <span className="text-xs text-slate-400">Local Stream Pull on Demand</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-                {workspace?.cameras?.map((cam: any) => (
+                {workspace?.cameras?.length ? workspace.cameras.map((cam: any) => (
                   <div
                     key={cam.cameraId}
                     className="p-2.5 rounded-lg bg-slate-950/80 border border-slate-800/80 flex flex-col justify-between h-24"
@@ -219,7 +222,7 @@ export default function BranchWorkspacePage() {
                       </span>
                     </div>
                   </div>
-                ))}
+                )) : <p className="col-span-full py-6 text-center text-xs text-slate-500">No camera telemetry has been reported for this branch.</p>}
               </div>
             </div>
           </div>
@@ -241,7 +244,7 @@ export default function BranchWorkspacePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {workspace?.cameras?.map((cam: any) => (
+                {workspace?.cameras?.length ? workspace.cameras.map((cam: any) => (
                   <tr key={cam.cameraId} className="hover:bg-slate-800/40">
                     <td className="px-4 py-3 font-semibold text-slate-200">{cam.name}</td>
                     <td className="px-4 py-3 text-slate-400">{cam.zone}</td>
@@ -259,7 +262,7 @@ export default function BranchWorkspacePage() {
                     <td className="px-4 py-3">{cam.fps !== undefined ? `${cam.fps} FPS` : "Not reported"}{cam.bitrateKbps !== undefined ? ` • ${cam.bitrateKbps} Kbps` : ""}</td>
                     <td className="px-4 py-3 text-slate-400">{cam.lastRecordedAt ? new Date(cam.lastRecordedAt).toLocaleTimeString() : "Unavailable"}</td>
                   </tr>
-                ))}
+                )) : <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">No camera telemetry has been reported for this branch.</td></tr>}
               </tbody>
             </table>
           </div>
@@ -268,7 +271,7 @@ export default function BranchWorkspacePage() {
         {/* Tab 3: Recorders */}
         {activeTab === "recorders" && (
           <div className="space-y-4">
-            {workspace?.recorders?.map((rec: any) => (
+            {workspace?.recorders?.length ? workspace.recorders.map((rec: any) => (
               <div key={rec.recorderId} className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -295,7 +298,7 @@ export default function BranchWorkspacePage() {
                   </div>
                 </div>
               </div>
-            ))}
+            )) : <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-center text-xs text-slate-500">No recorder telemetry has been reported for this branch.</div>}
           </div>
         )}
 
@@ -303,7 +306,7 @@ export default function BranchWorkspacePage() {
         {activeTab === "storage" && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {workspace?.disks?.map((disk: any) => (
+              {workspace?.disks?.length ? workspace.disks.map((disk: any) => (
                 <div key={disk.diskId} className="p-5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -331,7 +334,7 @@ export default function BranchWorkspacePage() {
                     Verified Footage Retention: <strong className="text-slate-200">{disk.retentionDays !== undefined ? `${disk.retentionDays} Days` : "Not reported"}</strong>
                   </div>
                 </div>
-              ))}
+              )) : <div className="col-span-full rounded-xl border border-slate-800 bg-slate-900/60 p-6 text-center text-xs text-slate-500">No storage telemetry has been reported for this branch.</div>}
             </div>
           </div>
         )}
@@ -371,7 +374,7 @@ export default function BranchWorkspacePage() {
             <div className="p-4 rounded-xl bg-rose-950/20 border border-rose-900/40 space-y-2">
               <h3 className="text-sm font-bold text-rose-300">Active Branch Alarms ({workspace?.activeAlerts?.length || 0})</h3>
               <div className="divide-y divide-rose-900/30">
-                {workspace?.activeAlerts?.map((alt: any) => (
+                {workspace?.activeAlerts?.length ? workspace.activeAlerts.map((alt: any) => (
                   <div key={alt.id} className="py-2.5 flex items-center justify-between text-xs">
                     <div>
                       <div className="font-semibold text-rose-200">{alt.title}</div>
@@ -379,14 +382,14 @@ export default function BranchWorkspacePage() {
                     </div>
                     <StatusBadge status={alt.severity} size="sm" />
                   </div>
-                ))}
+                )) : <p className="py-3 text-xs text-rose-300/70">No active branch alarms.</p>}
               </div>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
               <h3 className="text-sm font-bold text-white">Active Root-Cause Incidents ({workspace?.activeIncidents?.length || 0})</h3>
               <div className="divide-y divide-slate-800">
-                {workspace?.activeIncidents?.map((inc: any) => (
+                {workspace?.activeIncidents?.length ? workspace.activeIncidents.map((inc: any) => (
                   <div key={inc.id} className="py-2.5 flex items-center justify-between text-xs">
                     <div>
                       <div className="font-semibold text-slate-200">{inc.title}</div>
@@ -394,7 +397,7 @@ export default function BranchWorkspacePage() {
                     </div>
                     <StatusBadge status={inc.severity} size="sm" />
                   </div>
-                ))}
+                )) : <p className="py-3 text-xs text-slate-500">No active incidents.</p>}
               </div>
             </div>
           </div>

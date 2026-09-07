@@ -67,7 +67,9 @@ export function isManagedEvidenceReference(
 }
 
 export function dashboardEvidenceUrl(reference: string) {
-  return reference.startsWith("/v1/") ? `/api/control${reference}` : reference;
+  // /v1 is rewritten by Next.js to the control plane. Do not route it through
+  // the removed /api/control proxy namespace.
+  return reference;
 }
 
 export function evidenceAvailable(

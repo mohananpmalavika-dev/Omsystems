@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   Wifi,
@@ -61,6 +61,9 @@ interface RawFleetBranch {
   recordingCameras?: unknown;
   cameras?: { total?: unknown; healthy?: unknown; recording?: unknown };
   retentionBreaches?: unknown;
+  retentionDays?: unknown;
+  retentionRequiredDays?: unknown;
+  retentionCompliant?: unknown;
   retention?: {
     breaches?: unknown;
     observedDays?: unknown;
@@ -69,6 +72,7 @@ interface RawFleetBranch {
   };
   components?: { storage?: { status?: unknown } };
   storage?: { state?: unknown };
+  storageStatus?: unknown;
   criticalAlerts?: unknown;
   alerts?: { critical?: unknown; p1?: unknown };
 }
@@ -108,7 +112,7 @@ function normalizeBranch(raw: RawFleetBranch): FleetBranch | null {
     branchCode: stringOrFallback(raw.branchCode ?? raw.code, "N/A"),
     name,
     region: stringOrFallback(raw.region, "Unassigned"),
-    operationalState: statusValue(raw.operationalState ?? raw.healthStatus),
+    operationalState: statusValue(raw.healthStatus ?? raw.operationalState),
     internet: {
       state: statusValue(raw.internet?.state ?? raw.internetStatus),
     },
@@ -119,12 +123,14 @@ function normalizeBranch(raw: RawFleetBranch): FleetBranch | null {
     },
     retention: {
       breaches: numberOrNull(retention?.breaches ?? raw.retentionBreaches),
-      observedDays: numberOrNull(retention?.observedDays),
-      requiredDays: numberOrNull(retention?.requiredDays),
-      compliant: typeof retention?.compliant === "boolean" ? retention.compliant : null,
+      observedDays: numberOrNull(retention?.observedDays ?? raw.retentionDays),
+      requiredDays: numberOrNull(retention?.requiredDays ?? raw.retentionRequiredDays),
+      compliant: typeof (retention?.compliant ?? raw.retentionCompliant) === "boolean"
+        ? (retention?.compliant ?? raw.retentionCompliant) as boolean
+        : null,
     },
     storage: {
-      state: statusValue(raw.storage?.state ?? raw.components?.storage?.status),
+      state: statusValue(raw.storage?.state ?? raw.storageStatus ?? raw.components?.storage?.status),
     },
     alerts: {
       critical: numberOrNull(raw.alerts?.critical ?? raw.alerts?.p1 ?? raw.criticalAlerts),
@@ -143,31 +149,45 @@ export default function FleetBranchesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedRegion, setSelectedRegion] = useState("ALL");
+  const requestSequence = useRef(0);
 
   const loadBranches = async () => {
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/control/v1/operations/health/branches?limit=400", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success || !Array.isArray(data?.data?.branches)) {
-        throw new Error(data?.error || `Branch telemetry request failed (${res.status})`);
-      }
+      const loaded: RawFleetBranch[] = [];
+      let offset = 0;
+      let total = 0;
+      do {
+        const res = await fetch(`/v1/operations/health/branches?limit=500&offset=${offset}`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        const data = await res.json().catch(() => ({}));
+        const page = data?.data?.branches;
+        if (!res.ok || !data?.success || !Array.isArray(page)) {
+          throw new Error(data?.error || `Branch telemetry request failed (${res.status})`);
+        }
+        loaded.push(...page);
+        total = typeof data?.data?.total === "number" ? data.data.total : loaded.length;
+        offset += page.length;
+        if (sequence !== requestSequence.current) return;
+        if (page.length === 0) break;
+      } while (offset < total && loaded.length < 10_000);
 
       setBranches(
-        data.data.branches
+        loaded
           .map((branch: RawFleetBranch) => normalizeBranch(branch))
           .filter((branch: FleetBranch | null): branch is FleetBranch => branch !== null),
       );
     } catch (err: unknown) {
+      if (sequence !== requestSequence.current) return;
       console.error("Failed to load branches:", err);
       setBranches([]);
       setError(err instanceof Error ? err.message : "Failed to communicate with control plane.");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   };
 
@@ -240,14 +260,15 @@ export default function FleetBranchesPage() {
       b.alerts.critical ?? "",
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const downloadUrl = URL.createObjectURL(new Blob([csvContent], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", downloadUrl);
     link.setAttribute("download", `Sentinel_Grid_Branch_Health_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
   };
 
   const exportAlertsCsv = () => {
@@ -260,14 +281,15 @@ export default function FleetBranchesPage() {
         b.alerts.critical,
       ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const downloadUrl = URL.createObjectURL(new Blob([csvContent], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", downloadUrl);
     link.setAttribute("download", `Sentinel_Grid_Critical_Alerts_${new Date().toISOString().split("T")[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(downloadUrl);
   };
 
   return (

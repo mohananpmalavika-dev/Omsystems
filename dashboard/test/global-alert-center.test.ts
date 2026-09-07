@@ -36,7 +36,7 @@ describe("global real-time alert queue", () => {
       requestedAt: new Date().toISOString(), snapshotAvailable: true, clipAvailable: false,
     })).toBe(true);
     expect(dashboardEvidenceUrl(item.snapshotReference)).toBe(
-      "/api/control/v1/alerts/managed/evidence/snapshot",
+      "/v1/alerts/managed/evidence/snapshot",
     );
   });
 });
