@@ -110,11 +110,12 @@ export class EvidenceAssemblerService {
       clockConfidence: null,
     };
 
+    const gapsData = JSON.stringify(gaps);
     files.push({
       path: 'gaps.json',
       fileType: 'GAPS',
-      sizeBytes: Buffer.byteLength(JSON.stringify(gaps)),
-      sha256: createHash('sha256').update(JSON.stringify(gaps)).digest('hex'),
+      sizeBytes: Buffer.byteLength(gapsData),
+      sha256: createHash('sha256').update(gapsData).digest('hex'),
     });
     const clockData = JSON.stringify(clockObs);
     files.push({

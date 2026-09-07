@@ -64,7 +64,7 @@ export async function registerBranchConnectivityRoutes(
           managedAvailable: Boolean(options.tunnelProvider),
           cameraTypes: ["ip-camera", "analog-dvr-channel", "nvr-channel"],
           requirements: ["enrolled Sentinel gateway running the connector", "outbound TCP or UDP port 7844"],
-          productionRequirements: ["Cloudflare domain and API credentials configured in Sentinel Grid"],
+          productionRequirements: ["Cloudflare domain and API credentials configured in KryptoVision"],
         },
       },
     };
@@ -85,7 +85,7 @@ export async function registerBranchConnectivityRoutes(
         app.log.error({ err: error, branchId }, "Managed branch internet tunnel provisioning failed");
         return reply.code(502).send({
           error: "internet_tunnel_provisioning_failed",
-          message: "Sentinel Grid could not create the secure branch internet tunnel. Check the Cloudflare credentials and DNS zone.",
+          message: "KryptoVision could not create the secure branch internet tunnel. Check the Cloudflare credentials and DNS zone.",
         });
       }
     }

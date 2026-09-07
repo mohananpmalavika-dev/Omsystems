@@ -411,7 +411,7 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(409).send({
         error: "edge_agent_update_required",
         minimumVersion: targetedVerificationMinimumAgentVersion,
-        message: "Repair the Sentinel Grid Scanner before verifying credentials. Older scanners cannot guarantee a single-device probe.",
+        message: "Repair the KryptoVision Scanner before verifying credentials. Older scanners cannot guarantee a single-device probe.",
       });
     }
     if (looksLikeRecorderDiscovery(discovered) &&
@@ -419,7 +419,7 @@ export async function registerCameraDiscoveryRoutes(
       return reply.code(409).send({
         error: "edge_agent_update_required",
         minimumVersion: recorderChannelVerificationMinimumAgentVersion,
-        message: "Repair the Sentinel Grid Scanner before verifying this recorder so every DVR/NVR channel is enumerated.",
+        message: "Repair the KryptoVision Scanner before verifying this recorder so every DVR/NVR channel is enumerated.",
       });
     }
 

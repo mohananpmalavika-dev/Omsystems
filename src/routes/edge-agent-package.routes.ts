@@ -127,7 +127,7 @@ function requireControlPlaneUrl(request: { headers: Record<string, string | stri
   const resolved = resolveControlPlaneUrl(request, configured);
   if (resolved) return resolved;
   throw Object.assign(
-    new Error("The scanner download could not determine the Sentinel Grid server automatically. Download it again from the Sentinel Grid website."),
+    new Error("The scanner download could not determine the KryptoVision server automatically. Download it again from the KryptoVision portal."),
     { code: "control_plane_public_url_unavailable" },
   );
 }
@@ -303,12 +303,12 @@ function hashSecret(value: string) {
 
 function localDiscoveryReadme(branchName: string) {
   return [
-    `Sentinel Grid temporary local-network scanner for ${branchName}`,
+    `KryptoVision temporary local-network scanner for ${branchName}`,
     "",
     "1. Connect this Windows PC to the same wired/Wi-Fi network as the IP cameras and DVR/NVRs.",
     "2. Extract this ZIP and double-click Run Local Discovery.cmd.",
-    "3. The scanner securely loads only the saved login for each matching device IP. Unknown devices are reported so you can enter their login individually in Sentinel Grid.",
-    "4. Wait for the completed result, then return to Sentinel Grid and review the discovered devices.",
+    "3. The scanner securely loads only the saved login for each matching device IP. Unknown devices are reported so you can enter their login individually in KryptoVision.",
+    "4. Wait for the completed result, then return to KryptoVision and review the discovered devices.",
     "",
     "It discovers direct ONVIF IP cameras plus DVR/NVR channels. Analog cameras appear as DVR channels because the DVR digitizes them. A recorder login is needed to enumerate its individual channels.",
     "This tool exits after one scan. It does not install a Windows service, a tunnel, or a background monitor.",
@@ -505,7 +505,7 @@ export async function registerEdgeAgentPackageRoutes(
             "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0Run Local Discovery.ps1\"",
             "set EXIT_CODE=%ERRORLEVEL%",
             "echo.",
-            `if not "%EXIT_CODE%"=="0" echo Discovery failed. Check that this PC is on the branch camera network and can reach Sentinel Grid.`,
+            `if not "%EXIT_CODE%"=="0" echo Discovery failed. Check that this PC is on the branch camera network and can reach KryptoVision.`,
             "pause",
             "exit /b %EXIT_CODE%",
             "",

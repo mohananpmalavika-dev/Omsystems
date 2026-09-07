@@ -293,7 +293,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       return reply.code(409).send({
         error: "edge_agent_update_required",
         minimumVersion: credentialUpdateMinimumAgentVersion,
-        message: `Repair the Sentinel Grid Scanner before updating credentials. This gateway is running v${agent.version}; v${credentialUpdateMinimumAgentVersion} or newer is required.`,
+        message: `Repair the KryptoVision Scanner before updating credentials. This gateway is running v${agent.version}; v${credentialUpdateMinimumAgentVersion} or newer is required.`,
       });
     }
     const parsedBody = z.object({
@@ -628,7 +628,7 @@ async function packagedEdgeUpdate(
     const sha256 = createHash("sha256").update(artifact).digest("hex");
     const baseUrl = options.controlPlanePublicUrl.replace(/\/+$/, "");
     const artifactUrl = `${baseUrl}/v1/edge-updates/artifacts/${encodeURIComponent(version)}/edge-agent.bundle`;
-    const notes = `Sentinel Grid Edge Agent application patch v${version}`;
+    const notes = `KryptoVision Edge Agent application patch v${version}`;
     const signature = signEdgeUpdateManifest({ version, artifactUrl, sha256, notes }, options.updateSigningPrivateKey);
     return {
       id: `packaged-${version}-${sha256.slice(0, 12)}`,
