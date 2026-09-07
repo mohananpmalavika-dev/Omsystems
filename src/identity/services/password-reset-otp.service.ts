@@ -116,7 +116,7 @@ export class PasswordResetOtpService {
         destination: normalizedEmail,
         priority: "P1",
         payload: {
-          subject: "Sentinel Grid - Password Reset Verification Code",
+          subject: "KryptoVision - Password Reset Verification Code",
           text: `Your password reset verification code is: ${otp}\n\nThis code will expire in 10 minutes. If you did not request a password reset, please ignore this email or contact your security administrator.`,
         },
         status: "PENDING",

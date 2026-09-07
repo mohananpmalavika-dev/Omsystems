@@ -9,7 +9,9 @@ type StoredAsset = Omit<EvidenceAsset, "capturedAt"> & { capturedAt: string };
 export class EvidenceStorageService {
   private readonly basePath = process.env.EVIDENCE_STORAGE_PATH
     ? resolve(process.env.EVIDENCE_STORAGE_PATH)
-    : undefined;
+    : (process.env.NODE_ENV === "test" || Boolean(process.env.VITEST)
+        ? resolve(process.cwd(), "test-scratch/evidence")
+        : undefined);
 
   formatStorageKey(params: { tenantId: string; branchId: string; alertId: string; filename: string; date?: Date }): string {
     const date = params.date ?? new Date();

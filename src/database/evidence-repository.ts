@@ -213,6 +213,20 @@ export class EvidenceRepository {
       if (!existingCase) {
         throw new Error("Evidence case not found or tenant unauthorized");
       }
+
+      if (input.cameraId) {
+        const camCheck = await this.pool.query(
+          `SELECT c.id FROM cameras c
+           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+           WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)`,
+          [input.cameraId, tenantId],
+        );
+        if (camCheck.rows.length === 0) {
+          const err = new Error(`Camera ${input.cameraId} not found or tenant unauthorized`);
+          (err as any).code = "TENANT_RESOURCE_NOT_FOUND";
+          throw err;
+        }
+      }
     }
 
     const result = await this.pool.query(

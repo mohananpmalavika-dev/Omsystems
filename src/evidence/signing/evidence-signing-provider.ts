@@ -331,17 +331,12 @@ export class AwsKmsSigningProvider implements EvidenceSigningProvider {
     keyId?: string,
     certificatePem?: string,
   ): Promise<boolean> {
-    try {
-      if (certificatePem || this.cachedPublicKeyPem) {
-        const { verify: cryptoVerify } = await import("node:crypto");
-        const key = certificatePem || this.cachedPublicKeyPem!;
-        return cryptoVerify("sha256", digest, key, signature);
-      }
+    const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
 
+    // 1. Authoritative KMS Verify if client can be reached
+    try {
       const client = await this.getClient();
       const { VerifyCommand } = await import("@aws-sdk/client-kms");
-      const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
-
       const res = await client.send(
         new VerifyCommand({
           KeyId: keyId || this.keyId,
@@ -351,10 +346,29 @@ export class AwsKmsSigningProvider implements EvidenceSigningProvider {
           SigningAlgorithm: this.algorithm as any,
         }),
       );
-      return res.SignatureValid === true;
+      if (typeof res.SignatureValid === "boolean") {
+        return res.SignatureValid;
+      }
+    } catch {
+      // Fall through to local verification if KMS is unreachable
+    }
+
+    // 2. Local public key verification avoiding double-hashing on precomputed digest
+    try {
+      const key = certificatePem || this.cachedPublicKeyPem || (await this.getPublicKeyPem());
+      if (key) {
+        const { verify: cryptoVerify } = await import("node:crypto");
+        try {
+          return cryptoVerify(null, digestBuffer, key, signature);
+        } catch {
+          return cryptoVerify("sha256", digestBuffer, key, signature);
+        }
+      }
     } catch {
       return false;
     }
+
+    return false;
   }
 }
 

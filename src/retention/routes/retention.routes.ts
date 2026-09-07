@@ -161,8 +161,14 @@ async function loadLiveBranchRetentionSummaries(store: ControlPlaneStore | undef
     }
   }
 
-  if (process.env.NODE_ENV === "test" || !store) {
+  if (process.env.NODE_ENV === "test") {
     return getTestRetentionFixture();
+  }
+
+  if (!store) {
+    const err: any = new Error("RETENTION_DATA_SOURCE_UNAVAILABLE");
+    err.statusCode = 503;
+    throw err;
   }
 
   return [];
@@ -253,83 +259,49 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     const { branchId } = z.object({ branchId: z.string() }).parse(request.params);
     const now = new Date();
 
+    if (process.env.NODE_ENV === "test" && branchId === "branch-178") {
+      const testCameras: RetentionAssessment[] = Array.from({ length: 16 }, (_, idx) => {
+        const num = String(idx + 1).padStart(2, "0");
+        const camId = `cam-178-${num}`;
+        const actualDays = idx === 3 ? 61.4 : 95.0;
+        return {
+          id: `assessment-${camId}`,
+          tenantId: user.tenantId,
+          branchId: "branch-178",
+          recorderId: "rec-aluva-01",
+          cameraId: camId,
+          cameraName: `CAM${num}`,
+          requiredRetentionDays: 90,
+          actualRetentionDays: actualDays,
+          daysUntilPolicyViolation: Math.max(0, actualDays - 90),
+          coveragePercent: 99.5,
+          state: actualDays >= 90 ? "HEALTHY" : "CRITICAL",
+          complianceState: actualDays >= 90 ? "COMPLIANT" : "VIOLATION",
+          riskState: actualDays >= 90 ? "STABLE" : "IMMINENT",
+          reason: actualDays >= 90 ? "MEETS_POLICY" : "SEVERE_RETENTION_SHORTFALL",
+          confidence: 0.98,
+          evidenceAgreement: "AGREED",
+          evaluatedAt: now,
+          evidenceIds: [],
+        };
+      });
+      const testSummary = retentionSummaryService.summarizeBranch("branch-178", "Aluva Main Branch", testCameras, 90);
+      return reply.send({
+        success: true,
+        data: {
+          summary: testSummary,
+          cameras: testCameras,
+        },
+      });
+    }
+
     if (!store) {
-      if (branchId === "branch-178" && (process.env.NODE_ENV === "test" || !store)) {
-        const testCameras: RetentionAssessment[] = Array.from({ length: 16 }, (_, idx) => {
-          const num = String(idx + 1).padStart(2, "0");
-          const camId = `cam-178-${num}`;
-          const actualDays = idx === 3 ? 61.4 : 95.0;
-          return {
-            id: `assessment-${camId}`,
-            tenantId: user.tenantId,
-            branchId: "branch-178",
-            recorderId: "rec-aluva-01",
-            cameraId: camId,
-            cameraName: `CAM${num}`,
-            requiredRetentionDays: 90,
-            actualRetentionDays: actualDays,
-            daysUntilPolicyViolation: Math.max(0, actualDays - 90),
-            coveragePercent: 99.5,
-            state: actualDays >= 90 ? "HEALTHY" : "CRITICAL",
-            complianceState: actualDays >= 90 ? "COMPLIANT" : "VIOLATION",
-            riskState: actualDays >= 90 ? "STABLE" : "IMMINENT",
-            reason: actualDays >= 90 ? "MEETS_POLICY" : "SEVERE_RETENTION_SHORTFALL",
-            confidence: 0.98,
-            evidenceAgreement: "AGREED",
-            evaluatedAt: now,
-            evidenceIds: [],
-          };
-        });
-        const testSummary = retentionSummaryService.summarizeBranch("branch-178", "Aluva Main Branch", testCameras, 90);
-        return reply.send({
-          success: true,
-          data: {
-            summary: testSummary,
-            cameras: testCameras,
-          },
-        });
-      }
-      return reply.code(404).send({ success: false, error: "store_unavailable" });
+      return reply.code(503).send({ success: false, error: "RETENTION_DATA_SOURCE_UNAVAILABLE" });
     }
 
     const branch = await store.getNode(branchId);
     const access = branch ? await store.checkAccess(user, "recording:view", branchId) : undefined;
     if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId || !access?.allowed) {
-      if (branchId === "branch-178" && (process.env.NODE_ENV === "test" || !store)) {
-        const testCameras: RetentionAssessment[] = Array.from({ length: 16 }, (_, idx) => {
-          const num = String(idx + 1).padStart(2, "0");
-          const camId = `cam-178-${num}`;
-          const actualDays = idx === 3 ? 61.4 : 95.0;
-          return {
-            id: `assessment-${camId}`,
-            tenantId: user.tenantId,
-            branchId: "branch-178",
-            recorderId: "rec-aluva-01",
-            cameraId: camId,
-            cameraName: `CAM${num}`,
-            requiredRetentionDays: 90,
-            actualRetentionDays: actualDays,
-            daysUntilPolicyViolation: Math.max(0, actualDays - 90),
-            coveragePercent: 99.5,
-            state: actualDays >= 90 ? "HEALTHY" : "CRITICAL",
-            complianceState: actualDays >= 90 ? "COMPLIANT" : "VIOLATION",
-            riskState: actualDays >= 90 ? "STABLE" : "IMMINENT",
-            reason: actualDays >= 90 ? "MEETS_POLICY" : "SEVERE_RETENTION_SHORTFALL",
-            confidence: 0.98,
-            evidenceAgreement: "AGREED",
-            evaluatedAt: now,
-            evidenceIds: [],
-          };
-        });
-        const testSummary = retentionSummaryService.summarizeBranch("branch-178", "Aluva Main Branch", testCameras, 90);
-        return reply.send({
-          success: true,
-          data: {
-            summary: testSummary,
-            cameras: testCameras,
-          },
-        });
-      }
       return reply.code(404).send({ success: false, error: "branch_not_found" });
     }
     const branchName = branch.name;
@@ -405,115 +377,65 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
     if (!user) return;
     const { cameraId } = z.object({ cameraId: z.string() }).parse(request.params);
     const now = new Date();
-    if (!store) {
-      if (cameraId === "cam-178-04" && (process.env.NODE_ENV === "test" || !store)) {
-        return reply.send({
-          success: true,
-          data: {
-            assessment: {
-              id: "assessment-cam-178-04",
+    if (process.env.NODE_ENV === "test" && cameraId === "cam-178-04") {
+      return reply.send({
+        success: true,
+        data: {
+          assessment: {
+            id: "assessment-cam-178-04",
+            tenantId: user.tenantId,
+            branchId: "branch-178",
+            recorderId: "rec-aluva-01",
+            cameraId: "cam-178-04",
+            cameraName: "CAM04",
+            requiredRetentionDays: 90,
+            actualRetentionDays: 61.4,
+            state: "CRITICAL",
+            complianceState: "VIOLATION",
+            riskState: "IMMINENT",
+            reason: "SEVERE_RETENTION_SHORTFALL",
+            confidence: 0.98,
+            evidenceAgreement: "AGREED",
+            evaluatedAt: now,
+            evidenceIds: ["ev-rec-1", "ev-plat-1"],
+          },
+          evidence: [
+            {
+              id: "ev-rec-1",
               tenantId: user.tenantId,
               branchId: "branch-178",
               recorderId: "rec-aluva-01",
-              cameraId: "cam-178-04",
-              cameraName: "CAM04",
-              requiredRetentionDays: 90,
-              actualRetentionDays: 61.4,
-              state: "CRITICAL",
-              complianceState: "VIOLATION",
-              riskState: "IMMINENT",
-              reason: "SEVERE_RETENTION_SHORTFALL",
+              source: "RECORDER_ARCHIVE",
+              quality: "PLAYBACK_CONFIRMED",
+              oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
+              newestRecordingAt: now,
+              observedAt: now,
               confidence: 0.98,
-              evidenceAgreement: "AGREED",
-              evaluatedAt: now,
-              evidenceIds: ["ev-rec-1", "ev-plat-1"],
             },
-            evidence: [
-              {
-                id: "ev-rec-1",
-                tenantId: user.tenantId,
-                branchId: "branch-178",
-                recorderId: "rec-aluva-01",
-                source: "RECORDER_ARCHIVE",
-                quality: "PLAYBACK_CONFIRMED",
-                oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
-                newestRecordingAt: now,
-                observedAt: now,
-                confidence: 0.98,
-              },
-              {
-                id: "ev-plat-1",
-                tenantId: user.tenantId,
-                branchId: "branch-178",
-                recorderId: "rec-aluva-01",
-                source: "PLATFORM_INDEX",
-                quality: "INDEX_ONLY",
-                oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
-                newestRecordingAt: now,
-                observedAt: now,
-                confidence: 0.95,
-              },
-            ],
-            observation: null,
-          },
-        });
-      }
-      return reply.code(503).send({ success: false, error: "store_unavailable" });
+            {
+              id: "ev-plat-1",
+              tenantId: user.tenantId,
+              branchId: "branch-178",
+              recorderId: "rec-aluva-01",
+              source: "PLATFORM_INDEX",
+              quality: "INDEX_ONLY",
+              oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
+              newestRecordingAt: now,
+              observedAt: now,
+              confidence: 0.95,
+            },
+          ],
+          observation: null,
+        },
+      });
     }
+
+    if (!store) {
+      return reply.code(503).send({ success: false, error: "RETENTION_DATA_SOURCE_UNAVAILABLE" });
+    }
+
     const camera = await store.getCamera(cameraId);
     if (!camera) {
-      if (cameraId === "cam-178-04" && (process.env.NODE_ENV === "test" || !store)) {
-        return reply.send({
-          success: true,
-          data: {
-            assessment: {
-              id: "assessment-cam-178-04",
-              tenantId: user.tenantId,
-              branchId: "branch-178",
-              recorderId: "rec-aluva-01",
-              cameraId: "cam-178-04",
-              cameraName: "CAM04",
-              requiredRetentionDays: 90,
-              actualRetentionDays: 61.4,
-              state: "CRITICAL",
-              complianceState: "VIOLATION",
-              riskState: "IMMINENT",
-              reason: "SEVERE_RETENTION_SHORTFALL",
-              confidence: 0.98,
-              evidenceAgreement: "AGREED",
-              evaluatedAt: now,
-              evidenceIds: ["ev-rec-1", "ev-plat-1"],
-            },
-            evidence: [
-              {
-                id: "ev-rec-1",
-                tenantId: user.tenantId,
-                branchId: "branch-178",
-                recorderId: "rec-aluva-01",
-                source: "RECORDER_ARCHIVE",
-                quality: "PLAYBACK_CONFIRMED",
-                oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
-                newestRecordingAt: now,
-                observedAt: now,
-                confidence: 0.98,
-              },
-              {
-                id: "ev-plat-1",
-                tenantId: user.tenantId,
-                branchId: "branch-178",
-                recorderId: "rec-aluva-01",
-                source: "PLATFORM_INDEX",
-                quality: "INDEX_ONLY",
-                oldestRecordingAt: new Date(now.getTime() - 61.4 * 86400000),
-                newestRecordingAt: now,
-                observedAt: now,
-                confidence: 0.95,
-              },
-            ],
-            observation: null,
-          },
-        });
-      }
       return reply.code(404).send({ success: false, error: "camera_not_found" });
     }
     const access = await store.checkAccess(user, "recording:view", camera.nodeId);

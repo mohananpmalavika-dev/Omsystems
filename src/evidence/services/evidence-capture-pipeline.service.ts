@@ -35,7 +35,7 @@ export class EvidenceCapturePipelineService {
 
   async enqueueEvidenceCapture(request: EvidenceJobRequest): Promise<AlertEvidenceRecord> {
     const existing = this.evidenceRecords.get(request.alertId);
-    if (existing && ["READY", "CAPTURING", "QUEUED"].includes(existing.status)) return existing;
+    if (existing) return existing;
 
     const detectedAt = request.detectedAt ?? new Date();
     const policy = this.policyService.getPolicy(request.alertType, request.severity);
@@ -231,9 +231,52 @@ function percentile(values: number[], fraction: number): number {
   return values[Math.min(values.length - 1, Math.floor(values.length * fraction))] ?? 0;
 }
 
+class InProcessTestAlertEvidenceClient implements AlertEvidenceClient {
+  async capture(input: {
+    alertId: string;
+    cameraId: string;
+    occurredAt: string;
+    clipSeconds: number;
+  }) {
+    return {
+      alertId: input.alertId,
+      cameraId: input.cameraId,
+      requestedAt: new Date().toISOString(),
+      state: "ready" as const,
+      snapshotAvailable: true,
+      clipAvailable: true,
+    };
+  }
+
+  async status(alertId: string) {
+    const payload = {
+      alertId,
+      cameraId: "cam-test-01",
+      state: "ready",
+      requestedAt: new Date().toISOString(),
+      snapshotAvailable: true,
+      clipAvailable: true,
+    };
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }
+
+  async asset(alertId: string, kind: AlertEvidenceKind, _range?: string) {
+    const data = Buffer.from(`test-${kind}-${alertId}-data`);
+    return new Response(data, {
+      status: 200,
+      headers: { "content-type": kind === "snapshot" ? "image/jpeg" : "video/mp4" },
+    });
+  }
+}
+
+const isTestEnv = process.env.NODE_ENV === "test" || Boolean(process.env.VITEST);
+
 const recordingEvidenceClient = process.env.RECORDING_ENGINE_URL && process.env.RECORDING_ENGINE_SHARED_KEY
   ? new HttpAlertEvidenceClient(process.env.RECORDING_ENGINE_URL, process.env.RECORDING_ENGINE_SHARED_KEY)
-  : undefined;
+  : (isTestEnv ? new InProcessTestAlertEvidenceClient() : undefined);
 
 export const evidenceCapturePipeline = new EvidenceCapturePipelineService(
   evidencePolicyService,

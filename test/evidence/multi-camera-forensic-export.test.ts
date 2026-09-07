@@ -48,13 +48,19 @@ function createMockPool(data: MockTableData): Pool {
       const cameraId = params[0];
       const fromTime = new Date(params[1]).getTime();
       const toTime = new Date(params[2]).getTime();
+      const tenantId = params[3];
 
       const matching = data.recording_segments.filter(
-        (seg) =>
-          seg.camera_id === cameraId &&
-          new Date(seg.started_at).getTime() < toTime &&
-          new Date(seg.ended_at).getTime() > fromTime &&
-          (seg.status === "ready" || !seg.status),
+        (seg) => {
+          const cam = data.cameras.get(seg.camera_id);
+          if (tenantId && cam && cam.tenant_id && cam.tenant_id !== tenantId) return false;
+          return (
+            seg.camera_id === cameraId &&
+            new Date(seg.started_at).getTime() < toTime &&
+            new Date(seg.ended_at).getTime() > fromTime &&
+            (seg.status === "ready" || !seg.status)
+          );
+        },
       );
 
       const totalBytes = matching.reduce((sum, seg) => sum + Number(seg.size_bytes || 0), 0);
@@ -122,22 +128,36 @@ function createMockPool(data: MockTableData): Pool {
       return { rows: job ? [job] : [], rowCount: job ? 1 : 0 };
     }
 
-    if (cleanSql.includes("FROM cameras WHERE id = $1")) {
-      const cam = data.cameras.get(params[0]);
-      return { rows: cam ? [cam] : [], rowCount: cam ? 1 : 0 };
+    if (cleanSql.includes("FROM evidence_cases")) {
+      return { rows: [{ id: params[0], tenant_id: params[1] || "corp-tenant" }], rowCount: 1 };
     }
 
-    if (cleanSql.includes("FROM recording_segments") && cleanSql.includes("camera_id = $1")) {
+    if (cleanSql.includes("FROM cameras")) {
+      const cam = data.cameras.get(params[0]);
+      if (!cam) return { rows: [], rowCount: 0 };
+      if (params[1] && cam.tenant_id && cam.tenant_id !== params[1]) {
+        return { rows: [], rowCount: 0 };
+      }
+      return { rows: [cam], rowCount: 1 };
+    }
+
+    if (cleanSql.includes("FROM recording_segments") && (cleanSql.includes("camera_id = $1") || cleanSql.includes("rs.camera_id = $1"))) {
       const cameraId = params[0];
       const fromTime = new Date(params[1]).getTime();
       const toTime = new Date(params[2]).getTime();
+      const tenantId = params[3];
 
       const matching = data.recording_segments.filter(
-        (seg) =>
-          seg.camera_id === cameraId &&
-          new Date(seg.started_at).getTime() < toTime &&
-          new Date(seg.ended_at).getTime() > fromTime &&
-          (seg.status === "ready" || !seg.status),
+        (seg) => {
+          const cam = data.cameras.get(seg.camera_id);
+          if (tenantId && cam && cam.tenant_id && cam.tenant_id !== tenantId) return false;
+          return (
+            seg.camera_id === cameraId &&
+            new Date(seg.started_at).getTime() < toTime &&
+            new Date(seg.ended_at).getTime() > fromTime &&
+            (seg.status === "ready" || !seg.status)
+          );
+        },
       );
 
       matching.sort((a, b) => new Date(a.started_at).getTime() - new Date(b.started_at).getTime());
@@ -249,12 +269,14 @@ describe("Multi-Camera Forensic Export & Manifest Architecture (P0-01, P0-02, P0
       id: "CAM-VAULT-01",
       name: "Vault North Camera",
       node_id: "BR-DELHI-MAIN",
+      tenant_id: "corp-tenant",
     });
 
     mockData.cameras.set("CAM-TELLER-02", {
       id: "CAM-TELLER-02",
       name: "Teller Counter 2 Camera",
       node_id: "BR-DELHI-MAIN",
+      tenant_id: "corp-tenant",
     });
 
     // Create 2 real video segments for CAM-VAULT-01 (5 seconds each)

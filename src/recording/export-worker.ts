@@ -19,6 +19,7 @@ import {
   canonicalJsonStringify,
   appendCustodyEventTx,
 } from "../database/evidence-repository.js";
+import { packageDirectoryToZip } from "./zip-archive.js";
 
 /**
  * Creates a standard POSIX ustar TAR archive buffer from memory entries.
@@ -309,14 +310,31 @@ export class ExportWorker {
     let totalBytes = 0;
 
     for (const camera of input.cameras) {
+      // Validate camera ownership under tenant
+      const camCheck = await this.pool.query(
+        `SELECT c.id FROM cameras c
+         LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+         WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)`,
+        [camera.cameraId, input.tenantId],
+      );
+      if (camCheck.rows.length === 0) {
+        const err = new Error(`TENANT_RESOURCE_NOT_FOUND: Camera ${camera.cameraId} not found or does not belong to tenant ${input.tenantId}`);
+        (err as any).code = "TENANT_RESOURCE_NOT_FOUND";
+        (err as any).statusCode = 404;
+        throw err;
+      }
+
       const result = await this.pool.query(
-        `SELECT COUNT(*) as count, COALESCE(SUM(size_bytes), 0) as bytes
-         FROM recording_segments
-         WHERE camera_id = $1
-         AND started_at < $3::timestamptz
-         AND ended_at > $2::timestamptz
-         AND (status = 'ready' OR status IS NULL)`,
-        [camera.cameraId, camera.fromTime, camera.toTime],
+        `SELECT COUNT(*) as count, COALESCE(SUM(rs.size_bytes), 0) as bytes
+         FROM recording_segments rs
+         JOIN cameras c ON c.id = rs.camera_id
+         LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+         WHERE rs.camera_id = $1
+         AND (c.tenant_id = $4 OR rn.tenant_id = $4)
+         AND rs.started_at < $3::timestamptz
+         AND rs.ended_at > $2::timestamptz
+         AND (rs.status = 'ready' OR rs.status IS NULL)`,
+        [camera.cameraId, camera.fromTime, camera.toTime, input.tenantId],
       );
 
       totalSegments += parseInt(result.rows[0].count || "0", 10);
@@ -409,22 +427,48 @@ export class ExportWorker {
       const job = await this.getExportJob(jobId);
       if (!job) throw new Error("Job not found");
 
+      // Verify case belongs to job tenant (Priority 1)
+      const caseCheck = await this.pool.query(
+        `SELECT id FROM evidence_cases WHERE id = $1 AND tenant_id = $2`,
+        [job.caseId, job.tenantId],
+      );
+      if (caseCheck.rows.length === 0) {
+        const err = new Error(`EXPORT_DENIED: Case ${job.caseId} does not belong to tenant ${job.tenantId}`);
+        (err as any).code = "EXPORT_DENIED";
+        throw err;
+      }
+
       const cameras: Array<{ cameraId: string; fromTime: string; toTime: string }> =
         typeof job.cameras === "string" ? JSON.parse(job.cameras) : job.cameras;
 
       const allRawSegments: any[] = [];
 
       for (const camera of cameras) {
+        // Enforce camera tenant ownership (Priority 1)
+        const camCheck = await this.pool.query(
+          `SELECT c.id FROM cameras c
+           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+           WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)`,
+          [camera.cameraId, job.tenantId],
+        );
+        if (camCheck.rows.length === 0) {
+          const err = new Error(`EXPORT_DENIED: Camera ${camera.cameraId} does not belong to tenant ${job.tenantId}`);
+          (err as any).code = "EXPORT_DENIED";
+          throw err;
+        }
+
         const result = await this.pool.query(
           `SELECT rs.*, c.name as camera_name, c.node_id as branch_id
            FROM recording_segments rs
            JOIN cameras c ON c.id = rs.camera_id
+           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
            WHERE rs.camera_id = $1
+           AND (c.tenant_id = $4 OR rn.tenant_id = $4)
            AND rs.started_at < $3::timestamptz
            AND rs.ended_at > $2::timestamptz
            AND (rs.status = 'ready' OR rs.status IS NULL)
            ORDER BY rs.started_at ASC`,
-          [camera.cameraId, camera.fromTime, camera.toTime],
+          [camera.cameraId, camera.fromTime, camera.toTime, job.tenantId],
         );
         allRawSegments.push(...result.rows);
       }
@@ -554,18 +598,17 @@ export class ExportWorker {
               mediaInfo = camResult.mediaInfo;
             }
 
-            const camValidSorted = camValidations
-              .filter((v) => v.isValid)
-              .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-            const firstFrame = camValidSorted.length > 0 ? camValidSorted[0]!.startTime : null;
-            const lastFrame = camValidSorted.length > 0 ? camValidSorted[camValidSorted.length - 1]!.endTime : null;
+            const firstSegStartMs = camValidSorted.length > 0 ? new Date(camValidSorted[0]!.startTime).getTime() : 0;
             const reqFromMs = new Date(camera.fromTime).getTime();
             const reqToMs = new Date(camera.toTime).getTime();
             const reqDurationMs = Math.max(1, reqToMs - reqFromMs);
-            const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
-            const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
-            const startDeviationMs = firstFrameMs ? firstFrameMs - reqFromMs : 0;
-            const endDeviationMs = lastFrameMs ? lastFrameMs - reqToMs : 0;
+            const actualStartMs = firstSegStartMs > 0 ? Math.max(firstSegStartMs, reqFromMs) : reqFromMs;
+            const actualDurationSec = camResult.mediaInfo?.durationSeconds || reqDurationMs / 1000;
+            const actualEndMs = actualStartMs + Math.round(actualDurationSec * 1000);
+            const startDeviationMs = actualStartMs - reqFromMs;
+            const endDeviationMs = actualEndMs - reqToMs;
+            const actualStart = new Date(actualStartMs).toISOString();
+            const actualEnd = new Date(actualEndMs).toISOString();
             const camGaps = gaps.filter((g) => g.cameraId === camera.cameraId);
             const totalGapsDurationMs = camGaps.reduce((sum, g) => sum + g.durationSeconds * 1000, 0);
             const coveredDurationMs = Math.max(0, reqDurationMs - totalGapsDurationMs);
@@ -575,7 +618,7 @@ export class ExportWorker {
               cameraId: camera.cameraId,
               cameraName: camValidations[0]?.cameraName || camera.cameraId,
               requestedWindow: { start: camera.fromTime, end: camera.toTime },
-              actualFootageWindow: { start: firstFrame, end: lastFrame },
+              actualFootageWindow: { start: actualStart, end: actualEnd },
               startDeviationMs,
               endDeviationMs,
               coveragePercent,
@@ -596,7 +639,7 @@ export class ExportWorker {
             };
           }
         } else {
-          // Single camera viewing copy (e.g. jobId.mp4 for existing integration test backward compatibility)
+          // Single camera viewing copy
           const viewingResult = await this.createViewingCopy(jobDir, jobId, validationResults, job.options, cameras[0]);
           outputPath = viewingResult.outputPath;
           outputHash = viewingResult.hash;
@@ -613,15 +656,17 @@ export class ExportWorker {
             const camValidSorted = validationResults
               .filter((v) => v.isValid)
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-            const firstFrame = camValidSorted.length > 0 ? camValidSorted[0]!.startTime : null;
-            const lastFrame = camValidSorted.length > 0 ? camValidSorted[camValidSorted.length - 1]!.endTime : null;
+            const firstSegStartMs = camValidSorted.length > 0 ? new Date(camValidSorted[0]!.startTime).getTime() : 0;
             const reqFromMs = new Date(cameras[0].fromTime).getTime();
             const reqToMs = new Date(cameras[0].toTime).getTime();
             const reqDurationMs = Math.max(1, reqToMs - reqFromMs);
-            const firstFrameMs = firstFrame ? new Date(firstFrame).getTime() : 0;
-            const lastFrameMs = lastFrame ? new Date(lastFrame).getTime() : 0;
-            const startDeviationMs = firstFrameMs ? firstFrameMs - reqFromMs : 0;
-            const endDeviationMs = lastFrameMs ? lastFrameMs - reqToMs : 0;
+            const actualStartMs = firstSegStartMs > 0 ? Math.max(firstSegStartMs, reqFromMs) : reqFromMs;
+            const actualDurationSec = viewingResult.mediaInfo?.durationSeconds || reqDurationMs / 1000;
+            const actualEndMs = actualStartMs + Math.round(actualDurationSec * 1000);
+            const startDeviationMs = actualStartMs - reqFromMs;
+            const endDeviationMs = actualEndMs - reqToMs;
+            const actualStart = new Date(actualStartMs).toISOString();
+            const actualEnd = new Date(actualEndMs).toISOString();
             const totalGapsDurationMs = gaps.reduce((sum, g) => sum + g.durationSeconds * 1000, 0);
             const coveredDurationMs = Math.max(0, reqDurationMs - totalGapsDurationMs);
             const coveragePercent = Math.min(100, Math.round((coveredDurationMs / reqDurationMs) * 1000) / 10);
@@ -630,7 +675,7 @@ export class ExportWorker {
               cameraId: cameras[0].cameraId,
               cameraName: validationResults[0]?.cameraName || cameras[0].cameraId,
               requestedWindow: { start: cameras[0].fromTime, end: cameras[0].toTime },
-              actualFootageWindow: { start: firstFrame, end: lastFrame },
+              actualFootageWindow: { start: actualStart, end: actualEnd },
               startDeviationMs,
               endDeviationMs,
               coveragePercent,
@@ -698,11 +743,22 @@ export class ExportWorker {
         sha256: createHash("sha256").update(auditContent).digest("hex"),
       });
 
+      // Gap disclosure artifact (Priority 17)
+      const gapsPath = resolve(jobDir, "recording-gaps.json");
+      const gapsContent = JSON.stringify(gaps, null, 2);
+      writeFileSync(gapsPath, gapsContent, "utf-8");
+      outputFiles.push({
+        filename: "recording-gaps.json",
+        mimeType: "application/json",
+        size: Buffer.byteLength(gapsContent),
+        sha256: createHash("sha256").update(gapsContent).digest("hex"),
+      });
+
       await this.recordCustodyEvent({
         evidenceId: job.caseId,
         action: "package_hashed",
         performedBy: "system",
-        reason: `Output file generated and hashed: ${outputHash}`,
+        reason: `Output files generated and hashed: ${outputHash}`,
       });
 
       // Generate signed manifest
@@ -729,6 +785,17 @@ export class ExportWorker {
         performedBy: "system",
         reason: `Manifest ${manifestId} signed cryptographically`,
       });
+
+      // Priority 2: Deterministic multi-camera downloadable ZIP package
+      if (job.format !== "manifest-only") {
+        const zipFilename = `KryptoVision-Evidence-${jobId}.zip`;
+        const zipPath = resolve(jobDir, zipFilename);
+        const zipResult = await packageDirectoryToZip(jobDir, zipPath);
+
+        outputPath = zipResult.outputPath;
+        outputSize = zipResult.sizeBytes;
+        outputHash = zipResult.sha256;
+      }
 
       // Generate secure download token
       const downloadToken = randomUUID();
@@ -1082,15 +1149,30 @@ export class ExportWorker {
     const manifestId = randomUUID();
 
     const caseResult = await this.pool.query(
-      `SELECT * FROM evidence_cases WHERE id = $1`,
-      [input.caseId],
+      `SELECT * FROM evidence_cases WHERE id = $1 AND tenant_id = $2`,
+      [input.caseId, input.tenantId],
     );
+    if (caseResult.rows.length === 0) {
+      const err = new Error(`EXPORT_DENIED: Case ${input.caseId} does not belong to tenant ${input.tenantId}`);
+      (err as any).code = "EXPORT_DENIED";
+      throw err;
+    }
     const evidenceCase = caseResult.rows[0];
 
     const firstCamera = input.cameras[0];
     const cameraResult = firstCamera
-      ? await this.pool.query(`SELECT * FROM cameras WHERE id = $1`, [firstCamera.cameraId])
+      ? await this.pool.query(
+          `SELECT c.*, c.node_id as branch_id FROM cameras c
+           LEFT JOIN resource_nodes rn ON rn.id = c.resource_node_id
+           WHERE c.id = $1 AND (c.tenant_id = $2 OR rn.tenant_id = $2)`,
+          [firstCamera.cameraId, input.tenantId],
+        )
       : { rows: [] };
+    if (firstCamera && cameraResult.rows.length === 0) {
+      const err = new Error(`EXPORT_DENIED: Camera ${firstCamera.cameraId} does not belong to tenant ${input.tenantId}`);
+      (err as any).code = "EXPORT_DENIED";
+      throw err;
+    }
     const cameraRow = cameraResult.rows[0];
 
     const sortedValid = input.validationResults

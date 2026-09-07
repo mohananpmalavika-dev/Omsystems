@@ -122,10 +122,10 @@ export class MorningHealthDigestService {
       </tr>`).join("");
 
     return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>Sentinel Grid Morning Health Digest</title>
+<html lang="en"><head><meta charset="utf-8"><title>KryptoVision Morning Health Digest</title>
 <style>body{font-family:Arial,sans-serif;color:#172033}table{border-collapse:collapse;width:100%}th,td{border:1px solid #d7deea;padding:8px;text-align:left}.metrics{display:flex;gap:16px;flex-wrap:wrap}.metric{padding:12px;border:1px solid #d7deea;border-radius:8px}</style>
 </head><body>
-<h1>Sentinel Grid Morning Health Digest</h1>
+<h1>KryptoVision Morning Health Digest</h1>
 <p>Generated ${escapeHtml(report.generatedAt)} for ${escapeHtml(report.tenantId)}. Scheduled window: ${escapeHtml(report.scheduleTime)}.</p>
 <div class="metrics">
   <div class="metric">Branches: ${summary.totalBranches}</div><div class="metric">Healthy: ${summary.healthyBranches}</div>

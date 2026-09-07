@@ -174,6 +174,13 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
       { pattern: /\b99\.11\b/, rule: "NO_HARDCODED_COVERAGE_99_11", message: "Production code must not use hardcoded 99.11 coverage metric." },
       { pattern: /\b0\.94\b/, rule: "NO_HARDCODED_CONFIDENCE_0_94", message: "Production code must not use hardcoded 0.94 confidence metric." },
       { pattern: /\bdays\s*>=\s*90\b/, rule: "NO_HARDCODED_90_DAY_RETENTION", message: "Production code must not use hardcoded 90-day retention threshold; resolve policy dynamically." },
+      { pattern: /\|\|\s*!store\s*\)\s*\{\s*return\s+.*fixture/i, rule: "NO_PRODUCTION_FIXTURE_FALLBACK", message: "Production code must not fall back to fixtures when store is missing or uninitialized." },
+      { pattern: /if\s*\(\s*!store\s*\)\s*return\s+.*fixture/i, rule: "NO_PRODUCTION_FIXTURE_FALLBACK", message: "Production routes must throw or return 503 when store is missing, not return fixtures." },
+      { pattern: /if\s*\(\s*!db\s*\)\s*return\s+.*fake/i, rule: "NO_PRODUCTION_FIXTURE_FALLBACK", message: "Production code must never return fake data when db is missing." },
+      { pattern: /fallback\s+production\s+dataset/i, rule: "NO_FALLBACK_PRODUCTION_DATASET", message: "Production code must not define or use fallback production datasets." },
+      { pattern: /fixed\s+branch\s+fleet/i, rule: "NO_FIXED_BRANCH_FLEET", message: "Production code must not use fixed branch fleets." },
+      { pattern: /fixed\s+retention\s+percentages/i, rule: "NO_FIXED_RETENTION_METRICS", message: "Production code must not use fixed retention percentages." },
+      { pattern: /fixed\s+compliance\s+figures/i, rule: "NO_FIXED_COMPLIANCE_FIGURES", message: "Production code must not use fixed compliance figures." },
     ];
 
     for (const fp of forbiddenPatterns) {

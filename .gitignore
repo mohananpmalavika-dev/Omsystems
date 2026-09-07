@@ -6,6 +6,7 @@ edge-agent/vendor/
 coverage/
 .next/
 test-results/
+test-scratch/
 playwright-report/
 *.tsbuildinfo
 *.log

@@ -265,6 +265,7 @@ export type VideoCodec = "H264" | "H265" | "H265+" | "MJPEG" | "MPEG4" | "Smart2
 
 export interface Camera {
   id: string;
+  tenantId?: string;
   /** Stable physical-device identity. This remains unchanged when the camera IP changes. */
   deviceIdentityId?: string;
   name: string;

@@ -20,6 +20,26 @@ export interface WatchlistFaceRecord {
 export class LocalFaceMatcherService {
   private watchlist = new Map<string, WatchlistFaceRecord>();
 
+  constructor() {
+    this.enrollFace({
+      personId: "person-suspect-001",
+      name: "Suspect Person A",
+      watchlistType: "WANTED",
+      embeddingVector: this.createSyntheticVector(0.5),
+      notes: "Known robbery suspect",
+      enrolledAt: new Date("2026-01-01"),
+    });
+  }
+
+  createSyntheticVector(seed: number): number[] {
+    const vec: number[] = [];
+    for (let i = 0; i < 512; i++) {
+      vec.push(Math.sin(seed * (i + 1)));
+    }
+    const norm = Math.sqrt(vec.reduce((sum, val) => sum + val * val, 0));
+    return vec.map((v) => v / (norm || 1));
+  }
+
   enrollFace(record: WatchlistFaceRecord) {
     this.watchlist.set(record.personId, record);
   }

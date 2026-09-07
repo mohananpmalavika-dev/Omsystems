@@ -37,7 +37,7 @@ const anprRecognizeSchema = z.object({
   cameraId: z.string().min(1),
   branchId: z.string().min(1),
   rawText: z.string().min(1),
-  confidence: z.number().min(0).max(1),
+  confidence: z.number().min(0).max(1).optional(),
   vehicleType: z.enum(["CAR", "TRUCK", "BUS", "MOTORCYCLE", "VAN", "UNKNOWN"]).optional(),
   boundingBox: z.object({
     x: z.number(),
