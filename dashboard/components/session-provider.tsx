@@ -12,6 +12,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const isPublicRoute = isPublicDashboardRoute(pathname);
   const [connectionError, setConnectionError] = useState(false);
   const [retry, setRetry] = useState(0);
+  // sessionReady prevents child components from firing authenticated API requests
+  // before the session check has completed on protected routes.
+  const [sessionReady, setSessionReady] = useState(isPublicRoute);
 
   useEffect(() => {
     let cancelled = false;
@@ -19,8 +22,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (isPublicRoute) {
       teardownSessionGuard();
       setConnectionError(false);
+      setSessionReady(true);
       return;
     }
+
+    // Reset on route changes so a navigated-to protected page also validates.
+    setSessionReady(false);
 
     const validateSession = async () => {
       try {
@@ -33,6 +40,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           if (user?.id) localStorage.setItem('user', JSON.stringify(user));
         } catch { /* Restricted browser storage does not invalidate a session. */ }
         setConnectionError(false);
+        setSessionReady(true);
         setupSessionGuard();
       } catch (error) {
         if (cancelled) return;
@@ -40,10 +48,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // destination. An unavailable auth service must not cause a login loop.
         const status = (error as { statusCode?: number })?.statusCode;
         if (status === 400 || status === 401 || status === 403) {
-        setConnectionError(false);
-        redirectToLogin('expired');
-        return;
-      }
+          setConnectionError(false);
+          redirectToLogin('expired');
+          return;
+        }
         setConnectionError(true);
         retryTimer = setTimeout(() => void validateSession(), 5000);
       }
@@ -64,6 +72,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         <button type="button" className="ml-3 font-semibold underline underline-offset-2" onClick={() => setRetry((value) => value + 1)}>Retry now</button>
       </div>
     )}
-    {children}
+    {!isPublicRoute && !sessionReady ? (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-700 border-t-blue-500" role="status" aria-label="Verifying session" />
+      </div>
+    ) : children}
   </>;
 }
