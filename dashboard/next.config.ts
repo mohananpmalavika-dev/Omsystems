@@ -36,6 +36,14 @@ const nextConfig: NextConfig = {
         destination: `${apiBase}/api/ai/:path*`,
       },
       {
+        source: "/api/mobile/:path*",
+        destination: `${apiBase}/api/mobile/:path*`,
+      },
+      {
+        source: "/api/edge-product/:path*",
+        destination: `${apiBase}/api/edge-product/:path*`,
+      },
+      {
         source: "/v1/:path*",
         destination: `${apiBase}/v1/:path*`,
       },
