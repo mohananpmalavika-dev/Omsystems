@@ -7,6 +7,7 @@ import {
   statSync,
   writeFileSync,
   copyFileSync,
+  unlinkSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -19,7 +20,7 @@ import {
   canonicalJsonStringify,
   appendCustodyEventTx,
 } from "../database/evidence-repository.js";
-import { packageDirectoryToZip } from "./zip-archive.js";
+import { packageEvidenceToZip64, packageDirectoryToZip } from "./zip-archive.js";
 
 /**
  * Creates a standard POSIX ustar TAR archive buffer from memory entries.
@@ -171,6 +172,8 @@ export interface RecordingGapItem {
   from: string;
   to: string;
   durationSeconds: number;
+  durationMs?: number;
+  reason?: string;
 }
 
 export interface CameraExportDetails {
@@ -527,16 +530,13 @@ export class ExportWorker {
         outputHash = "0".repeat(64);
         outputSize = 0;
       } else if (job.exportType === "original") {
-        const origResult = await this.exportOriginalEvidence(jobDir, validationResults, cameras);
+        const origResult = await this.exportOriginalEvidence(jobDir, validationResults, cameras, job.options);
         outputPath = origResult.outputPath;
         outputHash = origResult.hash;
         outputSize = origResult.size;
-        outputFiles.push({
-          filename: "originals.tar",
-          mimeType: "application/x-tar",
-          size: outputSize,
-          sha256: outputHash,
-        });
+        for (const file of origResult.files) {
+          outputFiles.push(file);
+        }
 
         // Populate camera details for originals
         for (const cam of cameras) {
@@ -786,11 +786,12 @@ export class ExportWorker {
         reason: `Manifest ${manifestId} signed cryptographically`,
       });
 
-      // Priority 2: Deterministic multi-camera downloadable ZIP package
+      // Priority 2: Deterministic multi-camera downloadable ZIP64 package (P0-01, P0-02, P0-03)
       if (job.format !== "manifest-only") {
         const zipFilename = `KryptoVision-Evidence-${jobId}.zip`;
         const zipPath = resolve(jobDir, zipFilename);
-        const zipResult = await packageDirectoryToZip(jobDir, zipPath);
+        const explicitFiles = outputFiles.map((f) => f.filename).concat(["manifest.json", "manifest.sig"]);
+        const zipResult = await packageEvidenceToZip64(jobDir, zipPath, { explicitFiles });
 
         outputPath = zipResult.outputPath;
         outputSize = zipResult.sizeBytes;
@@ -910,11 +911,14 @@ export class ExportWorker {
       const reqEnd = new Date(req.toTime).getTime();
 
       if (camSegments.length === 0) {
+        const durSec = Math.max(0, Math.round((reqEnd - reqStart) / 1000));
         gaps.push({
           cameraId: req.cameraId,
           from: req.fromTime,
           to: req.toTime,
-          durationSeconds: Math.max(0, Math.round((reqEnd - reqStart) / 1000)),
+          durationSeconds: durSec,
+          durationMs: durSec * 1000,
+          reason: "NO_RECORDINGS_IN_WINDOW",
         });
         continue;
       }
@@ -922,11 +926,14 @@ export class ExportWorker {
       // Check gap before first segment
       const firstStart = new Date(camSegments[0]!.startTime).getTime();
       if (firstStart - reqStart > 3000) {
+        const durSec = Math.round((firstStart - reqStart) / 1000);
         gaps.push({
           cameraId: req.cameraId,
           from: req.fromTime,
           to: camSegments[0]!.startTime,
-          durationSeconds: Math.round((firstStart - reqStart) / 1000),
+          durationSeconds: durSec,
+          durationMs: durSec * 1000,
+          reason: "PRE_WINDOW_DISCONTINUITY",
         });
       }
 
@@ -935,11 +942,14 @@ export class ExportWorker {
         const segEnd = new Date(camSegments[i]!.endTime).getTime();
         const nextStart = new Date(camSegments[i + 1]!.startTime).getTime();
         if (nextStart - segEnd > 3000) {
+          const durSec = Math.round((nextStart - segEnd) / 1000);
           gaps.push({
             cameraId: req.cameraId,
             from: camSegments[i]!.endTime,
             to: camSegments[i + 1]!.startTime,
-            durationSeconds: Math.round((nextStart - segEnd) / 1000),
+            durationSeconds: durSec,
+            durationMs: durSec * 1000,
+            reason: "RECORDING_DISCONTINUITY",
           });
         }
       }
@@ -947,11 +957,14 @@ export class ExportWorker {
       // Check gap after last segment
       const lastEnd = new Date(camSegments[camSegments.length - 1]!.endTime).getTime();
       if (reqEnd - lastEnd > 3000) {
+        const durSec = Math.round((reqEnd - lastEnd) / 1000);
         gaps.push({
           cameraId: req.cameraId,
           from: camSegments[camSegments.length - 1]!.endTime,
           to: req.toTime,
-          durationSeconds: Math.round((reqEnd - lastEnd) / 1000),
+          durationSeconds: durSec,
+          durationMs: durSec * 1000,
+          reason: "POST_WINDOW_DISCONTINUITY",
         });
       }
     }
@@ -967,13 +980,46 @@ export class ExportWorker {
     jobDir: string,
     validations: SegmentValidationResult[],
     cameras?: Array<{ cameraId: string; fromTime: string; toTime: string }>,
-  ): Promise<{ outputPath: string; hash: string; size: number }> {
+    options?: any,
+  ): Promise<{ outputPath: string; hash: string; size: number; files: Array<{ filename: string; mimeType: string; size: number; sha256: string }> }> {
     const originalsDir = resolve(jobDir, "originals");
     mkdirSync(originalsDir, { recursive: true });
 
-    const tarEntries: Array<{ name: string; buffer: Buffer; mtime?: Date }> = [];
-    const isMultiCamera = (cameras && cameras.length > 1) || new Set(validations.map((v) => v.cameraId)).size > 1;
+    const outputFiles: Array<{ filename: string; mimeType: string; size: number; sha256: string }> = [];
+    let totalSize = 0;
+    const combinedHash = createHash("sha256");
 
+    for (const val of validations) {
+      if (!val.exists) continue;
+      const src = this.resolveStoragePath(val.storagePath);
+      const filename = val.storagePath.includes("/") || val.storagePath.includes("\\")
+        ? val.storagePath.split(/[/\\]/).pop()!
+        : `${val.segmentId}.mp4`;
+
+      const camDir = resolve(originalsDir, val.cameraId);
+      mkdirSync(camDir, { recursive: true });
+      const destFile = resolve(camDir, filename);
+      copyFileSync(src, destFile);
+
+      const stat = statSync(destFile);
+      const segHash = val.actualSha256 || val.expectedSha256 || (await this.computeFileSha256(destFile));
+      totalSize += stat.size;
+      combinedHash.update(segHash);
+
+      const relPath = `originals/${val.cameraId}/${filename}`;
+      outputFiles.push({
+        filename: relPath,
+        mimeType: "video/mp4",
+        size: stat.size,
+        sha256: segHash,
+      });
+    }
+
+    let primaryOutputPath = originalsDir;
+    let finalHash = combinedHash.digest("hex");
+
+    // Produce standalone POSIX ustar TAR archive on disk
+    const tarEntries: Array<{ name: string; buffer: Buffer; mtime?: Date }> = [];
     for (const val of validations) {
       if (!val.exists) continue;
       const src = this.resolveStoragePath(val.storagePath);
@@ -981,41 +1027,22 @@ export class ExportWorker {
       const filename = val.storagePath.includes("/") || val.storagePath.includes("\\")
         ? val.storagePath.split(/[/\\]/).pop()!
         : `${val.segmentId}.mp4`;
-
-      const camDir = resolve(originalsDir, val.cameraId);
-      mkdirSync(camDir, { recursive: true });
-      copyFileSync(src, resolve(camDir, filename));
-
-      // Always include camera-scoped entry in tar
       tarEntries.push({
         name: `originals/${val.cameraId}/${filename}`,
         buffer: data,
         mtime: new Date(val.startTime),
       });
-
-      // If single camera, also include root originals/ entry for backward compatibility
-      if (!isMultiCamera) {
-        copyFileSync(src, resolve(originalsDir, filename));
-        tarEntries.push({
-          name: `originals/${filename}`,
-          buffer: data,
-          mtime: new Date(val.startTime),
-        });
-      }
     }
-
-    // Produce genuine POSIX ustar TAR archive
     const tarBuffer = createPosixTarArchive(tarEntries);
     const bundlePath = resolve(jobDir, "originals.tar");
     writeFileSync(bundlePath, tarBuffer);
-
-    const finalSize = tarBuffer.length;
-    const finalHash = createHash("sha256").update(tarBuffer).digest("hex");
+    const tarHash = createHash("sha256").update(tarBuffer).digest("hex");
 
     return {
       outputPath: bundlePath,
-      hash: finalHash,
-      size: finalSize,
+      hash: tarHash,
+      size: tarBuffer.length,
+      files: outputFiles,
     };
   }
 
@@ -1094,6 +1121,13 @@ export class ExportWorker {
       child.once("exit", (code) => resolvePromise(code));
       child.once("error", () => resolvePromise(-1));
     });
+
+    // P0-03 & P0-04: Clean up temporary worker concat demuxer file immediately to prevent internal server path leakage
+    try {
+      if (existsSync(concatPath)) {
+        unlinkSync(concatPath);
+      }
+    } catch {}
 
     if (exitCode !== 0) {
       const err = new Error(`MEDIA_ASSEMBLY_FAILED: FFmpeg exited with code ${exitCode}. ${stderr}`);
@@ -1209,6 +1243,11 @@ export class ExportWorker {
     const sourceSegments = input.validationResults.map((v) => {
       const raw = rawMap.get(v.segmentId);
       const receiveTs = raw?.server_receive_timestamp || raw?.received_at;
+      const filename = v.storagePath.includes("/") || v.storagePath.includes("\\")
+        ? v.storagePath.split(/[/\\]/).pop()!
+        : `${v.segmentId}.mp4`;
+      // P0-04: Prevent internal storage path leakage; use logical identifier
+      const logicalLocator = `originals/${v.cameraId}/${filename}`;
       return {
         id: v.segmentId,
         cameraId: v.cameraId,
@@ -1216,7 +1255,7 @@ export class ExportWorker {
         end: v.endTime,
         size: v.sizeBytes,
         sha256: v.actualSha256 || v.expectedSha256 || "0".repeat(64),
-        storageLocator: v.storagePath,
+        storageLocator: logicalLocator,
         valid: v.isValid,
         recordingServerReceiveTimestamp: receiveTs ? new Date(receiveTs).toISOString() : null,
       };

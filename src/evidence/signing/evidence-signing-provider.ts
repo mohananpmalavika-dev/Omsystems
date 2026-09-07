@@ -353,16 +353,22 @@ export class AwsKmsSigningProvider implements EvidenceSigningProvider {
       // Fall through to local verification if KMS is unreachable
     }
 
-    // 2. Local public key verification avoiding double-hashing on precomputed digest
+    // 2. Local public key verification avoiding double-hashing on precomputed digest (P0-24)
     try {
       const key = certificatePem || this.cachedPublicKeyPem || (await this.getPublicKeyPem());
       if (key) {
         const { verify: cryptoVerify } = await import("node:crypto");
-        try {
-          return cryptoVerify(null, digestBuffer, key, signature);
-        } catch {
-          return cryptoVerify("sha256", digestBuffer, key, signature);
+        // If input is already 32 bytes and represents a SHA-256 digest, verify with null (no secondary hash)
+        if (digest.length === 32) {
+          try {
+            const valid = cryptoVerify(null, digest, key, signature);
+            if (valid) return true;
+          } catch {
+            // Fall through if key type requires explicit digest algorithm
+          }
         }
+        // If input is raw unhashed data, hash with sha256
+        return cryptoVerify("sha256", digest, key, signature);
       }
     } catch {
       return false;

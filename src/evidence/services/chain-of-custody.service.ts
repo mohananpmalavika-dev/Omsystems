@@ -21,6 +21,14 @@ import {
 
 export { canonicalJsonStringify };
 
+export class CustodyAuthorityUnavailableError extends Error {
+  public readonly code = "CUSTODY_AUTHORITY_UNAVAILABLE";
+  constructor(message: string = "Custody write failed: PostgreSQL pool is unavailable and in-memory fallback is forbidden in non-test mode (P0-17 fail-closed)") {
+    super(message);
+    this.name = "CustodyAuthorityUnavailableError";
+  }
+}
+
 export class ChainOfCustodyService {
   private inMemoryLedger: Map<string, EvidenceCustodyEvent[]> = new Map();
 
@@ -76,6 +84,11 @@ export class ChainOfCustodyService {
       } finally {
         client.release();
       }
+    }
+
+    // Fail-closed enforcement in production (P0-17)
+    if (process.env.NODE_ENV !== "test") {
+      throw new CustodyAuthorityUnavailableError();
     }
 
     // Fallback when running in decoupled unit tests without a database pool

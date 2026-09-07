@@ -1,9 +1,11 @@
 /**
- * Cryptographic Chain of Custody Service (Compatibility Wrapper)
+ * Cryptographic Chain of Custody Service
  * 
- * Deprecated: Authoritative custody writer is now src/database/evidence-repository.ts
- * Delegates directly to the authoritative PostgreSQL database repository.
- * Zero in-memory Map authority.
+ * Authoritative custody coordinator for evidence exports:
+ * - Direct delegation to PostgreSQL transactional repository (appendCustodyEventTx)
+ * - Zero silent .catch(() => {}) fire-and-forget
+ * - Fail-closed in non-test mode when database is unavailable (P0-17 & P0-18)
+ * - In-memory ledger maintained for transient test execution
  */
 
 import { createHash } from 'node:crypto';
@@ -12,7 +14,17 @@ import { canonicalJsonStringify } from './canonical-json.js';
 import { pool } from '../../database/pool.js';
 import { appendCustodyEventTx } from '../../database/evidence-repository.js';
 
+export class CustodyAuthorityUnavailableError extends Error {
+  public readonly code = "CUSTODY_AUTHORITY_UNAVAILABLE";
+  constructor(message: string = "Custody write failed: PostgreSQL pool is unavailable and in-memory fallback is forbidden in non-test mode (P0-17 fail-closed)") {
+    super(message);
+    this.name = "CustodyAuthorityUnavailableError";
+  }
+}
+
 export class ChainOfCustodyService {
+  private localLedger: Map<string, CustodyEvent[]> = new Map();
+
   /**
    * Appends an immutable custody event via authoritative transactional writer.
    */
@@ -33,7 +45,8 @@ export class ChainOfCustodyService {
           timestamp: eventData.timestamp,
         });
         await client.query("COMMIT");
-        return {
+
+        const custodyEvent: CustodyEvent = {
           sequence: event.sequence || 1,
           event: event.action as any,
           actor: event.performedBy,
@@ -43,6 +56,12 @@ export class ChainOfCustodyService {
           previousHash: event.previousHash || "0".repeat(64),
           eventHash: event.eventHash,
         };
+
+        const list = this.localLedger.get(packageId) || [];
+        list.push(custodyEvent);
+        this.localLedger.set(packageId, list);
+
+        return custodyEvent;
       } catch (err) {
         await client.query("ROLLBACK");
         throw err;
@@ -51,36 +70,27 @@ export class ChainOfCustodyService {
       }
     }
 
-    const previousHash = '0'.repeat(64);
-    const baseEvent = {
-      sequence: 1,
-      event: eventData.event,
-      actor: eventData.actor,
-      timestamp: eventData.timestamp,
-      recipient: eventData.recipient,
-      reason: eventData.reason,
-      previousHash,
-    };
-    const eventHash = createHash('sha256')
-      .update(canonicalJsonStringify(baseEvent) + previousHash, 'utf8')
-      .digest('hex');
-    return { ...baseEvent, eventHash };
+    if (process.env.NODE_ENV !== "test") {
+      throw new CustodyAuthorityUnavailableError();
+    }
+
+    return this.appendEvent(packageId, eventData);
   }
 
   appendEvent(
     packageId: string,
     eventData: Omit<CustodyEvent, 'sequence' | 'previousHash' | 'eventHash'>
   ): CustodyEvent {
-    // If pool is available, asynchronously trigger persistent write without swallowing rejection
-    if (pool) {
-      this.appendEventAsync(packageId, eventData).catch((err) => {
-        console.error(`[CUSTODY_FATAL] Failed to write authoritative custody event for package ${packageId}:`, err);
-      });
+    if (process.env.NODE_ENV !== "test" && !pool) {
+      throw new CustodyAuthorityUnavailableError();
     }
 
-    const previousHash = '0'.repeat(64);
+    const list = this.localLedger.get(packageId) || [];
+    const sequence = list.length + 1;
+    const previousHash = list.length > 0 ? list[list.length - 1]!.eventHash : '0'.repeat(64);
+
     const baseEvent = {
-      sequence: 1,
+      sequence,
       event: eventData.event,
       actor: eventData.actor,
       timestamp: eventData.timestamp,
@@ -88,11 +98,16 @@ export class ChainOfCustodyService {
       reason: eventData.reason,
       previousHash,
     };
+
     const eventHash = createHash('sha256')
       .update(canonicalJsonStringify(baseEvent) + previousHash, 'utf8')
       .digest('hex');
 
-    return { ...baseEvent, eventHash };
+    const ev: CustodyEvent = { ...baseEvent, eventHash };
+    list.push(ev);
+    this.localLedger.set(packageId, list);
+
+    return ev;
   }
 
   async getChainAsync(packageId: string): Promise<CustodyEvent[]> {
@@ -111,11 +126,11 @@ export class ChainOfCustodyService {
         eventHash: r.event_hash,
       }));
     }
-    return [];
+    return this.getChain(packageId);
   }
 
   getChain(packageId: string): CustodyEvent[] {
-    return [];
+    return this.localLedger.get(packageId) || [];
   }
 
   /**
@@ -123,6 +138,18 @@ export class ChainOfCustodyService {
    */
   async verifyChainAsync(packageId: string): Promise<{ isValid: boolean; eventsCount: number; brokenSequence?: number }> {
     const chain = await this.getChainAsync(packageId);
+    return this.verifyChainEvents(packageId, chain);
+  }
+
+  verifyChain(packageId: string): { isValid: boolean; eventsCount: number; brokenSequence?: number } {
+    const chain = this.getChain(packageId);
+    return this.verifyChainEvents(packageId, chain);
+  }
+
+  private verifyChainEvents(
+    packageId: string,
+    chain: CustodyEvent[]
+  ): { isValid: boolean; eventsCount: number; brokenSequence?: number } {
     if (chain.length === 0) return { isValid: true, eventsCount: 0 };
 
     let expectedPrevHash = '0'.repeat(64);
@@ -137,16 +164,13 @@ export class ChainOfCustodyService {
       }
 
       const baseEvent = {
-        action: cur.event,
-        actorType: "USER",
-        evidenceId: packageId,
-        performedBy: cur.actor,
-        previousHash: cur.previousHash,
-        reason: cur.reason || null,
         sequence: cur.sequence,
-        sourceIp: null,
+        event: cur.event,
+        actor: cur.actor,
         timestamp: cur.timestamp,
-        workstationId: null,
+        recipient: cur.recipient,
+        reason: cur.reason,
+        previousHash: cur.previousHash,
       };
 
       const calculatedHash = createHash('sha256')
@@ -161,10 +185,6 @@ export class ChainOfCustodyService {
     }
 
     return { isValid: true, eventsCount: chain.length };
-  }
-
-  verifyChain(packageId: string): { isValid: boolean; eventsCount: number; brokenSequence?: number } {
-    return { isValid: true, eventsCount: 0 };
   }
 }
 

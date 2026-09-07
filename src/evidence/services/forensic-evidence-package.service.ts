@@ -19,6 +19,7 @@ import type {
 } from '../domain/forensic-evidence.types.js';
 import { canonicalJsonStringify, chainOfCustodyService } from './chain-of-custody.service.js';
 import { clockMonitoringService } from '../../clock-monitoring/services/clock-monitoring.service.js';
+import { pool } from '../../database/pool.js';
 import {
   getEvidenceSigningProvider,
   type EvidenceSigningProvider,
@@ -59,6 +60,8 @@ export interface CreatePackageInput {
     clipBuffer?: Buffer;
     snapshotPath?: string;
     clipPath?: string;
+    redactedSnapshotBuffer?: Buffer;
+    redactedClipBuffer?: Buffer;
   };
   redaction?: {
     enabled: boolean;
@@ -92,18 +95,18 @@ export class ForensicEvidencePackageService {
     const evidenceId = `EV-${new Date().getFullYear()}-${randomUUID().substring(0, 8).toUpperCase()}`;
     const capturedAt = new Date().toISOString();
     const serverTime = input.serverTime || capturedAt;
-    const deviceTime = input.deviceTime || serverTime;
+    const deviceTime = input.deviceTime;
 
     const serverMs = new Date(serverTime).getTime();
-    const deviceMs = new Date(deviceTime).getTime();
-    const clockOffsetMs = deviceMs - serverMs;
+    const deviceMs = deviceTime ? new Date(deviceTime).getTime() : undefined;
+    const clockOffsetMs = deviceMs !== undefined ? deviceMs - serverMs : undefined;
 
-    // 1. Provenance - Strict authentic telemetry only (P0-03: No fabricated defaults)
+    // 1. Provenance - Strict authentic telemetry only (P0-03 & P0-06: No fabricated defaults)
     const provenance: EvidenceProvenance = {
       cameraId: input.cameraId,
-      cameraName: input.cameraName || `Camera ${input.cameraId}`,
+      cameraName: input.cameraName,
       recorderId: input.recorderId,
-      recorderName: input.recorderName || (input.recorderId ? `Recorder ${input.recorderId}` : undefined),
+      recorderName: input.recorderName,
       manufacturer: input.manufacturer,
       model: input.model,
       serialNumber: input.serialNumber,
@@ -140,13 +143,13 @@ export class ForensicEvidencePackageService {
       nvrTime: clockManifest?.nvrTime || deviceTime,
       cameraTime: clockManifest?.cameraTime || deviceTime,
       clockOffsetMs,
-      observedOffsetSeconds: clockManifest?.observedOffsetSeconds ?? Number((Math.abs(clockOffsetMs) / 1000).toFixed(2)),
+      observedOffsetSeconds: clockManifest?.observedOffsetSeconds ?? (clockOffsetMs !== undefined ? Number((Math.abs(clockOffsetMs) / 1000).toFixed(2)) : undefined),
       jitterMs: clockManifest?.jitterMs ?? 0,
-      ntpSynchronized: clockManifest ? clockManifest.clockHealthStatus === 'HEALTHY' : Math.abs(clockOffsetMs) < 2000,
+      ntpSynchronized: clockManifest ? clockManifest.clockHealthStatus === 'HEALTHY' : (clockOffsetMs !== undefined ? Math.abs(clockOffsetMs) < 2000 : false),
       ntpServer: clockManifest?.ntpSource,
       clockDriftMsPerDay: undefined,
-      clockHealthStatus: clockManifest?.clockHealthStatus || (Math.abs(clockOffsetMs) > 30000 ? 'CRITICAL' : Math.abs(clockOffsetMs) > 5000 ? 'WARNING' : 'HEALTHY'),
-      forensicConfidence: clockManifest?.forensicTimestampConfidence || (Math.abs(clockOffsetMs) < 5000 ? 'HIGH' : Math.abs(clockOffsetMs) <= 30000 ? 'MEDIUM' : 'DEGRADED'),
+      clockHealthStatus: clockManifest?.clockHealthStatus || (clockOffsetMs === undefined ? 'DEGRADED' : Math.abs(clockOffsetMs) > 30000 ? 'CRITICAL' : Math.abs(clockOffsetMs) > 5000 ? 'WARNING' : 'HEALTHY'),
+      forensicConfidence: clockManifest?.forensicTimestampConfidence || (clockOffsetMs === undefined ? 'DEGRADED' : Math.abs(clockOffsetMs) < 5000 ? 'HIGH' : Math.abs(clockOffsetMs) <= 30000 ? 'MEDIUM' : 'DEGRADED'),
     };
 
     // 3. Artifacts Generation & Hashing
@@ -168,24 +171,27 @@ export class ForensicEvidencePackageService {
       });
 
       if (input.redaction?.enabled) {
-        const redactedSnapshotHash = createHash('sha256')
-          .update(input.media.snapshotBuffer)
-          .update(Buffer.from('REDACTED_PRIVACY_BLUR_V1'))
-          .digest('hex');
+        if (input.media.redactedSnapshotBuffer) {
+          const redactedSnapshotHash = createHash('sha256')
+            .update(input.media.redactedSnapshotBuffer)
+            .digest('hex');
 
-        artifacts.push({
-          id: randomUUID(),
-          evidencePackageId: evidenceId,
-          type: 'REDACTED_SNAPSHOT',
-          path: `media/snapshot_redacted.jpg`,
-          filename: 'snapshot_redacted.jpg',
-          sizeBytes: input.media.snapshotBuffer.length,
-          mimeType: 'image/jpeg',
-          sha256: redactedSnapshotHash,
-          createdAt: capturedAt,
-          derivedFrom: originalSnapshotId,
-          redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
-        });
+          artifacts.push({
+            id: randomUUID(),
+            evidencePackageId: evidenceId,
+            type: 'REDACTED_SNAPSHOT',
+            path: `media/snapshot_redacted.jpg`,
+            filename: 'snapshot_redacted.jpg',
+            sizeBytes: input.media.redactedSnapshotBuffer.length,
+            mimeType: 'image/jpeg',
+            sha256: redactedSnapshotHash,
+            createdAt: capturedAt,
+            derivedFrom: originalSnapshotId,
+            redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
+          });
+        } else {
+          throw new Error('Redaction requested for snapshot but no actual redacted media buffer was provided. Synthetic redaction hashes are forbidden per forensic compliance (P0-07).');
+        }
       }
     }
 
@@ -205,24 +211,27 @@ export class ForensicEvidencePackageService {
       });
 
       if (input.redaction?.enabled) {
-        const redactedClipHash = createHash('sha256')
-          .update(input.media.clipBuffer)
-          .update(Buffer.from('REDACTED_PRIVACY_BLUR_V1'))
-          .digest('hex');
+        if (input.media.redactedClipBuffer) {
+          const redactedClipHash = createHash('sha256')
+            .update(input.media.redactedClipBuffer)
+            .digest('hex');
 
-        artifacts.push({
-          id: randomUUID(),
-          evidencePackageId: evidenceId,
-          type: 'REDACTED_VIDEO',
-          path: `media/clip_redacted.mp4`,
-          filename: 'clip_redacted.mp4',
-          sizeBytes: input.media.clipBuffer.length,
-          mimeType: 'video/mp4',
-          sha256: redactedClipHash,
-          createdAt: capturedAt,
-          derivedFrom: originalClipId,
-          redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
-        });
+          artifacts.push({
+            id: randomUUID(),
+            evidencePackageId: evidenceId,
+            type: 'REDACTED_VIDEO',
+            path: `media/clip_redacted.mp4`,
+            filename: 'clip_redacted.mp4',
+            sizeBytes: input.media.redactedClipBuffer.length,
+            mimeType: 'video/mp4',
+            sha256: redactedClipHash,
+            createdAt: capturedAt,
+            derivedFrom: originalClipId,
+            redactionProfile: (input.redaction.targets || ['FACES', 'LICENSE_PLATES']).join(','),
+          });
+        } else {
+          throw new Error('Redaction requested for video clip but no actual redacted media buffer was provided. Synthetic redaction hashes are forbidden per forensic compliance (P0-07).');
+        }
       }
     }
 
@@ -339,11 +348,57 @@ export class ForensicEvidencePackageService {
       manifestHash: manifestSha256,
     };
 
+    // 9. Persist to PostgreSQL if pool is available
+    if (pool) {
+      try {
+        await pool.query(
+          `INSERT INTO evidence_manifests (
+             id, case_id, source_segments, destination_file, timestamp,
+             digital_signature, signing_key_id, signed_at, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, now(), now())
+           ON CONFLICT (id) DO UPDATE SET
+             destination_file = EXCLUDED.destination_file,
+             digital_signature = EXCLUDED.digital_signature,
+             signing_key_id = EXCLUDED.signing_key_id`,
+          [
+            evidenceId,
+            input.caseNumber || randomUUID(),
+            JSON.stringify(artifacts),
+            JSON.stringify(evidencePackage),
+            JSON.stringify(timeSync),
+            signatureBase64,
+            keyId,
+          ],
+        );
+      } catch (dbErr) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(`Failed to persist evidence package ${evidenceId} to PostgreSQL: ${(dbErr as any)?.message}`);
+        }
+      }
+    }
+
+    // In-memory cache acts as transient/fallback cache
     this.packageCache.set(evidenceId, evidencePackage);
     return evidencePackage;
   }
 
   getPackage(evidenceId: string): EvidencePackage | undefined {
+    return this.packageCache.get(evidenceId);
+  }
+
+  async getPackageAsync(evidenceId: string): Promise<EvidencePackage | undefined> {
+    if (pool) {
+      try {
+        const res = await pool.query(`SELECT destination_file FROM evidence_manifests WHERE id = $1`, [evidenceId]);
+        if (res.rows[0]?.destination_file) {
+          return typeof res.rows[0].destination_file === 'string'
+            ? JSON.parse(res.rows[0].destination_file)
+            : res.rows[0].destination_file;
+        }
+      } catch {
+        // Fall back to cache
+      }
+    }
     return this.packageCache.get(evidenceId);
   }
 
