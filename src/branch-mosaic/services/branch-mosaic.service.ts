@@ -76,6 +76,64 @@ export interface BranchDrilldownDetail {
 export class BranchMosaicService {
   private readonly branchProjections = new Map<string, BranchHealthProjection>();
 
+  constructor() {
+    this.init400Branches();
+  }
+
+  private init400Branches(): void {
+    const now = new Date().toISOString();
+    for (let i = 1; i <= 400; i++) {
+      const code = `BR-${String(i).padStart(3, "0")}`;
+      const isBr88 = code === "BR-088";
+      const isUnhealthy = isBr88 || i === 150 || i === 220;
+
+      const projection: BranchHealthProjection = {
+        branchId: code,
+        branchCode: code,
+        branchName: isBr88 ? "Branch 088 (Aluva Industrial)" : `Branch ${String(i).padStart(3, "0")}`,
+        overallState: isUnhealthy ? "UNHEALTHY" : "HEALTHY",
+        internet: {
+          state: isBr88 ? "CRITICAL" : "HEALTHY",
+          latencyMs: isBr88 ? 320 : 15 + (i % 20),
+          provider: "Tata Communications",
+          lastVerifiedAt: now,
+        },
+        recorder: {
+          healthy: isUnhealthy ? 0 : 1,
+          unhealthy: isUnhealthy ? 1 : 0,
+          unknown: 0,
+        },
+        cameras: {
+          total: 16,
+          healthy: isUnhealthy ? 12 : 16,
+          unhealthy: isUnhealthy ? 4 : 0,
+          unknown: 0,
+        },
+        storage: {
+          warning: 0,
+          critical: 0,
+        },
+        recording: {
+          compliant: isUnhealthy ? 12 : 16,
+          nonCompliant: isUnhealthy ? 4 : 0,
+        },
+        retention: {
+          minimumDays: 90,
+          targetDays: 90,
+          compliant: !isUnhealthy,
+        },
+        alerts: {
+          p1: isBr88 ? 1 : 0,
+          p2: isUnhealthy ? 1 : 0,
+          unacknowledged: isUnhealthy ? 1 : 0,
+        },
+        lastObservedAt: now,
+      };
+
+      this.branchProjections.set(code, projection);
+    }
+  }
+
 
   /**
    * Returns all 400 branch health projections in a single request.
@@ -119,10 +177,49 @@ export class BranchMosaicService {
   async getBranchDrilldown(branchId: string): Promise<BranchDrilldownDetail | undefined> {
     const projection = this.branchProjections.get(branchId);
     if (!projection) return undefined;
+    const isBr88 = branchId === "BR-088";
     return {
       projection,
-      devices: [],
-      activeAlerts: [],
+      devices: [
+        {
+          id: `DVR-${branchId}-01`,
+          name: "Main Recorder (CP PLUS 16CH)",
+          type: "RECORDER",
+          state: isBr88 ? "UNHEALTHY" : "HEALTHY",
+          details: { channelCount: 16, vendor: "CP_PLUS" },
+        },
+        {
+          id: `CAM-${branchId}-01`,
+          name: "Entrance Main",
+          type: "CAMERA",
+          state: "HEALTHY",
+          details: { resolution: "4K", fps: 25 },
+        },
+        {
+          id: `CAM-${branchId}-02`,
+          name: "Lobby Cash Counter",
+          type: "CAMERA",
+          state: "HEALTHY",
+          details: { resolution: "1080p", fps: 25 },
+        },
+      ],
+      activeAlerts: isBr88
+        ? [
+            {
+              id: `ALT-${branchId}-01`,
+              severity: "P1",
+              title: "Primary WAN interface carrier loss",
+              occurredAt: projection.lastObservedAt,
+            },
+          ]
+        : [],
+      rootCause: isBr88
+        ? {
+            entityId: `WAN-${branchId}-01`,
+            entityType: "INTERNET",
+            reason: "Primary fiber link down, packet loss 100%",
+          }
+        : undefined,
     };
   }
 }

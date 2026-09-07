@@ -581,7 +581,7 @@ export class PostgresStore
   async recordCustodyEvent(input: any) { return this.evidence.recordCustodyEvent(input); }
   async getCustodyLog(evidenceId: string, tenantId?: string) { return this.evidence.getCustodyLog(evidenceId, tenantId); }
   async createLegalHold(input: any) { return this.evidence.createLegalHold(input); }
-  async releaseLegalHold(id: string, releasedBy: string, tenantId?: string, reason?: string) { return this.evidence.releaseLegalHold(id, releasedBy, tenantId, reason); }
+  async releaseLegalHold(id: string, releasedBy: string, tenantId?: string, reason?: string) { return this.evidence.releaseLegalHold(id, releasedBy, reason, undefined, tenantId); }
   async getLegalHold(id: string, tenantId?: string) { return this.evidence.getLegalHold(id, tenantId); }
   async upsertRecordingStorageNode(input: any) { return this.recordings.upsertStorageNode(input); }
   async listRecordingStorageNodes(tenantId: string) { return this.recordings.listStorageNodes(tenantId); }

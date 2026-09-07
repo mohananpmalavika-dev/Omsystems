@@ -62,7 +62,9 @@ export function RetentionReportModal({
       .then((json) => {
         if (json?.data) setReportData(json.data);
       })
-      .catch(() => {})
+      .catch((err) => {
+        console.error("Failed to load daily retention report", err);
+      })
       .finally(() => setLoading(false));
   }, [isOpen, initialReport]);
 

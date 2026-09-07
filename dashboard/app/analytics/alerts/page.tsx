@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { IncidentMediaModal } from "@/components/incident-media-modal";
 import {
@@ -277,8 +276,7 @@ export default function AiAlertsIncidentHubPage() {
   };
 
   return (
-    <AppLayout>
-      <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="content p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
         <PageHero
           eyebrow="Vision AI Operations"
           icon={BellRing}
@@ -901,6 +899,5 @@ export default function AiAlertsIncidentHubPage() {
           />
         )}
       </div>
-    </AppLayout>
   );
 }

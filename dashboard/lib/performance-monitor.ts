@@ -107,7 +107,7 @@ class PerformanceMonitor {
     }
 
     // Calculate derived metrics
-    if (performance.getEntriesByName('first-paint').length > 0) {
+    if (nav.firstPaint) {
       this.pageMetrics.metrics.ttfb = nav.responseStart - nav.fetchStart;
       this.pageMetrics.metrics.fcp = (performance.getEntriesByName('first-contentful-paint')[0] as PerformancePaintTiming)?.startTime ?? 0;
     }
@@ -123,11 +123,11 @@ class PerformanceMonitor {
           const entries = list.getEntries();
           const lastEntry = entries[entries.length - 1];
           const lcp = (lastEntry as any).renderTime || (lastEntry as any).loadTime || lastEntry.startTime;
-          
+
           if (this.pageMetrics) {
             this.pageMetrics.metrics.lcp = lcp;
           }
-          
+
           this.recordMetric({
             name: 'LCP',
             value: lcp,
@@ -248,7 +248,7 @@ class PerformanceMonitor {
 
   private recordMetric(metric: WebVitalMetric) {
     this.metrics.set(metric.name, metric);
-    
+
     // Schedule report on new metric
     if (this.reportTimeout) {
       clearTimeout(this.reportTimeout);

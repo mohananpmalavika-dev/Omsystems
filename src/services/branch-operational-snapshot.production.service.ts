@@ -407,7 +407,7 @@ export class BranchOperationalSnapshotService {
     const latestAgeSeconds = latestObservedAt ? Math.max(0, (Date.now() - Date.parse(latestObservedAt)) / 1000) : Number.POSITIVE_INFINITY;
     const telemetryFreshness: TelemetryFreshness = latestAgeSeconds <= policy.staleAfterSeconds ? "CURRENT"
       : latestAgeSeconds <= policy.offlineAfterSeconds ? "RECENT" : latestAgeSeconds <= 86_400 ? "STALE" : "OUTDATED";
-    const recentEvents = telemetry.flatMap((item) => item.reasonCodes.map((reasonCode) => {
+    const recentEvents = telemetry.flatMap((item) => (item.reasonCodes ?? []).map((reasonCode) => {
       const health = mapHealth(telemetryStatus(item, policy));
       return {
         id: `${item.idempotencyKey}:${reasonCode}`,

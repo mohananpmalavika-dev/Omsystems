@@ -112,7 +112,11 @@ export class RangeExporter {
         durationSeconds,
       };
     } finally {
-      await unlink(concatListPath).catch(() => {});
+      try {
+        await unlink(concatListPath);
+      } catch {
+        // temporary concat list file was already cleaned up
+      }
     }
   }
 

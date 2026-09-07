@@ -189,28 +189,16 @@ function IncidentsPageContent() {
         )}
 
         {/* View Tabs */}
-        <div className="incident-view-tabs" style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '16px',
-          borderBottom: '1px solid #e5e7eb',
-          paddingBottom: '8px',
-        }}>
+        <div className="incident-view-tabs flex gap-2 mb-4 pb-2 border-b border-slate-800">
           {(['all', 'critical', 'open', 'sla-breach'] as const).map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={view === v ? "active" : ""}
-              style={{
-                padding: '8px 16px',
-                border: 'none',
-                background: view === v ? '#2563eb' : 'transparent',
-                color: view === v ? 'white' : '#4b5563',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: 500,
-                textTransform: 'capitalize',
-              }}
+              className={`px-4 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${
+                view === v
+                  ? "bg-blue-600 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+              }`}
             >
               {v.replace('-', ' ')}
             </button>
@@ -218,19 +206,11 @@ function IncidentsPageContent() {
         </div>
 
         {/* Filters */}
-        <div className="incident-filter-panel" style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: '12px',
-          marginBottom: '24px',
-          padding: '16px',
-          backgroundColor: '#f9fafb',
-          borderRadius: '8px',
-        }}>
+        <div className="incident-filter-panel grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm mb-6">
           <select
             value={filters.severity || ''}
             onChange={e => setFilters({ ...filters, severity: e.target.value || undefined })}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+            className="p-2 rounded-lg border border-slate-700 bg-slate-800/90 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
           >
             <option value="">All Severities</option>
             <option value="P1">P1 - Critical</option>
@@ -243,7 +223,7 @@ function IncidentsPageContent() {
           <select
             value={filters.status || ''}
             onChange={e => setFilters({ ...filters, status: e.target.value || undefined })}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+            className="p-2 rounded-lg border border-slate-700 bg-slate-800/90 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
           >
             <option value="">All Statuses</option>
             <option value="new">New</option>
@@ -256,7 +236,7 @@ function IncidentsPageContent() {
           <select
             value={filters.incidentType || ''}
             onChange={e => setFilters({ ...filters, incidentType: e.target.value || undefined })}
-            style={{ padding: '8px', borderRadius: '4px', border: '1px solid #d1d5db' }}
+            className="p-2 rounded-lg border border-slate-700 bg-slate-800/90 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
           >
             <option value="">All Types</option>
             <option value="fire">Fire</option>
@@ -268,15 +248,7 @@ function IncidentsPageContent() {
 
           <button
             onClick={() => setFilters({})}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#6b7280',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 500,
-            }}
+            className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-lg border border-slate-700 transition-colors"
           >
             Clear Filters
           </button>
@@ -284,65 +256,53 @@ function IncidentsPageContent() {
 
         {/* Incidents Table */}
         {error && (
-          <div className="incident-table-panel" style={{
-            padding: '12px',
-            backgroundColor: '#fef2f2',
-            border: '1px solid #fecaca',
-            borderRadius: '6px',
-            color: '#dc2626',
-            marginBottom: '16px',
-          }}>
+          <div className="incident-table-panel p-3 bg-rose-950/30 border border-rose-800/60 rounded-lg text-rose-300 text-sm mb-4" role="alert">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+          <div className="text-center py-10 text-slate-400 text-sm">
             Loading incidents...
           </div>
         ) : (
-          <div style={{
-            backgroundColor: 'white',
-            borderRadius: '8px',
-            border: '1px solid #e5e7eb',
-            overflow: 'hidden',
-          }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead style={{ backgroundColor: '#f9fafb' }}>
+          <div className="incident-table-panel rounded-xl border border-slate-800 overflow-hidden bg-slate-900/80 shadow-sm">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-800/60 border-b border-slate-700/50">
                 <tr>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Incident #
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Title & Type
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Zone
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Branch
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Camera
                   </th>
-                  <th style={{ textAlign: 'center', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-center px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Severity
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th style={{ textAlign: 'left', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-left px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Occurred
                   </th>
-                  <th style={{ textAlign: 'center', padding: '12px 14px', fontWeight: 600, color: '#374151', fontSize: '12px', textTransform: 'uppercase' }}>
+                  <th className="text-center px-3.5 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wider">
                     Visual Evidence
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800/60">
                 {filteredIncidents.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: 'center', padding: '40px', color: '#6b7280' }}>
+                    <td colSpan={9} className="text-center py-12 text-slate-400 text-sm">
                       No incidents found
                     </td>
                   </tr>
@@ -350,83 +310,57 @@ function IncidentsPageContent() {
                   filteredIncidents.map((inc) => (
                     <tr
                       key={inc.id}
-                      style={{
-                        borderTop: '1px solid #f3f4f6',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.15s',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f9fafb'}
-                      onMouseLeave={e => e.currentTarget.style.backgroundColor = 'white'}
+                      className="hover:bg-slate-800/40 transition-colors cursor-pointer"
                     >
-                      <td style={{ padding: '12px 14px' }}>
+                      <td className="px-3.5 py-3">
                         <Link
                           href={`/incidents/${inc.id}`}
-                          style={{
-                            color: '#2563eb',
-                            textDecoration: 'none',
-                            fontWeight: 700,
-                            fontSize: '13px',
-                            fontFamily: 'monospace',
-                          }}
+                          className="font-mono text-sm font-bold text-blue-400 hover:text-blue-300"
                         >
                           {inc.incidentNumber}
                         </Link>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td className="px-3.5 py-3">
                         <Link
                           href={`/incidents/${inc.id}`}
-                          style={{ color: '#111827', textDecoration: 'none', fontWeight: 600, fontSize: '14px', display: 'block' }}
+                          className="text-sm font-semibold block hover:underline text-slate-100"
                         >
                           {inc.title}
                         </Link>
-                        <span style={{ fontSize: '11px', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <span className="text-[11px] text-slate-400 uppercase tracking-wider font-medium">
                           {inc.incidentType || 'Security Incident'}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '4px',
-                          padding: '3px 8px',
-                          borderRadius: '4px',
-                          backgroundColor: '#f3e8ff',
-                          color: '#7e22ce',
-                          fontWeight: 500,
-                          fontSize: '12px',
-                        }}>
+                      <td className="px-3.5 py-3 text-sm text-slate-300">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-950/50 text-purple-300 border border-purple-800/40">
                           <MapPin size={12} />
                           {inc.zoneName || "Main Facility"}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
-                          <Building2 size={13} style={{ color: '#6b7280' }} />
+                      <td className="px-3.5 py-3 text-sm text-slate-300">
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          <Building2 size={13} className="text-slate-400" />
                           {inc.branchName || inc.branchId || "Headquarters"}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: '13px', color: '#374151' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 500 }}>
-                          <Camera size={13} style={{ color: '#0284c7' }} />
+                      <td className="px-3.5 py-3 text-sm text-slate-300">
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          <Camera size={13} className="text-sky-400" />
                           {inc.cameraName || inc.cameraId || "Camera"}
                         </span>
                       </td>
-                      <td style={{ textAlign: 'center', padding: '12px 14px' }}>
-                        <span style={{
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          backgroundColor: getSeverityColor(inc.severity),
-                          color: 'white',
-                        }}>
+                      <td className="text-center px-3.5 py-3">
+                        <span
+                          className="px-2 py-0.5 rounded text-xs font-bold text-white shadow-sm"
+                          style={{ backgroundColor: getSeverityColor(inc.severity) }}
+                        >
                           {inc.severity}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
+                      <td className="px-3.5 py-3">
                         {getStatusBadge(inc.status)}
                       </td>
-                      <td style={{ padding: '12px 14px', fontSize: '12px', color: '#6b7280' }}>
+                      <td className="px-3.5 py-3 text-xs text-slate-400 whitespace-nowrap">
                         {inc.occurredAt
                           ? new Date(inc.occurredAt).toLocaleString([], {
                               month: 'short',
@@ -436,8 +370,8 @@ function IncidentsPageContent() {
                             })
                           : 'N/A'}
                       </td>
-                      <td style={{ textAlign: 'center', padding: '12px 14px' }}>
-                        <div style={{ display: 'inline-flex', gap: '6px' }}>
+                      <td className="text-center px-3.5 py-3">
+                        <div className="inline-flex gap-1.5">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -445,19 +379,7 @@ function IncidentsPageContent() {
                               setSelectedIncidentForMedia(inc);
                               setMediaModalTab('image');
                             }}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '5px 9px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              backgroundColor: '#f0fdf4',
-                              color: '#15803d',
-                              border: '1px solid #bbf7d0',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-emerald-950/40 text-emerald-300 border border-emerald-800/50 rounded-md hover:bg-emerald-900/40 transition-colors"
                             title="View high-resolution snapshot"
                           >
                             <Camera size={12} />
@@ -470,19 +392,7 @@ function IncidentsPageContent() {
                               setSelectedIncidentForMedia(inc);
                               setMediaModalTab('video');
                             }}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '5px 9px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                              backgroundColor: '#eff6ff',
-                              color: '#1d4ed8',
-                              border: '1px solid #bfdbfe',
-                              borderRadius: '6px',
-                              cursor: 'pointer',
-                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold bg-blue-950/40 text-blue-300 border border-blue-800/50 rounded-md hover:bg-blue-900/40 transition-colors"
                             title="Watch incident video clip"
                           >
                             <FileVideo size={12} />
@@ -539,17 +449,11 @@ export default function IncidentsPage() {
 
 function StatCard({ title, value, color }: { title: string; value: string | number; color: string }) {
   return (
-    <div className="incident-stat-card" style={{
-      padding: '20px',
-      backgroundColor: 'white',
-      borderRadius: '8px',
-      border: '1px solid #e5e7eb',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-    }}>
-      <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '8px', fontWeight: 500 }}>
+    <div className="incident-stat-card p-5 rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm space-y-2">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
         {title}
       </div>
-      <div style={{ fontSize: '28px', fontWeight: 'bold', color }}>
+      <div className="text-2xl font-black" style={{ color }}>
         {value}
       </div>
     </div>

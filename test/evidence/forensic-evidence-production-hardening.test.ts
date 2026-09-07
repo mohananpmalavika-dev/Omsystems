@@ -21,26 +21,28 @@ function createInMemoryPgPool() {
     evidence_cases: new Map<string, any>(),
   };
 
-  const advisoryLockQueues = new Map<string, Array<() => void>>();
+  const lockWaiters = new Map<string, Array<() => void>>();
   const heldLocks = new Set<string>();
 
   const acquireLock = async (key: string) => {
-    while (heldLocks.has(key)) {
-      await new Promise<void>((resolve) => {
-        const q = advisoryLockQueues.get(key) || [];
-        q.push(resolve);
-        advisoryLockQueues.set(key, q);
-      });
+    if (!heldLocks.has(key)) {
+      heldLocks.add(key);
+      return;
     }
-    heldLocks.add(key);
+    await new Promise<void>((resolve) => {
+      const q = lockWaiters.get(key) ?? [];
+      q.push(resolve);
+      lockWaiters.set(key, q);
+    });
   };
 
   const releaseLock = (key: string) => {
-    heldLocks.delete(key);
-    const q = advisoryLockQueues.get(key);
+    const q = lockWaiters.get(key);
     if (q && q.length > 0) {
       const next = q.shift()!;
       next();
+    } else {
+      heldLocks.delete(key);
     }
   };
 
@@ -173,7 +175,7 @@ function createInMemoryPgPool() {
         workstation_id: params[8] || null,
         event_hash: params[9],
         previous_hash: params[10],
-        created_at: new Date(),
+        created_at: params[11] ? new Date(params[11]) : new Date(),
       };
       tables.chain_of_custody_events.push(record);
       return { rows: [record], rowCount: 1 };

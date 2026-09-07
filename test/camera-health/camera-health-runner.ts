@@ -8,7 +8,8 @@ import {
   CameraHealthService,
   type CameraConfiguration,
 } from "../../edge-agent/src/monitoring/camera-health/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 
 async function runCameraHealthTests() {
   console.log("================================================================================");
@@ -158,7 +159,46 @@ async function runCameraHealthTests() {
     { ...mockCamera, id: "cam-178-07", channelNumber: 7, name: "Vault" },
   ];
 
-  const branchSummary = await service.checkBranchCameras("branch-178", branchCameras);
+  const mockNetProbe = {
+    probe: async () => ({ reachable: true, port: 554, latencyMs: 10, protocol: "TCP" as const }),
+  } as any;
+  const mockStreamProbe = {
+    inspect: async (cam: CameraConfiguration) => ({
+      reachable: cam.channelNumber !== 4,
+      videoTrackPresent: cam.channelNumber !== 4,
+      codec: "h264",
+      width: 1920,
+      height: 1080,
+      fps: 25,
+      bitrateKbps: 4096,
+    }),
+  } as any;
+  const mockDecProbe = {
+    sample: async (cam: CameraConfiguration) => ({
+      decodable: cam.channelNumber !== 4,
+      decodedFrames: cam.channelNumber !== 4 ? 25 : 0,
+      decodeErrors: 0,
+    }),
+  } as any;
+  const mockFreezeDetector = {
+    analyze: async () => ({
+      frozen: false,
+      confidence: 0.05,
+      durationSeconds: 0,
+      timestampProgressing: true,
+      packetsFlowing: true,
+    }),
+  } as any;
+
+  const mockHealthService = new CameraHealthService(
+    mockNetProbe,
+    mockStreamProbe,
+    mockDecProbe,
+    mockFreezeDetector,
+    evaluator
+  );
+
+  const branchSummary = await mockHealthService.checkBranchCameras("branch-178", branchCameras);
   assert(branchSummary.totalCameras === 3, "Summary tracks 3 cameras");
   assert(branchSummary.healthyCameras === 1, "Correctly identifies 1 fully healthy camera (CAM01)");
   assert(branchSummary.criticalCameras === 1, "Correctly identifies 1 critical camera (CAM04 Signal Loss)");
@@ -168,13 +208,76 @@ async function runCameraHealthTests() {
 
   // 8. REST API Endpoints Verification
   console.log("\nSuite 8: REST API Endpoints (Branch Cameras Health & Single Camera Diagnostics)");
+  const store = new MemoryStore();
+  const tenantId = "omsystems";
+
+  (store as any).nodes.set("branch-178", {
+    id: "branch-178",
+    parentId: "company-1",
+    tenantId,
+    type: "branch",
+    name: "Aluva Branch 178",
+    code: "ALV-178",
+    path: ["company-1", "branch-178"],
+  });
+
+  for (let i = 1; i <= 16; i++) {
+    const chStr = String(i).padStart(2, "0");
+    const camId = `cam-178-${chStr}`;
+    (store as any).cameras.set(camId, {
+      id: camId,
+      name: `Camera ${chStr}`,
+      tenantId,
+      branchId: "branch-178",
+      nodeId: "branch-178",
+      channel: i,
+      ipAddress: `192.168.1.${100 + i}`,
+      capabilities: { ptz: false, audio: false, events: true },
+      specifications: { frameRate: 25 },
+      lastSeenAt: new Date().toISOString(),
+    });
+
+    const isCam4 = i === 4;
+    const isCam7 = i === 7;
+    (store as any).operationalTelemetry.set(`camera:${camId}`, {
+      id: `tel-${camId}`,
+      idempotencyKey: `tel-${camId}`,
+      tenantId,
+      branchId: "branch-178",
+      deviceType: "camera",
+      deviceId: camId,
+      status: isCam4 ? "critical" : isCam7 ? "warning" : "healthy",
+      reasonCodes: isCam4 ? ["SIGNAL_LOST"] : isCam7 ? ["RECORDING_STOPPED"] : [],
+      observedAt: new Date().toISOString(),
+      metrics: {
+        status: isCam4 ? "critical" : isCam7 ? "warning" : "healthy",
+        streamActive: !isCam4,
+        recordingStatus: isCam4 || isCam7 ? "stopped" : "recording",
+        retentionDays: 90,
+        fps: isCam4 ? 0 : 25,
+        videoLoss: isCam4,
+        tamperingDetected: false,
+        imageFrozen: false,
+        blackScreen: false,
+        latencyMs: 12,
+      },
+    });
+  }
+
+  const app = await buildApp({ store });
   await app.ready();
+
+  const authHeaders = { "x-user-id": "user-global-admin" };
 
   const branchHealthResp = await app.inject({
     method: "GET",
     url: "/api/v1/branches/branch-178/cameras/health",
+    headers: authHeaders,
   });
-  assert(branchHealthResp.statusCode === 200, "GET /api/v1/branches/:branchId/cameras/health returns 200 OK");
+  assert(branchHealthResp.statusCode === 200, "GET /api/v1/branches/:branchId/cameras/health returns 200 OK", {
+    statusCode: branchHealthResp.statusCode,
+    body: branchHealthResp.body,
+  });
   const branchData = JSON.parse(branchHealthResp.body);
   assert(branchData.cameras.length === 16, "Branch cameras health returns 16 cameras");
   assert(branchData.healthyCameras === 14, "Tracks 14 healthy cameras");
@@ -184,6 +287,7 @@ async function runCameraHealthTests() {
   const camHealthResp = await app.inject({
     method: "GET",
     url: "/api/v1/cameras/cam-178-04/health",
+    headers: authHeaders,
   });
   assert(camHealthResp.statusCode === 200, "GET /api/v1/cameras/:cameraId/health returns 200 OK");
   const camData = JSON.parse(camHealthResp.body);
@@ -196,9 +300,8 @@ async function runCameraHealthTests() {
   console.log(`  RESULTS: ${passed} passed, ${failed} failed`);
   console.log("================================================================================\n");
 
-  if (failed > 0) {
-    process.exit(1);
-  }
+  await app.close();
+  process.exit(failed > 0 ? 1 : 0);
 }
 
 runCameraHealthTests().catch((err) => {

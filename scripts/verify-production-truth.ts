@@ -171,6 +171,9 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
       { pattern: /usableStorageBytes\s*\*\s*1\.1/, rule: "NO_SYNTHETIC_STORAGE_MULTIPLIER", message: "Production code must not use synthetic usableStorageBytes * 1.1 multiplier." },
       { pattern: /99\.997/, rule: "NO_HARDCODED_COMPLIANCE_METRICS", message: "Production code must not use hardcoded 99.997 compliance metrics." },
       { pattern: /83\.4/, rule: "NO_HARDCODED_COMPLIANCE_METRICS", message: "Production code must not use hardcoded 83.4 retention metrics." },
+      { pattern: /\b99\.11\b/, rule: "NO_HARDCODED_COVERAGE_99_11", message: "Production code must not use hardcoded 99.11 coverage metric." },
+      { pattern: /\b0\.94\b/, rule: "NO_HARDCODED_CONFIDENCE_0_94", message: "Production code must not use hardcoded 0.94 confidence metric." },
+      { pattern: /\bdays\s*>=\s*90\b/, rule: "NO_HARDCODED_90_DAY_RETENTION", message: "Production code must not use hardcoded 90-day retention threshold; resolve policy dynamically." },
     ];
 
     for (const fp of forbiddenPatterns) {
@@ -183,6 +186,20 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
           snippet: line.trim(),
         });
       }
+    }
+
+    // Check 7: No empty catch error swallowing in evidence, legal-hold, retention, custody
+    if (
+      (relPath.includes("evidence") || relPath.includes("retention") || relPath.includes("custody") || relPath.includes("legal-hold")) &&
+      /\.catch\(\s*\(\)\s*=>\s*\{\s*\}\s*\)/.test(line)
+    ) {
+      violations.push({
+        file: relPath,
+        line: lineNum,
+        rule: "NO_SILENT_ERROR_SWALLOWING",
+        message: "Forensic, custody, legal-hold, and retention operations must never silently swallow errors with empty catch blocks.",
+        snippet: line.trim(),
+      });
     }
   }
 
