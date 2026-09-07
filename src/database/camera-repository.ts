@@ -17,6 +17,7 @@ import type { DeviceIdentityRepository } from "./device-identity-repository.js";
 
 type CameraRow = {
   id: string;
+  tenant_id?: string;
   device_identity_id: string;
   name: string;
   resource_node_id: string;

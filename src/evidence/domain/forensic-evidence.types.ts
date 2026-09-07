@@ -48,14 +48,14 @@ export interface EvidenceProvenance {
   cameraName?: string;
   recorderId: string;
   recorderName?: string;
-  manufacturer: string;
-  model: string;
+  manufacturer?: string;
+  model?: string;
   serialNumber?: string;
   channel: number;
   streamProfile: 'main' | 'sub' | 'snapshot';
   captureMethod: 'RECORDER_PLAYBACK' | 'RTSP_LIVE' | 'EDGE_BUFFER' | 'PORTABLE_PUBLISH';
-  adapter: string;
-  adapterVersion: string;
+  adapter?: string;
+  adapterVersion?: string;
   sourceType?: string;
   deviceId?: string;
   sessionId?: string;

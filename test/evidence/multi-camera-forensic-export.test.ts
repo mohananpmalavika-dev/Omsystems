@@ -348,6 +348,10 @@ describe("Multi-Camera Forensic Export & Manifest Architecture (P0-01, P0-02, P0
     const savedJob = mockData.forensic_export_jobs.get(job.id);
     expect(savedJob).toBeDefined();
     expect(savedJob.status).toBe("ready");
+    expect(savedJob.output_path).toMatch(/KryptoVision-Evidence-.*\.zip$/);
+    const zipStat = await fs.stat(savedJob.output_path);
+    expect(zipStat.size).toBe(savedJob.output_size_bytes);
+    expect(savedJob.output_hash_sha256).toMatch(/^[a-f0-9]{64}$/);
 
     // Verify per-camera viewing copies in footage/
     const vaultMp4 = path.join(vaultDir, job.id, "footage", "CAM-VAULT-01.mp4");

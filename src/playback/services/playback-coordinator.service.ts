@@ -215,7 +215,7 @@ export class PlaybackCoordinatorService {
   /**
    * Master Clock Synchronization tick across cameras.
    */
-  syncTick(sessionId: string, elapsedMs: number = 1000): { masterTime: string; cameraDrifts: Record<string, number> } {
+  syncTick(sessionId: string, elapsedMs: number = 1000, measuredDrifts?: Record<string, number>): { masterTime: string; cameraDrifts: Record<string, number> } {
     const session = this.getSession(sessionId);
     if (!session) throw new Error(`Playback session ${sessionId} not found`);
 
@@ -227,11 +227,10 @@ export class PlaybackCoordinatorService {
     const cameraDrifts: Record<string, number> = {};
 
     for (const cam of session.cameras) {
-      // Simulate micro-drift (<100ms is normal, >500ms requires reseek)
-      const simulatedDrift = Math.round((Math.random() * 40 - 20));
-      cam.driftMs = simulatedDrift;
-      cam.actualTime = new Date(updatedMs + simulatedDrift).toISOString();
-      cameraDrifts[cam.cameraId] = simulatedDrift;
+      const drift = measuredDrifts?.[cam.cameraId] ?? 0;
+      cam.driftMs = drift;
+      cam.actualTime = new Date(updatedMs + drift).toISOString();
+      cameraDrifts[cam.cameraId] = drift;
     }
 
     return {
