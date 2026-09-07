@@ -31,6 +31,15 @@ export class CustodyAuthorityUnavailableError extends Error {
 
 export class ChainOfCustodyService {
   private inMemoryLedger: Map<string, EvidenceCustodyEvent[]> = new Map();
+  private readonly dbPool?: Pool | null;
+
+  constructor(dbPool?: Pool | null) {
+    this.dbPool = dbPool;
+  }
+
+  private getPool(): Pool | null {
+    return this.dbPool !== undefined ? this.dbPool : pool;
+  }
 
   /**
    * Appends a new custody event with cryptographic hash chaining.
@@ -48,9 +57,10 @@ export class ChainOfCustodyService {
     timestamp?: string;
   }): Promise<EvidenceCustodyEvent> {
     const timestamp = input.timestamp || new Date().toISOString();
+    const activePool = this.getPool();
 
-    if (pool) {
-      const client = await pool.connect();
+    if (activePool) {
+      const client = await activePool.connect();
       try {
         await client.query("BEGIN");
         const event = await appendCustodyEventTx(client, {
@@ -144,8 +154,9 @@ export class ChainOfCustodyService {
    * Loads ledger from database (survives restarts)
    */
   async loadLedgerFromDb(evidencePackageId: string): Promise<EvidenceCustodyEvent[]> {
-    if (pool) {
-      const res = await pool.query(
+    const activePool = this.getPool();
+    if (activePool) {
+      const res = await activePool.query(
         `SELECT * FROM chain_of_custody_events
          WHERE evidence_id = $1
          ORDER BY sequence ASC NULLS FIRST, created_at ASC`,

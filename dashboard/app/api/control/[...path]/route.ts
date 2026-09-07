@@ -96,7 +96,20 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
   }
   if (routePath === "/v1/auth/refresh") {
     const refreshToken = request.cookies.get("sentinel_refresh")?.value;
-    if (refreshToken) requestBody = JSON.stringify({ refreshToken });
+    if (refreshToken) {
+      requestBody = JSON.stringify({ refreshToken });
+    } else {
+      let parsedBody: any = null;
+      try {
+        parsedBody = requestBody ? JSON.parse(requestBody) : null;
+      } catch {}
+      if (!parsedBody?.refreshToken) {
+        return Response.json(
+          { error: "no_refresh_token", message: "No refresh token available" },
+          { status: 401, headers: { "cache-control": "no-store" } },
+        );
+      }
+    }
   }
 
   // Only include Content-Type and send a body when the body is non-empty
@@ -140,6 +153,8 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         user?: unknown;
       };
       const publicPayload = {
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
         expiresIn: payload.expiresIn,
         tokenType: payload.tokenType,
         ...(payload.user ? { user: payload.user } : {}),
@@ -153,17 +168,19 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
       // which are automatically destroyed by the browser when the user closes the browser.
       outgoing.cookies.set("sentinel_access", payload.accessToken, {
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: isHttps ? "none" : "lax",
         secure: isHttps,
+        partitioned: isHttps,
         path: "/",
-      });
+      } as any);
       if (payload.refreshToken) {
         outgoing.cookies.set("sentinel_refresh", payload.refreshToken, {
           httpOnly: true,
-          sameSite: "lax",
+          sameSite: isHttps ? "none" : "lax",
           secure: isHttps,
+          partitioned: isHttps,
           path: "/",
-        });
+        } as any);
       }
       return outgoing;
 
@@ -180,8 +197,9 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
           ...(isCurrentRevoked ? { "x-sentinel-current-session-revoked": "true" } : {}),
         },
       });
-      outgoing.cookies.set("sentinel_access", "", { path: "/", maxAge: 0 });
-      outgoing.cookies.set("sentinel_refresh", "", { path: "/", maxAge: 0 });
+      const isHttps = requestIsHttps(request);
+      outgoing.cookies.set("sentinel_access", "", { path: "/", maxAge: 0, sameSite: isHttps ? "none" : "lax", secure: isHttps, partitioned: isHttps } as any);
+      outgoing.cookies.set("sentinel_refresh", "", { path: "/", maxAge: 0, sameSite: isHttps ? "none" : "lax", secure: isHttps, partitioned: isHttps } as any);
       return outgoing;
     }
 

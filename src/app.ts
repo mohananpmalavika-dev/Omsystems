@@ -130,6 +130,7 @@ import {
 } from "./media/index.js";
 import { PlaybookEngineService } from "./incidents/services/playbook-engine.service.js";
 import { registerPlaybookEngineRoutes } from "./routes/playbook-engine.routes.js";
+import { registerInvestigationWorkspaceRoutes } from "./routes/incident-workspace.routes.js";
 import { AIQualityPlatformFacade } from "./ai-quality/index.js";
 import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js";
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
@@ -2780,6 +2781,7 @@ export async function buildApp(options?: {
   try {
     const playbookEngine = new PlaybookEngineService();
     await registerPlaybookEngineRoutes(app, playbookEngine, store);
+    await registerInvestigationWorkspaceRoutes(app, store, playbookEngine);
     app.log.info("Stateful Incident Playbook Engine & Dynamic Operator SOP routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register incident playbook engine routes");

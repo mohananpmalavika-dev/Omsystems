@@ -52,18 +52,7 @@ export async function registerPlaybookEngineRoutes(
   engine: PlaybookEngineService,
   store?: ControlPlaneStore,
 ) {
-  // 1. Get complete operator incident workspace
-  app.get("/v1/incidents/:id/workspace", async (request: FastifyRequest, reply: FastifyReply) => {
-    const { id } = request.params as { id: string };
-
-    if (!store || typeof (store as any).getIncident !== "function") {
-      return reply.code(503).send({ error: "incident_store_unavailable" });
-    }
-    const incidentData = await (store as any).getIncident(id);
-    if (!incidentData) return reply.code(404).send({ error: "incident_not_found" });
-    const workspace = await engine.getIncidentWorkspace(incidentData);
-    return { data: workspace };
-  });
+  // Playbook Engine Route Handlers
 
   // 2. Start Playbook SOP for incident
   app.post("/v1/incidents/:id/playbook/start", async (request: FastifyRequest, reply: FastifyReply) => {

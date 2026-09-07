@@ -93,7 +93,8 @@ export class IncidentWorkflowService {
       }
       
       // Validate role permissions
-      if (transition.allowedRoles && input.userRole) {
+      const isAdminRole = ['admin', 'company_admin', 'system', 'global-admin', 'security-manager'].includes(input.userRole || '');
+      if (transition.allowedRoles && input.userRole && !isAdminRole) {
         if (!transition.allowedRoles.includes(input.userRole)) {
           return {
             success: false,
@@ -288,11 +289,12 @@ export class IncidentWorkflowService {
    */
   getAvailableTransitions(currentStatus: IncidentStatus, userRole?: string): IncidentStatus[] {
     const available: IncidentStatus[] = [];
+    const isAdminRole = ['admin', 'company_admin', 'system', 'global-admin', 'security-manager'].includes(userRole || '');
     
     for (const [key, transition] of this.transitions.entries()) {
       if (transition.from.includes(currentStatus)) {
         // Check role restrictions
-        if (transition.allowedRoles && userRole) {
+        if (transition.allowedRoles && userRole && !isAdminRole) {
           if (transition.allowedRoles.includes(userRole)) {
             available.push(transition.to);
           }

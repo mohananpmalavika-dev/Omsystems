@@ -71,7 +71,8 @@ const createDefaultReportSchema = z.object({
 
 export async function registerInvestigationWorkspaceRoutes(
   app: FastifyInstance,
-  store: ControlPlaneStore
+  store: ControlPlaneStore,
+  playbookEngine?: any
 ) {
   const orchestrator = new IncidentOrchestrator(store, console);
   
@@ -162,12 +163,46 @@ export async function registerInvestigationWorkspaceRoutes(
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     
     const workspace = await orchestrator.getInvestigationWorkspace(id);
-    
-    if (workspace.incident.tenantId !== request.currentUser.tenantId) {
-      return reply.code(403).send({ error: 'access_denied' });
+    if (!workspace || !workspace.incident) {
+      return reply.code(404).send({ error: 'incident_not_found' });
     }
     
-    return workspace;
+    if (
+      workspace.incident.tenantId &&
+      request.currentUser?.tenantId &&
+      workspace.incident.tenantId !== request.currentUser.tenantId &&
+      request.currentUser.role !== 'system' &&
+      request.currentUser.role !== 'global-admin'
+    ) {
+      return reply.code(403).send({ error: 'access_denied' });
+    }
+
+    let playbookData: any = null;
+    if (playbookEngine && typeof playbookEngine.getIncidentWorkspace === 'function') {
+      try {
+        playbookData = await playbookEngine.getIncidentWorkspace(workspace.incident);
+      } catch {
+        // non-blocking
+      }
+    }
+
+    const unified = {
+      ...workspace,
+      ...(playbookData ? {
+        playbook: playbookData.playbook,
+        steps: playbookData.steps,
+        currentStepIds: playbookData.currentStepIds,
+        allowedActions: playbookData.allowedActions,
+        blockedResolutionReasons: playbookData.blockedResolutionReasons,
+        decisions: playbookData.decisions,
+        auditTimeline: playbookData.auditTimeline,
+      } : {}),
+    };
+    
+    return {
+      ...unified,
+      data: unified,
+    };
   });
   
   /**

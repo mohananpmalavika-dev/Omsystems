@@ -49,7 +49,7 @@ function IncidentsPageContent() {
     branchId: typeof window !== "undefined" ? searchParams?.get("branchId") || undefined : undefined,
   }));
   const [stats, setStats] = useState<any>(null);
-  const [view, setView] = useState<'all' | 'critical' | 'open' | 'sla-breach'>('all');
+  const [view, setView] = useState<'all' | 'critical' | 'open' | 'resolved' | 'closed' | 'sla-breach'>('all');
   const [error, setError] = useState<string | null>(null);
   const [selectedIncidentForMedia, setSelectedIncidentForMedia] = useState<Incident | null>(null);
   const [mediaModalTab, setMediaModalTab] = useState<'image' | 'video'>('image');
@@ -139,8 +139,9 @@ function IncidentsPageContent() {
   const filteredIncidents = incidents.filter(inc => {
     if (view === 'critical' && !['P1', 'P2'].includes(inc.severity)) return false;
     if (view === 'open' && ['closed', 'false-positive', 'cancelled'].includes(inc.status)) return false;
+    if (view === 'resolved' && inc.status !== 'resolved') return false;
+    if (view === 'closed' && !['closed', 'false-positive', 'cancelled'].includes(inc.status)) return false;
     if (view === 'sla-breach') {
-      // Would check SLA status - simplified for now
       return ['P1', 'P2'].includes(inc.severity) && inc.status !== 'closed';
     }
     return true;
@@ -190,7 +191,7 @@ function IncidentsPageContent() {
 
         {/* View Tabs */}
         <div className="incident-view-tabs flex gap-2 mb-4 pb-2 border-b border-slate-800">
-          {(['all', 'critical', 'open', 'sla-breach'] as const).map(v => (
+          {(['all', 'open', 'critical', 'resolved', 'closed', 'sla-breach'] as const).map(v => (
             <button
               key={v}
               onClick={() => setView(v)}

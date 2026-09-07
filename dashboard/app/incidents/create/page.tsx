@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Save, Siren } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
@@ -16,6 +16,7 @@ type IncidentForm = {
   confidentialityLevel: "public" | "internal" | "confidential" | "restricted" | "highly-restricted";
   policeRequired: boolean;
   insuranceRequired: boolean;
+  branchId?: string;
 };
 
 const initialForm: IncidentForm = {
@@ -27,13 +28,31 @@ const initialForm: IncidentForm = {
   confidentialityLevel: "internal",
   policeRequired: false,
   insuranceRequired: false,
+  branchId: undefined,
 };
 
 export default function CreateIncidentPage() {
   const router = useRouter();
   const [form, setForm] = useState(initialForm);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadBranches() {
+      try {
+        const res = await fetch("/api/control/v1/branches");
+        if (res.ok) {
+          const json = await res.json();
+          const list = Array.isArray(json) ? json : json.data || json.branches || [];
+          setBranches(list);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch branches list:", err);
+      }
+    }
+    loadBranches();
+  }, []);
 
   const update = <Key extends keyof IncidentForm>(key: Key, value: IncidentForm[Key]) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -97,6 +116,17 @@ export default function CreateIncidentPage() {
               <span>Incident type</span>
               <select className="input" value={form.incidentType} onChange={(event) => update("incidentType", event.target.value)}>
                 <option value="intrusion">Intrusion</option><option value="fire">Fire</option><option value="atm-tampering">ATM tampering</option><option value="tailgating">Tailgating</option><option value="fall-detection">Fall detection</option><option value="other">Other</option>
+              </select>
+            </label>
+            <label className="incident-field">
+              <span>Branch location</span>
+              <select className="input" value={form.branchId || ""} onChange={(event) => update("branchId", event.target.value || undefined)}>
+                <option value="">-- Unassigned / Enterprise Global --</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} {b.code ? `(${b.code})` : ""}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="incident-field">

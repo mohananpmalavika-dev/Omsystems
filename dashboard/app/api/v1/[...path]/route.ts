@@ -137,7 +137,13 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
             { status: 502, headers: { "cache-control": "no-store" } },
           );
         }
-        const { accessToken, refreshToken, ...publicPayload } = payload;
+        const accessToken = payload.accessToken;
+        const refreshToken = payload.refreshToken;
+        const publicPayload = {
+          accessToken,
+          refreshToken,
+          ...payload,
+        };
         outgoing = NextResponse.json(publicPayload, {
           status: upstreamRes.status,
           headers: { "cache-control": "no-store" },
@@ -145,19 +151,21 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         const isHttps = requestIsHttps(request);
         outgoing.cookies.set("sentinel_access", accessToken, {
           httpOnly: true,
-          sameSite: "strict",
+          sameSite: isHttps ? "none" : "lax",
           secure: isHttps,
+          partitioned: isHttps,
           path: "/",
           maxAge: payload.expiresIn || 86400,
-        });
+        } as any);
         if (refreshToken) {
           outgoing.cookies.set("sentinel_refresh", refreshToken, {
             httpOnly: true,
-            sameSite: "strict",
+            sameSite: isHttps ? "none" : "lax",
             secure: isHttps,
+            partitioned: isHttps,
             path: "/",
             maxAge: 30 * 24 * 60 * 60,
-          });
+          } as any);
         }
       } catch {
         return NextResponse.json(

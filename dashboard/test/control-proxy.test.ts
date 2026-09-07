@@ -380,7 +380,7 @@ describe("dashboard control-plane BFF", () => {
     expect(await response.text()).not.toBe("[]");
   });
 
-  it("keeps login tokens in HttpOnly cookies and removes them from JSON", async () => {
+  it("issues HttpOnly session cookies with SameSite=none for HTTPS iframes and provides bearer fallback", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json({
         accessToken: "access-secret",
@@ -404,13 +404,14 @@ describe("dashboard control-plane BFF", () => {
     );
 
     const body = await response.json();
-    expect(body.accessToken).toBeUndefined();
-    expect(body.refreshToken).toBeUndefined();
+    expect(body.accessToken).toBe("access-secret");
+    expect(body.refreshToken).toBe("refresh-secret");
     expect(body.user.id).toBe("employee-1");
     const cookies = response.headers.get("set-cookie") ?? "";
     expect(cookies).toContain("sentinel_access=access-secret");
     expect(cookies).toContain("HttpOnly");
-    expect(cookies).toContain("SameSite=lax");
+    expect(cookies.toLowerCase()).toContain("samesite=none");
+    expect(cookies).toContain("Secure");
   });
 
   it("keeps login cookies usable for local HTTP production deployments", async () => {
@@ -442,10 +443,12 @@ describe("dashboard control-plane BFF", () => {
     );
 
     expect(controlResponse.headers.get("set-cookie") ?? "").not.toContain("Secure");
+    expect(controlResponse.headers.get("set-cookie") ?? "").toContain("SameSite=lax");
     expect(compatibilityResponse.headers.get("set-cookie") ?? "").not.toContain("Secure");
+    expect(compatibilityResponse.headers.get("set-cookie") ?? "").toContain("SameSite=lax");
   });
 
-  it("keeps the compatibility v1 login proxy token-free too", async () => {
+  it("keeps the compatibility v1 login proxy usable in iframes too", async () => {
     vi.stubGlobal("fetch", vi.fn(async () =>
       Response.json({
         accessToken: "compat-access-secret",
@@ -467,13 +470,13 @@ describe("dashboard control-plane BFF", () => {
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body.accessToken).toBeUndefined();
-    expect(body.refreshToken).toBeUndefined();
+    expect(body.accessToken).toBe("compat-access-secret");
+    expect(body.refreshToken).toBe("compat-refresh-secret");
     expect(body.user.id).toBe("employee-compat");
     const cookies = response.headers.get("set-cookie") ?? "";
     expect(cookies).toContain("sentinel_access=compat-access-secret");
     expect(cookies).toContain("HttpOnly");
-    expect(cookies).toContain("SameSite=strict");
+    expect(cookies.toLowerCase()).toContain("samesite=none");
   });
 
   it("forwards the compatibility refresh cookie without an expired bearer token", async () => {

@@ -21,6 +21,10 @@ import {
   appendCustodyEventTx,
 } from "../database/evidence-repository.js";
 import { packageEvidenceToZip64, packageDirectoryToZip } from "./zip-archive.js";
+import {
+  HardwareEncoderDetector,
+  RedactionFilterGraphBuilder,
+} from "./hardware-encoder.js";
 
 /**
  * Creates a standard POSIX ustar TAR archive buffer from memory entries.
@@ -578,6 +582,9 @@ export class ExportWorker {
         if (cameras.length > 1 || job.exportType === "multi-camera") {
           for (const camera of cameras) {
             const camValidations = validationResults.filter((v) => v.cameraId === camera.cameraId);
+            const camValidSorted = camValidations
+              .filter((v) => v.isValid)
+              .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
             const camResult = await this.createViewingCopy(
               jobDir,
               camera.cameraId,
@@ -1112,7 +1119,35 @@ export class ExportWorker {
     if (durationSec > 0) {
       args.push("-t", durationSec.toFixed(3));
     }
-    args.push("-c", "copy", "-movflags", "+faststart", outputPath);
+
+    const hasRedaction = Boolean(
+      options?.redaction?.enabled ||
+      (options?.redaction?.boundingBoxes && options.redaction.boundingBoxes.length > 0) ||
+      (options?.privacyMasks && options.privacyMasks.length > 0)
+    );
+
+    let hwProfileName: string | undefined;
+
+    if (hasRedaction) {
+      const hwProfile = HardwareEncoderDetector.detect();
+      hwProfileName = hwProfile.name;
+      const filterGraph = RedactionFilterGraphBuilder.buildFilterGraph({
+        boundingBoxes: options?.redaction?.boundingBoxes || options?.privacyMasks,
+        targets: options?.redaction?.targets,
+        blurStrength: options?.redaction?.blurStrength || 15,
+      });
+
+      if (filterGraph.includes(";")) {
+        args.push("-filter_complex", filterGraph, "-map", "[outv]", "-map", "0:a?");
+      } else {
+        args.push("-vf", filterGraph);
+      }
+
+      args.push(...hwProfile.outputCodecFlags);
+      args.push("-movflags", "+faststart", outputPath);
+    } else {
+      args.push("-c", "copy", "-movflags", "+faststart", outputPath);
+    }
 
     let stderr = "";
     const exitCode = await new Promise<number | null>((resolvePromise) => {
@@ -1309,7 +1344,12 @@ export class ExportWorker {
       gaps: input.gaps,
       outputFiles: input.outputFiles,
       watermarkApplied: Boolean(input.options?.watermark),
-      redactionApplied: false,
+      redactionApplied: Boolean(
+        input.options?.redaction?.enabled ||
+        (input.options?.redaction?.boundingBoxes && input.options.redaction.boundingBoxes.length > 0) ||
+        (input.options?.privacyMasks && input.options.privacyMasks.length > 0)
+      ),
+      redactionProfile: input.options?.redaction?.targets?.join(",") || (input.options?.redaction?.enabled ? "CUSTOM" : undefined),
       audioIncluded: Boolean(input.options?.audioIncluded),
       signingAlgorithm: "ED25519",
       signingKeyId: await this.signingProvider.getKeyId(),

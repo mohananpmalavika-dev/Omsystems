@@ -183,4 +183,43 @@ export async function registerRecordingIndexRoutes(
     const summary = await service.reconcile(body.segmentIds);
     return reply.code(200).send({ success: true, data: summary });
   });
+
+  /**
+   * POST /api/v1/recordings/sync/batch
+   * Ingests a batch of segments synchronized from edge store-and-forward journal
+   */
+  app.post("/api/v1/recordings/sync/batch", async (request: FastifyRequest, reply: FastifyReply) => {
+    const batchSchema = z.object({
+      tenantId: z.string().uuid(),
+      branchId: z.string().uuid(),
+      segments: z.array(registerSegmentSchema).min(1),
+    });
+
+    const body = batchSchema.parse(request.body);
+    const results = [];
+
+    for (const seg of body.segments) {
+      try {
+        const registered = await service.registerSegment({
+          ...seg,
+          tenantId: body.tenantId,
+          branchId: body.branchId,
+          startTime: new Date(seg.startTime),
+          endTime: new Date(seg.endTime),
+          storageTier: seg.storageTier as StorageTier | undefined,
+          archiveState: seg.archiveState as ArchiveState | undefined,
+        });
+        results.push({ id: registered.id, status: "COMMITTED" });
+      } catch (err: any) {
+        results.push({ id: seg.id || "unknown", status: "FAILED", error: err.message });
+      }
+    }
+
+    return reply.code(200).send({
+      success: true,
+      totalReceived: body.segments.length,
+      committedCount: results.filter((r) => r.status === "COMMITTED").length,
+      results,
+    });
+  });
 }

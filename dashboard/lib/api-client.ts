@@ -94,17 +94,38 @@ export function refreshCookieBackedSession(): Promise<boolean> {
   if (typeof window === 'undefined') return Promise.resolve(false);
   if (cookieRefreshPromise) return cookieRefreshPromise;
 
+  const storedToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+  const body = storedToken ? JSON.stringify({ refreshToken: storedToken }) : '{}';
+
   cookieRefreshPromise = fetch(`${API_BASE}/v1/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: '{}',
+    body,
     signal: AbortSignal.timeout(3_000),
   })
-    .then((response) => {
-      if (response.ok) return true;
-      if (response.status === 401 || response.status === 403) return false;
+    .then(async (response) => {
+      if (response.ok) {
+        try {
+          const data = await response.clone().json();
+          if (data?.accessToken) {
+            sessionStorage.setItem('accessToken', data.accessToken);
+            localStorage.setItem('accessToken', data.accessToken);
+          }
+          if (data?.refreshToken) {
+            sessionStorage.setItem('refreshToken', data.refreshToken);
+            localStorage.setItem('refreshToken', data.refreshToken);
+          }
+        } catch {}
+        return true;
+      }
+      // 400 (missing/invalid token), 401, or 403 means session is definitively expired/unauthenticated
+      if (response.status === 400 || response.status === 401 || response.status === 403) return false;
       throw new ApiError('Sign-in service is temporarily unavailable. Please try again.', response.status);
+    })
+    .catch((err) => {
+      if (err instanceof ApiError) throw err;
+      return false;
     })
     .finally(() => { cookieRefreshPromise = null; });
   return cookieRefreshPromise;
@@ -407,11 +428,14 @@ export const authApi = {
     }),
 
   refreshToken: async () => {
+    const token = (typeof window !== 'undefined')
+      ? (localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken'))
+      : null;
     const response = await fetchApi<{
       expiresIn: number;
     }>('/v1/auth/refresh', {
       method: 'POST',
-      body: '{}',
+      body: JSON.stringify(token ? { refreshToken: token } : {}),
     });
 
     return response;

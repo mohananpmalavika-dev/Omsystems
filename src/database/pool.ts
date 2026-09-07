@@ -40,6 +40,36 @@ export function createPool(connectionString: string) {
   return pgPool;
 }
 
+import { MultiRegionDatabasePoolRouter } from "./multi-region-pool-router.js";
+
+export let poolRouter: MultiRegionDatabasePoolRouter | null = null;
+
+export function setPoolRouter(router: MultiRegionDatabasePoolRouter) {
+  poolRouter = router;
+  pool = router as unknown as Pool;
+}
+
+export function createMultiRegionPool(primaryConnectionString: string, standbyConnectionString?: string) {
+  const primary = createPool(primaryConnectionString);
+  if (!standbyConnectionString) {
+    return primary;
+  }
+  const standby = new Pool({
+    connectionString: standbyConnectionString,
+    max: boundedNumber(process.env.DB_POOL_MAX, 20, 2, 200),
+    min: boundedNumber(process.env.DB_POOL_MIN, 2, 0, 50),
+    ssl: createDatabaseTlsConfig(),
+    application_name: "kryptovision-standby-pool",
+  });
+  const router = new MultiRegionDatabasePoolRouter({
+    primaryPool: primary,
+    standbyPool: standby,
+    healthCheckIntervalMs: 5000,
+  });
+  setPoolRouter(router);
+  return router;
+}
+
 function boundedNumber(value: string | undefined, fallback: number, minimum: number, maximum: number) {
   const parsed = Number(value ?? fallback);
   return Number.isFinite(parsed) ? Math.min(maximum, Math.max(minimum, Math.trunc(parsed))) : fallback;
