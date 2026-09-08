@@ -512,9 +512,19 @@ export async function registerOperationalHealthRoutes(
     const query = z.object({ branchId: z.string().optional() }).parse(request.query);
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
     const branchById = new Map(projections.map((branch) => [branch.id, branch]));
-    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    const branchIds = [...branchById.keys()];
+    const [telemetry, policies] = await Promise.all([
+      store.listLatestOperationalTelemetry(request.currentUser.tenantId, branchIds),
+      Promise.all(branchIds.map(async (branchId) => [
+        branchId,
+        { ...defaultOperationalHealthPolicy, ...((await store.getOperationalHealthPolicy(request.currentUser.tenantId, branchId)) ?? {}) },
+      ] as const)),
+    ]);
+    const policyByBranch = new Map(policies);
+    const now = Date.now();
     const links = telemetry.filter((item) => item.deviceType === "network").flatMap((item) => {
-      const branch = branchById.get(item.branchId); return branch ? [projectInternetLink(item, branch)] : [];
+      const branch = branchById.get(item.branchId);
+      return branch ? [projectInternetLink(item, branch, policyByBranch.get(branch.id) ?? defaultOperationalHealthPolicy, now)] : [];
     });
     const branches = [...branchById.values()].map((branch) => ({
       branchId: branch.id, branchName: branch.name, branchCode: branch.code,
@@ -900,7 +910,16 @@ export async function registerOperationalHealthRoutes(
     }).parse(request.query);
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
     const branchById = new Map(projections.map((branch) => [branch.id, branch]));
-    const diskTelemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, [...branchById.keys()]);
+    const branchIds = [...branchById.keys()];
+    const [diskTelemetry, policies] = await Promise.all([
+      store.listLatestOperationalTelemetry(request.currentUser.tenantId, branchIds),
+      Promise.all(branchIds.map(async (branchId) => [
+        branchId,
+        { ...defaultOperationalHealthPolicy, ...((await store.getOperationalHealthPolicy(request.currentUser.tenantId, branchId)) ?? {}) },
+      ] as const)),
+    ]);
+    const policyByBranch = new Map(policies);
+    const now = Date.now();
     const diskAlerts = diskTelemetry
       .filter((item) => item.deviceType === "disk")
       .flatMap((item) => {
@@ -936,7 +955,7 @@ export async function registerOperationalHealthRoutes(
       .filter((item) => item.deviceType === "network")
       .flatMap((item) => {
         const branch = branchById.get(item.branchId); if (!branch) return [];
-        const link = projectInternetLink(item, branch);
+        const link = projectInternetLink(item, branch, policyByBranch.get(branch.id) ?? defaultOperationalHealthPolicy, now);
         const addressChanged = link.publicIpChanged;
         if (link.status === "online" && !addressChanged) return [];
         const offline = link.status === "offline";

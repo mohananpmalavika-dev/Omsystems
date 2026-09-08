@@ -39,6 +39,20 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
   { name: "AI - Face recognition match", detectionType: "face-recognition", objectClasses: ["face"], severity: "P2", minDurationSeconds: 0, minConfidence: 0.70, cooldownSeconds: 60 },
   { name: "AI - Number plate recognition", detectionType: "anpr", objectClasses: ["license-plate"], severity: "P4", minDurationSeconds: 0, minConfidence: 0.75, cooldownSeconds: 300 },
   { name: "AI - Watchlist match", detectionType: "watchlist-match", objectClasses: ["face", "license-plate"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  // Banking-specific alerting. These rules are deliberately camera-wide: the
+  // analytics engine emits the domain-specific detection only when its model
+  // or upstream integration has verified the banking context.
+  { name: "Banking AI - Person in vault after hours", detectionType: "person-in-vault-after-hours", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  { name: "Banking AI - Cash counter monitoring", detectionType: "cash-counter-monitoring", objectClasses: ["person"], severity: "P2", minDurationSeconds: 0, cooldownSeconds: 60 },
+  { name: "Banking AI - Teller presence", detectionType: "teller-presence", objectClasses: ["person"], severity: "P3", minDurationSeconds: 30, cooldownSeconds: 120 },
+  { name: "Banking AI - Vault door monitoring", detectionType: "vault-door-monitoring", objectClasses: [], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  { name: "Banking AI - ATM queue", detectionType: "atm-queue", objectClasses: ["person"], severity: "P3", minDurationSeconds: 60, cooldownSeconds: 120 },
+  { name: "Banking AI - ATM tampering", detectionType: "atm-tampering", objectClasses: [], severity: "P1", minDurationSeconds: 1, minConfidence: 0.75, cooldownSeconds: 30 },
+  { name: "Banking AI - ATM skimming", detectionType: "atm-skimming", objectClasses: [], severity: "P1", minDurationSeconds: 1, minConfidence: 0.75, cooldownSeconds: 30 },
+  { name: "Banking AI - Cash van arrival", detectionType: "cash-van-arrival", objectClasses: ["vehicle"], severity: "P3", minDurationSeconds: 0, cooldownSeconds: 120 },
+  { name: "Banking AI - Strong room entry", detectionType: "strong-room-entry", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  { name: "Banking AI - Cash tray left open", detectionType: "cash-tray-left-open", objectClasses: [], severity: "P1", minDurationSeconds: 5, cooldownSeconds: 30 },
+  { name: "Banking AI - Dual control verification", detectionType: "dual-control-verification", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
 ];
 
 export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = [];

@@ -127,7 +127,14 @@ export class RecordingContinuityCoordinatorService {
     const isRecordingActive = lagSeconds <= 45.0; // Segment duration (30s) + grace (15s)
 
     // Calculate yesterday's coverage
-    const yesterdayCoverage = this.calculateDailyCoverage(cameraId, '2026-08-16');
+    const yesterdayCoverage = this.calculateDailyCoverage(cameraId, previousUtcDate(now));
+    const segments = this.cameraSegments.get(cameraId) ?? [];
+    const oldestSegment = segments.length > 0
+      ? [...segments].sort((a, b) => a.start.getTime() - b.start.getTime())[0]
+      : undefined;
+    const availableDays = oldestSegment
+      ? Math.max(0, Number(((now.getTime() - oldestSegment.start.getTime()) / 86_400_000).toFixed(1)))
+      : 0;
 
     // Health state evaluation
     let healthState: 'HEALTHY' | 'WARNING' | 'CRITICAL' = 'HEALTHY';
@@ -154,9 +161,9 @@ export class RecordingContinuityCoordinatorService {
         largestGapSeconds: yesterdayCoverage.largestGapSeconds,
       },
       retention: {
-        availableDays: 0,
-        requiredDays: 0,
-        retentionCompliant: false,
+        availableDays,
+        requiredDays: expectation.requiredRetentionDays,
+        retentionCompliant: availableDays >= expectation.requiredRetentionDays,
       },
       mediaIntegrity: {
         status: yesterdayCoverage.corruptSegmentCount === 0 ? 'VERIFIED' : 'COMPROMISED',
@@ -168,7 +175,7 @@ export class RecordingContinuityCoordinatorService {
   /**
    * Calculates high-precision daily coverage for a camera on a specific date.
    */
-  calculateDailyCoverage(cameraId: string, dateStr: string): RecordingCoverageDaily {
+  calculateDailyCoverage(cameraId: string, dateStr: string = previousUtcDate(new Date())): RecordingCoverageDaily {
     const expectation = this.expectations.get(cameraId);
     if (!expectation) throw new Error(`recording_expectation_not_configured:${cameraId}`);
 
@@ -201,7 +208,7 @@ export class RecordingContinuityCoordinatorService {
   /**
    * Rollup coverage and continuity at the branch level.
    */
-  getBranchSummary(branchId: string): BranchContinuitySummary {
+  getBranchSummary(branchId: string, now: Date = new Date()): BranchContinuitySummary {
     const branchExpectations = Array.from(this.expectations.values()).filter((e) => e.branchId === branchId);
     const cameraCount = branchExpectations.length;
 
@@ -215,7 +222,7 @@ export class RecordingContinuityCoordinatorService {
     let worstCamera: { cameraId: string; coveragePercent: number; largestGapSeconds: number } | undefined;
 
     for (const exp of branchExpectations) {
-      const coverage = this.calculateDailyCoverage(exp.cameraId, '2026-08-16');
+      const coverage = this.calculateDailyCoverage(exp.cameraId, previousUtcDate(now));
       totalExpected += coverage.expectedSeconds;
       totalRecorded += coverage.recordedSeconds;
       totalGaps += coverage.gapCount;
@@ -256,7 +263,7 @@ export class RecordingContinuityCoordinatorService {
   /**
    * Generates a tamper-evident, cryptographically signed daily continuity audit certificate.
    */
-  generateSignedAuditCertificate(cameraId: string, dateStr: string): SignedContinuityAuditCertificate {
+  generateSignedAuditCertificate(cameraId: string, dateStr: string = previousUtcDate(new Date())): SignedContinuityAuditCertificate {
     const coverage = this.calculateDailyCoverage(cameraId, dateStr);
     const certificateId = `cert-cont-${cameraId}-${dateStr}-${Date.now()}`;
     const issuedAt = new Date();
@@ -302,6 +309,11 @@ export class RecordingContinuityCoordinatorService {
       },
     };
   }
+}
+
+function previousUtcDate(now: Date): string {
+  const previous = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  return previous.toISOString().slice(0, 10);
 }
 
 export const recordingContinuityCoordinator = new RecordingContinuityCoordinatorService();

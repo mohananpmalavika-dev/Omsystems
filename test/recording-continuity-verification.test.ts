@@ -7,7 +7,23 @@ import {
   SegmentVerifier,
   VerificationLevel,
   RecordingContinuityCoordinatorService,
+  DEFAULT_RECORDING_EXPECTATION,
 } from '../src/recording-continuity/index.js';
+
+function configureCoordinator(coordinator: RecordingContinuityCoordinatorService, cameraIds = ['cam-178-01', 'cam-178-02', 'cam-178-03']) {
+  for (const cameraId of cameraIds) {
+    coordinator.setExpectation(DEFAULT_RECORDING_EXPECTATION(cameraId));
+    coordinator.ingestSegment(cameraId, {
+      start: new Date('2026-05-20T05:24:00.000Z'), end: new Date('2026-05-20T05:25:00.000Z'),
+    });
+    coordinator.ingestSegment(cameraId, {
+      start: new Date('2026-08-16T00:00:00.000Z'), end: new Date('2026-08-16T12:00:00.000Z'),
+    });
+    coordinator.ingestSegment(cameraId, {
+      start: new Date('2026-08-16T12:00:02.000Z'), end: new Date('2026-08-16T23:59:59.999Z'),
+    });
+  }
+}
 
 describe('Recording Continuity Verification Subsystem (Banking Compliance Core)', () => {
   it('merges adjacent intervals with tolerance and prevents duration inflation on overlapping ranges', () => {
@@ -142,6 +158,7 @@ describe('Recording Continuity Verification Subsystem (Banking Compliance Core)'
   it('evaluates live recording health across 4 independent dimensions', () => {
     const coordinator = new RecordingContinuityCoordinatorService();
     const now = new Date('2026-08-17T15:00:00.000Z');
+    configureCoordinator(coordinator, ['cam-178-01']);
 
     // Simulate active media received 3.2s ago
     coordinator.recordMediaPacket('cam-178-01', new Date(now.getTime() - 3200));
@@ -168,7 +185,8 @@ describe('Recording Continuity Verification Subsystem (Banking Compliance Core)'
 
   it('aggregates branch-level continuity rollups', () => {
     const coordinator = new RecordingContinuityCoordinatorService();
-    const summary = coordinator.getBranchSummary('BR-118');
+    configureCoordinator(coordinator);
+    const summary = coordinator.getBranchSummary('BR-118', new Date('2026-08-17T15:00:00.000Z'));
 
     expect(summary.branchId).toBe('BR-118');
     expect(summary.cameraCount).toBeGreaterThanOrEqual(3);
@@ -179,6 +197,7 @@ describe('Recording Continuity Verification Subsystem (Banking Compliance Core)'
 
   it('generates cryptographically signed daily continuity audit certificates', () => {
     const coordinator = new RecordingContinuityCoordinatorService();
+    configureCoordinator(coordinator, ['cam-178-01']);
     const cert = coordinator.generateSignedAuditCertificate('cam-178-01', '2026-08-16');
 
     expect(cert.certificateId).toBeDefined();

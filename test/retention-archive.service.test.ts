@@ -10,7 +10,8 @@ describe("recorder archive retention evidence", () => {
       recorderId: "nvr-main", observedAt: new Date(now).toISOString(), sourceChannel: 1,
       status: "available", oldestContinuousAt: new Date(now - 35 * 86_400_000).toISOString(),
       newestPlayableAt: new Date(now).toISOString(), retentionLowerBound: false,
-      coverageComplete: true, continuityGapSeconds: 30, reasonCodes: [],
+      coverageComplete: true, continuityGapSeconds: 30,
+      playbackVerified: true, playbackFrameDecoded: true, reasonCodes: [],
     });
 
     expect(verification).toMatchObject({

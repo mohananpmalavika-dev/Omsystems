@@ -73,7 +73,16 @@ export class CoverageCalculator {
     const verifiedSegmentCount = recordedSegments.length - corruptSegmentCount;
 
     const mergedRecorded = IntervalMerger.merge(validSegmentIntervals);
-    const recordedSeconds = Math.min(expectedSeconds, IntervalMerger.totalSeconds(mergedRecorded));
+    // A segment may span midnight or a planned-maintenance exclusion. Count
+    // only its intersection with the effective recording expectation.
+    const recordedWithinExpected = IntervalMerger.merge(
+      effectiveExpectedIntervals.flatMap((expected) => mergedRecorded.flatMap((recorded) => {
+        const start = Math.max(expected.start, recorded.start);
+        const end = Math.min(expected.end, recorded.end);
+        return end > start ? [{ start, end }] : [];
+      })),
+    );
+    const recordedSeconds = IntervalMerger.totalSeconds(recordedWithinExpected);
     const missingSeconds = parseFloat(Math.max(0, expectedSeconds - recordedSeconds).toFixed(3));
 
     // High-precision coverage percentage

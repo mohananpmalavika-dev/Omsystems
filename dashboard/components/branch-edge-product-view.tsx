@@ -4,8 +4,18 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, RefreshCw, Server } from "lucide-react";
 
 type ApiState = {
-  summary: Record<string, unknown> | null;
-  agents: Array<Record<string, unknown>>;
+  summary: { total: number; online: number; offline: number; pending: number } | null;
+  agents: EdgeAgent[];
+};
+
+type EdgeAgent = {
+  id: string;
+  name: string;
+  branchId: string;
+  branchName?: string;
+  version: string;
+  status: "online" | "offline" | "pending" | string;
+  lastSeenAt?: string | null;
 };
 
 export function BranchEdgeProductView() {
@@ -17,15 +27,22 @@ export function BranchEdgeProductView() {
     setLoading(true);
     setError(null);
     try {
-      const [summaryResponse, agentsResponse] = await Promise.all([
-        fetch("/api/edge-product/fleet/summary", { cache: "no-store" }),
-        fetch("/api/edge-product/agents", { cache: "no-store" }),
-      ]);
-      const summaryBody = await summaryResponse.json().catch(() => ({}));
-      const agentsBody = await agentsResponse.json().catch(() => ({}));
-      if (!summaryResponse.ok) throw new Error(summaryBody.error ?? "Fleet summary unavailable");
-      if (!agentsResponse.ok) throw new Error(agentsBody.error ?? "Edge-agent inventory unavailable");
-      setState({ summary: summaryBody.data ?? null, agents: Array.isArray(agentsBody.data) ? agentsBody.data : [] });
+      // This is the authoritative, access-scoped gateway inventory.  The old
+      // edge-product endpoint has an isolated in-memory service and therefore
+      // could show an empty fleet even after a gateway enrolled successfully.
+      const response = await fetch("/api/control/v1/edge-agents", { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message ?? body.error ?? "Edge-agent inventory unavailable");
+      const agents = Array.isArray(body.data) ? body.data as EdgeAgent[] : [];
+      setState({
+        agents,
+        summary: {
+          total: agents.length,
+          online: agents.filter((agent) => agent.status === "online").length,
+          offline: agents.filter((agent) => agent.status === "offline").length,
+          pending: agents.filter((agent) => agent.status === "pending").length,
+        },
+      });
     } catch (reason) {
       setState({ summary: null, agents: [] });
       setError(reason instanceof Error ? reason.message : "Edge fleet unavailable");
@@ -55,13 +72,13 @@ export function BranchEdgeProductView() {
       </div>
 
       {error && <div className="rounded-lg border border-rose-800/60 bg-rose-950/30 p-4 text-sm text-rose-200"><AlertTriangle className="mr-2 inline h-4 w-4" />{error}</div>}
-      {!error && !state.summary && state.agents.length === 0 && <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">No edge-agent telemetry has been reported.</div>}
+      {!error && !loading && state.agents.length === 0 && <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">No edge gateways are enrolled for the branches you can manage.</div>}
 
-      {state.summary && <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Object.entries(state.summary).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"><dt className="text-xs uppercase tracking-wide text-slate-500">{key.replaceAll(/([A-Z])/g, " $1")}</dt><dd className="mt-2 text-2xl font-semibold text-slate-100">{typeof value === "object" ? "—" : String(value ?? "—")}</dd></div>)}</dl>}
+      {state.summary && <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Object.entries(state.summary).map(([key, value]) => <div key={key} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4"><dt className="text-xs uppercase tracking-wide text-slate-500">{key}</dt><dd className="mt-2 text-2xl font-semibold text-slate-100">{value}</dd></div>)}</dl>}
 
       <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/60">
         <div className="border-b border-slate-800 px-4 py-3 text-sm font-semibold text-slate-200"><Server className="mr-2 inline h-4 w-4" />Registered edge agents</div>
-        {state.agents.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No registered edge agents.</div> : <div className="divide-y divide-slate-800">{state.agents.map((agent, index) => <div key={String(agent.id ?? agent.agentId ?? index)} className="grid gap-2 px-4 py-4 sm:grid-cols-4"><span className="font-medium text-slate-200">{String(agent.name ?? agent.agentId ?? "Unnamed agent")}</span><span className="text-slate-400">{String(agent.branchId ?? agent.branchNodeId ?? "—")}</span><span className="text-slate-400">{String(agent.status ?? "unknown")}</span><span className="text-right text-slate-500">{String(agent.version ?? "—")}</span></div>)}</div>}
+        {state.agents.length === 0 ? <div className="p-8 text-center text-sm text-slate-500">No registered edge gateways.</div> : <div className="divide-y divide-slate-800">{state.agents.map((agent) => <div key={agent.id} className="grid gap-2 px-4 py-4 sm:grid-cols-4"><span className="font-medium text-slate-200">{agent.name}</span><span className="text-slate-400">{agent.branchName ?? agent.branchId}</span><span className="text-slate-400">{agent.status}</span><span className="text-right text-slate-500">{agent.version}</span></div>)}</div>}
       </div>
     </section>
   );

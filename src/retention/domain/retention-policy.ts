@@ -117,10 +117,12 @@ export function resolveScopedRetentionPolicy(
     cameraGroupId?: string;
     cameraId?: string;
   },
-  assignments: RetentionPolicyAssignment[]
+  assignments: RetentionPolicyAssignment[],
+  now: Date = new Date(),
 ): RetentionPolicy {
   const matched = assignments
     .filter((a) => a.tenantId === context.tenantId)
+    .filter((a) => a.effectiveFrom <= now && (!a.effectiveUntil || a.effectiveUntil >= now))
     .filter((a) => {
       if (a.scopeType === "CAMERA" && context.cameraId && a.scopeId === context.cameraId) return true;
       if (a.scopeType === "CAMERA_GROUP" && context.cameraGroupId && a.scopeId === context.cameraGroupId) return true;

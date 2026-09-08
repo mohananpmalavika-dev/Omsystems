@@ -57,7 +57,8 @@ export class RetentionPolicyService {
         recorderId: request.recorderId,
         cameraId: request.cameraId,
       },
-      this.policyAssignments
+      this.policyAssignments,
+      now,
     );
 
     // 2. Evaluate Evidence Agreement & Quality

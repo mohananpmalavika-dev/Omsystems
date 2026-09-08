@@ -22,66 +22,6 @@ export class RecordingContinuityService {
   private cameraTelemetries: Map<string, TelemetryContext> = new Map();
   private continuityCache: Map<string, RecordingContinuity> = new Map();
 
-  constructor() {
-    this.seedDefaultBranchContinuity();
-  }
-
-  private seedDefaultBranchContinuity() {
-    const now = new Date();
-    const dayAgo = new Date(now.getTime() - 86400_000);
-
-    // 1. Vault Camera 01 (Aluva) - High continuity (1 gap of 12 sec), Verified Playback, 90.4d retention
-    const vaultSegments: RecordingSegment[] = [
-      { start: dayAgo, end: new Date(now.getTime() - 43200_000), type: "CONTINUOUS", source: "DAHUA_CGI" },
-      // 12 second gap 12 hours ago
-      { start: new Date(now.getTime() - 43200_000 + 12000), end: new Date(now.getTime() - 3000), type: "CONTINUOUS", source: "DAHUA_CGI" },
-    ];
-    this.cameraSegments.set("cam-178-01", vaultSegments);
-    this.cameraPlaybackVerifications.set("cam-178-01", {
-      successful: true,
-      requestedTimestamp: new Date(now.getTime() - 900_000),
-      recordingFound: true,
-      playbackOpened: true,
-      framesDecoded: true,
-      timestampProgressing: true,
-      firstFrameAt: new Date(now.getTime() - 900_000),
-      latencyMs: 142,
-      verifiedAt: new Date(now.getTime() - 900_000),
-    });
-
-    // 2. ATM Back Camera 08 (Aluva) - Critical failure: stopped recording 10.7 hours ago (gap of ~10.7h)
-    const atmSegments: RecordingSegment[] = [
-      { start: dayAgo, end: new Date(now.getTime() - 38500_000), type: "CONTINUOUS", source: "DAHUA_CGI" },
-    ];
-    this.cameraSegments.set("cam-178-08", atmSegments);
-    this.cameraPlaybackVerifications.set("cam-178-08", {
-      successful: false,
-      requestedTimestamp: new Date(now.getTime() - 600_000),
-      recordingFound: false,
-      playbackOpened: false,
-      framesDecoded: false,
-      timestampProgressing: false,
-      failureReason: "No recording archive available for requested timestamp",
-      verifiedAt: new Date(now.getTime() - 600_000),
-    });
-
-    // 3. Cash Vault Camera 07 (Aluva) - Stopped recording 4.2 hours ago
-    const vault07Segments: RecordingSegment[] = [
-      { start: dayAgo, end: new Date(now.getTime() - 15120_000), type: "CONTINUOUS", source: "DAHUA_CGI" },
-    ];
-    this.cameraSegments.set("cam-178-07", vault07Segments);
-    this.cameraPlaybackVerifications.set("cam-178-07", {
-      successful: false,
-      requestedTimestamp: new Date(now.getTime() - 300_000),
-      recordingFound: false,
-      playbackOpened: false,
-      framesDecoded: false,
-      timestampProgressing: false,
-      failureReason: "Stream decodable but recording inactive",
-      verifiedAt: new Date(now.getTime() - 300_000),
-    });
-  }
-
   ingestSegments(cameraId: string, segments: RecordingSegment[]) {
     this.cameraSegments.set(cameraId, segments);
     this.continuityCache.delete(cameraId);
@@ -96,6 +36,9 @@ export class RecordingContinuityService {
     requestedTimestamp: Date = new Date(Date.now() - 900_000)
   ): Promise<PlaybackVerification> {
     const segments = this.cameraSegments.get(cameraId) ?? [];
+    const chronologicalSegments = [...segments]
+      .filter((segment) => Number.isFinite(segment.start.getTime()) && Number.isFinite(segment.end.getTime()) && segment.end > segment.start)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
     const found = segments.some(
       (s) => s.start.getTime() <= requestedTimestamp.getTime() && s.end.getTime() >= requestedTimestamp.getTime()
     );
@@ -163,7 +106,7 @@ export class RecordingContinuityService {
     const continuity24hPct = RecordingGapDetector.calculateContinuityPct(86400, gaps);
 
     // Latest recording timestamp
-    const latestSegment = segments.length > 0 ? segments[segments.length - 1] : undefined;
+    const latestSegment = chronologicalSegments.at(-1);
     const lastRecordedAt = latestSegment ? latestSegment.end : undefined;
     const secondsSinceLastRecording = lastRecordedAt
       ? Math.max(0, Math.floor((now.getTime() - (lastRecordedAt.getTime() + clockOffset * 1000)) / 1000))
@@ -172,7 +115,7 @@ export class RecordingContinuityService {
     const recordingNow = secondsSinceLastRecording !== undefined ? secondsSinceLastRecording <= 15 : null;
 
     // Retention
-    const oldestSegment = segments.length > 0 ? segments[0] : undefined;
+    const oldestSegment = chronologicalSegments[0];
     const actualRetentionDays = oldestSegment
       ? Number(((now.getTime() - oldestSegment.start.getTime()) / 86400_000).toFixed(1))
       : 0;

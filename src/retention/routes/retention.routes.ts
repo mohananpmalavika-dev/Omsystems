@@ -18,6 +18,10 @@ import {
   type RetentionRiskState,
 } from "../index.js";
 
+function finiteMetric(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function getTestRetentionFixture(): BranchRetentionSummary[] {
   const summaries: BranchRetentionSummary[] = [];
   for (let i = 1; i <= 400; i++) {
@@ -66,15 +70,8 @@ async function loadLiveBranchRetentionSummaries(store: ControlPlaneStore | undef
       );
 
       const metrics = (camTelemetry?.metrics || {}) as Record<string, unknown>;
-      const actualDays = typeof metrics.retentionDays === "number"
-        ? metrics.retentionDays
-        : typeof metrics.actualRetentionDays === "number"
-          ? metrics.actualRetentionDays
-          : undefined;
-
-      const coveragePercent = typeof metrics.coveragePercent === "number"
-        ? metrics.coveragePercent
-        : undefined;
+      const actualDays = finiteMetric(metrics.retentionDays) ?? finiteMetric(metrics.actualRetentionDays);
+      const coveragePercent = finiteMetric(metrics.coveragePercent);
 
       let state: RetentionState = "UNKNOWN";
       let complianceState: RetentionComplianceState = "UNKNOWN";
@@ -212,8 +209,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       .object({
         filter: z.enum(["all", "healthy", "warning", "violation", "critical", "unknown", "at_risk"]).optional(),
         search: z.string().optional(),
-        limit: z.coerce.number().default(50),
-        offset: z.coerce.number().default(0),
+        limit: z.coerce.number().int().min(1).max(200).default(50),
+        offset: z.coerce.number().int().min(0).max(100_000).default(0),
       })
       .parse(request.query);
 
@@ -317,13 +314,8 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       );
 
       const metrics = (camTelemetry?.metrics || {}) as Record<string, unknown>;
-      const actualDays = typeof metrics.retentionDays === "number"
-        ? metrics.retentionDays
-        : typeof metrics.actualRetentionDays === "number"
-          ? metrics.actualRetentionDays
-          : undefined;
-
-      const coveragePercent = typeof metrics.coveragePercent === "number" ? metrics.coveragePercent : undefined;
+      const actualDays = finiteMetric(metrics.retentionDays) ?? finiteMetric(metrics.actualRetentionDays);
+      const coveragePercent = finiteMetric(metrics.coveragePercent);
       const state: RetentionState = actualDays === undefined ? "UNKNOWN"
         : actualDays >= policy.retentionDays ? "HEALTHY"
           : actualDays >= policy.retentionDays - policy.retentionWarningDays ? "WARNING"
@@ -445,7 +437,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       (t) => (t.deviceType === "camera" || t.deviceType === "archive") && t.deviceId === cameraId
     );
     const metrics = (camTelemetry?.metrics || {}) as Record<string, unknown>;
-    const actualDays = typeof metrics.retentionDays === "number" ? metrics.retentionDays : undefined;
+    const actualDays = finiteMetric(metrics.retentionDays) ?? finiteMetric(metrics.actualRetentionDays);
     const policy = await store.getOperationalHealthPolicy(user.tenantId, camera.branchId)
       ?? await store.getOperationalHealthPolicy(user.tenantId);
     if (!policy) return reply.code(409).send({ success: false, error: "retention_policy_not_configured" });
@@ -463,7 +455,7 @@ export async function registerRetentionRoutes(app: FastifyInstance, store?: Cont
       cameraName: camera.name,
       requiredRetentionDays: policy.retentionDays,
       actualRetentionDays: actualDays,
-      coveragePercent: typeof metrics.coveragePercent === "number" ? metrics.coveragePercent : undefined,
+      coveragePercent: finiteMetric(metrics.coveragePercent),
       daysUntilPolicyViolation: actualDays === undefined ? undefined : Math.max(0, actualDays - policy.retentionDays),
       state,
       complianceState: state === "HEALTHY" || state === "WARNING" ? "COMPLIANT" : state === "UNKNOWN" ? "UNKNOWN" : "VIOLATION",

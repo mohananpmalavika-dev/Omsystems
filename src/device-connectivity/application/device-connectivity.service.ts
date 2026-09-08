@@ -114,6 +114,10 @@ export class DeviceConnectivityService {
       score: this.computeConnectivityScore(deviceId),
     };
   }
+
+  hasDevice(deviceId: string): boolean {
+    return this.states.has(deviceId);
+  }
 }
 
 function zeroScore(): ConnectivityScoreBreakdown {

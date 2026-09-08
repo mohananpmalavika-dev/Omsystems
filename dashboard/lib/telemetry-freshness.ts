@@ -20,7 +20,11 @@ export function getTelemetryFreshness(
     return { state: "unavailable", label: "Telemetry unavailable", detail: "Telemetry timestamp is invalid", ageSeconds: null };
   }
 
-  const ageSeconds = Math.max(0, Math.round((nowMs - observedMs) / 1_000));
+  if (observedMs > nowMs + 5_000) {
+    return { state: "unavailable", label: "Telemetry unavailable", detail: "Telemetry timestamp is in the future", ageSeconds: null };
+  }
+
+  const ageSeconds = Math.round((nowMs - observedMs) / 1_000);
   if (ageSeconds <= 60) {
     return { state: "fresh", label: "Telemetry current", detail: `Confirmed ${ageSeconds}s ago`, ageSeconds };
   }

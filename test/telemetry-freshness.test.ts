@@ -16,5 +16,6 @@ describe("telemetry freshness truth state", () => {
   it("does not manufacture a live state without a valid timestamp", () => {
     expect(getTelemetryFreshness(undefined, now).state).toBe("unavailable");
     expect(getTelemetryFreshness("not-a-timestamp", now).state).toBe("unavailable");
+    expect(getTelemetryFreshness("2026-09-07T12:00:06.000Z", now).state).toBe("unavailable");
   });
 });

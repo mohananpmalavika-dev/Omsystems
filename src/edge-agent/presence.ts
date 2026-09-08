@@ -5,6 +5,7 @@
  * network delay without routing work to a stopped scanner.
  */
 export const EDGE_AGENT_HEARTBEAT_TTL_MS = 90_000;
+const MAX_FUTURE_HEARTBEAT_SKEW_MS = 5_000;
 
 export function hasFreshEdgeHeartbeat(
   lastSeenAt: string | Date | null | undefined,
@@ -12,7 +13,9 @@ export function hasFreshEdgeHeartbeat(
 ) {
   if (!lastSeenAt) return false;
   const timestamp = lastSeenAt instanceof Date ? lastSeenAt.getTime() : Date.parse(lastSeenAt);
-  return Number.isFinite(timestamp) && now - timestamp <= EDGE_AGENT_HEARTBEAT_TTL_MS;
+  return Number.isFinite(timestamp)
+    && timestamp <= now + MAX_FUTURE_HEARTBEAT_SKEW_MS
+    && now - timestamp <= EDGE_AGENT_HEARTBEAT_TTL_MS;
 }
 
 export function isFreshEdgeAgent(agent: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle, Info, RefreshCw, XCircle } from "lucide-react";
 
 interface DiagnosticResult {
@@ -15,14 +15,14 @@ export default function DiagnosticsPage() {
   const [loading, setLoading] = useState(true);
   const [authDebug, setAuthDebug] = useState<any>(null);
 
-  const runDiagnostics = async () => {
+  const runDiagnostics = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     const diagnostics: DiagnosticResult[] = [];
 
     // Check the server-managed session and safe configuration flags. Access
     // tokens stay in HttpOnly cookies and are intentionally not exposed to JS.
     try {
-      const response = await fetch("/api/live/debug", { credentials: "include" });
+      const response = await fetch("/api/live/debug", { credentials: "include", signal, cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
       setAuthDebug(data);
@@ -69,6 +69,7 @@ export default function DiagnosticsPage() {
           : "Configure a public gateway or a LAN/VPN fallback",
       });
     } catch (error) {
+      if (signal?.aborted) return;
       setAuthDebug(null);
       diagnostics.push({
         name: "Session Authentication",
@@ -81,14 +82,18 @@ export default function DiagnosticsPage() {
     // Verify a read-only control-plane request. Never create a synthetic live
     // session from diagnostics because that would leave misleading audit data.
     try {
-      const response = await fetch("/api/control/v1/cameras?limit=1", {
+      const response = await fetch("/v1/cameras?limit=1", {
         headers: { "Content-Type": "application/json" },
         credentials: "include",
+        signal,
+        cache: "no-store",
       });
 
       if (response.ok) {
         const body = await response.json();
-        const cameras = Array.isArray(body.data) ? body.data : Array.isArray(body) ? body : [];
+        const cameras = Array.isArray(body.data) ? body.data
+          : Array.isArray(body.data?.cameras) ? body.data.cameras
+            : Array.isArray(body.cameras) ? body.cameras : Array.isArray(body) ? body : [];
         diagnostics.push({
           name: "Camera API",
           status: "success",
@@ -105,6 +110,7 @@ export default function DiagnosticsPage() {
         });
       }
     } catch (error) {
+      if (signal?.aborted) return;
       diagnostics.push({
         name: "Camera API",
         status: "error",
@@ -113,13 +119,17 @@ export default function DiagnosticsPage() {
       });
     }
 
-    setResults(diagnostics);
-    setLoading(false);
-  };
+    if (!signal?.aborted) {
+      setResults(diagnostics);
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void runDiagnostics();
-  }, []);
+    const controller = new AbortController();
+    void runDiagnostics(controller.signal);
+    return () => controller.abort();
+  }, [runDiagnostics]);
 
   const statusIcon = (status: DiagnosticResult["status"]) => {
     switch (status) {
@@ -148,6 +158,7 @@ export default function DiagnosticsPage() {
 
         <div className="mb-4 flex justify-end">
           <button
+            type="button"
             onClick={() => void runDiagnostics()}
             disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
@@ -217,7 +228,7 @@ export default function DiagnosticsPage() {
           </div>
         )}
 
-        {authDebug && (
+        {authDebug && process.env.NODE_ENV !== "production" && (
           <div className="mt-8 rounded-lg bg-gray-50 p-6">
             <h2 className="mb-4 text-lg font-bold text-gray-900">Authentication Debug Info</h2>
             <pre className="overflow-auto rounded bg-gray-900 p-4 text-xs text-green-400">

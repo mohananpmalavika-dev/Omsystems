@@ -92,6 +92,20 @@ const configSchema = z.object({
       message: "Managed branch tunnels require CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_ZONE_ID, CLOUDFLARE_API_TOKEN, and EDGE_MEDIA_BASE_DOMAIN",
     });
   }
+  if (config.EDGE_LEGACY_SHARED_KEY_ENABLED && !config.EDGE_BRIDGE_SHARED_KEY) {
+    context.addIssue({
+      code: "custom",
+      path: ["EDGE_LEGACY_SHARED_KEY_ENABLED"],
+      message: "Legacy edge bridge authentication requires EDGE_BRIDGE_SHARED_KEY",
+    });
+  }
+  if (config.CONTROL_PLANE_PUBLIC_URL && !config.CONTROL_PLANE_PUBLIC_URL.startsWith("https://")) {
+    context.addIssue({
+      code: "custom",
+      path: ["CONTROL_PLANE_PUBLIC_URL"],
+      message: "CONTROL_PLANE_PUBLIC_URL must use HTTPS in production",
+    });
+  }
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

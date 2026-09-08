@@ -17,6 +17,15 @@ export class RetentionEvidenceService {
    * Records a new piece of evidence
    */
   recordEvidence(evidence: RetentionEvidence): RetentionEvidence {
+    if (!Number.isFinite(evidence.observedAt.getTime())) {
+      throw new Error("retention_evidence_observed_at_invalid");
+    }
+    if (evidence.oldestRecordingAt && evidence.newestRecordingAt && evidence.oldestRecordingAt > evidence.newestRecordingAt) {
+      throw new Error("retention_evidence_window_invalid");
+    }
+    if (!Number.isFinite(evidence.confidence) || evidence.confidence < 0 || evidence.confidence > 1) {
+      throw new Error("retention_evidence_confidence_invalid");
+    }
     this.evidenceStore.set(evidence.id, evidence);
     return evidence;
   }
@@ -126,7 +135,7 @@ export class RetentionEvidenceService {
    */
   isEvidenceFresh(evidence: RetentionEvidence, now: Date = new Date(), maxAgeMinutes = 60): boolean {
     const ageMinutes = (now.getTime() - evidence.observedAt.getTime()) / 60_000;
-    return ageMinutes <= maxAgeMinutes;
+    return Number.isFinite(ageMinutes) && ageMinutes >= -5 && ageMinutes <= maxAgeMinutes;
   }
 }
 

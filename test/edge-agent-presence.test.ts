@@ -13,6 +13,7 @@ describe("edge-agent presence", () => {
     expect(hasFreshEdgeHeartbeat("2026-08-21T10:58:29.999Z", now)).toBe(false);
     expect(hasFreshEdgeHeartbeat(null, now)).toBe(false);
     expect(hasFreshEdgeHeartbeat("not-a-date", now)).toBe(false);
+    expect(hasFreshEdgeHeartbeat("2026-08-21T11:00:06.000Z", now)).toBe(false);
     expect(isFreshEdgeAgent({ status: "offline", lastSeenAt: "2026-08-21T10:59:59.000Z" })).toBe(false);
   });
 });

@@ -25,6 +25,19 @@ export class StaleDataEvaluatorService {
     overrideReason?: string
   ): StaleObservationMetadata {
     const obsDate = typeof observedAt === "string" ? new Date(observedAt) : observedAt;
+    if (!Number.isFinite(obsDate.getTime()) || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
+      return {
+        observedAt: obsDate,
+        expiresAt: new Date(0),
+        ttlSeconds,
+        isStale: true,
+        freshnessStatus: "EXPIRED",
+        originalState,
+        effectiveState: "UNKNOWN",
+        stalenessReason: overrideReason || "TELEMETRY_TIMESTAMP_INVALID",
+        lastObservedAgoSeconds: 0,
+      };
+    }
     const expiresAt = new Date(obsDate.getTime() + ttlSeconds * 1000);
     const elapsedSeconds = Math.max(0, Math.floor((currentTime.getTime() - obsDate.getTime()) / 1000));
     const isStale = currentTime.getTime() > expiresAt.getTime();

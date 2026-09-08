@@ -23,6 +23,8 @@ describe("Phase 5 enterprise readiness controls", () => {
   it("fails closed on development credentials in production", () => {
     expect(()=>loadConfig({NODE_ENV:"production",AUTH_MODE:"development"})).toThrow();
     expect(()=>loadConfig({NODE_ENV:"production",AUTH_MODE:"oidc",MEDIA_GATEWAY_SHARED_KEY:"development-media-gateway-key-change-me",REPORT_DOWNLOAD_SECRET:"01234567890123456789012345678901"})).toThrow();
+    expect(()=>loadConfig({NODE_ENV:"production",AUTH_MODE:"oidc",MEDIA_GATEWAY_SHARED_KEY:"x".repeat(32),REPORT_DOWNLOAD_SECRET:"y".repeat(32),EDGE_LEGACY_SHARED_KEY_ENABLED:"true"})).toThrow();
+    expect(()=>loadConfig({NODE_ENV:"production",AUTH_MODE:"oidc",MEDIA_GATEWAY_SHARED_KEY:"x".repeat(32),REPORT_DOWNLOAD_SECRET:"y".repeat(32),CONTROL_PLANE_PUBLIC_URL:"http://control.example"})).toThrow();
   });
 
   it("executes the real API contracts and records measured progressive-stage evidence", async () => {

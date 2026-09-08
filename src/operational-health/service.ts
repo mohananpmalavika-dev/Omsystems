@@ -141,7 +141,7 @@ function archiveRetentionSource(evidence: RecorderArchiveEvidence | undefined, p
   const unavailable = { source: undefined as RetentionSource | undefined, empty: false, verified: false, reasonCodes: [] as string[], sourceReasonCodes: [] as string[] };
   if (!evidence) return { ...unavailable, reasonCodes: ["recorder_archive_evidence_unavailable"] };
   const observedAt = Date.parse(evidence.observedAt);
-  if (!Number.isFinite(observedAt) || now - observedAt > ARCHIVE_EVIDENCE_MAX_AGE_MS) {
+  if (!Number.isFinite(observedAt) || observedAt > now + 5 * 60_000 || now - observedAt > ARCHIVE_EVIDENCE_MAX_AGE_MS) {
     return { ...unavailable, reasonCodes: ["recorder_archive_evidence_stale"] };
   }
   if (!evidence.coverageComplete) {

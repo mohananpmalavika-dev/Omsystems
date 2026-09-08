@@ -43,7 +43,12 @@ export class RetentionCalculatorService {
     expectedTo: Date,
     maxAllowedGapMinutes = 15
   ): RecordingCoverage {
-    const expectedMinutes = Math.max(1, Math.round((expectedTo.getTime() - expectedFrom.getTime()) / 60_000));
+    const fromMs = expectedFrom.getTime();
+    const toMs = expectedTo.getTime();
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+      throw new Error("retention_coverage_window_invalid");
+    }
+    const expectedMinutes = Math.max(1, Math.round((toMs - fromMs) / 60_000));
     if (segments.length === 0) {
       return {
         expectedMinutes,
@@ -62,18 +67,28 @@ export class RetentionCalculatorService {
       };
     }
 
-    // Sort segments chronologically
-    const sorted = [...segments].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+    const intervals = segments
+      .map((segment) => ({ start: segment.startTime.getTime(), end: segment.endTime.getTime() }))
+      .filter((segment) => Number.isFinite(segment.start) && Number.isFinite(segment.end) && segment.end > segment.start)
+      .map((segment) => ({ start: Math.max(fromMs, segment.start), end: Math.min(toMs, segment.end) }))
+      .filter((segment) => segment.end > segment.start)
+      .sort((left, right) => left.start - right.start);
+    const merged: Array<{ start: number; end: number }> = [];
+    for (const interval of intervals) {
+      const previous = merged.at(-1);
+      if (previous && interval.start <= previous.end) previous.end = Math.max(previous.end, interval.end);
+      else merged.push({ ...interval });
+    }
 
     let recordedMs = 0;
     const gaps: RecordingGap[] = [];
     let largestGapMinutes = 0;
 
-    let cursor = expectedFrom.getTime();
+    let cursor = fromMs;
 
-    for (const seg of sorted) {
-      const segStart = seg.startTime.getTime();
-      const segEnd = seg.endTime.getTime();
+    for (const segment of merged) {
+      const segStart = segment.start;
+      const segEnd = segment.end;
 
       // Check gap before this segment
       if (segStart > cursor) {
@@ -93,7 +108,7 @@ export class RetentionCalculatorService {
       }
 
       const effectiveStart = Math.max(segStart, cursor);
-      const effectiveEnd = Math.min(segEnd, expectedTo.getTime());
+      const effectiveEnd = segEnd;
       if (effectiveEnd > effectiveStart) {
         recordedMs += effectiveEnd - effectiveStart;
         cursor = effectiveEnd;
@@ -101,8 +116,8 @@ export class RetentionCalculatorService {
     }
 
     // Check gap at the end
-    if (cursor < expectedTo.getTime()) {
-      const gapMs = expectedTo.getTime() - cursor;
+    if (cursor < toMs) {
+      const gapMs = toMs - cursor;
       const gapMins = Math.round(gapMs / 60_000);
       if (gapMins >= maxAllowedGapMinutes) {
         gaps.push({

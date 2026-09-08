@@ -35,7 +35,6 @@ import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 
 const latestAnalyticsFrames = new Map<string, { buffer: Buffer; capturedAt: string }>();
-import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
@@ -106,7 +105,6 @@ import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activi
 import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
-import { registerConnectivityHealthRoutes } from "./routes/connectivity-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
@@ -2607,14 +2605,6 @@ export async function buildApp(options?: {
   }
 
 
-  // Register Capability-Aware Device Health Subsystem routes
-  try {
-    await registerDeviceHealthRoutes(app);
-    app.log.info('Capability-aware device health routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register device health routes');
-  }
-
   // Register Distributed Runtime State & Leases routes
   try {
     await registerDistributedStateRoutes(app);
@@ -2702,14 +2692,6 @@ export async function buildApp(options?: {
     app.log.info('Unified operations and product surface routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register unified operations routes');
-  }
-
-  // Register First-Class Evidence-Driven Branch Internet & WAN Connectivity routes
-  try {
-    await registerConnectivityHealthRoutes(app, store);
-    app.log.info('Branch internet and WAN connectivity routes registered');
-  } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register branch connectivity routes');
   }
 
   // Register Production-Grade Real-Time Alert Operations routes

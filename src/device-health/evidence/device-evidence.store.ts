@@ -39,7 +39,20 @@ export class DeviceEvidenceStore {
 
   put(evidence: DeviceEvidence) {
     const key = `${evidence.deviceId}:${evidence.capability}`;
-    this.evidenceMap.set(key, evidence);
+    const observedAt = evidence.observedAt.getTime();
+    const collectedAt = evidence.collectedAt.getTime();
+    if (!Number.isFinite(observedAt) || !Number.isFinite(collectedAt)) {
+      throw new Error("Device evidence requires valid observedAt and collectedAt timestamps");
+    }
+
+    // An edge clock that is materially ahead must not make evidence appear
+    // healthy for longer than its real collection time permits.
+    const normalized = observedAt > collectedAt + 60_000
+      ? { ...evidence, observedAt: new Date(collectedAt), errorMessage: evidence.errorMessage ?? "Future observation timestamp normalized to collection time" }
+      : evidence;
+    const existing = this.evidenceMap.get(key);
+    if (existing && existing.observedAt.getTime() > normalized.observedAt.getTime()) return;
+    this.evidenceMap.set(key, normalized);
   }
 
   putBatch(evidenceList: DeviceEvidence[]) {
@@ -56,6 +69,10 @@ export class DeviceEvidenceStore {
     // Evaluate freshness
     const ttl = DEFAULT_FRESHNESS_TTL_SECONDS[capability] || 300;
     const ageSeconds = (now.getTime() - evidence.observedAt.getTime()) / 1000;
+
+    if (!Number.isFinite(ageSeconds)) {
+      return { ...evidence, status: "ERROR", errorMessage: "Evidence timestamp is invalid" };
+    }
 
     if (evidence.status === "AVAILABLE" && ageSeconds > ttl) {
       return {

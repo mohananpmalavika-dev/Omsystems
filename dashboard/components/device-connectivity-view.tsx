@@ -108,7 +108,7 @@ export function DeviceConnectivityView() {
   const [targetPort, setTargetPort] = useState<number>(554);
   const [expectedVendor, setExpectedVendor] = useState<string>("CP PLUS");
 
-  const [certifications, setCertifications] = useState<any[]>(DEFAULT_CERTIFICATIONS);
+  const [certifications, setCertifications] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -203,47 +203,22 @@ export function DeviceConnectivityView() {
     setVerificationResult(null);
     try {
       const res = await fetch("/api/control/v1/connectivity/verify-stream", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ host: targetIp, port: targetPort }),
       });
       const data = await res.json().catch(() => ({}));
-
-      // If backend simulated or returned data
-      const result = data.data || {
-        dnsIpResolved: true,
-        tcpConnected: true,
-        rtspOptionsDescribeOk: true,
-        authValidated: true,
-        sdpParsed: true,
-        setupPlayOk: true,
-        rtpPacketsReceived: true,
-        videoKeyframeDecoded: true,
-        overallHealthy: true,
-        verificationLatencyMs: 88,
-      };
-
-      setVerificationResult(result);
-      setToastMsg(`✅ 8-Factor Stream Verification passed for ${targetIp}:${targetPort}! Video keyframe decoded in ${result.verificationLatencyMs}ms.`);
+      if (!res.ok || !data.success || !data.data) {
+        setVerificationResult(data.data ?? null);
+        setToastMsg(data.error ?? "Stream verification is unavailable until an edge transport is configured.");
+        return;
+      }
+      setVerificationResult(data.data);
+      setToastMsg(data.data.overallHealthy
+        ? `8-factor stream verification passed for ${targetIp}:${targetPort}.`
+        : `Stream verification completed with failed checks for ${targetIp}:${targetPort}.`);
     } catch {
-      // Local fallback verification result
-      setVerificationResult({
-        dnsIpResolved: true,
-        tcpConnected: true,
-        rtspOptionsDescribeOk: true,
-        authValidated: true,
-        sdpParsed: true,
-        setupPlayOk: true,
-        rtpPacketsReceived: true,
-        videoKeyframeDecoded: true,
-        overallHealthy: true,
-        verificationLatencyMs: 94,
-      });
-      setToastMsg(`✅ 8-Factor Stream Verification passed for ${targetIp}:${targetPort}!`);
-    } finally {
-      setActionLoading(null);
-    }
+      setToastMsg("Stream verification request failed. No connectivity result was recorded.");
+    } finally { setActionLoading(null); }
   };
 
   const handleProgressiveProbe = async () => {
@@ -251,45 +226,19 @@ export function DeviceConnectivityView() {
     setProbeResult(null);
     try {
       const res = await fetch("/api/control/v1/connectivity/probe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
+        method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({ host: targetIp, port: targetPort, expectedManufacturer: expectedVendor }),
       });
       const data = await res.json().catch(() => ({}));
-
-      const resolvedProbe = data.data || {
-        resolvedAdapter: `${expectedVendor.toUpperCase().replace(/\s+/g, "_")}_NATIVE`,
-        adapterVersion: "v4.2.0-certified",
-        probe: {
-          manufacturer: expectedVendor,
-          model: "Enterprise Series Dome/Bullet",
-          confidence: 0.98,
-          macAddress: "4C:11:BF:82:19:FA",
-          firmware: "v3.2.14-build2026",
-          onvifProfiles: ["Profile S", "Profile G", "Profile T"],
-        },
-      };
-
-      setProbeResult(resolvedProbe);
-      setToastMsg(`🎯 Fingerprinting Matched: ${resolvedProbe.probe.manufacturer} (${(resolvedProbe.probe.confidence * 100).toFixed(0)}% confidence) via ${resolvedProbe.resolvedAdapter}`);
+      if (!res.ok || !data.success || !data.data) {
+        setToastMsg(data.error ?? "No verified adapter was available for this target.");
+        return;
+      }
+      setProbeResult(data.data);
+      setToastMsg(`Fingerprinting matched ${data.data.probe.manufacturer ?? "the target"} via ${data.data.resolvedAdapter}.`);
     } catch {
-      setProbeResult({
-        resolvedAdapter: `${expectedVendor.toUpperCase().replace(/\s+/g, "_")}_NATIVE`,
-        adapterVersion: "v4.2.0-certified",
-        probe: {
-          manufacturer: expectedVendor,
-          model: "Enterprise Series",
-          confidence: 0.96,
-          macAddress: "4C:11:BF:82:19:FA",
-          firmware: "v3.2.14",
-          onvifProfiles: ["Profile S", "Profile G"],
-        },
-      });
-      setToastMsg(`🎯 Fingerprinting Matched: ${expectedVendor}`);
-    } finally {
-      setActionLoading(null);
-    }
+      setToastMsg("Adapter probe request failed. No device identity was inferred.");
+    } finally { setActionLoading(null); }
   };
 
   return (
@@ -517,14 +466,14 @@ export function DeviceConnectivityView() {
             {/* 8-Factor Checklist Matrix */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 font-mono text-xs">
               {[
-                { factor: "1. DNS & IP Routing Resolved", desc: "Layer 3 reachability & ARP binding", passed: verificationResult ? verificationResult.dnsIpResolved : true },
-                { factor: "2. TCP Socket Connected (:554)", desc: "SYN-ACK handshaking within 15ms", passed: verificationResult ? verificationResult.tcpConnected : true },
-                { factor: "3. RTSP OPTIONS / DESCRIBE", desc: "SDP media track negotiation OK", passed: verificationResult ? verificationResult.rtspOptionsDescribeOk : true },
-                { factor: "4. Vault Tokenized Auth (Digest)", desc: "No plaintext credentials exposed", passed: verificationResult ? verificationResult.authValidated : true },
-                { factor: "5. SDP Stream Parsing", desc: "H.264/H.265 payload type validated", passed: verificationResult ? verificationResult.sdpParsed : true },
-                { factor: "6. RTSP SETUP & PLAY Executed", desc: "Unicast RTP interleaved port created", passed: verificationResult ? verificationResult.setupPlayOk : true },
-                { factor: "7. RTP Media Packets Flowing", desc: "100+ packets arrived with 0 jitter", passed: verificationResult ? verificationResult.rtpPacketsReceived : true },
-                { factor: "8. Video Keyframe Decoded", desc: "I-Frame slice parsed & timestamp aligned", passed: verificationResult ? verificationResult.videoKeyframeDecoded : true },
+                { factor: "1. DNS & IP Routing Resolved", desc: "Layer 3 reachability & ARP binding", passed: verificationResult?.dnsIpResolved === true },
+                { factor: "2. TCP Socket Connected (:554)", desc: "TCP handshake confirmed", passed: verificationResult?.tcpConnected === true },
+                { factor: "3. RTSP OPTIONS / DESCRIBE", desc: "SDP media track negotiation", passed: verificationResult?.rtspOptionsDescribeOk === true },
+                { factor: "4. Vault Tokenized Auth (Digest)", desc: "Authentication verified", passed: verificationResult?.authValidated === true },
+                { factor: "5. SDP Stream Parsing", desc: "H.264/H.265 payload validation", passed: verificationResult?.sdpParsed === true },
+                { factor: "6. RTSP SETUP & PLAY Executed", desc: "Media session established", passed: verificationResult?.setupPlayOk === true },
+                { factor: "7. RTP Media Packets Flowing", desc: "Media packets observed", passed: verificationResult?.rtpPacketsReceived === true },
+                { factor: "8. Video Keyframe Decoded", desc: "Decodable keyframe observed", passed: verificationResult?.videoKeyframeDecoded === true },
               ].map((f, idx) => (
                 <div
                   key={idx}
@@ -610,6 +559,7 @@ export function DeviceConnectivityView() {
               </div>
             </div>
           ))}
+          {certifications.length === 0 && <p className="col-span-full rounded-xl border border-slate-800 bg-slate-950 p-6 text-center text-xs text-slate-400">No hardware certifications have been verified by a configured lab transport.</p>}
         </div>
       </div>
     </div>

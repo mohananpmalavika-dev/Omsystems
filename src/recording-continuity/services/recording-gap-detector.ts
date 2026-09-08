@@ -51,13 +51,25 @@ export class RecordingGapDetector {
     }
   ): RecordingGap[] {
     const allowedGapSec = options.allowedGapSeconds ?? 5;
-    const merged = this.mergeSegments(segments);
+    const windowStartMs = options.windowStart.getTime();
+    const windowEndMs = options.windowEnd.getTime();
+    if (!Number.isFinite(windowStartMs) || !Number.isFinite(windowEndMs) || windowEndMs <= windowStartMs) {
+      return [];
+    }
+
+    const merged = this.mergeSegments(segments)
+      .map((segment) => ({
+        ...segment,
+        start: new Date(Math.max(segment.start.getTime(), windowStartMs)),
+        end: new Date(Math.min(segment.end.getTime(), windowEndMs)),
+      }))
+      .filter((segment) => segment.end.getTime() > segment.start.getTime());
     const gaps: RecordingGap[] = [];
     const now = new Date();
 
     if (merged.length === 0) {
       // Entire window is missing
-      const durationSeconds = Math.max(0, (options.windowEnd.getTime() - options.windowStart.getTime()) / 1000);
+      const durationSeconds = (windowEndMs - windowStartMs) / 1000;
       if (durationSeconds > allowedGapSec) {
         gaps.push({
           id: `gap-${Date.now()}-full`,

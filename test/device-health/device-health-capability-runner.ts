@@ -8,13 +8,16 @@ import {
   healthEvaluatorEngine,
   deviceHealthService,
 } from "../../src/device-health/index.js";
-import { app } from "../../src/app.js";
+import Fastify from "fastify";
+import { registerDeviceHealthRoutes } from "../../src/routes/device-health.routes.js";
 
 async function runDeviceHealthCapabilityTests() {
   console.log("================================================================================");
   console.log("  CAPABILITY-AWARE DEVICE HEALTH - COMPREHENSIVE VERIFICATION RUNNER");
   console.log("================================================================================\n");
 
+  const app = Fastify();
+  await registerDeviceHealthRoutes(app);
   let passed = 0;
   let failed = 0;
 
@@ -282,8 +285,10 @@ async function runDeviceHealthCapabilityTests() {
   console.log("================================================================================\n");
 
   if (failed > 0) {
+    await app.close();
     process.exit(1);
   }
+  await app.close();
 }
 
 runDeviceHealthCapabilityTests().catch((err) => {

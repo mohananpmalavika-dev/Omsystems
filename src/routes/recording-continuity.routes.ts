@@ -121,7 +121,7 @@ export async function registerRecordingContinuityRoutes(app: FastifyInstance) {
   app.get("/v1/recording/continuity/cameras/:cameraId/coverage", async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as { cameraId: string };
     const query = (request.query as any) || {};
-    const dateStr = query.date || "2026-08-16";
+    const dateStr = typeof query.date === "string" ? query.date : undefined;
     const coverage = recordingContinuityCoordinator.calculateDailyCoverage(params.cameraId, dateStr);
     return reply.send({ success: true, data: coverage });
   });
@@ -144,7 +144,7 @@ export async function registerRecordingContinuityRoutes(app: FastifyInstance) {
   app.get("/v1/recording/continuity/cameras/:cameraId/audit-certificate", async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as { cameraId: string };
     const query = (request.query as any) || {};
-    const dateStr = query.date || "2026-08-16";
+    const dateStr = typeof query.date === "string" ? query.date : undefined;
     const certificate = recordingContinuityCoordinator.generateSignedAuditCertificate(params.cameraId, dateStr);
     return reply.send({ success: true, data: certificate });
   });

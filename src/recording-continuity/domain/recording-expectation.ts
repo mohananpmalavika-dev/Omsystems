@@ -20,6 +20,7 @@ export interface RecordingExpectation {
   schedule?: RecordingScheduleSlot[];
   minimumCoveragePercent: number; // default 99.99
   maximumAllowedGapSeconds: number; // default 5
+  requiredRetentionDays: number;
   enabledFrom: Date;
   enabledUntil?: Date;
 }
@@ -55,5 +56,6 @@ export const DEFAULT_RECORDING_EXPECTATION = (
   timezone: 'Asia/Kolkata',
   minimumCoveragePercent: 99.99,
   maximumAllowedGapSeconds: 5,
+  requiredRetentionDays: 90,
   enabledFrom: new Date(0),
 });

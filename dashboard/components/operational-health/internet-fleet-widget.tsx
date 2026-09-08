@@ -34,10 +34,10 @@ export function InternetFleetWidget({ detailed = false, autoRefresh = true, refr
     ["Offline", summary.offline, "border-red-300 bg-red-50 text-red-800"],
     ["No evidence", summary.unknown, "border-gray-200 bg-gray-50 text-gray-700"],
   ] as const;
-  return <section className="card" aria-labelledby="internet-fleet-title">
-    <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 id="internet-fleet-title" className="flex items-center gap-2 text-lg font-semibold"><Router size={20}/> Branch internet connectivity</h2><p className="mt-1 text-sm text-gray-600">Primary and backup ISP reachability, failover, latency, jitter, packet loss, and bandwidth load.</p></div><button className="btn-secondary flex items-center gap-2" onClick={() => void load()}><RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Refresh</button></div>
+  return <section className="card" aria-labelledby="internet-fleet-title" aria-busy={loading}>
+    <div className="mb-4 flex flex-wrap items-start justify-between gap-3"><div><h2 id="internet-fleet-title" className="flex items-center gap-2 text-lg font-semibold"><Router size={20}/> Branch internet connectivity</h2><p className="mt-1 text-sm text-gray-600">Primary and backup ISP reachability, failover, latency, jitter, packet loss, and bandwidth load.</p></div><button type="button" className="btn-secondary flex items-center gap-2" onClick={() => void load()} disabled={loading} aria-label="Refresh branch internet health"><RefreshCw size={15} className={loading ? "animate-spin" : ""}/> Refresh</button></div>
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">{stats.map(([label, value, tone]) => <div key={label} className={`rounded-lg border p-3 ${tone}`}><p className="text-xs font-medium uppercase tracking-wide">{label}</p><p className="mt-1 text-2xl font-bold">{value}</p></div>)}</div>
-    {error ? <p className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+    {error ? <p role="alert" className="mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
     <div className="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">{visible.map((branch) => <article key={branch.branchId} className={`rounded-lg border-2 p-4 ${internetStatusTone(branch.status)}`}>
       <div className="flex items-start justify-between gap-3"><div><h3 className="font-semibold text-gray-900">{branch.branchName}</h3><p className="text-xs opacity-75">{branch.branchCode}</p></div><span className="flex items-center gap-1 rounded bg-white/70 px-2 py-1 text-xs font-bold uppercase">{branch.status === "offline" ? <WifiOff size={13}/> : <Wifi size={13}/>} {branch.status}</span></div>
       <div className="mt-4 space-y-3">{branch.links.map((link) => <LinkMetrics key={link.id} link={link}/>)}</div>
@@ -57,6 +57,7 @@ function LinkMetrics({ link }: { link: InternetLinkHealth }) {
     <p className="mt-2 text-[11px] text-gray-500">Traffic ↓ {format(link.rxMbps, " Mbps")} · ↑ {format(link.txMbps, " Mbps")}{link.interfaceName ? ` · ${link.interfaceName}` : ""}</p>
     <p className="mt-1 text-[11px] text-gray-500">Path window: {link.probeWindowAttempts ?? 0} attempts / {formatDuration(link.probeWindowSeconds)} · current loss {format(link.instantPacketLossPercent, "%")}</p>
     <p className="mt-1 text-[11px] text-gray-500">Gateway: {link.gatewayReachable === null ? "not configured" : link.gatewayReachable ? "reachable" : "unreachable"}{link.gatewayAddress ? ` · ${link.gatewayAddress}` : ""} · last mile {link.lastMileStatus.replaceAll("_", " ")}</p>
+    <p className="mt-1 text-[11px] text-gray-500">Last telemetry: {formatTimestamp(link.lastCheck)}</p>
     <p className={`mt-1 text-[11px] ${link.publicIpChanged ? "font-semibold text-amber-800" : "text-gray-500"}`}>Public IP: {link.publicIp ?? "unavailable"}{link.publicIpChanged ? ` · changed from ${link.previousPublicIp ?? "unknown"}` : ""}</p>
     {link.outageStartedAt ? <p className="mt-1 text-[11px] font-semibold text-red-700">Sustained outage since {new Date(link.outageStartedAt).toLocaleString()} ({link.consecutiveFailedPolls ?? 0} failed polls)</p> : null}
     {!link.routeVerified ? <p className="mt-1 text-[11px] font-medium text-amber-800">Route not verified — configure an interface or source address for this backup link.</p> : null}
@@ -65,3 +66,4 @@ function LinkMetrics({ link }: { link: InternetLinkHealth }) {
 function Metric({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) { return <div><p className="flex items-center gap-1 text-gray-500">{icon}{label}</p><strong>{value}</strong></div>; }
 function format(value: number | null, suffix: string) { return value === null ? "--" : `${value.toFixed(value < 10 ? 1 : 0)}${suffix}`; }
 function formatDuration(seconds: number | null) { return seconds === null ? "--" : seconds >= 60 ? `${Math.round(seconds / 60)}m` : `${Math.round(seconds)}s`; }
+function formatTimestamp(value: string) { const timestamp = Date.parse(value); return Number.isFinite(timestamp) ? new Date(timestamp).toLocaleString() : "invalid timestamp"; }

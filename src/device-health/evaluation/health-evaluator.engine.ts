@@ -69,7 +69,15 @@ export class HealthEvaluatorEngine {
 
     switch (capability) {
       case "DEVICE_ONLINE": {
-        const isOnline = Boolean(value);
+        const isOnline = value === true || value === "true";
+        if (value !== true && value !== false && value !== "true" && value !== "false") {
+          return {
+            capability, capabilitySupport: support, importance, healthState: "UNKNOWN",
+            message: "Device reachability telemetry is invalid", source: evidence.source,
+            observedAt: evidence.observedAt, evidenceAgeSeconds: ageSeconds,
+            confidence: capRecord.confidence * 0.5,
+          };
+        }
         return {
           capability,
           capabilitySupport: support,
@@ -374,6 +382,14 @@ export class HealthEvaluatorEngine {
       }
 
       default: {
+        if (value === undefined || value === null) {
+          return {
+            capability, capabilitySupport: support, importance, healthState: "UNKNOWN",
+            message: `${capability} telemetry is missing`, source: evidence.source,
+            observedAt: evidence.observedAt, evidenceAgeSeconds: ageSeconds,
+            confidence: capRecord.confidence * 0.5,
+          };
+        }
         return {
           capability,
           capabilitySupport: support,
@@ -446,14 +462,19 @@ export class HealthEvaluatorEngine {
     const hasRequiredUnknown = metrics.some(
       (m) => m.importance === "REQUIRED" && m.healthState === "UNKNOWN"
     );
-    // 3. Any Warning → Overall WARNING
+    // 3. Recommended failures need operator attention even though they do not
+    // make the device unavailable. Do not present that state as healthy.
+    const hasRecommendedFailure = metrics.some(
+      (m) => m.importance === "RECOMMENDED" && m.healthState === "FAILURE"
+    );
+    // 4. Any Warning → Overall WARNING
     const hasWarning = metrics.some((m) => m.healthState === "WARNING");
 
     if (hasRequiredFailure) {
       overallState = "FAILURE";
     } else if (hasRequiredUnknown) {
       overallState = "UNKNOWN";
-    } else if (hasWarning) {
+    } else if (hasRecommendedFailure || hasWarning) {
       overallState = "WARNING";
     } else {
       overallState = "HEALTHY";

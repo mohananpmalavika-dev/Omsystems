@@ -338,7 +338,10 @@ describe("secure edge gateway operations", () => {
 
     expect(queued.statusCode).toBe(202);
     expect(queued.json()).toMatchObject({ commandId: expect.any(String), scope: "device" });
-    expect(queued.json()).not.toHaveProperty("scanId");
+    // v0.1.12 predates credential-cache invalidation, so the control plane
+    // deliberately queues a targeted compatibility scan after the encrypted
+    // command. Newer gateways do not receive this extra scan.
+    expect(queued.json()).toHaveProperty("scanId", expect.any(String));
     const claimed = await app.inject({
       method: "GET",
       url: `/v1/edge-agents/${identity.agentId}/commands/next`,

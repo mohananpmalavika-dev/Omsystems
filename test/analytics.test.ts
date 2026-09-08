@@ -27,8 +27,8 @@ describe("video analytics and alert workflow", () => {
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
       cameraCount: 9,
-      capabilityCount: 25,
-      created: 225,
+      capabilityCount: 35,
+      created: 315,
       enabled: 0,
       unchanged: 0,
     });
@@ -46,8 +46,11 @@ describe("video analytics and alert workflow", () => {
       capabilityCount: 25,
       created: 0,
       enabled: 0,
-      unchanged: 225,
+      unchanged: 315,
     });
+    const rules = await store.listAnalyticsRules("cam-001");
+    expect(rules.filter((rule) => rule.detectionType === "atm-skimming" || rule.detectionType === "person-in-vault-after-hours"))
+      .toHaveLength(2);
   });
 
   it("configures a camera rule and converts an authenticated detection into protected evidence", async () => {
