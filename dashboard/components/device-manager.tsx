@@ -1535,6 +1535,42 @@ export function DeviceManager() {
     }
   }
 
+  async function deleteDiscoveredCamera(discoveryId: string) {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      await cameraInventoryApi.deleteDiscovery(selectedBranch, discoveryId);
+      setNotice("Discovered camera removed from table. It will be re-discovered on the next scan.");
+      setSelectedDiscoveryId(undefined);
+      setDiscoveryEditMode(undefined);
+      setPreviewDiscoveryId(undefined);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to delete discovered camera."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearAllUnapprovedDiscoveries() {
+    if (!selectedBranch) return;
+    setSaving(true);
+    setError(undefined);
+    try {
+      const res = await cameraInventoryApi.clearDiscoveredCameras(selectedBranch) as { deleted?: number };
+      setNotice(`Removed ${res?.deleted ?? 0} unapproved camera(s) from table. They will be re-discovered on the next scan.`);
+      setShowDiscoveredList(false);
+      setSelectedDiscoveryId(undefined);
+      setDiscoveryEditMode(undefined);
+      await refreshBranch(selectedBranch);
+    } catch (reason) {
+      setError(messageOf(reason, "Failed to clear discovered cameras."));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function registerGateway(event: React.FormEvent) {
     event.preventDefault();
     if (!selectedBranch || !activeBranch) return;
@@ -2122,6 +2158,17 @@ export function DeviceManager() {
                   {saving ? "Provisioning…" : `Approve verified (${approvableDiscoveryCount})`}
                 </button>
               ) : null}
+              {pendingDiscoveryQueueItems.length > 0 ? (
+                <button
+                  type="button"
+                  className="secondary-button danger-button"
+                  onClick={() => void clearAllUnapprovedDiscoveries()}
+                  disabled={saving || scanning}
+                  title="Delete all unapproved cameras from discovery table. Scanning will re-discover them."
+                >
+                  <Trash2 size={13} /> Delete All Pending ({pendingDiscoveryQueueItems.length})
+                </button>
+              ) : null}
               {pendingReviewCount > 0 && approvableDiscoveryCount === 0 ? <span className="credential-pending-note">{pendingReviewCount} need review or login</span> : null}
               {(saving || scanning) && (
                 <button type="button" className="secondary-button danger-button" onClick={handleStopOperation}>
@@ -2199,6 +2246,15 @@ export function DeviceManager() {
                     )}
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setDiscoveryEditMode("rename"); setRenameDraft(item.displayName ?? item.model ?? ""); setRejectReason(""); }}>Rename</button>
                     <button type="button" className="secondary-button" onClick={() => { setSelectedDiscoveryId(item.id); setDiscoveryEditMode("reject"); setRejectReason(""); }}>Reject</button>
+                    <button
+                      type="button"
+                      className="secondary-button danger-button"
+                      onClick={() => void deleteDiscoveredCamera(item.id)}
+                      disabled={saving || scanning}
+                      title="Remove this camera from discovery table so it can be re-scanned"
+                    >
+                      <Trash2 size={13} /> Delete
+                    </button>
                   </div>
                   {selectedDiscoveryId === item.id && (
                     <div className="discovery-inline-editor">
@@ -2573,6 +2629,15 @@ export function DeviceManager() {
                           <button type="button" className="secondary-button" onClick={() => previewDiscoveredCamera(camera)} disabled={saving}>
                             {previewDiscoveryId === camera.id ? "Previewing" : "Preview"}
                           </button>
+                          <button
+                            type="button"
+                            className="secondary-button danger-button"
+                            onClick={() => void deleteDiscoveredCamera(camera.id)}
+                            disabled={saving}
+                            title="Delete this discovery so it can be re-scanned"
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>
                         </div>
                         {previewDiscoveryId === camera.id && (
                           <div className="discovery-inline-editor full-row">
@@ -2593,6 +2658,17 @@ export function DeviceManager() {
               )}
               <div className="modal-actions">
                 <button type="button" className="secondary-button" onClick={() => setShowDiscoveredList(false)}>Close</button>
+                {discoveredCameras.length > 0 && (
+                  <button
+                    type="button"
+                    className="secondary-button danger-button"
+                    onClick={() => void clearAllUnapprovedDiscoveries()}
+                    disabled={saving}
+                    title="Delete all unapproved cameras so they can be re-discovered on next scan"
+                  >
+                    <Trash2 size={13} /> Delete All Pending ({discoveredCameras.length})
+                  </button>
+                )}
                 {!loadingDiscoveries && approvableDiscoveryCount > 0 && (
                   <button type="button" className="primary-button" onClick={() => void approveAllDiscovered()} disabled={saving}>
                     {saving ? "Provisioning…" : `Approve verified (${approvableDiscoveryCount})`}

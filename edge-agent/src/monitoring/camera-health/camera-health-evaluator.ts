@@ -9,13 +9,13 @@ export const HEALTH_STALE_AFTER_MS = 90_000;
 
 export interface EvaluationInput {
   camera: CameraConfiguration;
-  network?: NetworkProbeResult;
-  stream?: StreamProbeResult;
-  decode?: DecodeProbeResult;
-  freeze?: FreezeAnalysis;
-  recorderChannel?: RecorderChannelStatus;
-  recording?: RecordingProbeResult;
-  observedAt?: Date;
+  network?: NetworkProbeResult | undefined;
+  stream?: StreamProbeResult | undefined;
+  decode?: DecodeProbeResult | undefined;
+  freeze?: FreezeAnalysis | undefined;
+  recorderChannel?: RecorderChannelStatus | undefined;
+  recording?: RecordingProbeResult | undefined;
+  observedAt?: Date | undefined;
 }
 
 function observation(available: boolean, passed: boolean | undefined, observedAt: Date, source: HealthObservation<boolean>["source"], confidence: number, errorCode?: string, latencyMs?: number): HealthObservation<boolean> {
