@@ -35,7 +35,13 @@ export function selectLiveWallCameras(
   const scoped = cameras.filter((camera) => {
     const branchId = camera.branchId || "default-branch";
     const branch = branchMap.get(branchId);
-    if (scope.branchId !== "ALL" && branchId !== scope.branchId) return false;
+    if (scope.branchId !== "ALL") {
+      const target = scope.branchId.trim().toLowerCase();
+      const matchId = branchId.toLowerCase() === target;
+      const matchCameraBranchName = camera.branchName?.trim().toLowerCase() === target;
+      const matchBranchObjName = (branch as any)?.branchName?.trim().toLowerCase() === target;
+      if (!matchId && !matchCameraBranchName && !matchBranchObjName) return false;
+    }
     if (scope.zone !== "ALL" && branch?.zone !== scope.zone) return false;
     if (scope.region !== "ALL" && branch?.region !== scope.region) return false;
     if (scope.area !== "ALL" && branch?.area !== scope.area) return false;
