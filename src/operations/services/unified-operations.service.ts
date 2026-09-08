@@ -258,16 +258,76 @@ export class UnifiedOperationsService {
 
   async getBranch360Workspace(branchId: string, tenantId: string, store?: ControlPlaneStore, user?: User): Promise<Branch360Workspace | null> {
     if (!store || !user) return null;
+    const branchRecord = await store.getNode(branchId);
+    if (!branchRecord || branchRecord.type !== "branch") return null;
+    const effectiveTenantId = branchRecord.tenantId || tenantId;
     const snapshotService = new BranchOperationalSnapshotService(store);
-    const snapshot = await snapshotService.getBranchSnapshot(tenantId, branchId, true, user);
+    const snapshot = await snapshotService.getBranchSnapshot(effectiveTenantId, branchId, true, user);
     if (!snapshot) return null;
     const [branches, telemetry, incidents] = await Promise.all([
-      this.getFleetBranchSummaries(tenantId, store, user),
-      store.listLatestOperationalTelemetry(tenantId, [branchId]),
+      this.getFleetBranchSummaries(effectiveTenantId, store, user),
+      store.listLatestOperationalTelemetry(effectiveTenantId, [branchId]),
       alertIncidentRepository.list(),
     ]);
-    const branch = branches.find((item) => item.branchId === branchId);
-    if (!branch) return null;
+    let branch = branches.find((item) => item.branchId === branchId);
+    if (!branch) {
+      const unknown = (snapshot.cameraList ?? []).filter((camera) => camera.state === "UNKNOWN").length;
+      const degraded = snapshot.cameras.warningCount;
+      const lastReportedAt = snapshot.lastTelemetryAt ? new Date(snapshot.lastTelemetryAt) : undefined;
+      const operationalState: BranchOperationalView["operationalState"] = snapshot.cameras.total === 0 ? "NOT_PROVISIONED"
+        : snapshot.telemetryFreshness === "STALE" || snapshot.telemetryFreshness === "OUTDATED" ? "STALE" : snapshot.overallState;
+      branch = {
+        branchId: snapshot.branchId,
+        branchCode: snapshot.branchCode,
+        name: snapshot.branchName,
+        region: snapshot.regionName ?? "Unassigned",
+        operationalState,
+        healthScore: snapshot.healthScore,
+        risk: { level: "UNKNOWN" },
+        internet: {
+          state: snapshot.network.state,
+          mode: snapshot.network.state === "FAILOVER" ? "FAILOVER" : snapshot.network.state === "UNKNOWN" ? undefined : "PRIMARY",
+          latencyMs: snapshot.network.latencyMs,
+          packetLossPct: snapshot.network.packetLossPct,
+        },
+        cameras: {
+          total: snapshot.cameras.total,
+          healthy: snapshot.cameras.healthyCount,
+          working: snapshot.cameras.online,
+          notWorking: snapshot.cameras.offline + degraded + unknown,
+          offline: snapshot.cameras.offline,
+          degraded,
+          unknown,
+          notRecording: snapshot.cameras.notRecording,
+          maintenance: 0,
+        },
+        recording: {
+          totalChannels: snapshot.cameras.total,
+          recordingChannels: snapshot.cameras.recording,
+          status: snapshot.cameras.total === 0 ? "NOT_PROVISIONED" : snapshot.cameras.notRecording > 0 ? "DEGRADED" : snapshot.cameras.recording === snapshot.cameras.total ? "HEALTHY" : "FAILED",
+        },
+        recorders: { total: snapshot.recorders.total, online: snapshot.recorders.online, offline: snapshot.recorders.offline },
+        storage: {
+          diskCount: snapshot.storage.disks.total,
+          state: snapshot.storage.state,
+          minFreePercent: snapshot.storage.capacity ? Math.max(0, 100 - snapshot.storage.capacity.usagePercent) : undefined,
+          smartWarningsCount: snapshot.storage.disks.warning + snapshot.storage.disks.failed,
+        },
+        retention: {
+          requiredDays: snapshot.retention.requiredDays,
+          observedDays: snapshot.retention.minimumVerifiedDays,
+          compliant: snapshot.retention.state === "UNKNOWN" ? undefined : snapshot.retention.state === "COMPLIANT",
+          displayTag: snapshot.retention.minimumVerifiedDays === undefined ? "Unknown" : `${snapshot.retention.minimumVerifiedDays}d / ${snapshot.retention.requiredDays}d`,
+        },
+        alerts: { p1: snapshot.alerts.p1Count, p2: snapshot.alerts.p2Count },
+        telemetry: {
+          lastReportedAt,
+          secondsAgo: lastReportedAt ? Math.max(0, Math.round((Date.now() - lastReportedAt.getTime()) / 1000)) : undefined,
+          isStale: snapshot.telemetryFreshness === "STALE" || snapshot.telemetryFreshness === "OUTDATED",
+        },
+        openIncidents: incidents.filter((incident) => incident.branchId === branchId && incident.status !== "RESOLVED").length,
+      };
+    }
     const disks = telemetry.filter((item) => item.deviceType === "disk");
     const network = telemetry.find((item) => item.deviceType === "network" && item.metrics.role !== "backup") ?? telemetry.find((item) => item.deviceType === "network");
     const backupNetwork = telemetry.find((item) => item.deviceType === "network" && item.metrics.role === "backup");

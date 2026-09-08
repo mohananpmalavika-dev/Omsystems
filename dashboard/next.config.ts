@@ -3,7 +3,7 @@ import path from "path";
 
 // In production (Vercel/Railway), set CONTROL_PLANE_URL to your Railway backend URL.
 // Locally defaults to http://localhost:8080.
-const apiBase = process.env.CONTROL_PLANE_URL?.replace(/\/$/, "") || "http://localhost:8080";
+const apiBase = process.env.CONTROL_PLANE_INTERNAL_URL?.replace(/\/$/, "") || process.env.CONTROL_PLANE_URL?.replace(/\/$/, "") || (process.env.NODE_ENV === "production" ? "http://control-plane:8080" : "http://localhost:8080");
 
 // Vercel sets VERCEL=1 automatically — no standalone output needed there.
 const isVercel = process.env.VERCEL === "1";

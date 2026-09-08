@@ -55,6 +55,14 @@ http://3-7-216-169.sslip.io, http://3.7.216.169.sslip.io, http://3.7.216.169, :8
         }
     }
 
+    handle /v1/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto http
+        }
+    }
+
     handle {
         reverse_proxy dashboard:10000 {
             header_up Host {host}
@@ -113,6 +121,14 @@ https://3-7-216-169.sslip.io, https://3.7.216.169.sslip.io {
         reverse_proxy control-plane:8080 {
             header_up Upgrade {>Upgrade}
             header_up Connection {>Connection}
+        }
+    }
+
+    handle /v1/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 
