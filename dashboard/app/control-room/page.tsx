@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -291,7 +292,10 @@ function HeaderClock() {
   );
 }
 
-export default function ControlRoomPage() {
+function ControlRoomContent() {
+  const searchParams = useSearchParams();
+  const urlBranchId = searchParams?.get("branchId") || searchParams?.get("branch") || null;
+
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
   const [stats, setStats] = useState<ControlRoomStats>(DEFAULT_EMPTY_STATS);
@@ -314,7 +318,7 @@ export default function ControlRoomPage() {
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
   const [selectedRegion, setSelectedRegion] = useState<string>("ALL");
   const [selectedArea, setSelectedArea] = useState<string>("ALL");
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("ALL");
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(() => (urlBranchId ? urlBranchId.trim() : "ALL"));
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ONLINE" | "OFFLINE" | "ALERT">("ALL");
 
@@ -436,6 +440,22 @@ export default function ControlRoomPage() {
     return Array.from(branchMap.values()).sort((a, b) => a.branchName.localeCompare(b.branchName));
   }, [cameras]);
 
+  // Auto-select and lock in the branch from URL query parameters (e.g. ?branchId=xxx from Fleet Branches)
+  useEffect(() => {
+    if (!urlBranchId) return;
+    const cleanUrlBranch = urlBranchId.trim();
+    const matched = branchesList.find(
+      (b) =>
+        b.branchId.toLowerCase() === cleanUrlBranch.toLowerCase() ||
+        b.branchName.toLowerCase() === cleanUrlBranch.toLowerCase()
+    );
+    if (matched) {
+      setSelectedBranchId(matched.branchId);
+    } else {
+      setSelectedBranchId(cleanUrlBranch);
+    }
+  }, [urlBranchId, branchesList]);
+
   // Available Zones
   const availableZones = useMemo(() => {
     const set = new Set<string>();
@@ -519,7 +539,14 @@ export default function ControlRoomPage() {
   // Selected Branch object (if single branch is chosen)
   const activeSingleBranch = useMemo(() => {
     if (selectedBranchId === "ALL") return null;
-    return branchesList.find((b) => b.branchId === selectedBranchId) || null;
+    const target = selectedBranchId.trim().toLowerCase();
+    return (
+      branchesList.find(
+        (b) =>
+          b.branchId.toLowerCase() === target ||
+          b.branchName.toLowerCase() === target
+      ) || null
+    );
   }, [selectedBranchId, branchesList]);
 
   // Initial layout for filtered cameras
@@ -1257,5 +1284,20 @@ export default function ControlRoomPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function ControlRoomPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="control-room-loading" role="status">
+          <RefreshCw size={36} className="spin" />
+          <p>Initializing Live Video Wall…</p>
+        </div>
+      }
+    >
+      <ControlRoomContent />
+    </Suspense>
   );
 }

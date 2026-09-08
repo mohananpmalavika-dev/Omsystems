@@ -39,6 +39,15 @@ describe("Live Wall filtering", () => {
     expect(select({ branchId: "north", query: "lobby" }).counts).toEqual({ total: 1, online: 0, offline: 1, alerts: 1 });
     expect(select({ branchId: "south" }).branchCount).toBe(1);
   });
+  it("filters strictly to the requested branchId (case-insensitive) on live wall", () => {
+    const resultSouth = select({ branchId: "SOUTH" });
+    expect(resultSouth.cameras.map((c) => c.id)).toEqual(["c"]);
+    expect(resultSouth.counts.total).toBe(1);
+
+    const resultNorth = select({ branchId: "North", hideUnavailable: false });
+    expect(resultNorth.cameras.map((c) => c.id)).toEqual(["a", "b", "d"]);
+    expect(resultNorth.counts.total).toBe(3);
+  });
   it("supports zero-indexed channel searches and reports no branches for empty results", () => {
     expect(select({ query: "0" }).cameras.map((camera) => camera.id)).toEqual(["a"]);
     expect(select({ query: "missing" }).branchCount).toBe(0);

@@ -79,6 +79,9 @@ export class RecordingContinuityService {
     const windowStart24h = new Date(now.getTime() - 86400_000);
 
     const segments = this.cameraSegments.get(cameraId) ?? [];
+    const chronologicalSegments = [...segments]
+      .filter((segment) => Number.isFinite(segment.start.getTime()) && Number.isFinite(segment.end.getTime()) && segment.end > segment.start)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
     const playback = this.cameraPlaybackVerifications.get(cameraId);
     const telemetry = this.cameraTelemetries.get(cameraId);
 

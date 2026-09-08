@@ -107,7 +107,7 @@ export default function BranchWorkspacePage() {
               <span>Refresh</span>
             </button>
             <Link
-              href={`/control-room?branchId=${branchId}`}
+              href={`/control-room?branchId=${encodeURIComponent(branch?.branchId || branchId)}`}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium shadow-sm transition-colors"
             >
               <Play className="w-3.5 h-3.5 fill-current" />
