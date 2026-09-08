@@ -17,6 +17,12 @@
 import { Socket } from 'node:net';
 import type { ExtendedControlPlaneStore } from '../control-plane-store.js';
 import { DeviceCredentialService } from '../services/device-credential-service.js';
+import { DeviceConfigurationService } from '../services/device-configuration.service.js';
+import { NotificationService } from '../services/notification-service.js';
+import { loadNotificationConfig } from '../config/notifications.config.js';
+import { OnvifCameraClient } from '../onvif/onvif-camera-client.js';
+import type { DeviceNetworkConfig } from '../types/device-configuration.types.js';
+import type { User } from '../domain/models.js';
 
 interface DeviceConfigurationJob {
   id: string;
@@ -45,9 +51,25 @@ export class DeviceJobWorker {
   private running = false;
   private readonly pollIntervalMs = 5000; // 5 seconds
   private readonly credentialService: DeviceCredentialService;
+  private readonly deviceConfigurationService: DeviceConfigurationService;
+  private readonly notificationService: NotificationService;
 
   constructor(private readonly store: ExtendedControlPlaneStore) {
     this.credentialService = new DeviceCredentialService(store);
+    // Device mutations must go through the authoritative ONVIF orchestration
+    // service.  It validates hardware capabilities and read-after-write state.
+    this.deviceConfigurationService = new DeviceConfigurationService({ store });
+    this.notificationService = new NotificationService(loadNotificationConfig(), store);
+  }
+
+  private systemUser(job: DeviceConfigurationJob): User {
+    return {
+      id: job.requestedBy || 'system-device-job-worker',
+      displayName: 'Device configuration worker',
+      email: 'system@omsystems.internal',
+      tenantId: job.tenantId,
+      role: 'super_admin',
+    };
   }
 
   /**
@@ -520,16 +542,40 @@ export class DeviceJobWorker {
    * Apply IP configuration to device.
    */
   async applyIpConfiguration(job: DeviceConfigurationJob) {
-    // TODO: Apply IP via vendor adapter
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // await adapter.setNetworkConfig({
-    //   ipAddress: job.payload.newIpAddress,
-    //   subnet: job.payload.subnet,
-    //   gateway: job.payload.gateway,
-    //   dnsServers: job.payload.dnsServers
-    // });
+    const device = await this.store.getDeviceInventory(job.deviceId);
+    if (!device) throw new Error('Device not found');
+    if (typeof job.payload.newIpAddress !== 'string' || !job.payload.newIpAddress.trim()) {
+      throw new Error('new_ip_address_required');
+    }
 
-    return { applied: true, newIp: job.payload.newIpAddress };
+    const user = this.systemUser(job);
+    const current = await this.deviceConfigurationService.getNetworkConfiguration(job.tenantId, job.deviceId, user);
+    const desired: DeviceNetworkConfig = {
+      ...current,
+      ipAddress: job.payload.newIpAddress,
+      subnetMask: job.payload.subnet ?? current.subnetMask,
+      gateway: job.payload.gateway ?? current.gateway,
+      dnsServers: job.payload.dnsServers ?? current.dnsServers,
+      dhcpEnabled: job.payload.dhcpEnabled ?? false,
+    };
+
+    const result = await this.deviceConfigurationService.setNetworkConfiguration(
+      job.tenantId,
+      job.deviceId,
+      user,
+      desired,
+      true,
+    );
+    // Some devices reboot immediately after SetNetworkInterfaces, so an
+    // in-band read-back can legitimately fail here.  The job does not become
+    // successful at this point: rediscovery plus authenticated ONVIF and RTSP
+    // checks below are the authoritative verification gate.
+    return {
+      applied: true,
+      newIp: desired.ipAddress,
+      immediateVerification: result.verification,
+      pendingPhysicalVerification: !result.success,
+    };
   }
 
   /**
@@ -544,16 +590,43 @@ export class DeviceJobWorker {
    * Rediscover device at new IP address.
    */
   async rediscoverDevice(job: DeviceConfigurationJob) {
-    // TODO: Probe new IP address
-    return { discovered: true, ipAddress: job.payload.newIpAddress };
+    const device = await this.store.getDeviceInventory(job.deviceId);
+    if (!device) throw new Error('Device not found');
+    const port = Number((device as any).onvifPort ?? (device as any).port ?? 80);
+    const reachable = await this.probeDeviceTcp(job.payload.newIpAddress, port, 5_000);
+    if (!reachable) throw new Error(`new_ip_unreachable:${job.payload.newIpAddress}:${port}`);
+    return { discovered: true, ipAddress: job.payload.newIpAddress, port };
   }
 
   /**
    * Verify device connectivity at new IP.
    */
   async verifyDeviceConnectivity(job: DeviceConfigurationJob) {
-    // TODO: Test ONVIF/RTSP connectivity
-    return { verified: true };
+    const device = await this.store.getDeviceInventory(job.deviceId);
+    if (!device) throw new Error('Device not found');
+    const onvifPort = Number((device as any).onvifPort ?? (device as any).port ?? 80);
+    const rtspPort = Number((device as any).rtspPort ?? 554);
+    const [onvifReachable, rtspReachable] = await Promise.all([
+      this.probeDeviceTcp(job.payload.newIpAddress, onvifPort, 5_000),
+      this.probeDeviceTcp(job.payload.newIpAddress, rtspPort, 5_000),
+    ]);
+    if (!onvifReachable) throw new Error(`new_ip_onvif_unreachable:${job.payload.newIpAddress}:${onvifPort}`);
+    if (!rtspReachable) throw new Error(`new_ip_rtsp_unreachable:${job.payload.newIpAddress}:${rtspPort}`);
+
+    const credential = await this.store.getCurrentDeviceCredential(job.deviceId);
+    if (!credential) throw new Error('current_credential_required_for_onvif_verification');
+    const password = await this.credentialService.decryptSecret(credential.encryptedSecret);
+    const client = new OnvifCameraClient({
+      deviceServiceUrl: `http://${job.payload.newIpAddress}:${onvifPort}/onvif/device_service`,
+      username: credential.username,
+      password,
+      autoSyncTime: false,
+      timeoutMs: 5_000,
+    });
+    const connected = await client.connect();
+    if (!connected.deviceInfo) throw new Error('new_ip_onvif_identity_not_verified');
+
+    return { verified: true, ipAddress: job.payload.newIpAddress, onvifPort, rtspPort, manufacturer: connected.deviceInfo.manufacturer };
   }
 
   /**
@@ -579,10 +652,36 @@ export class DeviceJobWorker {
    * Execute template application workflow.
    */
   async executeTemplateApply(job: DeviceConfigurationJob) {
-    // TODO: Implement template application workflow
-    console.log(`[DeviceJobWorker] Template application for job ${job.id}`);
+    const settings = job.payload.settings;
+    if (!settings || typeof settings !== 'object') throw new Error('template_settings_required');
 
-    return { applied: true };
+    const user = this.systemUser(job);
+    const results: Array<{ subsystem: string; verified: boolean }> = [];
+    const template = settings as Record<string, unknown>;
+
+    if (template.videoConfig) {
+      const result = await this.deviceConfigurationService.setVideoConfiguration(job.tenantId, job.deviceId, user, template.videoConfig as any);
+      if (!result.success) throw new Error(`template_video_not_verified:${result.message}`);
+      results.push({ subsystem: 'video', verified: true });
+    }
+    if (template.imageConfig) {
+      const result = await this.deviceConfigurationService.setImagingConfiguration(job.tenantId, job.deviceId, user, template.imageConfig as any);
+      if (!result.success) throw new Error(`template_imaging_not_verified:${result.message}`);
+      results.push({ subsystem: 'imaging', verified: true });
+    }
+    if (template.timeConfig) {
+      const result = await this.deviceConfigurationService.setTimeConfiguration(job.tenantId, job.deviceId, user, template.timeConfig as any);
+      if (!result.success) throw new Error(`template_time_not_verified:${result.message}`);
+      results.push({ subsystem: 'time', verified: true });
+    }
+    if (template.networkConfig) {
+      const result = await this.deviceConfigurationService.setNetworkConfiguration(job.tenantId, job.deviceId, user, template.networkConfig as DeviceNetworkConfig, true);
+      if (!result.success) throw new Error(`template_network_not_verified:${result.message}`);
+      results.push({ subsystem: 'network', verified: true });
+    }
+    if (results.length === 0) throw new Error('template_has_no_supported_configuration');
+
+    return { applied: true, verified: true, subsystems: results };
   }
 
   /**
@@ -616,14 +715,34 @@ export class DeviceJobWorker {
       console.error(
         `[DeviceJobWorker] Job ${job.id} failed after ${newAttempts} attempts - manual intervention required`
       );
+      await this.notifyOperationsOfFailure(job, error);
+    }
+  }
 
-      // TODO: Send alert notification
-      // await this.notificationService.sendAlert({
-      //   severity: 'critical',
-      //   title: 'Device configuration job failed',
-      //   message: `Job ${job.id} for device ${job.deviceId} failed after ${newAttempts} attempts`,
-      //   recipients: ['operations@example.com']
-      // });
+  private async notifyOperationsOfFailure(job: DeviceConfigurationJob, error: Error): Promise<void> {
+    try {
+      const recipients = await this.notificationService.resolveRecipients({
+        tenantId: job.tenantId,
+        notificationType: 'device_configuration_failure',
+        severity: 'critical',
+        assetId: job.deviceId,
+      });
+      const subject = `[CRITICAL] Device configuration job requires intervention`;
+      const body = `Job ${job.id} (${job.jobType}) for device ${job.deviceId} failed after ${job.maxAttempts} attempts. Error: ${error.message}`;
+      const [emailSent, smsSent] = await Promise.all([
+        recipients.email.length ? this.notificationService.sendEmail({ to: recipients.email, subject, body }, job.tenantId) : Promise.resolve(false),
+        recipients.sms.length ? this.notificationService.sendSms({ to: recipients.sms, body }, job.tenantId) : Promise.resolve(false),
+      ]);
+      await this.store.writeAudit({
+        tenantId: job.tenantId,
+        action: 'device.configuration.failure-notification',
+        actorUserId: 'system',
+        resourceNodeId: null,
+        outcome: emailSent || smsSent ? 'success' : 'failure',
+        details: { jobId: job.id, resourceId: job.deviceId, emailSent, smsSent, configuredRecipients: recipients.email.length + recipients.sms.length },
+      });
+    } catch (notificationError) {
+      console.error(`[DeviceJobWorker] Failed to notify operations for ${job.id}:`, notificationError);
     }
   }
 

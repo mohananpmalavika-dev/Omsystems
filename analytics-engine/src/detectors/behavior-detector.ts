@@ -542,13 +542,35 @@ export class BehaviorDetector extends BaseDetector {
     frame: DetectionFrame,
     persons: DetectedObject[],
   ): DetectionResult | null {
-    // TODO: Implement crowd panic detection
-    // Indicators:
-    // 1. Many people moving in same direction rapidly
-    // 2. High density + high speed
-    // 3. Irregular crowd flow patterns
+    // Require observed history for most people. This is intentionally
+    // conservative: a crowded still image must never become a panic alert.
+    const speeds = persons.map((person) => {
+      const track = this.trackedPersons.get(person.trackId || '');
+      return track ? this.calculateSpeed(track.positions.slice(-5)) : 0;
+    });
+    const movingFast = speeds.filter((speed) => speed >= 20).length;
+    const fastRatio = movingFast / persons.length;
+    if (persons.length < 5 || fastRatio < 0.7) return null;
 
-    return null;
+    const centers = persons.map((person) => ({
+      x: person.boundingBox.x + person.boundingBox.width / 2,
+      y: person.boundingBox.y + person.boundingBox.height / 2,
+    }));
+    const meanX = centers.reduce((sum, center) => sum + center.x, 0) / centers.length;
+    const meanY = centers.reduce((sum, center) => sum + center.y, 0) / centers.length;
+    const meanDistance = centers.reduce((sum, center) => sum + Math.hypot(center.x - meanX, center.y - meanY), 0) / centers.length;
+    // Panic classification needs a dense, rapidly moving crowd; broad normal
+    // foot traffic remains unclassified.
+    if (meanDistance > 0.2) return null;
+
+    const averageSpeed = speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length;
+    return {
+      detectionType: 'crowd-panic',
+      confidence: Math.min(0.9, 0.45 + fastRatio * 0.25 + Math.min(averageSpeed / 100, 0.2)),
+      objects: [],
+      metadata: { persons: persons.length, fastRatio, averageSpeed, meanDistance, evidence: 'tracked-person-motion' },
+      requiresAlert: true,
+    };
   }
 
   /**

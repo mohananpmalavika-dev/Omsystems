@@ -529,13 +529,9 @@ export class HumanAnalyticsDetector extends BaseDetector {
   }
 
   private async detectFighting(track: PersonTrack, frame: DetectionFrame): Promise<{ confidence: number } | null> {
-    // TODO: Implement fighting detection
-    // Requires multi-person interaction analysis:
-    // 1. Two or more people in close proximity
-    // 2. Rapid, aggressive movements
-    // 3. Unusual pose patterns
-    // 4. High velocity changes
-    
+    // This per-person pipeline deliberately does not claim fight detection:
+    // the required multi-person interaction evidence belongs to
+    // BehaviorDetector, which has the complete tracked crowd context.
     return null;
   }
 

@@ -263,17 +263,15 @@ export class FaceAnalyticsDetector extends BaseDetector {
   // ============================================================================
 
   private async extractEmbeddings(faces: FaceDetection[], frame: DetectionFrame): Promise<void> {
+    const pipeline = getInferencePipeline();
     for (const face of faces) {
-      // TODO: Extract 512-dim ArcFace embedding
-      /*
-      const faceCrop = this.cropAndAlign(frame, face.boundingBox, face.landmarks);
-      const input = this.preprocessForRecognition(faceCrop);
-      const output = await this.faceRecognizer.run({ input });
-      face.embedding = Array.from(output.embedding.data);
-      
-      // Normalize embedding
-      face.embedding = this.normalizeVector(face.embedding);
-      */
+      const embedding = await pipeline.extractFaceEmbedding(frame, face.boundingBox);
+      // Recognition is unavailable unless the configured model produces a real
+      // ArcFace vector. Never synthesize an embedding or a watchlist match.
+      if (!embedding || embedding.length !== 512 || embedding.some((value) => !Number.isFinite(value))) continue;
+      const magnitude = Math.hypot(...embedding);
+      if (!Number.isFinite(magnitude) || magnitude === 0) continue;
+      face.embedding = embedding.map((value) => value / magnitude);
     }
   }
 

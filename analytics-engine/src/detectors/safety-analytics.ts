@@ -620,11 +620,11 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   private async detectHazards(frame: DetectionFrame): Promise<HazardDetection[]> {
     const hazards: HazardDetection[] = [];
 
-    // TODO: Implement spill detection
+    // Spill detector returns no event when its model/evidence is unavailable.
     const spills = await this.detectSpills(frame);
     hazards.push(...spills);
 
-    // TODO: Implement arc flash detection
+    // Arc-flash detector returns no event when its model/evidence is unavailable.
     const arcFlash = await this.detectArcFlash(frame);
     hazards.push(...arcFlash);
 

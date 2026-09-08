@@ -1321,25 +1321,30 @@ export class DeviceConfigurationService {
 
     // 2. Dispatch to hardware
     const prefixLength = this.subnetMaskToPrefixLength(config.subnetMask);
-    if (client.device?.setNetworkInterfaces) {
-      let ifaceToken = "eth0";
-      try {
-        if (client.device.getNetworkInterfaces) {
-          const ifaces = await client.device.getNetworkInterfaces();
-          if (ifaces && ifaces.length > 0 && ifaces[0]?.token) {
-            ifaceToken = ifaces[0].token;
-          }
-        }
-      } catch {
-        // Fall back to eth0
-      }
-
-      await client.device.setNetworkInterfaces(ifaceToken, {
-        ipAddress: config.ipAddress,
-        prefixLength,
-        dhcpEnabled: config.dhcpEnabled,
-      });
+    if (!client.device?.setNetworkInterfaces) {
+      throw new ConfigurationError(
+        `Device ${deviceId} does not advertise ONVIF SetNetworkInterfaces`,
+        "UNSUPPORTED_NETWORK_MUTATION",
+        422,
+      );
     }
+    let ifaceToken = "eth0";
+    try {
+      if (client.device.getNetworkInterfaces) {
+        const ifaces = await client.device.getNetworkInterfaces();
+        if (ifaces && ifaces.length > 0 && ifaces[0]?.token) {
+          ifaceToken = ifaces[0].token;
+        }
+      }
+    } catch {
+      // Fall back to eth0 only for devices that do expose the mutation API.
+    }
+
+    await client.device.setNetworkInterfaces(ifaceToken, {
+      ipAddress: config.ipAddress,
+      prefixLength,
+      dhcpEnabled: config.dhcpEnabled,
+    });
 
     if (client.device?.setNetworkDefaultGateway) {
       await client.device.setNetworkDefaultGateway([config.gateway]);
