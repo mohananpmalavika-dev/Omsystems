@@ -222,8 +222,9 @@ export function SyncedPlaybackView({
 
   // Load controls state (datetime-local expects YYYY-MM-DDTHH:MM)
   const toLocalInput = (iso?: string) => {
-    if (!iso) return new Date().toISOString().slice(0, 16);
-    return iso.slice(0, 16);
+    const date = iso ? new Date(iso) : new Date();
+    date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+    return date.toISOString().slice(0, 16);
   };
 
   const [fromInput, setFromInput] = useState<string>(toLocalInput(fromTime));
@@ -286,7 +287,7 @@ export function SyncedPlaybackView({
       // Expecting shape: { cameras: [{ cameraId, cameraName, segments: [{ id, startedAt, endedAt }], timeOffset }] }
       const cams = (resp?.cameras ?? []) as any[];
       const mapped: CameraStream[] = cams.flatMap((c) => {
-        const segments = Array.isArray(c.segments) ? c.segments : [];
+        const segments: any[] = Array.isArray(c.segments) ? c.segments : [];
         const seg = segments.find((candidate) => {
           const start = new Date(candidate.startedAt || candidate.startTime).getTime();
           const end = new Date(candidate.endedAt || candidate.endTime).getTime();
@@ -298,7 +299,7 @@ export function SyncedPlaybackView({
         timeOffsetsRef.current[c.cameraId] = Number.isFinite(c.timeOffset) ? c.timeOffset : 0;
         return {
           cameraId: c.cameraId,
-          cameraName: c.cameraName || c.camera_id || c.cameraId,
+          cameraName: c.cameraName || c.name || c.camera_id || c.cameraId,
           segmentId,
           startTime: seg?.startedAt || seg?.startTime || '',
           endTime: seg?.endedAt || seg?.endTime || '',

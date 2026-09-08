@@ -40,6 +40,12 @@ interface CameraItem {
   location?: string;
 }
 
+function toLocalDateTimeInput(iso: string): string {
+  const date = new Date(iso);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
 export default function SyncedPlaybackPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
@@ -419,7 +425,7 @@ export default function SyncedPlaybackPage() {
                   </label>
                   <input
                     type="datetime-local"
-                    value={fromTime.slice(0, 16)}
+                    value={toLocalDateTimeInput(fromTime)}
                     onChange={(e) => {
                       setTimePreset("custom");
                       setFromTime(new Date(e.target.value).toISOString());
@@ -434,7 +440,7 @@ export default function SyncedPlaybackPage() {
                   </label>
                   <input
                     type="datetime-local"
-                    value={toTime.slice(0, 16)}
+                    value={toLocalDateTimeInput(toTime)}
                     onChange={(e) => {
                       setTimePreset("custom");
                       setToTime(new Date(e.target.value).toISOString());
