@@ -92,12 +92,30 @@ const playbackSessionSchema = z.object({
 
 const syncedPlaybackSchema = z.object({
   groupId: z.string().uuid().optional(),
-  cameraIds: z.array(z.string().uuid()).min(1).max(16),
+  cameraIds: z.array(z.string().uuid()).min(1).max(16).optional(),
   masterCameraId: z.string().uuid().optional(),
   fromTime: z.string().datetime(),
   toTime: z.string().datetime(),
   layout: z.enum(["grid", "stacked", "custom"]).default("grid"),
+}).superRefine((value, ctx) => {
+  if (!value.groupId && !value.cameraIds?.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "cameraIds or groupId is required", path: ["cameraIds"] });
+  }
+  if (value.cameraIds && new Set(value.cameraIds).size !== value.cameraIds.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "cameraIds must be unique", path: ["cameraIds"] });
+  }
+  if (value.masterCameraId && value.cameraIds && !value.cameraIds.includes(value.masterCameraId)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "masterCameraId must be included in cameraIds", path: ["masterCameraId"] });
+  }
 });
+
+const maxPlaybackWindowMs = 31 * 24 * 60 * 60 * 1000;
+
+function isValidPlaybackWindow(fromTime: string, toTime: string): boolean {
+  const from = new Date(fromTime).getTime();
+  const to = new Date(toTime).getTime();
+  return Number.isFinite(from) && Number.isFinite(to) && to > from && to - from <= maxPlaybackWindowMs;
+}
 
 /**
  * Register video search and playback routes
@@ -565,11 +583,15 @@ export async function registerVideoSearchRoutes(
     if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const body = syncedPlaybackSchema.parse(request.body);
 
+    if (!isValidPlaybackWindow(body.fromTime, body.toTime)) {
+      return reply.code(400).send({ error: "invalid_time_range" });
+    }
+
     try {
       const syncData = await playbackEngine.getSynchronizedPlayback({
         tenantId: request.currentUser.tenantId,
         groupId: body.groupId,
-        cameraIds: body.cameraIds,
+        cameraIds: body.cameraIds ?? [],
         masterCameraId: body.masterCameraId,
         fromTime: body.fromTime,
         toTime: body.toTime,
@@ -615,6 +637,13 @@ export async function registerVideoSearchRoutes(
         masterCameraId: z.string().uuid(),
         timeOffsets: z.record(z.number()).optional(),
         layout: z.enum(["grid", "stacked", "custom"]).default("grid"),
+      }).superRefine((value, ctx) => {
+        if (new Set(value.cameraIds).size !== value.cameraIds.length) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "cameraIds must be unique", path: ["cameraIds"] });
+        }
+        if (!value.cameraIds.includes(value.masterCameraId)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "masterCameraId must be included in cameraIds", path: ["masterCameraId"] });
+        }
       })
       .parse(request.body);
 

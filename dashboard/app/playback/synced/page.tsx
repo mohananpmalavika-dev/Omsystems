@@ -61,6 +61,7 @@ export default function SyncedPlaybackPage() {
   // Master camera & playback layout
   const [masterCameraId, setMasterCameraId] = useState<string>("");
   const [isPlaybackActive, setIsPlaybackActive] = useState<boolean>(false);
+  const [playbackRunId, setPlaybackRunId] = useState(0);
 
   // 1. Fetch Branches on Mount
   useEffect(() => {
@@ -99,6 +100,7 @@ export default function SyncedPlaybackPage() {
     if (!selectedBranchId) {
       setAllCameras([]);
       setSelectedCameraIds([]);
+      setIsPlaybackActive(false);
       return;
     }
 
@@ -121,6 +123,7 @@ export default function SyncedPlaybackPage() {
             location: c.location || c.zone,
           }));
           setAllCameras(cams);
+          setIsPlaybackActive(false);
           // Default select first 4 cameras
           const initialSelected = cams.slice(0, 4).map((c: CameraItem) => c.id);
           setSelectedCameraIds(initialSelected);
@@ -218,7 +221,10 @@ export default function SyncedPlaybackPage() {
 
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setIsPlaybackActive(!isPlaybackActive)}
+                onClick={() => {
+                  setPlaybackRunId((current) => current + 1);
+                  setIsPlaybackActive(true);
+                }}
                 disabled={selectedCameraIds.length === 0}
                 className={`px-4 py-2.5 rounded-xl font-bold text-xs shadow-lg flex items-center gap-2 transition-all ${
                   selectedCameraIds.length === 0
@@ -451,8 +457,15 @@ export default function SyncedPlaybackPage() {
                     Select a branch and pick up to 16 camera channels to load multi-stream timeline synchronization.
                   </p>
                 </div>
+              ) : !isPlaybackActive ? (
+                <div className="p-12 text-center space-y-3">
+                  <Play className="w-8 h-8 text-indigo-400 mx-auto" />
+                  <p className="text-sm font-medium text-slate-300">Ready to load synchronized recordings.</p>
+                  <p className="text-xs text-slate-500">Confirm the camera selection and time range, then launch playback.</p>
+                </div>
               ) : (
                 <SyncedPlaybackView
+                  key={playbackRunId}
                   streams={[]}
                   cameraIds={selectedCameraIds}
                   masterCameraId={masterCameraId}

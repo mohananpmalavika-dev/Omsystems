@@ -227,9 +227,13 @@ export class AIVideoSearchService {
       embeddingModel?: string;
     }
   ): Promise<VideoMetadata> {
-    const durationSeconds = Math.round(
-      (new Date(metadata.endTime).getTime() - new Date(metadata.startTime).getTime()) / 1000
-    );
+    const startTime = new Date(metadata.startTime);
+    const endTime = new Date(metadata.endTime);
+    if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(endTime.getTime()) || endTime <= startTime) {
+      throw new Error("invalid_video_time_range");
+    }
+
+    const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000);
 
     const videoMetadataId = randomUUID();
 
@@ -320,8 +324,10 @@ export class AIVideoSearchService {
     query: string,
     options?: {
       branchId?: string;
+      cameraIds?: string[];
       from?: string;
       to?: string;
+      minConfidence?: number;
       limit?: number;
     }
   ): Promise<VideoSearchResult[]> {
@@ -329,7 +335,15 @@ export class AIVideoSearchService {
     const parsedQuery = this.parseNaturalLanguageQuery(query);
 
     // Execute structured search
-    return this.searchVideos(tenantId, parsedQuery, options);
+    return this.searchVideos(tenantId, {
+      ...parsedQuery,
+      branchId: options?.branchId ?? parsedQuery.branchId,
+      cameraIds: options?.cameraIds ?? parsedQuery.cameraIds,
+      from: options?.from ?? parsedQuery.from,
+      to: options?.to ?? parsedQuery.to,
+      minConfidence: options?.minConfidence ?? parsedQuery.minConfidence,
+      limit: options?.limit ?? parsedQuery.limit,
+    });
   }
 
   /**
@@ -653,13 +667,13 @@ export class AIVideoSearchService {
     const to = query.to || options?.to;
 
     if (from) {
-      conditions.push(`vm.start_time >= $${paramIndex}::timestamptz`);
+      conditions.push(`vm.end_time >= $${paramIndex}::timestamptz`);
       params.push(from);
       paramIndex++;
     }
 
     if (to) {
-      conditions.push(`vm.end_time <= $${paramIndex}::timestamptz`);
+      conditions.push(`vm.start_time <= $${paramIndex}::timestamptz`);
       params.push(to);
       paramIndex++;
     }
@@ -681,7 +695,7 @@ export class AIVideoSearchService {
     // Object type filter (join with video_objects)
     const needsObjectJoin = query.objectType || query.trackingId || 
                             (query.attributes && Object.keys(query.attributes).length > 0) ||
-                            query.minConfidence;
+                            query.minConfidence !== undefined;
 
     let joinClause = "";
     if (needsObjectJoin) {
@@ -769,7 +783,8 @@ export class AIVideoSearchService {
     }
 
     const whereClause = conditions.join(" AND ");
-    const limit = query.limit || options?.limit || 50;
+    const requestedLimit = query.limit ?? options?.limit ?? 50;
+    const limit = Math.min(Math.max(Number.isInteger(requestedLimit) ? requestedLimit : 50, 1), 200);
 
     // Execute query
     const queryText = `
@@ -910,8 +925,8 @@ export class AIVideoSearchService {
       cameraIds: options?.cameraIds,
       from: options?.from,
       to: options?.to,
-      minConfidence: options?.minConfidence || 0.6,
-      limit: options?.limit || 50,
+      minConfidence: options?.minConfidence ?? 0.6,
+      limit: options?.limit ?? 50,
     };
 
     return this.searchVideos(tenantId, query);
@@ -1036,6 +1051,7 @@ export class AIVideoSearchService {
     // Score and filter similar objects
     const detections: CrossCameraTrack["detections"] = [];
     const seenCameras = new Set<string>();
+    const matchedObjectIds = new Set<string>([initialObject.object_id]);
     
     // Add initial detection
     detections.push({
@@ -1078,6 +1094,7 @@ export class AIVideoSearchService {
             confidence: combinedConfidence,
           });
           seenCameras.add(row.camera_id);
+          matchedObjectIds.add(row.object_id);
         }
       }
     }
@@ -1097,16 +1114,17 @@ export class AIVideoSearchService {
                        `track_${objectType}_${Date.now()}`;
 
     // Update all objects with the same tracking ID
-    const objectIds = similarObjectsResult.rows
-      .filter(row => seenCameras.has(row.camera_id))
-      .map(row => row.object_id);
+    const objectIds = [...matchedObjectIds];
     
     if (objectIds.length > 0) {
       await this.pool.query(
-        `UPDATE video_objects
+        `UPDATE video_objects vo
          SET cross_camera_tracking_id = $1,
              related_camera_detections = $2
-         WHERE object_id = ANY($3::text[])`,
+         FROM video_metadata vm
+         WHERE vo.video_metadata_id = vm.id
+           AND vm.tenant_id = $3
+           AND vo.object_id = ANY($4::text[])`,
         [
           trackingId,
           JSON.stringify(detections.map(d => ({
@@ -1114,7 +1132,8 @@ export class AIVideoSearchService {
             timestamp: d.timestamp,
             confidence: d.confidence
           }))),
-          [initialObject.object_id, ...objectIds]
+          tenantId,
+          objectIds,
         ]
       );
     }
@@ -1403,52 +1422,40 @@ export class AIVideoSearchService {
     attributes1: VideoObjectAttributes,
     attributes2: VideoObjectAttributes
   ): number {
-    let score = 0;
-    let totalChecks = 0;
+    const weightedAttributes: Array<[keyof VideoObjectAttributes, number]> = [
+      ["upperClothingColor", 0.3],
+      ["lowerClothingColor", 0.3],
+      ["vehicleColor", 0.4],
+      ["vehicleType", 0.3],
+      ["licensePlate", 0.8],
+      ["hasBag", 0.1],
+      ["hasBackpack", 0.1],
+      ["hasHat", 0.1],
+      ["hasGlasses", 0.1],
+      ["direction", 0.15],
+      ["speed", 0.15],
+      ["loitering", 0.2],
+      ["suspicious", 0.2],
+    ];
+    let matchedWeight = 0;
+    let requestedWeight = 0;
 
-    // Color matching (high weight)
-    if (attributes1.upperClothingColor && attributes2.upperClothingColor) {
-      totalChecks++;
-      if (attributes1.upperClothingColor === attributes2.upperClothingColor) {
-        score += 0.3;
-      }
-    }
-    if (attributes1.lowerClothingColor && attributes2.lowerClothingColor) {
-      totalChecks++;
-      if (attributes1.lowerClothingColor === attributes2.lowerClothingColor) {
-        score += 0.3;
-      }
-    }
-    if (attributes1.vehicleColor && attributes2.vehicleColor) {
-      totalChecks++;
-      if (attributes1.vehicleColor === attributes2.vehicleColor) {
-        score += 0.4;
-      }
-    }
+    for (const [attribute, weight] of weightedAttributes) {
+      const expected = attributes1[attribute];
+      if (expected === undefined) continue;
 
-    // Accessory matching
-    if (attributes1.hasBag !== undefined && attributes2.hasBag !== undefined) {
-      totalChecks++;
-      if (attributes1.hasBag === attributes2.hasBag) {
-        score += 0.1;
-      }
-    }
-    if (attributes1.hasBackpack !== undefined && attributes2.hasBackpack !== undefined) {
-      totalChecks++;
-      if (attributes1.hasBackpack === attributes2.hasBackpack) {
-        score += 0.1;
+      requestedWeight += weight;
+      const actual = attributes2[attribute];
+      if (
+        typeof expected === "string" && typeof actual === "string"
+          ? expected.toLowerCase() === actual.toLowerCase()
+          : expected === actual
+      ) {
+        matchedWeight += weight;
       }
     }
 
-    // Vehicle type matching (high weight)
-    if (attributes1.vehicleType && attributes2.vehicleType) {
-      totalChecks++;
-      if (attributes1.vehicleType === attributes2.vehicleType) {
-        score += 0.3;
-      }
-    }
-
-    return totalChecks > 0 ? score / totalChecks : 0;
+    return requestedWeight > 0 ? matchedWeight / requestedWeight : 0;
   }
 
   /**
@@ -1612,8 +1619,18 @@ export class AIVideoSearchService {
       branchId?: string;
     }
   ): Promise<VideoSearchResult[]> {
-    const threshold = options?.threshold || 0.7;
-    const limit = options?.limit || 50;
+    if (
+      !Array.isArray(referenceEmbedding) ||
+      referenceEmbedding.length === 0 ||
+      referenceEmbedding.length > 4_096 ||
+      !referenceEmbedding.every((value) => Number.isFinite(value))
+    ) {
+      throw new Error("invalid_reference_embedding");
+    }
+
+    const threshold = options?.threshold ?? 0.7;
+    const requestedLimit = options?.limit ?? 50;
+    const limit = Math.min(Math.max(Number.isInteger(requestedLimit) ? requestedLimit : 50, 1), 200);
 
     // Build query conditions
     const conditions: string[] = ["vm.tenant_id = $1"];
@@ -1627,13 +1644,13 @@ export class AIVideoSearchService {
     }
 
     if (options?.from) {
-      conditions.push(`vm.start_time >= $${paramIndex}::timestamptz`);
+      conditions.push(`vm.end_time >= $${paramIndex}::timestamptz`);
       params.push(options.from);
       paramIndex++;
     }
 
     if (options?.to) {
-      conditions.push(`vm.end_time <= $${paramIndex}::timestamptz`);
+      conditions.push(`vm.start_time <= $${paramIndex}::timestamptz`);
       params.push(options.to);
       paramIndex++;
     }
@@ -1676,8 +1693,8 @@ export class AIVideoSearchService {
        LEFT JOIN cameras c ON c.id = vm.camera_id
        WHERE ${whereClause}
        ORDER BY vm.start_time DESC
-       LIMIT ${limit * 3}`,
-      params
+       LIMIT $${paramIndex}`,
+      [...params, limit * 3]
     );
 
     // Calculate similarities and filter
@@ -1687,9 +1704,21 @@ export class AIVideoSearchService {
       const objectEmbedding = row.embedding;
       
       // Parse embedding if stored as JSONB
-      const embedding = Array.isArray(objectEmbedding) 
-        ? objectEmbedding 
-        : JSON.parse(objectEmbedding);
+      let embedding: number[];
+      try {
+        embedding = Array.isArray(objectEmbedding)
+          ? objectEmbedding
+          : JSON.parse(objectEmbedding);
+      } catch {
+        continue;
+      }
+      if (
+        !Array.isArray(embedding) ||
+        embedding.length !== referenceEmbedding.length ||
+        !embedding.every((value) => typeof value === "number" && Number.isFinite(value))
+      ) {
+        continue;
+      }
 
       // Calculate cosine similarity
       const similarity = this.cosineSimilarity(referenceEmbedding, embedding);

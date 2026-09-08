@@ -77,6 +77,7 @@ export class VideoSearchIntegrationPipeline {
         console.error("Error processing indexing queue:", error);
       });
     }, intervalMs);
+    this.processingInterval.unref();
   }
 
   /**
@@ -131,8 +132,15 @@ export class VideoSearchIntegrationPipeline {
             embeddingsGenerated++;
           } catch (error) {
             console.warn(`Failed to generate embedding for object ${obj.objectId}:`, error);
-            // Generate from attributes as fallback
-            obj.embedding = await this.aiVideoSearch.generateAttributeEmbedding(obj.attributes);
+            // Embeddings improve similarity search but are not required for
+            // attribute and natural-language retrieval. Keep indexing the
+            // detection if both embedding providers are unavailable.
+            try {
+              obj.embedding = await this.aiVideoSearch.generateAttributeEmbedding(obj.attributes);
+              embeddingsGenerated++;
+            } catch (fallbackError) {
+              console.warn(`Failed to generate fallback embedding for object ${obj.objectId}:`, fallbackError);
+            }
           }
         }
       }
@@ -295,13 +303,24 @@ export class VideoSearchIntegrationPipeline {
    * Process pending indexing jobs from queue
    */
   private async processIndexingQueue(): Promise<void> {
-    // Get pending jobs
+    // Claim work and transition it to processing in one statement. A plain
+    // SELECT ... FOR UPDATE releases its lock at statement end when no
+    // transaction is held, allowing another application instance to process
+    // the same segment.
     const result = await this.pool.query(
-      `SELECT * FROM video_indexing_queue
-       WHERE status = 'pending'
-       ORDER BY priority DESC, created_at ASC
-       LIMIT 10
-       FOR UPDATE SKIP LOCKED`
+      `WITH claimed AS (
+         SELECT id
+         FROM video_indexing_queue
+         WHERE status = 'pending'
+         ORDER BY priority DESC, created_at ASC
+         LIMIT 10
+         FOR UPDATE SKIP LOCKED
+       )
+       UPDATE video_indexing_queue queue
+       SET status = 'processing', started_at = NOW()
+       FROM claimed
+       WHERE queue.id = claimed.id
+       RETURNING queue.*`
     );
 
     if (result.rows.length === 0) {
@@ -320,14 +339,6 @@ export class VideoSearchIntegrationPipeline {
    */
   private async processIndexingJob(job: any): Promise<void> {
     try {
-      // Mark as processing
-      await this.pool.query(
-        `UPDATE video_indexing_queue
-         SET status = 'processing', started_at = NOW()
-         WHERE id = $1`,
-        [job.id]
-      );
-
       // Get objects from analytics engine or detection service
       const objects = await this.fetchObjectsForSegment(
         job.tenant_id,

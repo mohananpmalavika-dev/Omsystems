@@ -82,13 +82,14 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const handleSearch = async () => {
-    if (!inputValue.trim()) return;
+  const handleSearch = async (rawQuery = inputValue) => {
+    const query = rawQuery.trim();
+    if (query.length < 3 || loading) return;
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
-      content: inputValue,
+      content: query,
       timestamp: new Date(),
     };
 
@@ -98,27 +99,31 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
 
     try {
       // Perform search
-      const response = await fetch("/api/control/v1/ai/video/search", {
+      const response = await fetch("/api/control/v1/ai-video-search/natural-language", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          query: inputValue,
+          query,
           branchId,
           from: getTimeRangeStart(filters.timeRange),
           to: new Date().toISOString(),
+          minConfidence: filters.minConfidence / 100,
           limit: 10,
         }),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Video search failed");
+      }
       const results: SearchResult[] = data.results || [];
 
       // Create assistant response
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: generateResponseMessage(results, inputValue),
+        content: generateResponseMessage(results, query),
         results,
         timestamp: new Date(),
       };
@@ -379,7 +384,7 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                   size="sm"
                   onClick={() => {
                     setInputValue(search);
-                    setTimeout(() => handleSearch(), 100);
+                    void handleSearch(search);
                   }}
                   className="text-xs"
                 >
@@ -397,7 +402,7 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                 disabled={loading}
                 className="flex-1"
               />
-              <Button onClick={handleSearch} disabled={loading || !inputValue.trim()}>
+              <Button onClick={() => void handleSearch()} disabled={loading || inputValue.trim().length < 3}>
                 <Send className="h-4 w-4" />
               </Button>
             </div>

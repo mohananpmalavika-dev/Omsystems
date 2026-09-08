@@ -148,26 +148,39 @@ export class PlaybackEngine {
     // Get playback group if groupId provided
     let timeOffsets: Record<string, number> = {};
     let layout = input.layout ?? "grid";
-    let masterCameraId = input.masterCameraId ?? input.cameraIds[0];
+    let cameraIds = [...new Set(input.cameraIds)];
+    let masterCameraId = input.masterCameraId ?? cameraIds[0];
 
     if (input.groupId) {
       const groupResult = await this.pool.query(
-        `SELECT * FROM playback_groups WHERE id = $1 AND tenant_id = $2`,
+        `SELECT camera_ids, master_camera_id, time_offsets, layout
+         FROM playback_groups
+         WHERE id = $1 AND tenant_id = $2`,
         [input.groupId, input.tenantId],
       );
 
-      if (groupResult.rows[0]) {
-        const group = groupResult.rows[0];
-        timeOffsets = group.time_offsets || {};
-        layout = group.layout || layout;
-        masterCameraId = group.master_camera_id || masterCameraId;
+      if (!groupResult.rows[0]) {
+        throw new Error("playback_group_not_found");
       }
+      const group = groupResult.rows[0];
+      const groupCameraIds = Array.isArray(group.camera_ids) ? group.camera_ids : [];
+      if (cameraIds.length === 0) cameraIds = groupCameraIds;
+      timeOffsets = parseTimeOffsets(group.time_offsets);
+      layout = group.layout || layout;
+      masterCameraId = input.masterCameraId ?? group.master_camera_id ?? masterCameraId;
+    }
+
+    if (cameraIds.length === 0 || cameraIds.length > 16) {
+      throw new Error("invalid_playback_camera_selection");
+    }
+    if (!masterCameraId || !cameraIds.includes(masterCameraId)) {
+      masterCameraId = cameraIds[0];
     }
 
     // Get authoritative recording search result from RecordingIndex
     const searchResult = await recordingIndexService.findRecording({
       tenantId: input.tenantId,
-      cameraIds: input.cameraIds,
+      cameraIds,
       from: new Date(input.fromTime),
       to: new Date(input.toTime),
       includeKeyframes: true,
@@ -201,7 +214,7 @@ export class PlaybackEngine {
           cameraId: camRes.cameraId,
           name: cameraResult.rows[0]?.name || camRes.cameraId,
           segments: mappedSegments,
-          timeOffset: timeOffsets[camRes.cameraId] || 0,
+          timeOffset: normalizeTimeOffset(timeOffsets[camRes.cameraId]),
         };
       }),
     );
@@ -209,7 +222,7 @@ export class PlaybackEngine {
     return {
       groupId: input.groupId || `temp-${Date.now()}`,
       cameras,
-      masterCameraId: masterCameraId!,
+      masterCameraId,
       fromTime: input.fromTime,
       toTime: input.toTime,
       layout,
@@ -330,13 +343,15 @@ export class PlaybackEngine {
       name: string;
       description?: string;
       cameraCount: number;
+      cameraIds: string[];
+      masterCameraId: string;
       layout: string;
       createdAt: string;
     }>
   > {
     const result = await this.pool.query(
       `SELECT 
-         pg.id, pg.name, pg.description, pg.layout,
+         pg.id, pg.name, pg.description, pg.layout, pg.camera_ids, pg.master_camera_id,
          array_length(pg.camera_ids, 1) as camera_count,
          pg.created_at
        FROM playback_groups pg
@@ -351,6 +366,8 @@ export class PlaybackEngine {
       name: row.name,
       description: row.description,
       cameraCount: row.camera_count || 0,
+      cameraIds: Array.isArray(row.camera_ids) ? row.camera_ids : [],
+      masterCameraId: row.master_camera_id,
       layout: row.layout,
       createdAt: new Date(row.created_at).toISOString(),
     }));
@@ -518,6 +535,29 @@ export class PlaybackEngine {
       totalBytes: parseInt(row.total_bytes || "0", 10),
     };
   }
+}
+
+function parseTimeOffsets(value: unknown): Record<string, number> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, number>;
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as Record<string, number>
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function normalizeTimeOffset(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && Math.abs(value) <= 300_000
+    ? value
+    : 0;
 }
 
 function mapPlaybackSession(row: any): PlaybackSession {

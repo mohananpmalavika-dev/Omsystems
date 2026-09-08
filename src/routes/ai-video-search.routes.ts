@@ -16,10 +16,12 @@ import { AIVideoSearchService } from "../services/ai-video-search.js";
 import { VideoSearchIntegrationPipeline } from "../services/video-search-integration.js";
 
 const nlSearchSchema = z.object({
-  query: z.string().min(3).max(500),
+  query: z.string().trim().min(3).max(500),
   branchId: z.string().uuid().optional(),
+  cameraIds: z.array(z.string().uuid()).min(1).max(100).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  minConfidence: z.number().min(0).max(1).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 
@@ -37,7 +39,7 @@ const attributeSearchSchema = z.object({
     licensePlate: z.string().optional(),
   }),
   branchId: z.string().uuid().optional(),
-  cameraIds: z.array(z.string().uuid()).optional(),
+  cameraIds: z.array(z.string().uuid()).max(100).optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
   minConfidence: z.number().min(0).max(1).optional(),
@@ -46,7 +48,7 @@ const attributeSearchSchema = z.object({
 
 const similaritySearchSchema = z.object({
   referenceObjectId: z.string().optional(),
-  referenceEmbedding: z.array(z.number()).optional(),
+  referenceEmbedding: z.array(z.number().finite()).min(1).max(4096).optional(),
   objectType: z.enum(["person", "vehicle", "object", "animal"]).optional(),
   threshold: z.number().min(0).max(1).default(0.7),
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -71,12 +73,23 @@ const bulkReindexSchema = z.object({
   priority: z.number().int().min(1).max(1000).default(50),
 });
 
+const maxSearchWindowMs = 31 * 24 * 60 * 60 * 1000;
+
+function hasValidSearchWindow(from?: string, to?: string): boolean {
+  if (!from || !to) return true;
+  const start = new Date(from).getTime();
+  const end = new Date(to).getTime();
+  return Number.isFinite(start) && Number.isFinite(end) && end > start && end - start <= maxSearchWindowMs;
+}
+
 export async function registerAIVideoSearchRoutes(
   app: FastifyInstance,
   pool: Pool
 ) {
   const aiVideoSearch = new AIVideoSearchService(pool);
   const integrationPipeline = new VideoSearchIntegrationPipeline(pool);
+  integrationPipeline.start();
+  app.addHook("onClose", async () => integrationPipeline.stop());
 
   /**
    * Natural language video search
@@ -86,14 +99,20 @@ export async function registerAIVideoSearchRoutes(
     const body = nlSearchSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
 
+    if (!hasValidSearchWindow(body.from, body.to)) {
+      return reply.code(400).send({ error: "invalid_time_range" });
+    }
+
     try {
       const results = await aiVideoSearch.searchByNaturalLanguage(
         tenantId,
         body.query,
         {
           branchId: body.branchId,
+          cameraIds: body.cameraIds,
           from: body.from,
           to: body.to,
+          minConfidence: body.minConfidence,
           limit: body.limit,
         }
       );
@@ -122,6 +141,10 @@ export async function registerAIVideoSearchRoutes(
   app.post("/v1/ai-video-search/attributes", async (request, reply) => {
     const body = attributeSearchSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
+
+    if (!hasValidSearchWindow(body.from, body.to)) {
+      return reply.code(400).send({ error: "invalid_time_range" });
+    }
 
     try {
       const results = await aiVideoSearch.searchByAttributes(
@@ -155,6 +178,10 @@ export async function registerAIVideoSearchRoutes(
   app.post("/v1/ai-video-search/similarity", async (request, reply) => {
     const body = similaritySearchSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
+
+    if (!hasValidSearchWindow(body.from, body.to)) {
+      return reply.code(400).send({ error: "invalid_time_range" });
+    }
 
     try {
       let results;
@@ -323,6 +350,10 @@ export async function registerAIVideoSearchRoutes(
   app.post("/v1/ai-video-search/indexing/reindex", async (request, reply) => {
     const body = bulkReindexSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
+
+    if (!hasValidSearchWindow(body.from, body.to)) {
+      return reply.code(400).send({ error: "invalid_time_range" });
+    }
 
     try {
       const result = await integrationPipeline.bulkReindex({

@@ -71,7 +71,7 @@ export function SyncedPlaybackView({
   const [currentTimes, setCurrentTimes] = useState<Record<string, number>>({});
   const videoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const syncTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const timeOffsetsRef = useRef<Record<string, number>>({});
+  const timeOffsetsRef = useRef<Record<string, number>>({}); // milliseconds
 
   // Local streams state — will be replaced when synchronized playback is loaded
   const [localStreams, setLocalStreams] = useState<CameraStream[]>(streams);
@@ -107,7 +107,34 @@ export function SyncedPlaybackView({
     else if (count <= 6) setGridLayout("2x3");
     else if (count <= 9) setGridLayout("3x3");
     else setGridLayout("4x4");
-  }, [streams.length]);
+  }, [localStreams.length]);
+
+  const syncStreamsToMaster = (masterId = masterCamera) => {
+    const masterVideo = videoRefs.current[masterId];
+    const masterStream = localStreams.find((stream) => stream.cameraId === masterId);
+    if (!masterVideo || !masterStream || !Number.isFinite(masterVideo.currentTime)) return;
+
+    const masterStartMs = new Date(masterStream.startTime).getTime();
+    if (!Number.isFinite(masterStartMs)) return;
+    const masterWallClockMs = masterStartMs + masterVideo.currentTime * 1000;
+
+    for (const stream of localStreams) {
+      if (stream.cameraId === masterId) continue;
+      const video = videoRefs.current[stream.cameraId];
+      const streamStartMs = new Date(stream.startTime).getTime();
+      if (!video || !Number.isFinite(streamStartMs) || video.readyState < HTMLMediaElement.HAVE_METADATA) continue;
+
+      const target = (masterWallClockMs + (timeOffsetsRef.current[stream.cameraId] ?? 0) - streamStartMs) / 1000;
+      const boundedTarget = Math.max(0, Math.min(target, Number.isFinite(video.duration) ? video.duration : target));
+      if (Math.abs(video.currentTime - boundedTarget) > 0.3) {
+        try {
+          video.currentTime = boundedTarget;
+        } catch {
+          // A seek can be rejected while the browser is changing source or buffering.
+        }
+      }
+    }
+  };
 
   // Sync timer for synchronized playback
   useEffect(() => {
@@ -119,27 +146,7 @@ export function SyncedPlaybackView({
     }
 
     syncTimerRef.current = setInterval(() => {
-      const masterVideo = videoRefs.current[masterCamera];
-      if (!masterVideo) return;
-
-      const masterTime = masterVideo.currentTime;
-
-      // Sync all other videos to master, applying per-camera time offsets (seconds)
-      Object.entries(videoRefs.current).forEach(([cameraId, video]) => {
-        if (cameraId === masterCamera || !video) return;
-
-        const offset = timeOffsetsRef.current[cameraId] ?? 0;
-        const target = masterTime + offset;
-        const timeDiff = Math.abs(video.currentTime - target);
-        if (timeDiff > 0.3) {
-          // More than 300ms drift
-          try {
-            video.currentTime = target;
-          } catch (e) {
-            // Some browsers throw if setting currentTime during buffering; ignore
-          }
-        }
-      });
+      syncStreamsToMaster();
     }, 500); // Check sync every 500ms
 
     return () => {
@@ -147,7 +154,7 @@ export function SyncedPlaybackView({
         clearInterval(syncTimerRef.current);
       }
     };
-  }, [isSynced, isPlaying, masterCamera]);
+  }, [isSynced, isPlaying, masterCamera, localStreams]);
 
   // Handle sync toggle
   const handleSyncToggle = () => {
@@ -157,32 +164,29 @@ export function SyncedPlaybackView({
 
     if (newSyncState && isPlaying) {
       // Immediately sync all videos to master
-      const masterVideo = videoRefs.current[masterCamera];
-      if (masterVideo) {
-        const masterTime = masterVideo.currentTime;
-        Object.entries(videoRefs.current).forEach(([cameraId, video]) => {
-          if (cameraId !== masterCamera && video) {
-            video.currentTime = masterTime;
-          }
-        });
-      }
+      syncStreamsToMaster();
     }
   };
 
   // Handle global play/pause
-  const handleGlobalPlayPause = () => {
+  const handleGlobalPlayPause = async () => {
     const newPlayState = !isPlaying;
-    setIsPlaying(newPlayState);
+    const videos = Object.values(videoRefs.current).filter((video): video is HTMLVideoElement => Boolean(video));
+    if (!newPlayState) {
+      videos.forEach((video) => video.pause());
+      setIsPlaying(false);
+      return;
+    }
 
-    Object.values(videoRefs.current).forEach((video) => {
-      if (video) {
-        if (newPlayState) {
-          video.play();
-        } else {
-          video.pause();
-        }
-      }
-    });
+    syncStreamsToMaster();
+    const attempts = await Promise.allSettled(videos.map((video) => video.play()));
+    if (attempts.some((attempt) => attempt.status === "rejected")) {
+      videos.forEach((video) => video.pause());
+      showToast("Playback could not start. Check media access and try again.", "error");
+      setIsPlaying(false);
+      return;
+    }
+    setIsPlaying(videos.length > 0);
   };
 
   // Handle master camera change
@@ -192,15 +196,7 @@ export function SyncedPlaybackView({
 
     // If synced and playing, sync all to new master
     if (isSynced && isPlaying) {
-      const newMasterVideo = videoRefs.current[cameraId];
-      if (newMasterVideo) {
-        const masterTime = newMasterVideo.currentTime;
-        Object.entries(videoRefs.current).forEach(([id, video]) => {
-          if (id !== cameraId && video) {
-            video.currentTime = masterTime;
-          }
-        });
-      }
+      syncStreamsToMaster(cameraId);
     }
   };
 
@@ -235,11 +231,17 @@ export function SyncedPlaybackView({
 
   const handleLoadClick = async () => {
     const ids = cameraIds && cameraIds.length > 0 ? cameraIds : streams.map((s) => s.cameraId);
+    const from = new Date(fromInput);
+    const to = new Date(toInput);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || to <= from) {
+      showToast("Choose an end time after the start time.", "error");
+      return;
+    }
     try {
       await loadSyncData({
         cameraIds: ids,
-        fromTime: new Date(fromInput).toISOString(),
-        toTime: new Date(toInput).toISOString(),
+        fromTime: from.toISOString(),
+        toTime: to.toISOString(),
       });
       showToast('Synchronized playback loaded', 'success');
     } catch (err) {
@@ -256,7 +258,7 @@ export function SyncedPlaybackView({
   // Build a loader that parents can call (or auto-invoke)
   const loadSyncData = async (params?: { cameraIds?: string[]; groupId?: string; fromTime?: string; toTime?: string; masterCameraId?: string; layout?: string }) => {
     const payload = {
-      cameraIds: params?.cameraIds ?? cameraIds ?? [],
+      cameraIds: params?.groupId && params.cameraIds === undefined ? [] : (params?.cameraIds ?? cameraIds ?? []),
       groupId: params?.groupId ?? groupId,
       fromTime: params?.fromTime ?? fromTime,
       toTime: params?.toTime ?? toTime,
@@ -265,6 +267,11 @@ export function SyncedPlaybackView({
     };
 
     if (!payload.cameraIds?.length && !payload.groupId) return;
+    const requestedFrom = new Date(String(payload.fromTime));
+    const requestedTo = new Date(String(payload.toTime));
+    if (!Number.isFinite(requestedFrom.getTime()) || !Number.isFinite(requestedTo.getTime()) || requestedTo <= requestedFrom) {
+      throw new Error("invalid_time_range");
+    }
 
     try {
       const resp = await playbackApi.getSynchronizedPlayback({
@@ -278,11 +285,17 @@ export function SyncedPlaybackView({
 
       // Expecting shape: { cameras: [{ cameraId, cameraName, segments: [{ id, startedAt, endedAt }], timeOffset }] }
       const cams = (resp?.cameras ?? []) as any[];
-      const mapped: CameraStream[] = cams.map((c) => {
-        const seg = Array.isArray(c.segments) && c.segments.length > 0 ? c.segments[0] : null;
-        const segmentId = seg?.id || seg?.segmentId || seg?.segment_id || '';
-        // store timeOffset (ms -> seconds)
-        timeOffsetsRef.current[c.cameraId] = (c.timeOffset ?? 0) / 1000;
+      const mapped: CameraStream[] = cams.flatMap((c) => {
+        const segments = Array.isArray(c.segments) ? c.segments : [];
+        const seg = segments.find((candidate) => {
+          const start = new Date(candidate.startedAt || candidate.startTime).getTime();
+          const end = new Date(candidate.endedAt || candidate.endTime).getTime();
+          return Number.isFinite(start) && Number.isFinite(end) && start <= requestedFrom.getTime() && end >= requestedFrom.getTime();
+        }) ?? segments[0];
+        if (!seg) return [];
+        const segmentId = seg.id || seg.segmentId || seg.segment_id;
+        if (!segmentId) return [];
+        timeOffsetsRef.current[c.cameraId] = Number.isFinite(c.timeOffset) ? c.timeOffset : 0;
         return {
           cameraId: c.cameraId,
           cameraName: c.cameraName || c.camera_id || c.cameraId,
@@ -297,8 +310,10 @@ export function SyncedPlaybackView({
       setLocalStreams(mapped);
 
       // Set master camera if provided by response
-      if (resp.masterCameraId) {
+      if (resp.masterCameraId && mapped.some((stream) => stream.cameraId === resp.masterCameraId)) {
         setMasterCamera(resp.masterCameraId);
+      } else if (mapped[0]) {
+        setMasterCamera(mapped[0].cameraId);
       }
     } catch (err) {
       console.error('Failed to load synchronized playback', err);
@@ -388,15 +403,19 @@ export function SyncedPlaybackView({
     };
   }, [selectedGroup, groups]);
 
-  // Auto-invoke loader when initial source is provided and autoLoad is true
+  const cameraIdsKey = (cameraIds ?? []).join(",");
+
+  // Reload when the selected cameras or requested time window changes. This
+  // keeps the displayed streams aligned with the controls that launched them.
   useEffect(() => {
     if (!autoLoad) return;
     if ((cameraIds && cameraIds.length > 0) || groupId) {
-      // fire-and-forget
       loadSyncData().catch(() => {});
     }
+    // loadSyncData is intentionally omitted: it is recreated while rendering
+    // and including it would reload on every timeline tick.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [autoLoad, cameraIdsKey, groupId, fromTime, toTime, masterCameraId]);
 
   return (
     <div className="synced-playback-view">
@@ -408,7 +427,7 @@ export function SyncedPlaybackView({
             Multi-Camera Playback
           </h3>
           <span className="camera-count">
-            {streams.length} camera{streams.length !== 1 ? "s" : ""}
+            {localStreams.length} camera{localStreams.length !== 1 ? "s" : ""}
           </span>
         </div>
 
@@ -513,7 +532,7 @@ export function SyncedPlaybackView({
           {/* Global Play/Pause */}
           <button
             className="play-button"
-            onClick={handleGlobalPlayPause}
+            onClick={() => void handleGlobalPlayPause()}
             title={isPlaying ? "Pause all" : "Play all"}
           >
             {isPlaying ? (
@@ -644,6 +663,13 @@ export function SyncedPlaybackView({
                 ref={(ref) => setVideoRef(stream.cameraId, ref)}
                 className="video-element"
                 src={`/api/recordings/play?segmentId=${encodeURIComponent(stream.segmentId)}`}
+                onLoadedMetadata={(event) => {
+                  const requestedStart = new Date(fromInput).getTime();
+                  const segmentStart = new Date(stream.startTime).getTime();
+                  if (!Number.isFinite(requestedStart) || !Number.isFinite(segmentStart)) return;
+                  const target = (requestedStart + (timeOffsetsRef.current[stream.cameraId] ?? 0) - segmentStart) / 1000;
+                  event.currentTarget.currentTime = Math.max(0, Math.min(target, event.currentTarget.duration || target));
+                }}
                 onTimeUpdate={(e) =>
                   handleTimeUpdate(
                     stream.cameraId,
@@ -708,7 +734,7 @@ export function SyncedPlaybackView({
         <div className="sync-status">
           <LinkIcon size={14} />
           <span>
-            All cameras synchronized to <strong>{streams.find((s) => s.cameraId === masterCamera)?.cameraName || "master"}</strong>
+            All cameras synchronized to <strong>{localStreams.find((s) => s.cameraId === masterCamera)?.cameraName || "master"}</strong>
           </span>
         </div>
       )}
