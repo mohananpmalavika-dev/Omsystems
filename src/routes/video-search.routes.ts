@@ -601,7 +601,14 @@ export async function registerVideoSearchRoutes(
       return syncData;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return reply.code(500).send({ error: "synced_playback_failed", details: message });
+      if (message === "playback_group_not_found") {
+        return reply.code(404).send({ error: message });
+      }
+      if (message === "invalid_playback_camera_selection") {
+        return reply.code(400).send({ error: message });
+      }
+      request.log.error({ error }, "Synchronized playback request failed");
+      return reply.code(500).send({ error: "synced_playback_failed" });
     }
   });
 
@@ -635,7 +642,7 @@ export async function registerVideoSearchRoutes(
         description: z.string().trim().max(1000).optional(),
         cameraIds: z.array(z.string().uuid()).min(1).max(16),
         masterCameraId: z.string().uuid(),
-        timeOffsets: z.record(z.number()).optional(),
+        timeOffsets: z.record(z.number().finite().min(-300_000).max(300_000)).optional(),
         layout: z.enum(["grid", "stacked", "custom"]).default("grid"),
       }).superRefine((value, ctx) => {
         if (new Set(value.cameraIds).size !== value.cameraIds.length) {
