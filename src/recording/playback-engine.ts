@@ -174,7 +174,7 @@ export class PlaybackEngine {
       throw new Error("invalid_playback_camera_selection");
     }
     if (!masterCameraId || !cameraIds.includes(masterCameraId)) {
-      masterCameraId = cameraIds[0];
+      masterCameraId = cameraIds[0] ?? "";
     }
 
     // Get authoritative recording search result from RecordingIndex
@@ -222,7 +222,7 @@ export class PlaybackEngine {
     return {
       groupId: input.groupId || `temp-${Date.now()}`,
       cameras,
-      masterCameraId,
+      masterCameraId: masterCameraId || "",
       fromTime: input.fromTime,
       toTime: input.toTime,
       layout,
