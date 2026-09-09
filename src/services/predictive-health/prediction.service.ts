@@ -266,7 +266,12 @@ export class PredictionService {
     return {
       branchId,
       period: { start, end },
-      predictions,
+      predictions: predictions.map((p) => ({
+        timestamp: p.generatedAt ?? new Date(),
+        probability: p.probability,
+        riskLevel: p.riskLevel,
+        primaryDriver: p.primaryRiskDriver ?? "Unknown",
+      })),
       events,
     };
   }

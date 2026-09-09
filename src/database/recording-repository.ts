@@ -638,7 +638,7 @@ export class RecordingRepository {
     const actualHash = await new Promise<string>((resolve, reject) => {
       const hash = createHash("sha256");
       const stream = createReadStream(storagePath);
-      stream.on("data", (chunk: Buffer) => hash.update(chunk));
+      stream.on("data", (chunk: Buffer | string) => { hash.update(chunk); });
       stream.once("error", reject);
       stream.once("end", () => resolve(hash.digest("hex")));
     });

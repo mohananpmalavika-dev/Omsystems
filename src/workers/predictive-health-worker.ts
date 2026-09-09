@@ -128,8 +128,8 @@ export class PredictiveHealthWorker {
     const result = await db.query(
       `SELECT id::text, tenant_id::text, name FROM resource_nodes WHERE type = 'branch'`,
     );
-    const branches = result.rows.map((row: any) => ({ id: row.id, tenantId: row.tenant_id, name: row.name }));
-    return (await Promise.all(branches.map(async (branch) => (await this.branchNeedsUpdate(branch.id, branch.tenantId)) ? branch : null))).filter(Boolean) as Array<{ id: string; tenantId: string; name: string }>;
+    const branches: Array<{ id: string; tenantId: string; name: string }> = result.rows.map((row: any) => ({ id: row.id, tenantId: row.tenant_id, name: row.name }));
+    return (await Promise.all(branches.map(async (branch: { id: string; tenantId: string; name: string }) => (await this.branchNeedsUpdate(branch.id, branch.tenantId)) ? branch : null))).filter(Boolean) as Array<{ id: string; tenantId: string; name: string }>;
   }
 
   /**
