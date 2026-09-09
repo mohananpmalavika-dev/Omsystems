@@ -14,6 +14,11 @@ echo "=== 1.8. Applying Database Migrations ==="
 docker exec -i sentinel-aws-postgres psql -U sentinel_admin -d sentinel_grid < /opt/sentinel-grid/database/migrations/094_portable_cameras.sql || true
 docker exec -i sentinel-aws-postgres psql -U sentinel_admin -d sentinel_grid < /opt/sentinel-grid/database/migrations/095_nbfc_ai_rules_engine.sql || true
 
+echo "=== 1.9. Ensuring .env uses HTTPS public domain ==="
+if [ -f /opt/sentinel-grid/deploy/aws/.env ]; then
+  sed -i 's|CONTROL_PLANE_PUBLIC_URL=http://.*|CONTROL_PLANE_PUBLIC_URL=https://3-7-216-169.sslip.io|g' /opt/sentinel-grid/deploy/aws/.env
+fi
+
 echo "=== 2. Building services sequentially ==="
 cd /opt/sentinel-grid/deploy/aws
 

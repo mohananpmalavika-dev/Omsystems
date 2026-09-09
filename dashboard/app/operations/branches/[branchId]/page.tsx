@@ -38,10 +38,24 @@ export default function BranchWorkspacePage() {
     setError(null);
     try {
       if (!branchId) throw new Error("Branch identifier is missing");
-      const res = await fetch(`/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, {
+      const token = typeof window !== "undefined" ? (localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")) : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["x-sentinel-session"] = token;
+      }
+      let res = await fetch(`/api/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, {
+        headers,
         cache: "no-store",
         credentials: "include",
       });
+      if (res.status === 404) {
+        res = await fetch(`/v1/operations/branches/${encodeURIComponent(branchId)}/workspace`, {
+          headers,
+          cache: "no-store",
+          credentials: "include",
+        });
+      }
       if (!res.ok) throw new Error(`Branch workspace request failed (${res.status})`);
       const data = await res.json();
       if (!data.success || !data.data) throw new Error("No authoritative branch workspace was returned");
