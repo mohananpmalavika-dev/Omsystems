@@ -67,7 +67,7 @@ function redirectToLogin() {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
     localStorage.removeItem('sentinel_login_time');
-    
+
     // Redirect to login
     const currentPath = window.location.pathname;
     if (currentPath !== '/login') {
@@ -116,7 +116,7 @@ export function refreshCookieBackedSession(): Promise<boolean> {
             sessionStorage.setItem('refreshToken', data.refreshToken);
             localStorage.setItem('refreshToken', data.refreshToken);
           }
-        } catch {}
+        } catch { }
         return true;
       }
       // 400 (missing/invalid token), 401, or 403 means session is definitively expired/unauthenticated
@@ -135,8 +135,8 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== 'undefined' 
-    ? localStorage.getItem('accessToken') 
+  const token = typeof window !== 'undefined'
+    ? localStorage.getItem('accessToken')
     : null;
 
   const headers = new Headers(options.headers);
@@ -165,7 +165,7 @@ async function fetchApi<T>(
   });
 
   let response: Response;
-  
+
   try {
     response = await send();
     if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
@@ -242,7 +242,7 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
   });
 
   let response: Response;
-  
+
   try {
     response = await send();
     if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
@@ -453,9 +453,9 @@ export type OrganizationTreeResponse = {
 
 export const organizationApi = {
   getTree: () => fetchApi<OrganizationTreeResponse>('/v1/organization/tree'),
-  
+
   getStatistics: () => fetchApi<any>('/v1/organization/statistics'),
-  
+
   listNodes: (filters?: {
     type?: string;
     parentId?: string;
@@ -467,33 +467,33 @@ export const organizationApi = {
     if (filters?.includeInactive) params.append('includeInactive', 'true');
     return fetchApi<{ data: any[] }>(`/v1/organization/nodes?${params}`);
   },
-  
+
   getNode: (id: string) => fetchApi<any>(`/v1/organization/nodes/${id}`),
-  
-  getNodePath: (id: string) => 
+
+  getNodePath: (id: string) =>
     fetchApi<{ data: any[] }>(`/v1/organization/nodes/${id}/path`),
-  
-  getDescendants: (id: string, includeInactive = false) => 
+
+  getDescendants: (id: string, includeInactive = false) =>
     fetchApi<{ data: any[] }>(
       `/v1/organization/nodes/${id}/descendants?includeInactive=${includeInactive}`
     ),
-  
-  createNode: (data: any) => 
+
+  createNode: (data: any) =>
     fetchApi<any>('/v1/organization/nodes', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
-  updateNode: (id: string, data: any) => 
+
+  updateNode: (id: string, data: any) =>
     fetchApi<any>(`/v1/organization/nodes/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
-  
-  deleteNode: (id: string) => 
+
+  deleteNode: (id: string) =>
     fetchApi<void>(`/v1/organization/nodes/${id}`, { method: 'DELETE' }),
-  
-  validateHierarchy: (parentNodeId: string, childNodeType: string) => 
+
+  validateHierarchy: (parentNodeId: string, childNodeType: string) =>
     fetchApi<{ valid: boolean }>('/v1/organization/validate-hierarchy', {
       method: 'POST',
       body: JSON.stringify({ parentNodeId, childNodeType }),
@@ -510,56 +510,56 @@ export const userApi = {
     }
     return fetchApi<{ data: any[]; total: number }>(`/v1/users?${params}`);
   },
-  
+
   get: (id: string) => fetchApi<any>(`/v1/users/${id}`),
-  
-  create: (data: any) => 
+
+  create: (data: any) =>
     fetchApi<any>('/v1/users', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
-  update: (id: string, data: any) => 
+
+  update: (id: string, data: any) =>
     fetchApi<any>(`/v1/users/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     }),
-  
-  delete: (id: string) => 
+
+  delete: (id: string) =>
     fetchApi<void>(`/v1/users/${id}`, { method: 'DELETE' }),
-  
-  assignOrganization: (userId: string, scopeNodeId: string, isPrimary = false) => 
+
+  assignOrganization: (userId: string, scopeNodeId: string, isPrimary = false) =>
     fetchApi<any>(`/v1/users/${userId}/organizations`, {
       method: 'POST',
       body: JSON.stringify({ scopeNodeId, isPrimary }),
     }),
-  
-  removeOrganization: (userId: string, nodeId: string) => 
+
+  removeOrganization: (userId: string, nodeId: string) =>
     fetchApi<void>(`/v1/users/${userId}/organizations/${nodeId}`, {
       method: 'DELETE',
     }),
-  
-  changePassword: (userId: string, currentPassword: string, newPassword: string) => 
+
+  changePassword: (userId: string, currentPassword: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/change-password`, {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
-  
-  resetPassword: (userId: string, newPassword: string) => 
+
+  resetPassword: (userId: string, newPassword: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/reset-password`, {
       method: 'POST',
       body: JSON.stringify({ newPassword }),
     }),
-  
-  unlock: (userId: string) => 
+
+  unlock: (userId: string) =>
     fetchApi<{ success: boolean }>(`/v1/users/${userId}/unlock`, {
       method: 'POST',
     }),
-  
-  getCameraAccess: (userId: string) => 
+
+  getCameraAccess: (userId: string) =>
     fetchApi<any>(`/v1/users/${userId}/camera-access`),
-  
-  getAuditLog: (userId: string, limit = 50, offset = 0) => 
+
+  getAuditLog: (userId: string, limit = 50, offset = 0) =>
     fetchApi<any>(`/v1/users/${userId}/audit-log?limit=${limit}&offset=${offset}`),
 
 };
@@ -1144,7 +1144,7 @@ export const dashboardApi = {
   getStorage: () => fetchApi<any>('/v1/dashboard/storage'),
   getAlerts: () => fetchApi<any>('/v1/dashboard/alerts'),
   getIncidents: (limit?: number) => fetchApi<any>(`/v1/dashboard/incidents${limit ? `?limit=${limit}` : ''}`),
-  getSystemHealth: (branchNodeId?: string) => 
+  getSystemHealth: (branchNodeId?: string) =>
     fetchApi<any>(`/v1/dashboard/system-health${branchNodeId ? `?branchNodeId=${branchNodeId}` : ''}`),
 };
 
@@ -1595,21 +1595,21 @@ export const bankingAnalyticsApi = {
 };
 
 export const cameraPermissionApi = {
-  listUserGrants: (userId: string) => 
+  listUserGrants: (userId: string) =>
     fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),
-  
-  listCameraGrants: (cameraId: string) => 
+
+  listCameraGrants: (cameraId: string) =>
     fetchApi<{ data: any[] }>(`/v1/cameras/${cameraId}/grants`),
-  
-  createGrant: (data: any) => 
+
+  createGrant: (data: any) =>
     fetchApi<any>('/v1/camera-grants', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
-  deleteGrant: (id: string) => 
+
+  deleteGrant: (id: string) =>
     fetchApi<void>(`/v1/camera-grants/${id}`, { method: 'DELETE' }),
-  
+
   listAccessRequests: (filters?: any) => {
     const params = new URLSearchParams();
     if (filters) {
@@ -1619,20 +1619,20 @@ export const cameraPermissionApi = {
     }
     return fetchApi<{ data: any[] }>(`/v1/camera-access-requests?${params}`);
   },
-  
-  createAccessRequest: (data: any) => 
+
+  createAccessRequest: (data: any) =>
     fetchApi<any>('/v1/camera-access-requests', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
-  reviewAccessRequest: (id: string, status: 'approved' | 'rejected', reviewNotes?: string) => 
+
+  reviewAccessRequest: (id: string, status: 'approved' | 'rejected', reviewNotes?: string) =>
     fetchApi<any>(`/v1/camera-access-requests/${id}/review`, {
       method: 'POST',
       body: JSON.stringify({ status, reviewNotes }),
     }),
-  
-  checkCameraAccess: (cameraId: string, action = 'live:view') => 
+
+  checkCameraAccess: (cameraId: string, action = 'live:view') =>
     fetchApi<{ allowed: boolean; reason: string; requiresApproval: boolean }>(
       `/v1/cameras/${cameraId}/check-access?action=${action}`
     ),
@@ -1924,7 +1924,6 @@ export const deviceConfigurationApi = {
     fetchApi<{ success: boolean; data: any }>(
       `/v1/device-configuration/templates/${encodeURIComponent(id)}${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`
     ),
-
   createGoldenTemplate: (template: any, tenantId?: string) =>
     fetchApi<{ success: boolean; data: any }>(
       `/v1/device-configuration/templates${tenantId ? `?tenantId=${encodeURIComponent(tenantId)}` : ''}`,
