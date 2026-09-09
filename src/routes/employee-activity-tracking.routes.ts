@@ -627,8 +627,8 @@ export async function registerEmployeeActivityTrackingRoutes(
         userId,
         query.startDate,
         query.endDate,
-        query.limit,
-        query.offset,
+        query.limit ?? 50,
+        query.offset ?? 0,
       );
       return { data: result.events, total: result.total, limit: query.limit, offset: query.offset };
     } catch (error) {

@@ -230,7 +230,7 @@ async function requireAccess(
     await reply.code(401).send({ error: "unauthenticated" });
     return false;
   }
-  const role = request.currentUser.role;
+  const role = request.currentUser.role ?? "";
   const tenantAdministrators = new Set(["super_admin", "company_admin", "hq_admin"]);
   const canView = tenantAdministrators.has(role) || role === "security_officer" || role === "auditor";
   const canManage = tenantAdministrators.has(role) || role === "security_officer";
@@ -914,7 +914,7 @@ export async function registerComplianceEnhancedRoutes(
       residualImpact: z.enum(["critical", "high", "medium", "low", "negligible"]),
       treatmentPlan: z.string().optional(),
     }).parse(request.body);
-    if (riskScale[body.residualLikelihood] > riskScale[existing.inherentLikelihood] || riskScale[body.residualImpact] > riskScale[existing.inherentImpact]) {
+    if ((riskScale[body.residualLikelihood] ?? 0) > (riskScale[existing.inherentLikelihood] ?? 0) || (riskScale[body.residualImpact] ?? 0) > (riskScale[existing.inherentImpact] ?? 0)) {
       return reply.code(400).send({ error: "residual_risk_exceeds_inherent_risk" });
     }
     const risk = await store.assessComplianceRisk(id, {

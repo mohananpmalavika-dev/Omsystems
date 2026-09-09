@@ -60,7 +60,7 @@ const breachTransitions: Record<string, readonly string[]> = {
 };
 
 async function requirePrivacyAccess(request: FastifyRequest, reply: FastifyReply, mode: "view" | "manage" | "report") {
-  const role = request.currentUser?.role;
+  const role = request.currentUser?.role ?? "";
   const administrators = new Set(["super_admin", "company_admin", "hq_admin"]);
   const allowed = administrators.has(role) || role === "security_officer" ||
     ((mode === "view" || mode === "report") && role === "auditor");
@@ -126,7 +126,7 @@ async function requireCameraView(
     await reply.code(404).send({ error: "camera_not_found" });
     return null;
   }
-  const decision = await store.checkAccess(request.currentUser, "device:view", camera.nodeId);
+  const decision = await store.checkAccess(request.currentUser, "live:view", camera.nodeId);
   if (!decision?.allowed) {
     await reply.code(403).send({ error: "forbidden", reason: decision?.reason ?? "access_denied" });
     return null;
@@ -205,7 +205,7 @@ export async function registerPrivacyRoutes(
     const { cameraId } = cameraParams.parse(request.params);
     const camera = await store.getCamera(cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    const decision = await store.checkAccess(request.currentUser, "device:view", camera.nodeId);
+    const decision = await store.checkAccess(request.currentUser, "live:view", camera.nodeId);
     if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
     return { data: await store.listCameraPrivacyPurposes(cameraId) };
   });
@@ -245,7 +245,7 @@ export async function registerPrivacyRoutes(
     const { cameraId } = cameraParams.parse(request.params);
     const camera = await store.getCamera(cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    const decision = await store.checkAccess(request.currentUser, "device:view", camera.nodeId);
+    const decision = await store.checkAccess(request.currentUser, "live:view", camera.nodeId);
     if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
     const controls = await store.getCameraPrivacyControls(cameraId);
     return controls || {
@@ -365,7 +365,7 @@ export async function registerPrivacyRoutes(
     const { cameraId } = cameraParams.parse(request.params);
     const camera = await store.getCamera(cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    const decision = await store.checkAccess(request.currentUser, "device:view", camera.nodeId);
+    const decision = await store.checkAccess(request.currentUser, "live:view", camera.nodeId);
     if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
     const zones = privacyPolicyService.getStaticZones(cameraId);
     return { data: zones };
@@ -442,7 +442,7 @@ export async function registerPrivacyRoutes(
     const body = decisionSchema.parse(request.body);
     const camera = await store.getCamera(body.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
-    const cameraAccess = await store.checkAccess(request.currentUser, "device:view", camera.nodeId);
+    const cameraAccess = await store.checkAccess(request.currentUser, "live:view", camera.nodeId);
     if (!cameraAccess?.allowed) return reply.code(403).send({ error: "forbidden" });
     if (body.branchId && body.branchId !== camera.nodeId) return reply.code(400).send({ error: "decision_camera_branch_mismatch" });
     const user = request.currentUser;
@@ -453,7 +453,7 @@ export async function registerPrivacyRoutes(
       username: user.username ?? user.id,
       email: user.email ?? "",
       displayName: user.displayName ?? user.username ?? user.id,
-      roles: [user.role],
+      roles: user.role ? [user.role] : [],
       permissions: [],
       scope: { type: "ALL_BRANCHES" as const },
       authMethod: "LOCAL" as const,

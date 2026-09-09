@@ -115,7 +115,7 @@ async function requireComplianceAccess(
   reply: FastifyReply,
   mode: "view" | "manage",
 ) {
-  const role = request.currentUser?.role;
+  const role = request.currentUser?.role ?? "";
   const administrators = new Set(["super_admin", "company_admin", "hq_admin"]);
   const allowed = administrators.has(role) || role === "security_officer" ||
     (mode === "view" && role === "auditor");
