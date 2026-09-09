@@ -534,6 +534,7 @@ export interface WorkOrder {
   actionTaken?: string;
   verification?: string;
   status: WorkOrderStatus;
+  resolvedAt?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

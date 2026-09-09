@@ -707,8 +707,25 @@ export class CameraRepository {
            LIMIT 1`,
           [cameraId],
         );
-        if (fallbackAgent.rows[0]) {
-          const fb = fallbackAgent.rows[0];
+        let fb = fallbackAgent.rows[0];
+        if (!fb) {
+          const anyAgent = await this.pool.query<{
+            id: string;
+            public_media_url: string | null;
+            local_media_url: string | null;
+            status: string;
+            last_seen_at: Date | null;
+          }>(
+            `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
+             FROM edge_agents agent
+             WHERE agent.credential_revoked_at IS NULL
+               AND agent.last_seen_at >= now() - interval '10 minutes'
+             ORDER BY agent.last_seen_at DESC
+             LIMIT 1`,
+          );
+          fb = anyAgent.rows[0];
+        }
+        if (fb) {
           activeAgent = {
             ...row,
             edge_agent_id: fb.id,

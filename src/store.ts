@@ -3176,7 +3176,7 @@ export class MemoryStore {
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
-      ...(clean({ assetId: input.assetId, branchNodeId: input.branchNodeId, technician: input.technician, vendorId: input.vendorId, slaDueAt: input.slaDueAt, eta: input.eta, parts: input.parts, cost: input.cost, rootCause: input.rootCause, actionTaken: input.actionTaken, verification: input.verification }) as any),
+      ...(clean({ assetId: input.assetId, branchNodeId: input.branchNodeId, technician: input.technician, vendorId: input.vendorId, slaDueAt: input.slaDueAt, eta: input.eta, parts: input.parts, cost: input.cost, rootCause: input.rootCause, actionTaken: input.actionTaken, verification: input.verification, resolvedAt: input.resolvedAt }) as any),
     };
     this.workOrders.push(workOrder);
     return workOrder;

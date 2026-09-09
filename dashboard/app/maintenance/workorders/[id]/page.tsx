@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { maintenanceApi } from "@/lib/api-client";
 import type { MaintenanceAsset, WorkOrder } from "@/lib/types";
 
@@ -25,6 +26,7 @@ export default function WorkOrderDetailPage() {
   const [item, setItem] = useState<WorkOrder | null>(null);
   const [assets, setAssets] = useState<MaintenanceAsset[]>([]);
   const [eta, setEta] = useState("");
+  const [slaDueAt, setSlaDueAt] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +45,7 @@ export default function WorkOrderDetailPage() {
         setItem(workOrder);
         setAssets(assetResponse.data);
         setEta(toDateTimeLocal(workOrder.eta));
+        setSlaDueAt(toDateTimeLocal(workOrder.slaDueAt));
       })
       .catch((reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
@@ -66,6 +69,7 @@ export default function WorkOrderDetailPage() {
         assetId: item.assetId || null,
         severity: item.severity,
         technician: item.technician?.trim() || null,
+        slaDueAt: slaDueAt ? new Date(slaDueAt).toISOString() : null,
         eta: eta ? new Date(eta).toISOString() : null,
         rootCause: item.rootCause?.trim() || null,
         actionTaken: item.actionTaken?.trim() || null,
@@ -98,15 +102,88 @@ export default function WorkOrderDetailPage() {
     && (!needsAssignee || Boolean(item.technician?.trim()))
     && (!needsResolutionEvidence || Boolean(item.actionTaken?.trim() && item.verification?.trim()));
 
+  // Compute SLA status info
+  const now = Date.now();
+  let slaBanner = null;
+  if (item.slaDueAt && !Number.isNaN(Date.parse(item.slaDueAt))) {
+    const dueTime = Date.parse(item.slaDueAt);
+    const isClosed = ["resolved", "closed"].includes(item.status);
+    const finishTime = item.resolvedAt
+      ? Date.parse(item.resolvedAt)
+      : item.updatedAt
+      ? Date.parse(item.updatedAt)
+      : 0;
+
+    if (isClosed) {
+      const met = finishTime > 0 && finishTime <= dueTime;
+      slaBanner = (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            borderRadius: "8px",
+            background: met ? "#ecfdf5" : "#fef2f2",
+            border: `1px solid ${met ? "#a7f3d0" : "#fecaca"}`,
+            color: met ? "#065f46" : "#991b1b",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+        >
+          {met ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          <div>
+            <strong>{met ? "SLA Target Met" : "SLA Target Breached"}</strong>
+            <span style={{ display: "block", fontSize: "11px", opacity: 0.9 }}>
+              Due: {new Date(item.slaDueAt).toLocaleString()} · Resolved:{" "}
+              {new Date(finishTime).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      );
+    } else {
+      const overdue = dueTime < now;
+      const atRisk = !overdue && dueTime - now <= 4 * 3600 * 1000;
+      slaBanner = (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            padding: "12px 16px",
+            marginBottom: "16px",
+            borderRadius: "8px",
+            background: overdue ? "#fef2f2" : atRisk ? "#fffbeb" : "#eff6ff",
+            border: `1px solid ${overdue ? "#fecaca" : atRisk ? "#fde68a" : "#bfdbfe"}`,
+            color: overdue ? "#991b1b" : atRisk ? "#92400e" : "#1e40af",
+            fontSize: "13px",
+            fontWeight: 500,
+          }}
+        >
+          {overdue ? <AlertCircle size={18} /> : <Clock size={18} />}
+          <div>
+            <strong>{overdue ? "SLA Overdue / Breached" : atRisk ? "SLA At Risk (<4h Remaining)" : "Active In SLA"}</strong>
+            <span style={{ display: "block", fontSize: "11px", opacity: 0.9 }}>
+              Target deadline: {new Date(item.slaDueAt).toLocaleString()}
+            </span>
+          </div>
+        </div>
+      );
+    }
+  }
+
   return (
     <main className="record-form-page work-order-form-page">
       <header className="record-form-hero">
         <div>
           <span>Field service · {item.workOrderNumber}</span>
           <h1>Work order details</h1>
-          <p>Update assignment, execution evidence, resolution, and lifecycle status.</p>
+          <p>Update assignment, execution evidence, resolution, and SLA lifecycle status.</p>
         </div>
       </header>
+
+      {slaBanner}
 
       <form className="work-order-form" onSubmit={handleSave}>
         <div className="work-order-form-grid">
@@ -158,7 +235,15 @@ export default function WorkOrderDetailPage() {
             />
           </label>
           <label className="work-order-field">
-            <span>Expected service time <em>Optional</em></span>
+            <span>SLA Target Deadline <em>Optional</em></span>
+            <input
+              type="datetime-local"
+              value={slaDueAt}
+              onChange={(event) => setSlaDueAt(event.target.value)}
+            />
+          </label>
+          <label className="work-order-field">
+            <span>Expected service time (ETA) <em>Optional</em></span>
             <input
               type="datetime-local"
               value={eta}

@@ -178,6 +178,7 @@ export class EdgeLiveGateway {
       void this.handle(request, response).catch((error) => {
         logger.error("Edge live gateway request failed", { error: error instanceof Error ? error.message : String(error) });
         if (!response.headersSent) {
+          setCorsHeaders(request, response);
           if (error instanceof TalkbackTransportError) sendJson(response, error.status, { error: error.code });
           else sendJson(response, 502, { error: "media_gateway_failure" });
         }
@@ -332,17 +333,25 @@ export class EdgeLiveGateway {
     }
     response.setHeader("Vary", "Origin");
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
-    const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
-    const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
-      method: request.method ?? "GET",
-      headers: forwardMediaHeaders(request.headers),
-    });
-    response.statusCode = upstream.status;
-    for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
-      const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
+    try {
+      const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
+      const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
+        method: request.method ?? "GET",
+        headers: forwardMediaHeaders(request.headers),
+      });
+      response.statusCode = upstream.status;
+      for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
+        const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
+      }
+      if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
+      response.end(Buffer.from(await upstream.arrayBuffer()));
+    } catch (err) {
+      logger.error("HLS proxy failed", { error: err instanceof Error ? err.message : String(err) });
+      if (!response.headersSent) {
+        response.writeHead(502, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "hls_upstream_unavailable" }));
+      }
     }
-    if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
-    response.end(Buffer.from(await upstream.arrayBuffer()));
   }
 }
 
