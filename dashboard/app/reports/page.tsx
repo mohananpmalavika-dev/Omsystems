@@ -42,13 +42,26 @@ export default function ReportsPage(){
   const[filters,setFilters]=useState<Filters>({});
   const[deliveryConfiguration,setDeliveryConfiguration]=useState<DeliveryConfiguration|null>(null);
   
+  function getReportAuthHeaders(): Record<string, string> {
+    const token = typeof window !== "undefined"
+      ? (localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken"))
+      : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-sentinel-session"] = token;
+    }
+    return headers;
+  }
+
   const load=useCallback(async()=>{
     try{
+    const authHeaders = getReportAuthHeaders();
     const[scheduleResponse,runResponse,templateResponse,deliveryResponse]=await Promise.all([
-      fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),
-      fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"}),
-      fetch("/api/control/v1/reports/operational/templates",{cache:"no-store"}),
-      fetch("/api/control/v1/reports/operational/delivery-configuration",{cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/schedules",{headers: authHeaders, credentials: "include", cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/runs?limit=100",{headers: authHeaders, credentials: "include", cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/templates",{headers: authHeaders, credentials: "include", cache:"no-store"}),
+      fetch("/api/control/v1/reports/operational/delivery-configuration",{headers: authHeaders, credentials: "include", cache:"no-store"}),
     ]);
     if(!scheduleResponse.ok||!runResponse.ok||!templateResponse.ok||!deliveryResponse.ok)throw new Error("Unable to refresh report data. Check your reporting access and try again.");
     setSchedules((await scheduleResponse.json()).data??[]);
@@ -76,7 +89,8 @@ export default function ReportsPage(){
     setMessage("");setError("");setSubmitting("schedule");
     try{const response=await fetch("/api/control/v1/reports/operational/schedules",{
       method:"POST",
-      headers:{"content-type":"application/json"},
+      headers:{"content-type":"application/json", ...getReportAuthHeaders()},
+      credentials: "include",
       body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})
     });
     if(!response.ok)throw new Error(await responseError(response,"Could not save schedule."));
@@ -90,7 +104,8 @@ export default function ReportsPage(){
     setMessage("");setError("");setSubmitting("run");
     try{const response=await fetch("/api/control/v1/reports/operational/runs",{
       method:"POST",
-      headers:{"content-type":"application/json"},
+      headers:{"content-type":"application/json", ...getReportAuthHeaders()},
+      credentials: "include",
       body:JSON.stringify(payload())
     });
     if(!response.ok)throw new Error(await responseError(response,"Could not queue report."));
@@ -102,7 +117,11 @@ export default function ReportsPage(){
   const remove=async(id:string)=>{
     if(!window.confirm("Delete this daily schedule? Existing report history will be retained."))return;
     setError("");setMessage("");setSubmitting("delete");
-    try{const response=await fetch(`/api/control/v1/reports/operational/schedules/${encodeURIComponent(id)}`,{method:"DELETE"});if(!response.ok)throw new Error(await responseError(response,"Could not delete schedule."));setMessage("Schedule deleted.");await load();}catch(cause){setError(cause instanceof Error?cause.message:"Could not delete schedule.");}finally{setSubmitting(null);}
+    try{const response=await fetch(`/api/control/v1/reports/operational/schedules/${encodeURIComponent(id)}`,{
+      method:"DELETE",
+      headers: getReportAuthHeaders(),
+      credentials: "include",
+    });if(!response.ok)throw new Error(await responseError(response,"Could not delete schedule."));setMessage("Schedule deleted.");await load();}catch(cause){setError(cause instanceof Error?cause.message:"Could not delete schedule.");}finally{setSubmitting(null);}
   };
   const validateRequest=(requireScheduleName:boolean)=>{if(!formats.length){setError("Select at least one export format.");return false;}if(requireScheduleName&&!name.trim()){setError("Provide a schedule name.");return false;}const invalid=recipients.split(",").map((item)=>item.trim()).filter(Boolean).find((item)=>!/^\S+@\S+\.\S+$/.test(item));if(invalid){setError(`Invalid recipient email: ${invalid}`);return false;}return true;};
   

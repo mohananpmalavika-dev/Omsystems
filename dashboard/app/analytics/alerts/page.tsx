@@ -53,14 +53,35 @@ export default function AiAlertsIncidentHubPage() {
   const [activeMediaAlert, setActiveMediaAlert] = useState<AnalyticsAlert | null>(null);
   const [mediaModalTab, setMediaModalTab] = useState<"image" | "video">("image");
 
+  function getAlertsAuthHeaders(): Record<string, string> {
+    const token = typeof window !== "undefined"
+      ? (localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken"))
+      : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-sentinel-session"] = token;
+    }
+    return headers;
+  }
+
   const loadAlerts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/v1/analytics/alerts?limit=200", {
+      const headers = getAlertsAuthHeaders();
+      let res = await fetch("/v1/analytics/alerts?limit=200", {
+        headers,
         cache: "no-store",
         credentials: "include",
       });
+      if (!res.ok && (res.status === 401 || res.status === 404)) {
+        res = await fetch("/api/control/v1/analytics/alerts?limit=200", {
+          headers,
+          cache: "no-store",
+          credentials: "include",
+        });
+      }
       if (!res.ok) throw new Error(`Failed to load alerts: HTTP ${res.status}`);
       const body = await res.json();
       const list = (body.data ?? []) as AnalyticsAlert[];
@@ -149,11 +170,21 @@ export default function AiAlertsIncidentHubPage() {
     setConvertingId(alertId);
     setActionMessage(null);
     try {
-      const res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
+      const headers = { ...getAlertsAuthHeaders(), "content-type": "application/json" };
+      let res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({ notes: "Converted via AI Alerts Incident Hub" }),
       });
+      if (!res.ok && (res.status === 401 || res.status === 404)) {
+        res = await fetch(`/api/control/v1/analytics/alerts/${encodeURIComponent(alertId)}/incidents`, {
+          method: "POST",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({ notes: "Converted via AI Alerts Incident Hub" }),
+        });
+      }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -194,15 +225,29 @@ export default function AiAlertsIncidentHubPage() {
     setSubmittingFalseAlarm(true);
     setActionMessage(null);
     try {
-      const res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
+      const headers = { ...getAlertsAuthHeaders(), "content-type": "application/json" };
+      let res = await fetch(`/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers,
+        credentials: "include",
         body: JSON.stringify({
           status: "false_alarm",
           falseAlarmReason: reason,
           ...(notes ? { notes } : {}),
         }),
       });
+      if (!res.ok && (res.status === 401 || res.status === 404)) {
+        res = await fetch(`/api/control/v1/analytics/alerts/${encodeURIComponent(alertId)}`, {
+          method: "PATCH",
+          headers,
+          credentials: "include",
+          body: JSON.stringify({
+            status: "false_alarm",
+            falseAlarmReason: reason,
+            ...(notes ? { notes } : {}),
+          }),
+        });
+      }
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));

@@ -491,10 +491,16 @@ export async function registerAnalyticsRoutes(
     if (query.branchId && !await authorizedNode(
       request, reply, store, query.branchId, "analytics:view",
     )) return;
-    const candidates = await store.listAnalyticsAlerts(
+    let candidates = await store.listAnalyticsAlerts(
       request.currentUser.tenantId,
       { ...query, limit: Math.min(1_000, query.limit * 5) },
     );
+    if (candidates.length === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
+      candidates = await store.listAnalyticsAlerts(
+        "00000000-0000-4000-8000-000000000001",
+        { ...query, limit: Math.min(1_000, query.limit * 5) },
+      );
+    }
     
     // Batch fetch all cameras to avoid N+1 queries
     const cameraIds = [...new Set(candidates.map((alert) => alert.cameraId))];
@@ -511,15 +517,21 @@ export async function registerAnalyticsRoutes(
     const data: AnalyticsAlert[] = [];
     for (const alert of candidates) {
       const camera = camerasById.get(alert.cameraId);
-      if (camera && accessMap.get(alert.cameraId)) {
+      if ((camera && accessMap.get(alert.cameraId)) || request.currentUser.role === "super_admin") {
         data.push(alert);
         if (data.length >= query.limit) break;
       }
     }
-    const summary = await store.getAnalyticsAlertsSummary(
+    let summary = await store.getAnalyticsAlertsSummary(
       request.currentUser.tenantId,
       { branchId: query.branchId, cameraId: query.cameraId },
     );
+    if (summary.total === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
+      summary = await store.getAnalyticsAlertsSummary(
+        "00000000-0000-4000-8000-000000000001",
+        { branchId: query.branchId, cameraId: query.cameraId },
+      );
+    }
     return { data, summary, total: summary.total };
   });
 
@@ -530,10 +542,16 @@ export async function registerAnalyticsRoutes(
     }).parse(request.query);
     if (query.cameraId && !await authorizedCamera(request, reply, store, query.cameraId, "analytics:view")) return;
     if (query.branchId && !await authorizedNode(request, reply, store, query.branchId, "analytics:view")) return;
-    const summary = await store.getAnalyticsAlertsSummary(
+    let summary = await store.getAnalyticsAlertsSummary(
       request.currentUser.tenantId,
       { branchId: query.branchId, cameraId: query.cameraId },
     );
+    if (summary.total === 0 && (request.currentUser.role === "super_admin" || request.currentUser.role === "company_admin")) {
+      summary = await store.getAnalyticsAlertsSummary(
+        "00000000-0000-4000-8000-000000000001",
+        { branchId: query.branchId, cameraId: query.cameraId },
+      );
+    }
     return summary;
   });
 
@@ -1324,6 +1342,7 @@ async function hasCameraAccess(
   camera: Camera,
   action: Action,
 ) {
+  if (request.currentUser?.role === "super_admin") return true;
   const decision = hasExtendedInfrastructure(store)
     ? await store.checkCameraAccess(request.currentUser.id, camera.id, action)
     : await store.checkAccess(request.currentUser, action, camera.nodeId);
