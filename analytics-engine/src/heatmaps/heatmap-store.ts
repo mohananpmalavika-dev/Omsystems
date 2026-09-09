@@ -138,7 +138,7 @@ export class HeatmapStore {
                 bucket.tenantId === tenantId &&
                 bucket.cameraId === cameraId &&
                 bucket.metric === metric &&
-                bucket.bucketStart >= from &&
+                bucket.bucketEnd > from &&
                 bucket.bucketStart < to
             ) {
                 results.push(bucket);
@@ -151,7 +151,7 @@ export class HeatmapStore {
                 stored.tenantId === tenantId &&
                 stored.cameraId === cameraId &&
                 stored.metric === metric &&
-                stored.bucketStart.getTime() >= from &&
+                stored.bucketEnd.getTime() > from &&
                 stored.bucketStart.getTime() < to
             ) {
                 const bucket = await this.decompressBucket(stored);
@@ -222,21 +222,16 @@ export class HeatmapStore {
             return;
         }
 
-        const buckets = Array.from(this.pending.values());
+        const buckets = Array.from(this.pending.entries());
         
-        for (const bucket of buckets) {
+        for (const [key, bucket] of buckets) {
             const stored = await this.compressBucket(bucket);
-            const key = this.getBucketKey(
-                bucket.tenantId,
-                bucket.cameraId,
-                bucket.metric,
-                bucket.bucketStart,
-            );
-            
             this.cache.set(key, stored);
+            // Do not discard a replacement queued while compression awaited.
+            if (this.pending.get(key) === bucket) {
+                this.pending.delete(key);
+            }
         }
-
-        this.pending.clear();
     }
 
     /**
@@ -334,13 +329,18 @@ export class HeatmapStore {
         cameraId: string,
         metric: HeatmapMetric,
     ): Promise<void> {
-        const totalSize = this.cache.size + this.pending.size;
+        const matching = (bucket: Pick<HeatmapBucket, 'tenantId' | 'cameraId' | 'metric'>) =>
+            bucket.tenantId === tenantId && bucket.cameraId === cameraId && bucket.metric === metric;
+        const totalSize = [
+            ...this.cache.values(),
+            ...this.pending.values(),
+        ].filter(matching).length;
         
         if (totalSize <= this.config.maxStoredBuckets) {
             return;
         }
 
-        // Find oldest bucket for this camera/metric
+        // Find the oldest bucket for this camera/metric across both tiers.
         let oldestKey: string | null = null;
         let oldestTime = Infinity;
 
@@ -358,8 +358,16 @@ export class HeatmapStore {
             }
         }
 
+        for (const [key, bucket] of this.pending.entries()) {
+            if (matching(bucket) && bucket.bucketStart < oldestTime) {
+                oldestTime = bucket.bucketStart;
+                oldestKey = key;
+            }
+        }
+
         if (oldestKey) {
             this.cache.delete(oldestKey);
+            this.pending.delete(oldestKey);
         }
     }
 

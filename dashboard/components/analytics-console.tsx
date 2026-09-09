@@ -93,8 +93,10 @@ export function AnalyticsConsole() {
   }, [branchId]);
 
   useEffect(() => {
+    let active = true;
     void Promise.all([cameraInventoryApi.listBranches("analytics:view"), analyticsApi.capabilities()])
       .then(([{ data }, catalog]) => {
+        if (!active) return;
         setBranches(data as Branch[]);
         setBranchId(data[0]?.id ?? "");
         setCapabilityDomains(catalog.domains ?? []);
@@ -102,38 +104,54 @@ export function AnalyticsConsole() {
         setAutomaticCapabilityCount(catalog.cameraDeployment?.automatic?.length ?? 0);
         setSetupRequiredCount(catalog.cameraDeployment?.setupRequired?.length ?? 0);
       })
-      .catch((error) => setMessage({ kind: "error", text: readable(error) }))
-      .finally(() => setLoading(false));
+      .catch((error) => { if (active) setMessage({ kind: "error", text: readable(error) }); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
+    let active = true;
     void analyticsApi.engineHealth()
-      .then((health) => setEngineState(health.status === "ok" || health.status === "degraded" || health.status === "online" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline"))
-      .catch((error) => setEngineState(error instanceof Error && error.message.includes("unconfigured") ? "unconfigured" : "offline"));
+      .then((health) => { if (active) setEngineState(health.status === "ok" || health.status === "degraded" || health.status === "online" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline"); })
+      .catch((error) => { if (active) setEngineState(error instanceof Error && error.message.includes("unconfigured") ? "unconfigured" : "offline"); });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
     if (!branchId) return;
+    let active = true;
     setLoading(true);
     setCameraId("");
     void Promise.all([
       cameraInventoryApi.listByBranch(branchId, "analytics:view"),
-      analyticsApi.listAlerts({ branchId, status: statusFilter || undefined, limit: 100 }),
       analyticsApi.branchSummary(branchId, {
         from: new Date(Date.now() - 24 * 60 * 60 * 1_000).toISOString(),
         to: new Date().toISOString(),
       }),
-    ]).then(([cameraResponse, alertResponse, summaryResponse]) => {
+    ]).then(([cameraResponse, summaryResponse]) => {
+      if (!active) return;
       const nextCameras = cameraResponse.data as CameraType[];
       setCameras(nextCameras);
       setCameraId(nextCameras[0]?.id ?? "");
-      setAlerts(alertResponse.data as AnalyticsAlert[]);
-      setSummary(alertResponse.summary as AnalyticsAlertSummary);
       setObjectEvents((summaryResponse.events ?? [])
         .filter((event) => event.detectionType === "object")
         .slice(0, 100));
-    }).catch((error) => setMessage({ kind: "error", text: readable(error) }))
-      .finally(() => setLoading(false));
+    }).catch((error) => { if (active) setMessage({ kind: "error", text: readable(error) }); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [branchId]);
+
+  useEffect(() => {
+    if (!branchId) return;
+    let active = true;
+    void analyticsApi.listAlerts({ branchId, status: statusFilter || undefined, limit: 100 })
+      .then((response) => {
+        if (!active) return;
+        setAlerts(response.data as AnalyticsAlert[]);
+        setSummary(response.summary as AnalyticsAlertSummary);
+      })
+      .catch((error) => { if (active) setMessage({ kind: "error", text: readable(error) }); });
+    return () => { active = false; };
   }, [branchId, statusFilter]);
 
   useEffect(() => {
@@ -314,7 +332,7 @@ export function AnalyticsConsole() {
           event.preventDefault();
           if (!assistantQuery.trim()) return;
           setAssistantLoading(true);
-          void analyticsApi.askAssistant(assistantQuery).then(setAssistantResult)
+          void analyticsApi.askAssistant(assistantQuery, branchId).then(setAssistantResult)
             .catch((error) => setMessage({ kind: "error", text: readable(error) }))
             .finally(() => setAssistantLoading(false));
         }}>

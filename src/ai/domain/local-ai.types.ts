@@ -108,7 +108,7 @@ export interface FaceMatchRequest {
   branchId: string;
   embeddingVector: number[]; // 512-dimension vector
   detectedAt?: Date;
-  minSimilarityThreshold?: number; // default 0.75
+  minSimilarityThreshold?: number; // default 0.82
 }
 
 export interface FaceMatchCandidate {

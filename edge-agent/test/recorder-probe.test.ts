@@ -73,6 +73,23 @@ describe("vendor recorder probes", () => {
     expect(probe.hddStatus[0]).toMatchObject({ raidStatus: "Optimal", raidLevel: "RAID1" });
   });
 
+  it("recognizes table.Drive storage returned by Dahua-family recorder firmware", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response("deviceType=DH-XVR\nserialNumber=CP1"))
+      .mockResolvedValueOnce(new Response("table.Drive[0].Name=SATA1\ntable.Drive[0].Capacity=4000GB\ntable.Drive[0].Health=Normal\ntable.Drive[0].SmartStatus=Passed"))
+      .mockResolvedValueOnce(new Response("ChannelTitle[0].Name=Camera 1"))
+      .mockResolvedValueOnce(new Response("result="))
+      .mockResolvedValueOnce(new Response("object=0"))
+      .mockResolvedValueOnce(new Response("OK"))
+      .mockResolvedValueOnce(new Response("found=0"))
+      .mockResolvedValueOnce(new Response("OK"));
+    vi.stubGlobal("fetch", fetcher);
+
+    const probe = await probeRecorder({ id: "cp", name: "CP DVR", deviceType: "dvr", vendor: "cp-plus", host: "192.0.2.2", port: 80 }, 1000);
+
+    expect(probe.hddStatus).toEqual([expect.objectContaining({ diskNo: 1, Name: "SATA1", Capacity: "4000GB", SmartStatus: "Passed" })]);
+  });
+
   it("uses a recent ONVIF Search summary as activity evidence", async () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response("<GetDeviceInformationResponse><Model>Generic NVR</Model><SerialNumber>ONVIF1</SerialNumber><FirmwareVersion>1.0</FirmwareVersion></GetDeviceInformationResponse>"))

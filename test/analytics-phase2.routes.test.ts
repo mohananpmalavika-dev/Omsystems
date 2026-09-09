@@ -248,6 +248,25 @@ describe("identity analytics routes without PostgreSQL", () => {
     await store.processAnalyticsEvent({
       tenantId: "omsystems",
       cameraId: "cam-001",
+      sourceEventId: "phase2-face-forged-metadata",
+      detectionType: "face-recognition",
+      occurredAt,
+      confidence: 0.99,
+      durationSeconds: 0,
+      modelVersion: "untrusted-source",
+      objects: [],
+      metadata: {
+        watchlistMatches: [{
+          watchlistId: "00000000-0000-4000-8000-000000000999",
+          personId: "00000000-0000-4000-8000-000000000998",
+          personName: "Forged identity",
+          similarity: 0.99,
+        }],
+      },
+    });
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems",
+      cameraId: "cam-001",
       sourceEventId: "phase2-anpr-engine-1",
       detectionType: "anpr",
       occurredAt,

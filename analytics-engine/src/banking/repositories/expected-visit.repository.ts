@@ -112,9 +112,13 @@ export class ExpectedVisitRepository {
         }
 
         if (visit.expectedPlateRegex) {
-          const regex = new RegExp(visit.expectedPlateRegex, 'i');
-          if (regex.test(normalizedPlate)) {
-            return visit;
+          // API validation constrains newly-created patterns. This guard also
+          // protects historical/imported records from malformed expressions.
+          try {
+            const regex = new RegExp(visit.expectedPlateRegex, 'i');
+            if (regex.test(normalizedPlate)) return visit;
+          } catch {
+            continue;
           }
         }
       } else {

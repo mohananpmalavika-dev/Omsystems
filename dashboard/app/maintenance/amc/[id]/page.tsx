@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { maintenanceApi } from "@/lib/api-client";
 
+function dateInputValue(value?: string) {
+  return value?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
+}
+
 export default function AmcContractDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -36,10 +40,10 @@ export default function AmcContractDetailPage() {
       const payload = {
         contractNumber: contract.contractNumber,
         vendorId: contract.vendorId,
-        startDate: contract.startDate || undefined,
-        endDate: contract.endDate || undefined,
+        startDate: dateInputValue(contract.startDate),
+        endDate: dateInputValue(contract.endDate),
         warranty: contract.warranty || undefined,
-        coverage: contract.coverage || undefined,
+        coverage: contract.coverage?.trim(),
         exclusions: contract.exclusions || undefined,
         paymentTerms: contract.paymentTerms || undefined,
         cost: contract.cost === "" || contract.cost === undefined ? undefined : Number(contract.cost),
@@ -88,23 +92,24 @@ export default function AmcContractDetailPage() {
           <div style={{ marginBottom: 8 }}>
             <label>
               Start date<br />
-              <input type="date" value={contract.startDate ?? ""} onChange={(e) => setContract({ ...contract, startDate: e.target.value })} />
+              <input type="date" value={dateInputValue(contract.startDate)} onChange={(e) => setContract({ ...contract, startDate: e.target.value })} required />
             </label>
           </div>
           <div style={{ marginBottom: 8 }}>
             <label>
               End date<br />
-              <input type="date" value={contract.endDate ?? ""} onChange={(e) => setContract({ ...contract, endDate: e.target.value })} />
+              <input type="date" value={dateInputValue(contract.endDate)} onChange={(e) => setContract({ ...contract, endDate: e.target.value })} required min={dateInputValue(contract.startDate) || undefined} />
             </label>
           </div>
           <div style={{ marginBottom: 8 }}>
             <label>
               Status<br />
               <select value={contract.status ?? "active"} onChange={(e) => setContract({ ...contract, status: e.target.value })}>
-                <option value="active">active</option>
                 <option value="pending">pending</option>
+                <option value="active">active</option>
                 <option value="expired">expired</option>
                 <option value="suspended">suspended</option>
+                <option value="cancelled">cancelled</option>
               </select>
             </label>
           </div>
@@ -124,7 +129,7 @@ export default function AmcContractDetailPage() {
         <div style={{ marginBottom: 8 }}>
           <label>
             Coverage<br />
-            <textarea rows={3} value={contract.coverage ?? ""} onChange={(e) => setContract({ ...contract, coverage: e.target.value })} />
+            <textarea rows={3} value={contract.coverage ?? ""} onChange={(e) => setContract({ ...contract, coverage: e.target.value })} minLength={5} required />
           </label>
         </div>
         <div style={{ marginBottom: 8 }}>

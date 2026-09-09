@@ -105,7 +105,7 @@ export default function MaintenanceReportsPage() {
 
   const handleDownloadReport = async (reportId: string) => {
     try {
-      const response = await fetch(`/v1/maintenance/reports/${reportId}/download`);
+      const response = await fetch(`/api/control/v1/maintenance/reports/${encodeURIComponent(reportId)}/download`, { credentials: 'include' });
       if (!response.ok) {
         throw new Error('Download not available');
       }
@@ -126,9 +126,10 @@ export default function MaintenanceReportsPage() {
 
   const handleToggleScheduledReport = async (id: string, enabled: boolean) => {
     try {
-      const response = await fetch(`/v1/maintenance/reports/scheduled/${id}`, {
+      const response = await fetch(`/api/control/v1/maintenance/reports/scheduled/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ enabled }),
       });
 
@@ -149,8 +150,9 @@ export default function MaintenanceReportsPage() {
     }
 
     try {
-      const response = await fetch(`/v1/maintenance/reports/scheduled/${id}`, {
+      const response = await fetch(`/api/control/v1/maintenance/reports/scheduled/${encodeURIComponent(id)}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
 
       if (!response.ok) {

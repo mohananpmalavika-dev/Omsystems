@@ -63,7 +63,11 @@ export class ZoneDetector extends BaseDetector {
       const trackId = obj.trackId;
 
       // Update tracking
-      let tracked = this.trackedObjects.get(trackId);
+      // Crossing state is specific to a line. Sharing it across all line
+      // rules caused a person counted at one doorway to be suppressed at a
+      // second doorway while their track remained active.
+      const lineKey = `${config.line.start.x},${config.line.start.y}:${config.line.end.x},${config.line.end.y}:${trackId}`;
+      let tracked = this.trackedObjects.get(lineKey);
       if (!tracked) {
         tracked = {
           trackId,
@@ -71,7 +75,7 @@ export class ZoneDetector extends BaseDetector {
           positions: [],
           lastSeen: now,
         };
-        this.trackedObjects.set(trackId, tracked);
+        this.trackedObjects.set(lineKey, tracked);
       }
 
       tracked.positions.push({ x: center.x, y: center.y, timestamp: now });

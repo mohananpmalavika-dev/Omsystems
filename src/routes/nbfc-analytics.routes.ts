@@ -16,12 +16,40 @@ export function registerNbfcAnalyticsRoutes(
   const { repository, engineService } = options;
 
   function getUser(request: FastifyRequest) {
-    const user = (request as any).currentUser;
-    const headerTenant = request.headers["x-tenant-id"] as string | undefined;
-    const tenantId = user?.tenantId || headerTenant || "00000000-0000-4000-8000-000000000001";
-    const userId = user?.id || user?.userId || "00000000-0000-4000-8000-000000000201";
-    const roles = user?.roles || ["admin"];
-    return { tenantId, userId, roles, user };
+    const user = request.currentUser;
+    if (!user?.tenantId || !user.id) throw new Error("authenticated_user_required");
+    return { tenantId: user.tenantId, userId: user.id, role: user.role, user };
+  }
+
+  async function requireRuleAdministrator(request: FastifyRequest, reply: FastifyReply) {
+    const role = request.currentUser?.role;
+    const allowed = new Set([
+      "super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager",
+      "area_manager", "branch_manager", "security_officer",
+    ]);
+    if (!role || !allowed.has(role)) {
+      await reply.code(403).send({ error: "forbidden", message: "AI rule configuration requires an authorized security administrator" });
+      return false;
+    }
+    return true;
+  }
+
+  async function tenantRule(id: string, tenantId: string, reply: FastifyReply) {
+    const rule = await repository.getRule(id);
+    if (!rule || rule.tenantId !== tenantId) {
+      await reply.code(404).send({ error: "rule_not_found" });
+      return undefined;
+    }
+    return rule;
+  }
+
+  async function tenantZone(id: string, tenantId: string, reply: FastifyReply) {
+    const zone = await repository.getZone(id);
+    if (!zone || zone.tenantId !== tenantId) {
+      await reply.code(404).send({ error: "zone_not_found" });
+      return undefined;
+    }
+    return zone;
   }
 
   // ==========================================
@@ -29,7 +57,7 @@ export function registerNbfcAnalyticsRoutes(
   // ==========================================
 
   // List rules
-  app.get("/api/ai/rules", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/rules", async (request, reply) => {
     const { tenantId } = getUser(request);
     const query = request.query as any;
 
@@ -53,6 +81,7 @@ export function registerNbfcAnalyticsRoutes(
 
   // Create rule
   app.post("/api/ai/rules", async (request, reply) => {
+    if (!await requireRuleAdministrator(request, reply)) return;
     const { tenantId, userId } = getUser(request);
     const body = z.object({
       name: z.string().min(2).max(160),
@@ -71,6 +100,14 @@ export function registerNbfcAnalyticsRoutes(
       templateId: z.string().optional(),
       changeReason: z.string().default("Initial rule creation"),
     }).parse(request.body || {});
+
+    if (body.state === "ACTIVE" && !(body.branchIds?.length || body.cameraIds?.length)) {
+      return reply.code(400).send({
+        error: "scoped_activation_required",
+        message: "Active rules must target at least one branch or camera; create global policies in shadow mode first.",
+      });
+    }
+    if (body.zoneId && !await tenantZone(body.zoneId, tenantId, reply)) return;
 
     const rule = await repository.createRule({
       tenantId,
@@ -108,11 +145,23 @@ export function registerNbfcAnalyticsRoutes(
   });
 
   // Enable all NBFC rule templates across all cameras
-  app.post("/api/ai/rules/apply-all-templates", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/ai/rules/apply-all-templates", async (request, reply) => {
+    if (!await requireRuleAdministrator(request, reply)) return;
     const { tenantId, userId } = getUser(request);
+    const scope = z.object({
+      branchId: z.string().min(1).optional(),
+      cameraId: z.string().min(1).optional(),
+    }).refine((value) => Boolean(value.branchId || value.cameraId), {
+      message: "Select a branch or camera before applying templates",
+    }).parse(request.body || {});
     const templates = await repository.listTemplates();
     const existingRules = await repository.listRules({ tenantId });
-    const existingTemplateIds = new Set(existingRules.map((r) => r.templateId).filter(Boolean));
+    const rulesAtScope = existingRules.filter((rule) =>
+      scope.cameraId
+        ? rule.cameraIds.includes(scope.cameraId)
+        : Boolean(scope.branchId && rule.branchIds.includes(scope.branchId))
+    );
+    const existingTemplateIds = new Set(rulesAtScope.map((r) => r.templateId).filter(Boolean));
 
     const newlyInstantiated: any[] = [];
     for (const tmpl of templates) {
@@ -121,8 +170,8 @@ export function registerNbfcAnalyticsRoutes(
           const rule = await repository.instantiateTemplate(tmpl.id, {
             tenantId,
             name: tmpl.name,
-            branchIds: [],
-            cameraIds: [],
+            branchIds: scope.branchId ? [scope.branchId] : [],
+            cameraIds: scope.cameraId ? [scope.cameraId] : [],
             createdBy: userId,
           });
           newlyInstantiated.push(rule);
@@ -132,23 +181,24 @@ export function registerNbfcAnalyticsRoutes(
       }
     }
 
-    // Ensure all existing rules are active and enabled
-    for (const rule of existingRules) {
+    // Only alter rules already assigned to this target. A deployment for one
+    // branch must never reactivate another branch's rules.
+    for (const rule of rulesAtScope) {
       if (!rule.enabled || rule.state !== "ACTIVE") {
-        await repository.updateRule(rule.id, { enabled: true, state: "ACTIVE" }, "Batch enabled for all cameras", userId);
+        await repository.updateRule(rule.id, { enabled: true, state: "ACTIVE" }, "Batch enabled for selected scope", userId);
       }
     }
 
     immutableAuditService.append({
       tenantId,
       category: "CONFIG_CHANGED",
-      action: "ai_rules.all_enabled_for_all_cameras",
+      action: "ai_rules.templates_applied_to_scope",
       actorUserId: userId,
       actorRoles: ["admin"],
       targetResourceType: "AI_RULE",
-      targetResourceId: "all",
+      targetResourceId: scope.cameraId ?? scope.branchId!,
       outcome: "SUCCESS",
-      metadata: { totalTemplates: templates.length, newlyInstantiated: newlyInstantiated.length },
+      metadata: { totalTemplates: templates.length, newlyInstantiated: newlyInstantiated.length, scope },
       timestamp: new Date().toISOString(),
     });
 
@@ -156,20 +206,19 @@ export function registerNbfcAnalyticsRoutes(
 
     return reply.send({
       success: true,
-      message: `All ${templates.length} NBFC rules enabled across all cameras`,
+      message: `All ${templates.length} NBFC rules enabled for the selected scope`,
       totalTemplates: templates.length,
       newlyInstantiated: newlyInstantiated.length,
-      totalActiveRules: allRules.filter((r) => r.state === "ACTIVE").length,
+      totalActiveRules: allRules.filter((r) => rulesAtScope.some((scoped) => scoped.id === r.id) || newlyInstantiated.some((created) => created.id === r.id)).filter((r) => r.state === "ACTIVE").length,
     });
   });
 
   // Get rule details
-  app.get("/api/ai/rules/:id", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/rules/:id", async (request, reply) => {
     const params = request.params as { id: string };
-    const rule = await repository.getRule(params.id);
-    if (!rule) {
-      return reply.code(404).send({ error: "rule_not_found" });
-    }
+    const { tenantId } = getUser(request);
+    const rule = await tenantRule(params.id, tenantId, reply);
+    if (!rule) return;
 
     const versions = await repository.getRuleVersions(params.id);
     return reply.send({
@@ -182,6 +231,9 @@ export function registerNbfcAnalyticsRoutes(
   app.patch("/api/ai/rules/:id", async (request, reply) => {
     const { tenantId, userId } = getUser(request);
     const params = request.params as { id: string };
+    if (!await requireRuleAdministrator(request, reply)) return;
+    const existing = await tenantRule(params.id, tenantId, reply);
+    if (!existing) return;
     const body = z.object({
       name: z.string().optional(),
       description: z.string().optional(),
@@ -199,6 +251,14 @@ export function registerNbfcAnalyticsRoutes(
       actions: z.array(z.string()).optional(),
       changeReason: z.string().default("Modified rule configuration"),
     }).parse(request.body || {});
+
+    const nextBranchIds = body.branchIds ?? existing.branchIds;
+    const nextCameraIds = body.cameraIds ?? existing.cameraIds;
+    const nextState = body.state ?? existing.state;
+    if (nextState === "ACTIVE" && !(nextBranchIds.length || nextCameraIds.length)) {
+      return reply.code(400).send({ error: "scoped_activation_required", message: "Active rules must target at least one branch or camera" });
+    }
+    if (body.zoneId && !await tenantZone(body.zoneId, tenantId, reply)) return;
 
     const updated = await repository.updateRule(
       params.id,
@@ -231,6 +291,8 @@ export function registerNbfcAnalyticsRoutes(
   app.delete("/api/ai/rules/:id", async (request, reply) => {
     const { tenantId, userId } = getUser(request);
     const params = request.params as { id: string };
+    if (!await requireRuleAdministrator(request, reply)) return;
+    if (!await tenantRule(params.id, tenantId, reply)) return;
 
     const deleted = await repository.deleteRule(params.id);
     if (!deleted) {
@@ -255,8 +317,10 @@ export function registerNbfcAnalyticsRoutes(
 
   // Enable rule
   app.post("/api/ai/rules/:id/enable", async (request, reply) => {
-    const { userId } = getUser(request);
+    const { tenantId, userId } = getUser(request);
     const params = request.params as { id: string };
+    if (!await requireRuleAdministrator(request, reply)) return;
+    if (!await tenantRule(params.id, tenantId, reply)) return;
     const updated = await repository.updateRule(params.id, { state: "ACTIVE", enabled: true }, "Enabled rule", userId);
     if (!updated) return reply.code(404).send({ error: "rule_not_found" });
     return reply.send({ success: true, state: "ACTIVE" });
@@ -264,8 +328,10 @@ export function registerNbfcAnalyticsRoutes(
 
   // Disable rule
   app.post("/api/ai/rules/:id/disable", async (request, reply) => {
-    const { userId } = getUser(request);
+    const { tenantId, userId } = getUser(request);
     const params = request.params as { id: string };
+    if (!await requireRuleAdministrator(request, reply)) return;
+    if (!await tenantRule(params.id, tenantId, reply)) return;
     const updated = await repository.updateRule(params.id, { state: "INACTIVE", enabled: false }, "Disabled rule", userId);
     if (!updated) return reply.code(404).send({ error: "rule_not_found" });
     return reply.send({ success: true, state: "INACTIVE" });
@@ -273,10 +339,11 @@ export function registerNbfcAnalyticsRoutes(
 
   // Toggle shadow mode
   app.post("/api/ai/rules/:id/shadow", async (request, reply) => {
-    const { userId } = getUser(request);
+    const { tenantId, userId } = getUser(request);
     const params = request.params as { id: string };
-    const rule = await repository.getRule(params.id);
-    if (!rule) return reply.code(404).send({ error: "rule_not_found" });
+    if (!await requireRuleAdministrator(request, reply)) return;
+    const rule = await tenantRule(params.id, tenantId, reply);
+    if (!rule) return;
 
     const nextState = rule.state === "SHADOW" ? "ACTIVE" : "SHADOW";
     const updated = await repository.updateRule(params.id, { state: nextState }, `Toggled state to ${nextState}`, userId);
@@ -284,10 +351,11 @@ export function registerNbfcAnalyticsRoutes(
   });
 
   // Test rule simulation
-  app.post("/api/ai/rules/:id/test", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/ai/rules/:id/test", async (request, reply) => {
     const params = request.params as { id: string };
-    const rule = await repository.getRule(params.id);
-    if (!rule) return reply.code(404).send({ error: "rule_not_found" });
+    const { tenantId } = getUser(request);
+    const rule = await tenantRule(params.id, tenantId, reply);
+    if (!rule) return;
 
     const body = z.object({
       days: z.number().int().min(1).max(30).default(7),
@@ -303,7 +371,7 @@ export function registerNbfcAnalyticsRoutes(
   // ==========================================
 
   // List templates
-  app.get("/api/ai/rule-templates", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/rule-templates", async (request, reply) => {
     const query = request.query as { category?: string };
     const templates = await repository.listTemplates(query.category);
     return reply.send({
@@ -315,6 +383,7 @@ export function registerNbfcAnalyticsRoutes(
   // Instantiate rule from template
   app.post("/api/ai/rule-templates/:id/instantiate", async (request, reply) => {
     const { tenantId, userId } = getUser(request);
+    if (!await requireRuleAdministrator(request, reply)) return;
     const params = request.params as { id: string };
     const body = z.object({
       name: z.string().optional(),
@@ -326,6 +395,11 @@ export function registerNbfcAnalyticsRoutes(
       cooldownMs: z.number().int().min(1000).optional(),
       conditionOverrides: z.record(z.any()).optional(),
     }).parse(request.body || {});
+
+    if (!(body.branchIds?.length || body.cameraIds?.length)) {
+      return reply.code(400).send({ error: "scoped_activation_required", message: "Template rules must target at least one branch or camera" });
+    }
+    if (body.zoneId && !await tenantZone(body.zoneId, tenantId, reply)) return;
 
     const rule = await repository.instantiateTemplate(params.id, {
       tenantId,
@@ -360,7 +434,7 @@ export function registerNbfcAnalyticsRoutes(
   // 3. ZONE DESIGNER
   // ==========================================
 
-  app.get("/api/ai/zones", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/zones", async (request, reply) => {
     const { tenantId } = getUser(request);
     const query = request.query as { branchId?: string; cameraId?: string };
     const zones = await repository.listZones({
@@ -373,6 +447,7 @@ export function registerNbfcAnalyticsRoutes(
 
   app.post("/api/ai/zones", async (request, reply) => {
     const { tenantId, userId } = getUser(request);
+    if (!await requireRuleAdministrator(request, reply)) return;
     const body = z.object({
       branchId: z.string().min(1),
       cameraId: z.string().min(1),
@@ -382,7 +457,7 @@ export function registerNbfcAnalyticsRoutes(
         "RESTRICTED_AREA", "LOCKER", "STRONG_ROOM", "SERVER_ROOM",
         "ENTRANCE", "EXIT", "CASH_VAN_AREA", "ATM_AREA", "CUSTOM",
       ]),
-      polygon: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).min(2),
+      polygon: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).min(3),
     }).parse(request.body || {});
 
     const zone = await repository.createZone({
@@ -400,6 +475,9 @@ export function registerNbfcAnalyticsRoutes(
 
   app.patch("/api/ai/zones/:id", async (request, reply) => {
     const params = request.params as { id: string };
+    const { tenantId } = getUser(request);
+    if (!await requireRuleAdministrator(request, reply)) return;
+    if (!await tenantZone(params.id, tenantId, reply)) return;
     const body = z.object({
       name: z.string().optional(),
       type: z.enum([
@@ -407,7 +485,7 @@ export function registerNbfcAnalyticsRoutes(
         "RESTRICTED_AREA", "LOCKER", "STRONG_ROOM", "SERVER_ROOM",
         "ENTRANCE", "EXIT", "CASH_VAN_AREA", "ATM_AREA", "CUSTOM",
       ]).optional(),
-      polygon: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
+      polygon: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).min(3).optional(),
       enabled: z.boolean().optional(),
     }).parse(request.body || {});
 
@@ -418,6 +496,9 @@ export function registerNbfcAnalyticsRoutes(
 
   app.delete("/api/ai/zones/:id", async (request, reply) => {
     const params = request.params as { id: string };
+    const { tenantId } = getUser(request);
+    if (!await requireRuleAdministrator(request, reply)) return;
+    if (!await tenantZone(params.id, tenantId, reply)) return;
     const deleted = await repository.deleteZone(params.id);
     if (!deleted) return reply.code(404).send({ error: "zone_not_found" });
     return reply.send({ success: true, zoneId: params.id });
@@ -427,7 +508,7 @@ export function registerNbfcAnalyticsRoutes(
   // 4. REAL-TIME EVALUATION
   // ==========================================
 
-  app.post("/api/ai/evaluate", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/ai/evaluate", async (request, reply) => {
     const body = z.object({
       ruleId: z.string().min(1),
       entityKey: z.string().min(1),
@@ -436,8 +517,10 @@ export function registerNbfcAnalyticsRoutes(
       zoneId: z.string().optional(),
     }).parse(request.body || {});
 
-    const rule = await repository.getRule(body.ruleId);
-    if (!rule) return reply.code(404).send({ error: "rule_not_found" });
+    const { tenantId } = getUser(request);
+    if (!await requireRuleAdministrator(request, reply)) return;
+    const rule = await tenantRule(body.ruleId, tenantId, reply);
+    if (!rule) return;
 
     const result = await engineService.evaluateRule(rule, {
       entityKey: body.entityKey,
@@ -453,7 +536,7 @@ export function registerNbfcAnalyticsRoutes(
   // 5. HEALTH, CAPACITY & STATISTICS
   // ==========================================
 
-  app.get("/api/ai/health", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/health", async (request, reply) => {
     const { tenantId } = getUser(request);
     const stats = await repository.getLivePlatformStatistics(tenantId);
     const models = engineService.getModelRegistry();
@@ -466,13 +549,13 @@ export function registerNbfcAnalyticsRoutes(
     });
   });
 
-  app.get("/api/ai/statistics", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/statistics", async (request, reply) => {
     const { tenantId } = getUser(request);
     const stats = await repository.getLivePlatformStatistics(tenantId);
     return reply.send(stats);
   });
 
-  app.get("/api/ai/cameras", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/cameras", async (request, reply) => {
     const { tenantId } = getUser(request);
     const cameras = await repository.listAllCamerasWithBranches(tenantId);
     return reply.send({ cameras, total: cameras.length });
@@ -483,7 +566,7 @@ export function registerNbfcAnalyticsRoutes(
   // ==========================================
 
   app.post("/api/ai/feedback", async (request, reply) => {
-    const { userId } = getUser(request);
+    const { tenantId, userId } = getUser(request);
     const body = z.object({
       ruleId: z.string().optional(),
       alertId: z.string().optional(),
@@ -494,6 +577,8 @@ export function registerNbfcAnalyticsRoutes(
       ]),
       comment: z.string().optional(),
     }).parse(request.body || {});
+
+    if (body.ruleId && !await tenantRule(body.ruleId, tenantId, reply)) return;
 
     const saved = await repository.saveFeedback({
       ...body,
@@ -507,13 +592,13 @@ export function registerNbfcAnalyticsRoutes(
   // 7. USER PREFERENCES (Cross-device alert audio, etc.)
   // ==========================================
 
-  app.get("/api/ai/preferences", { config: { noAuth: true } }, async (request, reply) => {
+  app.get("/api/ai/preferences", async (request, reply) => {
     const { userId } = getUser(request);
     const preferences = await repository.getUserPreferences(userId);
     return reply.send({ success: true, preferences });
   });
 
-  app.post("/api/ai/preferences", { config: { noAuth: true } }, async (request, reply) => {
+  app.post("/api/ai/preferences", async (request, reply) => {
     const { userId } = getUser(request);
     const body = (request.body ?? {}) as Record<string, unknown>;
     const updatePayload =

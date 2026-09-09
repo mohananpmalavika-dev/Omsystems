@@ -72,6 +72,28 @@ describe("AI Command Center", () => {
     expect(followUp.json()).toMatchObject({ conversationId, intent: "evidence", diagnosis: { branch: { id: "branch-blr-001" } } });
   });
 
+  it("rejects invalid and unbounded investigation windows before reading telemetry", async () => {
+    const backwards = await app.inject({
+      method: "POST", url: "/v1/command-center/query", headers: admin,
+      payload: {
+        branchId: "branch-blr-001",
+        question: "Show health",
+        from: "2026-09-09T12:00:00.000Z",
+        to: "2026-09-08T12:00:00.000Z",
+      },
+    });
+    expect(backwards.statusCode).toBe(400);
+    expect(backwards.json().error).toBe("invalid_request");
+
+    const oversized = await app.inject({
+      method: "GET",
+      url: "/v1/command-center/branches/branch-blr-001/diagnosis?from=2026-01-01T00:00:00.000Z&to=2026-03-01T00:00:00.000Z",
+      headers: admin,
+    });
+    expect(oversized.statusCode).toBe(400);
+    expect(oversized.json().error).toBe("invalid_request");
+  });
+
   it("requires approval and permission before creating a real work order", async () => {
     await ingest("recorder", "nvr-1", Date.now() - 1_000, { status: "offline", reachable: false });
     const query = await app.inject({

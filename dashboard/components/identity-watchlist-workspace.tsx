@@ -124,7 +124,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
   const [selectedFaceList, setSelectedFaceList] = useState("");
   const [selectedAnprList, setSelectedAnprList] = useState("");
   const [plateQuery, setPlateQuery] = useState("");
-  const [minSimilarity, setMinSimilarity] = useState(0.6);
+  const [minSimilarity, setMinSimilarity] = useState(0.82);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialog, setDialog] = useState<DialogKind>();
@@ -368,7 +368,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
         </label>
         {mode === "face" ? (
           <label className={`min-w-[220px] flex-1 ${labelClass}`}>Minimum similarity: {Math.round(minSimilarity * 100)}%
-            <input type="range" min="0.4" max="0.99" step="0.01" value={minSimilarity} onChange={(event) => setMinSimilarity(Number(event.target.value))} className="mt-3 w-full accent-cyan-500" />
+            <input type="range" min="0.5" max="0.99" step="0.01" value={minSimilarity} onChange={(event) => setMinSimilarity(Number(event.target.value))} className="mt-3 w-full accent-cyan-500" />
           </label>
         ) : (
           <label className={`min-w-[220px] flex-1 ${labelClass}`}>Plate search

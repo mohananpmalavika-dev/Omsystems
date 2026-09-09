@@ -107,10 +107,9 @@ export class PersonDetector extends BaseDetector {
         metadata: {
           count: tracked.length,
           occupancy: tracked.length,
+          // This is a frame snapshot, not an entry/exit measurement.  A
+          // crossing is emitted only by a configured line rule.
           total: tracked.length,
-          totalCrossings: tracked.length,
-          entries: tracked.length,
-          exits: 0,
           trackedIds: tracked.map(p => p.trackId),
         },
         requiresAlert: false,
@@ -129,20 +128,6 @@ export class PersonDetector extends BaseDetector {
         requiresAlert: false,
       });
 
-      // Footfall Counter metrics
-      results.push({
-        detectionType: "footfall",
-        confidence: avgConfidence,
-        objects,
-        metadata: {
-          count: tracked.length,
-          totalCrossings: tracked.length,
-          entries: tracked.length,
-          exits: 0,
-          occupancy: tracked.length,
-        },
-        requiresAlert: false,
-      });
     }
 
     return results;

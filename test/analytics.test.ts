@@ -338,6 +338,40 @@ describe("video analytics and alert workflow", () => {
     expect(store.analyticsEscalations).toHaveLength(1);
   });
 
+  it("scopes assistant alert results to cameras the operator can access", async () => {
+    await store.createAnalyticsRule(
+      "omsystems", "cam-a006-01", "user-global-admin",
+      {
+        name: "North smoke detector", detectionType: "smoke", enabled: true,
+        objectClasses: ["smoke"], minConfidence: 0.5, minDurationSeconds: 0,
+        direction: "any", severity: "P1", cooldownSeconds: 0,
+        recipients: [], recordingPolicy: "none", preRollSeconds: 30, postRollSeconds: 120,
+      },
+    );
+    await store.processAnalyticsEvent({
+      tenantId: "omsystems", cameraId: "cam-a006-01", sourceEventId: "north-smoke",
+      detectionType: "smoke", occurredAt: new Date().toISOString(), confidence: 0.99,
+      durationSeconds: 1, modelVersion: "fire-v1", objects: [{ label: "smoke", confidence: 0.99 }],
+    });
+
+    const operatorQuery = await app.inject({
+      method: "POST", url: "/v1/analytics/assistant/query",
+      headers: { "x-user-id": "user-south-operator" },
+      payload: { query: "show smoke alerts" },
+    });
+    expect(operatorQuery.statusCode).toBe(200);
+    expect(operatorQuery.json()).toMatchObject({
+      intent: "alert-search", answer: "Found 0 matching alerts.", data: [],
+    });
+
+    const deniedScope = await app.inject({
+      method: "POST", url: "/v1/analytics/assistant/query",
+      headers: { "x-user-id": "user-south-operator" },
+      payload: { query: "show smoke alerts", branchId: "A006" },
+    });
+    expect(deniedScope.statusCode).toBe(403);
+  });
+
   it("returns a batched, permission-filtered live-wall AI snapshot", async () => {
     const rule = await store.createAnalyticsRule(
       "omsystems", "cam-001", "user-global-admin",

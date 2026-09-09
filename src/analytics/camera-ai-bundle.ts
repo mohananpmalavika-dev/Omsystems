@@ -55,6 +55,9 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
   { name: "Banking AI - Dual control verification", detectionType: "dual-control-verification", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
 ];
 
+// Footfall rules are safe to provision, but emit counts only from a configured
+// line crossing. A frame-level person snapshot is never converted into an
+// entry or exit.
 export const CAMERA_AI_SETUP_REQUIRED: readonly string[] = [];
 
 export function cameraAiRuleInput(

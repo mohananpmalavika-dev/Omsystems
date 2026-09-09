@@ -20,17 +20,6 @@ export interface WatchlistFaceRecord {
 export class LocalFaceMatcherService {
   private watchlist = new Map<string, WatchlistFaceRecord>();
 
-  constructor() {
-    this.enrollFace({
-      personId: "person-suspect-001",
-      name: "Suspect Person A",
-      watchlistType: "WANTED",
-      embeddingVector: this.createSyntheticVector(0.5),
-      notes: "Known robbery suspect",
-      enrolledAt: new Date("2026-01-01"),
-    });
-  }
-
   createSyntheticVector(seed: number): number[] {
     const vec: number[] = [];
     for (let i = 0; i < 512; i++) {
@@ -41,6 +30,7 @@ export class LocalFaceMatcherService {
   }
 
   enrollFace(record: WatchlistFaceRecord) {
+    this.assertEmbedding(record.embeddingVector);
     this.watchlist.set(record.personId, record);
   }
 
@@ -57,8 +47,12 @@ export class LocalFaceMatcherService {
     embeddingVector: number[];
     minThreshold?: number;
   }): Promise<FaceMatchResult> {
-    const threshold = options.minThreshold ?? 0.75;
+    const threshold = options.minThreshold ?? 0.82;
+    if (!Number.isFinite(threshold) || threshold < 0.5 || threshold > 0.99) {
+      throw new Error("Face-match threshold must be between 0.50 and 0.99");
+    }
     const inputVec = options.embeddingVector;
+    this.assertEmbedding(inputVec);
 
     let bestMatch: FaceMatchCandidate | undefined;
     let highestSimilarity = 0;
@@ -96,8 +90,8 @@ export class LocalFaceMatcherService {
    * sim(A, B) = (A · B) / (||A|| * ||B||)
    */
   calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
-    if (!vecA || !vecB || vecA.length === 0 || vecB.length === 0) return 0;
-    const len = Math.min(vecA.length, vecB.length);
+    if (!vecA || !vecB || vecA.length !== 512 || vecB.length !== 512) return 0;
+    const len = 512;
 
     let dotProduct = 0;
     let normA = 0;
@@ -114,6 +108,16 @@ export class LocalFaceMatcherService {
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
     if (denominator === 0) return 0;
     return Math.max(0, Math.min(1, dotProduct / denominator));
+  }
+
+  private assertEmbedding(vector: number[]) {
+    if (!Array.isArray(vector) || vector.length !== 512 || vector.some((value) => !Number.isFinite(value))) {
+      throw new Error("Face embeddings must contain exactly 512 finite values");
+    }
+    const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+    if (!Number.isFinite(magnitude) || magnitude < 0.9 || magnitude > 1.1) {
+      throw new Error("Face embeddings must be normalized before matching");
+    }
   }
 
 }

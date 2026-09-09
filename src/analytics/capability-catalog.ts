@@ -122,7 +122,7 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
    * 
    * Health monitoring runs every 60s and reports exact dependency status.
    */
-  { id: "industrial", name: "Industrial analytics", description: "Equipment detection, tracking, safety zones, and worker proximity (v2.0 - Real Detection)", capabilities: [
+  { id: "industrial", name: "Industrial analytics", description: "Equipment detection, PPE compliance, safety zones, and worker proximity (v2.0 - Real Detection)", capabilities: [
     // Equipment detection (now using real ONNX models, not simulated)
     c("forklift", "Forklift detection", "open-model"), 
     c("pallet-jack", "Pallet jack detection", "open-model"),
@@ -153,6 +153,14 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("restricted-machinery-zone", "Restricted machinery zone violation", "derived", "P1"), 
     c("worker-near-hazard", "Worker near hazard", "derived", "P1"),
     c("equipment-pedestrian-zone", "Equipment in pedestrian zone", "derived", "P1"),
+
+    // PPE violations are emitted only from confirmed PPE model observations.
+    // They belong in the industrial workspace, where operators configure the
+    // safety policy, rather than being hidden in a generic safety catalog.
+    c("no-helmet", "Missing safety helmet", "open-model", "P2"),
+    c("no-safety-vest", "Missing high-visibility vest", "open-model", "P2"),
+    c("no-gloves", "Missing safety gloves", "open-model", "P2"),
+    c("no-shoes", "Missing safety footwear", "open-model", "P2"),
     
     // Other safety features (open-model)
     c("conveyor-blockage", "Conveyor blockage", "open-model", "P2"),

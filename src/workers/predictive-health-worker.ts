@@ -123,34 +123,27 @@ export class PredictiveHealthWorker {
    * Get branches that need prediction updates
    */
   private async getBranchesNeedingUpdate(): Promise<Array<{ id: string; tenantId: string; name: string }>> {
-    try {
-      // For MemoryStore, we need to work with the store's available methods
-      // This is a simplified implementation that would work with in-memory store
-      // In production with PostgresStore, this would query the database
-      
-      // For now, return empty array as this is a memory-store-only limitation
-      // The actual implementation would use proper database queries in PostgresStore
-      console.warn("Branch prediction updates not fully supported in MemoryStore");
-      return [];
-    } catch (error) {
-      console.error("Failed to get branches needing update:", error);
-      return [];
-    }
+    const db = (this.store as any).db;
+    if (!db?.query) return [];
+    const result = await db.query(
+      `SELECT id::text, tenant_id::text, name FROM resource_nodes WHERE type = 'branch'`,
+    );
+    const branches = result.rows.map((row: any) => ({ id: row.id, tenantId: row.tenant_id, name: row.name }));
+    return (await Promise.all(branches.map(async (branch) => (await this.branchNeedsUpdate(branch.id, branch.tenantId)) ? branch : null))).filter(Boolean) as Array<{ id: string; tenantId: string; name: string }>;
   }
 
   /**
    * Check if a branch needs prediction update
    */
   private async branchNeedsUpdate(branchId: string, tenantId: string): Promise<boolean> {
-    try {
-      // For MemoryStore, we can't query prediction history
-      // This would be implemented in PostgresStore
-      console.warn("Branch prediction check not fully supported in MemoryStore");
-      return false;
-    } catch (error) {
-      console.error(`Failed to check if branch ${branchId} needs update:`, error);
-      return false;
-    }
+    const db = (this.store as any).db;
+    if (!db?.query) return false;
+    const result = await db.query(
+      `SELECT 1 FROM branch_risk_predictions
+       WHERE tenant_id=$1 AND branch_id=$2 AND expires_at > now()
+       LIMIT 1`, [tenantId, branchId],
+    );
+    return result.rows.length === 0;
   }
 
   /**
@@ -264,24 +257,15 @@ export function initializePredictiveHealthWorker(
   store: ControlPlaneStore,
   websocketService?: any
 ): PredictiveHealthWorker {
+  const configuredInterval = Number.parseInt(process.env.PREDICTION_INTERVAL_MINUTES || "10", 10);
+  const configuredBatchSize = Number.parseInt(process.env.PREDICTION_BATCH_SIZE || "10", 10);
   const worker = new PredictiveHealthWorker(store, websocketService, {
-    intervalMinutes: parseInt(process.env.PREDICTION_INTERVAL_MINUTES || "10", 10),
-    batchSize: parseInt(process.env.PREDICTION_BATCH_SIZE || "10", 10),
+    intervalMinutes: Number.isFinite(configuredInterval) && configuredInterval > 0 ? configuredInterval : 10,
+    batchSize: Number.isFinite(configuredBatchSize) && configuredBatchSize > 0 ? configuredBatchSize : 10,
     horizons: [24, 72, 168], // 1 day, 3 days, 1 week
   });
 
   worker.start();
-
-  // Graceful shutdown
-  process.on("SIGTERM", () => {
-    console.log("SIGTERM received, stopping predictive health worker");
-    worker.stop();
-  });
-
-  process.on("SIGINT", () => {
-    console.log("SIGINT received, stopping predictive health worker");
-    worker.stop();
-  });
 
   return worker;
 }

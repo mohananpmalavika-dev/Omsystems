@@ -11,6 +11,9 @@ import { localVisionEngineService } from "../ai/services/local-vision-engine.ser
 import { localAnprService } from "../ai/services/local-anpr.service.js";
 import { localFaceMatcherService } from "../ai/services/local-face-matcher.service.js";
 import { localIncidentSummaryService } from "../ai/services/local-incident-summary.service.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { Action } from "../domain/models.js";
+import { activeAnprRegistryMatches, recordAnprRegistryMatches } from "../analytics/identity-registry.js";
 
 const detectFrameSchema = z.object({
   cameraId: z.string().min(1),
@@ -50,15 +53,15 @@ const anprRecognizeSchema = z.object({
 const faceMatchSchema = z.object({
   cameraId: z.string().min(1),
   branchId: z.string().min(1),
-  embeddingVector: z.array(z.number()),
-  minThreshold: z.number().optional(),
+  embeddingVector: z.array(z.number().finite()).length(512),
+  minThreshold: z.number().min(0.5).max(0.99).optional(),
 });
 
 const faceEnrollSchema = z.object({
   personId: z.string().min(1),
   name: z.string().min(1),
   watchlistType: z.enum(["WANTED", "BLACK_LIST", "VIP", "STAFF", "SUSPECT"]),
-  embeddingVector: z.array(z.number()),
+  embeddingVector: z.array(z.number().finite()).length(512),
   notes: z.string().optional(),
 });
 
@@ -70,7 +73,19 @@ const incidentSummarizeSchema = z.object({
   impactedCameras: z.array(z.string()).optional(),
 });
 
-export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
+export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance, store?: ControlPlaneStore) {
+  async function authorizeCamera(request: FastifyRequest, reply: FastifyReply, cameraId: string, action: Action) {
+    if (!store || !request.currentUser) return reply.code(401).send({ error: "unauthenticated" });
+    const camera = await store.getCamera(cameraId);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    const decision = await store.checkAccess(request.currentUser, action, camera.nodeId);
+    if (!decision?.allowed) return reply.code(403).send({ error: "forbidden" });
+    return camera;
+  }
+
+  function ephemeralFaceMatcherEnabled() {
+    return process.env.NODE_ENV !== "production" && process.env.ENABLE_EPHEMERAL_FACE_MATCHER === "true";
+  }
   /**
    * GET /v1/ai/status
    */
@@ -111,7 +126,19 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/anpr/recognize", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = anprRecognizeSchema.parse(request.body);
+    const camera = await authorizeCamera(request, reply, body.cameraId, "analytics:view");
+    if (!camera) return;
+    if (camera.branchId !== body.branchId) {
+      return reply.code(400).send({ error: "camera_branch_mismatch" });
+    }
     const result = await localAnprService.recognizePlate(body as any);
+    const matches = await activeAnprRegistryMatches(store!, request.currentUser!.tenantId, [result.normalizedPlate]);
+    if (matches.length > 0) {
+      const match = matches[0]!;
+      result.isWatchlistMatch = true;
+      result.matchedWatchlistId = match.watchlistId;
+      await recordAnprRegistryMatches(store!, request.currentUser!.tenantId, matches.map((item) => item.plateId), result.recognizedAt.toISOString());
+    }
     return reply.send({
       success: true,
       data: result,
@@ -123,6 +150,14 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/face/match", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = faceMatchSchema.parse(request.body);
+    if (!ephemeralFaceMatcherEnabled()) {
+      return reply.code(503).send({ error: "ephemeral_face_matcher_disabled", message: "Use the governed face-watchlist pipeline in this environment" });
+    }
+    const camera = await authorizeCamera(request, reply, body.cameraId, "face:view");
+    if (!camera) return;
+    if (camera.branchId !== body.branchId) {
+      return reply.code(400).send({ error: "camera_branch_mismatch" });
+    }
     const result = await localFaceMatcherService.matchFace(body as any);
     return reply.send({
       success: true,
@@ -135,6 +170,12 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance) {
    */
   app.post("/v1/ai/face/enroll", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = faceEnrollSchema.parse(request.body);
+    if (!ephemeralFaceMatcherEnabled()) {
+      return reply.code(503).send({ error: "ephemeral_face_matcher_disabled", message: "Use the governed face-watchlist enrollment pipeline in this environment" });
+    }
+    if (!store || !request.currentUser || !(await store.listAccessibleNodes(request.currentUser, "face:enrol", "company")).length) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
     localFaceMatcherService.enrollFace({
       ...body,
       enrolledAt: new Date(),

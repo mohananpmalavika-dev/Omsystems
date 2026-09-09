@@ -115,4 +115,18 @@ describe("universal DVR channel adapter", () => {
     expect(channels.every((channel) => channel.profiles[0]?.role === "sub")).toBe(true);
     expect(probeStream).toHaveBeenCalledTimes(2);
   });
+
+  it("does not treat the sole ONVIF profile as the recorder's channel capacity", async () => {
+    const channels = await discoverVendorRecorderChannels({
+      manufacturer: "CP PLUS",
+      model: "XVR", // Common OEM response: no channel count in the model.
+      host: "192.0.2.20",
+      credentials: { username: "admin", password: "secret" },
+      existingChannels: [1],
+      maxChannels: 4,
+      probeStream: async () => ({ reachable: true, codec: "h264", width: 1920, height: 1080 }),
+    });
+
+    expect(channels.map((channel) => channel.sourceChannel)).toEqual([2, 3, 4]);
+  });
 });

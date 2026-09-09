@@ -82,7 +82,7 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
   const [domain, setDomain] = useState<CapabilityDomain>();
   const [rules, setRules] = useState<AnalyticsRule[]>([]);
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
-  const [engineState, setEngineState] = useState<"checking" | "online" | "offline" | "unconfigured">("checking");
+  const [engineState, setEngineState] = useState<"checking" | "online" | "degraded" | "offline" | "unconfigured">("checking");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string>();
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
@@ -107,7 +107,7 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
       setBranches(nextBranches);
       setBranchId(nextBranches[0]?.id ?? "");
       setDomain((catalog.domains as CapabilityDomain[] | undefined)?.find((item) => item.id === domainId));
-      setEngineState(health.status === "ok" || health.status === "degraded" || health.status === "online" ? "online" : health.status === "unconfigured" ? "unconfigured" : "offline");
+      setEngineState(health.status === "ok" || health.status === "online" ? "online" : health.status === "degraded" ? "degraded" : health.status === "unconfigured" ? "unconfigured" : "offline");
     }).catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
   }, [domainId]);
@@ -195,8 +195,8 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
               </div>
             </div>
           </div>
-          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${engineState === "online" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : engineState === "checking" ? "border-slate-700 bg-slate-800 text-slate-300" : "border-amber-500/30 bg-amber-500/10 text-amber-200"}`}>
-            <i className={`h-2 w-2 rounded-full ${engineState === "online" ? "bg-emerald-400" : engineState === "checking" ? "bg-slate-400" : "bg-amber-400"}`} />
+          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs ${engineState === "online" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : engineState === "checking" ? "border-slate-700 bg-slate-800 text-slate-300" : engineState === "degraded" ? "border-amber-500/30 bg-amber-500/10 text-amber-200" : "border-red-500/30 bg-red-500/10 text-red-200"}`}>
+            <i className={`h-2 w-2 rounded-full ${engineState === "online" ? "bg-emerald-400" : engineState === "checking" ? "bg-slate-400" : engineState === "degraded" ? "bg-amber-400" : "bg-red-400"}`} />
             AI engine {engineState}
           </div>
         </div>

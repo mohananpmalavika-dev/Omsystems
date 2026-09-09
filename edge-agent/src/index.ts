@@ -482,6 +482,7 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           host: endpoint.remoteAddress,
           credentials,
           existingChannels: channels.filter((channel) => channel.streamVerified).map((channel) => channel.sourceChannel),
+          maxChannels: config.RECORDER_DISCOVERY_MAX_CHANNELS,
           probeStream: (uri) => probeRtsp(uri, config.FFPROBE_PATH, config.ONVIF_TIMEOUT_MS),
         });
         const channelsByNumber = new Map(channels.map((channel) => [channel.sourceChannel, channel]));

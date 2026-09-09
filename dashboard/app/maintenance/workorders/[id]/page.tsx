@@ -92,6 +92,11 @@ export default function WorkOrderDetailPage() {
       </main>
     );
   }
+  const needsAssignee = item.status === "assigned" || item.status === "in_progress";
+  const needsResolutionEvidence = item.status === "resolved" || item.status === "closed";
+  const canSave = item.problem.trim().length >= 5
+    && (!needsAssignee || Boolean(item.technician?.trim()))
+    && (!needsResolutionEvidence || Boolean(item.actionTaken?.trim() && item.verification?.trim()));
 
   return (
     <main className="record-form-page work-order-form-page">
@@ -144,7 +149,7 @@ export default function WorkOrderDetailPage() {
             </select>
           </label>
           <label className="work-order-field">
-            <span>Technician <em>Optional</em></span>
+            <span>Technician <em>{needsAssignee ? "Required" : "Optional"}</em></span>
             <input
               value={item.technician ?? ""}
               onChange={(event) => setItem({ ...item, technician: event.target.value })}
@@ -186,7 +191,7 @@ export default function WorkOrderDetailPage() {
             />
           </label>
           <label className="work-order-field work-order-field-wide">
-            <span>Action taken <em>Optional</em></span>
+            <span>Action taken <em>{needsResolutionEvidence ? "Required" : "Optional"}</em></span>
             <textarea
               value={item.actionTaken ?? ""}
               onChange={(event) => setItem({ ...item, actionTaken: event.target.value })}
@@ -195,7 +200,7 @@ export default function WorkOrderDetailPage() {
             />
           </label>
           <label className="work-order-field work-order-field-wide">
-            <span>Verification evidence <em>Optional</em></span>
+            <span>Verification evidence <em>{needsResolutionEvidence ? "Required" : "Optional"}</em></span>
             <textarea
               value={item.verification ?? ""}
               onChange={(event) => setItem({ ...item, verification: event.target.value })}
@@ -210,7 +215,7 @@ export default function WorkOrderDetailPage() {
 
         <footer className="work-order-form-footer">
           <p>Created {new Date(item.createdAt).toLocaleString()} · Last updated {new Date(item.updatedAt).toLocaleString()}</p>
-          <button type="submit" disabled={saving || item.problem.trim().length < 5}>
+          <button type="submit" disabled={saving || !canSave}>
             {saving ? "Saving…" : "Save work order"}
           </button>
         </footer>

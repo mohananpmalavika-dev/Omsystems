@@ -72,6 +72,14 @@ export interface TrackingObservation {
     bbox: BoundingBox;
 
     /**
+     * Source frame dimensions when coordinates are in pixels.  Detectors that
+     * produce normalized [0, 1] boxes may omit these.  Consumers must not
+     * assume a particular camera resolution.
+     */
+    frameWidth?: number;
+    frameHeight?: number;
+
+    /**
      * Anchor point for spatial analytics.
      * 
      * For pedestrian/vehicle heatmaps, this is bottom-center of bbox,

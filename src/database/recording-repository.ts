@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
+import { createReadStream, existsSync } from "node:fs";
 import type { Pool } from "pg";
 import type {
   DbRecordingGap,
@@ -620,7 +621,7 @@ export class RecordingRepository {
 
   async verifyRecordingSegment(segmentId: string): Promise<{ status: "verified" | "mismatch" | "missing"; hash?: string }> {
     const result = await this.pool.query(
-      `SELECT checksum_sha256 FROM recording_segments WHERE id = $1`,
+      `SELECT checksum_sha256, storage_path FROM recording_segments WHERE id = $1`,
       [segmentId],
     );
 
@@ -629,11 +630,22 @@ export class RecordingRepository {
     }
 
     const storedHash = result.rows[0].checksum_sha256;
-    // In a real implementation, you would compute the hash from the stored video file
-    // For now, return the stored hash as verified
+    const storagePath = result.rows[0].storage_path;
+    if (!storedHash || !/^[a-f0-9]{64}$/i.test(storedHash) || !storagePath || !existsSync(storagePath)) {
+      return { status: "missing" };
+    }
+
+    const actualHash = await new Promise<string>((resolve, reject) => {
+      const hash = createHash("sha256");
+      const stream = createReadStream(storagePath);
+      stream.on("data", (chunk: Buffer) => hash.update(chunk));
+      stream.once("error", reject);
+      stream.once("end", () => resolve(hash.digest("hex")));
+    });
+
     return {
-      status: storedHash ? "verified" : "missing",
-      hash: storedHash,
+      status: actualHash === storedHash.toLowerCase() ? "verified" : "mismatch",
+      hash: actualHash,
     };
   }
 }

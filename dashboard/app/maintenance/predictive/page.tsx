@@ -16,7 +16,7 @@ export default function MaintenancePredictivePage() {
 
     void Promise.all([maintenanceApi.listHighRiskAssets(), maintenanceApi.listFailureForecast()])
       .then(([highRisk, forecast]) => {
-        setAlerts([
+        const rows = [
           ...(highRisk.data ?? []).map((item: any) => ({
             id: item.id,
             name: item.assetId || item.deviceType || "Unknown asset",
@@ -26,14 +26,15 @@ export default function MaintenancePredictivePage() {
             nextFailureDays: item.details?.estimated_failure_days,
           })),
           ...(forecast.data ?? []).map((item: any) => ({
-            id: `forecast-${item.id}`,
+            id: item.id,
             name: item.assetId || item.deviceType || "Unknown asset",
             type: "forecast",
             score: item.score,
             details: item.details,
             nextFailureDays: item.details?.estimated_failure_days,
           })),
-        ]);
+        ];
+        setAlerts(Array.from(new Map(rows.map((item) => [item.id, item])).values()));
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : String(err));
@@ -62,7 +63,7 @@ export default function MaintenancePredictivePage() {
             <tr key={alert.id}>
               <td><strong className="module-row-title">{alert.name}</strong></td>
               <td><span className={`module-priority ${alert.type === "high-risk" ? "critical" : "high"}`}>{alert.type === "high-risk" ? "High risk" : "Failure forecast"}</span></td>
-              <td>{typeof alert.score === "number" ? alert.score.toFixed(2) : "Not scored"}</td>
+              <td>{typeof alert.score === "number" ? `${Math.round(alert.score * 100)}%` : "Not scored"}</td>
               <td>{alert.nextFailureDays !== undefined ? `${alert.nextFailureDays} days` : "Not estimated"}</td>
               <td>{alert.details?.recommendation || alert.details?.message || "Review asset and schedule maintenance."}</td>
             </tr>

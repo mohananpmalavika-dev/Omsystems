@@ -18,16 +18,9 @@ export interface LocalWatchlistPlate {
 export class LocalAnprService {
   private watchlist = new Map<string, LocalWatchlistPlate>();
 
-  constructor() {
-    this.addWatchlistEntry({
-      plateNumber: "KL07CD1234",
-      listType: "SUSPICIOUS",
-      notes: "Flagged suspicious vehicle",
-    });
-  }
-
   addWatchlistEntry(entry: LocalWatchlistPlate) {
     const norm = this.normalizePlate(entry.plateNumber);
+    if (!this.isPlausiblePlate(norm)) throw new Error("invalid_plate_number");
     this.watchlist.set(norm, entry);
   }
 
@@ -52,6 +45,9 @@ export class LocalAnprService {
       throw new Error("OCR text is required; no ANPR inference provider is configured for raw images");
     }
     const normalized = this.normalizePlate(raw);
+    if (!this.isPlausiblePlate(normalized)) {
+      throw new Error("invalid_plate_number");
+    }
     const stateCode = this.extractStateCode(normalized);
 
     const match = this.watchlist.get(normalized);
@@ -78,6 +74,13 @@ export class LocalAnprService {
    */
   normalizePlate(raw: string): string {
     return raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+
+  private isPlausiblePlate(normalized: string): boolean {
+    // Keep OCR tolerant of regional formats, but reject arbitrary text and
+    // impossible short/long values before they can become vehicle records.
+    return normalized.length >= 6 && normalized.length <= 14 &&
+      /^[A-Z]{2}/.test(normalized) && /\d/.test(normalized);
   }
 
   /**

@@ -534,7 +534,10 @@ export class DVRNVRMonitorService extends EventEmitter {
     } catch {
       const grouped = new Map<string, Record<string, unknown>>();
       for (const line of payload.split(/\r?\n/)) {
-        const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
+        // Dahua-family / CP PLUS recorders report disks as
+        // table.Drive[0].*.  Include that common wire format as well as the
+        // Storage/Disk/HDD variants so detected drives reach monitoring.
+        const match = line.match(/(?:table\.)?(?:Storage|Disk|HDD|Drive)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
         if (!match || !match[1] || !match[2] || !match[3]) continue;
         const diskIndex = match[1];
         const record = grouped.get(diskIndex) ?? { diskNo: Number(diskIndex) + 1 };

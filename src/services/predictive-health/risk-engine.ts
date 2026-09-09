@@ -520,7 +520,7 @@ export class RiskEngine {
   private identifyProtectiveFactors(snapshot: BranchHealthSnapshot): RiskFactor[] {
     const factors: RiskFactor[] = [];
 
-    if (snapshot.hdd.healthScore > 90) {
+    if (snapshot.hdd.smartStatus !== "UNKNOWN" && snapshot.hdd.healthScore > 90) {
       factors.push({
         factor: "Healthy HDD",
         contribution: 0.1,
@@ -533,7 +533,7 @@ export class RiskEngine {
       });
     }
 
-    if (snapshot.storage.estimatedDaysRemaining > 90) {
+    if (snapshot.storage.totalBytes > 0 && snapshot.storage.estimatedDaysRemaining > 90) {
       factors.push({
         factor: "Ample storage",
         contribution: 0.08,

@@ -5,9 +5,11 @@ import Link from "next/link";
 import { FileClock } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
+import type { MaintenanceVendor } from "@/lib/types";
 
 export default function AmcContractsListPage() {
   const [contracts, setContracts] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<MaintenanceVendor[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,7 +17,11 @@ export default function AmcContractsListPage() {
     setLoading(true);
     void maintenanceApi
       .listAmcContracts()
-      .then((res) => setContracts(res.data))
+      .then(async (res) => {
+        setContracts(res.data);
+        const directory = await maintenanceApi.listVendors();
+        setVendors(directory.data);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
   }, []);
@@ -52,7 +58,7 @@ export default function AmcContractsListPage() {
           {contracts.map((contract) => (
             <tr key={contract.id}>
               <td><strong className="module-row-title">{contract.contractNumber}</strong></td>
-              <td><span className="module-id">{contract.vendorId}</span></td>
+              <td>{vendors.find((vendor) => vendor.id === contract.vendorId)?.name ?? "Directory record unavailable"}</td>
               <td><ModuleStatus value={contract.status} /></td>
               <td>
                 {contract.startDate ?? "-"} {contract.endDate ? `to ${contract.endDate}` : ""}

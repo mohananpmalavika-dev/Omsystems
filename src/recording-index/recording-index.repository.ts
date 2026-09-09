@@ -53,12 +53,17 @@ export class RecordingIndexRepository {
         AND started_at < $3::timestamptz
         AND ended_at > $2::timestamptz
         AND status <> 'deleted'
+        AND EXISTS (
+          SELECT 1 FROM cameras c
+          WHERE c.id = recording_segments.camera_id
+            AND c.tenant_id = $4
+        )
     `;
 
-    const params: any[] = [request.cameraIds, fromIso, toIso];
+    const params: any[] = [request.cameraIds, fromIso, toIso, request.tenantId];
 
     if (request.storageStates && request.storageStates.length > 0) {
-      query += ` AND archive_state = ANY($4)`;
+      query += ` AND archive_state = ANY($${params.length + 1})`;
       params.push(request.storageStates);
     }
 

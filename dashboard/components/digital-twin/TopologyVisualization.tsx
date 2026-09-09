@@ -21,7 +21,7 @@ import ReactFlow, {
   MarkerType,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Loader2, RefreshCw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Loader2, Network, RefreshCw, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { TopologyNode } from './TopologyNode';
 import { TopologyEdge } from './TopologyEdge';
 
@@ -87,10 +87,11 @@ export function TopologyVisualization({
         ? `/api/digital-twin/topology?rootId=${rootId}`
         : '/api/digital-twin/topology';
 
-      const response = await fetch(url);
+      const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch topology');
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.message || body?.error || `Topology request failed (${response.status})`);
       }
 
       const data: TopologyData = await response.json();
@@ -136,11 +137,20 @@ export function TopologyVisualization({
     } finally {
       setLoading(false);
     }
-  }, [rootId, highlightedNodes, setNodes, setEdges]);
+  }, [rootId, setNodes, setEdges]);
 
   useEffect(() => {
     fetchTopology();
   }, [fetchTopology]);
+
+  // Highlight changes are a presentation concern; do not reload the graph on
+  // every selection change.
+  useEffect(() => {
+    setNodes((current) => current.map((node) => ({
+      ...node,
+      data: { ...node.data, isHighlighted: highlightedNodes.includes(node.id) },
+    })));
+  }, [highlightedNodes, setNodes]);
 
   // Calculate node position using force-directed layout simulation
   const calculateNodePosition = (
@@ -228,6 +238,17 @@ export function TopologyVisualization({
             Retry
           </button>
         </div>
+      </div>
+    );
+  }
+
+  if (topology && topology.totalAssets === 0) {
+    return (
+      <div className="flex h-[600px] flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
+        <Network className="mb-3 h-10 w-10 text-gray-400" aria-hidden="true" />
+        <h3 className="font-semibold text-gray-900">No infrastructure assets available</h3>
+        <p className="mt-1 max-w-md text-sm text-gray-600">There are no assets in the branches you can view, or inventory and telemetry have not been collected yet.</p>
+        <button onClick={fetchTopology} className="mt-4 rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Retry</button>
       </div>
     );
   }

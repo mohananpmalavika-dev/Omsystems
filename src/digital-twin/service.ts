@@ -54,6 +54,11 @@ export class DigitalTwinService {
 
   async activatePlan(user: User, planId: string, floorId: string) {
     const scope = await this.requireFloor(user, floorId, "device:configure");
+    // Confirm ownership before asking the state store to switch the active
+    // version. In PostgreSQL the former implementation deactivated the
+    // current plan before discovering that planId belonged to another floor.
+    const candidate = await this.state.getPlan(planId);
+    if (!candidate || candidate.floorId !== floorId) throw new TwinServiceError("floor_plan_not_found", 404);
     const previous = await this.state.getActivePlan(floorId);
     const plan = await this.state.activatePlan(planId, floorId);
     if (!plan) throw new TwinServiceError("floor_plan_not_found", 404);
@@ -259,12 +264,33 @@ export class DigitalTwinService {
   }
 
   async createZone(user: User, input: TwinZoneInput) { const scope = await this.requireFloor(user, input.floorId, "device:configure"); const zone = await this.state.createZone(input, user.id); await this.audit(user, "create", "zone", zone.id, `Created zone ${zone.name}`, { floorId: input.floorId, buildingId: scope.buildingId, newState: zone as unknown as Record<string, unknown> }); this.publish(scope, "zone.created"); return zone; }
-  async updateZone(user: User, id: string, floorId: string, input: Partial<TwinZoneInput>) { const scope = await this.requireFloor(user, floorId, "device:configure"); const zone = await this.state.updateZone(id, input); if (!zone || zone.floorId !== floorId) throw new TwinServiceError("zone_not_found", 404); await this.audit(user, "update", "zone", id, `Updated zone ${zone.name}`, { floorId, buildingId: scope.buildingId, newState: zone as unknown as Record<string, unknown> }); this.publish(scope, "zone.updated"); return zone; }
-  async deleteZone(user: User, id: string, floorId: string) { const scope = await this.requireFloor(user, floorId, "device:configure"); if (!(await this.state.deleteZone(id))) throw new TwinServiceError("zone_not_found", 404); await this.audit(user, "delete", "zone", id, `Deleted zone ${id}`, { floorId, buildingId: scope.buildingId }); this.publish(scope, "zone.deleted"); }
+  async updateZone(user: User, id: string, floorId: string, input: Partial<TwinZoneInput>) {
+    const scope = await this.requireFloor(user, floorId, "device:configure");
+    // Verify containment before the write. The old ordering updated a zone on
+    // another floor, then returned 404 after its state had already changed.
+    const previous = (await this.state.listZones(floorId)).find((zone) => zone.id === id);
+    if (!previous) throw new TwinServiceError("zone_not_found", 404);
+    const zone = await this.state.updateZone(id, input);
+    if (!zone) throw new TwinServiceError("zone_not_found", 404);
+    await this.audit(user, "update", "zone", id, `Updated zone ${zone.name}`, { floorId, buildingId: scope.buildingId, previousState: previous as unknown as Record<string, unknown>, newState: zone as unknown as Record<string, unknown> });
+    this.publish(scope, "zone.updated"); return zone;
+  }
+  async deleteZone(user: User, id: string, floorId: string) {
+    const scope = await this.requireFloor(user, floorId, "device:configure");
+    const previous = (await this.state.listZones(floorId)).find((zone) => zone.id === id);
+    if (!previous) throw new TwinServiceError("zone_not_found", 404);
+    if (!(await this.state.deleteZone(id))) throw new TwinServiceError("zone_not_found", 404);
+    await this.audit(user, "delete", "zone", id, `Deleted zone ${previous.name}`, { floorId, buildingId: scope.buildingId, previousState: previous as unknown as Record<string, unknown> });
+    this.publish(scope, "zone.deleted");
+  }
 
   async ingestEvent(user: User, input: Omit<TwinEventInput, "tenantId" | "branchId">) {
     const scope = await this.requireFloor(user, input.floorId, "device:configure");
-    if (input.twinObjectId) { const objectScope = await this.state.objectScope(input.twinObjectId); if (objectScope?.floorId !== input.floorId) throw new TwinServiceError("object_floor_mismatch", 409); }
+    if (input.twinObjectId) {
+      const objectScope = await this.state.objectScope(input.twinObjectId);
+      if (!objectScope) throw new TwinServiceError("object_not_found", 404);
+      if (objectScope.floorId !== input.floorId) throw new TwinServiceError("object_floor_mismatch", 409);
+    }
     const result = await this.state.recordEvent({ ...input, tenantId: user.tenantId, branchId: scope.branchId });
     if (!result.duplicate && isAlertEvent(result.event)) {
       const object = result.event.twinObjectId ? await this.state.getObject(result.event.twinObjectId) : undefined;
@@ -309,7 +335,16 @@ export class DigitalTwinService {
   }
 
   async nearbyCameras(user: User, objectId: string, limit = 4) { const scope = await this.requireObject(user, objectId, "recording:view"); const selected = await this.state.getObject(objectId); if (!selected) throw new TwinServiceError("object_not_found", 404); return (await this.state.listObjects(scope.floorId!)).filter((item) => item.objectType === "camera" && item.id !== objectId).map((item) => ({ ...item, distance: Math.hypot(item.positionX - selected.positionX, item.positionY - selected.positionY) })).sort((a, b) => a.distance - b.distance).slice(0, limit); }
-  async acknowledgeAlert(user: User, alertId: string, floorId: string, resolve = false) { const scope = await this.requireFloor(user, floorId, "alerts:acknowledge"); const alert = resolve ? await this.state.resolveAlert(alertId, user.id) : await this.state.acknowledgeAlert(alertId, user.id); if (!alert || alert.floorId !== floorId) throw new TwinServiceError("alert_not_found", 404); await this.audit(user, resolve ? "resolve" : "acknowledge", "alert", alertId, `${resolve ? "Resolved" : "Acknowledged"} spatial alert ${alert.title}`, { floorId, buildingId: scope.buildingId }); digitalTwinEvents.publish({ id: randomUUID(), tenantId: user.tenantId, branchId: scope.branchId, floorId, type: resolve ? "alert.resolved" : "alert.acknowledged", occurredAt: new Date().toISOString(), alertId, severity: alert.severity }); return alert; }
+  async acknowledgeAlert(user: User, alertId: string, floorId: string, resolve = false) {
+    const scope = await this.requireFloor(user, floorId, "alerts:acknowledge");
+    const existing = (await this.state.listAlerts(floorId, false)).find((alert) => alert.id === alertId);
+    if (!existing) throw new TwinServiceError("alert_not_found", 404);
+    const alert = resolve ? await this.state.resolveAlert(alertId, user.id) : await this.state.acknowledgeAlert(alertId, user.id);
+    if (!alert) throw new TwinServiceError("alert_not_found", 404);
+    await this.audit(user, resolve ? "resolve" : "acknowledge", "alert", alertId, `${resolve ? "Resolved" : "Acknowledged"} spatial alert ${alert.title}`, { floorId, buildingId: scope.buildingId, previousState: existing as unknown as Record<string, unknown>, newState: alert as unknown as Record<string, unknown> });
+    digitalTwinEvents.publish({ id: randomUUID(), tenantId: user.tenantId, branchId: scope.branchId, floorId, type: resolve ? "alert.resolved" : "alert.acknowledged", occurredAt: new Date().toISOString(), alertId, severity: alert.severity });
+    return alert;
+  }
 
   private async validateBinding(user: User, branchId: string, type: TwinBinding["deviceType"], deviceId: string) { if (type === "camera") { const camera = await this.store.getCamera(deviceId); if (!camera || camera.branchId !== branchId) throw new TwinServiceError("device_not_found", 404); return; } const telemetry = await this.store.listLatestOperationalTelemetry(user.tenantId, [branchId]); if (["recorder","ups","network","disk"].includes(type) && !telemetry.some((item) => normalizeDeviceType(item.deviceType) === type && item.deviceId === deviceId)) throw new TwinServiceError("device_not_found", 404); }
   private async requireBranch(user: User, branchId: string, action: "recording:view" | "device:configure" | "incident:view" | "alerts:acknowledge") { const branch = await this.store.getNode(branchId); const decision = branch && await this.store.checkAccess(user, action, branchId); if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId || !decision?.allowed) throw new TwinServiceError("branch_not_found", 404); return branch; }

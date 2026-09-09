@@ -19,7 +19,7 @@ export default function NewAmcContractPage() {
   const [cost, setCost] = useState("");
   const [renewal, setRenewal] = useState("");
   const [sla, setSla] = useState("");
-  const [status, setStatus] = useState("active");
+  const [status, setStatus] = useState("pending");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,12 +34,12 @@ export default function NewAmcContractPage() {
     setError(null);
     try {
       const payload = {
-        contractNumber,
+        contractNumber: contractNumber.trim(),
         vendorId,
-        startDate: startDate || undefined,
-        endDate: endDate || undefined,
+        startDate,
+        endDate,
         warranty: warranty || undefined,
-        coverage: coverage || undefined,
+        coverage: coverage.trim(),
         exclusions: exclusions || undefined,
         paymentTerms: paymentTerms || undefined,
         cost: cost === "" ? undefined : Number(cost),
@@ -85,21 +85,21 @@ export default function NewAmcContractPage() {
           <div style={{ marginBottom: 8 }}>
             <label>
               Start date<br />
-              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
             </label>
           </div>
           <div style={{ marginBottom: 8 }}>
             <label>
               End date<br />
-              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required min={startDate || undefined} />
             </label>
           </div>
           <div style={{ marginBottom: 8 }}>
             <label>
               Status<br />
               <select value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="active">active</option>
                 <option value="pending">pending</option>
+                <option value="active">active</option>
                 <option value="expired">expired</option>
                 <option value="suspended">suspended</option>
               </select>
@@ -121,7 +121,7 @@ export default function NewAmcContractPage() {
         <div style={{ marginBottom: 8 }}>
           <label>
             Coverage<br />
-            <textarea rows={3} value={coverage} onChange={(e) => setCoverage(e.target.value)} />
+            <textarea rows={3} value={coverage} onChange={(e) => setCoverage(e.target.value)} minLength={5} required />
           </label>
         </div>
         <div style={{ marginBottom: 8 }}>

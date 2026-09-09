@@ -83,19 +83,27 @@ export function RecordingWorkspace() {
     try {
       const fromIso = new Date(from).toISOString();
       const toIso = new Date(to).toISOString();
-      if (Date.parse(toIso) <= Date.parse(fromIso)) {
+      const rangeMs = Date.parse(toIso) - Date.parse(fromIso);
+      if (rangeMs <= 0) {
         throw new Error("End time must be after start time.");
       }
-      const [policyResponse, playbackResponse, healthResponse] = await Promise.all([
+      if (rangeMs > 31 * 24 * 60 * 60 * 1000) {
+        throw new Error("Recording searches are limited to 31 days.");
+      }
+      const [policyResult, playbackResult, healthResult] = await Promise.allSettled([
         fetch(`/api/recording/${encodeURIComponent(cameraId)}`),
         fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/playback?from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`),
         fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/recording/health?limit=20`),
       ]);
-      if (!policyResponse.ok || !playbackResponse.ok || !healthResponse.ok) throw new Error();
-      const policy = await policyResponse.json() as RecordingJob;
-      const playback = await playbackResponse.json() as { segments: RecordingSegment[]; vms: VmsView };
-      const events = await healthResponse.json() as { data: HealthEvent[] };
-      setJob(policy); setSegments(playback.segments); setHealth(events.data); setVms(playback.vms);
+      if (policyResult.status !== "fulfilled" || !policyResult.value.ok) throw new Error("Recording policy could not be loaded.");
+      if (playbackResult.status !== "fulfilled" || !playbackResult.value.ok) throw new Error("Recording playback is unavailable for this time range.");
+
+      const policy = await policyResult.value.json() as RecordingJob;
+      const playback = await playbackResult.value.json() as { segments: RecordingSegment[]; vms: VmsView };
+      const events = healthResult.status === "fulfilled" && healthResult.value.ok
+        ? await healthResult.value.json() as { data: HealthEvent[] }
+        : { data: [] as HealthEvent[] };
+      setJob(policy); setSegments(playback.segments ?? []); setHealth(events.data ?? []); setVms(playback.vms);
       setSelected((current) => current && playback.segments.some((item) => item.id === current.id) ? current : playback.segments.find((item) => item.status === "ready"));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Recording data could not be loaded. Check recorder and access permissions."); }
     finally { setLoading(false); }
@@ -158,7 +166,26 @@ export function RecordingWorkspace() {
 function toLocalInput(value: number) { const date = new Date(value - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }
 function formatTime(value: string) { return new Date(value).toLocaleString(); }
 function formatBytes(value: number) { return value > 1_000_000 ? `${(value / 1_000_000).toFixed(1)} MB` : `${Math.max(1, Math.round(value / 1_000))} KB`; }
-function coveragePercent(segments: RecordingSegment[], from: string, to: string) { const duration = Date.parse(to) - Date.parse(from); if (duration <= 0) return 0; const recorded = segments.filter((segment) => segment.status === "ready").reduce((total, segment) => total + Math.max(0, Date.parse(segment.endedAt) - Date.parse(segment.startedAt)), 0); return Math.min(100, Number((recorded / duration * 100).toFixed(2))); }
+function coveragePercent(segments: RecordingSegment[], from: string, to: string) {
+  const start = Date.parse(from);
+  const end = Date.parse(to);
+  const duration = end - start;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return 0;
+
+  const intervals = segments
+    .filter((segment) => segment.status === "ready")
+    .map((segment) => ({ start: Math.max(start, Date.parse(segment.startedAt)), end: Math.min(end, Date.parse(segment.endedAt)) }))
+    .filter((interval) => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: Array<{ start: number; end: number }> = [];
+  for (const interval of intervals) {
+    const previous = merged[merged.length - 1];
+    if (previous && interval.start <= previous.end) previous.end = Math.max(previous.end, interval.end);
+    else merged.push(interval);
+  }
+  const recorded = merged.reduce((total, interval) => total + interval.end - interval.start, 0);
+  return Number(Math.min(100, (recorded / duration) * 100).toFixed(2));
+}
 function availabilityMessage(value: Availability<unknown> | undefined) {
   if (!value) return "Not observed yet";
   if (value.state === "UNAVAILABLE") return value.message;

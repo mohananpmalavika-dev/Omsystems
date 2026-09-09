@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DetectionFrame, InferenceObject } from "../src/detectors/base-detector.js";
 import { SmokeFireDetector } from "../src/detectors/smoke-fire-detector.js";
 import { HelmetDetector } from "../src/detectors/helmet-detector.js";
+import { PPEDetector } from "../src/detectors/ppe-detector.js";
 import { FaceDetector } from "../src/detectors/face-detector.js";
 import { ANPRDetector } from "../src/detectors/anpr-detector.js";
 
@@ -18,6 +19,24 @@ function frame(detections: InferenceObject[] = []): DetectionFrame {
 }
 
 describe("local specialty model adapters", () => {
+  it("normalizes confirmed PPE violation labels without inventing missing equipment", async () => {
+    const detector = new PPEDetector(0.7);
+    await detector.initialize();
+    const results = await detector.detect(frame([
+      object("no_vest", 0.94),
+      object("no-safety-gloves", 0.88),
+      object("helmet", 0.99),
+      object("no-shoes", 0.61), // Below the configured threshold: ignored.
+    ]));
+
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ detectionType: "no-safety-vest", requiresAlert: true }),
+      expect.objectContaining({ detectionType: "no-gloves", requiresAlert: true }),
+    ]));
+    expect(results.map((result) => result.detectionType)).not.toContain("no-helmet");
+    expect(results.map((result) => result.detectionType)).not.toContain("no-shoes");
+  });
+
   it("produces fire and smoke events without external detections", async () => {
     const detector = new SmokeFireDetector({ run: async () => [object("fire", 0.93)] });
     await detector.initialize();

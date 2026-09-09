@@ -172,6 +172,12 @@ export function buildTrackingObservation(
         objectType,
         timestamp: (detection.timestamp || context.timestamp).getTime(),
         bbox,
+        ...(typeof context.frameWidth === 'number' && Number.isFinite(context.frameWidth) && context.frameWidth > 0
+            ? { frameWidth: context.frameWidth }
+            : {}),
+        ...(typeof context.frameHeight === 'number' && Number.isFinite(context.frameHeight) && context.frameHeight > 0
+            ? { frameHeight: context.frameHeight }
+            : {}),
         anchor,
         confidence: detection.confidence,
         velocity,

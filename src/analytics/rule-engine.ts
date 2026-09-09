@@ -78,9 +78,20 @@ function faceIdentity(metadata?: Record<string, unknown>) {
   const candidate = value.candidate;
   const candidateName = candidate && typeof candidate === "object" && !Array.isArray(candidate)
     ? (candidate as Record<string, unknown>).name : undefined;
+  const similarity = [
+    value.similarity,
+    value.similarityScore,
+    value.score,
+    candidate && typeof candidate === "object" && !Array.isArray(candidate)
+      ? (candidate as Record<string, unknown>).similarity
+      : undefined,
+  ].find((score): score is number => typeof score === "number" && Number.isFinite(score));
   return {
     ...value,
-    matched: value.matched === true || Boolean(candidateName),
+    // A candidate label alone is model output, not a verified identity.  Only
+    // emit recognition rules after the source explicitly marks a match and it
+    // clears the service's production confidence floor.
+    matched: value.matched === true && similarity !== undefined && similarity >= 0.82,
     personName: typeof value.personName === "string" ? value.personName : candidateName,
   };
 }

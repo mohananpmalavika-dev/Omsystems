@@ -10,7 +10,16 @@ const branchParams = z.object({ branchId: z.string().min(1) });
 const incidentParams = z.object({ incidentId: z.string().min(1) });
 const actionParams = z.object({ actionId: z.string().min(1) });
 const diagnosisParams = z.object({ diagnosisId: z.string().min(1) });
-const timeQuery = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() });
+const timeQuery = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+}).superRefine((value, ctx) => {
+  if (!value.from || !value.to) return;
+  const from = Date.parse(value.from);
+  const to = Date.parse(value.to);
+  if (from > to) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be after from" });
+  else if (to - from > 31 * 24 * 60 * 60 * 1_000) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "Command Center queries are limited to a 31-day window" });
+});
 
 export async function registerCommandCenterRoutes(app: FastifyInstance, store: ControlPlaneStore) {
   const service = new CommandCenterService(store, createCommandCenterState(store));
@@ -24,6 +33,12 @@ export async function registerCommandCenterRoutes(app: FastifyInstance, store: C
       question: z.string().trim().min(2).max(2_000),
       from: z.string().datetime().optional(),
       to: z.string().datetime().optional(),
+    }).superRefine((value, ctx) => {
+      if (!value.from || !value.to) return;
+      const from = Date.parse(value.from);
+      const to = Date.parse(value.to);
+      if (from > to) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "to must be after from" });
+      else if (to - from > 31 * 24 * 60 * 60 * 1_000) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["to"], message: "Command Center queries are limited to a 31-day window" });
     }).parse(request.body);
     const response = await service.query(user, {
       question: body.question!,
@@ -346,6 +361,9 @@ async function commandReply(reply: FastifyReply, work: () => Promise<unknown>) {
   try {
     return await work();
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return reply.code(400).send({ error: "invalid_request", message: "Invalid Command Center request", details: error.flatten() });
+    }
     if (error instanceof CommandCenterError) return reply.code(error.statusCode).send({ error: error.code, message: error.message.replaceAll("_", " "), ...error.details });
     throw error;
   }

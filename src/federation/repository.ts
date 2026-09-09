@@ -83,6 +83,12 @@ export class MemoryFederationRepository implements FederationRepository {
       updatedAt: now,
     };
     this.servers.set(server.id, server);
+    // Registration is replace semantics in PostgreSQL. Keep the in-memory
+    // implementation identical so a removed scope cannot keep routing to a
+    // server after it is reconfigured.
+    for (const [key, serverId] of this.scopeMappings) {
+      if (serverId === server.id) this.scopeMappings.delete(key);
+    }
     for (const scopeNodeId of input.scopeNodeIds) this.scopeMappings.set(this.scopeKey(input.tenantId, scopeNodeId), server.id);
     return structuredClone(server);
   }
@@ -454,4 +460,3 @@ export function publicServer(server: FederatedServerRecord): FederatedServer {
   const { sharedSecretHash: _secret, ...safe } = server;
   return safe;
 }
-

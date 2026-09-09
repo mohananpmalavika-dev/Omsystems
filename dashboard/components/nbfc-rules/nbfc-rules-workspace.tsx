@@ -239,14 +239,14 @@ export function NbfcRulesWorkspace() {
     severity: "CRITICAL" as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO",
     cooldownSeconds: 60,
     actionAlert: true,
-    actionIncident: true,
+    actionIncident: false,
     actionSnapshot: true,
     actionClip: true,
     actionBookmark: false,
     actionPopup: false,
     actionNotifySoc: true,
     actionNotifyBranch: true,
-    state: "ACTIVE" as "ACTIVE" | "SHADOW",
+    state: "SHADOW" as "ACTIVE" | "SHADOW",
     templateId: "",
   });
 
@@ -339,14 +339,14 @@ export function NbfcRulesWorkspace() {
       severity: "CRITICAL",
       cooldownSeconds: 60,
       actionAlert: true,
-      actionIncident: true,
+      actionIncident: false,
       actionSnapshot: true,
       actionClip: true,
       actionBookmark: false,
       actionPopup: false,
       actionNotifySoc: true,
       actionNotifyBranch: true,
-      state: "ACTIVE",
+      state: "SHADOW",
       templateId: "",
     });
     setIsBuilderOpen(true);
@@ -378,7 +378,7 @@ export function NbfcRulesWorkspace() {
       actionPopup: tmpl.defaultActions.includes("POPUP_LIVE_VIEW"),
       actionNotifySoc: tmpl.defaultActions.includes("NOTIFY_SOC"),
       actionNotifyBranch: tmpl.defaultActions.includes("NOTIFY_BRANCH_MANAGER"),
-      state: "ACTIVE",
+      state: "SHADOW",
       templateId: tmpl.id,
     });
     setIsBuilderOpen(true);
@@ -517,11 +517,22 @@ export function NbfcRulesWorkspace() {
     }
   };
 
-  // Bulk enable all 37 NBFC rule templates across all cameras
+  // Bulk deployment is deliberately scoped: location-sensitive templates must
+  // never be activated across an entire fleet without an operator target.
   const handleEnableAllRules = async () => {
+    if (selectedBranch === "ALL" && selectedCamera === "ALL") {
+      alert("Select a branch or camera before applying templates. Production rules must be scoped before activation.");
+      return;
+    }
     setIsEnablingAll(true);
     try {
-      await aiFetch("/api/ai/rules/apply-all-templates", { method: "POST" });
+      await aiFetch("/api/ai/rules/apply-all-templates", {
+        method: "POST",
+        body: JSON.stringify({
+          ...(selectedBranch !== "ALL" ? { branchId: selectedBranch } : {}),
+          ...(selectedCamera !== "ALL" ? { cameraId: selectedCamera } : {}),
+        }),
+      });
       await fetchData();
     } catch (e) {
       console.error("Failed to enable all rules:", e);
@@ -641,11 +652,18 @@ export function NbfcRulesWorkspace() {
       alert("Please draw at least 3 points to complete the polygon zone.");
       return;
     }
+    const inferredBranchId = selectedBranch !== "ALL"
+      ? selectedBranch
+      : cameras.find((camera) => camera.id === zoneCameraId)?.branchId;
+    if (!inferredBranchId) {
+      alert("Select a camera that belongs to a branch before saving a zone.");
+      return;
+    }
     try {
       const res = await aiFetch("/api/ai/zones", {
         method: "POST",
         body: JSON.stringify({
-          branchId: selectedBranch === "ALL" ? "Kollam" : selectedBranch,
+          branchId: inferredBranchId,
           cameraId: zoneCameraId,
           name: zoneName,
           type: zoneType,
@@ -692,12 +710,12 @@ export function NbfcRulesWorkspace() {
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           <button
             onClick={handleEnableAllRules}
-            disabled={loading || isEnablingAll}
+            disabled={loading || isEnablingAll || (selectedBranch === "ALL" && selectedCamera === "ALL")}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg shadow-lg shadow-emerald-900/30 transition text-sm disabled:opacity-50"
-            title="Enable all 37 NBFC visual rules across all cameras"
+            title="Select a branch or camera, then apply the template set to that scope"
           >
             <ShieldCheck className={`w-4 h-4 ${isEnablingAll ? "animate-spin" : ""}`} />
-            {isEnablingAll ? "Enabling All Rules..." : "Enable All to All Cameras"}
+            {isEnablingAll ? "Applying Templates..." : "Apply Templates to Selected Scope"}
           </button>
           <button
             onClick={fetchData}

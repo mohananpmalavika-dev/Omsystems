@@ -36,12 +36,24 @@ export class TelemetryIngestionService {
   private agentLiveness = new Map<string, AgentLivenessRecord>();
   private transitionEvents: DeviceHealthChangedEvent[] = [];
 
-  async ingestEnvelope(envelope: BranchTelemetryEnvelope): Promise<{ accepted: boolean; duplicate: boolean; messageId: string }> {
+  private static readonly MAX_PROCESSED_MESSAGES = 100_000;
+  private static readonly MAX_CLOCK_SKEW_MS = 5 * 60_000;
+
+  async ingestEnvelope(envelope: BranchTelemetryEnvelope): Promise<{ accepted: boolean; duplicate: boolean; outOfOrder: boolean; messageId: string }> {
+    this.assertValidEnvelope(envelope);
     // 1. Idempotency check
     if (this.processedMessageIds.has(envelope.messageId)) {
-      return { accepted: true, duplicate: true, messageId: envelope.messageId };
+      return { accepted: true, duplicate: true, outOfOrder: false, messageId: envelope.messageId };
     }
     this.processedMessageIds.add(envelope.messageId);
+    this.trimProcessedMessages();
+
+    const previous = this.branchCurrentStates.get(envelope.branchId);
+    // Buffered edge uploads can arrive after a newer heartbeat.  Do not let a
+    // delayed sample overwrite the branch's current operational state.
+    if (previous && envelope.sequenceNumber <= previous.lastSequenceNumber) {
+      return { accepted: true, duplicate: false, outOfOrder: true, messageId: envelope.messageId };
+    }
 
     // 2. Calculate branch overall state based on camera & recorder health
     const onlineCameras = envelope.cameras.filter((c) => c.state === "HEALTHY").length;
@@ -82,7 +94,30 @@ export class TelemetryIngestionService {
       lastSequenceNumber: envelope.sequenceNumber,
     });
 
-    return { accepted: true, duplicate: false, messageId: envelope.messageId };
+    return { accepted: true, duplicate: false, outOfOrder: false, messageId: envelope.messageId };
+  }
+
+  private trimProcessedMessages() {
+    while (this.processedMessageIds.size > TelemetryIngestionService.MAX_PROCESSED_MESSAGES) {
+      const oldest = this.processedMessageIds.values().next().value;
+      if (!oldest) return;
+      this.processedMessageIds.delete(oldest);
+    }
+  }
+
+  private assertValidEnvelope(envelope: BranchTelemetryEnvelope) {
+    const observedAt = Date.parse(envelope.observedAt);
+    const sentAt = Date.parse(envelope.sentAt);
+    if (!Number.isFinite(observedAt) || !Number.isFinite(sentAt)) {
+      throw new Error("telemetry_timestamp_invalid");
+    }
+    const latestPermitted = Date.now() + TelemetryIngestionService.MAX_CLOCK_SKEW_MS;
+    if (observedAt > latestPermitted || sentAt > latestPermitted) {
+      throw new Error("telemetry_timestamp_in_future");
+    }
+    if (envelope.sequenceNumber < 0 || !Number.isSafeInteger(envelope.sequenceNumber)) {
+      throw new Error("telemetry_sequence_invalid");
+    }
   }
 
   async recordTransition(event: DeviceHealthChangedEvent): Promise<void> {

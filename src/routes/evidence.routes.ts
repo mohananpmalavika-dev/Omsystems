@@ -36,6 +36,13 @@ const legalHoldSchema = z.object({
   endTime: z.string().datetime(),
   reviewDate: z.string().datetime().optional(),
   expiryDate: z.string().datetime().optional(),
+}).superRefine((value, ctx) => {
+  if (new Date(value.endTime).getTime() <= new Date(value.startTime).getTime()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endTime"], message: "endTime must be after startTime" });
+  }
+  if (value.expiryDate && new Date(value.expiryDate).getTime() < new Date(value.endTime).getTime()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["expiryDate"], message: "expiryDate cannot precede the protected period" });
+  }
 });
 
 async function hasAccess(
@@ -432,14 +439,16 @@ export async function registerEvidenceRoutes(
     }
     const body = legalHoldSchema.parse(request.body);
 
-    // Check access to at least one camera's branch
-    const firstCamera = await store.getCamera(body.cameraIds[0]!);
-    if (!firstCamera) {
-      return reply.code(404).send({ error: "camera_not_found" });
-    }
-
-    if (!(await hasAccess(request, reply, store, "evidence:create", firstCamera.nodeId))) {
-      return;
+    // A hold protects every listed camera.  Checking only the first camera let a
+    // caller add cameras from another tenant or branch to an otherwise valid hold.
+    for (const cameraId of new Set(body.cameraIds)) {
+      const camera = await store.getCamera(cameraId);
+      if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+        return reply.code(404).send({ error: "camera_not_found" });
+      }
+      if (!(await hasAccess(request, reply, store, "evidence:create", camera.nodeId))) {
+        return;
+      }
     }
 
     try {
@@ -452,14 +461,6 @@ export async function registerEvidenceRoutes(
         endTime: body.endTime,
         reviewDate: body.reviewDate,
         expiryDate: body.expiryDate,
-        tenantId: request.currentUser.tenantId,
-      });
-
-      await store.recordCustodyEvent({
-        action: "legal_hold_applied",
-        performedBy: request.currentUser.id,
-        sourceIp: request.ip,
-        reason: body.reason,
         tenantId: request.currentUser.tenantId,
       });
 
@@ -482,18 +483,28 @@ export async function registerEvidenceRoutes(
     const body = z.object({ reason: z.string().trim().max(500).optional() }).parse(request.body);
 
     try {
+      const hold = await store.getLegalHold?.(holdId, request.currentUser.tenantId);
+      if (!hold) {
+        return reply.code(404).send({ error: "hold_not_found" });
+      }
+
+      const protectedCameraIds = Array.isArray(hold.cameraIds)
+        ? hold.cameraIds
+        : hold.cameraId ? [hold.cameraId] : [];
+      for (const cameraId of protectedCameraIds) {
+        const camera = await store.getCamera(cameraId);
+        if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+          return reply.code(404).send({ error: "hold_not_found" });
+        }
+        if (!(await hasAccess(request, reply, store, "evidence:create", camera.nodeId))) {
+          return;
+        }
+      }
+
       const released = await store.releaseLegalHold(holdId, request.currentUser.id, request.currentUser.tenantId, body.reason);
       if (!released) {
         return reply.code(404).send({ error: "hold_not_found" });
       }
-
-      await store.recordCustodyEvent({
-        action: "hold_released",
-        performedBy: request.currentUser.id,
-        sourceIp: request.ip,
-        reason: body.reason,
-        tenantId: request.currentUser.tenantId,
-      });
 
       return released;
     } catch (error) {
@@ -520,22 +531,38 @@ export async function registerEvidenceRoutes(
 
       const items = await store.listEvidenceItems(caseId, request.currentUser.tenantId);
       const recordingItems = items.filter((item) => item.type === "recording" && item.recordingSegmentId);
+      for (const item of recordingItems) {
+        if (!item.cameraId) {
+          return reply.code(400).send({ error: "recording_camera_missing", message: "Recording evidence is missing its camera reference" });
+        }
+        const camera = await store.getCamera(item.cameraId);
+        if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+          return reply.code(404).send({ error: "camera_not_found" });
+        }
+        if (!(await hasAccess(request, reply, store, "recording:view", camera.nodeId))) {
+          return;
+        }
+      }
       const verifications = await Promise.all(
         recordingItems.map((item) => store.verifyRecordingSegment(item.recordingSegmentId!)),
       );
 
+      const verifiedItemCount = verifications.filter((verification) => verification.status === "verified").length;
       await store.recordCustodyEvent({
         evidenceId: caseId,
-        action: "verified",
+        action: "integrity_verification_completed",
         performedBy: request.currentUser.id,
         sourceIp: request.ip,
+        reason: `${verifiedItemCount}/${items.length} case items verified from stored bytes`,
         tenantId: request.currentUser.tenantId,
       });
 
       return {
         caseId,
         verifications,
-        allVerified: verifications.every((v) => v.status === "verified"),
+        verifiedItemCount,
+        unverifiableItemCount: items.length - verifiedItemCount,
+        allVerified: items.length > 0 && verifiedItemCount === items.length,
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -806,8 +833,16 @@ export async function registerEvidenceRoutes(
     const expiresAt = new Date(Date.now() + body.expiresInHours * 3600_000);
 
     const pool = (store as any).pool || defaultPool;
-    if (pool) {
-      await pool.query(
+    if (!pool) return reply.code(501).send({ error: "database_not_configured" });
+
+    const exportRecord = await store.getEvidenceExport(body.exportId, currentUser.tenantId);
+    const exportJob = exportWorker ? await exportWorker.getExportJob(body.exportId) : undefined;
+    const exportTenantId = exportRecord?.tenantId ?? exportJob?.tenantId;
+    if ((!exportRecord && !exportJob) || (exportTenantId && exportTenantId !== currentUser.tenantId && currentUser.role !== "super_admin")) {
+      return reply.code(404).send({ error: "export_not_found" });
+    }
+
+    await pool.query(
         `INSERT INTO external_evidence_shares (
            id, tenant_id, export_id, share_token, recipient_email, reason,
            scope, max_downloads, download_count, expires_at, created_by, created_at
@@ -824,8 +859,7 @@ export async function registerEvidenceRoutes(
           expiresAt,
           currentUser.id,
         ],
-      );
-    }
+    );
 
     await store.recordCustodyEvent({
       evidenceId: body.exportId,
@@ -873,35 +907,45 @@ export async function registerEvidenceRoutes(
       return reply.code(403).send({ error: "share_expired" });
     }
 
-    if (share.download_count >= share.max_downloads) {
-      return reply.code(403).send({ error: "download_limit_exceeded" });
+    if (share.scope !== "DOWNLOAD") {
+      return reply.code(403).send({ error: "share_download_not_permitted" });
     }
 
-    await pool.query(
-      `UPDATE external_evidence_shares SET download_count = download_count + 1 WHERE id = $1`,
+    if (!exportWorker) {
+      return reply.code(503).send({ error: "export_worker_not_enabled" });
+    }
+
+    const job = await exportWorker.getExportJob(share.export_id);
+    if (!job || (job.tenantId && job.tenantId !== share.tenant_id) || !job.outputPath || !existsSync(job.outputPath)) {
+      return reply.code(404).send({ error: "evidence_media_not_found" });
+    }
+
+    const consumed = await pool.query(
+      `UPDATE external_evidence_shares
+       SET download_count = download_count + 1
+       WHERE id = $1
+         AND revoked_at IS NULL
+         AND expires_at > now()
+         AND download_count < max_downloads
+       RETURNING download_count, max_downloads`,
       [share.id],
     );
+    if (consumed.rows.length === 0) {
+      return reply.code(403).send({ error: "download_limit_exceeded" });
+    }
 
     await store.recordCustodyEvent({
       evidenceId: share.export_id,
       action: "export_downloaded",
       performedBy: `external:${share.recipient_email}`,
       sourceIp: request.ip,
-      reason: `External share download (${share.download_count + 1}/${share.max_downloads})`,
+      reason: `External share download (${consumed.rows[0].download_count}/${consumed.rows[0].max_downloads})`,
     });
-
-    if (exportWorker) {
-      const job = await exportWorker.getExportJob(share.export_id);
-      if (job?.outputPath && existsSync(job.outputPath)) {
-        const stats = statSync(job.outputPath);
-        const filename = basename(job.outputPath);
-        reply.header("Content-Disposition", `attachment; filename="${filename}"`);
-        reply.header("Content-Length", stats.size);
-        return reply.send(createReadStream(job.outputPath));
-      }
-    }
-
-    return reply.code(404).send({ error: "evidence_media_not_found" });
+    const stats = statSync(job.outputPath);
+    const filename = basename(job.outputPath);
+    reply.header("Content-Disposition", `attachment; filename="${filename}"`);
+    reply.header("Content-Length", stats.size);
+    return reply.send(createReadStream(job.outputPath));
   });
 
   /**

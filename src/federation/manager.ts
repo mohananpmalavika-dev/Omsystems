@@ -44,8 +44,13 @@ export class HttpFederationPeerClient implements FederationPeerClient {
     try {
       const response = await fetch(new URL("internal/federation/search", ensureTrailingSlash(server.apiUrl)), {
         method: "POST",
+        // Peer endpoints are administrator-configured. Never follow a redirect
+        // from one: doing so could forward the federation credential to an
+        // unrelated host.
+        redirect: "error",
         headers: {
           "content-type": "application/json",
+          "accept": "application/json",
           "x-federation-key": this.sharedKey,
         },
         body: JSON.stringify({ tenantId, query }),
@@ -71,6 +76,21 @@ export class FederationManager {
 
   async register(input: Omit<RegisterFederatedServerInput, "sharedSecretHash"> & { sharedSecret: string }) {
     const { sharedSecret, ...registration } = input;
+    if (registration.primaryServerId === registration.backupServerId && registration.primaryServerId) {
+      throw new Error("invalid_federation_relationship");
+    }
+    const existing = await this.repository.getServerByExternalId(registration.externalId);
+    if (existing?.tenantId === registration.tenantId &&
+      [registration.primaryServerId, registration.backupServerId].includes(existing.id)) {
+      throw new Error("invalid_federation_relationship");
+    }
+    if (registration.primaryServerId || registration.backupServerId) {
+      const relatedIds = [registration.primaryServerId, registration.backupServerId].filter(
+        (id): id is string => Boolean(id),
+      );
+      const related = await Promise.all(relatedIds.map((id) => this.repository.getServer(registration.tenantId, id)));
+      if (related.some((server) => !server)) throw new Error("federation_server_not_found");
+    }
     return publicServer(await this.repository.registerServer({
       ...registration,
       sharedSecretHash: await hashPassword(sharedSecret),
@@ -92,6 +112,9 @@ export class FederationManager {
 
   async getDashboard(tenantId: string): Promise<FederationDashboardSummary> {
     const servers = (await this.repository.listServers(tenantId)).map((server) => this.withEffectiveStatus(server));
+    // A standby usually mirrors its primary's camera/branch inventory. Counting
+    // it before activation doubles fleet capacity in a multi-site dashboard.
+    const resourceOwners = servers.filter((server) => server.role !== "backup_server" || server.status === "failover_active");
     const regions = new Map<string, FederationDashboardSummary["regions"][number] & { healthTotal: number }>();
     for (const server of servers) {
       const key = `${server.countryCode}:${server.region}`;
@@ -108,9 +131,10 @@ export class FederationManager {
       };
       current.servers += 1;
       current.onlineServers += isAvailable(server) ? 1 : 0;
-      current.branches += server.totalBranches;
-      current.cameras += server.totalCameras;
-      current.onlineCameras += server.onlineCameras;
+      const ownsResources = resourceOwners.some((owner) => owner.id === server.id);
+      current.branches += ownsResources ? server.totalBranches : 0;
+      current.cameras += ownsResources ? server.totalCameras : 0;
+      current.onlineCameras += ownsResources ? server.onlineCameras : 0;
       current.healthTotal += server.healthScore;
       current.healthScore = Number((current.healthTotal / current.servers).toFixed(2));
       regions.set(key, current);
@@ -124,11 +148,11 @@ export class FederationManager {
       failoverActiveServers: servers.filter((server) => server.status === "failover_active").length,
       totalRegions: new Set(servers.map((server) => `${server.countryCode}:${server.region}`)).size,
       totalCountries: new Set(servers.map((server) => server.countryCode)).size,
-      totalCameras: sum(servers, "totalCameras"),
-      onlineCameras: sum(servers, "onlineCameras"),
-      totalBranches: sum(servers, "totalBranches"),
-      totalStorageGb: nullableSum(servers, "storageCapacityGb"),
-      usedStorageGb: nullableSum(servers, "storageUsedGb"),
+      totalCameras: sum(resourceOwners, "totalCameras"),
+      onlineCameras: sum(resourceOwners, "onlineCameras"),
+      totalBranches: sum(resourceOwners, "totalBranches"),
+      totalStorageGb: nullableSum(resourceOwners, "storageCapacityGb"),
+      usedStorageGb: nullableSum(resourceOwners, "storageUsedGb"),
       avgHealthScore: servers.length
         ? Number((servers.reduce((total, server) => total + server.healthScore, 0) / servers.length).toFixed(2))
         : 0,
@@ -141,7 +165,7 @@ export class FederationManager {
   async search(tenantId: string, query: FederationSearchQuery): Promise<FederationSearchResponse> {
     const all = (await this.repository.listServers(tenantId)).map((server) => this.withEffectiveStatus(server));
     const candidates = all.filter((server) =>
-      ["regional_control_center", "edge_server"].includes(server.role)
+      (["regional_control_center", "edge_server"].includes(server.role) || server.status === "failover_active")
       && isAvailable(server)
       && server.syncEnabled
       && (!query.regions?.length || query.regions.includes(server.region))
@@ -215,6 +239,7 @@ export class FederationManager {
     const validPair = active.role === "backup_server"
       && (active.primaryServerId === failed.id || failed.backupServerId === active.id);
     if (!validPair) throw new Error("invalid_failover_pair");
+    if (!isAvailable(this.withEffectiveStatus(active))) throw new Error("failover_target_unavailable");
     return this.repository.activateFailover({ ...input, now: this.now().toISOString() });
   }
 

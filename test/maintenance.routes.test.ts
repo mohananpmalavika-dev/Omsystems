@@ -19,6 +19,80 @@ describe('maintenance routes (basic)', async () => {
     expect(body.data.length).toBeGreaterThan(0);
   });
 
+  it('keeps the vendor service directory validated, unique, and tenant scoped', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const invalid = await app.inject({
+      method: 'POST', url: '/v1/maintenance/vendors', headers,
+      payload: { name: 'Broken contact', email: 'not-an-email' },
+    });
+    expect(invalid.statusCode).toBe(400);
+    const create = await app.inject({
+      method: 'POST', url: '/v1/maintenance/vendors', headers,
+      payload: { name: '  Reliable  Service  ', contact: 'Operations Desk', email: 'ops@example.test', serviceCenters: ['HQ', 'South hub'] },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json()).toMatchObject({ name: 'Reliable Service', contact: 'Operations Desk', serviceCenters: ['HQ', 'South hub'] });
+    const duplicate = await app.inject({
+      method: 'POST', url: '/v1/maintenance/vendors', headers,
+      payload: { name: 'reliable service', phone: '+91 98765 43210' },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toEqual({ error: 'vendor_name_already_registered' });
+  });
+
+  it('validates AMC contract identity, dates, and lifecycle transitions', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const vendor = await app.inject({
+      method: 'POST', url: '/v1/maintenance/vendors', headers,
+      payload: { name: 'Contract Support Partner', contact: 'Service Desk' },
+    });
+    expect(vendor.statusCode).toBe(201);
+    const vendorId = vendor.json().id as string;
+    const invalidDateRange = await app.inject({
+      method: 'POST', url: '/v1/maintenance/amc', headers,
+      payload: { contractNumber: 'AMC-INVALID', vendorId, startDate: '2026-12-31', endDate: '2026-01-01', coverage: 'All DVR hardware.' },
+    });
+    expect(invalidDateRange.statusCode).toBe(400);
+    const create = await app.inject({
+      method: 'POST', url: '/v1/maintenance/amc', headers,
+      payload: { contractNumber: ' amc-hq-001 ', vendorId, startDate: '2026-01-01', endDate: '2026-12-31', coverage: 'DVR hardware and on-site service.' },
+    });
+    expect(create.statusCode).toBe(201);
+    expect(create.json()).toMatchObject({ contractNumber: 'AMC-HQ-001', status: 'pending' });
+    const id = create.json().id as string;
+    const duplicate = await app.inject({
+      method: 'POST', url: '/v1/maintenance/amc', headers,
+      payload: { contractNumber: 'AMC-HQ-001', vendorId, startDate: '2027-01-01', endDate: '2027-12-31', coverage: 'Duplicate contract.' },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    const activate = await app.inject({ method: 'PATCH', url: `/v1/maintenance/amc/${id}`, headers, payload: { status: 'active' } });
+    expect(activate.statusCode).toBe(200);
+    const invalidTransition = await app.inject({ method: 'PATCH', url: `/v1/maintenance/amc/${id}`, headers, payload: { status: 'pending' } });
+    expect(invalidTransition.statusCode).toBe(409);
+  });
+
+
+  it('validates dates and prevents duplicate physical serials in a tenant', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const invalidDate = await app.inject({
+      method: 'POST', url: '/v1/maintenance/assets', headers,
+      payload: { category: 'recorder', assetType: 'DVR', purchaseDate: 'next Tuesday' },
+    });
+    expect(invalidDate.statusCode).toBe(400);
+
+    const first = await app.inject({
+      method: 'POST', url: '/v1/maintenance/assets', headers,
+      payload: { category: 'recorder', assetType: 'DVR', serialNumber: ' DVR-171 ' },
+    });
+    expect(first.statusCode).toBe(201);
+    const duplicate = await app.inject({
+      method: 'POST', url: '/v1/maintenance/assets', headers,
+      payload: { category: 'recorder', assetType: 'Backup DVR', serialNumber: 'dvr-171' },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    expect(duplicate.json()).toEqual({ error: 'asset_serial_already_registered' });
+  });
+
   it('returns work orders in the dashboard data envelope', async () => {
     const headers = { 'x-user-id': 'user-global-admin' };
     const create = await app.inject({
@@ -65,6 +139,46 @@ describe('maintenance routes (basic)', async () => {
       status: 'open',
     });
     expect(create.json().workOrderNumber).toMatch(/^WO-\d{8}-[A-F0-9]{8}$/);
+  });
+
+  it('enforces work-order lifecycle, assignment, and closure evidence', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const create = await app.inject({
+      method: 'POST', url: '/v1/maintenance/workorders', headers,
+      payload: { workOrderNumber: 'WO-LIFECYCLE-001', problem: 'DVR disk requires inspection.', severity: 'high' },
+    });
+    expect(create.statusCode).toBe(201);
+    const id = create.json().id as string;
+
+    const noAssignee = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers, payload: { status: 'assigned' },
+    });
+    expect(noAssignee.statusCode).toBe(400);
+    expect(noAssignee.json()).toEqual({ error: 'workorder_assignee_required' });
+
+    const assigned = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers,
+      payload: { status: 'assigned', technician: 'Field Team A' },
+    });
+    expect(assigned.statusCode).toBe(200);
+    const skipped = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers, payload: { status: 'closed' },
+    });
+    expect(skipped.statusCode).toBe(409);
+
+    const inProgress = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers, payload: { status: 'in_progress' },
+    });
+    expect(inProgress.statusCode).toBe(200);
+    const noEvidence = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers, payload: { status: 'resolved' },
+    });
+    expect(noEvidence.statusCode).toBe(400);
+    const resolved = await app.inject({
+      method: 'PATCH', url: `/v1/maintenance/workorders/${id}`, headers,
+      payload: { status: 'resolved', actionTaken: 'Replaced failed disk.', verification: 'SMART and recording checks passed.' },
+    });
+    expect(resolved.statusCode).toBe(200);
   });
 
   it('does not expose another tenant work order by identifier', async () => {

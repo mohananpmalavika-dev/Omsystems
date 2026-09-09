@@ -182,6 +182,9 @@ export class NbfcRuleRepository {
     }
 
     let rules = Array.from(this.inMemoryRules.values());
+    if (filters.tenantId) {
+      rules = rules.filter((rule) => rule.tenantId === filters.tenantId);
+    }
     if (filters.detectorType && filters.detectorType !== "ALL") {
       rules = rules.filter(r => r.detectorType === filters.detectorType);
     }
@@ -424,6 +427,9 @@ export class NbfcRuleRepository {
     }
 
     let zones = Array.from(this.inMemoryZones.values());
+    if (filters.tenantId) {
+      zones = zones.filter((zone) => zone.tenantId === filters.tenantId);
+    }
     if (filters.branchId && filters.branchId !== "ALL") {
       zones = zones.filter(z => z.branchId === filters.branchId);
     }

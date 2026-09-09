@@ -26,6 +26,7 @@ function assert(condition: boolean, message: string) {
 }
 
 async function runLocalAiTests() {
+  process.env.ENABLE_EPHEMERAL_FACE_MATCHER = "true";
   console.log("================================================================================");
   console.log("  100% FREE LOCAL OPEN-SOURCE AI PIPELINE - VERIFICATION TEST RUNNER");
   console.log("================================================================================\n");
@@ -111,6 +112,7 @@ async function runLocalAiTests() {
   // Suite 3: Local ANPR License Plate Recognition
   console.log("\nSuite 3: Local ANPR (Automatic Number Plate Recognition)");
   {
+    localAnprService.addWatchlistEntry({ plateNumber: "KL07CD1234", listType: "SUSPICIOUS" });
     const anprResult = await localAnprService.recognizePlate({
       cameraId: "cam-entry-01",
       branchId: "branch-178",
@@ -134,6 +136,14 @@ async function runLocalAiTests() {
   // Suite 4: Local Face Vector Matcher (Cosine Similarity)
   console.log("\nSuite 4: Local Face Watchlist & Biometric Matching");
   {
+    localFaceMatcherService.enrollFace({
+      personId: "person-suspect-001",
+      name: "Suspect Person A",
+      watchlistType: "WANTED",
+      embeddingVector: localFaceMatcherService.createSyntheticVector(0.5),
+      notes: "Test fixture only",
+      enrolledAt: new Date("2026-01-01"),
+    });
     // Match exact wanted suspect vector
     const suspectVector = localFaceMatcherService.createSyntheticVector(0.5);
     const matchResult = await localFaceMatcherService.matchFace({
@@ -227,8 +237,8 @@ async function runLocalAiTests() {
       url: "/v1/ai/face/match",
       headers,
       payload: {
-        cameraId: "cam-lobby-1",
-        branchId: "br-01",
+        cameraId: "cam-001",
+        branchId: "A005",
         embeddingVector: localFaceMatcherService.createSyntheticVector(0.5),
       },
     });

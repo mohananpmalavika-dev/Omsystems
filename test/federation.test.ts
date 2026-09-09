@@ -74,14 +74,15 @@ describe("federation control plane", () => {
     });
 
     await heartbeat(app, "south-primary", southKey, { totalCameras: 150, onlineCameras: 145, totalBranches: 12, healthScore: 96 });
+    await heartbeat(app, "south-backup", backupKey, { totalCameras: 150, onlineCameras: 145, totalBranches: 12, healthScore: 96 });
     await heartbeat(app, "north-primary", northKey, { totalCameras: 120, onlineCameras: 110, totalBranches: 10, healthScore: 84 });
 
     const dashboard = await app.inject({ method: "GET", url: "/v1/global/dashboard", headers: admin });
     expect(dashboard.statusCode).toBe(200);
     expect(dashboard.json()).toMatchObject({
       totalServers: 3,
-      onlineServers: 2,
-      offlineServers: 1,
+      onlineServers: 3,
+      offlineServers: 0,
       totalRegions: 2,
       totalCountries: 1,
       totalCameras: 270,
@@ -185,6 +186,34 @@ describe("federation control plane", () => {
       },
     });
     expect(untrustedPeer.statusCode).toBe(401);
+  });
+
+  it("rejects unavailable failover targets and clears superseded scope mappings", async () => {
+    const repository = new MemoryFederationRepository();
+    const manager = new FederationManager(repository, { async search() { return []; } }, 90_000, () => observedAt);
+    app = await buildApp({ store: new MemoryStore(), federationManager: manager, federationSharedKey: federationKey });
+    const primary = await register(app, {
+      externalId: "east-primary", name: "East Primary", role: "regional_control_center",
+      countryCode: "IN", region: "East", sharedSecret: southKey, scopeNodeIds: ["branch-east-1"],
+    });
+    const backup = await register(app, {
+      externalId: "east-backup", name: "East Backup", role: "backup_server",
+      countryCode: "IN", region: "East", sharedSecret: backupKey, primaryServerId: primary.id,
+    });
+
+    const unavailable = await app.inject({
+      method: "POST", url: "/v1/federation/failover", headers: admin,
+      payload: { failedServerId: primary.id, activeServerId: backup.id, reason: "Primary connection lost" },
+    });
+    expect(unavailable.statusCode).toBe(409);
+    expect(unavailable.json()).toEqual({ error: "failover_target_unavailable" });
+
+    await register(app, {
+      externalId: "east-primary", name: "East Primary", role: "regional_control_center",
+      countryCode: "IN", region: "East", sharedSecret: southKey, scopeNodeIds: ["branch-east-2"],
+    });
+    expect(await repository.resolveServerForResource("omsystems", "branch-east-1")).toBeUndefined();
+    expect((await repository.resolveServerForResource("omsystems", "branch-east-2"))?.id).toBe(primary.id);
   });
 });
 

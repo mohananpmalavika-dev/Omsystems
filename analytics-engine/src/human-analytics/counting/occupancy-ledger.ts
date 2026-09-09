@@ -268,21 +268,26 @@ export class OccupancyLedger {
     toDate: Date,
     intervalMinutes: number = 5,
   ): Array<{ timestamp: Date; occupancy: number; confidence: number }> {
-    const entries = this.getLedgerEntries(zoneId, fromDate, toDate);
+    const entries = this.getLedgerEntries(zoneId, undefined, toDate)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     const history: Array<{ timestamp: Date; occupancy: number; confidence: number }> =
       [];
 
-    let currentOccupancy = this.baselineOccupancy.get(zoneId) || 0;
+    let currentOccupancy = 0;
+    let entryIndex = 0;
+    // Establish the count at the beginning of the requested period once.
+    while (entryIndex < entries.length && entries[entryIndex]!.timestamp < fromDate) {
+      currentOccupancy = Math.max(0, currentOccupancy + entries[entryIndex]!.delta);
+      entryIndex++;
+    }
     let currentTime = new Date(fromDate);
 
     while (currentTime <= toDate) {
-      // Apply all entries up to current time
-      const applicableEntries = entries.filter(
-        (e) => e.timestamp <= currentTime,
-      );
-
-      for (const entry of applicableEntries) {
-        currentOccupancy = Math.max(0, currentOccupancy + entry.delta);
+      // Apply each ledger entry exactly once. Re-applying all earlier entries
+      // at every interval made historical occupancy grow on every bucket.
+      while (entryIndex < entries.length && entries[entryIndex]!.timestamp <= currentTime) {
+        currentOccupancy = Math.max(0, currentOccupancy + entries[entryIndex]!.delta);
+        entryIndex++;
       }
 
       // Calculate confidence (simplified)

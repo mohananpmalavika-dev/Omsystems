@@ -4,7 +4,7 @@ import { recordingIndexService, RecordingIndexService } from "../recording-index
 import type { ArchiveState, StorageTier } from "../recording-index/recording-index.types.js";
 
 const searchRequestSchema = z.object({
-  tenantId: z.string().uuid().default("00000000-0000-0000-0000-000000000000"),
+  tenantId: z.string().uuid().optional(),
   cameraIds: z.array(z.string().min(1)).min(1),
   from: z.string().datetime(),
   to: z.string().datetime(),
@@ -62,8 +62,13 @@ export async function registerRecordingIndexRoutes(
    */
   app.post("/api/v1/recordings/search", async (request: FastifyRequest, reply: FastifyReply) => {
     const input = searchRequestSchema.parse(request.body);
+    const tenantId = request.currentUser?.tenantId;
+    if (!tenantId) return reply.code(401).send({ success: false, error: "unauthorized" });
+    if (input.tenantId && input.tenantId !== tenantId) {
+      return reply.code(403).send({ success: false, error: "tenant_mismatch" });
+    }
     const result = await service.findRecording({
-      tenantId: input.tenantId,
+      tenantId,
       cameraIds: input.cameraIds,
       from: new Date(input.from),
       to: new Date(input.to),
@@ -136,6 +141,9 @@ export async function registerRecordingIndexRoutes(
    */
   app.post("/api/v1/recordings/segments", async (request: FastifyRequest, reply: FastifyReply) => {
     const input = registerSegmentSchema.parse(request.body);
+    const tenantId = request.currentUser?.tenantId;
+    if (!tenantId) return reply.code(401).send({ success: false, error: "unauthorized" });
+    if (input.tenantId !== tenantId) return reply.code(403).send({ success: false, error: "tenant_mismatch" });
     const segment = await service.registerSegment({
       id: input.id,
       tenantId: input.tenantId,
@@ -196,6 +204,11 @@ export async function registerRecordingIndexRoutes(
     });
 
     const body = batchSchema.parse(request.body);
+    const tenantId = request.currentUser?.tenantId;
+    if (!tenantId) return reply.code(401).send({ success: false, error: "unauthorized" });
+    if (body.tenantId !== tenantId || body.segments.some((segment) => segment.tenantId !== tenantId)) {
+      return reply.code(403).send({ success: false, error: "tenant_mismatch" });
+    }
     const results = [];
 
     for (const seg of body.segments) {

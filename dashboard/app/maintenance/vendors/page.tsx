@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Handshake } from "lucide-react";
-import { ModulePage, ModuleStatus } from "@/components/module-page";
+import { ModulePage } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
 
 export default function VendorsListPage() {
@@ -40,7 +40,7 @@ export default function VendorsListPage() {
             <th>Partner</th>
             <th>Primary contact</th>
             <th>Phone</th>
-            <th>Status</th>
+            <th>Email</th>
             <th><span className="sr-only">Actions</span></th>
           </tr>
         </thead>
@@ -49,9 +49,9 @@ export default function VendorsListPage() {
             <tr key={v.id}>
               <td><span className="module-id">{v.id}</span></td>
               <td><strong className="module-row-title">{v.name}</strong></td>
-              <td>{v.contactName ?? 'Not assigned'}</td>
+              <td>{v.contact ?? 'Not assigned'}</td>
               <td>{v.phone ?? 'Not provided'}</td>
-              <td><ModuleStatus value={v.active ? 'Active' : 'Inactive'} /></td>
+              <td>{v.email ?? 'Not provided'}</td>
               <td className="module-row-action">
                 <Link href={`/maintenance/vendors/${v.id}`}>View details</Link>
               </td>

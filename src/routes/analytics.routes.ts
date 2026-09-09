@@ -252,10 +252,15 @@ export async function registerAnalyticsRoutes(
       });
     }
   });
-  app.post("/v1/analytics/assistant/query", async (request) => {
-    const { query } = z.object({ query: z.string().trim().min(3).max(500) }).parse(request.body);
+  app.post("/v1/analytics/assistant/query", async (request, reply) => {
+    const { query, branchId } = z.object({
+      query: z.string().trim().min(3).max(500),
+      branchId: z.string().min(1).optional(),
+    }).parse(request.body);
     const normalized = query.toLowerCase();
-    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+    if (branchId && !await authorizedNode(request, reply, store, branchId, "analytics:view")) return;
+    const branches = (await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch"))
+      .filter((branch) => !branchId || branch.id === branchId);
     const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
 
     if (/not recording|recording (is )?(off|stopped|failed)/.test(normalized)) {
@@ -273,7 +278,12 @@ export async function registerAnalyticsRoutes(
     }
 
     if (/smoke|fire|alert/.test(normalized)) {
-      const alerts = await store.listAnalyticsAlerts(request.currentUser.tenantId, { limit: 200 });
+      const accessibleCameras = (await Promise.all(branches.map((branch) =>
+        store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view")
+      ))).flat();
+      const accessibleCameraIds = new Set(accessibleCameras.map((camera) => camera.id));
+      const alerts = (await store.listAnalyticsAlerts(request.currentUser.tenantId, { limit: 200 }))
+        .filter((alert) => accessibleCameraIds.has(alert.cameraId));
       const terms = ["smoke", "fire"].filter((term) => normalized.includes(term));
       const matches = alerts.filter((alert) => {
         const haystack = `${alert.title} ${alert.description ?? ""} ${alert.objectClasses.join(" ")}`.toLowerCase();
@@ -1198,8 +1208,16 @@ function aggregateFootfall(events: AnalyticsEvent[], interval: "hour" | "day") {
       (["exit", "leave", "b-to-a"].includes(direction) ? 1 : 0);
     bucket.entries += Math.max(0, entries);
     bucket.exits += Math.max(0, exits);
+    // A raw detection or occupancy snapshot is not a crossing. Only an
+    // explicit count or a recognized directional tripwire contributes to
+    // footfall; this prevents frame-rate-dependent inflation.
+    const explicitCrossings = finiteMetadataNumber(event.metadata, "totalCrossings", "crossings");
     bucket.total_crossings += Math.max(0,
-      finiteMetadataNumber(event.metadata, "totalCrossings", "crossings") ?? Math.max(1, entries + exits));
+      explicitCrossings ?? (entries + exits > 0 ? entries + exits :
+      // Compatibility for external engines whose `footfall` contract itself
+      // denotes one verified crossing. Person/occupancy snapshots never take
+      // this fallback.
+      (event.detectionType === "footfall" ? 1 : 0)));
     buckets.set(bucketAt, bucket);
   }
   return [...buckets.values()].sort((left, right) => left.bucket_at.localeCompare(right.bucket_at));

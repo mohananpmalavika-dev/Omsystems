@@ -5,7 +5,6 @@
  * Coordinates snapshot generation, feature extraction, and risk prediction.
  */
 
-import { randomUUID } from "node:crypto";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
 import type { User } from "../../domain/models.js";
 import { SnapshotService } from "./snapshot.service.js";
@@ -17,12 +16,15 @@ import type {
   BranchRiskHistory,
   PredictionOptions,
   PredictionTarget,
+  BranchHealthSnapshot,
 } from "./types.js";
 
 export class PredictionService {
   private readonly snapshotService: SnapshotService;
   private readonly featureEngine: FeatureEngine;
   private readonly riskEngine: RiskEngine;
+  private readonly memoryPredictions = new Map<string, BranchRiskPrediction[]>();
+  private readonly memorySnapshots = new Map<string, BranchHealthSnapshot[]>();
 
   constructor(private readonly store: ControlPlaneStore) {
     this.snapshotService = new SnapshotService(store);
@@ -49,9 +51,16 @@ export class PredictionService {
 
     // Get historical snapshots for trend analysis
     const historicalSnapshots = await this.getHistoricalSnapshots(
+      tenantId,
       branchId,
       30 // last 30 days
     );
+
+    // Do not turn absent telemetry into a reassuring or alarming forecast.
+    // A prediction is actionable only when enough real sources are present.
+    if (snapshot.dataQuality.qualityScore < 0.35) {
+      return [];
+    }
 
     // Extract features
     const features = await this.featureEngine.extractFeatures(
@@ -74,6 +83,11 @@ export class PredictionService {
 
     // Store predictions
     await this.storePredictions(predictions);
+    const snapshotKey = `${tenantId}:${branchId}`;
+    this.memorySnapshots.set(snapshotKey, [
+      ...(this.memorySnapshots.get(snapshotKey) ?? []),
+      snapshot,
+    ].slice(-500));
 
     return predictions;
   }
@@ -85,9 +99,8 @@ export class PredictionService {
     predictionId: string,
     tenantId: string
   ): Promise<BranchRiskPrediction | null> {
-    // TODO: Implement database query when schema is available
-    // For now, predictions are computed on-demand
-    return null;
+    const values = await this.getLatestPredictionsForTenant(tenantId, predictionId);
+    return values.find((prediction) => prediction.id === predictionId) ?? null;
   }
 
   /**
@@ -97,9 +110,17 @@ export class PredictionService {
     branchId: string,
     tenantId: string
   ): Promise<BranchRiskPrediction[]> {
-    // TODO: Implement database query when schema is available
-    // For now, predictions are computed on-demand
-    return [];
+    const db = this.database();
+    if (db) {
+      const result = await db.query(
+        `SELECT DISTINCT ON (horizon_hours) prediction_data FROM branch_risk_predictions
+         WHERE tenant_id=$1 AND branch_id=$2 AND expires_at > now()
+         ORDER BY horizon_hours, generated_at DESC`,
+        [tenantId, branchId],
+      );
+      return result.rows.map((row: any) => hydratePrediction(row.prediction_data));
+    }
+    return (this.memoryPredictions.get(`${tenantId}:${branchId}`) ?? []).filter((prediction) => prediction.expiresAt > new Date());
   }
 
   /**
@@ -213,8 +234,17 @@ export class PredictionService {
     const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const end = new Date();
 
-    // TODO: Implement database query when schema is available
-    const predictions: BranchRiskHistory["predictions"] = [];
+    const db = this.database();
+    const predictions = db
+      ? (await db.query(
+          `SELECT prediction_data FROM branch_risk_predictions
+           WHERE tenant_id=$1 AND branch_id=$2 AND generated_at >= $3
+           ORDER BY generated_at ASC`,
+          [tenantId, branchId, start],
+        )).rows.map((row: any) => hydratePrediction(row.prediction_data))
+      : (this.memoryPredictions.get(`${tenantId}:${branchId}`) ?? [])
+          .filter((prediction) => prediction.generatedAt >= start)
+          .map((prediction) => ({ ...prediction }));
 
     // Get failure events
     const allIncidents = await this.store.listIncidents(tenantId, {
@@ -247,20 +277,64 @@ export class PredictionService {
   private async storePredictions(
     predictions: BranchRiskPrediction[]
   ): Promise<void> {
-    // TODO: Implement database persistence when schema is available
-    // For now, predictions are computed on-demand and not persisted
-    console.debug(`Generated ${predictions.length} predictions (not persisted)`);
+    if (predictions.length === 0) return;
+    const db = this.database();
+    if (db) {
+      for (const prediction of predictions) {
+        await db.query(
+          `INSERT INTO branch_risk_predictions
+            (id, tenant_id, branch_id, horizon_hours, probability, risk_level, confidence, data_quality, prediction_data, generated_at, expires_at)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)`,
+          [prediction.id, prediction.tenantId, prediction.branchId, prediction.horizonHours, prediction.probability,
+            prediction.riskLevel, prediction.confidence, prediction.dataQuality, JSON.stringify(prediction), prediction.generatedAt, prediction.expiresAt],
+        );
+      }
+      return;
+    }
+    this.memoryPredictions.set(`${predictions[0]!.tenantId}:${predictions[0]!.branchId}`, predictions);
   }
 
   /**
    * Get historical snapshots for trend analysis
    */
   private async getHistoricalSnapshots(
+    tenantId: string,
     branchId: string,
     days: number
   ): Promise<any[]> {
-    // TODO: Implement database query when schema is available
-    // For now, snapshots are computed on-demand and not persisted
-    return [];
+    const db = this.database();
+    if (db) {
+      const result = await db.query(
+        `SELECT snapshot_data FROM branch_health_prediction_snapshots
+         WHERE tenant_id=$1 AND branch_id=$2 AND captured_at >= now() - ($3::int * interval '1 day')
+         ORDER BY captured_at ASC`,
+        [tenantId, branchId, days],
+      );
+      return result.rows.map((row: any) => hydrateSnapshot(row.snapshot_data));
+    }
+    return (this.memorySnapshots.get(`${tenantId}:${branchId}`) ?? []).filter((snapshot) => snapshot.timestamp >= new Date(Date.now() - days * 86_400_000));
   }
+
+  private database(): { query: (sql: string, values: unknown[]) => Promise<{ rows: any[] }> } | undefined {
+    return (this.store as any).db ?? (typeof (this.store as any).query === "function" ? this.store as any : undefined);
+  }
+
+  private async getLatestPredictionsForTenant(tenantId: string, predictionId: string) {
+    const db = this.database();
+    if (!db) return [...this.memoryPredictions.values()].flat().filter((prediction) => prediction.tenantId === tenantId);
+    const result = await db.query(`SELECT prediction_data FROM branch_risk_predictions WHERE tenant_id=$1 AND id=$2`, [tenantId, predictionId]);
+    return result.rows.map((row: any) => hydratePrediction(row.prediction_data));
+  }
+}
+
+function hydratePrediction(value: any): BranchRiskPrediction {
+  const prediction = typeof value === "string" ? JSON.parse(value) : value;
+  return { ...prediction, generatedAt: new Date(prediction.generatedAt), expiresAt: new Date(prediction.expiresAt), predictedWindow: prediction.predictedWindow ? {
+    start: new Date(prediction.predictedWindow.start), end: new Date(prediction.predictedWindow.end), mostLikely: new Date(prediction.predictedWindow.mostLikely),
+  } : undefined };
+}
+
+function hydrateSnapshot(value: any): BranchHealthSnapshot {
+  const snapshot = typeof value === "string" ? JSON.parse(value) : value;
+  return { ...snapshot, timestamp: new Date(snapshot.timestamp), historical: { ...snapshot.historical, lastFailureDate: snapshot.historical?.lastFailureDate ? new Date(snapshot.historical.lastFailureDate) : null } };
 }

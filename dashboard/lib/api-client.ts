@@ -1253,8 +1253,8 @@ export const analyticsApi = {
     '/v1/analytics/enable-all-fleet-cameras',
     { method: 'POST', body: JSON.stringify({}) },
   ),
-  askAssistant: (query: string) => fetchApi<any>('/v1/analytics/assistant/query', {
-    method: 'POST', body: JSON.stringify({ query }),
+  askAssistant: (query: string, branchId?: string) => fetchApi<any>('/v1/analytics/assistant/query', {
+    method: 'POST', body: JSON.stringify({ query, ...(branchId ? { branchId } : {}) }),
   }),
   listRules: (cameraId: string) =>
     fetchApi<{ data: any[] }>(
@@ -1493,6 +1493,7 @@ export const identityAnalyticsApi = {
     const params = new URLSearchParams();
     if (filters?.watchlistId && filters.watchlistId.trim() !== "") params.set('watchlistId', filters.watchlistId);
     if (filters?.minSimilarity !== undefined) params.set('minSimilarity', String(filters.minSimilarity));
+    if (filters?.minSimilarity === undefined) params.set('minSimilarity', '0.82');
     params.set('limit', String(filters?.limit ?? 100));
     return fetchApi<{ data: FaceRecognitionEvent[] }>(`/v1/analytics/face-events?${params}`);
   },

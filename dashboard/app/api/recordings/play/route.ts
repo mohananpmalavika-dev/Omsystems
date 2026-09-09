@@ -6,6 +6,9 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const segmentId = request.nextUrl.searchParams.get("segmentId");
   if (!segmentId) return Response.json({ error: "segment_id_required" }, { status: 400 });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segmentId)) {
+    return Response.json({ error: "invalid_segment_id" }, { status: 400 });
+  }
   const sessionToken = request.cookies.get("sentinel_access")?.value;
   if (!sessionToken) {
     return Response.json(
@@ -19,6 +22,9 @@ export async function GET(request: NextRequest) {
       sessionToken,
     );
     if (segment.status !== "ready") {
+      return Response.json({ error: "recording_segment_unavailable" }, { status: 409 });
+    }
+    if (!segment.storagePath || typeof segment.storagePath !== "string") {
       return Response.json({ error: "recording_segment_unavailable" }, { status: 409 });
     }
     const engineBase = runtimeEnv("RECORDING_ENGINE_INTERNAL_URL");
@@ -36,6 +42,12 @@ export async function GET(request: NextRequest) {
       },
       cache: "no-store",
     });
+    if (!upstream.ok && upstream.status !== 206) {
+      return Response.json(
+        { error: upstream.status === 404 ? "recording_segment_not_found" : "recording_playback_unavailable" },
+        { status: upstream.status === 404 ? 404 : 502 },
+      );
+    }
     const headers = new Headers({
       "cache-control": "private, no-store",
       "content-type": upstream.headers.get("content-type") ?? "video/mp4",

@@ -215,6 +215,10 @@ async function genericFaceEvents(
   return candidates.flatMap((event) => {
     const watchlistId = event.watchlistId ??
       (event.personId ? personWatchlists.get(event.personId) ?? null : null);
+    // Metadata is untrusted until its identity references resolve to this
+    // tenant's active watchlist registry.
+    if (!watchlistId || !watchlistNames.has(watchlistId)) return [];
+    if (event.personId && personWatchlists.get(event.personId) !== watchlistId) return [];
     if (filters.watchlistId && watchlistId !== filters.watchlistId) return [];
     return [{
       ...event,
@@ -829,7 +833,7 @@ export async function registerAnalyticsPhase2Routes(
         cameraId: z.string().trim().min(1).max(200).optional(),
         watchlistId: z.string().uuid().optional(),
         personId: z.string().uuid().optional(),
-        minSimilarity: z.coerce.number().min(0).max(1).default(0.6),
+        minSimilarity: z.coerce.number().min(0.5).max(1).default(0.82),
         limit: z.coerce.number().int().min(1).max(1000).default(100),
       })
       .superRefine((value, context) => {

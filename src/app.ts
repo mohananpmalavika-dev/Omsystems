@@ -6,6 +6,8 @@ import Fastify, {
 } from "fastify";
 import { z } from "zod";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { SESClient } from "@aws-sdk/client-ses";
 import {
   hasExtendedInfrastructure,
@@ -97,6 +99,7 @@ import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infr
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
+import { initializePredictiveHealthWorker } from "./workers/predictive-health-worker.js";
 import { registerRCAIncidentIntegrationRoutes } from "./routes/rca-incident-integration.routes.js";
 import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
@@ -661,8 +664,7 @@ export async function buildApp(options?: {
       request.url === "/health" ||
       request.url === "/ready" ||
       request.url === "/metrics" ||
-       request.url.startsWith("/api/observability/") ||
-      request.url.startsWith("/api/ai/") ||
+      request.url.startsWith("/api/observability/") ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
       request.url.startsWith("/internal/analytics/") ||
@@ -2482,6 +2484,18 @@ export async function buildApp(options?: {
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to start device configuration job worker');
     }
+
+    // This worker writes durable, tenant-scoped forecasts. Deploy it on one
+    // control-plane instance only to avoid duplicate forecast cycles.
+    if (process.env.ENABLE_PREDICTIVE_HEALTH_WORKER === "true") {
+      try {
+        const predictiveHealthWorker = initializePredictiveHealthWorker(extendedStore);
+        app.addHook("onClose", async () => predictiveHealthWorker.stop());
+        app.log.info("Predictive health worker started");
+      } catch (err: unknown) {
+        app.log.error({ err }, "failed to start predictive health worker");
+      }
+    }
   }
   await registerPrivacyRoutes(app, store);
   await registerReportsRoutes(app, store);
@@ -2744,7 +2758,7 @@ export async function buildApp(options?: {
 
   // Register 100% Free Local Open-Source AI Analytics routes
   try {
-    await registerLocalAiAnalyticsRoutes(app);
+    await registerLocalAiAnalyticsRoutes(app, store);
     app.log.info('Local open-source AI analytics routes registered (100% Free / Zero Cloud Billing)');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register local AI analytics routes');
@@ -2752,9 +2766,31 @@ export async function buildApp(options?: {
 
   // Register banking analytics routes
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const bankingModule = require('../analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js');
-    await bankingModule.registerBankingAnalyticsApiRoutes(app, {});
+    // The control plane is ESM; `require` silently left this entire feature
+    // unavailable in production. Resolve the independently-built workspace
+    // from the deployment root instead of relying on a source-relative path.
+    const bankingModule = await import(pathToFileURL(resolve(
+      process.env.BANKING_ANALYTICS_MODULE_PATH ?? "analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js",
+    )).href);
+    await bankingModule.registerBankingAnalyticsApiRoutes(app, {
+      authorize: async (request: FastifyRequest, reply: FastifyReply) => {
+        const user = request.currentUser;
+        if (!user) {
+          await reply.code(401).send({ success: false, error: "unauthenticated" });
+          return false;
+        }
+        const query = request.query as { tenantId?: unknown; branchId?: unknown };
+        const body = request.body as { tenantId?: unknown; branchId?: unknown } | undefined;
+        const tenantId = typeof body?.tenantId === "string" ? body.tenantId : query.tenantId;
+        const branchId = typeof body?.branchId === "string" ? body.branchId : query.branchId;
+        if (typeof tenantId === "string" && tenantId !== user.tenantId) return false;
+        if (typeof branchId !== "string") return true;
+        const branch = await store.getNode(branchId);
+        if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId) return false;
+        const action: Action = ["GET", "HEAD"].includes(request.method) ? "analytics:view" : "analytics:configure";
+        return Boolean((await store.checkAccess(user, action, branch.id))?.allowed);
+      },
+    });
     app.log.info('Banking analytics routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register banking analytics routes');
@@ -2993,6 +3029,7 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/next$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/scan-jobs\/[^/]+\/complete$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/(?:telemetry|recorder-hdd|recorder-archive)$/.test(path)) return true;
+  if (method === "POST" && /^\/(?:api\/)?v1\/edge\/(?:telemetry|transitions)$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/analytics\/frames$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/(?:commands|updates)\/next$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/bootstrap$/.test(path)) return true;
@@ -3006,6 +3043,10 @@ function edgeAgentIdFromIngress(request: FastifyRequest) {
   const path = request.url.split("?", 1)[0] ?? request.url;
   const direct = path.match(/^\/v1\/edge-agents\/([^/]+)/)?.[1];
   if (direct) return decodeURIComponent(direct);
+  if (/^\/(?:api\/)?v1\/edge\/(?:telemetry|transitions)$/.test(path)) {
+    const value = (request.body as { agentId?: unknown } | undefined)?.agentId;
+    return typeof value === "string" ? value : undefined;
+  }
   if (/^\/v1\/branches\/[^/]+\/cameras\/discovered$/.test(path)) {
     const value = (request.body as { edgeAgentId?: unknown } | undefined)?.edgeAgentId;
     return typeof value === "string" ? value : undefined;

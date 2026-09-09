@@ -38,6 +38,7 @@ export class HeatMapGenerator extends BaseDetector {
     timestamp: Date;
   }> = [];
   private lastDecayTime: Date = new Date();
+  private decayTimer?: NodeJS.Timeout;
 
   private readonly DEFAULT_CONFIG: HeatMapConfig = {
     gridWidth: 32,
@@ -247,7 +248,8 @@ export class HeatMapGenerator extends BaseDetector {
    * Start heat decay process
    */
   private startDecayProcess(): void {
-    setInterval(() => {
+    if (this.decayTimer) return;
+    this.decayTimer = setInterval(() => {
       const now = new Date();
       const timeDiff = (now.getTime() - this.lastDecayTime.getTime()) / 60000; // Minutes
       
@@ -381,6 +383,10 @@ export class HeatMapGenerator extends BaseDetector {
   }
 
   async cleanup(): Promise<void> {
+    if (this.decayTimer) {
+      clearInterval(this.decayTimer);
+      this.decayTimer = undefined;
+    }
     this.reset();
     console.log("Heat map generator cleaned up");
   }

@@ -79,8 +79,6 @@ export async function GET(request: NextRequest) {
 function forwardedHeaders(request: NextRequest) {
   return {
     cookie: request.headers.get("cookie") ?? "",
-    "x-tenant-id": request.headers.get("x-tenant-id") ?? "",
-    "x-user-id": request.headers.get("x-user-id") ?? "system",
   };
 }
 
@@ -118,8 +116,8 @@ function toGraphNode(value: unknown): GraphNode[] {
     deviceId: value.deviceId,
     deviceType: typeof value.deviceType === "string" ? value.deviceType : "device",
     deviceName: typeof value.deviceName === "string" ? value.deviceName : value.deviceId,
-    healthScore: typeof value.healthScore === "number" ? value.healthScore : null,
-    status: typeof value.status === "string" ? value.status : "unknown",
+    healthScore: typeof value.healthScore === "number" && Number.isFinite(value.healthScore) ? value.healthScore : null,
+    status: normalizeStatus(value.status),
     observedAt: typeof value.observedAt === "string" ? value.observedAt : null,
     evidenceQuality: typeof value.evidenceQuality === "string" ? value.evidenceQuality : "unknown",
   }];
@@ -140,8 +138,7 @@ function toTopologyData(graphs: BranchGraph[]) {
     type: node.deviceType,
     label: node.deviceName,
     status: node.status,
-    healthScore: node.healthScore ?? 0,
-    securityScore: 0,
+    healthScore: node.healthScore,
     metadata: {
       branchId: graph.branchId,
       observedAt: node.observedAt,
@@ -172,7 +169,12 @@ function toTopologyData(graphs: BranchGraph[]) {
 }
 
 function nodeKey(branchId: string, deviceId: string) {
-  return `${branchId}:${deviceId}`;
+  return `${encodeURIComponent(branchId)}:${encodeURIComponent(deviceId)}`;
+}
+
+function normalizeStatus(value: unknown) {
+  const status = typeof value === "string" ? value.toLowerCase() : "";
+  return ["healthy", "warning", "critical", "offline", "unknown"].includes(status) ? status : "unknown";
 }
 
 function edgeCriticality(sourceStatus: string | undefined, targetStatus: string | undefined) {

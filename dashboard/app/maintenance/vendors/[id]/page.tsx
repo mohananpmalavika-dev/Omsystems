@@ -12,11 +12,12 @@ export default function VendorDetailPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [serviceCenters, setServiceCenters] = useState("");
 
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    void maintenanceApi.getVendor(id).then((r) => setVendor(r)).catch((err) => setError(err.message || String(err))).finally(() => setLoading(false));
+    void maintenanceApi.getVendor(id).then((r) => { setVendor(r); setServiceCenters((r.serviceCenters ?? []).join("\n")); }).catch((err) => setError(err.message || String(err))).finally(() => setLoading(false));
   }, [id]);
 
   async function handleSave(e: React.FormEvent) {
@@ -25,7 +26,10 @@ export default function VendorDetailPage() {
     setSaving(true);
     setError(null);
     try {
-      const payload: any = { name: vendor.name, contactName: vendor.contactName || undefined, email: vendor.email || undefined, phone: vendor.phone || undefined, active: vendor.active };
+      const payload = {
+        name: vendor.name.trim(), contact: vendor.contact?.trim() || null, email: vendor.email?.trim() || null, phone: vendor.phone?.trim() || null,
+        serviceCenters: serviceCenters.split("\n").map((value) => value.trim()).filter(Boolean),
+      };
       await maintenanceApi.updateVendor(id, payload);
       router.push('/maintenance/vendors');
     } catch (err: any) {
@@ -48,8 +52,8 @@ export default function VendorDetailPage() {
           </label>
         </div>
         <div style={{ marginBottom: 8 }}>
-          <label>Contact name<br />
-            <input value={vendor.contactName ?? ""} onChange={(e) => setVendor({ ...vendor, contactName: e.target.value })} />
+          <label>Primary contact<br />
+            <input value={vendor.contact ?? ""} onChange={(e) => setVendor({ ...vendor, contact: e.target.value })} />
           </label>
         </div>
         <div style={{ marginBottom: 8 }}>
@@ -62,8 +66,10 @@ export default function VendorDetailPage() {
             <input value={vendor.phone ?? ""} onChange={(e) => setVendor({ ...vendor, phone: e.target.value })} />
           </label>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label><input type="checkbox" checked={vendor.active ?? true} onChange={(e) => setVendor({ ...vendor, active: e.target.checked })} /> Active</label>
+        <div style={{ marginBottom: 8 }}>
+          <label>Service centres <small>(one per line)</small><br />
+            <textarea value={serviceCenters} onChange={(e) => setServiceCenters(e.target.value)} rows={3} />
+          </label>
         </div>
         {error && <p style={{ color: 'red' }}>{error}</p>}
         <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>

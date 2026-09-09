@@ -22,6 +22,7 @@ import { ZoneDetector } from "./detectors/zone-detector.js";
 import { PersonDetector } from "./detectors/person-detector.js";
 import { VehicleDetector } from "./detectors/vehicle-detector.js";
 import { HelmetDetector } from "./detectors/helmet-detector.js";
+import { PPEDetector } from "./detectors/ppe-detector.js";
 import { FallDetector } from "./detectors/fall-detector.js";
 import { SmokeFireDetector } from "./detectors/smoke-fire-detector.js";
 import { CrowdDensityDetector } from "./detectors/crowd-density-detector.js";
@@ -78,6 +79,7 @@ export class AnalyticsPipeline {
   private personDetector: PersonDetector;
   private vehicleDetector: VehicleDetector;
   private helmetDetector: HelmetDetector;
+  private ppeDetector: PPEDetector;
   private fallDetector: FallDetector;
   private smokeFireDetector: SmokeFireDetector;
   private crowdDensityDetector: CrowdDensityDetector;
@@ -132,6 +134,7 @@ export class AnalyticsPipeline {
     this.personDetector = new PersonDetector();
     this.vehicleDetector = new VehicleDetector();
     this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.5));
+    this.ppeDetector = new PPEDetector(environmentProbability("PPE_CONFIDENCE_THRESHOLD", 0.6));
     this.fallDetector = new FallDetector();
     this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
     this.crowdDensityDetector = new CrowdDensityDetector();
@@ -175,6 +178,7 @@ export class AnalyticsPipeline {
       this.personDetector,
       this.vehicleDetector,
       this.helmetDetector,
+      this.ppeDetector,
       this.fallDetector,
       this.smokeFireDetector,
       this.crowdDensityDetector,
@@ -353,6 +357,13 @@ export class AnalyticsPipeline {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
 
+      // PPE violations originate from a dedicated edge/local PPE model.  Do
+      // not turn a missing observation into a violation: this detector only
+      // emits normalized, high-confidence model observations.
+      if (this.needsDetection(rules, ['no-helmet', 'no-safety-vest', 'no-gloves', 'no-shoes'])) {
+        specializedPromises.push(this.ppeDetector.detect(trackedFrame));
+      }
+
       // Fall detection (if persons present)
       if (persons.length > 0 && this.needsDetection(rules, ['fall'])) {
         specializedPromises.push(this.fallDetector.detect(trackedFrame));
@@ -462,6 +473,7 @@ export class AnalyticsPipeline {
 
     switch (rule.detectionType) {
       case "line-crossing":
+      case "footfall":
         if (rule.zone.shape === "line") {
           results = await this.zoneDetector.detectLineCrossing(
             frame,
@@ -474,6 +486,22 @@ export class AnalyticsPipeline {
               direction: (rule.direction as any) ?? "any",
             },
           );
+          if (rule.detectionType === "footfall") {
+            results = results.map((result) => {
+              const direction = result.metadata?.direction;
+              const isEntry = direction === "a-to-b";
+              return {
+                ...result,
+                detectionType: "footfall",
+                metadata: {
+                  ...result.metadata,
+                  entries: isEntry ? 1 : 0,
+                  exits: isEntry ? 0 : 1,
+                  totalCrossings: 1,
+                },
+              };
+            });
+          }
         }
         break;
 
@@ -617,6 +645,9 @@ export class AnalyticsPipeline {
       "helmet",
       "helmet-worn",
       "no-helmet",
+      "no-safety-vest",
+      "no-gloves",
+      "no-shoes",
       "loitering",
       "intrusion",
       "line-crossing",
@@ -644,7 +675,7 @@ export class AnalyticsPipeline {
   private needsObjectDetection(rules: AnalyticsRule[]): boolean {
     return this.needsDetection(rules, [
       "object", "person", "person-counting", "occupancy-counting", "footfall", "customer-counting",
-      "vehicle", "helmet", "helmet-worn", "no-helmet", "fall", "fire", "smoke",
+      "vehicle", "helmet", "helmet-worn", "no-helmet", "no-safety-vest", "no-gloves", "no-shoes", "fall", "fire", "smoke",
       "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
       "face", "face-recognition", "watchlist-match",
     ]);

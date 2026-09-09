@@ -243,7 +243,10 @@ export class ChainOfCustodyService {
     const syncResult = computeSync();
 
     const asyncPromise = (async () => {
-      if (pool) {
+      // Use the same authority selected for writes.  Checking the module-level
+      // pool here made injected production/test pools write to one ledger and
+      // verify a different one.
+      if (this.getPool()) {
         const ledger = await this.loadLedgerFromDb(evidencePackageId);
         if (ledger.length === 0) {
           return { valid: true, verifiedCount: 0 };

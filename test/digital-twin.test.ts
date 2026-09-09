@@ -103,6 +103,19 @@ describe("operational Digital Twin", () => {
     expect(invalid.json().error).toBe("unsafe_svg_content");
   });
 
+  it("does not deactivate the current floor plan when activation targets another floor", async () => {
+    const active = await uploadPlan("ground-active.png");
+    const live = await app.inject({ method: "GET", url: `/v1/digital-twin/branches/${branchId}/live`, headers: admin });
+    const otherFloor = await app.inject({ method: "POST", url: "/v1/digital-twin/floors", headers: admin, payload: { buildingId: live.json().building.id, floorNumber: 3, name: "Third Floor" } });
+    expect(otherFloor.statusCode).toBe(201);
+    const otherPlan = await app.inject({ method: "POST", url: "/v1/digital-twin/floor-plans", headers: admin, payload: { floorId: otherFloor.json().id, contentType: "image/png", originalFilename: "third-floor.png", dataBase64: tinyPng } });
+    expect(otherPlan.statusCode).toBe(201);
+
+    const activation = await app.inject({ method: "POST", url: `/v1/digital-twin/floor-plans/${otherPlan.json().id}/activate`, headers: admin, payload: { floorId } });
+    expect(activation.statusCode).toBe(404);
+    expect((await floorState()).floorPlan.id).toBe(active.id);
+  });
+
   it("projects live camera health and lets newer telemetry supersede old events", async () => {
     const camera = await createObject({
       objectType: "camera", name: "Vault camera", positionX: 0.25, positionY: 0.3,
@@ -229,6 +242,27 @@ describe("operational Digital Twin", () => {
       expect.objectContaining({ entityType: "zone", action: "create" }),
       expect.objectContaining({ entityType: "object", action: "create" }),
     ]));
+  });
+
+  it("rejects cross-floor zone and alert mutations before changing their state", async () => {
+    const otherFloor = await app.inject({
+      method: "POST", url: "/v1/digital-twin/floors", headers: admin,
+      payload: { buildingId: (await app.inject({ method: "GET", url: `/v1/digital-twin/branches/${branchId}/live`, headers: admin })).json().building.id, floorNumber: 2, name: "Second Floor" },
+    });
+    expect(otherFloor.statusCode).toBe(201);
+    const zone = await app.inject({ method: "POST", url: "/v1/digital-twin/zones", headers: admin, payload: { floorId, name: "Vault", zoneType: "restricted", vertices: [{ x: 0.1, y: 0.1 }, { x: 0.4, y: 0.1 }, { x: 0.4, y: 0.4 }] } });
+    expect(zone.statusCode).toBe(201);
+    const wrongFloorId = otherFloor.json().id;
+    const update = await app.inject({ method: "PATCH", url: `/v1/digital-twin/zones/${zone.json().id}`, headers: admin, payload: { floorId: wrongFloorId, name: "Mutated" } });
+    expect(update.statusCode).toBe(404);
+    expect((await floorState()).zones.find((item: { id: string }) => item.id === zone.json().id).name).toBe("Vault");
+
+    const door = await createObject({ objectType: "door", name: "Door", positionX: 0.4, positionY: 0.4 });
+    await postEvent(door.id, "door_forced", "forced_entry", "critical", "cross-floor-alert", "2026-07-30T12:00:00.000Z");
+    const alertId = (await floorState()).alerts[0].id;
+    const resolve = await app.inject({ method: "POST", url: `/v1/digital-twin/alerts/${alertId}/resolve`, headers: admin, payload: { floorId: wrongFloorId } });
+    expect(resolve.statusCode).toBe(404);
+    expect((await floorState()).alerts.find((item: { id: string }) => item.id === alertId)?.resolvedAt).toBeNull();
   });
 
   it("keeps one branch-scoped binding per device and does not leave failed placements", async () => {

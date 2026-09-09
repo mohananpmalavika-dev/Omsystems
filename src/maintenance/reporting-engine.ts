@@ -384,15 +384,22 @@ export class ReportingEngine {
 
     const periodWorkOrders = workOrders.filter(wo => {
       const created = new Date(wo.createdAt);
-      return created >= periodStart && created <= periodEnd;
+      return created >= periodStart && created <= periodEnd
+        && (!filters?.branchNodeId || wo.branchNodeId === filters.branchNodeId)
+        && (!filters?.assetId || wo.assetId === filters.assetId)
+        && (!filters?.vendorId || wo.vendorId === filters.vendorId)
+        && (!filters?.severity || wo.severity === filters.severity);
     });
 
     const withSla = periodWorkOrders.filter(wo => wo.slaDueAt);
     const closed = withSla.filter(wo => wo.status === 'closed');
     const onTime = closed.filter(wo => new Date(wo.updatedAt) <= new Date(wo.slaDueAt!));
-    const breached = withSla.filter(wo => 
+    const closedLate = closed.filter(wo => new Date(wo.updatedAt) > new Date(wo.slaDueAt!));
+    const openBreaches = withSla.filter(wo =>
       wo.status !== 'closed' && new Date(wo.slaDueAt!) < new Date()
     );
+    const breached = [...closedLate, ...openBreaches];
+    const evaluated = closed.length + openBreaches.length;
 
     // Group by severity
     const bySeverity = {
@@ -410,7 +417,7 @@ export class ReportingEngine {
         closed: closed.length,
         onTime: onTime.length,
         breached: breached.length,
-        complianceRate: closed.length > 0 ? (onTime.length / closed.length) * 100 : 100,
+        complianceRate: evaluated > 0 ? (onTime.length / evaluated) * 100 : 100,
       },
       bySeverity,
     };

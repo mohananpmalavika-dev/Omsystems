@@ -821,7 +821,11 @@ function parseCgiDisks(text: string) {
   const sharedRaidStatus = firstKey(text, ["Raid.Status", "RAID.State", "Storage.RaidStatus"]);
   const sharedRaidLevel = firstKey(text, ["Raid.Level", "RAID.Level", "Storage.RaidLevel"]);
   for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/(?:Storage|Disk|HDD)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
+    // Dahua/CP PLUS firmware usually returns table.Drive[0].*, while other
+    // OEM builds use Storage[0].* or HDD.0.*.  Treat all of these as a
+    // physical disk; otherwise a perfectly healthy installed drive is
+    // discarded before it reaches the storage dashboard.
+    const match = line.match(/(?:table\.)?(?:Storage|Disk|HDD|Drive)(?:\[|\.)(\d+)\]?\.([^=]+)=(.*)$/i);
     if (!match) continue;
     const item = grouped.get(match[1]!) ?? { diskNo: Number(match[1]) + 1 };
     item[match[2]!] = match[3]!.trim();

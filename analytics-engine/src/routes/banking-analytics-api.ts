@@ -33,6 +33,8 @@ import {
 export interface BankingAnalyticsApiConfig {
   bankingService?: BankingAnalyticsService;
   evidenceService?: BankingEvidenceService;
+  /** Host-provided tenant and branch authorization for control-plane use. */
+  authorize?: (request: FastifyRequest, reply: FastifyReply) => Promise<boolean> | boolean;
 }
 
 /**
@@ -100,12 +102,14 @@ const AddScheduleRuleSchema = z.object({
 });
 
 const CreateVisitSchema = z.object({
-  tenantId: z.string(),
-  branchId: z.string(),
-  expectedPlate: z.string().optional(),
-  expectedPlateRegex: z.string().optional(),
-  providerId: z.string().optional(),
-  providerName: z.string().optional(),
+  tenantId: z.string().trim().min(1).max(200),
+  branchId: z.string().trim().min(1).max(200),
+  expectedPlate: z.string().trim().min(4).max(20).optional(),
+  // Regex is evaluated against a short normalized plate. Keep the grammar
+  // deliberately small so a schedule cannot introduce a ReDoS pattern.
+  expectedPlateRegex: z.string().min(1).max(64).regex(/^[A-Za-z0-9^$\[\]\\?*+|.\-]+$/).optional(),
+  providerId: z.string().trim().min(1).max(200).optional(),
+  providerName: z.string().trim().min(1).max(200).optional(),
   expectedArrivalStart: z.string().datetime(),
   expectedArrivalEnd: z.string().datetime(),
   expectedPersonnel: z.array(z.object({
@@ -115,7 +119,9 @@ const CreateVisitSchema = z.object({
     lastName: z.string().optional(),
     required: z.boolean().default(true),
   })).optional(),
-  notes: z.string().optional(),
+  notes: z.string().max(2_000).optional(),
+}).refine((visit) => Date.parse(visit.expectedArrivalEnd) > Date.parse(visit.expectedArrivalStart), {
+  message: 'expectedArrivalEnd must be after expectedArrivalStart', path: ['expectedArrivalEnd'],
 });
 
 const CreatePersonnelSchema = z.object({
@@ -150,6 +156,13 @@ export async function registerBankingAnalyticsApiRoutes(
   const sessionRepo = getCashVanSessionRepository();
   const visitRepo = getExpectedVisitRepository();
   const personnelRepo = getPersonnelAuthorizationRepository();
+
+  app.addHook('preHandler', async (request, reply) => {
+    if (!request.url.startsWith('/v1/banking/')) return;
+    if (!config.authorize) return;
+    if (await config.authorize(request, reply)) return;
+    if (!reply.sent) await reply.code(403).send({ success: false, error: 'forbidden' });
+  });
 
   // Initialize service
   await bankingService.initialize();

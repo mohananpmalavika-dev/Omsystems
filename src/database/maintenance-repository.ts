@@ -262,8 +262,10 @@ export class MaintenanceRepository {
       phone: input.phone,
       address: input.address,
       gst_number: input.gstNumber,
-      service_centers: input.serviceCenters ? JSON.stringify(input.serviceCenters) : undefined,
-      escalation_matrix: input.escalationMatrix ? JSON.stringify(input.escalationMatrix) : undefined,
+      // Preserve explicit empty values so stale service centres/escalation
+      // data can be removed from a vendor record.
+      service_centers: input.serviceCenters === undefined ? undefined : JSON.stringify(input.serviceCenters),
+      escalation_matrix: input.escalationMatrix === undefined ? undefined : JSON.stringify(input.escalationMatrix),
       notes: input.notes,
       created_by: input.createdBy,
     };

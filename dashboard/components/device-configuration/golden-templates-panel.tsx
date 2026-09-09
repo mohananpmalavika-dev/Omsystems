@@ -152,10 +152,12 @@ export function GoldenTemplatesPanel({
 
   // Convert to Signed Config Draft Modal State
   const [draftModalOpen, setDraftModalOpen] = useState(false);
-  const [draftBranchId, setDraftBranchId] = useState<string>(selectedBranchId || (branches[0]?.id ?? "BR-118"));
+  const [draftBranchId, setDraftBranchId] = useState<string>(selectedBranchId || (branches[0]?.id ?? ""));
   const [draftChangeReason, setDraftChangeReason] = useState<string>("");
   const [drafting, setDrafting] = useState(false);
   const [draftResult, setDraftResult] = useState<any | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [applyAcknowledged, setApplyAcknowledged] = useState(false);
 
   // Expanded Drifts in Table
   const [expandedDriftDeviceIds, setExpandedDriftDeviceIds] = useState<Set<string>>(new Set());
@@ -195,12 +197,19 @@ export function GoldenTemplatesPanel({
     loadCompliance();
   }, []);
 
+  useEffect(() => {
+    const branchId = selectedBranchId || branches[0]?.id || "";
+    setApplyBranchId(branchId);
+    setDraftBranchId(branchId);
+  }, [selectedBranchId, branches]);
+
   const handleOpenApplyModal = (template: Template) => {
     setSelectedTemplate(template);
     setApplyScope("branch");
     setApplyBranchId(selectedBranchId || (branches[0]?.id ?? ""));
     setApplyDeviceId("");
     setApplyResult(null);
+    setApplyAcknowledged(false);
     setApplyModalOpen(true);
   };
 
@@ -211,12 +220,17 @@ export function GoldenTemplatesPanel({
 
   const handleExecuteApply = async () => {
     if (!selectedTemplate) return;
+    if ((applyScope === "single" && !applyDeviceId.trim()) || (applyScope === "branch" && !applyBranchId) || !applyAcknowledged) {
+      setApplyResult({ success: false, error: "Confirm the target and acknowledge this configuration change before applying." });
+      return;
+    }
     setApplying(true);
     setApplyResult(null);
 
     try {
       const payload: any = {
         scope: applyScope,
+        confirmNetworkChange: true,
       };
       if (applyScope === "single") payload.deviceId = applyDeviceId;
       if (applyScope === "branch") payload.branchId = applyBranchId;
@@ -244,7 +258,7 @@ export function GoldenTemplatesPanel({
       setRemediationResult(res?.data);
       loadCompliance();
     } catch (err: any) {
-      console.error("Remediation error:", err);
+      setError(err?.message || "Failed to remediate configuration drift.");
     } finally {
       setRemediating(false);
     }
@@ -258,7 +272,7 @@ export function GoldenTemplatesPanel({
       });
       loadCompliance();
     } catch (err) {
-      console.error("Single device remediation error:", err);
+      setError(err instanceof Error ? err.message : "Failed to remediate this device.");
     }
   };
 
@@ -280,6 +294,10 @@ export function GoldenTemplatesPanel({
 
   const handleExecuteDraft = async () => {
     if (!selectedTemplate) return;
+    if (!draftBranchId || !draftChangeReason.trim()) {
+      setDraftResult({ success: false, error: "A target branch and audit change reason are required." });
+      return;
+    }
     setDrafting(true);
     setDraftResult(null);
     try {
@@ -313,6 +331,7 @@ export function GoldenTemplatesPanel({
 
   return (
     <div className="space-y-6">
+      {error && <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-rose-500/40 bg-rose-950/50 px-4 py-3 text-xs text-rose-200"><span>{error}</span><button type="button" onClick={() => setError(null)} className="font-semibold text-rose-100 hover:text-white">Dismiss</button></div>}
       {/* Top Banner & Tab Navigation */}
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -918,6 +937,11 @@ export function GoldenTemplatesPanel({
               </div>
             )}
 
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-amber-800/60 bg-amber-950/30 p-3 text-xs text-amber-100">
+              <input type="checkbox" checked={applyAcknowledged} onChange={(event) => setApplyAcknowledged(event.target.checked)} className="mt-0.5" />
+              <span>I verified the target scope and understand this applies a device configuration change immediately. Network-affecting settings may briefly interrupt connectivity.</span>
+            </label>
+
             {/* Variable Substitution Assurance */}
             <div className="bg-slate-950 p-3.5 rounded-xl border border-slate-800 space-y-2">
               <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
@@ -972,7 +996,7 @@ export function GoldenTemplatesPanel({
               <button
                 type="button"
                 onClick={handleExecuteApply}
-                disabled={applying}
+                disabled={applying || !applyAcknowledged || (applyScope === "single" && !applyDeviceId.trim()) || (applyScope === "branch" && !applyBranchId)}
                 className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-indigo-600/30"
               >
                 <Play className={`w-3.5 h-3.5 fill-current ${applying ? "animate-spin" : ""}`} />

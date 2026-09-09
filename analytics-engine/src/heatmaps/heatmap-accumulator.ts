@@ -279,17 +279,20 @@ export class HeatmapAccumulator {
         // Use anchor point (bottom-center of bbox) for ground contact
         const { anchor } = observation;
 
-        // Assume normalized coordinates [0, 1] or convert if needed
-        // For now, assume coordinates are already in image space [0, width]
-        // and we need to normalize to grid
-        
-        // TODO: Get actual camera resolution from camera service
-        // For now, assume 1920x1080 as default
-        const cameraWidth = 1920;
-        const cameraHeight = 1080;
-
-        const normalizedX = anchor.x / cameraWidth;
-        const normalizedY = anchor.y / cameraHeight;
+        // Inference adapters normally provide normalized boxes.  Some camera
+        // integrations provide pixels instead, in which case the frame
+        // dimensions travel with the observation.  The former hard-coded
+        // 1920x1080 here collapsed normalized observations into the top-left
+        // heatmap cell and made non-1080p streams inaccurate.
+        const normalized = anchor.x >= 0 && anchor.x <= 1 && anchor.y >= 0 && anchor.y <= 1;
+        const frameWidth = observation.frameWidth;
+        const frameHeight = observation.frameHeight;
+        const normalizedX = normalized
+            ? anchor.x
+            : (frameWidth && frameWidth > 0 ? anchor.x / frameWidth : anchor.x);
+        const normalizedY = normalized
+            ? anchor.y
+            : (frameHeight && frameHeight > 0 ? anchor.y / frameHeight : anchor.y);
 
         const gridX = Math.min(
             this.config.width - 1,
@@ -449,6 +452,12 @@ export class HeatmapAccumulator {
      * Create pre-computed Gaussian kernel
      */
     private createGaussianKernel(radius: number): GaussianKernel {
+        if (!Number.isInteger(radius) || radius < 0) {
+            throw new Error('Heatmap kernel radius must be a non-negative integer');
+        }
+        if (radius === 0) {
+            return { radius: 0, size: 1, weights: new Float32Array([1]) };
+        }
         const size = radius * 2 + 1;
         const weights = new Float32Array(size * size);
         const sigma = radius / 2;

@@ -19,9 +19,14 @@ const heartbeatStatus = z.enum(["online", "degraded", "maintenance"]);
 const searchType = z.enum(["vehicle", "face", "object", "incident", "recording"]);
 const federationUrl = z.string().url().refine((value) => {
   const parsed = new URL(value);
-  return parsed.protocol === "https:"
+  return !parsed.username && !parsed.password && parsed.protocol === "https:"
     || (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname));
 }, "Federation endpoints must use HTTPS (HTTP is allowed only for loopback development)");
+const federationWebsocketUrl = z.string().url().refine((value) => {
+  const parsed = new URL(value);
+  return !parsed.username && !parsed.password && (parsed.protocol === "wss:"
+    || (parsed.protocol === "ws:" && ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname)));
+}, "Federation WebSocket endpoints must use WSS (WS is allowed only for loopback development)");
 
 const registerBody = z.object({
   externalId: z.string().trim().min(3).max(120).regex(/^[a-zA-Z0-9._:-]+$/),
@@ -34,7 +39,7 @@ const registerBody = z.object({
   timezone: z.string().trim().min(1).max(80).default("UTC"),
   baseUrl: federationUrl,
   apiUrl: federationUrl,
-  websocketUrl: z.string().url().optional(),
+  websocketUrl: federationWebsocketUrl.optional(),
   sharedSecret: z.string().min(32).max(512),
   primaryServerId: z.string().uuid().optional(),
   backupServerId: z.string().uuid().optional(),
@@ -95,8 +100,10 @@ const internalSearchBody = z.object({
     regions: z.array(z.string()).optional(),
     countryCodes: z.array(z.string().length(2)).optional(),
     limit: z.number().int().min(1).max(500),
+  }).refine((query) => new Date(query.from) < new Date(query.to), {
+    path: ["to"], message: "to must be after from",
   }),
-});
+}).strict();
 
 export async function registerFederationRoutes(
   app: FastifyInstance,
@@ -124,11 +131,22 @@ export async function registerFederationRoutes(
       RegisterFederatedServerInput,
       "tenantId" | "createdBy" | "sharedSecretHash"
     > & { sharedSecret: string };
-    const server = await manager.register({
-      ...body,
-      tenantId: request.currentUser.tenantId,
-      createdBy: request.currentUser.id,
-    });
+    let server;
+    try {
+      server = await manager.register({
+        ...body,
+        tenantId: request.currentUser.tenantId,
+        createdBy: request.currentUser.id,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "federation_server_not_found") {
+        return reply.code(404).send({ error: error.message });
+      }
+      if (error instanceof Error && error.message === "invalid_federation_relationship") {
+        return reply.code(409).send({ error: error.message });
+      }
+      throw error;
+    }
     await federationAudit(request, store, "federation.server_registered", { serverId: server.id, externalId: server.externalId });
     return reply.code(201).send(server);
   });
@@ -218,6 +236,9 @@ export async function registerFederationRoutes(
         return reply.code(404).send({ error: error.message });
       }
       if (error instanceof Error && error.message === "invalid_failover_pair") {
+        return reply.code(409).send({ error: error.message });
+      }
+      if (error instanceof Error && error.message === "failover_target_unavailable") {
         return reply.code(409).send({ error: error.message });
       }
       throw error;

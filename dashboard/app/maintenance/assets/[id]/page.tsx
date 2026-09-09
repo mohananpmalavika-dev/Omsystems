@@ -7,6 +7,12 @@ import type { MaintenanceAsset, MaintenanceVendor } from "@/lib/types";
 
 type BranchOption = { id: string; name: string };
 
+function dateInputValue(value: string | undefined) {
+  // PostgreSQL drivers may serialize a DATE as either YYYY-MM-DD or an ISO
+  // timestamp. HTML date inputs accept only the former.
+  return value?.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
+}
+
 export default function AssetDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -176,15 +182,15 @@ export default function AssetDetailPage() {
           </label>
           <label className="work-order-field">
             <span>Purchase date</span>
-            <input type="date" value={asset.purchaseDate ?? ""} onChange={(event) => setAsset({ ...asset, purchaseDate: event.target.value })} />
+            <input type="date" value={dateInputValue(asset.purchaseDate)} onChange={(event) => setAsset({ ...asset, purchaseDate: event.target.value })} />
           </label>
           <label className="work-order-field">
             <span>Installation date</span>
-            <input type="date" value={asset.installationDate ?? ""} onChange={(event) => setAsset({ ...asset, installationDate: event.target.value })} />
+            <input type="date" value={dateInputValue(asset.installationDate)} onChange={(event) => setAsset({ ...asset, installationDate: event.target.value })} />
           </label>
           <label className="work-order-field">
             <span>Warranty expires</span>
-            <input type="date" value={asset.warrantyExpiresAt ?? ""} onChange={(event) => setAsset({ ...asset, warrantyExpiresAt: event.target.value })} />
+            <input type="date" value={dateInputValue(asset.warrantyExpiresAt)} onChange={(event) => setAsset({ ...asset, warrantyExpiresAt: event.target.value })} />
           </label>
           <label className="work-order-field">
             <span>Status</span>

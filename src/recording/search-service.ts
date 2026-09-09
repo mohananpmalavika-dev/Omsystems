@@ -95,11 +95,11 @@ export class RecordingSearchService {
     let paramIndex = 2;
 
     // Time range (required)
-    conditions.push(`rsi.started_at >= $${paramIndex}::timestamptz`);
+    conditions.push(`rsi.ended_at >= $${paramIndex}::timestamptz`);
     params.push(filters.from);
     paramIndex++;
 
-    conditions.push(`rsi.ended_at <= $${paramIndex}::timestamptz`);
+    conditions.push(`rsi.started_at <= $${paramIndex}::timestamptz`);
     params.push(filters.to);
     paramIndex++;
 
@@ -136,7 +136,7 @@ export class RecordingSearchService {
     }
 
     // Duration filter
-    if (filters.minDuration) {
+    if (filters.minDuration !== undefined) {
       conditions.push(`rsi.duration_seconds >= $${paramIndex}`);
       params.push(filters.minDuration);
       paramIndex++;
@@ -224,8 +224,8 @@ export class RecordingSearchService {
     const params: any[] = [tenantId, options.from, options.to];
     const conditions = [
       "rsi.tenant_id = $1",
-      "rsi.started_at >= $2::timestamptz",
-      "rsi.ended_at <= $3::timestamptz",
+      "rsi.ended_at >= $2::timestamptz",
+      "rsi.started_at <= $3::timestamptz",
       "rsi.thumbnail_path IS NOT NULL",
     ];
     let paramIndex = 4;
@@ -307,13 +307,13 @@ export class RecordingSearchService {
       paramIndex++;
     }
 
-    if (filters.minDuration) {
+    if (filters.minDuration !== undefined) {
       conditions.push(`me.duration_seconds >= $${paramIndex}`);
       params.push(filters.minDuration);
       paramIndex++;
     }
 
-    if (filters.minConfidence) {
+    if (filters.minConfidence !== undefined) {
       conditions.push(`me.confidence >= $${paramIndex}`);
       params.push(filters.minConfidence);
       paramIndex++;
@@ -403,7 +403,7 @@ export class RecordingSearchService {
       paramIndex++;
     }
 
-    if (filters.minConfidence) {
+    if (filters.minConfidence !== undefined) {
       conditions.push(`do.confidence >= $${paramIndex}`);
       params.push(filters.minConfidence);
       paramIndex++;

@@ -60,6 +60,8 @@ export function EvidenceManager() {
   const [exports, setExports] = useState<any[]>([]);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [verification, setVerification] = useState<{ allVerified: boolean; verifiedItemCount: number; unverifiableItemCount: number } | null>(null);
+  const [verifying, setVerifying] = useState(false);
   const [custodyLog, setCustodyLog] = useState<ChainOfCustodyEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -205,7 +207,10 @@ export function EvidenceManager() {
                 <span className="panel-kicker">Case details</span>
                 <h3>{selectedCase.title}</h3>
               </div>
-              <span className="integrity-status"><CheckCircle size={14} /> Auditable record</span>
+              <span className={`integrity-status ${verification ? (verification.allVerified ? "" : "integrity-status-warning") : ""}`}>
+                {verification?.allVerified ? <CheckCircle size={14} /> : <AlertTriangle size={14} />}
+                {verification ? (verification.allVerified ? "Integrity verified" : `${verification.unverifiableItemCount} item(s) unverified`) : "Integrity not checked"}
+              </span>
             </div>
 
             <div className="case-details">
@@ -348,9 +353,9 @@ export function EvidenceManager() {
                 <Download size={16} />
                 {exporting ? "Requesting export…" : "Export Evidence"}
               </button>
-              <button className="action-button secondary">
+              <button className="action-button secondary" onClick={() => void handleVerifyIntegrity()} disabled={verifying}>
                 <Shield size={16} />
-                Verify Integrity
+                {verifying ? "Verifying…" : "Verify Integrity"}
               </button>
               <button className="action-button secondary danger" disabled title="Evidence case deletion is managed by retention policy">
                 <Trash2 size={16} />
@@ -419,6 +424,7 @@ export function EvidenceManager() {
       setItems(itemsResponse.data || []);
       setCustodyLog(custodyResponse.data || []);
       setExports(exportsResponse.data || []);
+      setVerification(null);
     } catch (error) {
       console.error("Failed to load case details:", error);
       setLoadError("The selected case could not be fully loaded. You can retry from the case register.");
@@ -443,6 +449,24 @@ export function EvidenceManager() {
       setExportError(error instanceof Error ? error.message : "Failed to request export");
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleVerifyIntegrity() {
+    if (!selectedCase) return;
+    setVerifying(true);
+    setExportError(null);
+    try {
+      const result = await evidenceApi.verifyEvidence(selectedCase.id);
+      await loadCaseDetails(selectedCase.id);
+      setVerification(result);
+      if (!result.allVerified) {
+        setExportError(`${result.unverifiableItemCount ?? 0} evidence item(s) could not be verified. Review the recording vault and custody log.`);
+      }
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Evidence integrity verification failed");
+    } finally {
+      setVerifying(false);
     }
   }
 }

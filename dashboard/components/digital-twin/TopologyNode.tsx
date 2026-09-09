@@ -131,26 +131,17 @@ export const TopologyNode = memo(({ data, selected }: NodeProps) => {
             {data.type}
           </div>
           
-          {/* Health and Security Scores */}
+          {/* Security is intentionally not fabricated in this operational topology. */}
           <div className="flex gap-3 mt-2 text-xs">
             <div>
               <span className="text-gray-500">Health:</span>
               <span className={`ml-1 font-semibold ${
+                typeof data.healthScore !== 'number' ? 'text-gray-500' :
                 data.healthScore >= 80 ? 'text-green-600' :
                 data.healthScore >= 60 ? 'text-yellow-600' :
                 'text-red-600'
               }`}>
-                {data.healthScore}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500">Security:</span>
-              <span className={`ml-1 font-semibold ${
-                data.securityScore >= 80 ? 'text-green-600' :
-                data.securityScore >= 60 ? 'text-yellow-600' :
-                'text-red-600'
-              }`}>
-                {data.securityScore}
+                {typeof data.healthScore === 'number' ? data.healthScore : 'Unknown'}
               </span>
             </div>
           </div>

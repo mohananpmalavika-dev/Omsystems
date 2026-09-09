@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Bot, CheckCircle2, ChevronDown, ChevronUp, Clock3,
@@ -44,6 +45,8 @@ const suggestions = [
 ];
 
 export default function AiCommandCenterPage() {
+  const searchParams = useSearchParams();
+  const branchId = searchParams?.get("branchId")?.trim() || undefined;
   const [question, setQuestion] = useState("");
   const [conversationId, setConversationId] = useState<string>();
   const [result, setResult] = useState<Answer>();
@@ -60,7 +63,7 @@ export default function AiCommandCenterPage() {
     try {
       const response = await fetch("/api/control/v1/command-center/query", {
         method: "POST", credentials: "include", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ question: prompt, conversationId }),
+        body: JSON.stringify({ question: prompt, conversationId, ...(branchId ? { branchId } : {}) }),
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message ?? body.error ?? "Command Center query failed");
@@ -92,6 +95,7 @@ export default function AiCommandCenterPage() {
         <p className="flex items-center gap-2 text-xs font-semibold tracking-[.2em] text-cyan-400"><Sparkles size={14}/> EVIDENCE-BOUND OPERATIONS</p>
         <h1 className="mt-1 text-2xl font-bold">AI Command Center</h1>
         <p className="text-sm text-slate-400">Deterministic branch diagnosis, causal evidence, recovery context and approved actions</p>
+        {branchId && <p className="mt-2 text-xs text-cyan-300">Scoped to branch {branchId}</p>}
       </div>
       <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300"><ShieldCheck size={15}/> No unsupported claims</div>
     </header>
@@ -218,7 +222,7 @@ function RecoveryPanel({ diagnosis }: { diagnosis?: Diagnosis }) {
 }
 
 function ActionsPanel({ actions, busy, update }: { actions: Action[]; busy: boolean; update: (action: Action, operation: "approve" | "execute") => Promise<void> }) {
-  return <Panel title="Recommended actions" icon={<Wrench size={17}/>}>{actions.length === 0 ? <Empty text="Evidence-safe runbook actions appear here."/> : <div className="space-y-3">{actions.map((action) => <div key={action.id} className="rounded-xl border border-slate-800 p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{action.title}</p><p className="mt-1 text-xs leading-5 text-slate-400">{action.reason}</p></div><span className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase">{action.status}</span></div><p className="mt-2 text-[11px] text-slate-500">Impact: {action.expectedImpact}</p><div className="mt-3 flex gap-2">{action.approvalRequired && action.status === "proposed" && <button disabled={busy} onClick={() => void update(action, "approve")} className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950">Approve</button>}{(!action.approvalRequired || action.status === "approved") && <button disabled={busy || action.executionMode === "integration-required"} onClick={() => void update(action, "execute")} className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40">{action.executionMode === "integration-required" ? "Adapter required" : "Execute"}</button>}{action.href && <a href={action.href} className="rounded-md border border-slate-700 px-3 py-1.5 text-xs">Open</a>}</div></div>)}</div>}</Panel>;
+  return <Panel title="Recommended actions" icon={<Wrench size={17}/>}>{actions.length === 0 ? <Empty text="Evidence-safe runbook actions appear here."/> : <div className="space-y-3">{actions.map((action) => <div key={action.id} className="rounded-xl border border-slate-800 p-3"><div className="flex items-start justify-between gap-2"><div><p className="text-sm font-semibold">{action.title}</p><p className="mt-1 text-xs leading-5 text-slate-400">{action.reason}</p></div><span className="rounded bg-slate-800 px-2 py-1 text-[10px] uppercase">{action.status}</span></div><p className="mt-2 text-[11px] text-slate-500">Impact: {action.expectedImpact}</p><div className="mt-3 flex gap-2">{action.href ? <a href={action.href} className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-semibold">Open</a> : <>{action.approvalRequired && action.status === "proposed" && <button disabled={busy} onClick={() => void update(action, "approve")} className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-slate-950">Approve</button>}{(!action.approvalRequired || action.status === "approved") && <button disabled={busy || action.executionMode === "integration-required"} onClick={() => void update(action, "execute")} className="rounded-md bg-cyan-600 px-3 py-1.5 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-40">{action.executionMode === "integration-required" ? "Adapter required" : "Execute"}</button>}</>}</div></div>)}</div>}</Panel>;
 }
 
 function EvidenceConsole({ tab, diagnosis }: { tab: "evidence" | "raw" | "audit"; diagnosis?: Diagnosis }) {

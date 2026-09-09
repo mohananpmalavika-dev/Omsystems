@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Building2,
   Camera,
@@ -60,6 +60,7 @@ export function DeviceConfigurationCenter() {
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   // 1. Fetch Branches
   useEffect(() => {
@@ -70,37 +71,28 @@ export function DeviceConfigurationCenter() {
         const res = await cameraInventoryApi.listBranches("device:configure");
         const list = res?.data || [];
         if (list.length > 0) {
-          const mapped: BranchOption[] = list.map((b: any) => ({
-            id: b.id || b.branchId || b.code,
+          const mapped: BranchOption[] = list.flatMap((b: any) => {
+            const id = b.id || b.branchId || b.code;
+            return typeof id === "string" && id.trim() ? [{
+            id,
             name: b.name || b.branchName || `Branch ${b.code || b.id}`,
             code: b.code || b.branchId,
             region: b.region || b.zone || "Main Zone",
             city: b.city || b.location,
-          }));
+          }] : [];
+          });
+          if (mapped.length === 0) throw new Error("No valid branch records were returned");
           setBranches(mapped);
           setSelectedBranchId(mapped[0].id);
         } else {
-          // Default fallback branch
-          const fallback: BranchOption = {
-            id: "branch-001",
-            name: "Connaught Place Flagship Branch",
-            code: "BR-001",
-            region: "North Region",
-            city: "New Delhi",
-          };
-          setBranches([fallback]);
-          setSelectedBranchId(fallback.id);
+          setBranches([]);
+          setSelectedBranchId("");
+          setError("No branches are available with device-configuration permission.");
         }
-      } catch {
-        const fallback: BranchOption = {
-          id: "branch-001",
-          name: "Connaught Place Flagship Branch",
-          code: "BR-001",
-          region: "North Region",
-          city: "New Delhi",
-        };
-        setBranches([fallback]);
-        setSelectedBranchId(fallback.id);
+      } catch (reason) {
+        setBranches([]);
+        setSelectedBranchId("");
+        setError(reason instanceof Error ? reason.message : "Unable to load branches. Please retry.");
       } finally {
         setLoadingBranches(false);
       }
@@ -111,21 +103,26 @@ export function DeviceConfigurationCenter() {
   // 2. Fetch Cameras & Recorders for Selected Branch
   const fetchDevicesForBranch = async (branchId: string) => {
     if (!branchId) return;
+    const sequence = ++requestSequence.current;
     setLoadingDevices(true);
     setError(null);
+    setCameras([]);
+    setRecorders([]);
+    setSelectedDeviceId("");
     try {
       // 2a. Fetch Cameras
       const camRes = await cameraInventoryApi.listByBranch(branchId, "device:configure");
       const camList: DeviceOption[] = (camRes?.data || []).map((c: any) => ({
         id: c.id,
         name: c.name || `Camera ${c.id.slice(0, 8)}`,
-        ipAddress: c.ipAddress || "127.0.0.1",
+        ipAddress: typeof c.ipAddress === "string" ? c.ipAddress : undefined,
         type: "camera" as const,
-        status: c.status || "online",
-        model: c.model || "Universal ONVIF Camera",
+        status: c.status || "unknown",
+        model: c.model || "Unknown model",
         nodeId: c.nodeId || branchId,
         branchId,
       }));
+      if (sequence !== requestSequence.current) return;
       setCameras(camList);
 
       // 2b. Fetch Recorders
@@ -136,10 +133,10 @@ export function DeviceConfigurationCenter() {
           recList = devRes.data.map((d: any) => ({
             id: d.id,
             name: d.name || `NVR ${d.id.slice(0, 8)}`,
-            ipAddress: d.ipAddress || "127.0.0.1",
+            ipAddress: typeof d.ipAddress === "string" ? d.ipAddress : undefined,
             type: "recorder" as const,
-            status: d.status || "online",
-            model: d.model || "Universal Surveillance NVR",
+            status: d.status || "unknown",
+            model: d.model || "Unknown model",
             branchId,
             channelCount: d.channelCount || 16,
           }));
@@ -148,20 +145,7 @@ export function DeviceConfigurationCenter() {
         // Fallback recorder if needed
       }
 
-      if (recList.length === 0) {
-        recList = [
-          {
-            id: `nvr-${branchId}`,
-            name: `Branch Master NVR (${branchId.slice(0, 10)})`,
-            ipAddress: "192.168.1.200",
-            type: "recorder" as const,
-            status: "online",
-            model: "Sentin-NVR-32CH Pro",
-            branchId,
-            channelCount: 16,
-          },
-        ];
-      }
+      if (sequence !== requestSequence.current) return;
       setRecorders(recList);
 
       // Select first device of current type
@@ -172,9 +156,10 @@ export function DeviceConfigurationCenter() {
         setSelectedDeviceId("");
       }
     } catch (err: any) {
+      if (sequence !== requestSequence.current) return;
       setError(err?.message || "Failed to load branch devices");
     } finally {
-      setLoadingDevices(false);
+      if (sequence === requestSequence.current) setLoadingDevices(false);
     }
   };
 
@@ -265,6 +250,8 @@ export function DeviceConfigurationCenter() {
           </div>
         </div>
       </div>
+
+      {error && <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-4 py-3 text-sm text-rose-200">{error}</div>}
 
       {/* Mode Navigation Tabs */}
       <div className="flex items-center gap-2 p-1 bg-slate-900/90 border border-slate-800 rounded-2xl w-fit shadow-lg backdrop-blur">
@@ -374,14 +361,14 @@ export function DeviceConfigurationCenter() {
                       <span className="font-semibold text-xs text-slate-200 truncate">
                         {d.name}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-400 bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        ONLINE
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${d.status?.toLowerCase() === "online" || d.status?.toLowerCase() === "healthy" ? "text-emerald-400 bg-emerald-950/70 border-emerald-500/30" : d.status?.toLowerCase() === "offline" || d.status?.toLowerCase() === "critical" ? "text-rose-300 bg-rose-950/70 border-rose-500/30" : "text-slate-400 bg-slate-800 border-slate-700"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${d.status?.toLowerCase() === "online" || d.status?.toLowerCase() === "healthy" ? "bg-emerald-400" : d.status?.toLowerCase() === "offline" || d.status?.toLowerCase() === "critical" ? "bg-rose-400" : "bg-slate-500"}`} />
+                        {(d.status || "unknown").toUpperCase()}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <span>{d.ipAddress || "127.0.0.1"}</span>
+                      <span>{d.ipAddress || "IP unavailable"}</span>
                       <span className="text-[10px] text-slate-500 font-sans">
                         {d.type === "recorder" ? `${d.channelCount || 16} Channels` : "ONVIF S/T"}
                       </span>

@@ -10,6 +10,36 @@ import { initReportingEngine, type ReportConfig } from '../maintenance/reporting
 import { initScheduledReportsService, type ScheduledReportConfig } from '../maintenance/scheduled-reports.js';
 import { v4 as uuidv4 } from 'uuid';
 
+async function requireReportFilterAccess(request: any, reply: any, store: ControlPlaneStore, filters?: { branchNodeId?: string; assetId?: string; vendorId?: string }) {
+  if (filters?.branchNodeId) {
+    const node = await store.getNode(filters.branchNodeId);
+    const access = node && node.type === 'branch' ? await store.checkAccess(request.currentUser, 'device:configure', node.id) : undefined;
+    if (!node || node.type !== 'branch' || !access?.allowed) {
+      await reply.code(404).send({ error: 'resource_not_found' });
+      return false;
+    }
+  }
+  if (filters?.assetId) {
+    const asset = await store.getMaintenanceAsset(filters.assetId);
+    if (!asset || asset.tenantId !== request.currentUser.tenantId) {
+      await reply.code(404).send({ error: 'asset_not_found' });
+      return false;
+    }
+    if (asset.branchNodeId && !(await store.checkAccess(request.currentUser, 'device:configure', asset.branchNodeId))?.allowed) {
+      await reply.code(404).send({ error: 'resource_not_found' });
+      return false;
+    }
+  }
+  if (filters?.vendorId) {
+    const vendor = await store.getMaintenanceVendor(filters.vendorId);
+    if (!vendor || vendor.tenantId !== request.currentUser.tenantId) {
+      await reply.code(404).send({ error: 'vendor_not_found' });
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function registerMaintenanceReportsRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
@@ -49,6 +79,7 @@ export async function registerMaintenanceReportsRoutes(
     }).parse(request.body);
 
     const tenantId = request.currentUser.tenantId;
+    if (!(await requireReportFilterAccess(request, reply, store, body.filters))) return;
 
     // Validate period
     const start = new Date(body.periodStart);
@@ -200,11 +231,15 @@ export async function registerMaintenanceReportsRoutes(
       return reply.code(404).send({ error: 'report_not_found' });
     }
 
-    // In production, stream from file system or object storage
-    return reply.code(501).send({
-      error: 'not_implemented',
-      message: 'Report download requires file storage configuration',
-    });
+    // JSON is an immediately portable report artifact. Binary PDF/XLSX
+    // generation remains asynchronous and must be backed by durable storage.
+    if (report.config.format === 'json') {
+      return reply
+        .header('content-type', 'application/json; charset=utf-8')
+        .header('content-disposition', `attachment; filename="${report.filename.replace(/[^a-zA-Z0-9._-]/g, '_')}"`)
+        .send(JSON.stringify(report, null, 2));
+    }
+    return reply.code(409).send({ error: 'report_artifact_not_available', message: 'The binary report artifact is not available for download yet.' });
   });
 
   // ============================================================================
@@ -243,6 +278,7 @@ export async function registerMaintenanceReportsRoutes(
     }).parse(request.body);
 
     const tenantId = request.currentUser.tenantId;
+    if (!(await requireReportFilterAccess(request, reply, store, body.filters))) return;
 
     const config: Omit<ScheduledReportConfig, 'id' | 'createdAt' | 'nextRun'> = {
       tenantId,

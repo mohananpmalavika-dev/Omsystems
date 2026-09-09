@@ -139,11 +139,17 @@ export async function discoverVendorRecorderChannels(input: {
   host: string;
   credentials: OnvifCredentials;
   existingChannels?: number[];
+  /**
+   * The model string is not authoritative: many OEM recorders only return
+   * "DVR"/"XVR".  When ONVIF exposes just channel one, limiting the vendor
+   * fallback to that observed profile silently hides every other input.
+   */
+  maxChannels?: number;
   probeStream(uri: string): Promise<RtspProbeResult>;
 }) {
   const existing = new Set(input.existingChannels ?? []);
   const channelCount = inferRecorderChannelCount(input.model)
-    ?? Math.max(1, ...existing);
+    ?? Math.max(1, input.maxChannels ?? 64, ...existing);
   const pending = Array.from({ length: channelCount }, (_, index) => index + 1)
     .filter((channel) => !existing.has(channel));
   const vendor = identifyVendorFamily(input.manufacturer, input.model);

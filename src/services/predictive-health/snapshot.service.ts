@@ -102,9 +102,9 @@ export class SnapshotService {
         };
       }
 
-      // Get accessible cameras - we'll use a system user context
-      // TODO: Consider adding a service-level camera listing method
-      const totalCameras = 0; // Placeholder until we have proper access
+      const telemetry = await this.store.listLatestOperationalTelemetry(tenantId, [branchId]);
+      const cameras = telemetry.filter((item) => item.deviceType === "camera");
+      const totalCameras = cameras.length;
 
       if (totalCameras === 0) {
         return {
@@ -117,7 +117,10 @@ export class SnapshotService {
         };
       }
 
-      const recordingCameras = 0; // Placeholder
+      const recordingCameras = cameras.filter((camera) => {
+        const state = String(camera.metrics.recordingStatus ?? camera.metrics.status ?? "").toLowerCase();
+        return camera.metrics.reachable !== false && camera.metrics.online !== false && ["recording", "running", "online", "healthy"].includes(state);
+      }).length;
 
       // Get recording gaps from last 24h
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -242,12 +245,12 @@ export class SnapshotService {
 
       return {
         healthScore,
-        temperatureC: hddTelemetry.temperature || null,
-        reallocatedSectors: hddTelemetry.reallocatedSectors || null,
-        pendingSectors: hddTelemetry.pendingSectors || null,
-        readErrors: hddTelemetry.readErrors || null,
-        writeErrors: hddTelemetry.writeErrors || null,
-        powerOnHours: hddTelemetry.powerOnHours || null,
+        temperatureC: hddTelemetry.temperature ?? null,
+        reallocatedSectors: hddTelemetry.reallocatedSectors ?? null,
+        pendingSectors: hddTelemetry.pendingSectors ?? null,
+        readErrors: hddTelemetry.readErrors ?? null,
+        writeErrors: hddTelemetry.writeErrors ?? null,
+        powerOnHours: hddTelemetry.powerOnHours ?? null,
         smartStatus: hddTelemetry.smartStatus || "UNKNOWN",
       };
     } catch (error) {
@@ -332,15 +335,15 @@ export class SnapshotService {
       });
 
       // Calculate uptime
-      const uptimePercent = networkTelemetry.uptimePercent || 100;
+      const uptimePercent = networkTelemetry.uptimePercent ?? 0;
 
       return {
-        latencyMs: networkTelemetry.latency || null,
-        packetLossPercent: networkTelemetry.packetLoss || null,
-        jitterMs: networkTelemetry.jitter || null,
+        latencyMs: networkTelemetry.latency ?? null,
+        packetLossPercent: networkTelemetry.packetLoss ?? null,
+        jitterMs: networkTelemetry.jitter ?? null,
         disconnectCount: disconnects.length,
         uptimePercent,
-        bandwidthUtilization: networkTelemetry.bandwidthUtilization || null,
+        bandwidthUtilization: networkTelemetry.bandwidthUtilization ?? null,
       };
     } catch (error) {
       console.error("Failed to collect network telemetry:", error);
@@ -356,9 +359,9 @@ export class SnapshotService {
     branchId: string
   ): Promise<BranchHealthSnapshot["cameras"]> {
     try {
-      // TODO: Need a service-level camera listing method
-      // For now, using placeholder values
-      const total = 0;
+      const telemetry = await this.store.listLatestOperationalTelemetry(tenantId, [branchId]);
+      const cameras = telemetry.filter((item) => item.deviceType === "camera");
+      const total = cameras.length;
 
       if (total === 0) {
         return {
@@ -371,8 +374,9 @@ export class SnapshotService {
         };
       }
 
-      const offlineCount = 0;
-      const criticalOffline = 0;
+      const unavailable = cameras.filter((camera) => camera.metrics.reachable === false || camera.metrics.online === false || String(camera.metrics.status ?? "").toLowerCase() === "offline");
+      const offlineCount = unavailable.length;
+      const criticalOffline = unavailable.filter((camera) => camera.metrics.critical === true).length;
 
       // Get camera events from last 24h
       const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -470,10 +474,10 @@ export class SnapshotService {
       });
 
       return {
-        temperatureC: dvrTelemetry.temperature || null,
-        cpuPercent: dvrTelemetry.cpuPercent || null,
-        memoryPercent: dvrTelemetry.memoryPercent || null,
-        uptimeHours: dvrTelemetry.uptimeHours || null,
+        temperatureC: dvrTelemetry.temperature ?? null,
+        cpuPercent: dvrTelemetry.cpuPercent ?? null,
+        memoryPercent: dvrTelemetry.memoryPercent ?? null,
+        uptimeHours: dvrTelemetry.uptimeHours ?? null,
         restartCount24h: restarts.length,
         recordingEngineState: dvrTelemetry.recordingState || "UNKNOWN",
       };
@@ -642,9 +646,13 @@ export class SnapshotService {
    * Store snapshot for historical analysis
    */
   private async storeSnapshot(snapshot: BranchHealthSnapshot): Promise<void> {
-    // TODO: Implement snapshot persistence when database schema is available
-    // For now, snapshots are computed on-demand and not persisted
-    console.debug(`Snapshot generated for branch ${snapshot.branchId} at ${snapshot.timestamp}`);
+    const db = (this.store as any).db;
+    if (!db?.query) return;
+    await db.query(
+      `INSERT INTO branch_health_prediction_snapshots (id, tenant_id, branch_id, captured_at, snapshot_data)
+       VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb)`,
+      [snapshot.tenantId, snapshot.branchId, snapshot.timestamp, JSON.stringify(snapshot)],
+    );
   }
 
   /**
@@ -656,9 +664,19 @@ export class SnapshotService {
     tenantId: string,
     branchId: string
   ): Promise<{ totalBytes: number; freeBytes: number; estimatedRetentionDays: number } | null> {
-    // TODO: Implement actual storage telemetry fetching
-    // This should query your DVR/NVR telemetry or storage monitoring system
-    return null;
+    const disks = (await this.store.listLatestOperationalTelemetry(tenantId, [branchId]))
+      .filter((item) => item.deviceType === "disk" || item.deviceType === "archive");
+    let totalBytes = 0;
+    let freeBytes = 0;
+    for (const disk of disks) {
+      const total = numberValue(disk.metrics.totalBytes ?? disk.metrics.capacityBytes);
+      const free = numberValue(disk.metrics.freeBytes ?? disk.metrics.availableBytes);
+      if (total !== null && free !== null && total > 0 && free >= 0 && free <= total) {
+        totalBytes += total;
+        freeBytes += free;
+      }
+    }
+    return totalBytes > 0 ? { totalBytes, freeBytes, estimatedRetentionDays: numberValue(disks[0]?.metrics.estimatedRetentionDays) ?? 0 } : null;
   }
 
   private async calculateStorageGrowthRate(
@@ -674,24 +692,43 @@ export class SnapshotService {
     tenantId: string,
     branchId: string
   ): Promise<any | null> {
-    // TODO: Implement HDD SMART data fetching
-    return null;
+    const disk = (await this.store.listLatestOperationalTelemetry(tenantId, [branchId]))
+      .find((item) => item.deviceType === "disk" && (item.metrics.smartStatus !== undefined || item.metrics.temperatureC !== undefined));
+    if (!disk) return null;
+    return {
+      temperature: numberValue(disk.metrics.temperatureC ?? disk.metrics.temperature),
+      reallocatedSectors: numberValue(disk.metrics.reallocatedSectors), pendingSectors: numberValue(disk.metrics.pendingSectors),
+      readErrors: numberValue(disk.metrics.readErrors), writeErrors: numberValue(disk.metrics.writeErrors),
+      powerOnHours: numberValue(disk.metrics.powerOnHours), smartStatus: String(disk.metrics.smartStatus ?? "UNKNOWN").toUpperCase(),
+    };
   }
 
   private async getNetworkTelemetry(
     tenantId: string,
     branchId: string
   ): Promise<any | null> {
-    // TODO: Implement network telemetry fetching
-    return null;
+    const network = (await this.store.listLatestOperationalTelemetry(tenantId, [branchId]))
+      .find((item) => ["network", "router", "sdwan", "firewall"].includes(item.deviceType));
+    if (!network) return null;
+    return {
+      latency: numberValue(network.metrics.latencyMs), packetLoss: numberValue(network.metrics.packetLossPercent),
+      jitter: numberValue(network.metrics.jitterMs), uptimePercent: numberValue(network.metrics.uptimePercent),
+      bandwidthUtilization: numberValue(network.metrics.bandwidthUtilization),
+    };
   }
 
   private async getDvrTelemetry(
     tenantId: string,
     branchId: string
   ): Promise<any | null> {
-    // TODO: Implement DVR telemetry fetching
-    return null;
+    const recorder = (await this.store.listLatestOperationalTelemetry(tenantId, [branchId]))
+      .find((item) => item.deviceType === "recorder");
+    if (!recorder) return null;
+    return {
+      temperature: numberValue(recorder.metrics.temperatureC ?? recorder.metrics.temperature), cpuPercent: numberValue(recorder.metrics.cpuPercent),
+      memoryPercent: numberValue(recorder.metrics.memoryPercent), uptimeHours: numberValue(recorder.metrics.uptimeHours),
+      recordingState: String(recorder.metrics.recordingStatus ?? recorder.metrics.status ?? "UNKNOWN").toUpperCase(),
+    };
   }
 
   private getDefaultNetworkData(): BranchHealthSnapshot["network"] {
@@ -700,7 +737,7 @@ export class SnapshotService {
       packetLossPercent: null,
       jitterMs: null,
       disconnectCount: 0,
-      uptimePercent: 100,
+      uptimePercent: 0,
       bandwidthUtilization: null,
     };
   }
@@ -727,4 +764,8 @@ export class SnapshotService {
       repeatedComponentFailures: [],
     };
   }
+}
+
+function numberValue(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

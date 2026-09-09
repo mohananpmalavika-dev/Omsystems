@@ -96,15 +96,16 @@ export class CommandCenterService {
    */
   private async getPredictiveHealth(tenantId: string, branchId: string) {
     try {
-      // Check if query method exists on store
-      if (typeof (this.store as any).query !== 'function') {
+      const database = (this.store as { db?: { query?: (sql: string, values: unknown[]) => Promise<{ rows: any[] }> } }).db;
+      const query = database?.query ?? (this.store as any).query;
+      if (typeof query !== "function") {
         return null;
       }
       
-      const result = await (this.store as any).query(
-        `SELECT prediction_data FROM branch_risk_predictions
+      const result = await query.call(database ?? this.store,
+        `SELECT DISTINCT ON (horizon_hours) prediction_data FROM branch_risk_predictions
          WHERE branch_id = $1 AND tenant_id = $2 AND expires_at > NOW()
-         ORDER BY horizon_hours, created_at DESC
+         ORDER BY horizon_hours, generated_at DESC
          LIMIT 3`,
         [branchId, tenantId]
       );
@@ -124,7 +125,7 @@ export class CommandCenterService {
         predictions,
       };
     } catch (error) {
-      console.error("Failed to fetch predictive health:", error);
+      console.warn("Predictive health is unavailable for Command Center", error instanceof Error ? error.message : error);
       return null;
     }
   }

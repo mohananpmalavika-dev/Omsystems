@@ -11,8 +11,12 @@ const idParams = z.object({ id: z.string().uuid() });
 const assetCategorySchema = z.enum(["camera", "recorder", "storage", "network", "power", "accessory"]);
 const workOrderStatusSchema = z.enum(["open", "assigned", "in_progress", "resolved", "closed"]);
 const listAssetsQuery = z.object({ category: assetCategorySchema.optional() });
-const listWorkOrdersQuery = z.object({ status: workOrderStatusSchema.optional() });
+const listWorkOrdersQuery = z.object({
+  status: workOrderStatusSchema.optional(),
+  branchNodeId: z.string().min(1).max(200).optional(),
+});
 const listAmcQuery = z.object({ vendorId: z.string().uuid().optional() });
+const calendarDate = z.string().date();
 
 const assetSchema = z.object({
   category: assetCategorySchema,
@@ -21,9 +25,9 @@ const assetSchema = z.object({
   make: z.string().trim().max(200).nullable().optional(),
   model: z.string().trim().max(200).nullable().optional(),
   firmwareVersion: z.string().trim().max(200).nullable().optional(),
-  warrantyExpiresAt: z.string().nullable().optional(),
-  purchaseDate: z.string().nullable().optional(),
-  installationDate: z.string().nullable().optional(),
+  warrantyExpiresAt: calendarDate.nullable().optional(),
+  purchaseDate: calendarDate.nullable().optional(),
+  installationDate: calendarDate.nullable().optional(),
   vendorId: z.string().uuid().nullable().optional(),
   branchNodeId: z.string().uuid().nullable().optional(),
   location: z.string().trim().max(200).nullable().optional(),
@@ -52,31 +56,36 @@ const workOrderSchema = z.object({
 
 const vendorSchema = z.object({
   name: z.string().trim().min(2).max(200),
-  contact: z.string().trim().max(200).optional(),
-  email: z.string().email().optional(),
-  phone: z.string().trim().max(50).optional(),
-  address: z.string().max(500).optional(),
-  gstNumber: z.string().trim().max(50).optional(),
-  serviceCenters: z.array(z.string().trim().max(200)).optional(),
-  escalationMatrix: z.record(z.unknown()).optional(),
-  notes: z.string().max(2000).optional(),
+  contact: z.string().trim().min(2).max(200).nullable().optional(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().trim().min(5).max(50).nullable().optional(),
+  address: z.string().trim().max(500).nullable().optional(),
+  gstNumber: z.string().trim().max(50).nullable().optional(),
+  serviceCenters: z.array(z.string().trim().min(2).max(200)).max(100).nullable().optional(),
+  escalationMatrix: z.record(z.unknown()).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
 });
 
-const amcSchema = z.object({
+const amcStatusSchema = z.enum(["pending", "active", "suspended", "expired", "cancelled"]);
+const amcContractFields = z.object({
   contractNumber: z.string().trim().min(2).max(200),
   vendorId: z.string().uuid(),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  warranty: z.string().max(500).optional(),
-  coverage: z.string().max(2000).optional(),
-  exclusions: z.string().max(2000).optional(),
-  paymentTerms: z.string().max(1000).optional(),
-  cost: z.number().nonnegative().optional(),
-  renewal: z.string().max(200).optional(),
-  sla: z.string().max(1000).optional(),
-  status: z.string().trim().max(100).default("active"),
-  notes: z.string().max(2000).optional(),
+  startDate: calendarDate,
+  endDate: calendarDate,
+  warranty: z.string().trim().max(500).nullable().optional(),
+  coverage: z.string().trim().min(5).max(2000),
+  exclusions: z.string().trim().max(2000).nullable().optional(),
+  paymentTerms: z.string().trim().max(1000).nullable().optional(),
+  cost: z.number().nonnegative().nullable().optional(),
+  renewal: z.string().trim().max(200).nullable().optional(),
+  sla: z.string().trim().max(1000).nullable().optional(),
+  status: amcStatusSchema.default("pending"),
+  notes: z.string().trim().max(2000).nullable().optional(),
 });
+const amcSchema = amcContractFields.refine((value) => value.endDate >= value.startDate, {
+  path: ["endDate"], message: "end_date_must_not_precede_start_date",
+});
+const amcPatchSchema = amcContractFields.partial();
 
 async function requireBranchAccess(
   request: FastifyRequest,
@@ -85,7 +94,9 @@ async function requireBranchAccess(
   branchNodeId: string,
 ) {
   const branch = await store.getNode(branchNodeId);
-  if (!branch || branch.type !== "branch") {
+  // Never allow a tenant-scoped registry record to be attached to a branch
+  // owned by another tenant, even if an overly broad role was configured.
+  if (!branch || branch.type !== "branch" || branch.tenantId !== request.currentUser.tenantId) {
     await reply.code(404).send({ error: "branch_not_found" });
     return false;
   }
@@ -101,9 +112,134 @@ async function requireBranchAccess(
   return true;
 }
 
+function normalizedSerial(value: string | null | undefined) {
+  const serial = value?.trim().toLocaleUpperCase();
+  return serial || undefined;
+}
+
+function normalizedVendorName(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleUpperCase();
+}
+
+function normalizedContractNumber(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLocaleUpperCase();
+}
+
+async function ensureUniqueAmcContractNumber(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  contractNumber: string,
+  excludeContractId?: string,
+) {
+  const normalized = normalizedContractNumber(contractNumber);
+  const contracts = await store.listAmcContracts(request.currentUser.tenantId);
+  if (contracts.some((contract) => contract.id !== excludeContractId && normalizedContractNumber(contract.contractNumber) === normalized)) {
+    await reply.code(409).send({ error: "amc_contract_number_already_registered" });
+    return false;
+  }
+  return true;
+}
+
+function validAmcStatusTransition(current: string, next: string) {
+  const allowed: Record<string, readonly string[]> = {
+    pending: ["active", "cancelled"],
+    active: ["suspended", "expired", "cancelled"],
+    suspended: ["active", "expired", "cancelled"],
+    expired: [],
+    cancelled: [],
+  };
+  return current === next || Boolean(allowed[current]?.includes(next));
+}
+
+async function ensureUniqueVendorName(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  name: string,
+  excludeVendorId?: string,
+) {
+  const normalized = normalizedVendorName(name);
+  const vendors = await store.listMaintenanceVendors(request.currentUser.tenantId);
+  if (vendors.some((vendor) => vendor.id !== excludeVendorId && normalizedVendorName(vendor.name) === normalized)) {
+    await reply.code(409).send({ error: "vendor_name_already_registered" });
+    return false;
+  }
+  return true;
+}
+
+async function ensureUniqueAssetSerial(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  serialNumber: string | null | undefined,
+  excludeAssetId?: string,
+) {
+  const serial = normalizedSerial(serialNumber);
+  if (!serial) return true;
+  const assets = await store.listMaintenanceAssets(request.currentUser.tenantId);
+  if (assets.some((asset) => asset.id !== excludeAssetId && normalizedSerial(asset.serialNumber) === serial)) {
+    await reply.code(409).send({ error: "asset_serial_already_registered" });
+    return false;
+  }
+  return true;
+}
+
 function generateWorkOrderNumber() {
   const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   return `WO-${date}-${randomUUID().slice(0, 8).toUpperCase()}`;
+}
+
+const permittedWorkOrderTransitions: Record<string, readonly string[]> = {
+  open: ["assigned"],
+  assigned: ["open", "in_progress"],
+  in_progress: ["assigned", "resolved"],
+  resolved: ["in_progress", "closed"],
+  closed: [],
+};
+
+function normalizedWorkOrderNumber(value: string) {
+  return value.trim().toLocaleUpperCase();
+}
+
+async function ensureUniqueWorkOrderNumber(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore,
+  workOrderNumber: string,
+  excludeWorkOrderId?: string,
+) {
+  const number = normalizedWorkOrderNumber(workOrderNumber);
+  const orders = await store.listWorkOrders(request.currentUser.tenantId);
+  if (orders.some((order) => order.id !== excludeWorkOrderId && normalizedWorkOrderNumber(order.workOrderNumber) === number)) {
+    await reply.code(409).send({ error: "workorder_number_already_registered" });
+    return false;
+  }
+  return true;
+}
+
+function validateWorkOrderTransition(
+  reply: FastifyReply,
+  existing: { status: string; technician?: string; actionTaken?: string; verification?: string },
+  update: { status?: string; technician?: string | null; actionTaken?: string | null; verification?: string | null },
+) {
+  const nextStatus = update.status ?? existing.status;
+  if (nextStatus !== existing.status && !permittedWorkOrderTransitions[existing.status]?.includes(nextStatus)) {
+    reply.code(409).send({ error: "invalid_workorder_status_transition", from: existing.status, to: nextStatus });
+    return false;
+  }
+  const technician = update.technician === undefined ? existing.technician : update.technician;
+  if (["assigned", "in_progress"].includes(nextStatus) && !technician?.trim()) {
+    reply.code(400).send({ error: "workorder_assignee_required" });
+    return false;
+  }
+  const actionTaken = update.actionTaken === undefined ? existing.actionTaken : update.actionTaken;
+  const verification = update.verification === undefined ? existing.verification : update.verification;
+  if (["resolved", "closed"].includes(nextStatus) && (!actionTaken?.trim() || !verification?.trim())) {
+    reply.code(400).send({ error: "workorder_resolution_evidence_required" });
+    return false;
+  }
+  return true;
 }
 
 async function getAccessibleWorkOrder(
@@ -223,9 +359,12 @@ export async function registerMaintenanceRoutes(
   });
 
   app.post("/v1/maintenance/assets", async (request, reply) => {
-    const body = assetSchema.parse(request.body);
+    const parsed = assetSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     if (body.branchNodeId && !(await requireBranchAccess(request, reply, store, body.branchNodeId))) return;
     if (body.vendorId && !(await getTenantMaintenanceVendor(request, reply, store, body.vendorId))) return;
+    if (!(await ensureUniqueAssetSerial(request, reply, store, body.serialNumber))) return;
     const payload = { tenantId: request.currentUser.tenantId, ...cleanObject(body), createdBy: request.currentUser.id };
     const asset = await store.createMaintenanceAsset(payload as any);
     await store.writeAudit({
@@ -246,14 +385,25 @@ export async function registerMaintenanceRoutes(
 
   app.patch("/v1/maintenance/assets/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
-    const body = assetSchema.partial().parse(request.body);
+    const parsed = assetSchema.partial().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     const existing = await getAccessibleMaintenanceAsset(request, reply, store, id);
     if (!existing) return;
     if (body.branchNodeId && !(await requireBranchAccess(request, reply, store, body.branchNodeId))) return;
     if (body.vendorId && !(await getTenantMaintenanceVendor(request, reply, store, body.vendorId))) return;
+    if (body.serialNumber !== undefined && !(await ensureUniqueAssetSerial(request, reply, store, body.serialNumber, id))) return;
     const payload = cleanObject(body);
     const asset = await store.updateMaintenanceAsset(id, payload as any);
     if (!asset) return reply.code(404).send({ error: "asset_not_found" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.asset_updated",
+      resourceNodeId: asset.branchNodeId ?? "",
+      outcome: "success",
+      details: { assetId: asset.id, changedFields: Object.keys(payload) },
+    });
     return asset;
   });
 
@@ -263,13 +413,17 @@ export async function registerMaintenanceRoutes(
     const accessibleBranchIds = await listAccessibleBranchIds(request, store);
     return {
       data: workOrders.filter(
-        (workOrder) => !workOrder.branchNodeId || accessibleBranchIds.has(workOrder.branchNodeId),
+        (workOrder) => (!query.branchNodeId || workOrder.branchNodeId === query.branchNodeId)
+          && (!workOrder.branchNodeId || accessibleBranchIds.has(workOrder.branchNodeId)),
       ),
     };
   });
 
   app.post("/v1/maintenance/workorders", async (request, reply) => {
-    const body = workOrderSchema.parse(request.body);
+    const parsed = workOrderSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
+    if (body.status !== "open") return reply.code(400).send({ error: "workorder_must_start_open" });
     const asset = await resolveWorkOrderAsset(request, reply, store, body.assetId ?? undefined);
     if (asset === null) return;
     if (!(await validateWorkOrderVendor(request, reply, store, body.vendorId ?? undefined))) return;
@@ -278,10 +432,12 @@ export async function registerMaintenanceRoutes(
     }
     const branchNodeId = body.branchNodeId ?? asset?.branchNodeId;
     if (branchNodeId && !(await requireBranchAccess(request, reply, store, branchNodeId))) return;
+    const workOrderNumber = normalizedWorkOrderNumber(body.workOrderNumber ?? generateWorkOrderNumber());
+    if (!(await ensureUniqueWorkOrderNumber(request, reply, store, workOrderNumber))) return;
     const payload = {
       tenantId: request.currentUser.tenantId,
       ...cleanObject(body),
-      workOrderNumber: body.workOrderNumber ?? generateWorkOrderNumber(),
+      workOrderNumber,
       ...(branchNodeId ? { branchNodeId } : {}),
       createdBy: request.currentUser.id,
     };
@@ -304,9 +460,12 @@ export async function registerMaintenanceRoutes(
 
   app.patch("/v1/maintenance/workorders/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
-    const body = workOrderSchema.partial().parse(request.body);
+    const parsed = workOrderSchema.partial().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     const existing = await getAccessibleWorkOrder(request, reply, store, id);
     if (!existing) return;
+    if (!validateWorkOrderTransition(reply, existing, body)) return;
     const asset = await resolveWorkOrderAsset(request, reply, store, body.assetId ?? undefined);
     if (asset === null) return;
     if (!(await validateWorkOrderVendor(request, reply, store, body.vendorId ?? undefined))) return;
@@ -320,14 +479,29 @@ export async function registerMaintenanceRoutes(
     ) {
       return reply.code(400).send({ error: "asset_branch_mismatch" });
     }
-    const branchNodeId = body.branchNodeId ?? asset?.branchNodeId;
+    const branchNodeId = body.branchNodeId !== undefined
+      ? body.branchNodeId
+      : asset?.branchNodeId ?? effectiveAsset?.branchNodeId ?? existing.branchNodeId;
+    if (effectiveAsset?.branchNodeId && branchNodeId !== effectiveAsset.branchNodeId) {
+      return reply.code(400).send({ error: "asset_branch_mismatch" });
+    }
     if (branchNodeId && !(await requireBranchAccess(request, reply, store, branchNodeId))) return;
+    if (body.workOrderNumber !== undefined && !(await ensureUniqueWorkOrderNumber(request, reply, store, body.workOrderNumber, id))) return;
     const payload = {
       ...cleanObject(body),
+      ...(body.workOrderNumber !== undefined ? { workOrderNumber: normalizedWorkOrderNumber(body.workOrderNumber) } : {}),
       ...(branchNodeId ? { branchNodeId } : {}),
     };
     const workOrder = await store.updateWorkOrder(id, payload as any);
     if (!workOrder) return reply.code(404).send({ error: "workorder_not_found" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.workorder_updated",
+      resourceNodeId: workOrder.branchNodeId ?? "",
+      outcome: "success",
+      details: { workOrderId: workOrder.id, changedFields: Object.keys(payload), previousStatus: existing.status, status: workOrder.status },
+    });
     return workOrder;
   });
 
@@ -336,8 +510,11 @@ export async function registerMaintenanceRoutes(
   });
 
   app.post("/v1/maintenance/vendors", async (request, reply) => {
-    const body = vendorSchema.parse(request.body);
-    const payload = { tenantId: request.currentUser.tenantId, ...cleanObject(body), createdBy: request.currentUser.id };
+    const parsed = vendorSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
+    if (!(await ensureUniqueVendorName(request, reply, store, body.name))) return;
+    const payload = { tenantId: request.currentUser.tenantId, ...cleanObject(body), name: body.name.trim().replace(/\s+/g, " "), createdBy: request.currentUser.id };
     const vendor = await store.createMaintenanceVendor(payload as any);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
@@ -357,12 +534,23 @@ export async function registerMaintenanceRoutes(
 
   app.patch("/v1/maintenance/vendors/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
-    const body = vendorSchema.partial().parse(request.body);
+    const parsed = vendorSchema.partial().safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     const existing = await getTenantMaintenanceVendor(request, reply, store, id);
     if (!existing) return;
+    if (body.name !== undefined && !(await ensureUniqueVendorName(request, reply, store, body.name, id))) return;
     const payload = cleanObject(body);
     const vendor = await store.updateMaintenanceVendor(id, payload as any);
     if (!vendor) return reply.code(404).send({ error: "vendor_not_found" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.vendor_updated",
+      resourceNodeId: request.currentUser.tenantId,
+      outcome: "success",
+      details: { vendorId: vendor.id, changedFields: Object.keys(payload) },
+    });
     return vendor;
   });
 
@@ -372,9 +560,12 @@ export async function registerMaintenanceRoutes(
   });
 
   app.post("/v1/maintenance/amc", async (request, reply) => {
-    const body = amcSchema.parse(request.body);
+    const parsed = amcSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     if (!(await getTenantMaintenanceVendor(request, reply, store, body.vendorId))) return;
-    const payload = { tenantId: request.currentUser.tenantId, ...cleanObject(body), createdBy: request.currentUser.id };
+    if (!(await ensureUniqueAmcContractNumber(request, reply, store, body.contractNumber))) return;
+    const payload = { tenantId: request.currentUser.tenantId, ...cleanObject(body), contractNumber: normalizedContractNumber(body.contractNumber), createdBy: request.currentUser.id };
     const contract = await store.createAmcContract(payload as any);
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
@@ -394,13 +585,31 @@ export async function registerMaintenanceRoutes(
 
   app.patch("/v1/maintenance/amc/:id", async (request, reply) => {
     const { id } = idParams.parse(request.params);
-    const body = amcSchema.partial().parse(request.body);
+    const parsed = amcPatchSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const body = parsed.data;
     const existing = await getTenantAmcContract(request, reply, store, id);
     if (!existing) return;
     if (body.vendorId && !(await getTenantMaintenanceVendor(request, reply, store, body.vendorId))) return;
+    const startDate = body.startDate ?? existing.startDate;
+    const endDate = body.endDate ?? existing.endDate;
+    if (endDate < startDate) return reply.code(400).send({ error: "end_date_must_not_precede_start_date" });
+    if (body.status !== undefined && !validAmcStatusTransition(existing.status, body.status)) {
+      return reply.code(409).send({ error: "invalid_amc_status_transition", from: existing.status, to: body.status });
+    }
+    if (body.contractNumber !== undefined && !(await ensureUniqueAmcContractNumber(request, reply, store, body.contractNumber, id))) return;
     const payload = cleanObject(body);
+    if (body.contractNumber !== undefined) payload.contractNumber = normalizedContractNumber(body.contractNumber);
     const contract = await store.updateAmcContract(id, payload as any);
     if (!contract) return reply.code(404).send({ error: "amc_not_found" });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "maintenance.amc_updated",
+      resourceNodeId: request.currentUser.tenantId,
+      outcome: "success",
+      details: { amcId: contract.id, changedFields: Object.keys(payload), previousStatus: existing.status, status: contract.status },
+    });
     return contract;
   });
 
