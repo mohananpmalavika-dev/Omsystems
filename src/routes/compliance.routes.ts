@@ -6,7 +6,6 @@ function cleanObject<T extends Record<string, any>>(obj: T) {
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const idParams = z.object({ id: z.string().uuid() });
-const queryListFrameworks = z.object({});
 const queryListPolicies = z.object({ frameworkId: z.string().uuid().optional() });
 const queryListAssessments = z.object({
   frameworkId: z.string().uuid().optional(),
@@ -30,13 +29,13 @@ const policySchema = z.object({
   entityType: z.string().max(100).optional(),
   locationType: z.string().max(100).optional(),
   cameraType: z.string().max(100).optional(),
-  normalRetentionDays: z.number().int().min(0).optional(),
-  hotStorageDays: z.number().int().min(0).optional(),
-  warmStorageDays: z.number().int().min(0).optional(),
-  coldStorageDays: z.number().int().min(0).optional(),
+  normalRetentionDays: z.number().int().min(0).max(36_500).optional(),
+  hotStorageDays: z.number().int().min(0).max(36_500).optional(),
+  warmStorageDays: z.number().int().min(0).max(36_500).optional(),
+  coldStorageDays: z.number().int().min(0).max(36_500).optional(),
   backupRequired: z.boolean().default(false),
   legalHoldOverride: z.boolean().default(false),
-  incidentRetentionDays: z.number().int().min(0).optional(),
+  incidentRetentionDays: z.number().int().min(0).max(36_500).optional(),
   automaticDeletionEligibility: z.boolean().default(true),
   approvalAuthority: z.string().max(200).optional(),
   effectiveDate: z.string().datetime().optional(),
@@ -71,15 +70,56 @@ const certificateSchema = z.object({
   signature: z.string().max(1_000).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
+const queryListCertificates = z.object({
+  assessmentId: z.string().uuid().optional(),
+  status: z.enum(["compliant", "compliant_with_exceptions", "provisionally_compliant", "non_compliant", "incomplete"]).optional(),
+});
 
-async function hasAuditAccess(
+async function requireOwnedResource<T extends { tenantId?: string }>(
   request: FastifyRequest,
   reply: FastifyReply,
-  store: ControlPlaneStore,
-  resourceNodeId: string,
+  resource: T | undefined,
+  notFoundError: string,
 ) {
-  const decision = await store.checkAccess(request.currentUser, "audit:view" as any, resourceNodeId);
-  if (!decision) {
+  if (!resource || resource.tenantId !== request.currentUser.tenantId) {
+    await reply.code(404).send({ error: notFoundError });
+    return undefined;
+  }
+  return resource;
+}
+
+function parseBody<T>(schema: z.ZodType<T>, body: unknown, reply: FastifyReply): T | undefined {
+  const parsed = schema.safeParse(body);
+  if (!parsed.success) {
+    void reply.code(400).send({ error: "validation_error", details: parsed.error.flatten() });
+    return undefined;
+  }
+  return parsed.data;
+}
+
+function validatePolicyConfiguration(policy: Record<string, unknown>) {
+  const automaticDeletion = policy.automaticDeletionEligibility === true;
+  const retentionFields = ["normalRetentionDays", "hotStorageDays", "warmStorageDays", "coldStorageDays"];
+  if (automaticDeletion && retentionFields.some((field) => policy[field] === 0)) {
+    return "automatic_deletion_requires_positive_retention";
+  }
+  if (policy.legalHoldOverride === true &&
+      (typeof policy.approvalAuthority !== "string" || !policy.approvalAuthority.trim())) {
+    return "legal_hold_override_requires_approval_authority";
+  }
+  return undefined;
+}
+
+async function requireComplianceAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  mode: "view" | "manage",
+) {
+  const role = request.currentUser?.role;
+  const administrators = new Set(["super_admin", "company_admin", "hq_admin"]);
+  const allowed = administrators.has(role) || role === "security_officer" ||
+    (mode === "view" && role === "auditor");
+  if (!allowed) {
     await reply.code(403).send({ error: "forbidden" });
     return false;
   }
@@ -90,12 +130,18 @@ export async function registerComplianceRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
 ) {
-  app.get("/v1/compliance/frameworks", async (request) => {
+  app.get("/v1/compliance/frameworks", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     return { data: await store.listComplianceFrameworks(request.currentUser.tenantId) };
   });
 
   app.post("/v1/compliance/frameworks", async (request, reply) => {
-    const body = frameworkSchema.parse(request.body);
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
+    const body = parseBody(frameworkSchema, request.body, reply);
+    if (!body) return;
+    if (body.effectiveDate && body.reviewDate && body.reviewDate < body.effectiveDate) {
+      return reply.code(400).send({ error: "review_date_before_effective_date" });
+    }
     const framework = await store.createComplianceFramework({
       tenantId: request.currentUser.tenantId,
       name: body.name,
@@ -110,15 +156,25 @@ export async function registerComplianceRoutes(
   });
 
   app.get("/v1/compliance/frameworks/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const { id } = idParams.parse(request.params);
-    const framework = await store.getComplianceFramework(id);
-    if (!framework) return reply.code(404).send({ error: "framework_not_found" });
+    const framework = await requireOwnedResource(request, reply, await store.getComplianceFramework(id), "framework_not_found");
+    if (!framework) return;
     return framework;
   });
 
   app.patch("/v1/compliance/frameworks/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
     const { id } = idParams.parse(request.params);
-    const body = frameworkSchema.partial().parse(request.body);
+    const body = parseBody(frameworkSchema.partial(), request.body, reply);
+    if (!body) return;
+    const existing = await requireOwnedResource(request, reply, await store.getComplianceFramework(id), "framework_not_found");
+    if (!existing) return;
+    const effectiveDate = body.effectiveDate ?? existing.effectiveDate;
+    const reviewDate = body.reviewDate ?? existing.reviewDate;
+    if (effectiveDate && reviewDate && reviewDate < effectiveDate) {
+      return reply.code(400).send({ error: "review_date_before_effective_date" });
+    }
     const updateInput: Partial<import("../control-plane-store.js").ComplianceFrameworkInput> = {
       ...(cleanObject(body) as any),
       tenantId: request.currentUser.tenantId,
@@ -129,7 +185,8 @@ export async function registerComplianceRoutes(
     return framework;
   });
 
-  app.get("/v1/compliance/policies", async (request) => {
+  app.get("/v1/compliance/policies", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const query = queryListPolicies.parse(request.query);
     return {
       data: await store.listCompliancePolicies(
@@ -140,7 +197,16 @@ export async function registerComplianceRoutes(
   });
 
   app.post("/v1/compliance/policies", async (request, reply) => {
-    const body = policySchema.parse(request.body);
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
+    const body = parseBody(policySchema, request.body, reply);
+    if (!body) return;
+    const framework = await requireOwnedResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found");
+    if (!framework) return;
+    if (body.effectiveDate && body.reviewDate && body.reviewDate < body.effectiveDate) {
+      return reply.code(400).send({ error: "review_date_before_effective_date" });
+    }
+    const policyError = validatePolicyConfiguration(body);
+    if (policyError) return reply.code(400).send({ error: policyError });
     const policy = await store.createCompliancePolicy({
       frameworkId: body.frameworkId,
       tenantId: request.currentUser.tenantId,
@@ -167,15 +233,28 @@ export async function registerComplianceRoutes(
   });
 
   app.get("/v1/compliance/policies/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const { id } = idParams.parse(request.params);
-    const policy = await store.getCompliancePolicy(id);
-    if (!policy) return reply.code(404).send({ error: "policy_not_found" });
+    const policy = await requireOwnedResource(request, reply, await store.getCompliancePolicy(id), "policy_not_found");
+    if (!policy) return;
     return policy;
   });
 
   app.patch("/v1/compliance/policies/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
     const { id } = idParams.parse(request.params);
-    const body = policySchema.partial().parse(request.body);
+    const body = parseBody(policySchema.partial(), request.body, reply);
+    if (!body) return;
+    const existing = await requireOwnedResource(request, reply, await store.getCompliancePolicy(id), "policy_not_found");
+    if (!existing) return;
+    if (body.frameworkId && !(await requireOwnedResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found"))) return;
+    const effectiveDate = body.effectiveDate ?? existing.effectiveDate;
+    const reviewDate = body.reviewDate ?? existing.reviewDate;
+    if (effectiveDate && reviewDate && reviewDate < effectiveDate) {
+      return reply.code(400).send({ error: "review_date_before_effective_date" });
+    }
+    const policyError = validatePolicyConfiguration({ ...existing, ...cleanObject(body) });
+    if (policyError) return reply.code(400).send({ error: policyError });
     const updateInput: Partial<import("../control-plane-store.js").CompliancePolicyInput> = {
       ...(cleanObject(body) as any),
       tenantId: request.currentUser.tenantId,
@@ -186,7 +265,8 @@ export async function registerComplianceRoutes(
     return policy;
   });
 
-  app.get("/v1/compliance/assessments", async (request) => {
+  app.get("/v1/compliance/assessments", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const query = queryListAssessments.parse(request.query);
     return {
       data: await store.listComplianceAssessments(request.currentUser.tenantId, {
@@ -198,7 +278,19 @@ export async function registerComplianceRoutes(
   });
 
   app.post("/v1/compliance/assessments", async (request, reply) => {
-    const body = assessmentSchema.parse(request.body);
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
+    const body = parseBody(assessmentSchema, request.body, reply);
+    if (!body) return;
+    if (!(await requireOwnedResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found"))) return;
+    if (body.branchNodeId) {
+      const branch = await store.getNode(body.branchNodeId);
+      if (!branch || branch.tenantId !== request.currentUser.tenantId || branch.type !== "branch") {
+        return reply.code(400).send({ error: "invalid_branch" });
+      }
+    }
+    if (body.assessmentPeriodStart && body.assessmentPeriodEnd && body.assessmentPeriodEnd < body.assessmentPeriodStart) {
+      return reply.code(400).send({ error: "assessment_period_invalid" });
+    }
     const assessment = await store.createComplianceAssessment({
       frameworkId: body.frameworkId,
       tenantId: request.currentUser.tenantId,
@@ -214,15 +306,28 @@ export async function registerComplianceRoutes(
   });
 
   app.get("/v1/compliance/assessments/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const { id } = idParams.parse(request.params);
-    const assessment = await store.getComplianceAssessment(id);
-    if (!assessment) return reply.code(404).send({ error: "assessment_not_found" });
+    const assessment = await requireOwnedResource(request, reply, await store.getComplianceAssessment(id), "assessment_not_found");
+    if (!assessment) return;
     return assessment;
   });
 
   app.patch("/v1/compliance/assessments/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
     const { id } = idParams.parse(request.params);
-    const body = assessmentSchema.partial().parse(request.body);
+    const body = parseBody(assessmentSchema.partial(), request.body, reply);
+    if (!body) return;
+    const existing = await requireOwnedResource(request, reply, await store.getComplianceAssessment(id), "assessment_not_found");
+    if (!existing) return;
+    if (body.frameworkId && !(await requireOwnedResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found"))) return;
+    if (body.branchNodeId) {
+      const branch = await store.getNode(body.branchNodeId);
+      if (!branch || branch.tenantId !== request.currentUser.tenantId || branch.type !== "branch") return reply.code(400).send({ error: "invalid_branch" });
+    }
+    const periodStart = body.assessmentPeriodStart ?? existing.assessmentPeriodStart;
+    const periodEnd = body.assessmentPeriodEnd ?? existing.assessmentPeriodEnd;
+    if (periodStart && periodEnd && periodEnd < periodStart) return reply.code(400).send({ error: "assessment_period_invalid" });
     const updateInput: Partial<import("../control-plane-store.js").ComplianceAssessmentInput> = {
       ...(cleanObject(body) as any),
       tenantId: request.currentUser.tenantId,
@@ -234,17 +339,20 @@ export async function registerComplianceRoutes(
   });
 
   app.get("/v1/compliance/assessments/:id/certificates", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const { id } = idParams.parse(request.params);
-    const assessment = await store.getComplianceAssessment(id);
-    if (!assessment) return reply.code(404).send({ error: "assessment_not_found" });
+    const assessment = await requireOwnedResource(request, reply, await store.getComplianceAssessment(id), "assessment_not_found");
+    if (!assessment) return;
     return { data: await store.listComplianceCertificates(id) };
   });
 
   app.post("/v1/compliance/assessments/:id/certificates", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "manage"))) return;
     const { id } = idParams.parse(request.params);
-    const assessment = await store.getComplianceAssessment(id);
-    if (!assessment) return reply.code(404).send({ error: "assessment_not_found" });
-    const body = certificateSchema.parse(request.body);
+    const assessment = await requireOwnedResource(request, reply, await store.getComplianceAssessment(id), "assessment_not_found");
+    if (!assessment) return;
+    const body = parseBody(certificateSchema, request.body, reply);
+    if (!body) return;
     const certificate = await store.createComplianceCertificate({
       assessmentId: id,
       tenantId: request.currentUser.tenantId,
@@ -261,10 +369,17 @@ export async function registerComplianceRoutes(
     return reply.code(201).send(certificate);
   });
 
+  app.get("/v1/compliance/certificates", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
+    const query = queryListCertificates.parse(request.query);
+    return { data: await store.listComplianceCertificatesForTenant(request.currentUser.tenantId, query) };
+  });
+
   app.get("/v1/compliance/certificates/:id", async (request, reply) => {
+    if (!(await requireComplianceAccess(request, reply, "view"))) return;
     const { id } = idParams.parse(request.params);
-    const certificate = await store.getComplianceCertificate(id);
-    if (!certificate) return reply.code(404).send({ error: "certificate_not_found" });
+    const certificate = await requireOwnedResource(request, reply, await store.getComplianceCertificate(id), "certificate_not_found");
+    if (!certificate) return;
     return certificate;
   });
 }

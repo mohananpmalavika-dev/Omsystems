@@ -26,11 +26,11 @@ export default function PrivacyBreachNewPage() {
       await privacyApi.reportBreach({
         branchNodeId: branchNodeId || undefined,
         cameraId: cameraId || undefined,
-        breachType,
+        breachType: breachType.trim(),
         severity,
         discoveredAt: new Date(discoveredAt).toISOString(),
-        description: description || undefined,
-        remediation: remediation || undefined,
+        description: description.trim(),
+        remediation: remediation.trim() || undefined,
       });
 
       router.push("/maintenance/privacy/breaches");
@@ -55,7 +55,7 @@ export default function PrivacyBreachNewPage() {
         </Link>
       </div>
 
-      {error && <div style={{ marginBottom: 20, color: "#b91c1c" }}>{error}</div>}
+      {error && <div role="alert" style={{ marginBottom: 20, color: "#b91c1c" }}>{error}</div>}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14, maxWidth: 700 }}>
         <label>
@@ -84,6 +84,7 @@ export default function PrivacyBreachNewPage() {
             value={breachType}
             onChange={(e) => setBreachType(e.target.value)}
             required
+            minLength={3}
             placeholder="Example: unauthorized_recording"
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
@@ -120,7 +121,9 @@ export default function PrivacyBreachNewPage() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
-            placeholder="Describe what happened and what systems were affected."
+            placeholder="Describe what happened, the affected data or systems, and the immediate impact."
+            required
+            minLength={10}
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>

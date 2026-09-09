@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// Use server-side env variables for API routes
-const API_BASE_URL = process.env.CONTROL_PLANE_URL || 
-                      process.env.CONTROL_PLANE_INTERNAL_URL || 
-                      process.env.NEXT_PUBLIC_API_URL || 
-                      'http://localhost:8080';
+const CONTROL_BFF_BASE = '/api/control';
 
 /**
  * GET /api/audit/maintenance/[id]
@@ -16,24 +12,25 @@ export async function GET(
 ) {
   try {
     const params = await context.params;
-    const url = `${API_BASE_URL}/v1/maintenance/workorders/${params.id}`;
+    const url = new URL(`${CONTROL_BFF_BASE}/v1/maintenance/workorders/${encodeURIComponent(params.id)}`, request.nextUrl.origin);
 
-    const sessionToken = request.cookies.get('sentinel_access')?.value;
+    const authorization = request.headers.get('authorization');
+    const sentinelSession = request.headers.get('x-sentinel-session');
     const response = await fetch(url, {
       headers: {
-        'Authorization': `Bearer ${sessionToken || ''}`,
-        'Content-Type': 'application/json',
+        cookie: request.headers.get('cookie') ?? '',
+        ...(authorization ? { authorization } : {}),
+        ...(sentinelSession ? { 'x-sentinel-session': sentinelSession } : {}),
       },
-      credentials: 'include',
+      cache: 'no-store',
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return proxyResponse(response);
   } catch (error) {
     console.error('Get maintenance work order API error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch maintenance work order' },
-      { status: 500 }
+      { error: 'control_plane_unavailable', message: 'Unable to load the maintenance work order' },
+      { status: 502 }
     );
   }
 }
@@ -48,27 +45,43 @@ export async function PUT(
 ) {
   try {
     const params = await context.params;
-    const body = await request.json();
-    const url = `${API_BASE_URL}/v1/maintenance/workorders/${params.id}`;
+    const body: unknown = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'validation_error', message: 'A work-order update payload is required' }, { status: 400 });
+    }
+    const url = new URL(`${CONTROL_BFF_BASE}/v1/maintenance/workorders/${encodeURIComponent(params.id)}`, request.nextUrl.origin);
 
-    const sessionToken = request.cookies.get('sentinel_access')?.value;
+    const authorization = request.headers.get('authorization');
+    const sentinelSession = request.headers.get('x-sentinel-session');
     const response = await fetch(url, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${sessionToken || ''}`,
         'Content-Type': 'application/json',
+        cookie: request.headers.get('cookie') ?? '',
+        ...(authorization ? { authorization } : {}),
+        ...(sentinelSession ? { 'x-sentinel-session': sentinelSession } : {}),
       },
       body: JSON.stringify(body),
-      credentials: 'include',
+      cache: 'no-store',
     });
 
-    const data = await response.json();
-    return NextResponse.json(data, { status: response.status });
+    return proxyResponse(response);
   } catch (error) {
     console.error('Update maintenance work order API error:', error);
     return NextResponse.json(
-      { error: 'Failed to update maintenance work order' },
-      { status: 500 }
+      { error: 'control_plane_unavailable', message: 'Unable to update the maintenance work order' },
+      { status: 502 }
     );
   }
+}
+
+async function proxyResponse(response: Response) {
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    return NextResponse.json(await response.json(), { status: response.status });
+  }
+  return new NextResponse(await response.text(), {
+    status: response.status,
+    headers: { 'content-type': contentType || 'text/plain; charset=utf-8' },
+  });
 }

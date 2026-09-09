@@ -3092,6 +3092,14 @@ export class MemoryStore {
     return this.complianceCertificates.filter((certificate) => certificate.assessmentId === assessmentId);
   }
 
+  async listComplianceCertificatesForTenant(tenantId: string, filters?: { assessmentId?: string; status?: string }) {
+    return this.complianceCertificates
+      .filter((certificate) => certificate.tenantId === tenantId)
+      .filter((certificate) => !filters?.assessmentId || certificate.assessmentId === filters.assessmentId)
+      .filter((certificate) => !filters?.status || certificate.status === filters.status)
+      .sort((left, right) => right.issuedAt.localeCompare(left.issuedAt));
+  }
+
   async getComplianceCertificate(id: string) {
     return this.complianceCertificates.find((certificate) => certificate.id === id);
   }
@@ -4912,6 +4920,7 @@ export class MemoryStore {
   async closeComplianceFinding(id: string, closedBy: string, notes?: string): Promise<any | undefined> {
     const finding = this.complianceFindings.find((f) => f.id === id);
     if (!finding) return undefined;
+    if (finding.status !== 'verified') return undefined;
     finding.status = 'closed';
     finding.closedDate = new Date().toISOString();
     finding.closedBy = closedBy;

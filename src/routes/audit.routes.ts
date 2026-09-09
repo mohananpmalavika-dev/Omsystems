@@ -15,6 +15,9 @@ const healthQuery = z.object({
   from: z.string().datetime({ offset: true }).optional(),
   to: z.string().datetime({ offset: true }).optional(),
   summary: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+}).refine((value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to), {
+  message: 'from must be before or equal to to',
+  path: ['to'],
 });
 
 const healthCheckBody = z.object({
@@ -24,13 +27,52 @@ const healthCheckBody = z.object({
   message: 'Provide exactly one cameraId or branchNodeId',
 });
 
+const accessLogQuery = z.object({
+  userId: z.string().uuid().optional(),
+  cameraId: z.string().uuid().optional(),
+  branchNodeId: z.string().uuid().optional(),
+  accessType: z.enum(['live_view', 'playback', 'download', 'export', 'search', 'snapshot', 'bookmark', 'evidence_creation', 'share', 'ptz_control', 'thumbnail_view']).optional(),
+  incidentId: z.string().uuid().optional(),
+  sessionId: z.string().uuid().optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+  summary: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
+}).refine((value) => !value.from || !value.to || new Date(value.from) <= new Date(value.to), {
+  message: 'from must be before or equal to to', path: ['to'],
+});
+
 export async function registerAuditRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
   auditRepo: AuditRepository,
 ) {
+  app.get("/v1/audit/access-logs", async (request, reply) => {
+    const parsedQuery = accessLogQuery.safeParse(request.query);
+    if (!parsedQuery.success) return reply.code(400).send({ error: 'validation_error', details: parsedQuery.error.flatten() });
+    const query = parsedQuery.data;
+    const branches = await store.listAccessibleNodes(request.currentUser, 'analytics:view', 'branch');
+    const allowedBranchIds = new Set(branches.map((branch) => branch.id));
+    if (query.branchNodeId && !allowedBranchIds.has(query.branchNodeId)) return reply.code(403).send({ error: 'forbidden' });
+    const logs = await auditRepo.listVideoAccessLogs(request.currentUser.tenantId, query);
+    // Audit entries without an authorized branch scope are never exposed in a
+    // broad listing. This avoids cross-scope leakage from legacy producers.
+    const records = logs.filter((log: Record<string, unknown>) =>
+      typeof log.branchNodeId === 'string' && allowedBranchIds.has(log.branchNodeId),
+    );
+    const summary = query.summary ? {
+      totalAccesses: records.length,
+      deniedAccesses: records.filter((log: Record<string, unknown>) => log.accessResult === 'denied').length,
+      exports: records.filter((log: Record<string, unknown>) => log.accessType === 'export').length,
+      downloads: records.filter((log: Record<string, unknown>) => log.accessType === 'download').length,
+    } : undefined;
+    return { data: records, total: records.length, ...(summary ? { summary } : {}) };
+  });
+
   app.get("/v1/audit/branch-compliance", async (request, reply) => {
-    const query = branchComplianceQuery.parse(request.query);
+    const parsedQuery = branchComplianceQuery.safeParse(request.query);
+    if (!parsedQuery.success) return reply.code(400).send({ error: "validation_error", details: parsedQuery.error.flatten() });
+    const query = parsedQuery.data;
     const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
     const targets = query.branchNodeId
       ? branches.filter((branch) => branch.id === query.branchNodeId)
@@ -45,7 +87,9 @@ export async function registerAuditRoutes(
   });
 
   app.get("/v1/audit/health", async (request, reply) => {
-    const query = healthQuery.parse(request.query);
+    const parsedQuery = healthQuery.safeParse(request.query);
+    if (!parsedQuery.success) return reply.code(400).send({ error: "validation_error", details: parsedQuery.error.flatten() });
+    const query = parsedQuery.data;
     const branches = await store.listAccessibleNodes(
       request.currentUser,
       "analytics:view",
@@ -108,7 +152,9 @@ export async function registerAuditRoutes(
   });
 
   app.post("/v1/audit/health/check", async (request, reply) => {
-    const body = healthCheckBody.parse(request.body);
+    const parsedBody = healthCheckBody.safeParse(request.body);
+    if (!parsedBody.success) return reply.code(400).send({ error: "validation_error", details: parsedBody.error.flatten() });
+    const body = parsedBody.data;
     let cameras: Camera[] = [];
     let resourceNodeId: string;
 

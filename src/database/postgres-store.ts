@@ -668,6 +668,7 @@ export class PostgresStore
   async createComplianceAssessment(input: any) { return this.compliance.createAssessment(input); }
   async updateComplianceAssessment(id: string, input: any) { return this.compliance.updateAssessment(id, input); }
   async listComplianceCertificates(assessmentId: string) { return this.compliance.listCertificates(assessmentId); }
+  async listComplianceCertificatesForTenant(tenantId: string, filters?: { assessmentId?: string; status?: string }) { return this.compliance.listCertificatesForTenant(tenantId, filters); }
   async getComplianceCertificate(id: string) { return this.compliance.getCertificate(id); }
   async createComplianceCertificate(input: any) { return this.compliance.createCertificate(input); }
   async getPrivacySummary(tenantId: string) { return this.privacy.getPrivacySummary(tenantId); }
@@ -1633,7 +1634,7 @@ export class PostgresStore
     const result = await this.pool.query(
       `UPDATE compliance_findings
        SET status='closed', closed_date=now(), closed_by=$2, closure_notes=$3, updated_at=now()
-       WHERE id=$1 RETURNING *`,
+       WHERE id=$1 AND status='verified' RETURNING *`,
       [id, closedBy, notes ?? null]
     );
     if (!result.rows[0]) return undefined;

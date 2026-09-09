@@ -1024,7 +1024,14 @@ export const maintenanceApi = {
   updateAsset: (id: string, data: MaintenanceAssetWriteInput) => fetchApi<MaintenanceAsset>(`/v1/maintenance/assets/${encodeURIComponent(id)}`, {
     method: 'PATCH', body: JSON.stringify(data),
   }),
-  listWorkOrders: () => fetchApi<{ data: WorkOrder[] }>('/v1/maintenance/workorders'),
+  listWorkOrders: (filters?: { status?: WorkOrder['status']; severity?: WorkOrder['severity']; branchNodeId?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.branchNodeId) params.set('branchNodeId', filters.branchNodeId);
+    const query = params.toString();
+    return fetchApi<{ data: WorkOrder[] }>(`/v1/maintenance/workorders${query ? `?${query}` : ''}`);
+  },
   getWorkOrder: (id: string) => fetchApi<WorkOrder>(`/v1/maintenance/workorders/${encodeURIComponent(id)}`),
   createWorkOrder: (data: WorkOrderWriteInput & Pick<WorkOrder, 'problem'>) => fetchApi<WorkOrder>('/v1/maintenance/workorders', {
     method: 'POST', body: JSON.stringify(data),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Search, Filter, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 
@@ -22,19 +22,19 @@ interface Finding {
 export default function FindingsPage() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    fetchFindings();
-  }, []);
-
-  const fetchFindings = async () => {
+  const fetchFindings = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch('/api/compliance/findings');
+      if (!response.ok) throw new Error('Unable to load compliance findings.');
       const data = await response.json();
-      setFindings((data.data || []).map((item: any) => ({
+      setFindings((Array.isArray(data.data) ? data.data : []).map((item: any) => ({
         ...item,
         findingNumber: item.findingNumber ?? item.number ?? item.id?.slice(0, 8) ?? 'FIND',
         title: item.title ?? 'Untitled finding',
@@ -47,10 +47,13 @@ export default function FindingsPage() {
       })));
     } catch (error) {
       console.error('Failed to fetch findings:', error);
+      setError(error instanceof Error ? error.message : 'Unable to load compliance findings.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { void fetchFindings(); }, [fetchFindings]);
 
   const filteredFindings = findings.filter(finding => {
     const matchesSearch = 
@@ -102,6 +105,8 @@ export default function FindingsPage() {
             </div>
           </div>
         </div>
+
+        {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error} <button type="button" className="font-semibold underline" onClick={() => void fetchFindings()}>Try again</button></div>}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">

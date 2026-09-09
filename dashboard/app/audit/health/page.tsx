@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Camera, RefreshCw } from 'lucide-react';
 import { PageHero } from '@/components/page-hero';
+import { useSearchParams } from 'next/navigation';
 
 interface HealthSummary {
   totalCameras: number;
@@ -36,20 +37,25 @@ interface CameraHealth {
 }
 
 export default function CameraHealthPage() {
+  const searchParams = useSearchParams();
   const [summary, setSummary] = useState<HealthSummary | null>(null);
   const [cameras, setCameras] = useState<CameraHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [runningCameraId, setRunningCameraId] = useState<string | null>(null);
   const [filter, setFilter] = useState({
     status: '',
-    branchNodeId: '',
+    branchNodeId: searchParams?.get('branchNodeId') ?? '',
   });
+  const requestSequence = useRef(0);
 
   useEffect(() => {
     fetchHealthData();
   }, [filter]);
 
   const fetchHealthData = async () => {
+    const requestId = ++requestSequence.current;
     setLoading(true);
     setError(null);
     try {
@@ -58,10 +64,11 @@ export default function CameraHealthPage() {
       if (filter.branchNodeId) summaryParams.append('branchNodeId', filter.branchNodeId);
       
       const summaryResponse = await fetch(`/api/audit/health?${summaryParams}`);
-      const summaryData = await summaryResponse.json();
-      if (!summaryResponse.ok) throw new Error(summaryData.error || 'Health summary is unavailable');
-      const summaryPayload = summaryData?.data ?? summaryData;
-      setSummary(summaryPayload && typeof summaryPayload === 'object' && 'totalCameras' in summaryPayload ? summaryPayload as HealthSummary : null);
+      const summaryData: unknown = await summaryResponse.json().catch(() => null);
+      if (!summaryResponse.ok) throw new Error(apiErrorMessage(summaryData, 'Health summary is unavailable'));
+      const summaryPayload = isRecord(summaryData) ? summaryData.data ?? summaryData : summaryData;
+      const normalizedSummary = normalizeSummary(summaryPayload);
+      if (!normalizedSummary) throw new Error('The health service returned an invalid summary');
 
       // Fetch camera list
       const params = new URLSearchParams();
@@ -69,17 +76,42 @@ export default function CameraHealthPage() {
       if (filter.branchNodeId) params.append('branchNodeId', filter.branchNodeId);
 
       const response = await fetch(`/api/audit/health?${params}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Camera health records are unavailable');
-      const cameraPayload = data?.data ?? data;
-      setCameras(Array.isArray(cameraPayload) ? cameraPayload : []);
+      const data: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(apiErrorMessage(data, 'Camera health records are unavailable'));
+      const cameraPayload = isRecord(data) ? data.data ?? data : data;
+      if (requestId !== requestSequence.current) return;
+      setSummary(normalizedSummary);
+      setCameras(Array.isArray(cameraPayload) ? cameraPayload.map(normalizeCameraHealth).filter((camera): camera is CameraHealth => camera !== null) : []);
     } catch (error) {
+      if (requestId !== requestSequence.current) return;
       console.error('Failed to fetch health data:', error);
       setSummary(null);
       setCameras([]);
       setError(error instanceof Error ? error.message : 'Camera health data is unavailable');
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
+    }
+  };
+
+  const requestHealthCheck = async (cameraId: string) => {
+    setRunningCameraId(cameraId);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await fetch('/api/audit/health', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cameraId }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(apiErrorMessage(payload, 'Unable to request a camera health check'));
+      setNotice(isRecord(payload) && typeof payload.message === 'string'
+        ? payload.message
+        : 'Camera health check requested. Refresh after the Branch Gateway reports its result.');
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to request a camera health check');
+    } finally {
+      setRunningCameraId(null);
     }
   };
 
@@ -134,7 +166,8 @@ export default function CameraHealthPage() {
         actions={<button type="button" onClick={() => void fetchHealthData()} className="btn-secondary"><RefreshCw size={16} /> Refresh audit</button>}
       />
 
-      {error && <div className="page-alert error">{error}. Showing the available audit workspace without live records.</div>}
+      {error && <div className="page-alert error" role="alert">{error}</div>}
+      {notice && <div className="page-alert success" role="status">{notice}</div>}
 
       {/* Summary Statistics */}
       {summary && (
@@ -281,8 +314,19 @@ export default function CameraHealthPage() {
               </div>
             )}
 
+            <div className="mt-3 pt-3 border-t border-gray-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => void requestHealthCheck(camera.cameraId)}
+                disabled={runningCameraId === camera.cameraId}
+                className="btn-secondary text-sm"
+              >
+                {runningCameraId === camera.cameraId ? 'Requesting…' : 'Run health check'}
+              </button>
+            </div>
+
             <div className="mt-3 text-xs text-gray-500">
-              Last checked: {new Date(camera.checkTimestamp).toLocaleString()}
+              Last checked: {formatTimestamp(camera.checkTimestamp)}
             </div>
           </div>
         ))}
@@ -297,4 +341,69 @@ export default function CameraHealthPage() {
       )}
     </main>
   );
+}
+
+function normalizeSummary(value: unknown): HealthSummary | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  return {
+    totalCameras: nonNegativeNumber(row.totalCameras),
+    assessedCameras: nonNegativeNumber(row.assessedCameras),
+    unassessedCameras: nonNegativeNumber(row.unassessedCameras),
+    onlineCameras: nonNegativeNumber(row.onlineCameras),
+    recordingCameras: nonNegativeNumber(row.recordingCameras),
+    healthyCameras: nonNegativeNumber(row.healthyCameras),
+    warningCameras: nonNegativeNumber(row.warningCameras),
+    degradedCameras: nonNegativeNumber(row.degradedCameras),
+    criticalCameras: nonNegativeNumber(row.criticalCameras),
+    offlineCameras: nonNegativeNumber(row.offlineCameras),
+    avgHealthScore: finiteNumberOrNull(row.avgHealthScore),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function apiErrorMessage(value: unknown, fallback: string) {
+  if (!isRecord(value)) return fallback;
+  return typeof value.message === 'string' ? value.message : typeof value.error === 'string' ? value.error : fallback;
+}
+
+function normalizeCameraHealth(value: unknown): CameraHealth | null {
+  if (!value || typeof value !== 'object') return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.id !== 'string' || typeof row.cameraId !== 'string' || typeof row.checkTimestamp !== 'string') return null;
+  const status = typeof row.overallStatus === 'string' ? row.overallStatus : 'unknown';
+  return {
+    id: row.id,
+    cameraId: row.cameraId,
+    cameraName: typeof row.cameraName === 'string' ? row.cameraName : 'Unnamed camera',
+    cameraLocation: typeof row.cameraLocation === 'string' ? row.cameraLocation : 'Location unavailable',
+    branchName: typeof row.branchName === 'string' ? row.branchName : 'Branch unavailable',
+    checkTimestamp: row.checkTimestamp,
+    isOnline: row.isOnline === true,
+    isRecording: typeof row.isRecording === 'boolean' ? row.isRecording : null,
+    overallStatus: status,
+    healthScore: finiteNumberOrNull(row.healthScore),
+    issuesDetected: Array.isArray(row.issuesDetected) ? row.issuesDetected.filter((issue): issue is string => typeof issue === 'string') : [],
+    currentFps: finiteNumberOrNull(row.currentFps),
+    currentBitrateKbps: finiteNumberOrNull(row.currentBitrateKbps),
+    latencyMs: finiteNumberOrNull(row.latencyMs),
+  };
+}
+
+function finiteNumberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function nonNegativeNumber(value: unknown) {
+  return Math.max(0, finiteNumberOrNull(value) ?? 0);
+}
+
+function formatTimestamp(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? 'Unavailable' : date.toLocaleString();
 }

@@ -120,6 +120,19 @@ describe('maintenance routes (basic)', async () => {
     });
   });
 
+  it('validates and applies server-side maintenance audit filters', async () => {
+    const headers = { 'x-user-id': 'user-global-admin' };
+    const invalid = await app.inject({ method: 'GET', url: '/v1/maintenance/workorders?severity=urgent', headers });
+    expect(invalid.statusCode).toBe(400);
+
+    const filtered = await app.inject({ method: 'GET', url: '/v1/maintenance/workorders?severity=high', headers });
+    expect(filtered.statusCode).toBe(200);
+    expect(filtered.json().data).toEqual(expect.arrayContaining([
+      expect.objectContaining({ workOrderNumber: 'WO-MAINT-001', severity: 'high' }),
+    ]));
+    expect(filtered.json().data.every((order: { severity: string }) => order.severity === 'high')).toBe(true);
+  });
+
   it('generates a work-order number for dashboard submissions', async () => {
     const create = await app.inject({
       method: 'POST',

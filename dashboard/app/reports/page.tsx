@@ -30,6 +30,8 @@ export default function ReportsPage(){
   const[runs,setRuns]=useState<Run[]>([]);
   const[loading,setLoading]=useState(true);
   const[message,setMessage]=useState("");
+  const[error,setError]=useState("");
+  const[submitting,setSubmitting]=useState<"run"|"schedule"|"delete"|null>(null);
   const[name,setName]=useState("Daily enterprise surveillance");
   const[timezone,setTimezone]=useState("Asia/Kolkata");
   const[dailyAt,setDailyAt]=useState("06:30");
@@ -41,14 +43,16 @@ export default function ReportsPage(){
   const[deliveryConfiguration,setDeliveryConfiguration]=useState<DeliveryConfiguration|null>(null);
   
   const load=useCallback(async()=>{
+    try{
     const[scheduleResponse,runResponse,templateResponse,deliveryResponse]=await Promise.all([
       fetch("/api/control/v1/reports/operational/schedules",{cache:"no-store"}),
       fetch("/api/control/v1/reports/operational/runs?limit=100",{cache:"no-store"}),
       fetch("/api/control/v1/reports/operational/templates",{cache:"no-store"}),
       fetch("/api/control/v1/reports/operational/delivery-configuration",{cache:"no-store"}),
     ]);
-    if(scheduleResponse.ok)setSchedules((await scheduleResponse.json()).data??[]);
-    if(runResponse.ok)setRuns((await runResponse.json()).data??[]);
+    if(!scheduleResponse.ok||!runResponse.ok||!templateResponse.ok||!deliveryResponse.ok)throw new Error("Unable to refresh report data. Check your reporting access and try again.");
+    setSchedules((await scheduleResponse.json()).data??[]);
+    setRuns((await runResponse.json()).data??[]);
     if(templateResponse.ok){
       const catalog=((await templateResponse.json()).data??[]) as Array<{id:Template;name:string}>;
       const available=catalog.map((item)=>({
@@ -57,40 +61,50 @@ export default function ReportsPage(){
       }));
       if(available.length){setTemplates(available);setTemplate((current)=>available.some((item)=>item.id===current)?current:available[0]!.id);}
     }
-    if(deliveryResponse.ok)setDeliveryConfiguration((await deliveryResponse.json()).data);
-    setLoading(false);
+    setDeliveryConfiguration((await deliveryResponse.json()).data);
+    setError("");
+    }catch(cause){setError(cause instanceof Error?cause.message:"Unable to refresh report data.");}
+    finally{setLoading(false);}
   },[]);
   
-  useEffect(()=>{void load();const timer=setInterval(load,5_000);return()=>clearInterval(timer);},[load]);
+  useEffect(()=>{void load();const timer=setInterval(()=>void load(),15_000);return()=>clearInterval(timer);},[load]);
   
   const payload=()=>({template,formats,filters:clean(filters),recipients:recipients.split(",").map((item)=>item.trim()).filter(Boolean)});
   
   const createSchedule=async()=>{
-    setMessage("");
-    const response=await fetch("/api/control/v1/reports/operational/schedules",{
+    if(!validateRequest(true))return;
+    setMessage("");setError("");setSubmitting("schedule");
+    try{const response=await fetch("/api/control/v1/reports/operational/schedules",{
       method:"POST",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})
     });
-    setMessage(response.ok?"Schedule saved.":"Could not save schedule.");
+    if(!response.ok)throw new Error(await responseError(response,"Could not save schedule."));
+    setMessage("Daily schedule saved.");
     if(response.ok)await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:"Could not save schedule.");}finally{setSubmitting(null);}
   };
   
   const runNow=async()=>{
-    setMessage("");
-    const response=await fetch("/api/control/v1/reports/operational/runs",{
+    if(!validateRequest(false))return;
+    setMessage("");setError("");setSubmitting("run");
+    try{const response=await fetch("/api/control/v1/reports/operational/runs",{
       method:"POST",
       headers:{"content-type":"application/json"},
       body:JSON.stringify(payload())
     });
-    setMessage(response.ok?"Report queued for generation.":"Could not queue report.");
+    if(!response.ok)throw new Error(await responseError(response,"Could not queue report."));
+    setMessage("Report queued for generation.");
     if(response.ok)await load();
+    }catch(cause){setError(cause instanceof Error?cause.message:"Could not queue report.");}finally{setSubmitting(null);}
   };
   
   const remove=async(id:string)=>{
-    await fetch(`/api/control/v1/reports/operational/schedules/${id}`,{method:"DELETE"});
-    await load();
+    if(!window.confirm("Delete this daily schedule? Existing report history will be retained."))return;
+    setError("");setMessage("");setSubmitting("delete");
+    try{const response=await fetch(`/api/control/v1/reports/operational/schedules/${encodeURIComponent(id)}`,{method:"DELETE"});if(!response.ok)throw new Error(await responseError(response,"Could not delete schedule."));setMessage("Schedule deleted.");await load();}catch(cause){setError(cause instanceof Error?cause.message:"Could not delete schedule.");}finally{setSubmitting(null);}
   };
+  const validateRequest=(requireScheduleName:boolean)=>{if(!formats.length){setError("Select at least one export format.");return false;}if(requireScheduleName&&!name.trim()){setError("Provide a schedule name.");return false;}const invalid=recipients.split(",").map((item)=>item.trim()).filter(Boolean).find((item)=>!/^\S+@\S+\.\S+$/.test(item));if(invalid){setError(`Invalid recipient email: ${invalid}`);return false;}return true;};
   
   const selectedTemplateInfo = templates.find(t => t.id === template);
   
@@ -103,7 +117,8 @@ export default function ReportsPage(){
       actions={<button className="btn-secondary" onClick={()=>void load()}><RefreshCw size={16}/>Refresh data</button>}
     />
     
-    {message&&<div className="card py-3 text-sm">{message}</div>}
+    {message&&<div className="card py-3 text-sm" role="status">{message}</div>}
+    {error&&<div className="card border-red-500/50 py-3 text-sm text-red-300" role="alert">{error}</div>}
     
     <section className="grid xl:grid-cols-[1fr_1.2fr] gap-5">
       <div className="card space-y-4">
@@ -162,7 +177,7 @@ export default function ReportsPage(){
           <span className="text-sm">Formats</span>
           <div className="flex gap-2 mt-1">
             {(["csv","xlsx","pdf"] as Format[]).map((format)=>(
-              <button 
+              <button type="button"
                 key={format} 
                 onClick={()=>setFormats((current)=>
                   current.includes(format)?current.filter((item)=>item!==format):[...current,format]
@@ -208,11 +223,11 @@ export default function ReportsPage(){
         </div>
         
         <div className="flex gap-2">
-          <button disabled={!formats.length} onClick={()=>void runNow()} className="btn-primary flex gap-2">
-            <Play size={15}/>Run now
+          <button disabled={!formats.length||submitting!==null} onClick={()=>void runNow()} className="btn-primary flex gap-2">
+            {submitting==="run"?<LoaderCircle size={15} className="animate-spin"/>:<Play size={15}/>}Run now
           </button>
-          <button disabled={!formats.length} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2">
-            <CalendarClock size={15}/>Save daily schedule
+          <button disabled={!formats.length||submitting!==null} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2">
+            {submitting==="schedule"?<LoaderCircle size={15} className="animate-spin"/>:<CalendarClock size={15}/>}Save daily schedule
           </button>
         </div>
       </div>
@@ -233,7 +248,7 @@ export default function ReportsPage(){
                   </p>
                   <p className="text-xs text-gray-500">{schedule.recipients.join(", ")||"In-app only"}</p>
                 </div>
-                <button aria-label="Delete schedule" onClick={()=>void remove(schedule.id)}>
+                <button aria-label="Delete schedule" disabled={submitting!==null} onClick={()=>void remove(schedule.id)}>
                   <Trash2 size={17} className="text-red-600"/>
                 </button>
               </div>
@@ -317,3 +332,5 @@ function clean(filters:Filters){
 function toIso(value:string){
   return value?new Date(value).toISOString():undefined;
 }
+
+async function responseError(response:Response,fallback:string){const body=await response.json().catch(()=>null);return body?.error??fallback;}

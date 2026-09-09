@@ -85,6 +85,20 @@ const endSessionSchema = z.object({
     .default('user_logout'),
 });
 
+const activityReportPeriodBase = z.object({
+  userId: z.string().uuid().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+const withValidActivityPeriod = <T extends { startDate: string; endDate: string }>(schema: z.ZodType<T>) => schema.refine((value) => value.startDate <= value.endDate, {
+  message: 'startDate must be before or equal to endDate', path: ['endDate'],
+}).refine((value) => Date.parse(`${value.endDate}T00:00:00.000Z`) - Date.parse(`${value.startDate}T00:00:00.000Z`) <= 366 * 86_400_000, {
+  message: 'Activity report range cannot exceed 366 days', path: ['endDate'],
+});
+
+const activityReportPeriodQuery = withValidActivityPeriod(activityReportPeriodBase);
+
 const sensitiveMetadataKey = /password|passcode|secret|token|credential|authorization|cookie|api.?key|private.?key|query|search.?term/i;
 
 function sanitizeActivityMetadata(value: unknown, depth = 0): unknown {
@@ -597,13 +611,10 @@ export async function registerEmployeeActivityTrackingRoutes(
   });
   
   app.get("/v1/activity/timeline", async (request, reply) => {
-    const query = z.object({
-      userId: z.string().optional(),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    const query = withValidActivityPeriod(activityReportPeriodBase.extend({
       limit: z.coerce.number().int().min(1).max(500).optional().default(200),
       offset: z.coerce.number().int().min(0).optional().default(0),
-    }).parse(request.query);
+    })).parse(request.query);
 
     try {
       const user = getAuthUser(request);
@@ -627,11 +638,7 @@ export async function registerEmployeeActivityTrackingRoutes(
   });
 
   app.get("/v1/activity/report/comprehensive", async (request, reply) => {
-    const query = z.object({
-      userId: z.string().optional(),
-      startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-    }).parse(request.query);
+    const query = activityReportPeriodQuery.parse(request.query);
     
     try {
       const user = getAuthUser(request);

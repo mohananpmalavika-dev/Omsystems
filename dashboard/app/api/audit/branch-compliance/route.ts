@@ -17,13 +17,15 @@ export async function GET(request: NextRequest) {
     `${CONTROL_BFF_BASE}/v1/audit/branch-compliance${query ? `?${query}` : ""}`,
     request.nextUrl.origin,
   );
+  const authorization = request.headers.get("authorization");
+  const sentinelSession = request.headers.get("x-sentinel-session");
 
   try {
     const response = await fetch(bffUrl, {
       headers: {
         cookie: request.headers.get("cookie") ?? "",
-        "x-tenant-id": request.headers.get("x-tenant-id") ?? "",
-        "x-user-id": request.headers.get("x-user-id") ?? "system",
+        ...(authorization ? { authorization } : {}),
+        ...(sentinelSession ? { "x-sentinel-session": sentinelSession } : {}),
       },
       cache: "no-store",
     });

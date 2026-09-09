@@ -94,6 +94,20 @@ describe('audit routes', () => {
     expect(response.json()).toMatchObject({ data: [{ id: 'allowed' }], total: 1 });
   });
 
+  it('rejects an invalid camera-health audit window before querying evidence', async () => {
+    const listLatestCameraHealthChecks = vi.fn();
+    await registerAuditRoutes(app, makeStore(), makeAudits({ listLatestCameraHealthChecks }));
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/audit/health?from=2026-02-02T00%3A00%3A00.000Z&to=2026-02-01T00%3A00%3A00.000Z',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: 'validation_error' });
+    expect(listLatestCameraHealthChecks).not.toHaveBeenCalled();
+  });
+
   it('queues a real edge camera probe for a manual health check', async () => {
     const store = makeStore();
     await registerAuditRoutes(app, store, makeAudits());
@@ -135,5 +149,33 @@ describe('audit routes', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ data: [{ branchId: branch.id }] });
     expect(getBranchComplianceSummary).toHaveBeenCalledWith(user.tenantId, branch.id);
+  });
+
+  it('rejects malformed branch compliance filters without calling the repository', async () => {
+    const getBranchComplianceSummary = vi.fn();
+    await registerAuditRoutes(app, makeStore(), makeAudits({ getBranchComplianceSummary }));
+
+    const response = await app.inject({ method: 'GET', url: '/v1/audit/branch-compliance?branchNodeId=not-a-uuid' });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: 'validation_error' });
+    expect(getBranchComplianceSummary).not.toHaveBeenCalled();
+  });
+
+  it('does not query branch compliance for an inaccessible branch', async () => {
+    const getBranchComplianceSummary = vi.fn();
+    await registerAuditRoutes(
+      app,
+      makeStore({ listAccessibleNodes: vi.fn().mockResolvedValue([]) }),
+      makeAudits({ getBranchComplianceSummary }),
+    );
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/v1/audit/branch-compliance?branchNodeId=00000000-0000-4000-8000-000000000101',
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(getBranchComplianceSummary).not.toHaveBeenCalled();
   });
 });

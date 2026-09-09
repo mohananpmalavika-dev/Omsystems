@@ -13,7 +13,7 @@ import { zeroTouchDeviceReviewService } from "../services/zero-touch-device-revi
 
 export async function registerZeroTouchRoutes(app: FastifyInstance, store: ControlPlaneStore) {
   // 1. Fleet Overview & SLA Metrics
-  app.get("/api/v1/zero-touch/fleet", async (request, reply) => {
+  const fleetHandler = async (request: any, reply: any) => {
     const accessibleBranches = await store.listAccessibleNodes(request.currentUser, "device:configure", "branch");
     const branchData = await Promise.all(accessibleBranches.map(async (branch) => {
       const [agents, cameras, discoveries, latestJob, region] = await Promise.all([
@@ -105,7 +105,11 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
         slaMetrics,
       },
     });
-  });
+  };
+  // /v1 is served through the authenticated dashboard BFF. Keep the old
+  // location for existing API clients while they migrate.
+  app.get("/v1/zero-touch/fleet", fleetHandler);
+  app.get("/api/v1/zero-touch/fleet", fleetHandler);
 
   // 2. Create Branch Profile
   app.post("/api/v1/zero-touch/branches", async (request, reply) => {
@@ -118,6 +122,13 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
 
   // 3. Generate Single-Use 15-Minute Enrollment Package
   app.post("/api/v1/zero-touch/branches/:branchId/enrollment", async (request, reply) => {
+    void request;
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_enrollment_disabled",
+      message: "Create a persisted edge activation through POST /v1/branches/:branchId/edge-activations.",
+    });
+    /*
     const { branchId } = request.params as { branchId: string };
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ success: false, error: "branch_not_found" });
@@ -145,10 +156,18 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
       success: true,
       data: pkg,
     });
+    */
   });
 
   // 4. Agent Bootstrap & mTLS Key Exchange
   app.post("/api/v1/zero-touch/enrollment/exchange", async (request, reply) => {
+    void request;
+    return reply.code(410).send({
+      success: false,
+      error: "legacy_enrollment_disabled",
+      message: "Use POST /v1/edge-enrollment/activate with an edge activation code.",
+    });
+    /*
     const body = z.object({
       token: z.string().min(5),
       hostname: z.string().trim().min(1),
@@ -168,6 +187,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
       return reply.code(400).send(result);
     }
     return reply.code(200).send(result);
+    */
   });
 
   // 5. Start Real Zero-Touch Provisioning Job
@@ -309,15 +329,75 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
   });
 
   // 15. Engineering Diagnostic Probes & Logs
-  app.get("/api/v1/zero-touch/diagnostics/:branchId", async (request, reply) => {
+  const diagnosticsHandler = async (request: any, reply: any) => {
     const { branchId } = request.params as { branchId: string };
-    const report = zeroTouchJobEngineService.getDiagnostics(branchId);
-    if (!report) return reply.code(404).send({ success: false, error: "diagnostics_not_available" });
+    const branch = await store.getNode(branchId);
+    if (!branch || branch.type !== "branch") return reply.code(404).send({ success: false, error: "branch_not_found" });
+    const access = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (!access?.allowed) return reply.code(403).send({ success: false, error: "forbidden" });
+    const [agents, job, discoveries, telemetry] = await Promise.all([
+      store.listEdgeAgentsByBranch(branchId),
+      store.getLatestEdgeScanJob(branchId),
+      store.listDiscoveredCameras(branchId),
+      store.listLatestOperationalTelemetry(branch.tenantId, [branchId]),
+    ]);
+    const agent = agents.find((item) => item.status === "online") ?? agents[0];
+    const latestTelemetry = telemetry
+      .sort((left, right) => Date.parse(right.observedAt) - Date.parse(left.observedAt))
+      .slice(0, 25);
+    const verified = discoveries.filter((item) => item.streamVerified === true).length;
+    const credentialsRequired = discoveries.filter((item) => item.credentialsRequired === true).length;
+    const issues = [
+      ...(!agent ? [{ severity: "critical", code: "edge_agent_missing", message: "No edge agent is enrolled for this branch." }] : []),
+      ...(agent?.status !== "online" ? [{ severity: "warning", code: "edge_agent_offline", message: "The enrolled edge agent is not currently online." }] : []),
+      ...(latestTelemetry.length === 0 ? [{ severity: "warning", code: "telemetry_unavailable", message: "No authenticated operational telemetry has been received yet." }] : []),
+      ...(job?.status === "failed" ? [{ severity: "critical", code: "scan_failed", message: job.error ?? "The most recent discovery scan failed." }] : []),
+      ...(credentialsRequired > 0 ? [{ severity: "warning", code: "credentials_required", message: `${credentialsRequired} discovered device(s) require credentials before approval.` }] : []),
+    ];
     return reply.code(200).send({
       success: true,
-      data: report,
+      data: {
+        branchId,
+        branchName: branch.name,
+        generatedAt: new Date().toISOString(),
+        agent: agent ? {
+          id: agent.id,
+          name: agent.name,
+          status: agent.status,
+          version: agent.version,
+          lastHeartbeat: agent.lastSeenAt,
+        } : null,
+        scan: job ? {
+          id: job.id,
+          status: job.status,
+          requestedAt: job.requestedAt,
+          startedAt: job.startedAt,
+          completedAt: job.completedAt,
+          resultCount: job.resultCount,
+          verifiedCount: job.verifiedCount,
+          provisionedCount: job.provisionedCount,
+          error: job.error,
+        } : null,
+        discoveries: {
+          total: discoveries.length,
+          verified,
+          credentialsRequired,
+          pendingVerification: discoveries.filter((item) => !item.credentialsRequired && item.streamVerified !== true).length,
+          duplicates: discoveries.filter((item) => item.duplicateStatus === "duplicate").length,
+        },
+        telemetry: latestTelemetry.map((item) => ({
+          deviceType: item.deviceType,
+          deviceId: item.deviceId,
+          observedAt: item.observedAt,
+          source: item.source,
+          reasonCodes: item.reasonCodes,
+        })),
+        issues,
+      },
     });
-  });
+  };
+  app.get("/v1/zero-touch/diagnostics/:branchId", diagnosticsHandler);
+  app.get("/api/v1/zero-touch/diagnostics/:branchId", diagnosticsHandler);
 
   // Backward compatibility routes for legacy callers
   app.post("/api/zero-touch/branches/create-and-enroll", async (_request, reply) => {

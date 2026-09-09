@@ -1555,6 +1555,7 @@ export interface ControlPlaneStore {
   createComplianceAssessment(input: ComplianceAssessmentInput): Promise<ComplianceAssessment>;
   updateComplianceAssessment(id: string, input: Partial<ComplianceAssessmentInput>): Promise<ComplianceAssessment | undefined>;
   listComplianceCertificates(assessmentId: string): Promise<ComplianceCertificate[]>;
+  listComplianceCertificatesForTenant(tenantId: string, filters?: { assessmentId?: string; status?: string }): Promise<ComplianceCertificate[]>;
   getComplianceCertificate(id: string): Promise<ComplianceCertificate | undefined>;
   createComplianceCertificate(input: ComplianceCertificateInput): Promise<ComplianceCertificate>;
   

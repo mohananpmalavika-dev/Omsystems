@@ -1,69 +1,18 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import { Camera, LockKeyhole, ShieldCheck } from "lucide-react";
-import { PageHero } from "@/components/page-hero";
-import { privacyApi } from "@/lib/api-client";
+import { FormEvent, useState } from 'react';
+import { Camera, Loader2, LockKeyhole, RefreshCw, Save, ShieldCheck } from 'lucide-react';
+import { PageHero } from '@/components/page-hero';
+import { privacyApi } from '@/lib/api-client';
+
+type Controls = { cameraId: string; audioRecordingApproved: boolean; encryptionEnabled: boolean; disposalPlan?: string | null; dataProtectionOfficer?: string | null; lastReviewedAt?: string | null; updatedAt?: string | null };
+const blank = (): Controls => ({ cameraId: '', audioRecordingApproved: false, encryptionEnabled: false, disposalPlan: '', dataProtectionOfficer: '', lastReviewedAt: null });
+const displayDate = (value?: string | null) => value && !Number.isNaN(new Date(value).getTime()) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not recorded';
 
 export default function PrivacyControlsPage() {
-  const [controls, setControls] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [cameraId, setCameraId] = useState("cam-001");
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    void privacyApi.getCameraControls(cameraId)
-      .then(setControls)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-  }, [cameraId]);
-
-  const updateControls = async () => {
-    setError(null);
-    try {
-      const result = await privacyApi.updateCameraControls(cameraId, {
-        audioRecordingApproved: true,
-        encryptionEnabled: true,
-        dataProtectionOfficer: "dp0",
-      });
-      setControls(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  return (
-    <div className="privacy-controls-page">
-      <PageHero eyebrow="Privacy enforcement" title="Camera privacy controls" description="Review encryption, audio approval, and governance ownership for a selected camera." icon={LockKeyhole} />
-
-      <div className="privacy-control-selector">
-        <span className="privacy-camera-icon"><Camera size={17} /></span>
-        <label>Camera ID
-          <input
-            value={cameraId}
-            onChange={(event) => setCameraId(event.target.value)}
-          />
-        </label>
-      </div>
-
-      {error && <div className="page-alert error">{error}</div>}
-
-      {loading ? (
-        <div className="privacy-controls-state">Loading privacy controls…</div>
-      ) : (
-        <section className="privacy-controls-panel">
-          <header><div><span>Control posture</span><h2>Protection settings</h2></div><ShieldCheck size={20} /></header>
-          <div className="privacy-control-grid">
-            <div><span>Audio recording</span><strong>{controls?.audioRecordingApproved ? "Approved" : "Not approved"}</strong></div>
-            <div><span>Encryption</span><strong>{controls?.encryptionEnabled ? "Enabled" : "Disabled"}</strong></div>
-            <div><span>Data protection officer</span><strong>{controls?.dataProtectionOfficer ?? "Not assigned"}</strong></div>
-            <div><span>Last reviewed</span><strong>{controls?.lastReviewedAt ?? "Never"}</strong></div>
-          </div>
-          <footer><p>Apply the approved baseline for this camera and record the responsible data protection officer.</p><button className="btn-primary" onClick={updateControls}>Apply approved baseline</button></footer>
-        </section>
-      )}
-    </div>
-  );
+  const [cameraId, setCameraId] = useState(''); const [activeCameraId, setActiveCameraId] = useState(''); const [controls, setControls] = useState<Controls>(blank); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false); const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null);
+  async function load(event?: FormEvent) { event?.preventDefault(); const id = cameraId.trim(); if (!id) { setError('Enter a camera ID to load its privacy controls.'); return; } setLoading(true); setError(null); setNotice(null); try { const response = await privacyApi.getCameraControls(id) as Controls; setActiveCameraId(id); setControls({ ...blank(), ...response, cameraId: id }); } catch (cause) { setActiveCameraId(''); setControls(blank()); setError(cause instanceof Error ? cause.message : 'Unable to load camera privacy controls.'); } finally { setLoading(false); } }
+  async function save(event: FormEvent) { event.preventDefault(); if (!activeCameraId) return; if (controls.audioRecordingApproved && !controls.dataProtectionOfficer?.trim()) { setError('Assign a data protection officer before approving audio recording.'); return; } setSaving(true); setError(null); setNotice(null); try { const updated = await privacyApi.updateCameraControls(activeCameraId, { audioRecordingApproved: controls.audioRecordingApproved, encryptionEnabled: controls.encryptionEnabled, disposalPlan: controls.disposalPlan?.trim() || undefined, dataProtectionOfficer: controls.dataProtectionOfficer?.trim() || undefined, lastReviewedAt: new Date().toISOString() }) as Controls; setControls({ ...blank(), ...updated, cameraId: activeCameraId }); setNotice('Privacy controls saved and recorded in the audit trail.'); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to save camera privacy controls.'); } finally { setSaving(false); } }
+  return <div className="privacy-controls-page"><PageHero eyebrow="Privacy enforcement" title="Camera privacy controls" description="Load a camera, review its processing safeguards, and save governed control changes." icon={LockKeyhole} /><form onSubmit={load} className="privacy-control-selector"><span className="privacy-camera-icon"><Camera size={17} /></span><label>Camera ID<input value={cameraId} onChange={(event) => setCameraId(event.target.value)} placeholder="Camera UUID" autoComplete="off" /></label><button type="submit" className="btn-secondary" disabled={loading}>{loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}Load controls</button></form>{error && <div className="page-alert error" role="alert">{error}</div>}{notice && <div className="page-alert success" role="status">{notice}</div>}{!activeCameraId ? <div className="privacy-controls-state">Load a camera to review and manage its privacy posture.</div> : loading ? <div className="privacy-controls-state">Loading privacy controls...</div> : <form onSubmit={save} className="privacy-controls-panel"><header><div><span>Control posture</span><h2>Protection settings</h2></div><ShieldCheck size={20} /></header><div className="privacy-control-grid"><Toggle label="Audio recording approved" description="Requires an assigned data protection officer." checked={controls.audioRecordingApproved} onChange={(value) => setControls({ ...controls, audioRecordingApproved: value })} /><Toggle label="Encryption enabled" description="Protect recorded data in transit and at rest." checked={controls.encryptionEnabled} onChange={(value) => setControls({ ...controls, encryptionEnabled: value })} /><label><span>Data protection officer</span><input value={controls.dataProtectionOfficer ?? ''} onChange={(event) => setControls({ ...controls, dataProtectionOfficer: event.target.value })} placeholder="Assigned owner" /></label><label><span>Disposal plan</span><textarea value={controls.disposalPlan ?? ''} onChange={(event) => setControls({ ...controls, disposalPlan: event.target.value })} placeholder="Retention and disposal procedure" rows={3} /></label><div><span>Last reviewed</span><strong>{displayDate(controls.lastReviewedAt)}</strong></div><div><span>Last updated</span><strong>{displayDate(controls.updatedAt)}</strong></div></div><footer><p>Saving records the current review time and writes an audit event for this camera.</p><button type="submit" className="btn-primary" disabled={saving}>{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save controls</button></footer></form>}</div>;
 }
+function Toggle({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (value: boolean) => void }) { return <label className="flex items-start gap-3"><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="mt-1 h-4 w-4" /><span><strong>{label}</strong><small className="mt-1 block text-gray-500">{description}</small></span></label>; }

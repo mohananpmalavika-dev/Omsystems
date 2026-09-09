@@ -96,6 +96,17 @@ interface TimelineEvent {
   metadata: Record<string, unknown>;
 }
 
+interface VideoAccessLog {
+  id: string;
+  accessTimestamp: string;
+  accessType: string;
+  accessResult?: string | null;
+  cameraName?: string | null;
+  branchName?: string | null;
+  userName?: string | null;
+  durationSeconds?: number | null;
+}
+
 type ReportPeriod = "seven-days" | "four-weeks" | "quarter" | "custom";
 
 function dateValue(daysAgo = 0) {
@@ -204,6 +215,15 @@ function normalizeTimeline(value: any): TimelineEvent[] {
   return [];
 }
 
+function normalizeAccessLogs(value: any): VideoAccessLog[] {
+  return Array.isArray(value) ? value.map((item: any) => ({
+    id: String(item.id ?? ''), accessTimestamp: String(item.accessTimestamp ?? ''),
+    accessType: String(item.accessType ?? 'access'), accessResult: item.accessResult ?? null,
+    cameraName: item.cameraName ?? null, branchName: item.branchName ?? null,
+    userName: item.userName ?? null, durationSeconds: item.durationSeconds == null ? null : numberValue(item.durationSeconds),
+  })).filter((item) => Boolean(item.id)) : [];
+}
+
 async function responseJson(response: Response) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -229,6 +249,7 @@ export function EmployeeActivityReport({
   const [report, setReport] = useState<ComprehensiveReport | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [timelineTotal, setTimelineTotal] = useState(0);
+  const [accessLogs, setAccessLogs] = useState<VideoAccessLog[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -293,21 +314,30 @@ export function EmployeeActivityReport({
       const timelineParams = new URLSearchParams(params);
       timelineParams.set("limit", "200");
       timelineParams.set("offset", "0");
-      const [reportResponse, timelineResponse] = await Promise.all([
+      const accessParams = new URLSearchParams();
+      if (userId) accessParams.set('userId', userId);
+      accessParams.set('from', `${startDate}T00:00:00.000Z`);
+      accessParams.set('to', `${endDate}T23:59:59.999Z`);
+      accessParams.set('limit', '100');
+      const [reportResponse, timelineResponse, accessResponse] = await Promise.all([
         fetch(`${apiBaseUrl}/v1/activity/report/comprehensive?${params}`, requestOptions),
         fetch(`${apiBaseUrl}/v1/activity/timeline?${timelineParams}`, requestOptions),
+        fetch(`${apiBaseUrl}/v1/audit/access-logs?${accessParams}`, requestOptions),
       ]);
       const [body, timelineBody] = await Promise.all([
         responseJson(reportResponse),
         responseJson(timelineResponse),
       ]);
+      const accessBody = accessResponse.ok ? await responseJson(accessResponse) : { data: [] };
       setReport(normalizeReport(body));
       setTimeline(normalizeTimeline(timelineBody.data));
       setTimelineTotal(numberValue(timelineBody.total));
+      setAccessLogs(normalizeAccessLogs(accessBody.data));
     } catch (reason) {
       setReport(null);
       setTimeline([]);
       setTimelineTotal(0);
+      setAccessLogs([]);
       setError(reason instanceof Error ? reason.message : "Unable to load the employee activity report.");
     } finally {
       setLoading(false);
@@ -466,6 +496,18 @@ export function EmployeeActivityReport({
               </div>
             </section>
           </div>
+
+          <section className="employee-report-panel employee-timeline-panel">
+            <div className="employee-timeline-heading">
+              <PanelHeader icon={ShieldCheck} eyebrow="Video-access audit" title="Recent access activity" description="Authorized video viewing, playback, download, and export events in the selected window" />
+              <span>{accessLogs.length.toLocaleString()} recent events</span>
+            </div>
+            <div className="employee-timeline-table">
+              <div className="employee-timeline-head"><span>Time</span><span>Access</span><span>Camera / branch</span><span>Result</span></div>
+              {accessLogs.map((log) => <article className="employee-timeline-row" key={log.id}><time dateTime={log.accessTimestamp}>{log.accessTimestamp ? new Date(log.accessTimestamp).toLocaleString() : '—'}</time><div><span className="employee-event-type">{log.accessType.replaceAll('_', ' ')}</span><strong>{log.userName || 'Authenticated user'}</strong></div><div><strong>{log.cameraName || 'Video resource'}</strong><small>{log.branchName || 'Authorized branch scope'}</small></div><div><strong>{log.accessResult || 'success'}</strong><small>{log.durationSeconds == null ? 'Audit event' : formatDuration(log.durationSeconds)}</small></div></article>)}
+              {accessLogs.length === 0 && <EmptyReportState text="No branch-authorized video access events were recorded during this period." />}
+            </div>
+          </section>
 
           <section className="employee-report-panel employee-timeline-panel">
             <div className="employee-timeline-heading">

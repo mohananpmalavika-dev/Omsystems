@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ScrollText } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { complianceApi } from "@/lib/api-client";
@@ -11,7 +11,7 @@ export default function CompliancePoliciesPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function loadPolicies() {
+  const loadPolicies = useCallback(() => {
     setLoading(true);
     setError(null);
     void complianceApi.listPolicies().then((res) => {
@@ -19,11 +19,11 @@ export default function CompliancePoliciesPage() {
     }).catch((err) => {
       setError(err instanceof Error ? err.message : "Unable to load policies");
     }).finally(() => setLoading(false));
-  }
+  }, []);
 
   useEffect(() => {
     loadPolicies();
-  }, []);
+  }, [loadPolicies]);
 
   return (
     <ModulePage

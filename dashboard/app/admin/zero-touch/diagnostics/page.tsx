@@ -1,251 +1,57 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
-import {
-  Activity,
-  ArrowLeft,
-  CheckCircle2,
-  ShieldCheck,
-  Server,
-  Terminal,
-  FileCode,
-  Layers,
-  Network,
-  RefreshCw,
-  Copy,
-  Check,
-  AlertTriangle,
-  Radio,
-  Cpu,
-} from "lucide-react";
+import { Activity, AlertTriangle, ArrowLeft, RefreshCw, Server, ShieldCheck } from "lucide-react";
+
+type FleetBranch = { branchId: string; branchName: string };
+type Diagnostics = {
+  branchName: string; generatedAt: string;
+  agent: { id: string; name: string; status: string; version: string; lastHeartbeat?: string | null } | null;
+  scan: { id: string; status: string; requestedAt: string; startedAt?: string | null; completedAt?: string | null; resultCount: number; verifiedCount: number; provisionedCount: number; error?: string } | null;
+  discoveries: { total: number; verified: number; credentialsRequired: number; pendingVerification: number; duplicates: number };
+  telemetry: Array<{ deviceType: string; deviceId: string; observedAt: string; source: string; reasonCodes: string[] }>;
+  issues: Array<{ severity: "warning" | "critical"; code: string; message: string }>;
+};
+const timestamp = (value?: string | null) => value ? new Date(value).toLocaleString() : "Not reported";
 
 export default function ZeroTouchDiagnosticsPage() {
-  const [selectedBranch, setSelectedBranch] = useState("");
-  const [diagnostics, setDiagnostics] = useState<any | null>(null);
-  const [branches, setBranches] = useState<Array<{ branchId: string; branchName: string }>>([]);
+  const [branches, setBranches] = useState<FleetBranch[]>([]);
+  const [branchId, setBranchId] = useState("");
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  const fetchDiagnostics = async (branchId: string) => {
-    if (!branchId) return;
-    setLoading(true);
-    setError(null);
+  const loadDiagnostics = useCallback(async (id: string) => {
+    if (!id) return;
+    setLoading(true); setError(null);
     try {
-      const res = await fetch(`/api/v1/zero-touch/diagnostics/${branchId}`);
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || data.message || `Diagnostics request failed (${res.status})`);
-      setDiagnostics(data.data);
+      const response = await fetch(`/api/control/v1/zero-touch/diagnostics/${encodeURIComponent(id)}`, { cache: "no-store" });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) throw new Error(body.message || body.error || `Diagnostics request failed (${response.status})`);
+      setDiagnostics(body.data);
     } catch (reason) {
-      setDiagnostics(null);
-      setError(reason instanceof Error ? reason.message : "Diagnostics are unavailable");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/v1/zero-touch/fleet", { cache: "no-store" })
-      .then(async (response) => {
-        const body = await response.json();
-        if (!response.ok || !body.success) throw new Error(body.error || `Fleet request failed (${response.status})`);
-        return Array.isArray(body.data?.branches) ? body.data.branches : [];
-      })
-      .then((nextBranches) => {
-        if (cancelled) return;
-        const normalized: Array<{ branchId: string; branchName: string }> = nextBranches
-          .filter((branch: any) => typeof branch?.branchId === "string")
-          .map((branch: any) => ({ branchId: branch.branchId, branchName: branch.branchName || branch.branchId }));
-        setBranches(normalized);
-        setSelectedBranch((current) => normalized.some((branch) => branch.branchId === current) ? current : normalized[0]?.branchId || "");
-      })
-      .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "Fleet inventory is unavailable");
-      });
-    return () => { cancelled = true; };
+      setDiagnostics(null); setError(reason instanceof Error ? reason.message : "Diagnostics are unavailable.");
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
-    void fetchDiagnostics(selectedBranch);
-  }, [selectedBranch]);
+    let active = true;
+    void fetch("/api/control/v1/zero-touch/fleet", { cache: "no-store" }).then(async (response) => {
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.success) throw new Error(body.message || body.error || "Fleet inventory is unavailable.");
+      return (Array.isArray(body.data?.branches) ? body.data.branches : []).filter((branch: any) => typeof branch?.branchId === "string").map((branch: any) => ({ branchId: branch.branchId, branchName: branch.branchName || branch.branchId })) as FleetBranch[];
+    }).then((items) => { if (active) { setBranches(items); setBranchId((current) => current || items[0]?.branchId || ""); } }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Fleet inventory is unavailable."); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => { void loadDiagnostics(branchId); }, [branchId, loadDiagnostics]);
 
-  const handleCopy = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedIndex(idx);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
-            <Link
-              href="/admin/zero-touch"
-              className="p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-slate-100 flex items-center">
-                <Activity className="w-5 h-5 mr-2 text-indigo-400" />
-                Zero-Touch Provisioning Diagnostics &amp; Engineering Raw Probes
-              </h1>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Low-level ONVIF SOAP envelopes, mTLS certificate thumbprints, vendor CGI payloads, and RTSP SDP handshakes
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <select
-              value={selectedBranch}
-              onChange={(e) => setSelectedBranch(e.target.value)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 font-mono focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">Select a branch</option>
-              {branches.map((branch) => <option key={branch.branchId} value={branch.branchId}>{branch.branchName} ({branch.branchId})</option>)}
-            </select>
-
-            <button
-              onClick={() => fetchDiagnostics(selectedBranch)}
-              disabled={loading}
-              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-semibold flex items-center shadow"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? "animate-spin" : ""}`} />
-              Re-probe Branch
-            </button>
-          </div>
-        </div>
-
-        {error && !diagnostics && <div className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200">{error}</div>}
-
-        {diagnostics && (
-          <div className="space-y-6">
-            {/* Top diagnostic status grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* mTLS Status */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2 font-mono text-xs">
-                <div className="flex items-center justify-between text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800 pb-2">
-                  <span className="flex items-center text-indigo-300">
-                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
-                    mTLS Security Channel
-                  </span>
-                  <span className="text-emerald-400 font-bold">VERIFIED</span>
-                </div>
-                <div className="space-y-1 text-slate-300 text-[11px]">
-                  <div>SAN: <strong className="text-slate-100">{diagnostics.mTLSStatus.san}</strong></div>
-                  <div>Serial: <span className="text-slate-400">{diagnostics.mTLSStatus.clientCertSerial}</span></div>
-                  <div className="truncate text-slate-400">Thumbprint: {diagnostics.mTLSStatus.thumbprint}</div>
-                </div>
-              </div>
-
-              {/* Subnet Diagnostics */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2 font-mono text-xs">
-                <div className="flex items-center justify-between text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800 pb-2">
-                  <span className="flex items-center text-cyan-300">
-                    <Network className="w-3.5 h-3.5 mr-1.5" />
-                    LAN Interfaces
-                  </span>
-                  <span className="text-emerald-400 font-bold">HEALTHY</span>
-                </div>
-                <div className="space-y-1 text-slate-300 text-[11px]">
-                  <div>Gateway: <strong className="text-slate-100">{diagnostics.networkDiagnostics.gatewayIp}</strong></div>
-                  <div>ARP Entries: <span className="text-slate-100">{diagnostics.networkDiagnostics.arpTableEntries} active</span></div>
-                  <div>DNS Latency: <span className="text-cyan-300 font-bold">{diagnostics.networkDiagnostics.dnsLatencyMs}ms</span></div>
-                </div>
-              </div>
-
-              {/* Multicast UDP 3702 */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 space-y-2 font-mono text-xs">
-                <div className="flex items-center justify-between text-slate-400 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-800 pb-2">
-                  <span className="flex items-center text-emerald-300">
-                    <Radio className="w-3.5 h-3.5 mr-1.5" />
-                    UDP 3702 ONVIF Broadcast
-                  </span>
-                  <span className="text-emerald-400 font-bold">REACHABLE</span>
-                </div>
-                <div className="space-y-1 text-slate-300 text-[11px]">
-                  <div>Multicast: <strong className="text-slate-100">239.255.255.250</strong></div>
-                  <div>Packet Loss: <span className="text-emerald-400 font-bold">{diagnostics.networkDiagnostics.packetLossPct}%</span></div>
-                  <div>Agent ID: <span className="text-slate-400">{diagnostics.agentId}</span></div>
-                </div>
-              </div>
-            </div>
-
-            {/* Raw SOAP / CGI / SDP Probes */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="font-bold text-slate-100 text-sm flex items-center">
-                  <FileCode className="w-4 h-4 mr-2 text-indigo-400" />
-                  Raw Discovery Probes &amp; Payload Inspector
-                </h3>
-                <span className="text-xs text-slate-400 font-mono">({diagnostics.rawProbes.length} raw payloads recorded)</span>
-              </div>
-
-              <div className="space-y-4">
-                {diagnostics.rawProbes.map((probe: any, idx: number) => (
-                  <div key={idx} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2.5 font-mono text-xs">
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 border border-indigo-500/40 text-indigo-300">
-                          {probe.protocol}
-                        </span>
-                        <strong className="text-slate-200">{probe.targetIp}</strong>
-                      </div>
-                      <div className="flex items-center space-x-3 text-[11px]">
-                        <span className="text-cyan-300 font-bold">⏱ {probe.latencyMs}ms</span>
-                        <span className="text-emerald-400 font-bold">{probe.status}</span>
-                        <button
-                          onClick={() => handleCopy(probe.responsePayload, idx)}
-                          className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center"
-                        >
-                          {copiedIndex === idx ? <Check className="w-3 h-3 mr-1 text-emerald-400" /> : <Copy className="w-3 h-3 mr-1" />}
-                          {copiedIndex === idx ? "Copied" : "Copy Payload"}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Request Packet:</div>
-                        <div className="bg-slate-900 p-2.5 rounded-lg text-slate-300 overflow-x-auto text-[11px] max-h-36 whitespace-pre-wrap">
-                          {probe.requestPayload}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Agent Response Payload:</div>
-                        <div className="bg-slate-900 p-2.5 rounded-lg text-emerald-400 overflow-x-auto text-[11px] max-h-36 whitespace-pre-wrap">
-                          {probe.responsePayload}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Agent Live Log Stream */}
-            <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-5 space-y-3 font-mono text-xs">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <h3 className="font-bold text-slate-100 text-sm flex items-center">
-                  <Terminal className="w-4 h-4 mr-2 text-emerald-400" />
-                  Edge Agent Telemetry Logs ({diagnostics.agentId})
-                </h3>
-              </div>
-              <div className="bg-slate-950 p-3.5 rounded-xl text-slate-300 space-y-1 text-[11px] max-h-48 overflow-y-auto">
-                {diagnostics.agentLogs.map((log: string, lIdx: number) => (
-                  <div key={lIdx} className="text-emerald-300/90">{log}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  return <main className="min-h-screen bg-slate-950 p-6 text-slate-100"><div className="mx-auto max-w-6xl space-y-6">
+    <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center"><div className="flex items-start gap-3"><Link href="/admin/zero-touch" className="rounded-lg border border-slate-800 bg-slate-900 p-2 text-slate-300 hover:text-white" aria-label="Back to zero-touch provisioning"><ArrowLeft size={16} /></Link><div><h1 className="flex items-center gap-2 text-xl font-bold"><Activity className="text-indigo-400" size={20} />ZTP fleet diagnostics</h1><p className="mt-1 text-sm text-slate-400">Authenticated agent, scan, discovery, and telemetry state. Sensitive probe payloads are never displayed.</p></div></div><div className="flex gap-2"><select value={branchId} onChange={(event) => setBranchId(event.target.value)} className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm" aria-label="Select branch"><option value="">Select branch</option>{branches.map((branch) => <option key={branch.branchId} value={branch.branchId}>{branch.branchName}</option>)}</select><button type="button" disabled={!branchId || loading} onClick={() => void loadDiagnostics(branchId)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"><RefreshCw className={loading ? "animate-spin" : ""} size={15} />Refresh</button></div></header>
+    {error && <div role="alert" className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-4 text-rose-100">{error}</div>}
+    {!error && !diagnostics && <div className="rounded-xl border border-slate-800 bg-slate-900 p-8 text-center text-slate-400">{loading ? "Loading diagnostics…" : "Select a branch to inspect its fleet state."}</div>}
+    {diagnostics && <section className="space-y-5"><p className="text-xs text-slate-500">Snapshot generated {timestamp(diagnostics.generatedAt)} for {diagnostics.branchName}</p><div className="grid gap-4 md:grid-cols-3"><Card icon={<Server size={16} />} title="Edge agent" state={diagnostics.agent?.status || "NOT ENROLLED"} tone={diagnostics.agent?.status === "online" ? "good" : "bad"}><p>{diagnostics.agent ? `${diagnostics.agent.name} · v${diagnostics.agent.version}` : "Enroll an Edge Gateway before starting a scan."}</p><p>Heartbeat: {timestamp(diagnostics.agent?.lastHeartbeat)}</p></Card><Card icon={<ShieldCheck size={16} />} title="Latest scan" state={diagnostics.scan?.status || "NOT STARTED"} tone={diagnostics.scan?.status === "completed" ? "good" : "warn"}><p>{diagnostics.scan ? `${diagnostics.scan.verifiedCount}/${diagnostics.scan.resultCount} streams verified` : "No persisted scan job."}</p><p>{diagnostics.scan?.error || `Completed: ${timestamp(diagnostics.scan?.completedAt)}`}</p></Card><Card icon={<Activity size={16} />} title="Discovery review" state={`${diagnostics.discoveries.verified}/${diagnostics.discoveries.total} VERIFIED`} tone={diagnostics.discoveries.credentialsRequired ? "warn" : "good"}><p>{diagnostics.discoveries.pendingVerification} awaiting verification · {diagnostics.discoveries.credentialsRequired} need credentials</p><p>{diagnostics.discoveries.duplicates} duplicate candidates excluded</p></Card></div>
+      {diagnostics.issues.length > 0 && <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-4"><h2 className="mb-3 flex items-center gap-2 font-semibold text-amber-100"><AlertTriangle size={17} />Action required</h2><ul className="space-y-2 text-sm text-amber-50">{diagnostics.issues.map((issue) => <li key={issue.code}>{issue.message}</li>)}</ul></div>}
+      <section className="rounded-xl border border-slate-800 bg-slate-900"><div className="border-b border-slate-800 px-4 py-3"><h2 className="font-semibold">Recent authenticated telemetry</h2></div>{diagnostics.telemetry.length === 0 ? <p className="p-4 text-sm text-slate-400">No operational telemetry has been received for this branch.</p> : <div className="divide-y divide-slate-800">{diagnostics.telemetry.map((item, index) => <div key={`${item.deviceId}-${index}`} className="flex flex-col gap-1 px-4 py-3 text-sm md:flex-row md:items-center md:justify-between"><span><strong>{item.deviceType}</strong> · {item.deviceId}</span><span className="text-slate-400">{timestamp(item.observedAt)} · {item.source}{item.reasonCodes.length ? ` · ${item.reasonCodes.join(", ")}` : ""}</span></div>)}</div>}</section></section>}
+  </div></main>;
 }
+function Card({ icon, title, state, tone, children }: { icon: ReactNode; title: string; state: string; tone: "good" | "warn" | "bad"; children: ReactNode }) { const color = tone === "good" ? "text-emerald-300" : tone === "warn" ? "text-amber-300" : "text-rose-300"; return <section className="rounded-xl border border-slate-800 bg-slate-900 p-4"><div className="mb-3 flex items-center justify-between"><span className="flex items-center gap-2 text-sm font-semibold">{icon}{title}</span><span className={`text-xs font-bold ${color}`}>{state.toUpperCase()}</span></div><div className="space-y-1 text-xs text-slate-400">{children}</div></section>; }

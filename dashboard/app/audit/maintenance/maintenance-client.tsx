@@ -24,7 +24,11 @@ export default function MaintenanceAuditClient() {
     setLoading(true);
     setError(null);
     try {
-      const response = await maintenanceApi.listWorkOrders();
+      const response = await maintenanceApi.listWorkOrders({
+        ...(branchNodeId ? { branchNodeId } : {}),
+        ...(status !== "all" ? { status } : {}),
+        ...(severity !== "all" ? { severity } : {}),
+      });
       setWorkOrders(Array.isArray(response?.data) ? (response.data as WorkOrder[]) : []);
     } catch (reason) {
       setWorkOrders([]);
@@ -32,7 +36,7 @@ export default function MaintenanceAuditClient() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchNodeId, severity, status]);
 
   useEffect(() => {
     void loadWorkOrders();
@@ -58,6 +62,8 @@ export default function MaintenanceAuditClient() {
       inProgress: visibleOrders.filter((order) => order.status === "in_progress").length,
       urgent: visibleOrders.filter((order) => ["critical", "high"].includes(order.severity)).length,
       overdue: overdueOrders.length,
+      slaAssessed: visibleOrders.filter((order) => order.status === "closed" && order.slaDueAt && order.updatedAt).length,
+      slaOnTime: visibleOrders.filter((order) => order.status === "closed" && order.slaDueAt && order.updatedAt && Date.parse(order.updatedAt) <= Date.parse(order.slaDueAt)).length,
     };
   }, [visibleOrders]);
 
@@ -88,6 +94,7 @@ export default function MaintenanceAuditClient() {
         <Metric label="In progress" value={summary.inProgress} />
         <Metric label="High priority" value={summary.urgent} tone="danger" />
         <Metric label="Overdue" value={summary.overdue} tone={summary.overdue ? "danger" : undefined} />
+        <Metric label="SLA on time" value={summary.slaAssessed ? Math.round((summary.slaOnTime / summary.slaAssessed) * 100) : "—"} suffix={summary.slaAssessed ? "%" : ""} />
       </section>
 
       <section className="module-filters" aria-label="Filter maintenance work orders">
@@ -166,11 +173,11 @@ export default function MaintenanceAuditClient() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: number; tone?: "danger" }) {
+function Metric({ label, value, tone, suffix = "" }: { label: string; value: number | string; tone?: "danger"; suffix?: string }) {
   return (
     <div className={tone ? `audit-maintenance-metric ${tone}` : "audit-maintenance-metric"}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong>{value}{suffix}</strong>
     </div>
   );
 }

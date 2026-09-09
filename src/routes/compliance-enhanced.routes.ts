@@ -226,12 +226,66 @@ async function requireAccess(
   store: ControlPlaneStore,
   action: string,
 ) {
-  // For now, check if user has compliance management permissions
-  // This will be enhanced with proper RBAC when implemented
   if (!request.currentUser) {
     await reply.code(401).send({ error: "unauthenticated" });
     return false;
   }
+  const role = request.currentUser.role;
+  const tenantAdministrators = new Set(["super_admin", "company_admin", "hq_admin"]);
+  const canView = tenantAdministrators.has(role) || role === "security_officer" || role === "auditor";
+  const canManage = tenantAdministrators.has(role) || role === "security_officer";
+  const canAudit = tenantAdministrators.has(role) || role === "security_officer" || role === "auditor";
+  const canApprove = tenantAdministrators.has(role) || role === "security_officer";
+  const permitted = action === "compliance:view" ? canView
+    : action === "compliance:manage" ? canManage
+    : action === "compliance:audit" ? canAudit
+    : action === "compliance:approve" ? canApprove
+    : false;
+  if (!permitted) {
+    await reply.code(403).send({ error: "forbidden" });
+    return false;
+  }
+  return true;
+}
+
+async function requireTenantResource<T extends { tenantId?: string }>(request: FastifyRequest, reply: FastifyReply, resource: T | undefined, error: string) {
+  if (!resource || resource.tenantId !== request.currentUser.tenantId) {
+    await reply.code(404).send({ error });
+    return undefined;
+  }
+  return resource;
+}
+
+const remediationPlanTransitions: Record<string, readonly string[]> = { identified: ["planned"], planned: ["in_progress"], in_progress: ["completed"], completed: ["verified"], verified: ["closed"], closed: [] };
+const remediationActionTransitions: Record<string, readonly string[]> = { pending: ["in_progress", "blocked"], in_progress: ["blocked", "completed"], blocked: ["in_progress", "completed"], completed: ["verified"], verified: [] };
+const controlTransitions: Record<string, readonly string[]> = { planned: ["in_progress"], in_progress: ["implemented", "failed"], implemented: ["verified", "failed"], verified: ["failed"], failed: ["in_progress"] };
+const riskTransitions: Record<string, readonly string[]> = { identified: ["assessed"], assessed: ["treated"], treated: ["monitored"], monitored: ["assessed", "closed"], closed: [] };
+const findingTransitions: Record<string, readonly string[]> = { open: ["in_review", "accepted_risk"], in_review: ["remediation_planned", "accepted_risk"], remediation_planned: ["remediation_in_progress"], remediation_in_progress: ["remediation_completed"], remediation_completed: ["verified"], verified: ["closed"], closed: [], accepted_risk: [] };
+const riskScale: Record<string, number> = { negligible: 1, low: 2, medium: 3, high: 4, critical: 5 };
+function isValidTransition(transitions: Record<string, readonly string[]>, current: unknown, next: unknown) {
+  return typeof current === "string" && typeof next === "string" && (current === next || transitions[current]?.includes(next) === true);
+}
+
+async function validateFindingLinks(request: FastifyRequest, reply: FastifyReply, store: ControlPlaneStore, input: Record<string, unknown>, existing?: Record<string, unknown>) {
+  const links = {
+    assessmentId: input.assessmentId ?? existing?.assessmentId,
+    testId: input.testId ?? existing?.testId,
+    requirementId: input.requirementId ?? existing?.requirementId,
+    controlId: input.controlId ?? existing?.controlId,
+  };
+  const [assessment, test, requirement, control] = await Promise.all([
+    links.assessmentId ? store.getComplianceAssessment(links.assessmentId as string) : undefined,
+    links.testId ? store.getComplianceTest(links.testId as string) : undefined,
+    links.requirementId ? store.getComplianceRequirement(links.requirementId as string) : undefined,
+    links.controlId ? store.getComplianceControl(links.controlId as string) : undefined,
+  ]);
+  if (links.assessmentId && !(await requireTenantResource(request, reply, assessment, "assessment_not_found"))) return false;
+  if (links.testId && !(await requireTenantResource(request, reply, test, "test_not_found"))) return false;
+  if (links.requirementId && !(await requireTenantResource(request, reply, requirement, "requirement_not_found"))) return false;
+  if (links.controlId && !(await requireTenantResource(request, reply, control, "control_not_found"))) return false;
+  if (control && requirement && control.requirementId !== requirement.id) return reply.code(400).send({ error: "control_requirement_mismatch" });
+  if (test && control && test.controlId !== control.id) return reply.code(400).send({ error: "test_control_mismatch" });
+  if (assessment && requirement && assessment.frameworkId !== requirement.frameworkId) return reply.code(400).send({ error: "assessment_requirement_mismatch" });
   return true;
 }
 
@@ -309,6 +363,8 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/controls", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const body = controlSchema.parse(request.body);
+    if (body.implementationStatus !== "planned") return reply.code(409).send({ error: "invalid_control_initial_status" });
+    if (!(await requireTenantResource(request, reply, await store.getComplianceRequirement(body.requirementId), "requirement_not_found"))) return;
     const control = await store.createComplianceControl({
       ...body,
       controlNumber: body.controlName,
@@ -325,8 +381,8 @@ export async function registerComplianceEnhancedRoutes(
   app.get("/v1/compliance/controls/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    const control = await store.getComplianceControl(id);
-    if (!control) return reply.code(404).send({ error: "control_not_found" });
+    const control = await requireTenantResource(request, reply, await store.getComplianceControl(id), "control_not_found");
+    if (!control) return;
     return control;
   });
 
@@ -334,6 +390,10 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = controlSchema.partial().parse(request.body);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceControl(id), "control_not_found");
+    if (!existing) return;
+    if (body.requirementId && !(await requireTenantResource(request, reply, await store.getComplianceRequirement(body.requirementId), "requirement_not_found"))) return;
+    if (body.implementationStatus && !isValidTransition(controlTransitions, existing.implementationStatus, body.implementationStatus)) return reply.code(409).send({ error: "invalid_control_transition" });
     const control = await store.updateComplianceControl(id, {
       ...body,
       ...(body.controlName ? { title: body.controlName } : {}),
@@ -348,6 +408,7 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/controls/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    if (!(await requireTenantResource(request, reply, await store.getComplianceControl(id), "control_not_found"))) return;
     await store.deleteComplianceControl(id);
     return reply.code(204).send();
   });
@@ -356,11 +417,13 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/controls/:id/test", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:audit"))) return;
     const { id } = idParams.parse(request.params);
+    if (!(await requireTenantResource(request, reply, await store.getComplianceControl(id), "control_not_found"))) return;
     const body = z.object({
       lastTestDate: z.string().datetime(),
       nextTestDate: z.string().datetime(),
       effectivenessRating: z.number().int().min(1).max(5).optional(),
     }).parse(request.body);
+    if (body.nextTestDate < body.lastTestDate) return reply.code(400).send({ error: "next_test_before_last_test" });
     const control = await store.updateControlTestDates(id, {
       lastTestDate: body.lastTestDate,
       nextTestDate: body.nextTestDate,
@@ -399,13 +462,15 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
     const evidence = await store.getComplianceEvidence(id);
-    if (!evidence) return reply.code(404).send({ error: "evidence_not_found" });
+    if (!evidence || evidence.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: "evidence_not_found" });
     return evidence;
   });
 
   app.patch("/v1/compliance/evidence/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await store.getComplianceEvidence(id);
+    if (!existing || existing.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: "evidence_not_found" });
     const body = evidenceSchema.partial().parse(request.body);
     const evidence = await store.updateComplianceEvidence(id, body);
     if (!evidence) return reply.code(404).send({ error: "evidence_not_found" });
@@ -415,6 +480,8 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/evidence/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await store.getComplianceEvidence(id);
+    if (!existing || existing.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: "evidence_not_found" });
     await store.deleteComplianceEvidence(id);
     return reply.code(204).send();
   });
@@ -423,6 +490,8 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/evidence/:id/validate", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:audit"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await store.getComplianceEvidence(id);
+    if (!existing || existing.tenantId !== request.currentUser.tenantId) return reply.code(404).send({ error: "evidence_not_found" });
     const body = z.object({
       validated: z.boolean(),
       validationNotes: z.string().optional(),
@@ -503,6 +572,13 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/findings", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:audit"))) return;
     const body = findingSchema.parse(request.body);
+    if (body.status !== "open") return reply.code(409).send({ error: "invalid_finding_initial_status" });
+    if (!(await validateFindingLinks(request, reply, store, body))) return;
+    if (body.assignedTo) {
+      const assignee = await store.getUser(body.assignedTo);
+      if (!assignee || assignee.tenantId !== request.currentUser.tenantId || assignee.status !== "active") return reply.code(400).send({ error: "invalid_assignee" });
+    }
+    if (body.dueDate && body.discoveredDate && body.dueDate < body.discoveredDate) return reply.code(400).send({ error: "due_date_before_discovery_date" });
     const finding = await store.createComplianceFinding({
       ...body,
       identifiedDate: body.discoveredDate,
@@ -516,8 +592,8 @@ export async function registerComplianceEnhancedRoutes(
   app.get("/v1/compliance/findings/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    const finding = await store.getComplianceFinding(id);
-    if (!finding) return reply.code(404).send({ error: "finding_not_found" });
+    const finding = await requireTenantResource(request, reply, await store.getComplianceFinding(id), "finding_not_found");
+    if (!finding) return;
     return finding;
   });
 
@@ -525,6 +601,23 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = findingSchema.partial().parse(request.body);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceFinding(id), "finding_not_found");
+    if (!existing) return;
+    if (!(await validateFindingLinks(request, reply, store, body, existing))) return;
+    if (body.assignedTo) {
+      const assignee = await store.getUser(body.assignedTo);
+      if (!assignee || assignee.tenantId !== request.currentUser.tenantId || assignee.status !== "active") return reply.code(400).send({ error: "invalid_assignee" });
+    }
+    if (body.dueDate && (existing.discoveredDate ?? body.discoveredDate) && body.dueDate < (existing.discoveredDate ?? body.discoveredDate)) return reply.code(400).send({ error: "due_date_before_discovery_date" });
+    if (body.status && !isValidTransition(findingTransitions, existing.status, body.status)) return reply.code(409).send({ error: "invalid_finding_transition" });
+    if (body.status === "closed") return reply.code(400).send({ error: "use_finding_closure" });
+    if (body.status === "accepted_risk" && !(body.recommendations ?? existing.recommendations)?.trim()) return reply.code(400).send({ error: "risk_acceptance_rationale_required" });
+    if (body.status === "verified") {
+      const plans = await store.listRemediationPlans(request.currentUser.tenantId, { findingId: id });
+      if (plans.length === 0 || plans.some((plan: { status?: string }) => plan.status !== "verified" && plan.status !== "closed")) {
+        return reply.code(409).send({ error: "remediation_not_verified" });
+      }
+    }
     const finding = await store.updateComplianceFinding(id, body);
     if (!finding) return reply.code(404).send({ error: "finding_not_found" });
     return finding;
@@ -533,6 +626,10 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/findings/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceFinding(id), "finding_not_found");
+    if (!existing) return;
+    const plans = await store.listRemediationPlans(request.currentUser.tenantId, { findingId: id });
+    if (existing.status !== "open" || plans.length > 0) return reply.code(409).send({ error: "finding_not_deletable" });
     await store.deleteComplianceFinding(id);
     return reply.code(204).send();
   });
@@ -541,8 +638,11 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/findings/:id/close", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:approve"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceFinding(id), "finding_not_found");
+    if (!existing) return;
+    if (existing.status !== "verified") return reply.code(409).send({ error: "finding_not_ready_for_closure" });
     const body = z.object({
-      closureNotes: z.string().optional(),
+      closureNotes: z.string().trim().min(1).max(2_000),
     }).parse(request.body);
     const finding = await store.closeComplianceFinding(
       id,
@@ -570,6 +670,8 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/remediation-plans", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const body = remediationPlanSchema.parse(request.body);
+    if (body.status !== "identified") return reply.code(409).send({ error: "invalid_remediation_plan_initial_status" });
+    if (!(await requireTenantResource(request, reply, await store.getComplianceFinding(body.findingId), "finding_not_found"))) return;
     const plan = await store.createRemediationPlan({
       ...body,
       tenantId: request.currentUser.tenantId,
@@ -581,8 +683,8 @@ export async function registerComplianceEnhancedRoutes(
   app.get("/v1/compliance/remediation-plans/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    const plan = await store.getRemediationPlan(id);
-    if (!plan) return reply.code(404).send({ error: "plan_not_found" });
+    const plan = await requireTenantResource(request, reply, await store.getRemediationPlan(id), "plan_not_found");
+    if (!plan) return;
     return plan;
   });
 
@@ -590,6 +692,17 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = remediationPlanSchema.partial().parse(request.body);
+    const existing = await requireTenantResource(request, reply, await store.getRemediationPlan(id), "plan_not_found");
+    if (!existing) return;
+    if (body.findingId && !(await requireTenantResource(request, reply, await store.getComplianceFinding(body.findingId), "finding_not_found"))) return;
+    if (body.status && !isValidTransition(remediationPlanTransitions, existing.status, body.status)) return reply.code(409).send({ error: "invalid_remediation_plan_transition" });
+    if (body.status === "verified") return reply.code(400).send({ error: "use_remediation_plan_verification" });
+    if (body.status === "completed") {
+      const actions = await store.listRemediationActions(id);
+      if (actions.some((action: { status?: string }) => action.status !== "completed" && action.status !== "verified")) {
+        return reply.code(409).send({ error: "remediation_actions_incomplete" });
+      }
+    }
     const plan = await store.updateRemediationPlan(id, body);
     if (!plan) return reply.code(404).send({ error: "plan_not_found" });
     return plan;
@@ -598,6 +711,7 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/remediation-plans/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    if (!(await requireTenantResource(request, reply, await store.getRemediationPlan(id), "plan_not_found"))) return;
     await store.deleteRemediationPlan(id);
     return reply.code(204).send();
   });
@@ -606,6 +720,9 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/remediation-plans/:id/approve", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:approve"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getRemediationPlan(id), "plan_not_found");
+    if (!existing) return;
+    if (existing.status !== "identified") return reply.code(409).send({ error: "invalid_remediation_plan_transition" });
     const plan = await store.approveRemediationPlan(id, request.currentUser.id);
     if (!plan) return reply.code(404).send({ error: "plan_not_found" });
     return plan;
@@ -615,10 +732,14 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/remediation-plans/:id/verify", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:audit"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getRemediationPlan(id), "plan_not_found");
+    if (!existing) return;
+    if (existing.status !== "completed") return reply.code(409).send({ error: "invalid_remediation_plan_transition" });
     const body = z.object({
       verificationNotes: z.string().optional(),
       effectivenessConfirmed: z.boolean(),
     }).parse(request.body);
+    if (!body.effectivenessConfirmed) return reply.code(409).send({ error: "remediation_effectiveness_not_confirmed" });
     const plan = await store.verifyRemediationPlan(id, request.currentUser.id, {
       verificationNotes: body.verificationNotes,
       effectivenessConfirmed: body.effectivenessConfirmed,
@@ -634,6 +755,7 @@ export async function registerComplianceEnhancedRoutes(
   app.get("/v1/compliance/remediation-plans/:planId/actions", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { planId } = z.object({ planId: z.string().uuid() }).parse(request.params);
+    if (!(await requireTenantResource(request, reply, await store.getRemediationPlan(planId), "plan_not_found"))) return;
     const actions = await store.listRemediationActions(planId);
     return { data: actions };
   });
@@ -642,6 +764,10 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { planId } = z.object({ planId: z.string().uuid() }).parse(request.params);
     const body = remediationActionSchema.parse(request.body);
+    const plan = await requireTenantResource(request, reply, await store.getRemediationPlan(planId), "plan_not_found");
+    if (!plan) return;
+    if (plan.status === "closed" || plan.status === "verified") return reply.code(409).send({ error: "remediation_plan_not_actionable" });
+    if (body.status !== "pending") return reply.code(409).send({ error: "invalid_remediation_action_initial_status" });
     const action = await store.createRemediationAction({
       ...body,
       planId,
@@ -654,7 +780,7 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
     const action = await store.getRemediationAction(id);
-    if (!action) return reply.code(404).send({ error: "action_not_found" });
+    if (!action || !(await requireTenantResource(request, reply, await store.getRemediationPlan(action.planId), "action_not_found"))) return;
     return action;
   });
 
@@ -662,6 +788,11 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = remediationActionSchema.partial().parse(request.body);
+    const existing = await store.getRemediationAction(id);
+    if (!existing || !(await requireTenantResource(request, reply, await store.getRemediationPlan(existing.planId), "action_not_found"))) return;
+    if (body.planId && body.planId !== existing.planId) return reply.code(400).send({ error: "remediation_action_plan_immutable" });
+    if (body.status && !isValidTransition(remediationActionTransitions, existing.status, body.status)) return reply.code(409).send({ error: "invalid_remediation_action_transition" });
+    if (body.status === "completed") return reply.code(400).send({ error: "use_remediation_action_completion" });
     const action = await store.updateRemediationAction(id, body);
     if (!action) return reply.code(404).send({ error: "action_not_found" });
     return action;
@@ -670,6 +801,8 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/remediation-actions/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await store.getRemediationAction(id);
+    if (!existing || !(await requireTenantResource(request, reply, await store.getRemediationPlan(existing.planId), "action_not_found"))) return;
     await store.deleteRemediationAction(id);
     return reply.code(204).send();
   });
@@ -678,6 +811,9 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/remediation-actions/:id/complete", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await store.getRemediationAction(id);
+    if (!existing || !(await requireTenantResource(request, reply, await store.getRemediationPlan(existing.planId), "action_not_found"))) return;
+    if (!isValidTransition(remediationActionTransitions, existing.status, "completed")) return reply.code(409).send({ error: "invalid_remediation_action_transition" });
     const body = z.object({
       evidenceUrl: z.string().url().optional(),
       notes: z.string().optional(),
@@ -704,6 +840,14 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/risks", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const body = riskSchema.parse(request.body);
+    if (body.status !== "identified") return reply.code(409).send({ error: "invalid_risk_initial_status" });
+    if (body.residualLikelihood || body.residualImpact) return reply.code(400).send({ error: "use_risk_assessment" });
+    if (body.frameworkId && !(await requireTenantResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found"))) return;
+    if (body.requirementId) {
+      const requirement = await requireTenantResource(request, reply, await store.getComplianceRequirement(body.requirementId), "requirement_not_found");
+      if (!requirement) return;
+      if (body.frameworkId && requirement.frameworkId !== body.frameworkId) return reply.code(400).send({ error: "requirement_framework_mismatch" });
+    }
     const risk = await store.createComplianceRisk({
       ...body,
       riskName: body.riskTitle,
@@ -719,8 +863,8 @@ export async function registerComplianceEnhancedRoutes(
   app.get("/v1/compliance/risks/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:view"))) return;
     const { id } = idParams.parse(request.params);
-    const risk = await store.getComplianceRisk(id);
-    if (!risk) return reply.code(404).send({ error: "risk_not_found" });
+    const risk = await requireTenantResource(request, reply, await store.getComplianceRisk(id), "risk_not_found");
+    if (!risk) return;
     return risk;
   });
 
@@ -728,6 +872,17 @@ export async function registerComplianceEnhancedRoutes(
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
     const body = riskSchema.partial().parse(request.body);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceRisk(id), "risk_not_found");
+    if (!existing) return;
+    if (body.frameworkId && !(await requireTenantResource(request, reply, await store.getComplianceFramework(body.frameworkId), "framework_not_found"))) return;
+    if (body.requirementId) {
+      const requirement = await requireTenantResource(request, reply, await store.getComplianceRequirement(body.requirementId), "requirement_not_found");
+      if (!requirement) return;
+      if ((body.frameworkId ?? existing.frameworkId) && requirement.frameworkId !== (body.frameworkId ?? existing.frameworkId)) return reply.code(400).send({ error: "requirement_framework_mismatch" });
+    }
+    if (body.status && !isValidTransition(riskTransitions, existing.status, body.status)) return reply.code(409).send({ error: "invalid_risk_transition" });
+    if (body.status === "assessed") return reply.code(400).send({ error: "use_risk_assessment" });
+    if (body.status === "treated" && !(body.treatmentPlan ?? existing.treatmentPlan)?.trim()) return reply.code(400).send({ error: "risk_treatment_plan_required" });
     const risk = await store.updateComplianceRisk(id, {
       ...body,
       ...(body.riskTitle ? { riskName: body.riskTitle } : {}),
@@ -742,6 +897,7 @@ export async function registerComplianceEnhancedRoutes(
   app.delete("/v1/compliance/risks/:id", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    if (!(await requireTenantResource(request, reply, await store.getComplianceRisk(id), "risk_not_found"))) return;
     await store.deleteComplianceRisk(id);
     return reply.code(204).send();
   });
@@ -750,11 +906,17 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/risks/:id/assess", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:manage"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceRisk(id), "risk_not_found");
+    if (!existing) return;
+    if (!isValidTransition(riskTransitions, existing.status, "assessed")) return reply.code(409).send({ error: "invalid_risk_transition" });
     const body = z.object({
       residualLikelihood: z.enum(["critical", "high", "medium", "low", "negligible"]),
       residualImpact: z.enum(["critical", "high", "medium", "low", "negligible"]),
       treatmentPlan: z.string().optional(),
     }).parse(request.body);
+    if (riskScale[body.residualLikelihood] > riskScale[existing.inherentLikelihood] || riskScale[body.residualImpact] > riskScale[existing.inherentImpact]) {
+      return reply.code(400).send({ error: "residual_risk_exceeds_inherent_risk" });
+    }
     const risk = await store.assessComplianceRisk(id, {
       residualLikelihood: body.residualLikelihood,
       residualImpact: body.residualImpact,
@@ -768,10 +930,14 @@ export async function registerComplianceEnhancedRoutes(
   app.post("/v1/compliance/risks/:id/review", async (request, reply) => {
     if (!(await requireAccess(request, reply, store, "compliance:audit"))) return;
     const { id } = idParams.parse(request.params);
+    const existing = await requireTenantResource(request, reply, await store.getComplianceRisk(id), "risk_not_found");
+    if (!existing) return;
+    if (existing.status !== "monitored") return reply.code(409).send({ error: "risk_not_ready_for_review" });
     const body = z.object({
       reviewNotes: z.string().optional(),
       nextReviewDate: z.string().datetime(),
     }).parse(request.body);
+    if (new Date(body.nextReviewDate).getTime() <= Date.now()) return reply.code(400).send({ error: "next_review_date_must_be_future" });
     const risk = await store.reviewComplianceRisk(id, {
       reviewNotes: body.reviewNotes,
       nextReviewDate: body.nextReviewDate,

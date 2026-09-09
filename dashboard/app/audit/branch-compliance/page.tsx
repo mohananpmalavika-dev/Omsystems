@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 interface BranchCompliance {
   branchId: string;
   branchName: string;
-  branchCode: string;
+  branchCode: string | null;
   totalCameras: number;
   onlineCameras: number;
   recordingCameras: number;
@@ -16,7 +16,7 @@ interface BranchCompliance {
   compliantRecordings: number;
   nonCompliantRecordings: number;
   avgStorageUtilization: number;
-  minDaysUntilFull: number;
+  minDaysUntilFull: number | null;
   openWorkOrders: number;
   urgentWorkOrders: number;
   avgQualityScore: number;
@@ -53,7 +53,7 @@ export default function BranchCompliancePage() {
           : null;
       if (!data) throw new Error('The compliance service returned an invalid response');
 
-      setBranches(data);
+      setBranches(data.map(normalizeBranchCompliance).filter((branch): branch is BranchCompliance => branch !== null));
     } catch (reason) {
       console.error('Failed to fetch branch compliance:', reason);
       setBranches([]);
@@ -179,7 +179,7 @@ export default function BranchCompliancePage() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <h3 className="text-xl font-bold text-gray-900">{branch.branchName}</h3>
-                  <span className="text-sm text-gray-600">({branch.branchCode})</span>
+                  {branch.branchCode && <span className="text-sm text-gray-600">({branch.branchCode})</span>}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`text-4xl font-bold ${getComplianceColor(branch.overallComplianceScore)}`}>
@@ -199,7 +199,7 @@ export default function BranchCompliancePage() {
                   {branch.onlineCameras}/{branch.totalCameras}
                 </div>
                 <div className="text-xs text-gray-500">
-                  {((branch.onlineCameras / branch.totalCameras) * 100).toFixed(0)}% online
+                  {percentage(branch.onlineCameras, branch.totalCameras)}% online
                 </div>
               </div>
 
@@ -208,7 +208,7 @@ export default function BranchCompliancePage() {
                 <div className="text-xs text-gray-600 mb-1">Recording</div>
                 <div className="text-lg font-bold text-green-600">{branch.recordingCameras}</div>
                 <div className="text-xs text-gray-500">
-                  {((branch.recordingCameras / branch.totalCameras) * 100).toFixed(0)}% active
+                  {percentage(branch.recordingCameras, branch.totalCameras)}% active
                 </div>
               </div>
 
@@ -238,7 +238,9 @@ export default function BranchCompliancePage() {
                 <div className="text-lg font-bold text-purple-600">
                   {branch.avgStorageUtilization?.toFixed(0) || 0}%
                 </div>
-                <div className="text-xs text-gray-500">{branch.minDaysUntilFull || 'N/A'} days left</div>
+                <div className="text-xs text-gray-500">
+                  {branch.minDaysUntilFull === null ? 'N/A' : `${branch.minDaysUntilFull} days left`}
+                </div>
               </div>
 
               {/* Maintenance */}
@@ -301,4 +303,44 @@ function isBranchComplianceResponse(value: unknown): value is { data: BranchComp
 
 function isApiError(value: unknown): value is { error?: string; message?: string } {
   return typeof value === 'object' && value !== null;
+}
+
+function normalizeBranchCompliance(value: unknown): BranchCompliance | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const row = value as Record<string, unknown>;
+  if (typeof row.branchId !== 'string' || typeof row.branchName !== 'string') return null;
+
+  return {
+    branchId: row.branchId,
+    branchName: row.branchName,
+    branchCode: typeof row.branchCode === 'string' && row.branchCode.trim() ? row.branchCode : null,
+    totalCameras: nonNegativeNumber(row.totalCameras),
+    onlineCameras: nonNegativeNumber(row.onlineCameras),
+    recordingCameras: nonNegativeNumber(row.recordingCameras),
+    healthyCameras: nonNegativeNumber(row.healthyCameras),
+    criticalCameras: nonNegativeNumber(row.criticalCameras),
+    avgRecordingAvailability: nonNegativeNumber(row.avgRecordingAvailability),
+    compliantRecordings: nonNegativeNumber(row.compliantRecordings),
+    nonCompliantRecordings: nonNegativeNumber(row.nonCompliantRecordings),
+    avgStorageUtilization: nonNegativeNumber(row.avgStorageUtilization),
+    minDaysUntilFull: finiteNumberOrNull(row.minDaysUntilFull),
+    openWorkOrders: nonNegativeNumber(row.openWorkOrders),
+    urgentWorkOrders: nonNegativeNumber(row.urgentWorkOrders),
+    avgQualityScore: nonNegativeNumber(row.avgQualityScore),
+    overallComplianceScore: nonNegativeNumber(row.overallComplianceScore),
+  };
+}
+
+function finiteNumberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function nonNegativeNumber(value: unknown) {
+  return Math.max(0, finiteNumberOrNull(value) ?? 0);
+}
+
+function percentage(value: number, total: number) {
+  return total > 0 ? ((value / total) * 100).toFixed(0) : '0';
 }

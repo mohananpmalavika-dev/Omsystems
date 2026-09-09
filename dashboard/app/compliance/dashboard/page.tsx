@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Shield, CheckCircle, AlertTriangle, FileText, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Shield, CheckCircle, AlertTriangle, FileText, TrendingUp, RefreshCw, Plus } from 'lucide-react';
 import { PageHero } from '@/components/page-hero';
 
 interface FrameworkSummary {
@@ -14,7 +15,41 @@ interface FrameworkSummary {
   openFindings: number;
   criticalFindings: number;
   evidenceCollected: number;
-  lastAssessmentDate: string;
+  lastAssessmentDate?: string | null;
+}
+
+const asCount = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+
+function normalizeDashboard(payload: unknown): FrameworkSummary[] {
+  const records = Array.isArray(payload) ? payload :
+    payload && typeof payload === 'object' && Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: unknown[] }).data : [];
+  return records.flatMap((record) => {
+    if (!record || typeof record !== 'object') return [];
+    const item = record as Record<string, unknown>;
+    const frameworkId = typeof item.frameworkId === 'string' ? item.frameworkId : '';
+    const frameworkName = typeof item.frameworkName === 'string' ? item.frameworkName.trim() : '';
+    if (!frameworkId || !frameworkName) return [];
+    const totalControls = asCount(item.totalControls);
+    return [{
+      frameworkId,
+      frameworkName,
+      totalRequirements: asCount(item.totalRequirements),
+      totalControls,
+      controlsImplemented: Math.min(asCount(item.controlsImplemented), totalControls),
+      controlsVerified: Math.min(asCount(item.controlsVerified), totalControls),
+      openFindings: asCount(item.openFindings),
+      criticalFindings: Math.min(asCount(item.criticalFindings), asCount(item.openFindings)),
+      evidenceCollected: asCount(item.evidenceCollected),
+      lastAssessmentDate: typeof item.lastAssessmentDate === 'string' ? item.lastAssessmentDate : null,
+    }];
+  });
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
 }
 
 export default function ComplianceDashboardPage() {
@@ -22,21 +57,32 @@ export default function ComplianceDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetch('/api/control/v1/compliance/dashboard', { credentials: 'include' })
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch dashboard');
-        return res.json();
-      })
-      .then(data => {
-        setDashboards(Array.isArray(data) ? data : data.data || []);
-        setLoading(false);
-      })
-      .catch(err => {
-        setError(err.message);
-        setLoading(false);
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/control/v1/compliance/dashboard', {
+        credentials: 'include',
+        cache: 'no-store',
+        signal,
       });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((body as { message?: string; error?: string } | null)?.message ?? 'Unable to load compliance dashboard.');
+      setDashboards(normalizeDashboard(body));
+    } catch (cause) {
+      if ((cause as { name?: string }).name !== 'AbortError') {
+        setError(cause instanceof Error ? cause.message : 'Unable to load compliance dashboard.');
+      }
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   if (loading) {
     return (
@@ -52,14 +98,15 @@ export default function ComplianceDashboardPage() {
       requirements: acc.requirements + fw.totalRequirements,
       controls: acc.controls + fw.totalControls,
       implemented: acc.implemented + fw.controlsImplemented,
+      verified: acc.verified + fw.controlsVerified,
       findings: acc.findings + fw.openFindings,
       critical: acc.critical + fw.criticalFindings,
     }),
-    { requirements: 0, controls: 0, implemented: 0, findings: 0, critical: 0 }
+    { requirements: 0, controls: 0, implemented: 0, verified: 0, findings: 0, critical: 0 }
   );
 
   const overallCompliance = totals.controls > 0
-    ? Math.round((totals.implemented / totals.controls) * 100)
+    ? Math.round((totals.verified / totals.controls) * 100)
     : 0;
 
   return (
@@ -70,16 +117,17 @@ export default function ComplianceDashboardPage() {
         title="Compliance dashboard"
         description="Monitor framework coverage, implemented controls, findings, and evidence readiness across the organization."
         icon={Shield}
+        actions={<button type="button" className="btn-secondary" onClick={() => void load()} disabled={loading}><RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh</button>}
       />
 
-      {error && <div className="page-alert error">{error}. Showing the dashboard without live framework records.</div>}
+      {error && <div className="page-alert error" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>Try again</button></div>}
 
       {/* Overall Stats */}
       <div className="compliance-dashboard-summary grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Overall Compliance</p>
+              <p className="text-sm text-gray-600">Verified Controls</p>
               <p className="text-3xl font-bold text-purple-600">{overallCompliance}%</p>
             </div>
             <TrendingUp className="w-8 h-8 text-purple-400" />
@@ -101,7 +149,7 @@ export default function ComplianceDashboardPage() {
             <div>
               <p className="text-sm text-gray-600">Implemented Controls</p>
               <p className="text-3xl font-bold text-green-600">{totals.implemented}</p>
-              <p className="text-xs text-gray-500">of {totals.controls}</p>
+              <p className="text-xs text-gray-500">of {totals.controls} controls</p>
             </div>
             <CheckCircle className="w-8 h-8 text-green-400" />
           </div>
@@ -132,7 +180,7 @@ export default function ComplianceDashboardPage() {
       <div className="compliance-dashboard-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {dashboards.map(framework => {
           const compliance = framework.totalControls > 0
-            ? Math.round((framework.controlsImplemented / framework.totalControls) * 100)
+            ? Math.round((framework.controlsVerified / framework.totalControls) * 100)
             : 0;
 
           return (
@@ -160,6 +208,11 @@ export default function ComplianceDashboardPage() {
                         'bg-red-500'
                       }`}
                       style={{ width: `${compliance}%` }}
+                      role="progressbar"
+                      aria-label={`${framework.frameworkName} verified control coverage`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={compliance}
                     ></div>
                   </div>
                 </div>
@@ -214,9 +267,7 @@ export default function ComplianceDashboardPage() {
                   {framework.lastAssessmentDate && (
                     <div className="flex justify-between items-center text-sm mt-2">
                       <span className="text-gray-600">Last Assessment</span>
-                      <span className="text-gray-900">
-                        {new Date(framework.lastAssessmentDate).toLocaleDateString()}
-                      </span>
+                      <span className="text-gray-900">{formatDate(framework.lastAssessmentDate) ?? 'Not available'}</span>
                     </div>
                   )}
                 </div>
@@ -231,7 +282,8 @@ export default function ComplianceDashboardPage() {
         <div className="compliance-dashboard-empty text-center py-12">
           <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Frameworks Found</h3>
-          <p className="text-gray-600">Create a compliance framework to get started</p>
+          <p className="text-gray-600 mb-4">Create a compliance framework and map its requirements to begin measuring assurance readiness.</p>
+          <Link href="/compliance" className="btn-primary"><Plus size={15} /> Create framework</Link>
         </div>
       )}
     </main>

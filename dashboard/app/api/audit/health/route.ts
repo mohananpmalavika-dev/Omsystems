@@ -25,16 +25,18 @@ export async function GET(request: NextRequest) {
     if (to) params.append('to', to);
     if (summary) params.append('summary', 'true');
 
-    // Use the dashboard BFF which handles auth, headers, and origin transformation.
+    // Use the dashboard BFF which owns employee authentication and origin transformation.
     const bffUrl = new URL(`${API_BFF_BASE}/v1/audit/health?${params.toString()}`, request.nextUrl.origin).toString();
+    const authorization = request.headers.get('authorization');
+    const sentinelSession = request.headers.get('x-sentinel-session');
 
     const response = await fetch(bffUrl, {
       headers: {
-        // forward cookies so the control BFF can extract the employee session
         cookie: request.headers.get('cookie') || '',
-        'x-tenant-id': request.headers.get('x-tenant-id') || '',
-        'x-user-id': request.headers.get('x-user-id') || 'system',
+        ...(authorization ? { authorization } : {}),
+        ...(sentinelSession ? { 'x-sentinel-session': sentinelSession } : {}),
       },
+      cache: 'no-store',
     });
 
     const contentType = response.headers.get('content-type') || '';
@@ -49,8 +51,8 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Camera health API error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch camera health data' },
-      { status: 500 }
+      { error: 'control_plane_unavailable', message: 'Unable to load camera health data' },
+      { status: 502 }
     );
   }
 }
@@ -61,19 +63,25 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body: unknown = await request.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: 'validation_error', message: 'A health-check scope is required' }, { status: 400 });
+    }
 
     const bffUrl = new URL(`/api/control/v1/audit/health/check`, request.nextUrl.origin).toString();
+    const authorization = request.headers.get('authorization');
+    const sentinelSession = request.headers.get('x-sentinel-session');
 
     const response = await fetch(bffUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         cookie: request.headers.get('cookie') || '',
-        'x-tenant-id': request.headers.get('x-tenant-id') || '',
-        'x-user-id': request.headers.get('x-user-id') || 'system',
+        ...(authorization ? { authorization } : {}),
+        ...(sentinelSession ? { 'x-sentinel-session': sentinelSession } : {}),
       },
       body: JSON.stringify(body),
+      cache: 'no-store',
     });
 
     const contentType = response.headers.get('content-type') || '';
@@ -87,8 +95,8 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Camera health check API error:', error);
     return NextResponse.json(
-      { error: 'Failed to perform camera health check' },
-      { status: 500 }
+      { error: 'control_plane_unavailable', message: 'Unable to request a camera health check' },
+      { status: 502 }
     );
   }
 }

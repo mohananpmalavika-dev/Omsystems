@@ -127,6 +127,28 @@ works over the internet without a Cloudflare account. Quick Tunnel URLs change
 after a scanner restart, so production branches should configure the four
 Cloudflare settings in `render.yaml` and use the stable managed endpoint.
 
+## Production prerequisites
+
+Set these control-plane environment values before creating production gateway
+activations: `EDGE_MANAGED_TUNNEL_REQUIRED=true`, `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_API_TOKEN`, and `EDGE_MEDIA_BASE_DOMAIN`.
+The control plane then creates a unique named tunnel and hostname for each
+branch. Reissue any activation package created before this configuration.
+
+Windows releases must be Authenticode signed before distribution:
+
+```powershell
+./scripts/sign-windows-release.ps1 -Path .\dist\edge-agent-installer.exe -CertificateThumbprint <thumbprint>
+```
+
+For Defender Controlled Folder Access, deploy the verified allow-list through
+Intune or Group Policy after installation. It refuses unsigned binaries and
+does not disable Defender:
+
+```powershell
+./installer/windows/defender-enterprise-policy.ps1
+```
+
 ## Uninstall
 
 Run the installed script as Administrator. It retains logs/config by default:

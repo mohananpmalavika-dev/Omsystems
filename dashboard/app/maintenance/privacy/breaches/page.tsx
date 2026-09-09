@@ -1,53 +1,24 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import { ShieldAlert } from "lucide-react";
-import { ModulePage, ModuleStatus } from "@/components/module-page";
-import { privacyApi } from "@/lib/api-client";
+import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, Search, ShieldAlert } from 'lucide-react';
+import { privacyApi } from '@/lib/api-client';
+
+type BreachStatus = 'reported' | 'investigating' | 'contained' | 'resolved' | 'closed';
+type Severity = 'low' | 'medium' | 'high' | 'critical';
+type Breach = { id: string; breachType: string; severity: Severity; status: BreachStatus; discoveredAt: string; description: string; remediation?: string | null; branchNodeId?: string | null; cameraId?: string | null };
+const nextStatus: Partial<Record<BreachStatus, BreachStatus>> = { reported: 'investigating', investigating: 'contained', contained: 'resolved', resolved: 'closed' };
+const formatDate = (value?: string) => value && !Number.isNaN(new Date(value).getTime()) ? new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(value)) : 'Not recorded';
 
 export default function PrivacyBreachesPage() {
-  const [breaches, setBreaches] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    void privacyApi.listBreaches()
-      .then((res) => setBreaches(res.data ?? []))
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-  }, []);
-
-  return (
-    <ModulePage
-      eyebrow="Privacy incident response"
-      title="Privacy breach register"
-      description="Review reported privacy events, track investigation status, and maintain a governed response history."
-      icon={ShieldAlert}
-      actionHref="/maintenance/privacy/breaches/new"
-      actionLabel="Report breach"
-      count={breaches.length}
-      countLabel="breaches"
-      loading={loading}
-      error={error}
-      empty={breaches.length === 0}
-      emptyTitle="No privacy breaches reported"
-      emptyDescription="New privacy events will appear here for triage, investigation, notification, and closure."
-    >
-      <div className="module-table-wrap">
-        <table>
-          <thead><tr><th>Event type</th><th>Severity</th><th>Status</th><th>Description</th></tr></thead>
-          <tbody>{breaches.map((breach) => (
-            <tr key={breach.id}>
-              <td><strong className="module-row-title">{breach.breachType.replace(/_/g, " ")}</strong></td>
-              <td><span className={`module-priority ${(breach.severity || "").toLowerCase()}`}>{breach.severity || "Unrated"}</span></td>
-              <td><ModuleStatus value={breach.status} /></td>
-              <td>{breach.description || "No description provided"}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </ModulePage>
-  );
+  const [breaches, setBreaches] = useState<Breach[]>([]); const [loading, setLoading] = useState(true); const [refreshing, setRefreshing] = useState(false); const [updating, setUpdating] = useState<string | null>(null); const [error, setError] = useState<string | null>(null); const [status, setStatus] = useState<BreachStatus | 'all'>('all'); const [search, setSearch] = useState('');
+  const load = useCallback(async (refresh = false) => { refresh ? setRefreshing(true) : setLoading(true); setError(null); try { const response = await privacyApi.listBreaches(status === 'all' ? undefined : status); setBreaches(Array.isArray(response.data) ? response.data as Breach[] : []); } catch (cause) { setBreaches([]); setError(cause instanceof Error ? cause.message : 'Unable to load privacy breach incidents.'); } finally { setLoading(false); setRefreshing(false); } }, [status]);
+  useEffect(() => { void load(); }, [load]);
+  const visible = useMemo(() => { const term = search.trim().toLowerCase(); return breaches.filter((item) => !term || [item.breachType, item.description, item.id, item.branchNodeId, item.cameraId].some((value) => value?.toLowerCase().includes(term))); }, [breaches, search]);
+  async function progress(breach: Breach) { const next = nextStatus[breach.status]; if (!next) return; if (next === 'resolved' && !breach.remediation?.trim()) { setError('A remediation plan is required before this incident can be resolved.'); return; } setUpdating(breach.id); setError(null); try { await privacyApi.updateBreachStatus(breach.id, next); await load(true); } catch (cause) { setError(cause instanceof Error ? cause.message : 'Unable to update breach status.'); } finally { setUpdating(null); } }
+  const openCount = breaches.filter((item) => item.status !== 'closed').length;
+  return <div className="mx-auto max-w-7xl p-6"><div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><div className="flex items-center gap-3"><ShieldAlert className="h-8 w-8 text-red-600" /><h1 className="text-3xl font-bold text-gray-900">Privacy breach incident log</h1></div><p className="mt-2 text-gray-600">Record, investigate, contain, and close privacy incidents with an auditable state transition history.</p></div><div className="flex gap-3"><button onClick={() => void load(true)} disabled={refreshing} className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button><Link href="/maintenance/privacy/breaches/new" className="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700">Report breach</Link></div></div>{error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error}</div>}<div className="mb-6 grid gap-4 sm:grid-cols-3"><Stat label="Incidents in view" value={breaches.length} icon={<ShieldAlert className="h-5 w-5" />} /><Stat label="Open incidents" value={openCount} icon={<AlertTriangle className="h-5 w-5" />} /><Stat label="Critical" value={breaches.filter((item) => item.severity === 'critical').length} icon={<AlertTriangle className="h-5 w-5" />} /></div><div className="mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-[1fr_220px]"><label className="relative"><span className="sr-only">Search incidents</span><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search incident type, description, or linked ID" className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3" /></label><select value={status} onChange={(event) => setStatus(event.target.value as BreachStatus | 'all')} className="rounded-lg border border-gray-300 px-3 py-2"><option value="all">All statuses</option>{(['reported', 'investigating', 'contained', 'resolved', 'closed'] as BreachStatus[]).map((value) => <option key={value} value={value}>{value}</option>)}</select></div>{loading ? <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-red-600" /></div> : visible.length === 0 ? <div className="rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center"><CheckCircle2 className="mx-auto h-10 w-10 text-gray-400" /><p className="mt-3 font-medium text-gray-900">No privacy incidents found</p><p className="mt-1 text-sm text-gray-600">Reported privacy events will appear here for controlled triage and resolution.</p></div> : <div className="overflow-hidden rounded-xl border border-gray-200 bg-white"><div className="divide-y divide-gray-100">{visible.map((item) => <BreachRow key={item.id} breach={item} progressing={updating === item.id} onProgress={() => void progress(item)} />)}</div><div className="border-t border-gray-100 px-5 py-3 text-sm text-gray-500">Showing {visible.length} of {breaches.length} incidents</div></div>}</div>;
 }
+function BreachRow({ breach, progressing, onProgress }: { breach: Breach; progressing: boolean; onProgress: () => void }) { const next = nextStatus[breach.status]; const severe = breach.severity === 'critical' || breach.severity === 'high'; return <article className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between"><div className="min-w-0"><div className="flex flex-wrap gap-2"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${severe ? 'bg-red-50 text-red-800' : 'bg-amber-50 text-amber-800'}`}>{breach.severity}</span><span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">{breach.status}</span></div><h2 className="mt-2 font-semibold capitalize text-gray-900">{breach.breachType.replaceAll('_', ' ')}</h2><p className="mt-1 text-sm text-gray-600">{breach.description}</p><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500"><span>Discovered: {formatDate(breach.discoveredAt)}</span>{breach.branchNodeId && <span>Branch linked</span>}{breach.cameraId && <span>Camera linked</span>}{breach.remediation && <span>Remediation recorded</span>}</div></div>{next && <button onClick={onProgress} disabled={progressing} className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50">{progressing && <Loader2 className="h-4 w-4 animate-spin" />}Mark {next}</button>}</article>; }
+function Stat({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) { return <div className="rounded-xl border border-gray-200 bg-white p-5"><div className="flex items-center justify-between text-gray-500"><span className="text-sm">{label}</span>{icon}</div><p className="mt-2 text-2xl font-bold text-gray-900">{value}</p></div>; }

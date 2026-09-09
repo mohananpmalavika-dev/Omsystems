@@ -13,6 +13,7 @@ const workOrderStatusSchema = z.enum(["open", "assigned", "in_progress", "resolv
 const listAssetsQuery = z.object({ category: assetCategorySchema.optional() });
 const listWorkOrdersQuery = z.object({
   status: workOrderStatusSchema.optional(),
+  severity: z.enum(["critical", "high", "medium", "low"]).optional(),
   branchNodeId: z.string().min(1).max(200).optional(),
 });
 const listAmcQuery = z.object({ vendorId: z.string().uuid().optional() });
@@ -92,6 +93,7 @@ async function requireBranchAccess(
   reply: FastifyReply,
   store: ControlPlaneStore,
   branchNodeId: string,
+  action: "analytics:view" | "device:configure" = "device:configure",
 ) {
   const branch = await store.getNode(branchNodeId);
   // Never allow a tenant-scoped registry record to be attached to a branch
@@ -100,7 +102,7 @@ async function requireBranchAccess(
     await reply.code(404).send({ error: "branch_not_found" });
     return false;
   }
-  const decision = await store.checkAccess(request.currentUser, "device:configure", branchNodeId);
+  const decision = await store.checkAccess(request.currentUser, action, branchNodeId);
   if (!decision) {
     await reply.code(404).send({ error: "resource_not_found" });
     return false;
@@ -255,15 +257,19 @@ async function getAccessibleWorkOrder(
   }
   if (
     workOrder.branchNodeId
-    && !(await requireBranchAccess(request, reply, store, workOrder.branchNodeId))
+    && !(await requireBranchAccess(request, reply, store, workOrder.branchNodeId, "analytics:view"))
   ) {
     return undefined;
   }
   return workOrder;
 }
 
-async function listAccessibleBranchIds(request: FastifyRequest, store: ControlPlaneStore) {
-  const branches = await store.listAccessibleNodes(request.currentUser, "device:configure", "branch");
+async function listAccessibleBranchIds(
+  request: FastifyRequest,
+  store: ControlPlaneStore,
+  action: "analytics:view" | "device:configure" = "device:configure",
+) {
+  const branches = await store.listAccessibleNodes(request.currentUser, action, "branch");
   return new Set(branches.map((branch) => branch.id));
 }
 
@@ -407,13 +413,16 @@ export async function registerMaintenanceRoutes(
     return asset;
   });
 
-  app.get("/v1/maintenance/workorders", async (request) => {
-    const query = listWorkOrdersQuery.parse(request.query);
+  app.get("/v1/maintenance/workorders", async (request, reply) => {
+    const parsed = listWorkOrdersQuery.safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
+    const query = parsed.data;
     const workOrders = await store.listWorkOrders(request.currentUser.tenantId, query.status);
-    const accessibleBranchIds = await listAccessibleBranchIds(request, store);
+    const accessibleBranchIds = await listAccessibleBranchIds(request, store, "analytics:view");
     return {
       data: workOrders.filter(
         (workOrder) => (!query.branchNodeId || workOrder.branchNodeId === query.branchNodeId)
+          && (!query.severity || workOrder.severity === query.severity)
           && (!workOrder.branchNodeId || accessibleBranchIds.has(workOrder.branchNodeId)),
       ),
     };

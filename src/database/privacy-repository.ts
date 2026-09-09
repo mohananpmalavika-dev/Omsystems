@@ -113,7 +113,6 @@ export class PrivacyRepository {
     if (input.riskLevel !== undefined) values.push(["risk_level", input.riskLevel]);
     if (input.dataCategories !== undefined) values.push(["data_categories", JSON.stringify(input.dataCategories)]);
     if (input.active !== undefined) values.push(["active", input.active]);
-    if (input.createdBy !== undefined) values.push(["created_by", input.createdBy]);
 
     if (values.length === 0) return this.getPrivacyPurpose(id);
 
@@ -179,20 +178,20 @@ export class PrivacyRepository {
          id, camera_id, audio_recording_approved,
          encryption_enabled, disposal_plan, data_protection_officer,
          last_reviewed_at, created_by, created_at, updated_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,now(),now())
+       ) VALUES ($1,$2,COALESCE($3, false),COALESCE($4, false),$5,$6,$7,$8,now(),now())
        ON CONFLICT (camera_id) DO UPDATE SET
-         audio_recording_approved = EXCLUDED.audio_recording_approved,
-         encryption_enabled = EXCLUDED.encryption_enabled,
-         disposal_plan = EXCLUDED.disposal_plan,
-         data_protection_officer = EXCLUDED.data_protection_officer,
-         last_reviewed_at = EXCLUDED.last_reviewed_at,
+         audio_recording_approved = COALESCE($3, camera_privacy_controls.audio_recording_approved),
+         encryption_enabled = COALESCE($4, camera_privacy_controls.encryption_enabled),
+         disposal_plan = COALESCE($5, camera_privacy_controls.disposal_plan),
+         data_protection_officer = COALESCE($6, camera_privacy_controls.data_protection_officer),
+         last_reviewed_at = COALESCE($7, camera_privacy_controls.last_reviewed_at),
          updated_at = now()
        RETURNING *`,
       [
         randomUUID(),
         cameraId,
-        input.audioRecordingApproved ?? false,
-        input.encryptionEnabled ?? false,
+        input.audioRecordingApproved ?? null,
+        input.encryptionEnabled ?? null,
         input.disposalPlan ?? null,
         input.dataProtectionOfficer ?? null,
         input.lastReviewedAt ?? null,
@@ -238,7 +237,7 @@ export class PrivacyRepository {
 
   async updatePrivacyBreachStatus(id: string, status: string, changedBy: string) {
     const result = await this.pool.query(
-      `UPDATE privacy_breaches SET status = $2, updated_at = now(), created_by = $3 WHERE id = $1 RETURNING *`,
+      `UPDATE privacy_breaches SET status = $2, updated_at = now() WHERE id = $1 RETURNING *`,
       [id, status, changedBy],
     );
     if (!result.rows[0]) return undefined;

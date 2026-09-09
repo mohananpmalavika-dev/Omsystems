@@ -85,12 +85,12 @@ export class ComplianceRepository {
     const values: Record<string, unknown> = {
       tenant_id: input.tenantId,
       name: input.name,
-      source: input.source ?? null,
-      description: input.description ?? null,
-      status: input.status ?? null,
-      effective_date: input.effectiveDate ?? null,
-      review_date: input.reviewDate ?? null,
-      created_by: input.createdBy ?? null,
+      source: input.source,
+      description: input.description,
+      status: input.status,
+      effective_date: input.effectiveDate,
+      review_date: input.reviewDate,
+      created_by: input.createdBy,
     };
     const { assignments, params } = buildUpdateStatement(values);
     if (assignments.length === 0) return this.getFramework(id);
@@ -239,13 +239,13 @@ export class ComplianceRepository {
     const values: Record<string, unknown> = {
       framework_id: input.frameworkId,
       tenant_id: input.tenantId,
-      branch_node_id: input.branchNodeId ?? null,
-      assessment_period_start: input.assessmentPeriodStart ?? null,
-      assessment_period_end: input.assessmentPeriodEnd ?? null,
-      status: input.status ?? null,
-      summary: input.summary ? JSON.stringify(input.summary) : null,
-      evidence: input.evidence ? JSON.stringify(input.evidence) : null,
-      created_by: input.createdBy ?? null,
+      branch_node_id: input.branchNodeId,
+      assessment_period_start: input.assessmentPeriodStart,
+      assessment_period_end: input.assessmentPeriodEnd,
+      status: input.status,
+      summary: input.summary === undefined ? undefined : JSON.stringify(input.summary),
+      evidence: input.evidence === undefined ? undefined : JSON.stringify(input.evidence),
+      created_by: input.createdBy,
     };
     const { assignments, params } = buildUpdateStatement(values);
     if (assignments.length === 0) return this.getAssessment(id);
@@ -261,6 +261,21 @@ export class ComplianceRepository {
     const result = await this.pool.query(
       `SELECT * FROM compliance_certificates WHERE assessment_id=$1 ORDER BY issued_at DESC`,
       [assessmentId],
+    );
+    return camelRows<ComplianceCertificate>(result.rows);
+  }
+
+  async listCertificatesForTenant(
+    tenantId: string,
+    filters?: { assessmentId?: string; status?: string },
+  ) {
+    const result = await this.pool.query(
+      `SELECT * FROM compliance_certificates
+       WHERE tenant_id = $1
+         AND ($2::uuid IS NULL OR assessment_id = $2)
+         AND ($3::text IS NULL OR status = $3)
+       ORDER BY issued_at DESC, created_at DESC`,
+      [tenantId, filters?.assessmentId ?? null, filters?.status ?? null],
     );
     return camelRows<ComplianceCertificate>(result.rows);
   }
@@ -665,7 +680,7 @@ export class ComplianceRepository {
         controls_verified,
         open_findings,
         critical_findings,
-        evidence_collected,
+        total_evidence AS evidence_collected,
         last_assessment_date
       FROM compliance_dashboard_summary
       WHERE tenant_id = $1
@@ -1113,7 +1128,7 @@ export class ComplianceRepository {
         closed_at = now(),
         closure_notes = $2,
         updated_at = now()
-      WHERE id = $3
+      WHERE id = $3 AND status = 'verified'
       RETURNING *`,
       [closedBy, notes ?? null, id]
     );
@@ -1513,7 +1528,7 @@ export class ComplianceRepository {
         residual_likelihood = $1,
         residual_impact = $2,
         treatment_plan = COALESCE($3, treatment_plan),
-        status = CASE WHEN status = 'identified' THEN 'assessed' ELSE status END,
+        status = 'assessed',
         updated_at = now()
       WHERE id = $4
       RETURNING *`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Plus, Search, TrendingUp, Activity } from 'lucide-react';
 
@@ -16,7 +16,7 @@ interface Risk {
   inherentRiskScore: number;
   residualRiskScore: number;
   riskResponse: 'accept' | 'mitigate' | 'transfer' | 'avoid';
-  status: 'identified' | 'assessed' | 'treated' | 'monitored';
+  status: 'identified' | 'assessed' | 'treated' | 'monitored' | 'closed';
   owner?: string;
   reviewDate?: string;
   mitigationCount?: number;
@@ -25,26 +25,29 @@ interface Risk {
 export default function RisksPage() {
   const [risks, setRisks] = useState<Risk[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [likelihoodFilter, setLikelihoodFilter] = useState('all');
   const [impactFilter, setImpactFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  useEffect(() => {
-    fetchRisks();
-  }, []);
-
-  const fetchRisks = async () => {
+  const fetchRisks = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch('/api/compliance/risks');
+      if (!response.ok) throw new Error('Unable to load the risk register.');
       const data = await response.json();
-      setRisks((data.data || []).map(normalizeRisk));
+      setRisks(Array.isArray(data.data) ? data.data.map(normalizeRisk) : []);
     } catch (error) {
       console.error('Failed to fetch risks:', error);
+      setError(error instanceof Error ? error.message : 'Unable to load the risk register.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => { void fetchRisks(); }, [fetchRisks]);
 
   const filteredRisks = risks.filter(risk => {
     const matchesSearch = 
@@ -87,6 +90,7 @@ export default function RisksPage() {
     assessed: { color: 'bg-blue-100 text-blue-800', label: 'Assessed' },
     treated: { color: 'bg-green-100 text-green-800', label: 'Treated' },
     monitored: { color: 'bg-purple-100 text-purple-800', label: 'Monitored' },
+    closed: { color: 'bg-gray-100 text-gray-800', label: 'Closed' },
   };
 
   if (loading) {
@@ -119,6 +123,8 @@ export default function RisksPage() {
             <span>Add Risk</span>
           </Link>
         </div>
+
+        {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error} <button type="button" className="font-semibold underline" onClick={() => void fetchRisks()}>Try again</button></div>}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
@@ -243,6 +249,7 @@ export default function RisksPage() {
                 <option value="assessed">Assessed</option>
                 <option value="treated">Treated</option>
                 <option value="monitored">Monitored</option>
+                <option value="closed">Closed</option>
               </select>
             </div>
           </div>
@@ -410,11 +417,15 @@ function normalizeRisk(item: any): Risk {
     category: item.category ?? item.riskCategory ?? 'compliance',
     likelihood,
     impact,
-    inherentRiskScore: item.inherentRiskScore ?? riskScale[likelihood] * riskScale[impact],
-    residualRiskScore: item.residualRiskScore ?? riskScale[residualLikelihood] * riskScale[residualImpact],
+    inherentRiskScore: validScore(item.inherentRiskScore, riskScale[likelihood] * riskScale[impact]),
+    residualRiskScore: validScore(item.residualRiskScore, riskScale[residualLikelihood] * riskScale[residualImpact]),
     riskResponse: ['accept', 'mitigate', 'transfer', 'avoid'].includes(item.riskResponse ?? item.riskTreatment) ? (item.riskResponse ?? item.riskTreatment) : 'mitigate',
-    status: ['identified', 'assessed', 'treated', 'monitored'].includes(item.status) ? item.status : 'identified',
+    status: ['identified', 'assessed', 'treated', 'monitored', 'closed'].includes(item.status) ? item.status : 'identified',
     owner: item.owner ?? item.riskOwner,
     reviewDate: item.reviewDate ?? item.nextReviewDate,
   };
+}
+
+function validScore(value: unknown, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 25 ? value : fallback;
 }

@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { complianceApi } from '@/lib/api-client';
+
+type AssessmentStatus = 'compliant' | 'exception' | 'non-compliant' | 'incomplete';
 
 interface Assessment {
   id: string;
@@ -9,9 +12,9 @@ interface Assessment {
   frameworkName?: string;
   branchNodeId?: string;
   branchName?: string;
-  status: string;
-  assessmentPeriodStart: string;
-  assessmentPeriodEnd: string;
+  status: AssessmentStatus;
+  assessmentPeriodStart?: string | null;
+  assessmentPeriodEnd?: string | null;
   summary?: {
     compliancePercentage?: number;
     totalRequirements?: number;
@@ -22,54 +25,52 @@ interface Assessment {
   updatedAt: string;
 }
 
+const statusLabels: Record<AssessmentStatus, string> = {
+  compliant: 'Compliant', exception: 'Exception', 'non-compliant': 'Non-compliant', incomplete: 'Incomplete',
+};
+
 export default function AssessmentsPage() {
   const router = useRouter();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState({
-    status: '',
-    frameworkId: '',
-    branchNodeId: '',
-  });
+  const [status, setStatus] = useState<AssessmentStatus | ''>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [frameworkId, setFrameworkId] = useState('');
+  const [periodStart, setPeriodStart] = useState('');
+  const [periodEnd, setPeriodEnd] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchAssessments();
-  }, [filter]);
-
-  const fetchAssessments = async () => {
+  const fetchAssessments = useCallback(async () => {
+    setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (filter.status) params.append('status', filter.status);
-      if (filter.frameworkId) params.append('frameworkId', filter.frameworkId);
-      if (filter.branchNodeId) params.append('branchNodeId', filter.branchNodeId);
-
-      const response = await fetch(`/api/compliance/assessments?${params}`);
-      const data = await response.json();
-      setAssessments(data);
+      const response = await complianceApi.listAssessments(status ? { status } : undefined);
+      setAssessments(Array.isArray(response.data) ? response.data as Assessment[] : []);
     } catch (error) {
       console.error('Failed to fetch assessments:', error);
+      setAssessments([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [status]);
+
+  useEffect(() => { void fetchAssessments(); }, [fetchAssessments]);
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'passed':
+      case 'compliant':
         return 'bg-green-100 text-green-800';
-      case 'passed_with_exceptions':
+      case 'exception':
         return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
+      case 'non-compliant':
         return 'bg-red-100 text-red-800';
-      case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString || Number.isNaN(new Date(dateString).getTime())) return 'Not set';
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -81,19 +82,26 @@ export default function AssessmentsPage() {
     setShowCreateModal(true);
   };
 
-  const handleExecuteAssessment = async (id: string) => {
+  const createAssessment = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreating(true);
+    setError(null);
     try {
-      const response = await fetch(`/api/compliance/assessments/${id}/execute`, {
-        method: 'POST',
-      });
-      
-      if (response.ok) {
-        alert('Assessment execution started');
-        fetchAssessments();
-      }
-    } catch (error) {
-      console.error('Failed to execute assessment:', error);
-      alert('Failed to execute assessment');
+      const assessment = await complianceApi.createAssessment({
+        frameworkId,
+        status: 'incomplete',
+        ...(periodStart ? { assessmentPeriodStart: new Date(`${periodStart}T00:00:00.000Z`).toISOString() } : {}),
+        ...(periodEnd ? { assessmentPeriodEnd: new Date(`${periodEnd}T00:00:00.000Z`).toISOString() } : {}),
+      }) as Assessment;
+      setShowCreateModal(false);
+      setFrameworkId('');
+      setPeriodStart('');
+      setPeriodEnd('');
+      router.push(`/compliance/assessments/${assessment.id}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Unable to create assessment.');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -125,6 +133,25 @@ export default function AssessmentsPage() {
         </div>
       </div>
 
+      {error && <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</div>}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="new-assessment-title">
+          <form onSubmit={createAssessment} className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl">
+            <h2 id="new-assessment-title" className="text-xl font-semibold text-gray-900">New assessment</h2>
+            <p className="mt-1 text-sm text-gray-600">Use the framework ID from the framework catalog. The assessment starts as incomplete until results are recorded.</p>
+            <label className="mt-5 block text-sm font-medium text-gray-700">Framework ID
+              <input required value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} placeholder="UUID" className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" />
+            </label>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <label className="text-sm font-medium text-gray-700">Period start<input type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
+              <label className="text-sm font-medium text-gray-700">Period end<input type="date" min={periodStart || undefined} value={periodEnd} onChange={(event) => setPeriodEnd(event.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2" /></label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3"><button type="button" className="px-4 py-2 text-sm text-gray-700" onClick={() => setShowCreateModal(false)} disabled={creating}>Cancel</button><button type="submit" disabled={creating} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{creating ? 'Creating…' : 'Create assessment'}</button></div>
+          </form>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -133,16 +160,15 @@ export default function AssessmentsPage() {
               Status
             </label>
             <select
-              value={filter.status}
-              onChange={(e) => setFilter({ ...filter, status: e.target.value })}
+              value={status}
+              onChange={(e) => setStatus(e.target.value as AssessmentStatus | '')}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Statuses</option>
               <option value="incomplete">Incomplete</option>
-              <option value="in_progress">In Progress</option>
-              <option value="passed">Passed</option>
-              <option value="passed_with_exceptions">Passed with Exceptions</option>
-              <option value="failed">Failed</option>
+              <option value="compliant">Compliant</option>
+              <option value="exception">Exception</option>
+              <option value="non-compliant">Non-compliant</option>
             </select>
           </div>
         </div>
@@ -179,7 +205,7 @@ export default function AssessmentsPage() {
                         assessment.status
                       )}`}
                     >
-                      {assessment.status.replace('_', ' ').toUpperCase()}
+                      {statusLabels[assessment.status]}
                     </span>
                   </div>
 
@@ -222,17 +248,6 @@ export default function AssessmentsPage() {
                 </div>
 
                 <div className="flex gap-2">
-                  {assessment.status === 'incomplete' && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExecuteAssessment(assessment.id);
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                    >
-                      Execute
-                    </button>
-                  )}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();

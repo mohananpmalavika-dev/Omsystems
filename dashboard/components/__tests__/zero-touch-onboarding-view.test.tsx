@@ -70,7 +70,7 @@ describe("ZeroTouchOnboardingView", () => {
       });
       
       expect(global.fetch).toHaveBeenCalledWith(
-        "/api/v1/zero-touch/fleet",
+        "/api/control/v1/zero-touch/fleet",
         expect.objectContaining({ signal: expect.any(AbortSignal) })
       );
     });

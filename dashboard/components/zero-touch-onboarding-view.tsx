@@ -302,7 +302,10 @@ export function ZeroTouchOnboardingView() {
     setTimeout(() => setCopiedKey(null), 2000);
   }, []);
 
-  const handleDownloadBatch = useCallback((branchId: string, branchName: string, psCommand?: string) => {
+  const handleDownloadBatch = useCallback((_branchId: string, _branchName: string, _psCommand?: string) => {
+    setToastMsg({ type: "info", text: "Use the signed Edge Gateway installer and paste the activation code shown here. Scripted bootstrap downloads are disabled." });
+    return;
+    /*
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     const cleanBranchName = (branchName || "Branch").replace(/["\r\n]/g, "");
     const command = psCommand || `iwr -useb '${origin}/api/control/v1/branches/${branchId}/install.ps1' | iex`;
@@ -358,6 +361,7 @@ Write-Host "================================================================" -F
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setToastMsg({ type: "success", text: `Installer "Install_SentinelGrid_${safeName}.bat" downloaded.` });
+    */
   }, []);
 
   const fetchFleet = useCallback(async () => {
@@ -375,7 +379,7 @@ Write-Host "================================================================" -F
     abortControllerRef.current = controller;
     
     try {
-      const res = await fetch("/api/v1/zero-touch/fleet", {
+      const res = await fetch("/api/control/v1/zero-touch/fleet", {
         signal: controller.signal,
         cache: "no-store",
       });
@@ -383,7 +387,7 @@ Write-Host "================================================================" -F
       const duration = Date.now() - startTime;
       
       if (!res.ok) {
-        trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, false, res.status);
+        trackApiCall("/api/control/v1/zero-touch/fleet", "GET", duration, false, res.status);
         const message = res.status === 401
           ? "Your session has expired. Sign in again to access branch provisioning."
           : res.status === 403
@@ -399,7 +403,7 @@ Write-Host "================================================================" -F
         setSlaMetrics(data.data?.slaMetrics ?? null);
         setToastMsg(null);
         
-        trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, true, res.status);
+        trackApiCall("/api/control/v1/zero-touch/fleet", "GET", duration, true, res.status);
         trackPerformance({
           name: "fleet_data_load",
           value: duration,
@@ -407,7 +411,7 @@ Write-Host "================================================================" -F
           metadata: { branchCount: Array.isArray(data.data?.branches) ? data.data.branches.length : 0 },
         });
       } else {
-        trackApiCall("/api/v1/zero-touch/fleet", "GET", duration, false);
+        trackApiCall("/api/control/v1/zero-touch/fleet", "GET", duration, false);
         throw new Error(data.error || "Failed to load fleet data");
       }
     } catch (err: unknown) {
@@ -425,7 +429,7 @@ Write-Host "================================================================" -F
         error: err as Error,
         context: "fetchFleet",
         severity: "high",
-        metadata: { endpoint: "/api/v1/zero-touch/fleet" },
+        metadata: { endpoint: "/api/control/v1/zero-touch/fleet" },
       });
     } finally {
       if (abortControllerRef.current === controller) {
@@ -608,10 +612,10 @@ Write-Host "================================================================" -F
     });
     
     try {
-      const res = await fetch(`/api/v1/zero-touch/branches/${branch.branchId}/enrollment`, {
+      const res = await fetch(`/api/control/v1/branches/${encodeURIComponent(branch.branchId)}/edge-activations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenantId: branch.tenantId, expiryMinutes: 15 }),
+        body: JSON.stringify({ agentName: `${branch.branchName} Gateway`, ttlMinutes: 60 }),
       });
       
       if (!res.ok) {
@@ -621,17 +625,24 @@ Write-Host "================================================================" -F
       
       const data = await res.json();
       
-      if (data.success) {
-        setEnrollModalBranch({ ...branch, enrollmentPackage: data.data });
+      if (res.ok && data.activationCode) {
+        setEnrollModalBranch({
+          ...branch,
+          enrollmentPackage: {
+            ...data,
+            installerScripts: {
+              windowsPowerShell: `Activation code: ${data.activationCode}`,
+              linuxBash: `Activation code: ${data.activationCode}`,
+            },
+          },
+        });
         
         trackEvent({
           category: "enrollment",
           action: "package_generated",
           label: branch.branchId,
         });
-      } else {
-        throw new Error(data.error || "Failed to generate enrollment package");
-      }
+      } else throw new Error(data.error || "Failed to create edge activation");
     } catch (err: unknown) {
       const apiError = handleApiError(err);
       setToastMsg({ 
@@ -876,10 +887,10 @@ Write-Host "================================================================" -F
 
   const fetchDiscoveredDevices = useCallback(async (branchId: string) => {
     try {
-      const res = await fetch(`/api/v1/zero-touch/branches/${branchId}/discovered-devices`);
+      const res = await fetch(`/api/control/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered`, { cache: "no-store" });
       const data = await res.json();
-      if (data.success) {
-        setDiscoveredDevices(data.data);
+      if (res.ok) {
+        setDiscoveredDevices(Array.isArray(data.data) ? data.data : []);
       }
     } catch {}
   }, []);
@@ -890,29 +901,16 @@ Write-Host "================================================================" -F
   }, [fetchDiscoveredDevices]);
 
   const handleBatchApprove = useCallback(async (branchId: string) => {
-    // Optimistic update: Mark devices as approved immediately
-    const originalDevices = [...discoveredDevices];
-    const approvedDevices = discoveredDevices.map((device) => ({
-      ...device,
-      reviewStatus: "APPROVED",
-      channels: device.channels.map((ch: any) => ({
-        ...ch,
-        isApproved: true,
-        validationState: "VALIDATED",
-      })),
-    }));
-    
-    setDiscoveredDevices(approvedDevices);
-    
-    // Show immediate feedback
     setToastMsg({ 
       type: "info", 
-      text: "Approving devices..." 
+      text: "Approving verified cameras..."
     });
 
     try {
-      const res = await fetch(`/api/v1/zero-touch/branches/${branchId}/batch-approve`, {
+      const res = await fetch(`/api/control/v1/branches/${encodeURIComponent(branchId)}/cameras/discovered/approve-all`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
       
       if (!res.ok) {
@@ -922,8 +920,8 @@ Write-Host "================================================================" -F
       
       const data = await res.json();
       
-      if (data.success) {
-        setToastMsg({ type: "success", text: data.message });
+      if (res.ok) {
+        setToastMsg({ type: "success", text: `${data.summary?.provisioned ?? 0} verified camera(s) added to monitoring.` });
         // Refresh to get accurate server state
         fetchDiscoveredDevices(branchId);
         fetchFleet();
@@ -931,9 +929,6 @@ Write-Host "================================================================" -F
         throw new Error(data.error || "Failed to batch approve devices");
       }
     } catch (err: unknown) {
-      // Rollback on error
-      setDiscoveredDevices(originalDevices);
-      
       const apiError = handleApiError(err);
       setToastMsg({ type: "error", text: `Batch approval failed: ${apiError.message}` });
     }
@@ -1509,6 +1504,16 @@ Write-Host "================================================================" -F
             </div>
 
             <div className="space-y-3 font-mono text-xs">
+              <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3 font-sans text-amber-100">
+                Use the signed Edge Gateway installer from your approved distribution channel, then paste this one-time activation code. Do not save it in scripts or tickets.
+                <div className="mt-2 flex items-center justify-between gap-3 rounded bg-slate-950 p-2 font-mono text-emerald-300">
+                  <code className="break-all">{enrollModalBranch.enrollmentPackage.activationCode}</code>
+                  <button onClick={() => handleCopy(enrollModalBranch.enrollmentPackage.activationCode, "activation")} className="shrink-0 rounded bg-slate-800 px-2 py-1 text-slate-100 hover:bg-slate-700">
+                    {copiedKey === "activation" ? "Copied" : "Copy code"}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-amber-200">Expires: {new Date(enrollModalBranch.enrollmentPackage.expiresAt).toLocaleString()}</p>
+              </div>
               {/* Highlighted 1-Click Auto-Setup Button for Non-Tech Staff */}
               <div className="p-3.5 rounded-xl bg-gradient-to-r from-emerald-950/80 to-teal-950/80 border border-emerald-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 font-sans">
                 <div>
@@ -1517,20 +1522,21 @@ Write-Host "================================================================" -F
                     1-Click Auto Setup (.BAT)
                   </div>
                   <p className="text-xs text-slate-300 mt-0.5">
-                    No PowerShell or technical knowledge needed. Double-click to auto-install & start!
+                    Scripted bootstrap downloads are disabled. Use the signed installer and the activation code above.
                   </p>
                 </div>
                 <button
                   type="button"
+                  disabled
                   onClick={() => handleDownloadBatch(
                     enrollModalBranch.branchId,
                     enrollModalBranch.branchName,
                     enrollModalBranch.enrollmentPackage?.installerScripts?.windowsPowerShell
                   )}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-emerald-900/30 flex items-center justify-center gap-2 shrink-0 transition-all"
+                  className="px-4 py-2 bg-slate-700 text-slate-300 text-xs font-bold rounded-lg flex items-center justify-center gap-2 shrink-0 cursor-not-allowed"
                 >
                   <Download className="w-4 h-4" />
-                  Download Auto-Setup (.BAT)
+                  Scripted setup disabled
                 </button>
               </div>
 
@@ -1610,7 +1616,7 @@ Write-Host "================================================================" -F
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-slate-400 font-mono">
-                  Found {discoveredDevices.length} appliances ({discoveredDevices.reduce((s, d) => s + d.channels.length, 0)} channels)
+                  Found {discoveredDevices.length} discovered camera(s). Only stream-verified, non-duplicate cameras can be approved.
                 </span>
                 <button
                   onClick={() => handleBatchApprove(reviewModalBranch.branchId)}
@@ -1621,14 +1627,14 @@ Write-Host "================================================================" -F
               </div>
 
               {discoveredDevices.map((device) => (
-                <div key={device.deviceId} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
+                <div key={device.id} className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3 font-mono text-xs">
                   <div className="flex items-center justify-between border-b border-slate-800/80 pb-2">
                     <div className="flex items-center space-x-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                       <strong className="text-slate-100 font-bold text-sm">
-                        {device.manufacturer} {device.model}
+                        {device.displayName || `${device.manufacturer || "Unknown"} ${device.model || "Camera"}`}
                       </strong>
-                      <span className="text-slate-400 text-xs">({device.ipAddress})</span>
+                      <span className="text-slate-400 text-xs">({device.ipAddress || "address unavailable"})</span>
                     </div>
                     <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-950 border border-indigo-500/40 text-indigo-300">
                       {device.protocol} • {device.channelCount} Channels
@@ -1636,7 +1642,13 @@ Write-Host "================================================================" -F
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {device.channels.map((ch: any) => (
+                    {(Array.isArray(device.channels) ? device.channels : [{
+                      channelNumber: device.id,
+                      channelName: device.streamVerified ? "Stream verified" : device.credentialsRequired ? "Credentials required" : "Verification pending",
+                      resolution: device.compatibilityStatus || "review-required",
+                      fps: device.sourceType || "ip-camera",
+                      validationState: device.duplicateStatus === "duplicate" ? "DUPLICATE" : device.streamVerified ? "VERIFIED" : "PENDING",
+                    }]).map((ch: any) => (
                       <div
                         key={ch.channelNumber}
                         className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800/80 flex items-center justify-between text-xs"
