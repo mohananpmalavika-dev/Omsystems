@@ -1359,7 +1359,8 @@ export class MemoryStore {
   }
 
   async getCamera(id: string) {
-    const cam = this.cameras.get(id);
+    const cam = this.cameras.get(id) ??
+      (id.startsWith("camera-") ? this.cameras.get(id.slice(7)) : this.cameras.get(`camera-${id}`));
     if (!cam) return undefined;
     const branch = this.nodes.get(cam.branchId) || this.nodes.get(cam.nodeId);
     return {
