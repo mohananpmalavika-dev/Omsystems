@@ -4,6 +4,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import type { EdgeConfig } from "../config.js";
 import type { ConsumedLiveSession, GatewayClient } from "../registration/gateway-client.js";
 import type { LocalStreamSecretStore } from "./secret-store.js";
@@ -322,9 +323,10 @@ export class EdgeLiveGateway {
   }
 
   private async proxyHls(request: IncomingMessage, response: ServerResponse) {
-    const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
-    response.setHeader("Access-Control-Allow-Origin", origin);
-    response.setHeader("Access-Control-Allow-Credentials", "true");
+    // HLS is authorized with a short-lived bearer token, never cookies.  Do
+    // not reflect an arbitrary Origin together with credentials: that turns a
+    // locally reachable camera gateway into a cross-origin credential target.
+    response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     if (request.headers["access-control-request-private-network"] === "true") {
@@ -332,17 +334,53 @@ export class EdgeLiveGateway {
     }
     response.setHeader("Vary", "Origin");
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
+    const path = hlsPath(request.url);
+    const token = bearerToken(request.headers.authorization)
+      || new URL(request.url ?? "/", "http://edge.local").searchParams.get("token")
+      || "";
+    // Keep authorization at the browser-facing boundary as well as in
+    // MediaMTX. This remains safe when a previously running MediaMTX process
+    // is reused or its HTTP auth configuration is accidentally changed.
+    if (!path || !this.access.authenticate(token, path, "read")) {
+      return sendJson(response, 401, { error: "media_access_denied" });
+    }
     const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
     const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
       method: request.method ?? "GET",
       headers: forwardMediaHeaders(request.headers),
     });
     response.statusCode = upstream.status;
-    for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
+    for (const name of ["accept-ranges", "content-length", "content-type"]) {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
     }
+    // Video is private and playlists must never be cached: a cached manifest
+    // points at expired live fragments and is a common cause of apparent
+    // stream freezes after reconnecting.
+    response.setHeader("cache-control", "no-store, private");
+    response.setHeader("x-content-type-options", "nosniff");
     if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
-    response.end(Buffer.from(await upstream.arrayBuffer()));
+    if (!upstream.body) { response.end(); return; }
+
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (isHlsPlaylist(contentType, suffix)) {
+      // Safari's native HLS implementation cannot attach an Authorization
+      // header to media fragments. Propagate the short-lived token through
+      // playlist URIs so every fragment remains authorized; hls.js continues
+      // to use its Authorization header as before.
+      const playlist = await readUpstreamText(upstream, 1_048_576);
+      response.removeHeader("content-length");
+      response.end(rewriteHlsPlaylistTokens(playlist, token));
+      return;
+    }
+
+    // Do not buffer fMP4 segments in the edge process. Buffering every
+    // fragment increases latency and creates memory spikes as viewers scale.
+    const stream = Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream);
+    const abort = () => stream.destroy();
+    request.once("aborted", abort);
+    response.once("close", abort);
+    stream.once("error", (error) => response.destroy(error));
+    stream.pipe(response);
   }
 }
 
@@ -765,6 +803,68 @@ function forwardMediaHeaders(headers: IncomingHttpHeaders) {
   }
   return forwarded;
 }
+function hlsPath(requestUrl: string | undefined) {
+  const pathname = new URL(requestUrl ?? "/", "http://edge.local").pathname;
+  const match = pathname.match(/^\/hls\/([^/]+)\//);
+  if (!match) return undefined;
+  try {
+    const path = decodeURIComponent(match[1]!);
+    return /^[a-z0-9_-]+$/i.test(path) ? path : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function isHlsPlaylist(contentType: string, requestUrl: string) {
+  return /(?:application|audio)\/(?:vnd\.apple\.mpegurl|x-mpegurl)/i.test(contentType)
+    || new URL(requestUrl, "http://edge.local").pathname.endsWith(".m3u8");
+}
+async function readUpstreamText(response: Response, maximumBytes: number) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > maximumBytes) {
+    throw new Error("HLS playlist exceeds maximum permitted size");
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      length += next.value.byteLength;
+      if (length > maximumBytes) throw new Error("HLS playlist exceeds maximum permitted size");
+      chunks.push(next.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
+}
+/** Add a token to URI lines and URI attributes (EXT-X-MAP/KEY/MEDIA). */
+export function rewriteHlsPlaylistTokens(playlist: string, token: string) {
+  if (!token) return playlist;
+  const rewrite = (uri: string) => appendQueryToken(uri, token);
+  return playlist.split(/(\r?\n)/).map((line) => {
+    if (!line || /^\r?$/.test(line)) return line;
+    if (!line.startsWith("#")) return rewrite(line);
+    return line.replace(/URI="([^"]+)"/g, (_match, uri: string) => `URI="${rewrite(uri)}"`);
+  }).join("");
+}
+function appendQueryToken(uri: string, token: string) {
+  // Never disclose a media credential to an absolute or protocol-relative
+  // third-party URI that may appear in a malformed/untrusted playlist.
+  if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(uri)) return uri;
+  try {
+    const base = "http://edge.local";
+    const parsed = new URL(uri, base);
+    parsed.searchParams.set("token", token);
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    // A malformed URI will be rejected by the HLS client; leave it unchanged
+    // rather than producing an invalid manifest here.
+    return uri;
+  }
+}
 async function readBinaryBody(request: IncomingMessage, maximumBytes: number) {
   const chunks: Buffer[] = []; let length = 0;
   for await (const chunk of request) {
@@ -776,9 +876,10 @@ async function readBinaryBody(request: IncomingMessage, maximumBytes: number) {
 }
 
 function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
-  const origin = typeof request.headers.origin === "string" ? request.headers.origin : "*";
-  response.setHeader("Access-Control-Allow-Origin", origin);
-  response.setHeader("Access-Control-Allow-Credentials", "true");
+  // Session and media authorization are bearer-token based. Cookies are not
+  // part of this protocol, so wildcard CORS avoids reflecting untrusted
+  // origins with credentials while retaining LAN and tunneled deployments.
+  response.setHeader("Access-Control-Allow-Origin", "*");
   const requestedHeaders = request.headers["access-control-request-headers"];
   response.setHeader(
     "Access-Control-Allow-Headers",
@@ -788,7 +889,6 @@ function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   if (request.headers["access-control-request-private-network"] === "true") {
     response.setHeader("Access-Control-Allow-Private-Network", "true");
   }
-  response.setHeader("Vary", "Origin");
 }
 function bearerToken(value: string | undefined) {
   const match = value?.match(/^Bearer\s+(.+)$/i);

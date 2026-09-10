@@ -182,8 +182,10 @@ export class HaFailoverCoordinator {
     const maxRecordingGapMs = latencies.length ? Math.max(...latencies) : null;
 
     const today = new Date().toISOString().slice(0, 10);
+    // Count completed outcomes, not both the start and completion records for
+    // one handoff.  The former doubled the daily failover metric.
     const failoverEventsToday = tenantEvents.filter(
-      (event) => event.type.startsWith("CAMERA_FAILOVER_") && event.timestamp.startsWith(today),
+      (event) => (event.type === "CAMERA_FAILOVER_COMPLETED" || event.type === "CAMERA_FAILOVER_FAILED") && event.timestamp.startsWith(today),
     );
     const successfulFailovers = failoverEventsToday.filter((e) => e.type === "CAMERA_FAILOVER_COMPLETED").length;
     const failedFailovers = failoverEventsToday.filter((e) => e.type === "CAMERA_FAILOVER_FAILED").length;

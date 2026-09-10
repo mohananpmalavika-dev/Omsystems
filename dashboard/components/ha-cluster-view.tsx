@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, AlertTriangle, Network, Radio, RefreshCw, Server } from "lucide-react";
+import { Activity, AlertTriangle, Network, Radio, RefreshCw, Server, ShieldCheck } from "lucide-react";
 
 type TelemetryRecord = Record<string, unknown>;
 
@@ -10,6 +10,15 @@ interface HAStatus {
   nodes: TelemetryRecord[];
   activeLeasesCount: number;
   recentEvents: TelemetryRecord[];
+}
+
+interface PlacementPlan {
+  cameraId: string;
+  branchId: string;
+  primaryNodeId: string;
+  secondaryNodeId: string;
+  tertiaryNodeId: string;
+  updatedAt: string;
 }
 
 function textValue(value: unknown, fallback = "Not reported"): string {
@@ -26,6 +35,7 @@ function formatTimestamp(value: unknown): string {
 
 export function HAClusterView() {
   const [status, setStatus] = useState<HAStatus | null>(null);
+  const [placements, setPlacements] = useState<PlacementPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +63,18 @@ export function HAClusterView() {
         activeLeasesCount: Number.isFinite(data.activeLeasesCount) ? data.activeLeasesCount : 0,
         recentEvents: data.recentEvents,
       });
+      // Placement plans are supplemental topology information.  Do not hide
+      // the authoritative cluster status when this optional read is delayed.
+      const placementResponse = await fetch("/api/control/api/ha/placements", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const placementBody = await placementResponse.json().catch(() => null);
+      setPlacements(
+        placementResponse.ok && Array.isArray(placementBody?.data)
+          ? placementBody.data.filter(isPlacementPlan)
+          : [],
+      );
       setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "HA telemetry is unavailable.");
@@ -181,6 +203,37 @@ export function HAClusterView() {
         )}
       </section>
 
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">Failure-domain placement</h2>
+            <p className="mt-1 text-xs text-slate-400">Preferred handoff order for cameras with an HA placement plan.</p>
+          </div>
+          <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">{placements.length} plans</span>
+        </div>
+        {placements.length === 0 ? (
+          <p className="mt-4 text-sm text-slate-400">No camera placement plans have been recorded for this tenant.</p>
+        ) : (
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-xs">
+              <thead className="border-b border-slate-800 text-slate-500"><tr><th className="p-2">Camera</th><th className="p-2">Branch</th><th className="p-2">Primary</th><th className="p-2">Standby</th><th className="p-2">DR</th></tr></thead>
+              <tbody>{placements.slice(0, 50).map((plan) => <tr key={plan.cameraId} className="border-b border-slate-800/70 text-slate-300"><td className="p-2 font-medium text-slate-100">{plan.cameraId}</td><td className="p-2">{plan.branchId}</td><td className="p-2">{plan.primaryNodeId}</td><td className="p-2">{plan.secondaryNodeId}</td><td className="p-2">{plan.tertiaryNodeId}</td></tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-indigo-900/80 bg-indigo-950/20 p-6">
+        <div className="flex gap-3">
+          <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-indigo-300" />
+          <div>
+            <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-100">Chaos lab safety gate</h2>
+            <p className="mt-1 text-sm text-indigo-100/80">This production console is observability-only. Fault injection requires an isolated environment, a recorded approval, passing capacity checks, and an auditable runbook.</p>
+            <p className="mt-2 text-xs text-indigo-200/60">No simulated success results or in-browser destructive controls are exposed here.</p>
+          </div>
+        </div>
+      </section>
+
       {metrics.length > 0 && (
         <section className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-slate-300">Coordinator metrics</h2>
@@ -223,5 +276,13 @@ function ClusterEventCard({ event }: { event: TelemetryRecord }) {
       </div>
       {message && <p className="mt-2 text-xs text-slate-400">{message}</p>}
     </div>
+  );
+}
+
+function isPlacementPlan(value: unknown): value is PlacementPlan {
+  if (!value || typeof value !== "object") return false;
+  const plan = value as Record<string, unknown>;
+  return ["cameraId", "branchId", "primaryNodeId", "secondaryNodeId", "tertiaryNodeId", "updatedAt"].every(
+    (key) => typeof plan[key] === "string",
   );
 }

@@ -12,6 +12,7 @@ describe('UI Gating & Usability Logic Tests', () => {
 
   it('permits usage when capability is PRODUCTION and HEALTHY', () => {
     const registry = getCapabilityRegistry();
+    registry.updateRuntimeState('video.live_view', CapabilityRuntimeState.HEALTHY, 'Verified by test runtime reporter');
     const result = registry.canUse('video.live_view');
     expect(result.usable).toBe(true);
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
   CheckCircle2,
@@ -10,8 +10,9 @@ import {
   Sparkles,
   Workflow,
 } from "lucide-react";
-import { AppLayout, getVisibleNavigation, menuKey, quickActions } from "@/components/app-layout";
+import { AppLayout, getVisibleNavigation, menuKey, quickActions, type MenuAccessUser } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
+import { filterAuthorizedQuickActions } from "@/lib/module-directory-access";
 
 const groupDescriptions: Record<string, string> = {
   OPERATIONS: "Live control room, branch fleet, alert dispatch, incident response, and media streaming pipeline.",
@@ -26,16 +27,34 @@ const groupDescriptions: Record<string, string> = {
 
 export default function ModulesPage() {
   const [query, setQuery] = useState("");
-  const [user, setUser] = useState<{ role?: string; preferences?: { menuAccess?: unknown } } | null>(null);
-  useEffect(() => {
+  const [user, setUser] = useState<MenuAccessUser | null | undefined>(undefined);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const loadUser = useCallback(() => {
+    setLoading(true);
+    setSessionError(null);
     fetch("/api/control/v1/auth/me", { credentials: "include" })
-      .then((response) => response.ok ? response.json() : null)
+      .then(async (response) => {
+        if (!response.ok) throw new Error(response.status === 401 ? "Sign in to view your available modules." : "Unable to load your module access.");
+        return response.json();
+      })
       .then((data) => setUser(data?.user ?? data ?? null))
-      .catch(() => setUser(null));
+      .catch((error) => {
+        setUser(null);
+        setSessionError(error instanceof Error ? error.message : "Unable to load your module access.");
+      })
+      .finally(() => setLoading(false));
   }, []);
-  const visibleNavigation = getVisibleNavigation(user);
-  const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
-  const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
+  useEffect(() => { loadUser(); }, [loadUser]);
+
+  // Never fall back to an assumed operator role while identity is unresolved.
+  // That can briefly advertise workflows belonging to a previous session.
+  const visibleNavigation = useMemo(() => user ? getVisibleNavigation(user) : [], [user]);
+  const visibleHrefs = useMemo(() => new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey))), [visibleNavigation]);
+  const visibleQuickActions = useMemo(
+    () => filterAuthorizedQuickActions(quickActions, visibleHrefs),
+    [visibleHrefs],
+  );
   const filteredGroups = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return visibleNavigation;
@@ -62,7 +81,7 @@ export default function ModulesPage() {
           actions={(
             <div className="page-hero-status">
               <i />
-              <div><span>Available capabilities</span><strong>{moduleCount} modules</strong></div>
+              <div><span>Available capabilities</span><strong>{loading ? "Loading workspace…" : `${moduleCount} modules`}</strong></div>
             </div>
           )}
         />
@@ -75,21 +94,31 @@ export default function ModulesPage() {
         </section>
 
         <section className="directory-toolbar">
-          <div className="directory-search"><Search size={18} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all modules and workflows" /></div>
+          <div className="directory-search"><Search size={18} /><input aria-label="Search available modules" disabled={loading} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search all modules and workflows" /></div>
           <span>{visibleCount} {visibleCount === 1 ? "result" : "results"}</span>
         </section>
 
-        <section className="directory-quick-actions">
+        {sessionError && (
+          <div className="directory-empty" role="alert">
+            <strong>{sessionError}</strong>
+            {user === null && sessionError.startsWith("Sign in")
+              ? <Link href="/login?next=%2Fmodules">Sign in</Link>
+              : <button type="button" onClick={loadUser}>Retry</button>}
+          </div>
+        )}
+
+        {!sessionError && <section className="directory-quick-actions">
           <header><div><span>Start a workflow</span><h2>Quick actions</h2></div><p>Common tasks that create or register operational records.</p></header>
           <div>
             {visibleQuickActions.map((action) => {
               const Icon = action.icon;
               return <Link href={action.href} key={action.href}><span><Icon size={17} /></span><strong>{action.label}</strong><ArrowUpRight size={14} /></Link>;
             })}
+            {!loading && visibleQuickActions.length === 0 && <p>No quick actions are available for this workspace.</p>}
           </div>
-        </section>
+        </section>}
 
-        <div className="directory-groups">
+        {!sessionError && <div className="directory-groups">
           {filteredGroups.map((group) => {
             const GroupIcon = group.icon;
             return (
@@ -116,7 +145,7 @@ export default function ModulesPage() {
           {filteredGroups.length === 0 && (
             <div className="directory-empty"><Search size={28} /><strong>No modules found</strong><span>Try another term such as camera, audit, incident, privacy or maintenance.</span></div>
           )}
-        </div>
+        </div>}
       </div>
     </AppLayout>
   );

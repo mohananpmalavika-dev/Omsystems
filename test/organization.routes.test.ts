@@ -117,6 +117,49 @@ describe("organization routes", () => {
     expect(writeAudit).toHaveBeenCalledOnce();
   });
 
+  it("rejects an invalid location relationship before creating a node", async () => {
+    const user: User = {
+      id: "admin-1", tenantId: "tenant-1", displayName: "Company Administrator", role: "company_admin",
+    };
+    const createOrganizationNode = vi.fn();
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue(companyNode),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      validateHierarchyRelationship: vi.fn().mockResolvedValue(false),
+      createOrganizationNode,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/organization/nodes",
+      payload: { parentNodeId: companyNode.id, nodeType: "floor", name: "Basement" },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe("invalid_hierarchy_relationship");
+    expect(createOrganizationNode).not.toHaveBeenCalled();
+  });
+
+  it("does not mutate a node owned by another tenant", async () => {
+    const user: User = {
+      id: "admin-1", tenantId: "tenant-1", displayName: "Company Administrator", role: "company_admin",
+    };
+    const updateOrganizationNode = vi.fn();
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue({ ...companyNode, tenantId: "tenant-2" }),
+      updateOrganizationNode,
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/organization/nodes/${companyNode.id}`,
+      payload: { name: "Should not update" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(updateOrganizationNode).not.toHaveBeenCalled();
+  });
+
   it("does not publish the tenant-wide debug endpoint", async () => {
     const user: User = {
       id: "employee-1",

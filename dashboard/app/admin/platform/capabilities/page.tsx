@@ -180,6 +180,12 @@ export default function PlatformCapabilitiesPage() {
           subtitle="Service Alert"
           color="rose"
         />
+        <MetricCard
+          title="Runtime Unverified"
+          value={summary?.byRuntimeState.unknown ?? capabilityList.filter((c) => c.runtime.state === CapabilityRuntimeState.UNKNOWN).length}
+          subtitle="Awaiting health probe"
+          color="amber"
+        />
       </div>
 
       {/* Filters & Search */}
@@ -235,6 +241,7 @@ export default function PlatformCapabilitiesPage() {
             <option value={CapabilityRuntimeState.DOWN}>Down</option>
             <option value={CapabilityRuntimeState.NOT_CONFIGURED}>Not Configured</option>
             <option value={CapabilityRuntimeState.DISABLED}>Disabled</option>
+            <option value={CapabilityRuntimeState.UNKNOWN}>Unverified</option>
           </select>
         </div>
       </div>

@@ -109,7 +109,7 @@ export class DailyBranchHealthAggregatorService {
     let totalRecAvailableSec = 0;
     let totalRecDowntimeSec = 0;
 
-    const totalCameras = params.cameraIntervals.size || 16;
+    const totalCameras = params.cameraIntervals.size;
 
     for (const [camId, intervals] of params.cameraIntervals.entries()) {
       const camRes = AvailabilityCalculator.calculate(intervals, windowStart, windowEnd);
@@ -183,7 +183,7 @@ export class DailyBranchHealthAggregatorService {
     const retentionTotal = params.retentionCounts.compliant + params.retentionCounts.nonCompliant + params.retentionCounts.unknown;
     const retentionCompliancePct =
       retentionTotal === 0
-        ? 100
+        ? null
         : Math.round((params.retentionCounts.compliant / retentionTotal) * 10000) / 100;
 
     // 5. Evaluate Overall SLA Status
@@ -196,7 +196,7 @@ export class DailyBranchHealthAggregatorService {
 
     const totalAlerts = params.alerts.p1Count + params.alerts.p2Count;
     const totalBreaches = params.alerts.p1Breaches + params.alerts.p2Breaches;
-    const ackCompliance = totalAlerts === 0 ? 100 : Math.round(((totalAlerts - totalBreaches) / totalAlerts) * 10000) / 100;
+    const ackCompliance = totalAlerts === 0 ? null : Math.round(((totalAlerts - totalBreaches) / totalAlerts) * 10000) / 100;
 
     const branchDaily: BranchHealthDaily = {
       branchId,
@@ -239,8 +239,10 @@ export class DailyBranchHealthAggregatorService {
     return branchDaily;
   }
 
-  async getFleetSummary(reportDate: string): Promise<FleetSlaSummary> {
-    const list = Array.from(this.branchDaily.values()).filter((b) => b.reportDate === reportDate);
+  async getFleetSummary(reportDate: string, allowedBranchIds?: ReadonlySet<string>): Promise<FleetSlaSummary> {
+    const list = Array.from(this.branchDaily.values()).filter((branch) =>
+      branch.reportDate === reportDate && (!allowedBranchIds || allowedBranchIds.has(branch.branchId)),
+    );
     if (!list.length) {
       return {
         reportDate,
@@ -248,18 +250,18 @@ export class DailyBranchHealthAggregatorService {
         compliantBranches: 0,
         warningBranches: 0,
         breachBranches: 0,
-        overallCameraAvailabilityPct: 100,
-        overallRecordingAvailabilityPct: 100,
-        overallRecorderAvailabilityPct: 100,
-        overallInternetAvailabilityPct: 100,
-        overallRetentionCompliancePct: 100,
+        overallCameraAvailabilityPct: null,
+        overallRecordingAvailabilityPct: null,
+        overallRecorderAvailabilityPct: null,
+        overallInternetAvailabilityPct: null,
+        overallRetentionCompliancePct: null,
         totalP1Alerts: 0,
         totalP2Alerts: 0,
         p1SlaBreaches: 0,
         p2SlaBreaches: 0,
-        overallAckSlaCompliancePct: 100,
-        meanAcknowledgeSeconds: 0,
-        meanResolutionSeconds: 0,
+        overallAckSlaCompliancePct: null,
+        meanAcknowledgeSeconds: null,
+        meanResolutionSeconds: null,
         worstPerformingBranches: [],
       };
     }
@@ -268,11 +270,16 @@ export class DailyBranchHealthAggregatorService {
     const warningBranches = list.filter((b) => b.slaStatus === "WARNING").length;
     const breachBranches = list.filter((b) => b.slaStatus === "BREACH").length;
 
-    const avgCamera = Math.round((list.reduce((sum, b) => sum + (b.cameraAvailabilityPct ?? 100), 0) / list.length) * 100) / 100;
-    const avgRec = Math.round((list.reduce((sum, b) => sum + (b.recordingAvailabilityPct ?? 100), 0) / list.length) * 100) / 100;
-    const avgRecorder = Math.round((list.reduce((sum, b) => sum + (b.recorderAvailabilityPct ?? 100), 0) / list.length) * 100) / 100;
-    const avgNet = Math.round((list.reduce((sum, b) => sum + (b.internetAvailabilityPct ?? 100), 0) / list.length) * 100) / 100;
-    const avgRet = Math.round((list.reduce((sum, b) => sum + (b.retentionCompliancePct ?? 100), 0) / list.length) * 100) / 100;
+    const weightedMeasured = (values: Array<{ value: number | null; weight: number }>) => {
+      const measured = values.filter(({ value, weight }) => value !== null && Number.isFinite(value) && Number.isFinite(weight) && weight > 0) as Array<{ value: number; weight: number }>;
+      const totalWeight = measured.reduce((sum, { weight }) => sum + weight, 0);
+      return totalWeight ? Math.round((measured.reduce((sum, { value, weight }) => sum + value * weight, 0) / totalWeight) * 100) / 100 : null;
+    };
+    const avgCamera = weightedMeasured(list.map((branch) => ({ value: branch.cameraAvailabilityPct, weight: branch.totalCameras })));
+    const avgRec = weightedMeasured(list.map((branch) => ({ value: branch.recordingAvailabilityPct, weight: branch.totalCameras })));
+    const avgRecorder = weightedMeasured(list.map((branch) => ({ value: branch.recorderAvailabilityPct, weight: 1 })));
+    const avgNet = weightedMeasured(list.map((branch) => ({ value: branch.internetAvailabilityPct, weight: 1 })));
+    const avgRet = weightedMeasured(list.map((branch) => ({ value: branch.retentionCompliancePct, weight: branch.retentionCompliantCameras + branch.retentionNoncompliantCameras + branch.retentionUnknownCameras })));
 
     const totalP1 = list.reduce((sum, b) => sum + b.p1AlertCount, 0);
     const totalP2 = list.reduce((sum, b) => sum + b.p2AlertCount, 0);
@@ -306,9 +313,9 @@ export class DailyBranchHealthAggregatorService {
       totalP2Alerts: totalP2,
       p1SlaBreaches: p1Breaches,
       p2SlaBreaches: p2Breaches,
-      overallAckSlaCompliancePct: 96.8,
-      meanAcknowledgeSeconds: 37,
-      meanResolutionSeconds: 580,
+      overallAckSlaCompliancePct: weightedMeasured(list.map((branch) => ({ value: branch.acknowledgementSlaCompliancePct, weight: branch.p1AlertCount + branch.p2AlertCount }))),
+      meanAcknowledgeSeconds: weightedMeasured(list.map((branch) => ({ value: branch.meanAcknowledgeTimeSeconds, weight: branch.acknowledgedAlertCount }))),
+      meanResolutionSeconds: weightedMeasured(list.map((branch) => ({ value: branch.meanResolutionTimeSeconds, weight: branch.resolvedAlertCount }))),
       worstPerformingBranches: worst,
     };
   }

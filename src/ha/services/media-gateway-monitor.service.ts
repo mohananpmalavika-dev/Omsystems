@@ -95,11 +95,34 @@ export class MediaGatewayMonitor {
    * Process heartbeat from a media gateway
    */
   async processHeartbeat(heartbeat: MediaGatewayHeartbeat): Promise<void> {
+    if (!heartbeat.gatewayId || !heartbeat.gatewayName || !heartbeat.ipAddress) {
+      throw new Error("Heartbeat must include gatewayId, gatewayName, and ipAddress");
+    }
+    const numericValues = [
+      heartbeat.cpuPercent, heartbeat.memoryPercent, heartbeat.memoryUsedMb, heartbeat.memoryTotalMb,
+      heartbeat.diskWriteMbps, heartbeat.diskReadMbps, heartbeat.diskUsedPercent,
+      heartbeat.networkInMbps, heartbeat.networkOutMbps, heartbeat.activeStreams,
+      heartbeat.recordingStreams, heartbeat.liveViewStreams, heartbeat.healthyStreams,
+      heartbeat.degradedStreams, heartbeat.failedStreams, heartbeat.avgBitrate,
+      heartbeat.avgFrameRate, heartbeat.packetLoss, heartbeat.frameDrops, heartbeat.ffmpegProcesses,
+      heartbeat.restarts, heartbeat.crashCount, heartbeat.capacityConstraints?.maxConcurrentStreams,
+      heartbeat.capacityConstraints?.maxNetworkMbps, heartbeat.capacityConstraints?.maxDiskWriteMbps,
+      heartbeat.capacityConstraints?.maxDecoders, heartbeat.capacityConstraints?.maxEncoders,
+      heartbeat.capacityConstraints?.safetyMarginPercent,
+    ];
+    if (numericValues.some((value) => !Number.isFinite(value))) {
+      throw new Error("Heartbeat contains invalid numeric telemetry");
+    }
+
     this.latestHeartbeats.set(heartbeat.gatewayId, heartbeat);
 
     const registration = this.registeredGateways.get(heartbeat.gatewayId);
     if (registration) {
-      registration.lastHeartbeatAt = heartbeat.timestamp;
+      // Heartbeats are untrusted remote input.  Using their wall-clock value
+      // lets a skewed or malicious future timestamp keep an offline gateway
+      // eligible for failover avoidance indefinitely.  Liveness is measured
+      // at receipt time on the control plane instead.
+      registration.lastHeartbeatAt = new Date().toISOString();
       registration.consecutiveFailures = 0;
     } else {
       // Auto-register if not already registered
@@ -249,30 +272,30 @@ export class MediaGatewayMonitor {
    */
   calculateCapacity(heartbeat: MediaGatewayHeartbeat): CapacityCalculation {
     const constraints = heartbeat.capacityConstraints;
-    const safetyMargin = 1 - constraints.safetyMarginPercent / 100;
+    const safetyMargin = Math.max(0, Math.min(1, 1 - constraints.safetyMarginPercent / 100));
 
     // Calculate limits from each resource
-    const streamLimit = constraints.maxConcurrentStreams;
+    const streamLimit = Math.max(0, constraints.maxConcurrentStreams);
     
     // CPU-based limit (assume 2% CPU per stream)
-    const cpuAvailable = 100 - heartbeat.cpuPercent;
+    const cpuAvailable = Math.max(0, 100 - heartbeat.cpuPercent);
     const cpuLimit = Math.floor(cpuAvailable / 2);
     
     // Network-based limit (assume 4 Mbps per stream)
-    const networkAvailable = constraints.maxNetworkMbps - heartbeat.networkInMbps;
+    const networkAvailable = Math.max(0, Math.max(0, constraints.maxNetworkMbps) - heartbeat.networkInMbps);
     const networkLimit = Math.floor(networkAvailable / 4);
     
     // Disk-based limit (assume 3 Mbps per recording stream)
-    const diskAvailable = constraints.maxDiskWriteMbps - heartbeat.diskWriteMbps;
+    const diskAvailable = Math.max(0, Math.max(0, constraints.maxDiskWriteMbps) - heartbeat.diskWriteMbps);
     const diskLimit = Math.floor(diskAvailable / 3);
     
     // Memory-based limit (assume 100MB per stream)
-    const memoryAvailableMb = heartbeat.memoryTotalMb * (1 - heartbeat.memoryPercent / 100);
+    const memoryAvailableMb = Math.max(0, heartbeat.memoryTotalMb * (1 - heartbeat.memoryPercent / 100));
     const memoryLimit = Math.floor(memoryAvailableMb / 100);
     
     // Decoder/encoder limits
-    const decoderLimit = constraints.maxDecoders;
-    const encoderLimit = constraints.maxEncoders;
+    const decoderLimit = Math.max(0, constraints.maxDecoders);
+    const encoderLimit = Math.max(0, constraints.maxEncoders);
 
     // Find bottleneck
     const limits = {
@@ -286,10 +309,12 @@ export class MediaGatewayMonitor {
     };
 
     const hardLimit = Math.min(...Object.values(limits));
-    const safeLimit = Math.floor(hardLimit * safetyMargin);
+    const safeLimit = Math.max(0, Math.floor(hardLimit * safetyMargin));
     const currentUsed = heartbeat.activeStreams;
-    const availableHeadroom = safeLimit - currentUsed;
-    const utilizationPercent = (currentUsed / safeLimit) * 100;
+    const availableHeadroom = Math.max(0, safeLimit - currentUsed);
+    const utilizationPercent = safeLimit > 0
+      ? (currentUsed / safeLimit) * 100
+      : (currentUsed > 0 ? 100 : 0);
 
     // Identify bottleneck
     let bottleneck: CapacityCalculation["bottleneck"] = undefined;
@@ -336,7 +361,7 @@ export class MediaGatewayMonitor {
       }
     }
 
-    const totalAvailable = totalCapacity - totalActive;
+    const totalAvailable = Math.max(0, totalCapacity - totalActive);
     const utilizationPercent = totalCapacity > 0 ? (totalActive / totalCapacity) * 100 : 0;
 
     return {

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { MemoryStore } from "../store.js";
-import { FirmwareManager } from "./firmware-manager.js";
+import { FirmwareExecutionUnavailableError, FirmwareManager } from "./firmware-manager.js";
 
 describe("FirmwareManager", () => {
-  it("registers firmware catalog entries and updates device inventory", async () => {
+  it("does not report a firmware deployment complete without a verified device executor", async () => {
     const store = new MemoryStore();
     const manager = new FirmwareManager(store, console);
 
@@ -40,21 +40,33 @@ describe("FirmwareManager", () => {
       expect.objectContaining({ id: version.id, version: version.version })
     ]));
 
+    const asset = await store.createMaintenanceAsset({
+      tenantId: "omsystems",
+      category: "camera",
+      assetType: "camera",
+      status: "operational",
+      createdBy: "tester",
+      model: "DS-2CD2xx",
+      make: "Hikvision",
+    });
     const update = await manager.scheduleFirmwareUpdate({
       tenantId: "omsystems",
       firmwareVersionId: version.id,
-      targetAssets: ["cam-001"],
+      targetAssets: [asset.id],
       createdBy: "tester",
     });
 
-    await manager.executeFirmwareUpdate(update.id);
+    await expect(manager.executeFirmwareUpdate(update.id)).rejects.toBeInstanceOf(FirmwareExecutionUnavailableError);
 
-    const inventory = await manager.getAssetFirmwareInventory("omsystems", "cam-001");
+    const inventory = await manager.getAssetFirmwareInventory("omsystems", asset.id);
     expect(inventory).toEqual(expect.objectContaining({
-      assetId: "cam-001",
-      currentVersion: version.version,
-      latestApprovedVersion: version.version,
-      classification: "current",
+      assetId: asset.id,
+      currentVersion: "unknown",
+      classification: "unknown",
+    }));
+    expect(await manager.getFirmwareUpdateProgress(update.id)).toEqual(expect.objectContaining({
+      status: "scheduled",
+      progress: expect.objectContaining({ completed: 0 }),
     }));
   });
 

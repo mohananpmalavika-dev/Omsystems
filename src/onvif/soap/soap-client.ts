@@ -47,7 +47,8 @@ export class SoapClient {
    * Sends an ONVIF SOAP request and returns the parsed XML response string or parsed object
    */
   async request(options: SoapRequestOptions): Promise<string> {
-    const timeout = options.timeoutMs ?? this.defaultOptions.timeoutMs ?? 10000;
+    const timeout = normalizeTimeout(options.timeoutMs ?? this.defaultOptions.timeoutMs ?? 10000);
+    const endpoint = validateOnvifEndpoint(options.endpoint);
     const creds = options.credentials ?? this.defaultOptions.credentials;
 
     let securityHeaderXml = "";
@@ -71,14 +72,27 @@ export class SoapClient {
     const timeoutTimer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const res = await fetch(options.endpoint, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers,
         body: envelopeXml,
         signal: controller.signal,
+        // Do not forward WS-Security credentials to a redirect target.
+        redirect: "manual",
       });
 
+      if (res.status >= 300 && res.status < 400) {
+        throw new SoapError(`ONVIF endpoint returned an unsupported redirect (${res.status})`, undefined, res.status);
+      }
+      const declaredLength = Number(res.headers.get("content-length"));
+      if (Number.isFinite(declaredLength) && declaredLength > 2_000_000) {
+        throw new SoapError("ONVIF response exceeds the 2MB safety limit", undefined, res.status);
+      }
+
       const responseText = await res.text();
+      if (responseText.length > 2_000_000) {
+        throw new SoapError("ONVIF response exceeds the 2MB safety limit", undefined, res.status);
+      }
 
       if (!res.ok) {
         const fault = this.parseSoapFault(responseText);
@@ -101,7 +115,7 @@ export class SoapClient {
       return responseText;
     } catch (err: any) {
       if (err.name === "AbortError") {
-        throw new SoapError(`SOAP request to [${options.endpoint}] timed out after ${timeout}ms`);
+        throw new SoapError(`SOAP request to [${endpoint}] timed out after ${timeout}ms`);
       }
       if (err instanceof SoapError) throw err;
       throw new SoapError(`SOAP request failed: ${err.message || String(err)}`);
@@ -200,4 +214,25 @@ export class SoapClient {
       detail,
     };
   }
+}
+
+function normalizeTimeout(value: number): number {
+  if (!Number.isFinite(value)) return 10_000;
+  return Math.max(1_000, Math.min(60_000, Math.floor(value)));
+}
+
+function validateOnvifEndpoint(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new SoapError("Invalid ONVIF endpoint URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new SoapError("ONVIF endpoints must use HTTP or HTTPS");
+  }
+  if (url.username || url.password || !url.hostname) {
+    throw new SoapError("ONVIF endpoint must not contain credentials");
+  }
+  return url.toString();
 }

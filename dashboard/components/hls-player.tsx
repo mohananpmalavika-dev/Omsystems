@@ -155,7 +155,9 @@ export function HlsPlayer({
           const refreshedSource = url;
           if (Hls.isSupported()) {
             hls = new Hls({
-              lowLatencyMode: false,
+              // The edge gateway publishes fMP4 parts; consume them instead
+              // of waiting for whole two-second segments on live cameras.
+              lowLatencyMode: true,
               backBufferLength: 4,
               maxBufferLength: 8,
               maxMaxBufferLength: 12,
@@ -250,7 +252,9 @@ export function HlsPlayer({
       try {
         hls = new Hls({
           // Keeping a lean buffer window prevents 1-minute drift and browser memory stutter
-          lowLatencyMode: false,
+          // The edge gateway publishes fMP4 parts; consume them instead
+          // of waiting for whole two-second segments on live cameras.
+          lowLatencyMode: true,
           backBufferLength: 4,
           maxBufferLength: 8,
           maxMaxBufferLength: 12,

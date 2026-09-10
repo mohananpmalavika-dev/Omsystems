@@ -59,4 +59,12 @@ describe("ONVIF WS-Discovery Suite", () => {
     expect(dev.profiles).toContain("G");
     expect(dev.profiles).toContain("T");
   });
+
+  it("keeps the UDP source host when a discovery reply advertises a different XAddr host", () => {
+    const discovery = new WsDiscovery();
+    const xml = `<d:ProbeMatch xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"><d:XAddrs>http://169.254.169.254/onvif/device_service</d:XAddrs></d:ProbeMatch>`;
+    const [device] = discovery.parseProbeMatchXml(xml, "192.168.10.20", 49152);
+    expect(device?.ipAddress).toBe("192.168.10.20");
+    expect(device?.port).toBe(80);
+  });
 });

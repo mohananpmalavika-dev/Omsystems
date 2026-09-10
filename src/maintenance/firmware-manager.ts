@@ -151,6 +151,18 @@ export interface FirmwareUpgradePlan {
   createdAt: Date;
 }
 
+/**
+ * The generic firmware catalogue is not itself a device transport.  Callers
+ * must not translate a planned update into a completed device update merely
+ * because it was accepted by this service.
+ */
+export class FirmwareExecutionUnavailableError extends Error {
+  constructor() {
+    super("No verified firmware deployment executor is configured. Use the signed edge-update control plane or configure a durable device executor.");
+    this.name = "FirmwareExecutionUnavailableError";
+  }
+}
+
 export class FirmwareManager {
   private store: ControlPlaneStore;
   private logger: any;
@@ -425,9 +437,9 @@ export class FirmwareManager {
       return false;
     }
 
-    plan.status = 'in-progress';
-    this.logger.info('Firmware upgrade plan started', { planId });
-    return true;
+    // A plan approval is not an execution acknowledgement.  Keep the plan
+    // approved until a real dispatcher has accepted and verified the job.
+    throw new FirmwareExecutionUnavailableError();
   }
 
   async getAvailableVersions(deviceType?: string, manufacturer?: string): Promise<FirmwareCatalogEntry[]> {
@@ -516,6 +528,11 @@ export class FirmwareManager {
     requestedBy: string;
     justification: string;
   }): Promise<FirmwareApprovalRequest> {
+    const version = this.catalog.get(data.firmwareVersionId);
+    if (!version || version.tenantId !== data.tenantId) {
+      throw new Error('Firmware version not found');
+    }
+
     const request: FirmwareApprovalRequest = {
       id: uuidv4(),
       tenantId: data.tenantId,
@@ -598,19 +615,40 @@ export class FirmwareManager {
     createdBy: string;
   }): Promise<FirmwareUpdate> {
     const version = this.catalog.get(data.firmwareVersionId);
-    if (!version) {
+    if (!version || version.tenantId !== data.tenantId) {
       throw new Error('Firmware version not found');
+    }
+    if (version.status !== 'approved') {
+      throw new Error('Firmware version must be approved before it can be scheduled');
+    }
+    const targetAssets = [...new Set(data.targetAssets)];
+    if (targetAssets.length === 0) {
+      throw new Error('At least one target asset is required');
+    }
+
+    for (const assetId of targetAssets) {
+      const maintenanceAsset = await this.store.getMaintenanceAsset(assetId);
+      const camera = maintenanceAsset ? undefined : await this.store.getCamera(assetId);
+      if ((!maintenanceAsset && !camera) || (maintenanceAsset?.tenantId ?? camera?.tenantId) !== data.tenantId) {
+        throw new Error(`Target asset ${assetId} was not found in this tenant`);
+      }
+      const compatibility = await this.checkCompatibility({ firmwareVersionId: version.id, assetId });
+      if (!compatibility.compatible) {
+        throw new Error(`Target asset ${assetId} is incompatible: ${compatibility.reason ?? 'compatibility check failed'}`);
+      }
     }
 
     const update: FirmwareUpdate = {
       id: uuidv4(),
       tenantId: data.tenantId,
       firmwareVersionId: data.firmwareVersionId,
-      targetAssets: data.targetAssets,
+      targetAssets,
       scheduledAt: data.scheduledAt,
-      status: data.scheduledAt ? 'scheduled' : 'in-progress',
+      // Scheduling is not device execution. A dispatcher is responsible for
+      // moving this state to in-progress only after a gateway accepts it.
+      status: 'scheduled',
       progress: {
-        total: data.targetAssets.length,
+        total: targetAssets.length,
         completed: 0,
         failed: 0,
         inProgress: 0,
@@ -632,40 +670,14 @@ export class FirmwareManager {
 
   async executeFirmwareUpdate(updateId: string): Promise<void> {
     const update = this.updates.get(updateId);
-    if (!update) return;
-
-    const version = this.catalog.get(update.firmwareVersionId);
-    if (!version) return;
-
-    update.status = 'in-progress';
-    update.startedAt = new Date();
-
-    for (const assetId of update.targetAssets) {
-      const previousInventory = this.assetInventory.get(assetId);
-      const previousVersion = previousInventory?.currentVersion ?? 'unknown';
-      const assetContext = await this.resolveAssetContext(assetId, update.tenantId);
-      const inventory = this.buildInventoryRecord(
-        update.tenantId,
-        assetId,
-        assetContext.assetType,
-        version,
-        previousVersion,
-        version.version,
-      );
-      inventory.deviceName = assetContext.deviceName;
-      inventory.vendor = assetContext.vendor ?? inventory.vendor;
-      inventory.model = assetContext.model ?? inventory.model;
-      this.assetInventory.set(assetId, inventory);
+    if (!update) {
+      throw new Error('Firmware update not found');
     }
 
-    update.status = 'completed';
-    update.completedAt = new Date();
-    update.progress = {
-      total: update.targetAssets.length,
-      completed: update.targetAssets.length,
-      failed: 0,
-      inProgress: 0,
-    };
+    // Deliberately do not mutate inventory or completion state here.  That
+    // requires a durable command dispatcher plus device-side integrity and
+    // post-install version confirmation, neither of which this manager owns.
+    throw new FirmwareExecutionUnavailableError();
   }
 
   async updateAssetFirmwareStatus(data: {
@@ -679,17 +691,8 @@ export class FirmwareManager {
     });
   }
 
-  async getFirmwareUpdateProgress(updateId: string): Promise<FirmwareUpdate> {
-    return this.updates.get(updateId) ?? {
-      id: updateId,
-      tenantId: 'unknown',
-      firmwareVersionId: 'unknown',
-      targetAssets: [],
-      status: 'in-progress',
-      progress: { total: 0, completed: 0, failed: 0, inProgress: 0 },
-      createdBy: 'system',
-      createdAt: new Date(),
-    };
+  async getFirmwareUpdateProgress(updateId: string): Promise<FirmwareUpdate | null> {
+    return this.updates.get(updateId) ?? null;
   }
 
   async rollbackFirmwareUpdate(data: {
@@ -792,11 +795,20 @@ export class FirmwareManager {
     createdBy: string;
   }): Promise<FirmwareUpdate[]> {
     const updates: FirmwareUpdate[] = [];
-    for (const branchId of data.branchNodeIds) {
+    const [assets, cameras] = await Promise.all([
+      this.store.listMaintenanceAssets(data.tenantId),
+      this.store.listCameras(data.tenantId),
+    ]);
+    for (const branchId of [...new Set(data.branchNodeIds)]) {
+      const targetAssets = [
+        ...assets.filter((asset) => asset.branchNodeId === branchId).map((asset) => asset.id),
+        ...cameras.filter((camera) => camera.branchId === branchId).map((camera) => camera.id),
+      ];
+      if (targetAssets.length === 0) continue;
       const update = await this.scheduleFirmwareUpdate({
         tenantId: data.tenantId,
         firmwareVersionId: data.firmwareVersionId,
-        targetAssets: [branchId],
+        targetAssets,
         scheduledAt: data.scheduledAt,
         createdBy: data.createdBy,
       });
@@ -898,12 +910,15 @@ export class FirmwareManager {
 
 // Singleton instance
 let firmwareManagerInstance: FirmwareManager | null = null;
+const firmwareManagers = new WeakMap<object, FirmwareManager>();
 
 export function initFirmwareManager(store: ControlPlaneStore, logger?: any): FirmwareManager {
-  if (!firmwareManagerInstance) {
-    firmwareManagerInstance = new FirmwareManager(store, logger);
-  }
-  return firmwareManagerInstance;
+  const existing = firmwareManagers.get(store as object);
+  if (existing) return existing;
+  const manager = new FirmwareManager(store, logger);
+  firmwareManagers.set(store as object, manager);
+  firmwareManagerInstance = manager;
+  return manager;
 }
 
 export function getFirmwareManager(): FirmwareManager | null {

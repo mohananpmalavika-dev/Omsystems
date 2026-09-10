@@ -53,6 +53,9 @@ export class WsDiscovery {
         socket = createSocket({ type: "udp4", reuseAddr: true });
 
         socket.on("message", (msg, rinfo) => {
+          // A UDP datagram cannot exceed 64KB. Keep parsing bounded anyway so
+          // a noisy network cannot spend unbounded CPU on discovery input.
+          if (msg.length > 65_507) return;
           const xml = msg.toString("utf8");
           const parsedDevices = this.parseProbeMatchXml(xml, rinfo.address, rinfo.port);
           for (const dev of parsedDevices) {
@@ -132,7 +135,7 @@ export class WsDiscovery {
   /**
    * Parses incoming ProbeMatch XML
    */
-  parseProbeMatchXml(xml: string, remoteIp: string, remotePort: number): DiscoveredOnvifDevice[] {
+  parseProbeMatchXml(xml: string, remoteIp: string, _remotePort: number): DiscoveredOnvifDevice[] {
     const devices: DiscoveredOnvifDevice[] = [];
     const probeMatches = SoapClient.extractAllTags(xml, "ProbeMatch");
 
@@ -144,7 +147,7 @@ export class WsDiscovery {
 
       const types = typesRaw.split(/\s+/).filter(Boolean);
       const scopes = scopesRaw.split(/\s+/).filter(Boolean);
-      const xaddrs = xaddrsRaw.split(/\s+/).filter(Boolean);
+      const xaddrs = xaddrsRaw.split(/\s+/).filter(Boolean).slice(0, 8);
 
       let manufacturer: string | undefined;
       let model: string | undefined;
@@ -154,7 +157,12 @@ export class WsDiscovery {
       const profiles: string[] = [];
 
       for (const scope of scopes) {
-        const decoded = decodeURIComponent(scope);
+        let decoded: string;
+        try {
+          decoded = decodeURIComponent(scope);
+        } catch {
+          continue;
+        }
         if (decoded.includes("/name/")) {
           name = decoded.split("/name/")[1];
         } else if (decoded.includes("/hardware/")) {
@@ -170,14 +178,22 @@ export class WsDiscovery {
         }
       }
 
-      // Try to parse IP & Port from XAddrs
+      // XAddr is supplied by an unauthenticated UDP response. Never let it
+      // redirect registry traffic to a different host; the packet source is
+      // the authoritative network identity during discovery.
       let ip = remoteIp;
-      let port = remotePort;
+      // WS-Discovery responses originate from an ephemeral UDP source port;
+      // it is not the ONVIF HTTP service port. Default to the ONVIF HTTP
+      // default unless a same-host XAddr explicitly advertises one.
+      let port = 80;
       if (xaddrs.length > 0 && xaddrs[0]) {
         try {
           const parsedUrl = new URL(xaddrs[0]);
-          ip = parsedUrl.hostname;
-          port = parsedUrl.port ? parseInt(parsedUrl.port, 10) : 80;
+          const advertisedPort = parsedUrl.port ? Number(parsedUrl.port) : (parsedUrl.protocol === "https:" ? 443 : 80);
+          if ((parsedUrl.protocol === "http:" || parsedUrl.protocol === "https:") &&
+              parsedUrl.hostname === remoteIp && Number.isInteger(advertisedPort) && advertisedPort >= 1 && advertisedPort <= 65535) {
+            port = advertisedPort;
+          }
         } catch {
           // fallback to remote IP
         }

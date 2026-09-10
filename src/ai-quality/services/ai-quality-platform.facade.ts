@@ -31,6 +31,11 @@ export class AIQualityPlatformFacade {
   readonly cameraTuning: CameraTuningService;
 
   constructor(benchmarkRunner?: BenchmarkRunner) {
+    // Process-local repositories would lose certification evidence and camera
+    // tuning after a restart, so they are strictly a non-production adapter.
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("AI quality control-plane requires durable repositories in production; in-memory registry is disabled");
+    }
     this.detectorRepo = new DetectorRegistryRepository();
     this.evaluationRepo = new EvaluationRepository();
     this.cameraTuningRepo = new CameraTuningRepository();
@@ -154,7 +159,17 @@ export class AIQualityPlatformFacade {
     const detector = await this.detectorRepo.getDetector(model.detectorId);
     if (!detector) throw new Error(`Detector ${model.detectorId} not found`);
 
-    // 2. Promote model to production
+    // 2. Demote the previous production version before promoting this model.
+    // A detector must never have two models labelled production.
+    if (detector.currentProductionModelId && detector.currentProductionModelId !== model.id) {
+      const previous = await this.detectorRepo.getModelVersion(detector.currentProductionModelId);
+      if (previous?.lifecycle === "production") {
+        previous.lifecycle = "certified";
+        await this.detectorRepo.saveModelVersion(previous);
+      }
+    }
+
+    // 3. Promote model to production
     model.lifecycle = "production";
     detector.currentProductionModelId = model.id;
     detector.updatedAt = new Date().toISOString();

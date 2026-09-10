@@ -34,8 +34,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'invalid_camera_count' }, { status: 502 });
     }
 
+    const activeGatewayCount = Array.isArray(gatewaysData.data)
+      ? gatewaysData.data.filter((gateway) => (
+        gateway && typeof gateway === 'object' &&
+        (gateway as { credentialStatus?: unknown }).credentialStatus !== 'revoked'
+      )).length
+      : 0;
+
     return NextResponse.json({
-      gateways: Array.isArray(gatewaysData.data) ? gatewaysData.data.length : 0,
+      gateways: activeGatewayCount,
       cameras: cameraCount,
       branches: Array.isArray(branchesData.data) ? branchesData.data.length : 0,
       // The platform has no authoritative aggregate for these two metrics yet.

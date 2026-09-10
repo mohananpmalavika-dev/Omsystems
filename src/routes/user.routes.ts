@@ -41,6 +41,10 @@ const createUserSchema = z.object({
   dateOfBirth: z.string().optional(),
   reportingToUserId: z.string().min(1).optional(),
   primaryOrgNodeId: z.string().min(1),
+  // The first scope is the primary assignment. Keeping the complete set in
+  // this request lets the repository create the employee and every grant in
+  // one transaction instead of leaving a partially provisioned account.
+  organizationScopeNodeIds: z.array(z.string().min(1)).min(1).max(100).optional(),
   photoUrl: z.string().optional(),
   avatarUrl: z.string().optional(),
   facePhotoBase64: z
@@ -94,6 +98,13 @@ const updateUserSchema = z.object({
   customRoleId: z.string().uuid().optional().nullable(),
 });
 
+const menuAccessSchema = z.array(
+  z.string().trim().min(1).max(240).refine(
+    (value) => value.startsWith("/") && !value.startsWith("//") && !value.includes("\\") && !value.split(/[?#]/)[0]!.split("/").includes(".."),
+    "Menu access must be an internal dashboard route",
+  ),
+).max(500).transform((items) => [...new Set(items)]);
+
 const customRoleSchema = z.object({
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(300).optional(),
@@ -101,7 +112,7 @@ const customRoleSchema = z.object({
     "super_admin", "company_admin", "hq_admin", "zone_manager", "region_manager",
     "area_manager", "branch_manager", "operator", "viewer", "security_officer", "auditor",
   ]),
-  menuAccess: z.array(z.string().min(1)).max(500),
+  menuAccess: menuAccessSchema,
 });
 
 const assignOrgSchema = z.object({
@@ -148,8 +159,10 @@ export async function registerUserRoutes(
       return reply.code(403).send({ error: "forbidden" });
     }
     const role = await store.updateCustomRole(id, request.currentUser.tenantId, body);
-    if (role && body.menuAccess) {
-      refreshInMemorySessionsForCustomRole(id, body.menuAccess, body.baseRole);
+    if (role && (body.menuAccess !== undefined || body.baseRole !== undefined)) {
+      // Use the persisted role so an empty menu list and base-role-only edit
+      // are propagated immediately to active sessions as well.
+      refreshInMemorySessionsForCustomRole(id, role.menuAccess ?? [], role.baseRole);
     }
     return role ? role : reply.code(404).send({ error: "role_not_found" });
   });
@@ -157,7 +170,24 @@ export async function registerUserRoutes(
   app.delete("/v1/roles/:id", async (request, reply) => {
     const { id } = userIdSchema.parse(request.params);
     if (!canManageRoles(request.currentUser.role)) return reply.code(403).send({ error: "forbidden" });
-    await store.deleteCustomRole(id, request.currentUser.tenantId);
+    const role = await store.getCustomRole(id, request.currentUser.tenantId);
+    if (!role) return reply.code(404).send({ error: "role_not_found" });
+    if (Number(role.userCount ?? 0) > 0) {
+      return reply.code(409).send({
+        error: "role_in_use",
+        message: "Reassign employees before deleting this role",
+      });
+    }
+    const deleted = await store.deleteCustomRole(id, request.currentUser.tenantId);
+    if (!deleted) {
+      // The role was assigned after the initial check, or was removed by a
+      // concurrent administrator. Do not turn either case into a success.
+      const latestRole = await store.getCustomRole(id, request.currentUser.tenantId);
+      if (latestRole && Number(latestRole.userCount ?? 0) > 0) {
+        return reply.code(409).send({ error: "role_in_use", message: "Reassign employees before deleting this role" });
+      }
+      return reply.code(404).send({ error: "role_not_found" });
+    }
     return reply.code(204).send();
   });
 
@@ -249,6 +279,24 @@ export async function registerUserRoutes(
   app.post("/v1/users", async (request, reply) => {
     const body = createUserSchema.parse(request.body);
 
+    const scopeNodeIds = [
+      body.primaryOrgNodeId,
+      ...(body.organizationScopeNodeIds ?? []),
+    ].filter((nodeId, index, all) => all.indexOf(nodeId) === index);
+
+    // Do not rely solely on grant evaluation for this boundary: a user must
+    // never be created into a foreign tenant, even if a store implementation
+    // has an authorization regression.
+    for (const scopeNodeId of scopeNodeIds) {
+      const node = await store.getNode(scopeNodeId);
+      if (!node || node.tenantId !== request.currentUser.tenantId) {
+        return reply.code(404).send({ error: "organization_node_not_found" });
+      }
+      if (!(await hasPermission(request, store, "user:manage", scopeNodeId))) {
+        return reply.code(403).send({ error: "forbidden" });
+      }
+    }
+
     if (body.customRoleId) {
       const customRole = await store.getCustomRole(body.customRoleId, request.currentUser.tenantId);
       if (!customRole) return reply.code(400).send({ error: "invalid_custom_role" });
@@ -258,16 +306,6 @@ export async function registerUserRoutes(
     }
 
     // Check permission
-    if (
-      !(await hasPermission(
-        request,
-        store,
-        "user:manage",
-        body.primaryOrgNodeId,
-      ))
-    ) {
-      return reply.code(403).send({ error: "forbidden" });
-    }
     if (!canAssignRole(request.currentUser.role, body.role)) {
       return reply.code(403).send({
         error: "forbidden",
@@ -299,6 +337,7 @@ export async function registerUserRoutes(
       preferences: biometricPreferences,
       passwordHash,
       createdBy: request.currentUser.id,
+      organizationScopeNodeIds: scopeNodeIds,
     });
 
     await store.writeAudit({

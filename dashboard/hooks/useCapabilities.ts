@@ -72,17 +72,20 @@ export function useCapabilities(): UseCapabilitiesReturn {
 
       const response = await platformCapabilitiesApi.list();
 
-      if (response && Array.isArray(response.capabilities)) {
-        const indexed: Record<string, PlatformCapability> = {};
-        for (const cap of response.capabilities) {
-          indexed[cap.id] = cap;
-        }
-        setCapabilities(indexed);
-        setCapabilityList(response.capabilities);
-        if (response.summary) {
-          setSummary(response.summary);
-        }
+      if (!response?.success || !Array.isArray(response.capabilities) || !response.summary) {
+        setCapabilities({});
+        setCapabilityList([]);
+        setSummary(null);
+        throw new Error('The control plane returned an invalid capability-matrix response.');
       }
+
+      const indexed: Record<string, PlatformCapability> = {};
+      for (const cap of response.capabilities) {
+        indexed[cap.id] = cap;
+      }
+      setCapabilities(indexed);
+      setCapabilityList(response.capabilities);
+      setSummary(response.summary);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch platform capabilities';
       setError(message);

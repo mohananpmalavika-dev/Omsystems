@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Clock3, Plus, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Bell, Clock3, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { alertPolicyApi } from "@/lib/api-client";
 import type { AlertNotificationPolicy, AlertNotificationPolicyInput, AlertNotificationPolicySchedule } from "@/lib/types";
@@ -146,18 +146,14 @@ export default function AlertNotificationPolicyPage() {
     setSaveState("unsaved");
   };
 
-  const handleSubmit = async (mode: "draft" | "publish" = "draft") => {
+  const handleSubmit = async () => {
     if (!input) return;
     setSaving(true);
     setSaveState("saving");
     setError(null);
     setMessage(null);
     try {
-      const payload = {
-        ...input,
-        status: mode === "publish" ? "published" : "draft",
-        policyVersion: (policy?.policyVersion ?? 1) + (mode === "publish" ? 1 : 0),
-      } as AlertNotificationPolicyInput;
+      const payload = { ...input } as AlertNotificationPolicyInput;
       const response = await alertPolicyApi.update(payload);
       setPolicy(response.data);
       setMatrix(response.matrix ?? null);
@@ -169,12 +165,10 @@ export default function AlertNotificationPolicyPage() {
         escalationAfterSeconds: response.data.escalationAfterSeconds,
         smsTemplates: response.data.smsTemplates ?? {},
         smsTemplateIds: response.data.smsTemplateIds ?? {},
-        policyVersion: response.data.policyVersion ?? payload.policyVersion,
-        status: response.data.status ?? payload.status,
       });
       setIsDirty(false);
       setSaveState("saved");
-      setMessage(mode === "publish" ? "Notification policy published successfully." : "Notification policy saved successfully.");
+      setMessage("Notification policy saved successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to save notification policy");
       setSaveState("failed");
@@ -223,9 +217,6 @@ export default function AlertNotificationPolicyPage() {
           <div className="flex items-center gap-2">
             <ShieldCheck size={16} className="text-emerald-600" />
             <span className="font-semibold">Notification policy</span>
-            <span className="rounded-full border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-600">
-              {policy?.status ?? "draft"}
-            </span>
           </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <span className={isDirty ? "text-amber-600" : "text-emerald-600"}>{isDirty ? "Unsaved changes" : "Saved"}</span>
@@ -484,8 +475,7 @@ export default function AlertNotificationPolicyPage() {
         <div className="flex flex-wrap gap-3">
           <button type="button" className="btn-secondary" onClick={loadPolicy} disabled={saving}>Reload</button>
           <button type="button" className="btn-secondary" onClick={() => setInput({ ...(input ?? { recipientGroups: {}, onCallSchedules: [], rateLimitPerMinute: 120, escalationAfterSeconds: { P1: 30, P2: 300, P3: 900 } }), quietHours: { ...(input?.quietHours ?? { start: "22:00", end: "06:00", timezone: "UTC", enabled: true }), enabled: input?.quietHours?.enabled ?? true } })} disabled={saving}>Discard</button>
-          <button type="button" className="btn-secondary flex items-center gap-2" onClick={() => handleSubmit("draft")} disabled={saving}>{saving ? "Saving…" : <><Save size={16} />Save draft</>}</button>
-          <button type="button" className="primary-button flex items-center gap-2" onClick={() => handleSubmit("publish")} disabled={saving}>{saving ? "Publishing…" : <><ShieldCheck size={16} />Publish</>}</button>
+          <button type="button" className="primary-button flex items-center gap-2" onClick={handleSubmit} disabled={saving}>{saving ? "Saving…" : <><ShieldCheck size={16} />Save policy</>}</button>
         </div>
       </div>
     </ModulePage>

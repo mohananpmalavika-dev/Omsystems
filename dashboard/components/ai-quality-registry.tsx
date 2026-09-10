@@ -59,10 +59,10 @@ interface FleetHealth {
     totalAlertsLast7Days: number;
     operatorConfirmedTPCount: number;
     operatorConfirmedFPCount: number;
-    observedFalseAlertRatePerHour: number;
-    baselineFalseAlertRatePerHour: number;
-    driftPercentage: number;
-    driftStatus: "HEALTHY" | "WARNING" | "CRITICAL_DRIFT";
+    observedFalseAlertRatePerHour: number | null;
+    baselineFalseAlertRatePerHour: number | null;
+    driftPercentage: number | null;
+    driftStatus: "HEALTHY" | "WARNING" | "CRITICAL_DRIFT" | "INSUFFICIENT_DATA";
     highFalseAlarmCameraIds: string[];
   }>;
   recentAuditEvents: Array<{
@@ -78,9 +78,10 @@ export function AIQualityRegistry() {
   const [detectors, setDetectors] = useState<DetectorItem[]>([]);
   const [models, setModels] = useState<ModelItem[]>([]);
   const [fleetHealth, setFleetHealth] = useState<FleetHealth | null>(null);
-  const [selectedModelId, setSelectedModelId] = useState<string | null>("model-intrusion-v3-2");
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
   const [modelEvalDetails, setModelEvalDetails] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("registry");
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export function AIQualityRegistry() {
 
   const loadData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const [detRes, modRes, healthRes] = await Promise.all([
         fetch("/api/control/v1/ai-quality/detectors", { credentials: "include" }),
@@ -102,26 +104,24 @@ export function AIQualityRegistry() {
         fetch("/api/control/v1/ai-quality/health", { credentials: "include" }),
       ]);
 
-      if (detRes.ok) {
-        const d = await detRes.json();
-        setDetectors(d.data || []);
-      }
-      if (modRes.ok) {
-        const m = await modRes.json();
-        setModels(m.data || []);
-      }
-      if (healthRes.ok) {
-        const h = await healthRes.json();
-        setFleetHealth(h.health || null);
-      }
+      const [d, m, h] = await Promise.all([detRes.json().catch(() => ({})), modRes.json().catch(() => ({})), healthRes.json().catch(() => ({}))]);
+      if (!detRes.ok || !modRes.ok || !healthRes.ok) throw new Error(d.message || m.message || h.message || d.error || m.error || h.error || "AI quality registry is unavailable.");
+      const nextModels = Array.isArray(m.data) ? m.data : [];
+      setDetectors(Array.isArray(d.data) ? d.data : []);
+      setModels(nextModels);
+      setFleetHealth(h.health || null);
+      setSelectedModelId((current) => nextModels.some((model: ModelItem) => model.id === current) ? current : nextModels[0]?.id ?? null);
     } catch (err) {
-      console.error("Failed to load AI Quality data:", err);
+      setDetectors([]); setModels([]); setFleetHealth(null);
+      setSelectedModelId(null); setModelEvalDetails(null);
+      setError(err instanceof Error ? err.message : "AI quality registry is unavailable.");
     } finally {
       setLoading(false);
     }
   };
 
   const loadModelEvaluation = async (modelId: string) => {
+    setModelEvalDetails(null);
     try {
       const res = await fetch(`/api/control/v1/ai-quality/models/${modelId}/evaluation`, {
         credentials: "include",
@@ -150,42 +150,49 @@ export function AIQualityRegistry() {
 
   return (
     <div className="space-y-6">
+      {error && <div role="alert" className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-sm text-rose-100">{error}</div>}
+      <div className="flex justify-end"><Button type="button" variant="outline" size="sm" onClick={() => void loadData()}><RotateCcw className="mr-2 h-3.5 w-3.5" />Refresh registry</Button></div>
+      {!error && !detectors.length && !models.length && (
+        <div className="rounded-lg border border-slate-800 bg-slate-900 p-4 text-sm text-slate-300">
+          No AI models are registered. Deployments remain unavailable until measured evaluation evidence is recorded.
+        </div>
+      )}
       {/* 1. Metric Overview Bar */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-slate-900 border-slate-800 p-4">
           <p className="text-xs text-slate-400 font-medium">Production Certified Detectors</p>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-2xl font-bold text-white font-mono">{fleetHealth?.certifiedDetectorsCount || 6}</span>
+            <span className="text-2xl font-bold text-white font-mono">{fleetHealth?.certifiedDetectorsCount ?? "—"}</span>
             <ShieldCheck className="w-6 h-6 text-emerald-400" />
           </div>
-          <p className="text-[11px] text-emerald-400/80 mt-1">100% Quality Gates Satisfied</p>
+          <p className="text-[11px] text-slate-400 mt-1">Certified models only; deployment remains gated.</p>
         </Card>
 
         <Card className="bg-slate-900 border-slate-800 p-4">
           <p className="text-xs text-slate-400 font-medium">Models in Production</p>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-2xl font-bold text-white font-mono">{fleetHealth?.modelsInProductionCount || 5}</span>
+            <span className="text-2xl font-bold text-white font-mono">{fleetHealth?.modelsInProductionCount ?? "—"}</span>
             <Layers className="w-6 h-6 text-blue-400" />
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">Across 400 branches</p>
+          <p className="text-[11px] text-slate-400 mt-1">Reported by the model registry</p>
         </Card>
 
         <Card className="bg-slate-900 border-slate-800 p-4">
           <p className="text-xs text-slate-400 font-medium">Fleet False Alert Baseline</p>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-2xl font-bold text-white font-mono">0.08</span>
+            <span className="text-2xl font-bold text-white font-mono">{fleetHealth?.detectors.length ? "Live" : "—"}</span>
             <span className="text-xs font-mono text-slate-400">alerts / cam-hr</span>
           </div>
-          <p className="text-[11px] text-emerald-400 mt-1">Bank SLA Target: &lt; 0.10</p>
+          <p className="text-[11px] text-slate-400 mt-1">See runtime drift metrics below</p>
         </Card>
 
         <Card className="bg-slate-900 border-slate-800 p-4">
           <p className="text-xs text-slate-400 font-medium">Drift Warnings</p>
           <div className="flex items-center justify-between mt-2">
-            <span className="text-2xl font-bold text-amber-400 font-mono">{fleetHealth?.qualityWarningsCount || 0}</span>
+            <span className="text-2xl font-bold text-amber-400 font-mono">{fleetHealth?.qualityWarningsCount ?? "—"}</span>
             <AlertTriangle className="w-6 h-6 text-amber-400" />
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">0 Critical Drift Incidents</p>
+          <p className="text-[11px] text-slate-400 mt-1">{fleetHealth ? `${fleetHealth.criticalDriftCount} critical drift incident(s)` : "No health snapshot"}</p>
         </Card>
       </div>
 
@@ -277,12 +284,12 @@ export function AIQualityRegistry() {
                   <CardHeader className="pb-3 border-b border-slate-800">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm font-bold text-white">Model Quality Certification</CardTitle>
-                      <Badge className="bg-emerald-600 text-white text-[10px]">
-                        ✓ PRODUCTION CERTIFIED
+                      <Badge className={modelEvalDetails.certification?.certificationStatus === "approved" ? "bg-emerald-600 text-white text-[10px]" : "bg-amber-600 text-white text-[10px]"}>
+                        {modelEvalDetails.certification?.certificationStatus === "approved" ? "CERTIFIED" : "EVALUATION ONLY"}
                       </Badge>
                     </div>
                     <CardDescription className="text-xs text-slate-400">
-                      Evaluated on BANK-INTRUSION-VALIDATION (8,421 videos / 1,917 hrs)
+                      Evaluation ID: {modelEvalDetails.evaluation.id} · status: {modelEvalDetails.evaluation.status}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="p-4 space-y-4">
@@ -330,7 +337,7 @@ export function AIQualityRegistry() {
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Certified Hardware</span>
-                        <span className="font-mono text-blue-400 font-semibold">NVIDIA RTX A4000 / L4</span>
+                        <span className="font-mono text-blue-400 font-semibold">{modelEvalDetails.evaluation.hardwareProfileId}</span>
                       </div>
                     </div>
 
@@ -370,7 +377,7 @@ export function AIQualityRegistry() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
-              {fleetHealth?.detectors.map((det) => (
+              {(fleetHealth?.detectors ?? []).map((det) => (
                 <div key={det.detectorId} className="bg-slate-950 border border-slate-800 rounded-lg p-4 flex items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -417,14 +424,14 @@ export function AIQualityRegistry() {
               <CardTitle className="text-sm font-bold text-white">AI Quality & Deployment Audit Trail</CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3">
-              {fleetHealth?.recentAuditEvents.map((e) => (
+              {(fleetHealth?.recentAuditEvents ?? []).map((e) => (
                 <div key={e.eventId} className="border-l-2 border-slate-700 pl-3 py-1 text-xs space-y-0.5">
                   <div className="flex justify-between text-slate-400">
                     <span className="font-bold text-blue-400 font-mono">{e.eventType}</span>
                     <span>{new Date(e.timestamp).toLocaleString()}</span>
                   </div>
                   <p className="text-slate-300">
-                    Actor: <strong className="text-white">{e.actor.userName}</strong> • {JSON.stringify(e.details)}
+                  Actor: <strong className="text-white">{e.actor.userName}</strong> · {Object.entries(e.details).map(([key, value]) => `${key}: ${String(value)}`).join(", ")}
                   </p>
                 </div>
               ))}

@@ -369,22 +369,31 @@ export async function registerAuthRoutes(
           });
         }
 
-        // Generate new access token
+        // Rotate both credentials. A refresh token is a long-lived bearer
+        // credential and must be single-use to limit replay after theft.
         const newAccessToken = generateToken(64);
         const newAccessTokenHash = hashToken(newAccessToken);
+        const newRefreshToken = generateToken(64);
+        const newRefreshTokenHash = hashToken(newRefreshToken);
 
-        // Update session
-        await store.updateSessionAccessToken(
-          session.id,
-          newAccessTokenHash,
-          request.ip,
-          request.headers["user-agent"],
-        );
+        if (typeof store.rotateSessionTokens === "function") {
+          await store.rotateSessionTokens(
+            session.id, newAccessTokenHash, newRefreshTokenHash,
+            request.ip, request.headers["user-agent"],
+          );
+        } else {
+          // Compatibility for test doubles and third-party stores. First-party
+          // storage implements rotation above.
+          await store.updateSessionAccessToken(
+            session.id, newAccessTokenHash, request.ip, request.headers["user-agent"],
+          );
+        }
 
         invalidateInMemorySession(session.id);
 
         return {
           accessToken: newAccessToken,
+          ...(typeof store.rotateSessionTokens === "function" ? { refreshToken: newRefreshToken } : {}),
           expiresIn: 3600,
           tokenType: "Bearer",
         };

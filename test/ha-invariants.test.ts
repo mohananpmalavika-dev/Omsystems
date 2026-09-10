@@ -29,6 +29,17 @@ describe("High Availability (HA) & Distributed Camera Ownership Invariant Test S
       supervisor,
       fencingService,
     );
+    const capacity = {
+      maxCameras: 100, currentCameras: 5, cpuPct: 20, memoryPct: 30,
+      ingressMbps: 20, maxIngressMbps: 500, diskWriteMbps: 10, maxDiskWriteMbps: 500,
+      activeRtspSessions: 5, activeRecordingSessions: 5,
+    };
+    nodeRegistry.registerNode("media-node-01", "Media Node 01", "10.0.0.1", 9001, {
+      datacenter: "dc-a", zone: "zone-1", rack: "rack-1", host: "media-node-01", network: "net-a", storagePool: "pool-a",
+    }, capacity);
+    nodeRegistry.registerNode("media-node-02", "Media Node 02", "10.0.0.2", 9001, {
+      datacenter: "dc-a", zone: "zone-1", rack: "rack-2", host: "media-node-02", network: "net-b", storagePool: "pool-b",
+    }, capacity);
   });
 
   it("Invariant 1: At most one active authoritative lease exists per camera", async () => {
@@ -106,19 +117,16 @@ describe("High Availability (HA) & Distributed Camera Ownership Invariant Test S
     expect(validResult.accepted).toBe(true);
   });
 
-  it("Invariant 4: Lease loss cancels recording immediately via AbortController", async () => {
+  it("Invariant 4: An unconfigured ingest worker is never reported as streaming", async () => {
     const tenantId = "tenant-blr";
     const cameraId = "CAM-104";
 
     const worker = await supervisor.startWorker(tenantId, cameraId, "media-node-01", "inst-01");
-    expect(worker).not.toBeNull();
-    expect(worker?.state).toBe("STREAMING");
-    expect(worker?.context.abortController.signal.aborted).toBe(false);
-
-    // Terminate worker upon lease loss
-    supervisor.terminateWorker(tenantId, cameraId, "LEASE_EXPIRED");
-    expect(worker?.context.abortController.signal.aborted).toBe(true);
+    // A lease alone is not evidence of an operational media ingest process.
+    // The supervisor must fail closed until a real worker is configured.
+    expect(worker).toBeNull();
     expect(supervisor.getWorker(tenantId, cameraId)).toBeUndefined();
+    expect(await leaseService.getOwner(tenantId, cameraId)).toBeNull();
   });
 
   it("Invariant 5: Camera reassignment does not require user intervention (automated failover)", async () => {

@@ -1956,7 +1956,7 @@ export interface UserManagementStore {
   getCustomRole(id: string, tenantId: string): Promise<any | undefined>;
   createCustomRole(tenantId: string, input: any): Promise<any>;
   updateCustomRole(id: string, tenantId: string, input: any): Promise<any>;
-  deleteCustomRole(id: string, tenantId: string): Promise<void>;
+  deleteCustomRole(id: string, tenantId: string): Promise<boolean>;
 }
 
 export interface AuthenticationStore {
@@ -1976,6 +1976,13 @@ export interface AuthenticationStore {
   updateSessionAccessToken(
     sessionId: string,
     newTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<void>;
+  rotateSessionTokens?(
+    sessionId: string,
+    accessTokenHash: string,
+    refreshTokenHash: string,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<void>;

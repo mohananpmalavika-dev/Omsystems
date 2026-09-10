@@ -1804,8 +1804,8 @@ export class MemoryStore {
 
   async getEdgeUpdateReleaseForAgent(edgeAgentId: string, currentVersion: string) {
     const release = [...this.edgeUpdateReleases.values()]
-      .filter((item) => item.enabled && item.version !== currentVersion)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0];
+      .filter((item) => item.enabled && compareEdgeVersions(item.version, currentVersion) > 0)
+      .sort((left, right) => compareEdgeVersions(right.version, left.version) || right.createdAt.localeCompare(left.createdAt))[0];
     if (!release || rolloutBucket(edgeAgentId, release.version) >= release.rolloutPercentage) return undefined;
     return structuredClone(release);
   }
@@ -5994,6 +5994,37 @@ export class MemoryStore {
 
     return Array.from(catalogMap.values());
   }
+}
+
+function compareEdgeVersions(left: string, right: string) {
+  return compareSemver(left, right);
+}
+
+function compareSemver(left: string, right: string) {
+  const parse = (value: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(left);
+  const b = parse(right);
+  if (!a || !b) return left.localeCompare(right);
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(a[index]) - Number(b[index]);
+    if (difference) return difference;
+  }
+  if (!a[4] || !b[4]) return a[4] ? -1 : b[4] ? 1 : 0;
+  const leftIds = a[4].split(".");
+  const rightIds = b[4].split(".");
+  for (let index = 0; index < Math.max(leftIds.length, rightIds.length); index += 1) {
+    const l = leftIds[index];
+    const r = rightIds[index];
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1;
+    if (l === r) continue;
+    const lNumber = /^\d+$/.test(l);
+    const rNumber = /^\d+$/.test(r);
+    if (lNumber && rNumber) return Number(l) - Number(r);
+    if (lNumber) return -1;
+    if (rNumber) return 1;
+    return l.localeCompare(r);
+  }
+  return 0;
 }
 
 

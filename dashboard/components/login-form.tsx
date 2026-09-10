@@ -131,7 +131,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         faceScan || undefined,
       );
 
-      if ((response as any)?.mustChangePassword) {
+      if ((response as any)?.user?.mustChangePassword) {
         setMustChangePassword(true);
         setInfo("You must change your password before continuing.");
         setLoading(false);
@@ -222,6 +222,15 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         user.id || 'me',
         formData.password,
         newPassword
+      );
+
+      // A password change revokes every old session, including the limited
+      // session used to perform this forced update. Establish a fresh session
+      // before navigating so the user does not land in an immediate login loop.
+      await authApi.login(
+        formData.username.trim(),
+        newPassword,
+        formData.tenantSlug.trim() || undefined,
       );
 
       setMustChangePassword(false);

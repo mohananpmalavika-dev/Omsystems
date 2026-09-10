@@ -55,6 +55,18 @@ describe("production authentication trust boundaries", () => {
     expect(new PermissionChecker({} as never).isSuperAdmin({ currentUser: response.json() } as never)).toBe(false);
   });
 
+  it("limits a forced-password-change session to the password-change flow", async () => {
+    const user = {
+      id: "user-a", tenantId: "bank-a", username: "operator", role: "operator",
+      status: "active", mustChangePassword: true,
+    };
+    const blocked = await authApp({ getUser: async () => user }, true).inject({
+      url: "/protected", headers: { "x-user-id": "user-a" },
+    });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().error).toBe("password_change_required");
+  });
+
   it.each(["invalid", new Date(Date.now() - 1000).toISOString()])("rejects invalid or expired session expiry: %s", async (accessExpiresAt) => {
     const response = await authApp({ findSessionByAccessToken: async () => ({ accessExpiresAt }) }).inject({
       url: "/protected", headers: { authorization: "Bearer token" },
@@ -135,5 +147,28 @@ describe("persisted login credentials", () => {
     const response = await app.inject({ method: "POST", url: "/v1/auth/login", payload: { username: PERMANENT_SUPERADMIN.username, password: "rotated-password" } });
     expect(response.statusCode).toBe(403);
     expect(store.createUserSession).not.toHaveBeenCalled();
+  });
+
+  it("rotates the refresh credential when first-party session storage supports it", async () => {
+    const rotateSessionTokens = vi.fn(async () => undefined);
+    const app = Fastify();
+    apps.push(app);
+    await registerAuthRoutes(app, {
+      findSessionByRefreshToken: async () => ({
+        id: "session-a", userId: "user-a", tenantId: "bank-a",
+        expiresAt: new Date(Date.now() + 3600_000),
+      }),
+      getUserById: async () => ({ id: "user-a", tenantId: "bank-a", status: "active" }),
+      rotateSessionTokens,
+    } as never);
+
+    const response = await app.inject({
+      method: "POST", url: "/v1/auth/refresh", payload: { refreshToken: "r".repeat(64) },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().refreshToken).toEqual(expect.any(String));
+    expect(response.json().refreshToken).not.toBe("r".repeat(64));
+    expect(rotateSessionTokens).toHaveBeenCalledOnce();
   });
 });

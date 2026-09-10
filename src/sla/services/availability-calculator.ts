@@ -70,13 +70,9 @@ export class AvailabilityCalculator {
     // Cap at total window seconds
     const observedTotal = availableSec + unavailableSec + unknownSec;
     if (observedTotal < totalWindowSeconds) {
-      // If intervals did not span the full day, default unaccounted period to HEALTHY if baseline exists, or UNKNOWN
-      const unaccounted = totalWindowSeconds - observedTotal;
-      if (availableSec > 0 || unavailableSec === 0) {
-        availableSec += unaccounted;
-      } else {
-        unknownSec += unaccounted;
-      }
+      // A missing observation is not evidence of availability.  Counting it as
+      // healthy inflates SLA figures during telemetry outages.
+      unknownSec += totalWindowSeconds - observedTotal;
     }
 
     const effectiveMonitored = availableSec + unavailableSec;

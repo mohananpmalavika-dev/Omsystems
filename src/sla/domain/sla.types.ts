@@ -119,20 +119,20 @@ export interface FleetSlaSummary {
   warningBranches: number;
   breachBranches: number;
 
-  overallCameraAvailabilityPct: number;
-  overallRecordingAvailabilityPct: number;
-  overallRecorderAvailabilityPct: number;
-  overallInternetAvailabilityPct: number;
-  overallRetentionCompliancePct: number;
+  overallCameraAvailabilityPct: number | null;
+  overallRecordingAvailabilityPct: number | null;
+  overallRecorderAvailabilityPct: number | null;
+  overallInternetAvailabilityPct: number | null;
+  overallRetentionCompliancePct: number | null;
 
   totalP1Alerts: number;
   totalP2Alerts: number;
   p1SlaBreaches: number;
   p2SlaBreaches: number;
-  overallAckSlaCompliancePct: number;
+  overallAckSlaCompliancePct: number | null;
 
-  meanAcknowledgeSeconds: number;
-  meanResolutionSeconds: number;
+  meanAcknowledgeSeconds: number | null;
+  meanResolutionSeconds: number | null;
 
   worstPerformingBranches: Array<{
     branchId: string;

@@ -232,11 +232,6 @@ export interface NotificationRule {
   repeatUntilAcknowledged?: boolean;
 }
 
-export interface NotificationPolicyMatrixEntry {
-  severity: AlertSeverity;
-  channels: NotificationChannel[];
-}
-
 export interface AlertNotificationPolicy {
   tenantId: string;
   recipientGroups: Partial<Record<"sms" | "email" | "voice", string[]>>;
@@ -246,11 +241,6 @@ export interface AlertNotificationPolicy {
   escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
-  policyVersion?: number;
-  status?: "draft" | "published";
-  recipientGroupsV2?: RecipientGroup[];
-  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
-  matrix?: NotificationPolicyMatrixEntry[];
   updatedAt: string;
 }
 
@@ -262,11 +252,6 @@ export interface AlertNotificationPolicyInput {
   escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
-  policyVersion?: number;
-  status?: "draft" | "published";
-  recipientGroupsV2?: RecipientGroup[];
-  rules?: Partial<Record<AlertSeverity, NotificationRule>>;
-  matrix?: NotificationPolicyMatrixEntry[];
 }
 
 export interface ComplianceAssessment {

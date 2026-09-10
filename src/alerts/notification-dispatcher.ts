@@ -315,19 +315,28 @@ function recipientsFor(
   const scheduled = activeOnCallRecipients(channel, policy);
   const configured = policy.recipientGroups[channel] ?? [];
   const recipients = [...new Set([...fromRule, ...scheduled, ...configured])];
-  return recipients.length > 0 ? recipients : ["unconfigured"];
+  // No configured recipient means no external delivery.  Creating a
+  // placeholder job causes noisy retries and can hide a genuine policy gap.
+  return recipients;
 }
 
 function activeOnCallRecipients(channel: "sms" | "email" | "voice", policy: AlertNotificationPolicy) {
   const now = new Date();
-  return policy.onCallSchedules.filter((schedule) => {
-    const parts = new Intl.DateTimeFormat("en-GB", {
-      timeZone: schedule.timezone, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-    }).formatToParts(now);
-    const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.find((part) => part.type === "weekday")?.value ?? "");
-    const time = `${parts.find((part) => part.type === "hour")?.value}:${parts.find((part) => part.type === "minute")?.value}`;
-    return schedule.days.includes(weekday) && (schedule.start <= schedule.end
-      ? time >= schedule.start && time < schedule.end
-      : time >= schedule.start || time < schedule.end);
-  }).flatMap((schedule) => schedule.recipients[channel] ?? []);
+  return policy.onCallSchedules.flatMap((schedule) => {
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: schedule.timezone, weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(now);
+      const weekday = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(parts.find((part) => part.type === "weekday")?.value ?? "");
+      const time = `${parts.find((part) => part.type === "hour")?.value}:${parts.find((part) => part.type === "minute")?.value}`;
+      const active = schedule.days.includes(weekday) && (schedule.start <= schedule.end
+        ? time >= schedule.start && time < schedule.end
+        : time >= schedule.start || time < schedule.end);
+      return active ? schedule.recipients[channel] ?? [] : [];
+    } catch {
+      // Invalid persisted data must not stop other recipients from receiving
+      // an alert. Policy writes reject invalid zones going forward.
+      return [];
+    }
+  });
 }

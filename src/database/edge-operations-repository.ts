@@ -254,11 +254,14 @@ export class EdgeOperationsRepository {
     const result = await this.pool.query(
       `SELECT release.* FROM edge_update_releases release
        JOIN edge_agents agent ON agent.id = $1
-       WHERE release.enabled = true AND release.version <> $2
-       ORDER BY release.created_at DESC LIMIT 1`,
-      [edgeAgentId, currentVersion],
+       WHERE release.enabled = true
+       ORDER BY release.created_at DESC`,
+      [edgeAgentId],
     );
-    const release = result.rows[0] ? mapRelease(result.rows[0]) : undefined;
+    const release = result.rows
+      .map(mapRelease)
+      .filter((item) => compareEdgeVersions(item.version, currentVersion) > 0)
+      .sort((left, right) => compareEdgeVersions(right.version, left.version) || right.createdAt.localeCompare(left.createdAt))[0];
     if (!release) return undefined;
     return rolloutBucket(edgeAgentId, release.version) < release.rolloutPercentage ? release : undefined;
   }
@@ -332,4 +335,31 @@ function rolloutBucket(agentId: string, version: string) {
   let hash = 2166136261;
   for (const char of `${agentId}:${version}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return (hash >>> 0) % 100;
+}
+
+function compareEdgeVersions(left: string, right: string) {
+  const parse = (value: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(left);
+  const b = parse(right);
+  if (!a || !b) return left.localeCompare(right);
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(a[index]) - Number(b[index]);
+    if (difference) return difference;
+  }
+  if (!a[4] || !b[4]) return a[4] ? -1 : b[4] ? 1 : 0;
+  const leftIds = a[4].split(".");
+  const rightIds = b[4].split(".");
+  for (let index = 0; index < Math.max(leftIds.length, rightIds.length); index += 1) {
+    const l = leftIds[index];
+    const r = rightIds[index];
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1;
+    if (l === r) continue;
+    const lNumber = /^\d+$/.test(l);
+    const rNumber = /^\d+$/.test(r);
+    if (lNumber && rNumber) return Number(l) - Number(r);
+    if (lNumber) return -1;
+    if (rNumber) return 1;
+    return l.localeCompare(r);
+  }
+  return 0;
 }

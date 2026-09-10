@@ -55,6 +55,7 @@ type OrgNode = {
     | "branch"
     | "building"
     | "floor"
+    | "location"
     | "location-group"
     | "camera-group"
     | "camera";
@@ -196,6 +197,11 @@ export default function OrganizationHierarchyPage() {
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
   const brandingFileRef = useRef<HTMLInputElement | null>(null);
+  const allowedRoleMenuKeys = new Set(
+    defaultMenuAccessForRole(roleBaseRole).flatMap((entry) => [entry, entry.split(/[?#]/)[0]]),
+  );
+  const isMenuAllowedForBaseRole = (href: string) =>
+    allowedRoleMenuKeys.has(href) || allowedRoleMenuKeys.has(href.split(/[?#]/)[0]);
 
   useEffect(() => {
     loadAllData();
@@ -521,7 +527,7 @@ export default function OrganizationHierarchyPage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetchWithAuth(`/api/control/v1/organization/nodes/${node.id}`, {
+      const res = await fetchWithAuth(`/api/control/v1/organization/nodes/${encodeURIComponent(node.id)}?cascade=true`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -547,10 +553,6 @@ export default function OrganizationHierarchyPage() {
       setError("The employee password must be at least 8 characters long.");
       return;
     }
-    if (!empPhotoData) {
-      setError("Capture or upload the employee's face photo before enrolling facial login.");
-      return;
-    }
     setSaving(true);
     setError(null);
     try {
@@ -565,8 +567,9 @@ export default function OrganizationHierarchyPage() {
         designation: newEmpDesignation.trim(),
         department: newEmpDept.trim(),
         primaryOrgNodeId: scopeNodeIds[0],
+        organizationScopeNodeIds: scopeNodeIds,
         facePhotoBase64: empPhotoData || undefined,
-        faceEnrolled: true,
+        faceEnrolled: Boolean(empPhotoData),
       };
 
       const res = await fetchWithAuth("/api/control/v1/users", {
@@ -579,13 +582,9 @@ export default function OrganizationHierarchyPage() {
         const errJson = await res.json();
         throw new Error(errJson.message || "Failed to create employee");
       }
-      const createdEmployee = await res.json();
+      await res.json();
 
-      setNotice(
-        `Employee ${newEmpName} enrolled successfully${
-          empPhotoData ? " with facial biometric profile for restricted areas!" : "!"
-        }`
-      );
+      setNotice(`Employee ${newEmpName} enrolled successfully${empPhotoData ? " with a facial biometric profile for restricted areas." : "."}`);
       setShowAddEmpModal(false);
       setNewEmpName("");
       setNewEmpEmail("");
@@ -596,13 +595,6 @@ export default function OrganizationHierarchyPage() {
       setNewEmpCustomRoleId("");
       setEmpPhotoData("");
       stopWebcam();
-      for (const scopeNodeId of scopeNodeIds.slice(1)) {
-        await fetchWithAuth(`/api/control/v1/users/${createdEmployee.id}/organizations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scopeNodeId, isPrimary: false }),
-        });
-      }
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to create employee");
@@ -656,6 +648,10 @@ export default function OrganizationHierarchyPage() {
   }
 
   async function handleDeleteRole(role: CustomRole) {
+    if ((role.userCount ?? 0) > 0) {
+      setError(`Reassign the ${role.userCount} employee(s) using "${role.name}" before deleting it.`);
+      return;
+    }
     if (!confirm(`Are you sure you want to delete role "${role.name}"?`)) return;
     setSaving(true);
     try {
@@ -1309,8 +1305,9 @@ export default function OrganizationHierarchyPage() {
                     <button
                       type="button"
                       onClick={() => handleDeleteRole(role)}
-                      className="px-2 py-1 text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 rounded text-[11px] transition"
-                      title="Delete role"
+                      disabled={(role.userCount ?? 0) > 0}
+                      className="px-2 py-1 text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/30 rounded text-[11px] transition disabled:cursor-not-allowed disabled:opacity-40"
+                      title={(role.userCount ?? 0) > 0 ? "Reassign employees before deleting this role" : "Delete role"}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -1354,7 +1351,12 @@ export default function OrganizationHierarchyPage() {
                   <select
                     disabled={Boolean(editingRole)}
                     value={roleBaseRole}
-                    onChange={(e) => setRoleBaseRole(e.target.value)}
+                    onChange={(e) => {
+                      const nextRole = e.target.value;
+                      const nextAllowed = new Set(defaultMenuAccessForRole(nextRole).flatMap((entry) => [entry, entry.split(/[?#]/)[0]]));
+                      setRoleBaseRole(nextRole);
+                      setRoleMenuAccess((current) => current.filter((key) => nextAllowed.has(key) || nextAllowed.has(key.split(/[?#]/)[0])));
+                    }}
                     className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"
                   >
                     <option value="operator">Operator capability (Live View)</option>
@@ -1387,7 +1389,7 @@ export default function OrganizationHierarchyPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        const allKeys = navigation.flatMap((g) => g.items.map(menuKey));
+                        const allKeys = navigation.flatMap((g) => g.items.filter((item) => isMenuAllowedForBaseRole(item.href)).map(menuKey));
                         setRoleMenuAccess(Array.from(new Set([...roleMenuAccess, ...allKeys])));
                       }}
                       className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] font-medium"
@@ -1406,14 +1408,14 @@ export default function OrganizationHierarchyPage() {
 
                 <div className="max-h-64 overflow-y-auto space-y-3 rounded-lg border border-slate-800 bg-slate-950 p-3">
                   {navigation.map((group) => {
-                    const groupItems = group.items.filter((item) =>
+                    const groupItems = group.items.filter((item) => isMenuAllowedForBaseRole(item.href) && (
                       !menuSearchQuery.trim() ||
                       item.label.toLowerCase().includes(menuSearchQuery.toLowerCase()) ||
                       group.label.toLowerCase().includes(menuSearchQuery.toLowerCase())
-                    );
+                    ));
                     if (!groupItems.length) return null;
 
-                    const groupKeys = group.items.map(menuKey);
+                    const groupKeys = groupItems.map(menuKey);
                     const allGroupSelected = groupKeys.every((k) => roleMenuAccess.includes(k));
 
                     return (
@@ -1722,7 +1724,7 @@ export default function OrganizationHierarchyPage() {
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
                 <label className="block text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                   <Camera size={14} className="text-amber-400" />
-                  Employee Face Photo (Required for Facial Login)
+                  Employee Face Photo (Optional — required only for facial login)
                 </label>
 
                 {/* Live Webcam Stream or Photo Preview */}
@@ -1932,7 +1934,7 @@ export default function OrganizationHierarchyPage() {
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Assigned Location Scope *</label>
                   <div className="max-h-36 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 space-y-1">
-                    {flatNodes.filter((n) => ["company", "zone", "region", "branch"].includes(n.type)).map((n) => (
+                    {flatNodes.filter((n) => ["company", "headquarters", "zone", "division", "region", "area", "branch", "building", "floor", "location", "location-group"].includes(n.type)).map((n) => (
                       <label key={n.id} className="flex items-center gap-2 text-slate-300 text-xs">
                         <input
                           type="checkbox"

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { EventEmitter } from "node:events";
+import { createServer, type Server } from "node:http";
 import {
   buildEdgeLiveGateway,
   extractQuickTunnelUrl,
@@ -9,6 +10,7 @@ import {
   resolvePrivateMediaGatewayUrl,
   resolvePrivateMediaGatewayUrlIfAvailable,
   resolveMediaTunnelMode,
+  rewriteHlsPlaylistTokens,
   shouldReuseExistingMediaMtx,
   startEdgeMediaRuntimeIfAvailable,
   type EdgeLiveGateway,
@@ -148,6 +150,22 @@ describe("all-in-one edge live gateway", () => {
     expect(resolvePrivateMediaGatewayUrlIfAvailable(8090, {})).toBeUndefined();
   });
 
+  it("keeps native-HLS fragment requests authorized when a playlist uses relative URIs", () => {
+    const rewritten = rewriteHlsPlaylistTokens([
+      "#EXTM3U",
+      '#EXT-X-MAP:URI="init.mp4"',
+      "segment-1.m4s",
+      '#EXT-X-KEY:METHOD=AES-128,URI="keys/key.bin?version=1"',
+      "https://untrusted.example/segment.m4s",
+      "",
+    ].join("\n"), "session-token");
+    expect(rewritten).toContain('URI="/init.mp4?token=session-token"');
+    expect(rewritten).toContain("/segment-1.m4s?token=session-token");
+    expect(rewritten).toContain('URI="/keys/key.bin?version=1&token=session-token"');
+    expect(rewritten).toContain("https://untrusted.example/segment.m4s");
+    expect(rewritten).not.toContain("untrusted.example/segment.m4s?token=");
+  });
+
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {
     const paths: Array<{ path: string; source: string }> = [];
     const bridgeKey = "b".repeat(43);
@@ -180,7 +198,7 @@ describe("all-in-one edge live gateway", () => {
       },
     });
     expect(liveCors.status).toBe(204);
-    expect(liveCors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+    expect(liveCors.headers.get("access-control-allow-origin")).toBe("*");
     expect(liveCors.headers.get("access-control-allow-private-network")).toBe("true");
 
     const cors = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
@@ -191,8 +209,8 @@ describe("all-in-one edge live gateway", () => {
       },
     });
     expect(cors.status).toBe(204);
-    expect(cors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
-    expect(cors.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(cors.headers.get("access-control-allow-origin")).toBe("*");
+    expect(cors.headers.get("access-control-allow-credentials")).toBeNull();
     expect(cors.headers.get("access-control-allow-private-network")).toBe("true");
 
     const started = await fetch(`${baseUrl}/v1/live/start`, {
@@ -214,7 +232,7 @@ describe("all-in-one edge live gateway", () => {
       },
     });
     expect(sessionCors.status).toBe(204);
-    expect(sessionCors.headers.get("access-control-allow-origin")).toBe("https://dashboard.example.com");
+    expect(sessionCors.headers.get("access-control-allow-origin")).toBe("*");
     expect(sessionCors.headers.get("access-control-allow-headers")).toBe("authorization,content-type");
 
     const mediaAuth = await fetch(`${baseUrl}/internal/mediamtx/auth`, {
@@ -222,6 +240,52 @@ describe("all-in-one edge live gateway", () => {
       body: JSON.stringify({ action: "read", path: "camera-camera-1", query: `token=${session.hls.bearerToken}` }),
     });
     expect(mediaAuth.status).toBe(204);
+  });
+
+  it("enforces edge authorization before proxying and rewrites private live playlists", async () => {
+    let upstream: Server | undefined;
+    let upstreamRequests = 0;
+    try {
+      upstream = createServer((request, response) => {
+        upstreamRequests += 1;
+        expect(request.url).toBe("/camera-camera-1/index.m3u8");
+        response.writeHead(200, { "content-type": "application/vnd.apple.mpegurl" });
+        response.end("#EXTM3U\n#EXT-X-MAP:URI=\"init.mp4\"\nsegment-1.m4s\n");
+      });
+      const upstreamAddress = await new Promise<{ port: number }>((resolve, reject) => {
+        upstream!.once("error", reject);
+        upstream!.listen(0, "127.0.0.1", () => resolve(upstream!.address() as { port: number }));
+      });
+      app = buildEdgeLiveGateway({
+        consumer: { consume: async () => ({
+          id: "session-1", cameraId: "camera-1", cameraNodeId: "branch-1", userId: "user-1", tenantId: "tenant-1",
+          connectionSecretRef: "edge://agent-1/camera-1", profiles: [],
+        }) },
+        router: { ensurePath: async () => undefined, removePath: async () => undefined },
+        resolveSecret: () => "rtsp://camera.local/stream",
+        publicBaseUrl: () => "http://127.0.0.1",
+        mediaMtxHlsUrl: `http://127.0.0.1:${upstreamAddress.port}`,
+        accessTtlMs: 30_000,
+      });
+      const address = await app.listen({ host: "127.0.0.1", port: 0 });
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const started = await fetch(`${baseUrl}/v1/live/start`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
+      });
+      const session = await started.json() as { hls: { bearerToken: string } };
+      const denied = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`);
+      expect(denied.status).toBe(401);
+      expect(upstreamRequests).toBe(0);
+      const playlist = await fetch(`${baseUrl}/hls/camera-camera-1/index.m3u8`, {
+        headers: { authorization: `Bearer ${session.hls.bearerToken}` },
+      });
+      expect(playlist.status).toBe(200);
+      expect(playlist.headers.get("cache-control")).toBe("no-store, private");
+      expect(await playlist.text()).toContain(`segment-1.m4s?token=${session.hls.bearerToken}`);
+    } finally {
+      await new Promise<void>((resolve) => upstream?.close(() => resolve()) ?? resolve());
+    }
   });
 
   it("streams held microphone audio through an exclusive talk session and reports completion", async () => {

@@ -31,7 +31,7 @@ export async function stageSignedUpdate(
 ): Promise<StagedEdgeUpdate> {
   if (!verifyManifest(release, publicKeyPem)) throw new Error("update_signature_invalid");
   const url = new URL(release.artifactUrl);
-  if (url.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(url.hostname)) {
+  if (!isSecureArtifactUrl(url)) {
     throw new Error("update_artifact_requires_https");
   }
   const targetDirectory = resolve(stagingRoot, safe(release.version));
@@ -41,6 +41,11 @@ export async function stageSignedUpdate(
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(5 * 60_000) });
     if (!response.ok || !response.body) throw new Error(`update_download_failed_${response.status}`);
+    // fetch follows redirects by default. Re-check the final URL so a signed
+    // HTTPS manifest cannot be used to downgrade the actual download to HTTP.
+    if (!isSecureArtifactUrl(new URL(response.url || url.href))) {
+      throw new Error("update_artifact_requires_https");
+    }
     const declaredLength = Number(response.headers.get("content-length"));
     if (Number.isFinite(declaredLength) && declaredLength > MAX_ARTIFACT_BYTES) {
       throw new Error("update_artifact_too_large");
@@ -95,13 +100,29 @@ export async function activateSignedUpdate(
       release.sha256.toLowerCase() !== staged.sha256.toLowerCase()) {
     throw new Error("staged_update_manifest_mismatch");
   }
+  const root = resolve(stagingRoot);
+  const artifactPath = resolveArtifactPath(root, staged.artifactPath);
+  const expectedPath = join(root, safe(release.version), "edge-agent.bundle");
+  if (!artifactPath || artifactPath !== expectedPath) {
+    throw new Error("staged_update_path_invalid");
+  }
+  try {
+    const metadata = await stat(artifactPath);
+    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > MAX_ARTIFACT_BYTES) {
+      throw new Error("invalid_size");
+    }
+    const digest = createHash("sha256").update(await readFile(artifactPath)).digest("hex");
+    if (digest !== release.sha256.toLowerCase()) throw new Error("invalid_hash");
+  } catch {
+    throw new Error("staged_update_artifact_invalid");
+  }
   const marker: ActiveEdgeUpdateMarker = {
     ...staged,
     release,
     activatedAt: new Date().toISOString(),
   };
-  await mkdir(resolve(stagingRoot), { recursive: true });
-  await writeFile(join(resolve(stagingRoot), ACTIVE_MARKER), JSON.stringify(marker, null, 2), {
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, ACTIVE_MARKER), JSON.stringify(marker, null, 2), {
     encoding: "utf8",
     mode: 0o600,
   });
@@ -194,16 +215,36 @@ async function quarantineMarker(markerPath: string, reason: string) {
 }
 
 function compareVersions(left: string, right: string) {
-  const parse = (value: string) => value.split(/[.+-]/, 3).map((part) => Number.parseInt(part, 10) || 0);
-  const leftParts = parse(left);
-  const rightParts = parse(right);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
+  const parse = (value: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(left);
+  const b = parse(right);
+  if (!a || !b) return left.localeCompare(right);
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(a[index]) - Number(b[index]);
+    if (difference) return difference;
   }
-  return left.localeCompare(right);
+  if (!a[4] || !b[4]) return a[4] ? -1 : b[4] ? 1 : 0;
+  const leftIds = a[4].split(".");
+  const rightIds = b[4].split(".");
+  for (let index = 0; index < Math.max(leftIds.length, rightIds.length); index += 1) {
+    const l = leftIds[index];
+    const r = rightIds[index];
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1;
+    if (l === r) continue;
+    const lNumber = /^\d+$/.test(l);
+    const rNumber = /^\d+$/.test(r);
+    if (lNumber && rNumber) return Number(l) - Number(r);
+    if (lNumber) return -1;
+    if (rNumber) return 1;
+    return l.localeCompare(r);
+  }
+  return 0;
 }
 
 function safe(value: string) {
   return value.replace(/[^0-9A-Za-z._-]/g, "-");
+}
+
+function isSecureArtifactUrl(url: URL) {
+  return url.protocol === "https:" && !url.username && !url.password;
 }

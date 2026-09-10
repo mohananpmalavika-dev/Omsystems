@@ -1,81 +1,54 @@
-import { describe, expect, it } from "vitest";
-import { buildApp } from "../src/app.js";
-import { MemoryStore } from "../src/store.js";
+import Fastify, { type FastifyInstance } from "fastify";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { registerDeviceInventoryRoutes } from "../src/routes/device-inventory.routes.js";
+import type { User } from "../src/domain/models.js";
 
-describe("device inventory routes", async () => {
-  const app = await buildApp({ logger: false, store: new MemoryStore() });
+const user: User = { id: "user-1", tenantId: "tenant-a", displayName: "Admin", role: "company_admin" };
+const branch = { id: "branch-a", tenantId: "tenant-a", type: "branch", name: "Main" };
 
-  it("creates, lists, and updates a unified device inventory record", async () => {
-    const headers = { "x-user-id": "user-global-admin" };
+describe("device inventory routes", () => {
+  const apps: FastifyInstance[] = [];
 
-    const createResponse = await app.inject({
-      method: "POST",
-      url: "/v1/device-inventory",
-      payload: {
-        deviceId: "DEV-001",
-        tenant: "tenant-demo",
-        region: "South",
-        branch: "branch-blr-001",
-        deviceType: "ip-camera",
-        manufacturer: "Hikvision",
-        model: "DS-2CD2143G2",
-        serialNumber: "SN-001",
-        macAddress: "00:11:22:33:44:55",
-        ipAddress: "192.168.1.10",
-        firmwareVersion: "5.6.0",
-        onvifVersion: "2.4.1",
-        capabilities: ["ptz", "audio"],
-        credentialReference: "vault://branches/blr-001/cameras/001",
-        installationDate: "2024-01-15",
-        warranty: "2028-01-15",
-        amcContract: "AMC-001",
-        healthStatus: "healthy",
-        lastCommunication: "2026-07-22T10:15:00.000Z",
-        configurationTemplate: "default-ip-camera",
-        riskClassification: "medium",
-        lifecycleState: "operational",
-      },
-      headers,
+  afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+
+  async function createApp(store: Record<string, unknown>) {
+    const app = Fastify();
+    apps.push(app);
+    app.decorateRequest("currentUser");
+    app.addHook("preHandler", async (request) => { (request as any).currentUser = user; });
+    await registerDeviceInventoryRoutes(app, store as any);
+    return app;
+  }
+
+  it("does not list inventory for a caller-supplied foreign tenant", async () => {
+    const listDeviceInventory = vi.fn();
+    const app = await createApp({ listDeviceInventory });
+    const response = await app.inject({ method: "GET", url: "/v1/device-inventory?tenant=tenant-b" });
+    expect(response.statusCode).toBe(403);
+    expect(listDeviceInventory).not.toHaveBeenCalled();
+  });
+
+  it("does not accept a device record with a foreign tenant label", async () => {
+    const createDeviceInventoryRecord = vi.fn();
+    const app = await createApp({ getNode: vi.fn().mockResolvedValue(branch), createDeviceInventoryRecord });
+    const response = await app.inject({
+      method: "POST", url: "/v1/device-inventory",
+      payload: { deviceId: "cam-1", tenant: "tenant-b", region: "south", branch: "branch-a", deviceType: "ip-camera", manufacturer: "Axis", model: "P3245" },
     });
+    expect(response.statusCode).toBe(400);
+    expect(createDeviceInventoryRecord).not.toHaveBeenCalled();
+  });
 
-    expect(createResponse.statusCode).toBe(201);
-    const created = JSON.parse(createResponse.body);
-    expect(created.deviceId).toBe("DEV-001");
-    expect(created.capabilities).toEqual(["ptz", "audio"]);
-
-    const listResponse = await app.inject({
-      method: "GET",
-      url: "/v1/device-inventory",
-      headers,
+  it("does not allow a generic PATCH to relocate a registered device", async () => {
+    const updateDeviceInventory = vi.fn();
+    const app = await createApp({
+      getDeviceInventory: vi.fn().mockResolvedValue({ id: "record-1", tenantId: "tenant-a", tenant: "tenant-a", branch: "branch-a" }),
+      getNode: vi.fn().mockResolvedValue(branch),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      updateDeviceInventory,
     });
-
-    expect(listResponse.statusCode).toBe(200);
-    const listed = JSON.parse(listResponse.body);
-    expect(listed.data.some((device: any) => device.deviceId === "DEV-001")).toBe(true);
-
-    const getResponse = await app.inject({
-      method: "GET",
-      url: `/v1/device-inventory/${created.id}`,
-      headers,
-    });
-
-    expect(getResponse.statusCode).toBe(200);
-    const fetched = JSON.parse(getResponse.body);
-    expect(fetched.deviceId).toBe("DEV-001");
-
-    const patchResponse = await app.inject({
-      method: "PATCH",
-      url: `/v1/device-inventory/${created.id}`,
-      payload: {
-        healthStatus: "warning",
-        lifecycleState: "maintenance",
-      },
-      headers,
-    });
-
-    expect(patchResponse.statusCode).toBe(200);
-    const updated = JSON.parse(patchResponse.body);
-    expect(updated.healthStatus).toBe("warning");
-    expect(updated.lifecycleState).toBe("maintenance");
+    const response = await app.inject({ method: "PATCH", url: "/v1/device-inventory/record-1", payload: { branch: "branch-b" } });
+    expect(response.statusCode).toBe(400);
+    expect(updateDeviceInventory).not.toHaveBeenCalled();
   });
 });

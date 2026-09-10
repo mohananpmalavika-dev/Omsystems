@@ -11,6 +11,7 @@ describe('Capabilities API Integration & Route Protection Tests', () => {
   beforeAll(async () => {
     app = Fastify();
     await registerCapabilitiesRoutes(app);
+    getCapabilityRegistry().updateRuntimeState('video.live_view', CapabilityRuntimeState.HEALTHY, 'Verified by test runtime reporter');
 
     // Register a test route protected by requireCapability
     app.get(

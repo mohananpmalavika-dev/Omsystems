@@ -77,6 +77,7 @@ import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useSta
 import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
 import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
+import { AlertNotificationTray } from "@/components/alerts/alert-notification-tray";
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
 
@@ -389,32 +390,51 @@ function filterNavigationByAllowed(navigationItems: NavGroup[], allowed: Set<str
 }
 
 export function getAuthorizedNavigation(user: MenuAccessUser | null | undefined) {
-  if (!user) return navigation;
-  const configuredValue =
-    user.menuAccess ??
-    (user as any).menu_access ??
-    user.preferences?.menuAccess ??
-    (user.preferences as any)?.menu_access;
-  const configured = Array.isArray(configuredValue)
-    ? configuredValue.filter((value): value is string => typeof value === "string")
-    : null;
-  return filterNavigationByAllowed(navigation, new Set(configured ?? navigation.flatMap((group) => group.items.map(menuKey))));
+  return filterNavigationByAllowed(navigation, effectiveMenuAccess(user));
 }
 
 export function getVisibleNavigation(user: MenuAccessUser | null | undefined) {
   if (!user) return filterNavigationByAllowed(navigation, new Set(defaultMenuAccessForRole("operator")));
+  // A custom role is an explicit restriction, including when its base role is
+  // administrative. Never let the broad base role silently override menus
+  // selected by a tenant administrator.
+  if (hasCustomMenuConfiguration(user)) return getAuthorizedNavigation(user);
   if (hasUnrestrictedMenuAccess(user)) {
     return navigation;
   }
-  const authorized = getAuthorizedNavigation(user);
-  const configuredValue =
-    user.menuAccess ??
-    (user as any).menu_access ??
-    user.preferences?.menuAccess ??
-    (user.preferences as any)?.menu_access;
-  if (Array.isArray(configuredValue)) return authorized;
-  const workspace = new Set(defaultMenuAccessForRole(user.role));
-  return filterNavigationByAllowed(authorized, workspace);
+  return getAuthorizedNavigation(user);
+}
+
+export function hasCustomMenuConfiguration(user: MenuAccessUser | null | undefined) {
+  // A custom role is a restriction. If its menu list is absent or malformed,
+  // fail closed rather than accidentally falling back to the broad base role.
+  return Boolean(user?.customRoleId);
+}
+
+function menuAccessValue(user: MenuAccessUser | null | undefined): unknown {
+  return user?.menuAccess
+    ?? (user as any)?.menu_access
+    ?? user?.preferences?.menuAccess
+    ?? user?.preferences?.menu_access;
+}
+
+function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<string> {
+  const allMenuKeys = new Set(navigation.flatMap((group) => group.items.flatMap((item) => [menuKey(item), routePath(item.href)])));
+  if (!user) return new Set(defaultMenuAccessForRole("operator"));
+  const configured = menuAccessValue(user);
+  if (hasCustomMenuConfiguration(user)) {
+    const selected = new Set((Array.isArray(configured) ? configured : [])
+      .filter((value): value is string => typeof value === "string" && allMenuKeys.has(value)));
+    // Custom menus can narrow a base role, never increase its capability.
+    if (!hasUnrestrictedMenuAccess(user)) {
+      const workspace = new Set(defaultMenuAccessForRole(user.role));
+      return new Set([...selected].filter((value) => workspace.has(value) || workspace.has(routePath(value))));
+    }
+    return selected;
+  }
+  return hasUnrestrictedMenuAccess(user)
+    ? allMenuKeys
+    : new Set(defaultMenuAccessForRole(user.role));
 }
 
 
@@ -532,6 +552,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     username?: string;
     email?: string;
   }) | null>(null);
+  const [operatorResolved, setOperatorResolved] = useState(false);
 
   useEffect(() => {
     try {
@@ -548,7 +569,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           } catch {}
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOperatorResolved(true));
 
     // Restore previously open navigation groups from localStorage
     try {
@@ -571,8 +593,11 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   };
 
   const pathname = usePathname() || "/";
-  const visibleNavigation = getVisibleNavigation(operator);
-  const visibleHrefs = new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey)));
+  const visibleNavigation = useMemo(() => getVisibleNavigation(operator), [operator]);
+  const visibleHrefs = useMemo(
+    () => new Set(visibleNavigation.flatMap((group) => group.items.map(menuKey))),
+    [visibleNavigation],
+  );
   const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
   const currentPage = pageMeta
     .filter((item) => routeMatches(item.path, pathname, searchParams))
@@ -620,6 +645,18 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return `${item.label} ${item.section} ${item.href} ${extra}`.toLowerCase().includes(query);
     }).slice(0, 12).map((item) => ({ ...item, recent: false }));
   }, [commandQuery, recentHrefs, searchableModules]);
+
+  // Hiding a link is not access control. Keep custom-role users out of a
+  // managed page when they paste or restore a URL that is not on their menu.
+  useEffect(() => {
+    if (!operatorResolved || !operator || !hasCustomMenuConfiguration(operator)) return;
+    const requested = navigation
+      .flatMap((group) => group.items)
+      .find((item) => routeMatches(item.href, pathname, searchParams));
+    if (!requested || visibleHrefs.has(requested.href)) return;
+    const fallback = visibleNavigation.flatMap((group) => group.items)[0]?.href;
+    if (fallback) router.replace(fallback);
+  }, [operator, operatorResolved, pathname, router, searchParams, visibleHrefs, visibleNavigation]);
 
   useEffect(() => {
     if (activeGroup?.label) {
@@ -1142,6 +1179,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           {children}
         </div>
       </main>
+      <AlertNotificationTray />
 
       {commandOpen && (
         <div className="command-overlay" role="presentation" onMouseDown={() => setCommandOpen(false)}>

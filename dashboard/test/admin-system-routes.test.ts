@@ -115,7 +115,7 @@ describe("admin system routes", () => {
       if (url.includes("organization/nodes")) {
         return Response.json({ data: [{ id: "branch-1" }, { id: "branch-2" }] });
       }
-      return Response.json({ data: [{ id: "gateway-1" }] });
+      return Response.json({ data: [{ id: "gateway-1" }, { id: "gateway-revoked", credentialStatus: "revoked" }] });
     }));
 
     const response = await getStats(authenticatedRequest("/api/admin/system/stats"));
@@ -128,6 +128,26 @@ describe("admin system routes", () => {
       live_sessions: null,
       telemetry_records: null,
     });
+  });
+
+  it("excludes revoked gateways from system management counts", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("organization/nodes")) return Response.json({ data: [{ id: "branch-1", name: "Kochi" }] });
+      if (url.includes("/v1/cameras?")) return Response.json({ data: [], total: 0 });
+      return Response.json({ data: [
+        { id: "active", branchId: "branch-1" },
+        { id: "revoked", branchId: "branch-1", credentialStatus: "revoked" },
+      ] });
+    }));
+
+    const [branches, stats] = await Promise.all([
+      getBranches(authenticatedRequest("/api/admin/system/branches")),
+      getStats(authenticatedRequest("/api/admin/system/stats")),
+    ]);
+    await expect(branches.json()).resolves.toEqual([expect.objectContaining({ id: "branch-1", gateway_count: 1 })]);
+    await expect(stats.json()).resolves.toEqual(expect.objectContaining({ gateways: 1 }));
   });
 });
 

@@ -62,6 +62,8 @@ export class NotificationPolicyEngine {
   private assignments: ScopedNotificationPolicyAssignment[] = [];
 
   registerAssignment(assignment: ScopedNotificationPolicyAssignment) {
+    const existingIndex = this.assignments.findIndex((item) => item.id === assignment.id);
+    if (existingIndex >= 0) this.assignments.splice(existingIndex, 1);
     this.assignments.push(assignment);
     this.assignments.sort((a, b) => b.priorityRank - a.priorityRank);
   }
@@ -71,15 +73,15 @@ export class NotificationPolicyEngine {
 
     // Check for scoped overrides in order of highest priority rank
     for (const assignment of this.assignments) {
-      if (assignment.tenantId === context.tenantId && assignment.priority === context.priority) {
+      if (assignment.enabled && assignment.tenantId === context.tenantId && assignment.priority === context.priority) {
         if (assignment.scopeType === "ALERT_TYPE" && assignment.scopeId === context.detectionType) {
-          return { ...basePolicy, channels: assignment.channels };
+          return { ...basePolicy, ...(assignment.policy ?? {}), channels: assignment.channels };
         }
         if (assignment.scopeType === "BRANCH" && assignment.scopeId === context.branchId) {
-          return { ...basePolicy, channels: assignment.channels };
+          return { ...basePolicy, ...(assignment.policy ?? {}), channels: assignment.channels };
         }
         if (assignment.scopeType === "TENANT" && assignment.scopeId === context.tenantId) {
-          return { ...basePolicy, channels: assignment.channels };
+          return { ...basePolicy, ...(assignment.policy ?? {}), channels: assignment.channels };
         }
       }
     }

@@ -551,7 +551,10 @@ export class InfrastructureRepository {
       if (!parent) {
         throw new Error("invalid_parent");
       }
-      const actualTenantId = parent.tenant_id || resolvedTenantId;
+      if (parent.tenant_id !== resolvedTenantId) {
+        throw new Error("invalid_parent");
+      }
+      const actualTenantId = resolvedTenantId;
       const newPath = `${parent.path}.${ltreeId}`;
       const result = await this.pool.query(
         `INSERT INTO resource_nodes (
@@ -648,6 +651,7 @@ export class InfrastructureRepository {
       return childNodeType === "company";
     }
     try {
+      await this.ensureFlexibleHierarchyRules();
       const parentRes = await this.pool.query<{ node_type: string }>(
         `SELECT node_type::text FROM resource_nodes WHERE id = $1::uuid LIMIT 1`,
         [parentNodeId],
@@ -656,12 +660,17 @@ export class InfrastructureRepository {
       if (!parentType) return false;
 
       const standardAllowed: Record<string, string[]> = {
-        company: ["headquarters", "zone", "region", "area", "branch"],
+        company: ["headquarters", "division", "zone", "region", "area", "branch"],
         headquarters: ["zone", "region", "area", "branch"],
+        division: ["zone", "region", "area", "branch"],
         zone: ["region", "area", "branch"],
         region: ["area", "branch"],
         area: ["branch"],
-        branch: [],
+        branch: ["building", "floor", "location", "location-group", "camera-group"],
+        building: ["floor", "location", "location-group"],
+        floor: ["location", "location-group"],
+        location: ["location-group", "camera-group"],
+        "location-group": ["camera-group"],
       };
 
       if (standardAllowed[parentType]?.includes(childNodeType)) {
@@ -680,7 +689,7 @@ export class InfrastructureRepository {
       );
       return Boolean(result.rows[0]?.valid);
     } catch {
-      return true;
+      return false;
     }
   }
 
@@ -899,8 +908,21 @@ export class InfrastructureRepository {
          ],
       );
       const id = result.rows[0]!.id;
-      if (input.primaryOrgNodeId) {
-        await this.assignOrganization(client, id, input.primaryOrgNodeId, true, input.createdBy ?? null);
+      const scopeNodeIds = [
+        input.primaryOrgNodeId,
+        ...(Array.isArray(input.organizationScopeNodeIds) ? input.organizationScopeNodeIds : []),
+      ].filter((scopeNodeId, index, all) =>
+        typeof scopeNodeId === "string" && scopeNodeId.length > 0 && all.indexOf(scopeNodeId) === index,
+      );
+      for (const [index, scopeNodeId] of scopeNodeIds.entries()) {
+        await this.assignOrganization(
+          client,
+          id,
+          scopeNodeId,
+          index === 0,
+          input.createdBy ?? null,
+          index === 0,
+        );
       }
       if (ownsTransaction) await client.query("COMMIT");
       return this.getUserWithPassword(id);
@@ -971,7 +993,8 @@ export class InfrastructureRepository {
 
   async getCustomRole(id: string, tenantId: string) {
     const result = await this.pool.query(
-      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access
+      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access,
+              (SELECT count(*)::integer FROM users u WHERE u.custom_role_id=cr.id) AS user_count
        FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`,
       [id, tenantId],
     );
@@ -1013,9 +1036,16 @@ export class InfrastructureRepository {
   }
 
   async deleteCustomRole(id: string, tenantId: string) {
-    await this.pool.query(
-      `DELETE FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`, [id, tenantId],
+    // Keep the "not assigned" condition in the mutation itself. A separate
+    // count followed by DELETE has a race that could otherwise revoke a
+    // restrictive role from an employee being assigned concurrently.
+    const result = await this.pool.query(
+      `DELETE FROM custom_roles cr
+       WHERE cr.id=$1::uuid AND cr.tenant_id=$2::uuid
+         AND NOT EXISTS (SELECT 1 FROM users u WHERE u.custom_role_id=cr.id)
+       RETURNING cr.id`, [id, tenantId],
     );
+    return result.rowCount === 1;
   }
 
   async deactivateUser(id: string) {
@@ -1226,7 +1256,7 @@ export class InfrastructureRepository {
       `INSERT INTO user_sessions (
          user_id,tenant_id,access_token_hash,refresh_token_hash,ip_address,
          user_agent,access_expires_at,expires_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '24 hours',now()+interval '30 days')
+       ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '1 hour',now()+interval '30 days')
        RETURNING id::text,user_id::text,tenant_id::text,access_expires_at,expires_at`,
       [resolvedUserId, resolvedTenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
     );
@@ -1264,6 +1294,22 @@ export class InfrastructureRepository {
          ip_address=COALESCE($3,ip_address),user_agent=COALESCE($4,user_agent)
        WHERE id=$1`,
       [sessionId, newTokenHash, ipAddress ?? null, userAgent ?? null],
+    );
+  }
+
+  async rotateSessionTokens(
+    sessionId: string,
+    accessTokenHash: string,
+    refreshTokenHash: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ) {
+    await this.pool.query(
+      `UPDATE user_sessions SET access_token_hash=$2,refresh_token_hash=$3,
+         access_expires_at=now()+interval '1 hour',last_activity_at=now(),
+         ip_address=COALESCE($4,ip_address),user_agent=COALESCE($5,user_agent)
+       WHERE id=$1`,
+      [sessionId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
     );
   }
 

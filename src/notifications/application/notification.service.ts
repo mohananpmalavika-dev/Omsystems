@@ -69,8 +69,13 @@ export class NotificationService {
 
       for (const recipient of recipients) {
         const destination = this.getDestination(recipient, channel);
+        // Incomplete identity records are not deliverable external recipients.
+        // Do not enqueue a job against a made-up address or phone number.
+        if (!destination) {
+          continue;
+        }
         const payload = this.renderer.render(context, channel, recipient);
-        const recipientIdentifier = recipient.userId || destination || "unknown";
+        const recipientIdentifier = recipient.userId || destination;
         const idempotencyKey = `${context.alertId}:${channel}:${recipientIdentifier}`;
 
         const retryPolicy = CHANNEL_RETRY_POLICIES[channel] || { maxAttempts: 3 };
@@ -100,15 +105,15 @@ export class NotificationService {
     return createdJobs;
   }
 
-  private getDestination(recipient: ResolvedRecipient, channel: NotificationChannel): string {
+  private getDestination(recipient: ResolvedRecipient, channel: NotificationChannel): string | undefined {
     switch (channel) {
       case "email":
-        return recipient.email || "alerts@bank-corp.internal";
+        return recipient.email;
       case "sms":
       case "voice":
-        return recipient.mobile || "+919876543210";
+        return recipient.mobile;
       case "push":
-        return recipient.pushTokens?.[0] || recipient.userId || "push-dest";
+        return recipient.pushTokens?.[0];
       case "dashboard":
         return "control-room-websocket";
       case "system_log":

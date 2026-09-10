@@ -6,13 +6,25 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import { initFirmwareManager, type FirmwareUpgradeSafetyContext } from '../maintenance/firmware-manager.js';
+import { FirmwareExecutionUnavailableError, initFirmwareManager, type FirmwareUpgradeSafetyContext } from '../maintenance/firmware-manager.js';
 
 export async function registerFirmwareManagementRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
 ) {
   const firmwareManager = initFirmwareManager(store, app.log);
+  // This manager currently provides catalogue and planning semantics only. It
+  // has no durable repository or device-command executor, so production must
+  // not expose mutable controls that would disappear on restart or be mistaken
+  // for an OTA deployment. Signed edge-agent OTA remains available separately.
+  const requireDurableFirmwareControlPlane = (reply: { code: (statusCode: number) => { send: (payload: unknown) => unknown } }) => {
+    if (process.env.NODE_ENV !== 'production') return true;
+    reply.code(503).send({
+      error: 'firmware_control_plane_unavailable',
+      message: 'Generic firmware management requires a durable repository and verified device executor. Use signed edge updates until those are configured.',
+    });
+    return false;
+  };
 
   // ========================================================================
   // Firmware Version Management
@@ -31,6 +43,7 @@ export async function registerFirmwareManagementRoutes(
    * Register new firmware version
    */
   app.post('/v1/maintenance/firmware/versions', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const body = z.object({
       assetCategory: z.enum(['camera', 'recorder', 'storage', 'network', 'other']),
       vendor: z.string().min(1),
@@ -108,6 +121,7 @@ export async function registerFirmwareManagementRoutes(
    * Request firmware approval
    */
   app.post('/v1/maintenance/firmware/versions/:id/request-approval', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({
       id: z.string().uuid(),
     }).parse(request.params);
@@ -132,6 +146,7 @@ export async function registerFirmwareManagementRoutes(
    * Approve firmware version
    */
   app.post('/v1/maintenance/firmware/approvals/:id/approve', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({
       id: z.string().uuid(),
     }).parse(request.params);
@@ -153,6 +168,7 @@ export async function registerFirmwareManagementRoutes(
    * Reject firmware version
    */
   app.post('/v1/maintenance/firmware/approvals/:id/reject', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({
       id: z.string().uuid(),
     }).parse(request.params);
@@ -178,6 +194,7 @@ export async function registerFirmwareManagementRoutes(
    * Schedule firmware update
    */
   app.post('/v1/maintenance/firmware/updates', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const body = z.object({
       firmwareVersionId: z.string().uuid(),
       targetAssets: z.array(z.string().uuid()).min(1),
@@ -218,6 +235,9 @@ export async function registerFirmwareManagementRoutes(
     }).parse(request.params);
 
     const update = await firmwareManager.getFirmwareUpdateProgress(params.id);
+    if (!update || update.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: 'firmware_update_not_found' });
+    }
     return update;
   });
 
@@ -225,19 +245,35 @@ export async function registerFirmwareManagementRoutes(
    * Execute firmware update immediately
    */
   app.post('/v1/maintenance/firmware/updates/:id/execute', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({
       id: z.string().uuid(),
     }).parse(request.params);
 
-    await firmwareManager.executeFirmwareUpdate(params.id);
+    const update = await firmwareManager.getFirmwareUpdateProgress(params.id);
+    if (!update || update.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: 'firmware_update_not_found' });
+    }
+    try {
+      await firmwareManager.executeFirmwareUpdate(params.id);
+    } catch (error) {
+      if (error instanceof FirmwareExecutionUnavailableError) {
+        return reply.code(503).send({
+          error: 'firmware_execution_unavailable',
+          message: error.message,
+        });
+      }
+      throw error;
+    }
 
-    return reply.code(200).send({ success: true, message: 'Firmware update started' });
+    return reply.code(202).send({ success: true, message: 'Firmware update accepted by device executor' });
   });
 
   /**
    * Rollback firmware update
    */
   app.post('/v1/maintenance/firmware/updates/:id/rollback', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({
       id: z.string().uuid(),
     }).parse(request.params);
@@ -246,6 +282,10 @@ export async function registerFirmwareManagementRoutes(
       reason: z.string().min(10),
     }).parse(request.body);
 
+    const update = await firmwareManager.getFirmwareUpdateProgress(params.id);
+    if (!update || update.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: 'firmware_update_not_found' });
+    }
     await firmwareManager.rollbackFirmwareUpdate({
       updateId: params.id,
       reason: body.reason,
@@ -259,6 +299,7 @@ export async function registerFirmwareManagementRoutes(
    * Create an upgrade plan with safety checks
    */
   app.post('/v1/maintenance/firmware/upgrade-plans', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const body = z.object({
       firmwareVersionId: z.string().uuid(),
       targetAssets: z.array(z.string().min(1)).min(1),
@@ -315,10 +356,11 @@ export async function registerFirmwareManagementRoutes(
    * Approve a planned firmware upgrade
    */
   app.post('/v1/maintenance/firmware/upgrade-plans/:id/approve', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
-    const body = z.object({ approvedBy: z.string().min(1).optional() }).parse(request.body);
+    z.object({}).parse(request.body);
 
-    const approved = await firmwareManager.approveUpgradePlan(params.id, body.approvedBy ?? request.currentUser.id);
+    const approved = await firmwareManager.approveUpgradePlan(params.id, request.currentUser.id);
     return reply.code(200).send({ success: approved });
   });
 
@@ -326,9 +368,17 @@ export async function registerFirmwareManagementRoutes(
    * Start an approved firmware upgrade plan
    */
   app.post('/v1/maintenance/firmware/upgrade-plans/:id/execute', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const params = z.object({ id: z.string().uuid() }).parse(request.params);
-    const started = await firmwareManager.executeUpgradePlan(params.id);
-    return reply.code(200).send({ success: started });
+    try {
+      const started = await firmwareManager.executeUpgradePlan(params.id);
+      return reply.code(200).send({ success: started });
+    } catch (error) {
+      if (error instanceof FirmwareExecutionUnavailableError) {
+        return reply.code(503).send({ error: 'firmware_execution_unavailable', message: error.message });
+      }
+      throw error;
+    }
   });
 
   /**
@@ -387,6 +437,7 @@ export async function registerFirmwareManagementRoutes(
    * Schedule bulk update by branch
    */
   app.post('/v1/maintenance/firmware/bulk-update/by-branch', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const body = z.object({
       firmwareVersionId: z.string().uuid(),
       branchNodeIds: z.array(z.string().uuid()).min(1),
@@ -410,6 +461,7 @@ export async function registerFirmwareManagementRoutes(
    * Schedule bulk update by category
    */
   app.post('/v1/maintenance/firmware/bulk-update/by-category', async (request, reply) => {
+    if (!requireDurableFirmwareControlPlane(reply)) return;
     const body = z.object({
       firmwareVersionId: z.string().uuid(),
       assetCategory: z.enum(['camera', 'recorder', 'storage', 'network', 'other']),

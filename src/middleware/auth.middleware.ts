@@ -79,6 +79,18 @@ export function sanitizeCurrentUser(user: any): any {
   return { ...publicUser, role: isSuper ? "super_admin" : (user.role ?? "viewer"), isSuperAdmin: isSuper };
 }
 
+function requiresPasswordChangeOnly(request: FastifyRequest, user: any): boolean {
+  if (!user?.mustChangePassword) return false;
+  const path = request.url.split("?")[0];
+  const permitted = new Set([
+    "/v1/auth/me",
+    "/v1/auth/logout",
+    "/v1/auth/logout-all",
+    `/v1/users/${encodeURIComponent(user.id)}/change-password`,
+  ]);
+  return !permitted.has(path);
+}
+
 /**
  * Authentication middleware that validates session tokens
  * and populates request.currentUser
@@ -108,6 +120,12 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
         return reply.code(401).send({ error: "invalid_identity" });
       }
       request.currentUser = sanitizeCurrentUser(user);
+      if (requiresPasswordChangeOnly(request, user)) {
+        return reply.code(403).send({
+          error: "password_change_required",
+          message: "Change your password before continuing.",
+        });
+      }
       return;
     }
 
@@ -196,6 +214,13 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     // Attach user to request
     request.currentUser = sanitizeCurrentUser(user);
+
+    if (requiresPasswordChangeOnly(request, user)) {
+      return reply.code(403).send({
+        error: "password_change_required",
+        message: "Change your password before continuing.",
+      });
+    }
 
     // Attach session ID for logout functionality
     (request as any).sessionId = session.id;

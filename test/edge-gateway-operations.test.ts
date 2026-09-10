@@ -444,6 +444,38 @@ describe("secure edge gateway operations", () => {
     expect(queued.json()).toMatchObject({ type: "apply-update", status: "queued" });
   });
 
+  it("does not offer a newly-created older release as an OTA downgrade", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const store = testStore();
+    const app = await buildApp({ store, edgeUpdateSigningPrivateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString() });
+    apps.push(app);
+    const identity = await enroll(app, await createActivation(app));
+    await store.heartbeatEdgeAgent(identity.agentId, "1.2.0");
+    const release = await app.inject({
+      method: "POST", url: "/v1/edge-updates/releases", headers: { "x-user-id": "user-global-admin" },
+      payload: { version: "1.1.0", artifactUrl: "https://updates.example/edge-agent.bundle", sha256: "a".repeat(64), enabled: true },
+    });
+    expect(release.statusCode).toBe(201);
+
+    const assigned = await app.inject({
+      method: "GET", url: `/v1/edge-agents/${identity.agentId}/updates/next?version=1.2.0`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(assigned.statusCode).toBe(200);
+    expect(assigned.json()).toBeNull();
+  });
+
+  it("requires secure, credential-free OTA artifact URLs", async () => {
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const app = await buildApp({ store: testStore(), edgeUpdateSigningPrivateKey: privateKey.export({ type: "pkcs8", format: "pem" }).toString() });
+    apps.push(app);
+    const response = await app.inject({
+      method: "POST", url: "/v1/edge-updates/releases", headers: { "x-user-id": "user-global-admin" },
+      payload: { version: "1.2.3", artifactUrl: "http://user:secret@updates.example/edge-agent.bundle", sha256: "a".repeat(64), enabled: true },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it("queues a requested signed update across every accessible branch gateway", async () => {
     const { privateKey } = generateKeyPairSync("ed25519");
     const privatePem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();

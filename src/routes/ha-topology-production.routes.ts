@@ -99,7 +99,10 @@ export function initializeHAServices(redisClient: Redis): void {
     mediaGatewayMonitor,
     {
       requireApproval: process.env.CHAOS_REQUIRE_APPROVAL !== "false",
-      allowProductionChaos: process.env.CHAOS_ALLOW_PRODUCTION === "true",
+      // Non-production environments may execute an explicitly approved lab
+      // experiment. Production remains fail-closed unless the operator opts
+      // in through the deployment configuration.
+      allowProductionChaos: process.env.NODE_ENV !== "production" || process.env.CHAOS_ALLOW_PRODUCTION === "true",
       minHealthyGateways: parseInt(process.env.CHAOS_MIN_HEALTHY_GATEWAYS || "2", 10),
       minAvailableCapacityPercent: parseInt(process.env.CHAOS_MIN_AVAILABLE_CAPACITY_PERCENT || "30", 10),
       rtoTargetMs: parseInt(process.env.RTO_TARGET_MS || "60000", 10),

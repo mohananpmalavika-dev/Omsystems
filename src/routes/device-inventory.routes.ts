@@ -50,7 +50,14 @@ const deviceInventorySchema = z.object({
   lifecycleState: z.enum(lifecycleStates).default("discovered"),
 }).strict();
 
-const updateDeviceInventorySchema = deviceInventorySchema.partial().extend({
+const updateDeviceInventorySchema = deviceInventorySchema.partial().omit({
+  // Identity and placement changes need an explicit, audited migration flow.
+  // Accepting them in a generic PATCH can move a device across a tenant or
+  // branch without checking access to the new scope.
+  deviceId: true,
+  tenant: true,
+  branch: true,
+}).extend({
   capabilities: z.array(z.string().trim().min(1).max(100)).optional(),
 });
 
@@ -67,7 +74,7 @@ async function ensureBranchAccess(
   action: "live:view" | "device:configure" = "live:view",
 ) {
   const branch = await store.getNode(branchNodeId);
-  if (!branch || branch.type !== "branch") {
+  if (!branch || branch.type !== "branch" || branch.tenantId !== request.currentUser.tenantId) {
     await reply.code(404).send({ error: "branch_not_found" });
     return false;
   }
@@ -89,7 +96,10 @@ export async function registerDeviceInventoryRoutes(
 ) {
   app.get("/v1/device-inventory", async (request, reply) => {
     const query = listQuerySchema.parse(request.query);
-    const tenantId = query.tenant ?? request.currentUser.tenantId;
+    if (query.tenant && query.tenant !== request.currentUser.tenantId) {
+      return reply.code(403).send({ error: "cross_tenant_inventory_access_denied" });
+    }
+    const tenantId = request.currentUser.tenantId;
     if (query.branch) {
       if (!(await ensureBranchAccess(request, reply, store, query.branch, "live:view"))) return;
     }
@@ -98,11 +108,14 @@ export async function registerDeviceInventoryRoutes(
 
   app.post("/v1/device-inventory", async (request, reply) => {
     const body = deviceInventorySchema.parse(request.body);
+    if (body.tenant && body.tenant !== request.currentUser.tenantId) {
+      return reply.code(400).send({ error: "tenant_must_match_authenticated_tenant" });
+    }
     if (!(await ensureBranchAccess(request, reply, store, body.branch, "device:configure"))) return;
 
     const record = await store.createDeviceInventoryRecord({
       tenantId: request.currentUser.tenantId,
-      tenant: body.tenant ?? request.currentUser.tenantId,
+      tenant: request.currentUser.tenantId,
       deviceId: body.deviceId,
       region: body.region,
       branch: body.branch,
@@ -139,15 +152,25 @@ export async function registerDeviceInventoryRoutes(
 
   app.patch("/v1/device-inventory/:id", async (request, reply) => {
     const { id } = z.object({ id: z.string().min(1) }).parse(request.params);
-    const body = updateDeviceInventorySchema.parse(request.body);
+    const parsedBody = updateDeviceInventorySchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      return reply.code(400).send({
+        error: "invalid_device_inventory_update",
+        message: "Device identity and branch placement cannot be changed through this endpoint",
+      });
+    }
+    const body = parsedBody.data;
     const existing = await store.getDeviceInventory(id);
     if (!existing) return reply.code(404).send({ error: "device_not_found" });
+    if (existing.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: "device_not_found" });
+    }
     if (!(await ensureBranchAccess(request, reply, store, existing.branch, "device:configure"))) return;
 
     const updated = await store.updateDeviceInventory(id, {
       ...body,
       tenantId: request.currentUser.tenantId,
-      tenant: body.tenant ?? existing.tenant,
+      tenant: existing.tenant,
     });
 
     return updated ?? reply.code(404).send({ error: "device_not_found" });

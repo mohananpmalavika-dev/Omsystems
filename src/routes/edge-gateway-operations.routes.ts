@@ -504,7 +504,10 @@ export async function registerEdgeGatewayOperationsRoutes(
     }
     const body = z.object({
       version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
-      artifactUrl: z.string().url(),
+      artifactUrl: z.string().url().refine((value) => {
+        const url = new URL(value);
+        return url.protocol === "https:" && !url.username && !url.password;
+      }, "artifactUrl must be an HTTPS URL without embedded credentials"),
       sha256: z.string().regex(/^[a-f0-9]{64}$/),
       notes: z.string().trim().max(5_000).default(""),
       rolloutPercentage: z.number().int().min(0).max(100).default(0),
@@ -666,14 +669,30 @@ async function findEdgeAgentRoot(preferredRoot?: string) {
 }
 
 function compareVersions(left: string, right: string) {
-  const parse = (value: string) => value.split(/[.+-]/, 3).map((part) => Number.parseInt(part, 10) || 0);
-  const leftParts = parse(left);
-  const rightParts = parse(right);
-  for (let index = 0; index < 3; index += 1) {
-    const difference = (leftParts[index] ?? 0) - (rightParts[index] ?? 0);
-    if (difference !== 0) return difference;
+  const parse = (value: string) => /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(left);
+  const b = parse(right);
+  if (!a || !b) return left.localeCompare(right);
+  for (let index = 1; index <= 3; index += 1) {
+    const difference = Number(a[index]) - Number(b[index]);
+    if (difference) return difference;
   }
-  return left.localeCompare(right);
+  if (!a[4] || !b[4]) return a[4] ? -1 : b[4] ? 1 : 0;
+  const leftIds = a[4].split(".");
+  const rightIds = b[4].split(".");
+  for (let index = 0; index < Math.max(leftIds.length, rightIds.length); index += 1) {
+    const l = leftIds[index];
+    const r = rightIds[index];
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1;
+    if (l === r) continue;
+    const lNumber = /^\d+$/.test(l);
+    const rNumber = /^\d+$/.test(r);
+    if (lNumber && rNumber) return Number(l) - Number(r);
+    if (lNumber) return -1;
+    if (rNumber) return 1;
+    return l.localeCompare(r);
+  }
+  return 0;
 }
 
 function hashSecret(value: string) {

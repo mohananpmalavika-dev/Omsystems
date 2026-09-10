@@ -18,26 +18,34 @@ import { generateAlertEvidenceSvg } from "../alerts/alert-evidence-graphic.js";
 
 const alertIdParams = z.object({ alertId: z.string().uuid() });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const ianaTimezone = z.string().trim().min(1).max(100).refine((value) => {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}, "Invalid IANA timezone");
+const phoneRecipient = z.string().trim().regex(/^\+[1-9]\d{6,14}$/, "Use an E.164 phone number");
 const recipients = z.object({
-  sms: z.array(z.string().trim().min(3).max(100)).max(100).optional(),
-  email: z.array(z.string().email()).max(100).optional(),
-  voice: z.array(z.string().trim().min(3).max(100)).max(100).optional(),
+  sms: z.array(phoneRecipient).max(100).optional(),
+  email: z.array(z.string().trim().email().max(254)).max(100).optional(),
+  voice: z.array(phoneRecipient).max(100).optional(),
 }).default({});
 const quietHoursSchema = z.object({
   enabled: z.boolean().default(true),
   start: hhmm,
   end: hhmm,
-  timezone: z.string().trim().min(1).max(100),
+  timezone: ianaTimezone,
   bypassSeverities: z.array(z.enum(["P1", "P2", "P3", "P4", "P5"])).default(["P1"]),
 });
-const notificationChannelSchema = z.enum(["dashboard", "email", "sms", "voice", "push", "webhook"]);
 const policySchema = z.object({
   recipientGroups: recipients,
   onCallSchedules: z.array(z.object({
     name: z.string().trim().min(1).max(100),
     days: z.array(z.number().int().min(0).max(6)).min(1).max(7),
     start: hhmm, end: hhmm,
-    timezone: z.string().trim().min(1).max(100),
+    timezone: ianaTimezone,
     recipients,
   })).max(50).default([]),
   quietHours: quietHoursSchema.optional(),
@@ -49,10 +57,6 @@ const policySchema = z.object({
     P4: z.number().int().min(10).max(86_400).optional(),
     P5: z.number().int().min(10).max(86_400).optional(),
   }).default({ P1: 30, P2: 300, P3: 900 }),
-  matrix: z.array(z.object({
-    severity: z.enum(["P1", "P2", "P3", "P4", "P5"]),
-    channels: z.array(notificationChannelSchema).min(1).max(6),
-  })).optional(),
   smsTemplates: z.object({
     P1: z.string().trim().min(1).max(480).optional(),
     P2: z.string().trim().min(1).max(480).optional(),
@@ -61,9 +65,7 @@ const policySchema = z.object({
     P1: z.string().trim().min(1).max(200).optional(),
     P2: z.string().trim().min(1).max(200).optional(),
   }).default({}),
-  policyVersion: z.number().int().min(1).optional(),
-  status: z.enum(["draft", "published"]).default("draft").optional(),
-});
+}).strict();
 
 export async function registerAlertCommandCenterRoutes(
   app: FastifyInstance,
@@ -364,7 +366,11 @@ export async function registerAlertCommandCenterRoutes(
 
   app.put("/v1/alerts/notification-policy", async (request, reply) => {
     if (!(await canConfigure(store, request.currentUser))) return reply.code(403).send({ error: "forbidden" });
-    const input = policySchema.parse(request.body);
+    const parsed = policySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: "invalid_notification_policy", message: parsed.error.issues[0]?.message ?? "Invalid notification policy" });
+    }
+    const input = parsed.data;
     const policy = await store.upsertAlertNotificationPolicy({
       tenantId: request.currentUser.tenantId,
       recipientGroups: input.recipientGroups,
@@ -382,6 +388,21 @@ export async function registerAlertCommandCenterRoutes(
       smsTemplates: input.smsTemplates,
       smsTemplateIds: input.smsTemplateIds,
       updatedAt: new Date().toISOString(),
+    });
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "alerts.notification_policy_updated",
+      resourceNodeId: null,
+      outcome: "success",
+      sourceIp: request.ip,
+      // Never store recipient addresses or phone numbers in audit payloads.
+      details: {
+        recipientCounts: Object.fromEntries(Object.entries(input.recipientGroups).map(([channel, values]) => [channel, values?.length ?? 0])),
+        onCallScheduleCount: input.onCallSchedules.length,
+        quietHoursEnabled: input.quietHours?.enabled ?? false,
+        rateLimitPerMinute: input.rateLimitPerMinute,
+      },
     });
     return { data: policy, matrix: NOTIFICATION_MATRIX };
   });

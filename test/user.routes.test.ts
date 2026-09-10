@@ -69,4 +69,92 @@ describe("user directory route", () => {
     expect(response.statusCode).toBe(500);
     expect(response.json()).not.toMatchObject({ data: [currentUser], total: 1 });
   });
+
+  it("creates all employee location assignments atomically through one repository call", async () => {
+    const primaryScopeId = "00000000-0000-4000-8000-000000000201";
+    const additionalScopeId = "00000000-0000-4000-8000-000000000202";
+    const createUser = vi.fn().mockResolvedValue({
+      id: "00000000-0000-4000-8000-000000000203",
+      tenantId: currentUser.tenantId,
+      username: "new-operator",
+      role: "operator",
+      passwordHash: "never-returned",
+    });
+    const app = await createApp({
+      getNode: vi.fn((id: string) => ({ id, tenantId: currentUser.tenantId })),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      createUser,
+      writeAudit: vi.fn(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/users",
+      payload: {
+        displayName: "New Operator",
+        email: "new.operator@example.test",
+        username: "new-operator",
+        password: "a-safe-password",
+        role: "operator",
+        primaryOrgNodeId: primaryScopeId,
+        organizationScopeNodeIds: [primaryScopeId, additionalScopeId],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).not.toHaveProperty("passwordHash");
+    expect(createUser).toHaveBeenCalledWith(
+      currentUser.tenantId,
+      expect.objectContaining({
+        primaryOrgNodeId: primaryScopeId,
+        organizationScopeNodeIds: [primaryScopeId, additionalScopeId],
+      }),
+    );
+  });
+
+  it("does not create an employee when any requested location is outside the tenant", async () => {
+    const createUser = vi.fn();
+    const app = await createApp({
+      getNode: vi.fn((id: string) => ({
+        id,
+        tenantId: id.endsWith("202") ? "00000000-0000-4000-8000-000000000999" : currentUser.tenantId,
+      })),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      createUser,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/users",
+      payload: {
+        displayName: "New Operator",
+        email: "new.operator@example.test",
+        username: "new-operator",
+        password: "a-safe-password",
+        role: "operator",
+        primaryOrgNodeId: "00000000-0000-4000-8000-000000000201",
+        organizationScopeNodeIds: ["00000000-0000-4000-8000-000000000202"],
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(createUser).not.toHaveBeenCalled();
+  });
+
+  it("does not delete a custom role while employees are assigned to it", async () => {
+    const deleteCustomRole = vi.fn();
+    const app = await createApp({
+      getCustomRole: vi.fn().mockResolvedValue({ id: "00000000-0000-4000-8000-000000000301", userCount: 1 }),
+      deleteCustomRole,
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: "/v1/roles/00000000-0000-4000-8000-000000000301",
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe("role_in_use");
+    expect(deleteCustomRole).not.toHaveBeenCalled();
+  });
 });

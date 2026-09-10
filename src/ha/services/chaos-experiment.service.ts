@@ -176,6 +176,16 @@ export class ChaosExperimentService {
       throw new Error(`Experiment ${experimentId} not found`);
     }
 
+    // A pre-check must never be used to bypass the approval gate.  Previously
+    // an unapproved request could be moved from `pending-approval` to `ready`
+    // and then executed by the route that runs pre-checks automatically.
+    if (this.config.requireApproval && !experiment.approval) {
+      throw new Error("Experiment requires approval before pre-checks can run");
+    }
+    if (!['approved', 'ready', 'pre-check-failed'].includes(experiment.status)) {
+      throw new Error(`Pre-checks cannot run from status: ${experiment.status}`);
+    }
+
     const startTime = Date.now();
     const checks: ChaosPreCheckResult[] = [];
 
@@ -245,7 +255,19 @@ export class ChaosExperimentService {
       throw new Error(`Experiment ${experimentId} not found`);
     }
 
-    if (experiment.status !== "ready" && experiment.status !== "approved") {
+    if (!this.config.allowProductionChaos) {
+      throw new Error("Chaos execution is disabled. Enable it only in an approved, isolated test environment.");
+    }
+
+    if (this.config.requireApproval && !experiment.approval) {
+      throw new Error("Experiment requires recorded approval before execution");
+    }
+
+    if (!experiment.preChecks?.allPassed) {
+      throw new Error("Experiment requires successful, current pre-checks before execution");
+    }
+
+    if (experiment.status !== "ready") {
       throw new Error(`Experiment cannot be executed from status: ${experiment.status}`);
     }
 
@@ -338,8 +360,6 @@ export class ChaosExperimentService {
   private async executeExperimentType(
     experiment: ChaosExperiment,
   ): Promise<ChaosExperimentMetrics> {
-    const detectionStartTime = Date.now();
-
     switch (experiment.experimentType) {
       case "KILL_MEDIA_GATEWAY": {
         const targetGatewayId = experiment.request.targetComponent;
@@ -374,21 +394,10 @@ export class ChaosExperimentService {
       }
 
       default:
-        // Simulated metrics for other experiment types
-        return {
-          detectionTimeMs: Date.now() - detectionStartTime,
-          detectionMethod: "manual",
-          failoverInitiatedAt: new Date().toISOString(),
-          rtoTargetMs: this.config.rtoTargetMs,
-          rpoTargetBytes: this.config.rpoTargetBytes,
-          affectedComponents: [experiment.request.targetComponent],
-          affectedCameras: 0,
-          affectedBranches: 0,
-          recordingGapTarget: this.config.recordingGapTargetMs,
-          servicesRestarted: 0,
-          leasesTransferred: 0,
-          reconnectAttempts: 0,
-        };
+        // Do not present synthetic measurements as evidence.  A scenario
+        // becomes executable only after it has a real injector and rollback
+        // implementation.
+        throw new Error(`Experiment type ${experiment.experimentType} has no production injector configured`);
     }
   }
 
@@ -404,13 +413,10 @@ export class ChaosExperimentService {
     step.startedAt = new Date().toISOString();
 
     try {
-      // Simulate step execution
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
       step.status = "completed";
       step.completedAt = new Date().toISOString();
       step.durationMs = Date.now() - startTime;
-      step.output = `Step ${step.stepNumber} completed successfully`;
+      step.output = `Step ${step.stepNumber} recorded successfully`;
     } catch (error) {
       step.status = "failed";
       step.completedAt = new Date().toISOString();

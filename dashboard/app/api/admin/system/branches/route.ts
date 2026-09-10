@@ -29,11 +29,11 @@ export async function GET(request: NextRequest) {
 
     const [branchesData, agentsData] = await Promise.all([
       branchesResponse.json() as Promise<{ data?: unknown[] }>,
-      agentsResponse.json() as Promise<{ data?: Array<{ branchId?: string }> }>,
+      agentsResponse.json() as Promise<{ data?: Array<{ branchId?: string; credentialStatus?: string }> }>,
     ]);
     const agentsByBranch = new Map<string, number>();
     for (const agent of agentsData.data ?? []) {
-      if (!agent.branchId) continue;
+      if (!agent.branchId || agent.credentialStatus === 'revoked') continue;
       agentsByBranch.set(agent.branchId, (agentsByBranch.get(agent.branchId) ?? 0) + 1);
     }
     const branches = (branchesData.data ?? []).map((value) => {

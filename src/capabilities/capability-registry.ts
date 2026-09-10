@@ -69,7 +69,17 @@ export class PlatformCapabilityRegistry {
 
   constructor(initialCapabilities: PlatformCapability[] = PLATFORM_CAPABILITIES) {
     for (const cap of initialCapabilities) {
-      this.capabilities.set(cap.id, { ...cap });
+      const capability = structuredClone(cap);
+      // A matrix definition describes release maturity, not live service
+      // health. HEALTHY is only valid after a runtime reporter has supplied a
+      // timestamped observation for this process.
+      if (capability.runtime.state === CapabilityRuntimeState.HEALTHY && !capability.runtime.checkedAt) {
+        capability.runtime = {
+          state: CapabilityRuntimeState.UNKNOWN,
+          reason: "Awaiting a timestamped runtime health observation.",
+        };
+      }
+      this.capabilities.set(capability.id, capability);
     }
   }
 
@@ -94,14 +104,15 @@ export class PlatformCapabilityRegistry {
    * Get a capability by its unique machine ID
    */
   get(id: string): PlatformCapability | undefined {
-    return this.capabilities.get(id);
+    const capability = this.capabilities.get(id);
+    return capability ? structuredClone(capability) : undefined;
   }
 
   /**
    * Get all registered platform capabilities
    */
   getAll(): PlatformCapability[] {
-    return Array.from(this.capabilities.values());
+    return Array.from(this.capabilities.values(), (capability) => structuredClone(capability));
   }
 
   /**
@@ -130,7 +141,7 @@ export class PlatformCapabilityRegistry {
    * Register or update a platform capability definition
    */
   register(capability: PlatformCapability): void {
-    this.capabilities.set(capability.id, capability);
+    this.capabilities.set(capability.id, structuredClone(capability));
   }
 
   /**
@@ -194,6 +205,10 @@ export class PlatformCapabilityRegistry {
 
     if (cap.runtime.state === CapabilityRuntimeState.NOT_CONFIGURED) {
       return { usable: false, reason: 'runtime_not_configured' };
+    }
+
+    if (cap.runtime.state === CapabilityRuntimeState.UNKNOWN) {
+      return { usable: false, reason: 'runtime_health_unverified' };
     }
 
     return { usable: true };
@@ -362,7 +377,11 @@ export class PlatformCapabilityRegistry {
   reset(): void {
     this.capabilities.clear();
     for (const cap of PLATFORM_CAPABILITIES) {
-      this.capabilities.set(cap.id, { ...cap });
+      const capability = structuredClone(cap);
+      if (capability.runtime.state === CapabilityRuntimeState.HEALTHY && !capability.runtime.checkedAt) {
+        capability.runtime = { state: CapabilityRuntimeState.UNKNOWN, reason: "Awaiting a timestamped runtime health observation." };
+      }
+      this.capabilities.set(capability.id, capability);
     }
   }
 }

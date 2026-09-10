@@ -249,6 +249,22 @@ describe("Phase 3 HO alert command center", () => {
     expect(response.json().matrix.P1).toEqual(["dashboard", "sms", "email", "voice"]);
     expect((await store.getAlertNotificationPolicy("omsystems")).onCallSchedules[0]?.name).toBe("Night SOC");
   });
+
+  it("rejects unsafe notification policy contacts, time zones, and unsupported lifecycle fields", async () => {
+    const response = await app.inject({
+      method: "PUT", url: "/v1/alerts/notification-policy", headers: admin,
+      payload: {
+        recipientGroups: { sms: ["9999999999"] },
+        onCallSchedules: [],
+        quietHours: { start: "22:00", end: "06:00", timezone: "not/a-timezone" },
+        rateLimitPerMinute: 60,
+        escalationAfterSeconds: { P1: 30 },
+        status: "published",
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: "invalid_notification_policy" });
+  });
 });
 
 describe("alert event tenant isolation", () => {

@@ -268,7 +268,7 @@ export async function registerOrganizationRoutes(
         }
       }
     } else if (
-      !(await requireAccess(
+      !(await requireTenantNodeAccess(
         request,
         reply,
         store,
@@ -277,6 +277,19 @@ export async function registerOrganizationRoutes(
       ))
     ) {
       return;
+    }
+
+    if (body.parentNodeId) {
+      const validRelationship = await store.validateHierarchyRelationship(
+        body.parentNodeId,
+        body.nodeType,
+      );
+      if (!validRelationship) {
+        return reply.code(400).send({
+          error: "invalid_hierarchy_relationship",
+          message: `${body.nodeType} cannot be created below the selected parent location`,
+        });
+      }
     }
 
     const node = await store.createOrganizationNode(
@@ -316,7 +329,7 @@ export async function registerOrganizationRoutes(
     const body = updateNodeSchema.parse(request.body);
 
     // Check permission
-    if (!(await requireAccess(request, reply, store, "org:manage", id))) {
+    if (!(await requireTenantNodeAccess(request, reply, store, "org:manage", id))) {
       return;
     }
 
@@ -346,15 +359,15 @@ export async function registerOrganizationRoutes(
       ({ id } = nodeIdSchema.parse(request.params));
 
       // Check permission
-      if (!(await requireAccess(request, reply, store, "org:manage", id))) {
+      if (!(await requireTenantNodeAccess(request, reply, store, "org:manage", id))) {
         return;
       }
 
-      // Get query parameters for cascade and force delete options
+      // Cascades are explicit. Never report a partial hierarchy deletion as a
+      // successful operation: it leaves scopes and grants misleading.
       const query = z
         .object({
           cascade: z.coerce.boolean().default(false),
-          force: z.coerce.boolean().default(false),
         })
         .parse(request.query);
 
@@ -362,7 +375,7 @@ export async function registerOrganizationRoutes(
       const descendants = await store.getDescendantNodes(id, false);
       
       if (descendants.length > 0) {
-        if (!query.cascade && !query.force) {
+        if (!query.cascade) {
           // Get child types for better error message
           const childTypes = [...new Set(descendants.map(d => d.type))];
           const childCount = descendants.length;
@@ -383,44 +396,27 @@ export async function registerOrganizationRoutes(
         if (query.cascade) {
           // Sort descendants by depth (deepest first) to avoid parent-child conflicts
           const sortedDescendants = [...descendants].sort((a, b) => {
-            // Count path depth (more slashes = deeper)
-            const depthA = (a.path?.match(/\//g) || []).length;
-            const depthB = (b.path?.match(/\//g) || []).length;
+            const depthOf = (node: { depth?: unknown; path?: unknown }) => {
+              if (typeof node.depth === "number") return node.depth;
+              if (Array.isArray(node.path)) return node.path.length;
+              return typeof node.path === "string" ? node.path.split(".").length : 0;
+            };
+            const depthA = depthOf(a);
+            const depthB = depthOf(b);
             return depthB - depthA;
           });
 
           // Deactivate each descendant
           for (const descendant of sortedDescendants) {
-            try {
-              await store.deactivateOrganizationNode(descendant.id);
-              
-              await store.writeAudit({
-                tenantId: request.currentUser.tenantId,
-                actorUserId: request.currentUser.id,
-                action: "organization.node_deleted",
-                resourceNodeId: descendant.id,
-                outcome: "success",
-                details: {
-                  cascadeDelete: true,
-                  parentNodeId: id
-                }
-              });
-            } catch (err) {
-              console.error(`Failed to deactivate descendant ${descendant.id}:`, err);
-              
-              if (!query.force) {
-                return reply.code(500).send({
-                  error: "cascade_delete_failed",
-                  message: `Failed to delete descendant node ${descendant.name} (${descendant.id})`,
-                  details: {
-                    failedNodeId: descendant.id,
-                    failedNodeName: descendant.name,
-                    error: err instanceof Error ? err.message : String(err)
-                  }
-                });
-              }
-              // If force=true, continue despite errors
-            }
+            await store.deactivateOrganizationNode(descendant.id);
+            await store.writeAudit({
+              tenantId: request.currentUser.tenantId,
+              actorUserId: request.currentUser.id,
+              action: "organization.node_deleted",
+              resourceNodeId: descendant.id,
+              outcome: "success",
+              details: { cascadeDelete: true, parentNodeId: id },
+            });
           }
         }
       }
@@ -443,29 +439,17 @@ export async function registerOrganizationRoutes(
       return reply.code(204).send();
       
     } catch (error) {
-      console.error("Error deleting organization node:", error);
-      
-      // Log detailed error for debugging
-      console.error("Delete error details:", {
+      request.log.error({
         nodeId: id || 'unknown',
         userId: request.currentUser.id,
         tenantId: request.currentUser.tenantId,
-        error: error instanceof Error ? {
-          message: error.message,
-          stack: error.stack,
-          name: error.name
-        } : String(error)
-      });
+        err: error,
+      }, "Failed to delete organization node");
 
-      // Return detailed error to client
+      // Do not disclose database or implementation details to API clients.
       return reply.code(500).send({
         error: "delete_failed",
-        message: error instanceof Error ? error.message : "Failed to delete organization node",
-        details: {
-          nodeId: id || 'unknown',
-          timestamp: new Date().toISOString(),
-          errorType: error instanceof Error ? error.name : typeof error
-        }
+        message: "Failed to delete organization node",
       });
     }
   });
@@ -476,21 +460,14 @@ export async function registerOrganizationRoutes(
       .object({
         parentNodeId: z.string().min(1),
         childNodeType: z.enum([
-          "company",
-          "headquarters",
-          "zone",
-          "region",
-          "area",
-          "branch",
-          "floor",
-          "location",
-          "camera-group",
+          "company", "headquarters", "zone", "division", "region", "area",
+          "branch", "building", "floor", "location", "location-group", "camera-group",
         ]),
       })
       .parse(request.body);
 
     if (
-      !(await requireAccess(
+      !(await requireTenantNodeAccess(
         request,
         reply,
         store,
@@ -575,4 +552,21 @@ async function requireAccess(
   }
 
   return true;
+}
+
+/** Resolve tenant ownership before evaluating grants. This prevents a valid
+ * grant lookup from ever being used to traverse a foreign tenant's tree. */
+async function requireTenantNodeAccess(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  store: ControlPlaneStore & OrganizationStore,
+  action: string,
+  resourceNodeId: string,
+) {
+  const node = await store.getOrganizationNodeDetails(resourceNodeId);
+  if (!node || node.tenantId !== request.currentUser.tenantId) {
+    await reply.code(404).send({ error: "resource_not_found" });
+    return false;
+  }
+  return requireAccess(request, reply, store, action, resourceNodeId);
 }
