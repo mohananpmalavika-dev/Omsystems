@@ -42,6 +42,8 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get('from');
     const to = searchParams.get('to');
     const summary = searchParams.get('summary') === 'true';
+    const search = searchParams.get('search')?.toLowerCase() ?? '';
+    const slaStatus = searchParams.get('slaStatus');
 
     const params = new URLSearchParams();
     if (cameraId) params.append('cameraId', cameraId);

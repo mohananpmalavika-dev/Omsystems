@@ -54,8 +54,9 @@ export async function registerSlaReportRoutes(
     // 2. Branch Historical SLA Trend (7d, 30d, 90d)
     app.get(`${prefix}/sla/branches/:id/history`, async (request, reply) => {
       const params = branchIdParamSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ success: false, error: "validation_error", details: params.error.flatten() });
       const query = historyQuerySchema.safeParse(request.query);
-      if (!params.success || !query.success) return reply.code(400).send({ success: false, error: "validation_error", details: (!params.success ? params.error : query.error).flatten() });
+      if (!query.success) return reply.code(400).send({ success: false, error: "validation_error", details: query.error.flatten() });
       const { id } = params.data;
       const { days } = query.data;
       if (!(await canReadBranch(request, id))) return reply.code(404).send({ success: false, error: "branch_not_found" });
@@ -72,8 +73,9 @@ export async function registerSlaReportRoutes(
     // 3. Per-Camera Daily Drill-Down Breakdown
     app.get(`${prefix}/sla/branches/:id/cameras/daily`, async (request, reply) => {
       const params = branchIdParamSchema.safeParse(request.params);
+      if (!params.success) return reply.code(400).send({ success: false, error: "validation_error", details: params.error.flatten() });
       const query = z.object({ reportDate: reportDateSchema.optional() }).strict().safeParse(request.query);
-      if (!params.success || !query.success) return reply.code(400).send({ success: false, error: "validation_error", details: (!params.success ? params.error : query.error).flatten() });
+      if (!query.success) return reply.code(400).send({ success: false, error: "validation_error", details: query.error.flatten() });
       const { id } = params.data;
       const reportDate = query.data.reportDate ?? new Date(Date.now() - 86400_000).toISOString().slice(0, 10);
       if (!(await canReadBranch(request, id))) return reply.code(404).send({ success: false, error: "branch_not_found" });

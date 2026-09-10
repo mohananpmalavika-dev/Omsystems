@@ -81,7 +81,7 @@ export function sanitizeCurrentUser(user: any): any {
 
 function requiresPasswordChangeOnly(request: FastifyRequest, user: any): boolean {
   if (!user?.mustChangePassword) return false;
-  const path = request.url.split("?")[0];
+  const path = request.url.split("?")[0] ?? "";
   const permitted = new Set([
     "/v1/auth/me",
     "/v1/auth/logout",
