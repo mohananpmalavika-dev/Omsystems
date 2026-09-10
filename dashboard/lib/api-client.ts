@@ -995,6 +995,7 @@ export type WorkOrderWriteInput = {
   actionTaken?: string | null;
   verification?: string | null;
   status?: WorkOrder['status'];
+  resolvedAt?: string | null;
 };
 
 export type MaintenanceAssetWriteInput = {

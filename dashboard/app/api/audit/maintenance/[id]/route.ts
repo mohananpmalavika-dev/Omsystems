@@ -35,11 +35,7 @@ export async function GET(
   }
 }
 
-/**
- * PUT /api/audit/maintenance/[id]
- * Update maintenance work order
- */
-export async function PUT(
+async function handleUpdate(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -54,7 +50,7 @@ export async function PUT(
     const authorization = request.headers.get('authorization');
     const sentinelSession = request.headers.get('x-sentinel-session');
     const response = await fetch(url, {
-      method: 'PUT',
+      method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         cookie: request.headers.get('cookie') ?? '',
@@ -73,6 +69,26 @@ export async function PUT(
       { status: 502 }
     );
   }
+}
+
+/**
+ * PUT /api/audit/maintenance/[id]
+ */
+export async function PUT(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  return handleUpdate(request, context);
+}
+
+/**
+ * PATCH /api/audit/maintenance/[id]
+ */
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  return handleUpdate(request, context);
 }
 
 async function proxyResponse(response: Response) {

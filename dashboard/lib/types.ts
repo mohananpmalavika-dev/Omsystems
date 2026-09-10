@@ -124,6 +124,7 @@ export interface WorkOrder {
   actionTaken?: string;
   verification?: string;
   status: "open" | "assigned" | "in_progress" | "resolved" | "closed";
+  resolvedAt?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;

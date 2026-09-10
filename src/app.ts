@@ -1662,7 +1662,7 @@ export async function buildApp(options?: {
       return;
     }
     try {
-      const session = await store.createLiveSession(id, request.currentUser.id);
+      const session = await store.createLiveSession(camera.id, request.currentUser.id);
       await audit(request, store, "live_session.created", camera.nodeId, "success", {
         sessionId: session.id,
       });
@@ -1692,7 +1692,7 @@ export async function buildApp(options?: {
       });
     }
     try {
-      const session = await store.createLiveSession(id, request.currentUser.id, "talk");
+      const session = await store.createLiveSession(camera.id, request.currentUser.id, "talk");
       await audit(request, store, "talk_session.created", camera.nodeId, "success", {
         sessionId: session.id,
         cameraId: camera.id,

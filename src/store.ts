@@ -1359,7 +1359,8 @@ export class MemoryStore {
   }
 
   async getCamera(id: string) {
-    const cam = this.cameras.get(id);
+    const cam = this.cameras.get(id) ??
+      (id.startsWith("camera-") ? this.cameras.get(id.slice(7)) : this.cameras.get(`camera-${id}`));
     if (!cam) return undefined;
     const branch = this.nodes.get(cam.branchId) || this.nodes.get(cam.nodeId);
     return {
@@ -3176,7 +3177,7 @@ export class MemoryStore {
       createdBy: input.createdBy,
       createdAt: now,
       updatedAt: now,
-      ...(clean({ assetId: input.assetId, branchNodeId: input.branchNodeId, technician: input.technician, vendorId: input.vendorId, slaDueAt: input.slaDueAt, eta: input.eta, parts: input.parts, cost: input.cost, rootCause: input.rootCause, actionTaken: input.actionTaken, verification: input.verification }) as any),
+      ...(clean({ assetId: input.assetId, branchNodeId: input.branchNodeId, technician: input.technician, vendorId: input.vendorId, slaDueAt: input.slaDueAt, eta: input.eta, parts: input.parts, cost: input.cost, rootCause: input.rootCause, actionTaken: input.actionTaken, verification: input.verification, resolvedAt: input.resolvedAt }) as any),
     };
     this.workOrders.push(workOrder);
     return workOrder;

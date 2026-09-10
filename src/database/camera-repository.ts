@@ -119,6 +119,15 @@ const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
   FROM cameras
   JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id`;
 
+export function normalizeCameraUuid(id: string): string {
+  if (!id) return id;
+  const uuidMatch = id.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  if (uuidMatch) {
+    return uuidMatch[0];
+  }
+  return id.replace(/^camera-/, "");
+}
+
 export class CameraRepository {
   constructor(
     private readonly pool: Pool,
@@ -126,18 +135,20 @@ export class CameraRepository {
   ) {}
 
   async findById(id: string) {
+    const cleanId = normalizeCameraUuid(id);
     const result = await this.pool.query<CameraRow>(
-      `${selectCamera} WHERE cameras.id = $1`,
-      [id],
+      `${selectCamera} WHERE cameras.id::text = $1 OR cameras.resource_node_id::text = $1 OR cameras.id::text = $2`,
+      [cleanId, id],
     );
     return result.rows[0] ? mapCamera(result.rows[0]) : undefined;
   }
 
   async listByIds(ids: string[]) {
     if (ids.length === 0) return [];
+    const cleanIds = Array.from(new Set(ids.flatMap(id => [id, normalizeCameraUuid(id)])));
     const result = await this.pool.query<CameraRow>(
-      `${selectCamera} WHERE cameras.id = ANY($1::uuid[])`,
-      [ids],
+      `${selectCamera} WHERE cameras.id::text = ANY($1::text[]) OR cameras.resource_node_id::text = ANY($1::text[])`,
+      [cleanIds],
     );
     return result.rows.map(mapCamera);
   }
@@ -653,16 +664,21 @@ export class CameraRepository {
   }
 
   async updateStatus(id: string, status: CameraStatus) {
+    const cleanId = normalizeCameraUuid(id);
     const result = await this.pool.query(
       `UPDATE cameras SET status = $2::camera_status, last_seen_at = CASE
          WHEN $2::camera_status = 'online' THEN now() ELSE last_seen_at END
-       WHERE id = $1::uuid`,
-      [id, status],
+       WHERE id::text = $1 OR resource_node_id::text = $1`,
+      [cleanId, status],
     );
-    return result.rowCount ? this.findById(id) : undefined;
+    return result.rowCount ? this.findById(cleanId) : undefined;
   }
 
   async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
+    const cleanCameraId = normalizeCameraUuid(cameraId);
+    const camera = await this.findById(cleanCameraId);
+    const targetCameraId = camera?.id ?? cleanCameraId;
+
     const route = await this.pool.query<{
       edge_agent_id: string | null;
       agent_id: string | null;
@@ -680,9 +696,9 @@ export class CameraRepository {
          agent.last_seen_at
        FROM cameras camera
        LEFT JOIN edge_agents agent ON agent.id = camera.edge_agent_id
-       WHERE camera.id = $1
+       WHERE camera.id::text = $1 OR camera.resource_node_id::text = $1
        LIMIT 1`,
-      [cameraId],
+      [targetCameraId],
     );
     const row = route.rows[0];
     let activeAgent = row;
@@ -700,15 +716,32 @@ export class CameraRepository {
           `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
            FROM edge_agents agent
            JOIN cameras c ON c.branch_node_id = agent.branch_node_id
-           WHERE c.id = $1
+           WHERE (c.id::text = $1 OR c.resource_node_id::text = $1)
              AND agent.credential_revoked_at IS NULL
              AND agent.last_seen_at >= now() - interval '5 minutes'
            ORDER BY agent.last_seen_at DESC
            LIMIT 1`,
-          [cameraId],
+          [targetCameraId],
         );
-        if (fallbackAgent.rows[0]) {
-          const fb = fallbackAgent.rows[0];
+        let fb = fallbackAgent.rows[0];
+        if (!fb) {
+          const anyAgent = await this.pool.query<{
+            id: string;
+            public_media_url: string | null;
+            local_media_url: string | null;
+            status: string;
+            last_seen_at: Date | null;
+          }>(
+            `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
+             FROM edge_agents agent
+             WHERE agent.credential_revoked_at IS NULL
+               AND agent.last_seen_at >= now() - interval '10 minutes'
+             ORDER BY agent.last_seen_at DESC
+             LIMIT 1`,
+          );
+          fb = anyAgent.rows[0];
+        }
+        if (fb) {
           activeAgent = {
             ...row,
             edge_agent_id: fb.id,
@@ -720,8 +753,8 @@ export class CameraRepository {
           };
           // Persist the healed edge_agent_id so subsequent requests route directly
           await this.pool.query(
-            `UPDATE cameras SET edge_agent_id = $1 WHERE id = $2`,
-            [fb.id, cameraId],
+            `UPDATE cameras SET edge_agent_id = $1 WHERE id::text = $2 OR resource_node_id::text = $2`,
+            [fb.id, targetCameraId],
           ).catch(() => undefined);
         } else {
           // Do not fail live session creation when branch edge agent is offline.
@@ -737,8 +770,8 @@ export class CameraRepository {
     await this.pool.query(
       `INSERT INTO live_sessions
          (id, camera_id, user_id, token_hash, expires_at, purpose)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, cameraId, userId, tokenHash, expiresAt, purpose],
+       VALUES ($1, $2::uuid, $3, $4, $5, $6)`,
+      [id, targetCameraId, userId, tokenHash, expiresAt, purpose],
     );
     const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 5 * 60 * 1000);
     const mediaGatewayUrl = (isAgentRecent && activeAgent?.agent_status === "online")
@@ -747,7 +780,7 @@ export class CameraRepository {
     const localMediaGatewayUrl = activeAgent?.local_media_url ?? undefined;
     return {
       id,
-      cameraId,
+      cameraId: targetCameraId,
       userId,
       token,
       expiresAt: expiresAt.toISOString(),

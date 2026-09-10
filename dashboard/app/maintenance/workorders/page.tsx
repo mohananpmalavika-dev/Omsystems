@@ -13,6 +13,20 @@ function assetLabel(asset: MaintenanceAsset | undefined) {
   return identity || asset.assetType;
 }
 
+function SlaDueCell({ value, status }: { value?: string; status: WorkOrder["status"] }) {
+  if (!value || Number.isNaN(Date.parse(value))) {
+    return <span className="module-row-detail">Not set</span>;
+  }
+  const isClosed = ["resolved", "closed"].includes(status);
+  const overdue = !isClosed && Date.parse(value) < Date.now();
+  return (
+    <span className={overdue ? "module-row-detail module-overdue" : "module-row-detail"}>
+      {new Date(value).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+      {overdue ? " (overdue)" : ""}
+    </span>
+  );
+}
+
 export default function WorkOrdersListPage() {
   const [items, setItems] = useState<WorkOrder[]>([]);
   const [assets, setAssets] = useState<MaintenanceAsset[]>([]);
@@ -50,7 +64,7 @@ export default function WorkOrdersListPage() {
     <ModulePage
       eyebrow="Field service"
       title="Work orders"
-      description="Coordinate corrective and preventive service work across branches, devices, and field teams."
+      description="Coordinate corrective and preventive service work across branches, devices, and field teams with SLA oversight."
       icon={ClipboardCheck}
       actionHref="/maintenance/workorders/new"
       actionLabel="Create work order"
@@ -71,6 +85,7 @@ export default function WorkOrdersListPage() {
               <th>Asset</th>
               <th>Severity</th>
               <th>Status</th>
+              <th>SLA Due</th>
               <th><span className="sr-only">Actions</span></th>
             </tr>
           </thead>
@@ -86,6 +101,9 @@ export default function WorkOrdersListPage() {
                   </span>
                 </td>
                 <td><ModuleStatus value={item.status} /></td>
+                <td>
+                  <SlaDueCell value={item.slaDueAt} status={item.status} />
+                </td>
                 <td className="module-row-action">
                   <Link href={`/maintenance/workorders/${item.id}`}>View details</Link>
                 </td>

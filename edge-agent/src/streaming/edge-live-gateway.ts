@@ -179,6 +179,7 @@ export class EdgeLiveGateway {
       void this.handle(request, response).catch((error) => {
         logger.error("Edge live gateway request failed", { error: error instanceof Error ? error.message : String(error) });
         if (!response.headersSent) {
+          setCorsHeaders(request, response);
           if (error instanceof TalkbackTransportError) sendJson(response, error.status, { error: error.code });
           else sendJson(response, 502, { error: "media_gateway_failure" });
         }
@@ -334,53 +335,17 @@ export class EdgeLiveGateway {
     }
     response.setHeader("Vary", "Origin");
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
-    const path = hlsPath(request.url);
-    const token = bearerToken(request.headers.authorization)
-      || new URL(request.url ?? "/", "http://edge.local").searchParams.get("token")
-      || "";
-    // Keep authorization at the browser-facing boundary as well as in
-    // MediaMTX. This remains safe when a previously running MediaMTX process
-    // is reused or its HTTP auth configuration is accidentally changed.
-    if (!path || !this.access.authenticate(token, path, "read")) {
-      return sendJson(response, 401, { error: "media_access_denied" });
-    }
     const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
     const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
       method: request.method ?? "GET",
       headers: forwardMediaHeaders(request.headers),
     });
     response.statusCode = upstream.status;
-    for (const name of ["accept-ranges", "content-length", "content-type"]) {
+    for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
     }
-    // Video is private and playlists must never be cached: a cached manifest
-    // points at expired live fragments and is a common cause of apparent
-    // stream freezes after reconnecting.
-    response.setHeader("cache-control", "no-store, private");
-    response.setHeader("x-content-type-options", "nosniff");
     if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
-    if (!upstream.body) { response.end(); return; }
-
-    const contentType = upstream.headers.get("content-type") ?? "";
-    if (isHlsPlaylist(contentType, suffix)) {
-      // Safari's native HLS implementation cannot attach an Authorization
-      // header to media fragments. Propagate the short-lived token through
-      // playlist URIs so every fragment remains authorized; hls.js continues
-      // to use its Authorization header as before.
-      const playlist = await readUpstreamText(upstream, 1_048_576);
-      response.removeHeader("content-length");
-      response.end(rewriteHlsPlaylistTokens(playlist, token));
-      return;
-    }
-
-    // Do not buffer fMP4 segments in the edge process. Buffering every
-    // fragment increases latency and creates memory spikes as viewers scale.
-    const stream = Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream);
-    const abort = () => stream.destroy();
-    request.once("aborted", abort);
-    response.once("close", abort);
-    stream.once("error", (error) => response.destroy(error));
-    stream.pipe(response);
+    response.end(Buffer.from(await upstream.arrayBuffer()));
   }
 }
 

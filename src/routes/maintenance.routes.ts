@@ -46,6 +46,7 @@ const workOrderSchema = z.object({
   technician: z.string().trim().max(200).nullable().optional(),
   vendorId: z.string().uuid().nullable().optional(),
   slaDueAt: z.string().datetime().nullable().optional(),
+  resolvedAt: z.string().datetime().nullable().optional(),
   eta: z.string().datetime().nullable().optional(),
   parts: z.array(z.string().trim().max(200)).nullable().optional(),
   cost: z.number().nonnegative().nullable().optional(),
@@ -54,6 +55,11 @@ const workOrderSchema = z.object({
   verification: z.string().max(2000).nullable().optional(),
   status: workOrderStatusSchema.default("open"),
 });
+
+function calculateDefaultSlaDueAt(severity: "critical" | "high" | "medium" | "low"): string {
+  const hours = severity === "critical" ? 4 : severity === "high" ? 12 : severity === "medium" ? 24 : 72;
+  return new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
+}
 
 const vendorSchema = z.object({
   name: z.string().trim().min(2).max(200),
@@ -443,10 +449,12 @@ export async function registerMaintenanceRoutes(
     if (branchNodeId && !(await requireBranchAccess(request, reply, store, branchNodeId))) return;
     const workOrderNumber = normalizedWorkOrderNumber(body.workOrderNumber ?? generateWorkOrderNumber());
     if (!(await ensureUniqueWorkOrderNumber(request, reply, store, workOrderNumber))) return;
+    const slaDueAt = body.slaDueAt !== undefined ? (body.slaDueAt ?? undefined) : calculateDefaultSlaDueAt(body.severity);
     const payload = {
       tenantId: request.currentUser.tenantId,
       ...cleanObject(body),
       workOrderNumber,
+      ...(slaDueAt ? { slaDueAt } : {}),
       ...(branchNodeId ? { branchNodeId } : {}),
       createdBy: request.currentUser.id,
     };
@@ -467,7 +475,7 @@ export async function registerMaintenanceRoutes(
     return getAccessibleWorkOrder(request, reply, store, id);
   });
 
-  app.patch("/v1/maintenance/workorders/:id", async (request, reply) => {
+  const updateWorkOrderHandler = async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = idParams.parse(request.params);
     const parsed = workOrderSchema.partial().safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request", details: parsed.error.flatten() });
@@ -496,9 +504,17 @@ export async function registerMaintenanceRoutes(
     }
     if (branchNodeId && !(await requireBranchAccess(request, reply, store, branchNodeId))) return;
     if (body.workOrderNumber !== undefined && !(await ensureUniqueWorkOrderNumber(request, reply, store, body.workOrderNumber, id))) return;
+
+    const nextStatus = body.status ?? existing.status;
+    const isResolving = (nextStatus === "resolved" || nextStatus === "closed") && !(existing.status === "resolved" || existing.status === "closed");
+    const resolvedAt = body.resolvedAt !== undefined
+      ? (body.resolvedAt ?? undefined)
+      : (isResolving && !(existing as any).resolvedAt ? new Date().toISOString() : undefined);
+
     const payload = {
       ...cleanObject(body),
       ...(body.workOrderNumber !== undefined ? { workOrderNumber: normalizedWorkOrderNumber(body.workOrderNumber) } : {}),
+      ...(resolvedAt !== undefined ? { resolvedAt } : {}),
       ...(branchNodeId ? { branchNodeId } : {}),
     };
     const workOrder = await store.updateWorkOrder(id, payload as any);
@@ -512,7 +528,10 @@ export async function registerMaintenanceRoutes(
       details: { workOrderId: workOrder.id, changedFields: Object.keys(payload), previousStatus: existing.status, status: workOrder.status },
     });
     return workOrder;
-  });
+  };
+
+  app.patch("/v1/maintenance/workorders/:id", updateWorkOrderHandler);
+  app.put("/v1/maintenance/workorders/:id", updateWorkOrderHandler);
 
   app.get("/v1/maintenance/vendors", async (request) => {
     return { data: await store.listMaintenanceVendors(request.currentUser.tenantId) };

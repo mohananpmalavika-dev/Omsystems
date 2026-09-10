@@ -143,8 +143,9 @@ export async function startLive(
       ? publicMediaGatewayUrl ?? internalMediaGateway
       : controlSession.mediaGatewayUrl ?? internalMediaGateway;
 
+    const isCloudflareQuickTunnel = primaryGateway.includes("trycloudflare.com");
     if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
-        isBrowserDirectMediaUrl(primaryGateway) && (!isProduction || isHttpsUrl(primaryGateway))) {
+        isBrowserDirectMediaUrl(primaryGateway) && (!isProduction || (isHttpsUrl(primaryGateway) && !isCloudflareQuickTunnel))) {
       return {
         cameraId,
         direct: {
