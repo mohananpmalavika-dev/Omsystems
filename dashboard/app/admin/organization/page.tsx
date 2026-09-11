@@ -21,6 +21,7 @@ import {
   MapPin,
   Camera,
   Layers,
+  ChevronLeft,
   ChevronRight,
   ChevronDown,
   RefreshCw,

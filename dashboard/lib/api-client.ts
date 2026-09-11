@@ -500,8 +500,11 @@ export const organizationApi = {
       body: JSON.stringify(data),
     }),
 
-  deleteNode: (id: string) =>
-    fetchApi<void>(`/v1/organization/nodes/${id}`, { method: 'DELETE' }),
+  deleteNode: (id: string, cascade = true) =>
+    fetchApi<void>(
+      `/v1/organization/nodes/${encodeURIComponent(id)}${cascade ? '?cascade=true' : ''}`,
+      { method: 'DELETE' }
+    ),
 
   validateHierarchy: (parentNodeId: string, childNodeType: string) =>
     fetchApi<{ valid: boolean }>('/v1/organization/validate-hierarchy', {
