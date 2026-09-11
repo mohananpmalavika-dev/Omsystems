@@ -65,6 +65,22 @@ export class EdgeOperationsRepository {
     return mapActivation(result.rows[0]);
   }
 
+  async getActiveActivation(input: { id: string; branchId: string; tokenHash: string }) {
+    const result = await this.pool.query(
+      `SELECT id::text, tenant_id::text, branch_node_id::text, agent_name,
+              expires_at, created_at, created_by::text, used_at, revoked_at
+       FROM edge_activation_tokens
+       WHERE id = $1
+         AND branch_node_id = $2
+         AND token_hash = decode($3, 'hex')
+         AND used_at IS NULL
+         AND revoked_at IS NULL
+         AND expires_at > now()`,
+      [input.id, input.branchId, input.tokenHash],
+    );
+    return result.rows[0] ? mapActivation(result.rows[0]) : undefined;
+  }
+
   async activate(input: {
     tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
   }): Promise<{ agent: EdgeAgent; tenantId: string }> {

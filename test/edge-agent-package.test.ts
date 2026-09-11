@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateRawSync } from "node:zlib";
+import { createHash } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 
@@ -28,6 +29,10 @@ function embeddedConfig(executable: Buffer) {
   const lengthOffset = executable.length - marker.length - 4;
   const length = executable.readUInt32LE(lengthOffset);
   return executable.subarray(lengthOffset - length, lengthOffset).toString("utf8");
+}
+
+function activationTokenHash(activationCode: string) {
+  return createHash("sha256").update(activationCode).digest("hex");
 }
 
 function zipEntry(zip: Buffer, expectedName: string) {
@@ -169,12 +174,13 @@ describe("branch edge-agent package", () => {
 
     const store = new MemoryStore();
     addTestBranch(store);
+    const activationCode = `sgact_${"a".repeat(48)}`;
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Bengaluru Scanner",
       createdBy: "user-global-admin",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      tokenHash: "activation-token-hash",
+      tokenHash: activationTokenHash(activationCode),
     });
     const app = await buildApp({
       store,
@@ -182,7 +188,6 @@ describe("branch edge-agent package", () => {
       controlPlanePublicUrl: "https://control.example.com",
     });
     try {
-      const activationCode = `sgact_${"a".repeat(48)}`;
       const response = await app.inject({
         method: "POST",
         url: "/v1/branches/branch-blr-001/edge-agent-installer",
@@ -215,12 +220,13 @@ describe("branch edge-agent package", () => {
 
     const store = new MemoryStore();
     addTestBranch(store);
+    const activationCode = `sgact_${"a".repeat(48)}`;
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Automatic Scanner",
       createdBy: "user-global-admin",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      tokenHash: "activation-token-hash",
+      tokenHash: activationTokenHash(activationCode),
     });
     const app = await buildApp({ store, edgeAgentArtifactRoot: artifactRoot });
     try {
@@ -233,7 +239,7 @@ describe("branch edge-agent package", () => {
         },
         payload: {
           activationId: activation.id,
-          activationCode: `sgact_${"a".repeat(48)}`,
+          activationCode,
           agentName: "Automatic Scanner",
         },
       });
@@ -242,6 +248,47 @@ describe("branch edge-agent package", () => {
       expect(embeddedConfig(response.rawPayload)).toContain(
         'CONTROL_PLANE_URL="https://dashboard.example.com/api/control"',
       );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("refuses to package an activation code that does not belong to the requested activation", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-mismatched-activation-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
+    await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const activation = await store.createEdgeActivation({
+      branchId: "branch-blr-001",
+      agentName: "Bound Scanner",
+      createdBy: "user-global-admin",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      tokenHash: activationTokenHash(`sgact_${"a".repeat(48)}`),
+    });
+    const app = await buildApp({
+      store,
+      edgeAgentArtifactRoot: artifactRoot,
+      controlPlanePublicUrl: "https://control.example.com",
+    });
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/branches/branch-blr-001/edge-agent-installer",
+        headers: { "x-user-id": "user-global-admin" },
+        payload: {
+          activationId: activation.id,
+          activationCode: `sgact_${"b".repeat(48)}`,
+          agentName: "An attacker supplied name",
+        },
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toMatchObject({ error: "edge_activation_invalid_or_expired" });
+      expect(store.auditEvents).toHaveLength(0);
     } finally {
       await app.close();
     }
@@ -256,12 +303,13 @@ describe("branch edge-agent package", () => {
 
     const store = new MemoryStore();
     addTestBranch(store);
+    const activationCode = `sgact_${"a".repeat(48)}`;
     const activation = await store.createEdgeActivation({
       branchId: "branch-blr-001",
       agentName: "Invalid Scanner",
       createdBy: "user-global-admin",
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      tokenHash: "activation-token-hash",
+      tokenHash: activationTokenHash(activationCode),
     });
     const app = await buildApp({ store, edgeAgentArtifactRoot: artifactRoot });
     try {
@@ -274,7 +322,7 @@ describe("branch edge-agent package", () => {
         },
         payload: {
           activationId: activation.id,
-          activationCode: `sgact_${"a".repeat(48)}`,
+          activationCode,
           agentName: "Invalid Scanner",
         },
       });

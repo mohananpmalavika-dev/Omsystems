@@ -357,6 +357,22 @@ export async function registerEdgeAgentPackageRoutes(
     if (!decision) return reply.code(404).send({ error: "resource_not_found" });
     if (!decision.allowed) return reply.code(403).send({ error: "forbidden", reason: decision.reason });
 
+    // Do not treat the activation id as audit-only metadata. The downloaded
+    // executable contains the one-time code, so both values must refer to the
+    // same live activation for this branch. This also prevents a stale or
+    // revoked activation from being packaged again.
+    const activation = await store.getActiveEdgeActivation({
+      id: body.activationId,
+      branchId,
+      tokenHash: hashSecret(body.activationCode),
+    });
+    if (!activation) {
+      return reply.code(409).send({
+        error: "edge_activation_invalid_or_expired",
+        message: "Create a new gateway activation and download a fresh installer.",
+      });
+    }
+
     const root = await findEdgeAgentRoot(options.artifactRoot);
     if (!root) return reply.code(503).send({
       error: "edge_agent_package_not_built",
@@ -382,7 +398,10 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
       }
-
+      const installer = streamInstaller(
+        executablePath,
+        Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8"),
+      );
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8");
 
