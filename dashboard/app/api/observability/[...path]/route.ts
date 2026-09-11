@@ -47,13 +47,13 @@ async function proxyObservabilityRequest(request: NextRequest, context: RouteCon
   if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);
     headers.delete("x-user-id");
-  } else if (process.env.NODE_ENV === "production") {
+  } else if (process.env.DASHBOARD_DEV_USER_ID) {
+    headers.set("x-user-id", process.env.DASHBOARD_DEV_USER_ID);
+  } else {
     return NextResponse.json(
       { success: false, error: "unauthenticated", message: "Sign in to continue" },
       { status: 401, headers: { "cache-control": "no-store" } },
     );
-  } else {
-    headers.set("x-user-id", process.env.DASHBOARD_DEV_USER_ID || "user-global-admin");
   }
 
   const requestBody = request.method !== "GET" && request.method !== "HEAD"

@@ -556,7 +556,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
   useEffect(() => {
     try {
-      const storedUser = localStorage.getItem("user");
+      const storedUser = sessionStorage.getItem("user") || localStorage.getItem("user");
       if (storedUser) setOperator(JSON.parse(storedUser));
     } catch {}
     authApi
@@ -565,7 +565,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         if (fresh) {
           setOperator(fresh);
           try {
-            localStorage.setItem("user", JSON.stringify(fresh));
+            sessionStorage.setItem("user", JSON.stringify(fresh));
           } catch {}
         }
       })

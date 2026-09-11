@@ -14,10 +14,10 @@ export function buildControlPlaneHeaders(
 
   if (sessionToken) {
     headers.authorization = `Bearer ${sessionToken}`;
-  } else if (process.env.NODE_ENV === 'production') {
-    return null;
   } else {
-    const developmentUserId = process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin';
+    const developmentUserId = process.env.NODE_ENV === 'test'
+      ? (process.env.DASHBOARD_DEV_USER_ID || 'user-global-admin')
+      : process.env.DASHBOARD_DEV_USER_ID;
     if (!developmentUserId) return null;
     headers['x-user-id'] = developmentUserId;
   }

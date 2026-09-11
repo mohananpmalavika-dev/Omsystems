@@ -231,7 +231,7 @@ export class BranchOperationalSnapshotService {
     const branch = await this.store.getNode(branchId);
     if (!branch || branch.type !== "branch") return null;
     const role = (user?.role as string | undefined) ?? "";
-    const isSuperAdmin = role === "super_admin" || role === "superadmin" || role === "company_admin" || user?.username?.toLowerCase() === "mgdhanyamohan";
+    const isSuperAdmin = role === "super_admin" || role === "superadmin" || user?.username?.toLowerCase() === "mgdhanyamohan";
     const effectiveTenantId = branch.tenantId || tenantId;
     if (!isSuperAdmin && branch.tenantId && tenantId && branch.tenantId !== tenantId && tenantId !== "omsystems" && branch.tenantId !== "00000000-0000-4000-8000-000000000001") {
       return null;

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QA Audit Report - int-test-1789133104831 - KryptoVision</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --card-border: #1f2937;
+      --text: #f9fafb;
+      --text-muted: #9ca3af;
+      --accent: #3b82f6;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 32px 16px; line-height: 1.5; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header { border-bottom: 1px solid var(--card-border); padding-bottom: 24px; margin-bottom: 32px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+    h1 { font-size: 26px; font-weight: 700; color: #fff; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 9999px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .score-banner { display: flex; align-items: center; gap: 24px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 24px; margin-bottom: 32px; }
+    .score-circle { width: 100px; height: 100px; border-radius: 50%; border: 6px solid #ef4444; display: flex; align-items: center; justify-content: center; flex-direction: column; font-weight: 800; font-size: 28px; }
+    .score-circle span { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 10px; padding: 16px; }
+    .stat-val { font-size: 24px; font-weight: 700; margin-top: 4px; }
+    .stat-label { font-size: 13px; color: var(--text-muted); }
+    section { margin-bottom: 40px; }
+    h2 { font-size: 18px; margin-bottom: 16px; color: #e5e7eb; border-left: 4px solid var(--accent); padding-left: 10px; }
+    table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 8px; overflow: hidden; font-size: 14px; margin-bottom: 24px; }
+    th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid var(--card-border); }
+    th { background: #1f2937; color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+    tr:last-child td { border-bottom: none; }
+    .crit { color: var(--danger); font-weight: 600; }
+    .maj { color: var(--warning); font-weight: 600; }
+    .min { color: #60a5fa; font-weight: 600; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    .gallery-item { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; padding: 8px; }
+    .gallery-item img { width: 100%; height: 160px; object-fit: cover; border-radius: 4px; }
+    .gallery-caption { font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <p style="color: #60a5fa; font-size: 13px; font-weight: 600;">KryptoVision Automated QA</p>
+        <h1>Audit Run Report: int-test-1789133104831</h1>
+        <p style="color: var(--text-muted); font-size: 14px; margin-top: 4px;">Target: <strong>http://127.0.0.1:60919</strong> | Role: <strong>Admin</strong> | Browser: <strong>chromium</strong></p>
+      </div>
+      <div>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid var(--success);">Status: Completed</span>
+      </div>
+    </header>
+
+    <div class="score-banner">
+      <div class="score-circle">
+        55
+        <span>/ 100</span>
+      </div>
+      <div style="flex: 1;">
+        <h3 style="font-size: 18px; margin-bottom: 8px;">Overall QA Health Score</h3>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 12px;">Weighted evaluation across navigation availability, functional robustness, API stability, performance benchmarks, and accessibility.</p>
+        <div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px;">
+          <span>Availability: <strong>75%</strong></span>
+          <span>Functional: <strong>44%</strong></span>
+          <span>API: <strong>90%</strong></span>
+          <span>Console: <strong>85%</strong></span>
+          <span>Performance: <strong>100%</strong></span>
+          <span>Accessibility: <strong>100%</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Pages Tested</div>
+        <div class="stat-val">3 / 3</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Page Coverage</div>
+        <div class="stat-val">100%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Critical Issues</div>
+        <div class="stat-val crit">2</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Major Issues</div>
+        <div class="stat-val maj">2</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Console Errors</div>
+        <div class="stat-val">3</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">API Failures</div>
+        <div class="stat-val">1</div>
+      </div>
+    </div>
+
+    <section>
+      <h2>Categorized Issues (7)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Severity</th>
+            <th>Category</th>
+            <th>Title</th>
+            <th>Page</th>
+            <th>Occurrences</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td class="crit">CRITICAL</td>
+              <td>DESTRUCTIVE_BLOCKED</td>
+              <td>Safety Engine blocked execution of destructive action: "Delete Camera"</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/dashboard</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="maj">MAJOR</td>
+              <td>BROKEN_NAVIGATION</td>
+              <td>Broken Navigation to http://127.0.0.1:60919/error-page</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/error-page</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="crit">CRITICAL</td>
+              <td>API_FAILURE</td>
+              <td>API returned HTTP 500 for http://127.0.0.1:60919/api/cameras</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/dashboard</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="maj">MAJOR</td>
+              <td>API_FAILURE</td>
+              <td>API returned HTTP 404 for http://127.0.0.1:60919/error-page</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/cameras</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="min">MINOR</td>
+              <td>CONSOLE_ERROR</td>
+              <td>JavaScript exception: Test console error from dashboard script</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/dashboard</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="min">MINOR</td>
+              <td>CONSOLE_ERROR</td>
+              <td>JavaScript exception: Failed to load resource: the server responded with a status of 500 (Internal Server Error)</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/dashboard</td>
+              <td>1</td>
+            </tr>
+          
+            <tr>
+              <td class="min">MINOR</td>
+              <td>CONSOLE_ERROR</td>
+              <td>JavaScript exception: Failed to load resource: the server responded with a status of 404 (Not Found)</td>
+              <td style="color: #60a5fa;">http://127.0.0.1:60919/cameras</td>
+              <td>1</td>
+            </tr>
+          
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Visited Pages & Load Times (3)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Page Title</th>
+            <th>Path</th>
+            <th>Load Time</th>
+            <th>Interactive Elements</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td><strong>Dashboard - Sentinel Grid</strong></td>
+              <td>/dashboard</td>
+              <td>32ms</td>
+              <td>1 / 5</td>
+              <td><span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">TESTED</span></td>
+            </tr>
+          
+            <tr>
+              <td><strong>Cameras - Sentinel Grid</strong></td>
+              <td>/cameras</td>
+              <td>21ms</td>
+              <td>1 / 3</td>
+              <td><span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">TESTED</span></td>
+            </tr>
+          
+            <tr>
+              <td><strong>Untitled</strong></td>
+              <td>/error-page</td>
+              <td>15ms</td>
+              <td>3 / 0</td>
+              <td><span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">FAILED</span></td>
+            </tr>
+          
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Artifacts & Downloads</h2>
+      <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <a href="artifacts/video/full-session.webm" style="color: #60a5fa; text-decoration: none; padding: 10px 16px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px;">🎥 Watch Full Session Video</a>
+        <a href="artifacts/trace.zip" style="color: #60a5fa; text-decoration: none; padding: 10px 16px; background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 6px;">🔍 Download Playwright Trace.zip</a>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

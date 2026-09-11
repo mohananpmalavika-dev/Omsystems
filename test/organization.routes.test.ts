@@ -173,4 +173,34 @@ describe("organization routes", () => {
 
     expect(response.statusCode).toBe(404);
   });
+
+  it("scopes company_admin to only their assigned company in organization tree", async () => {
+    const user: User = {
+      id: "admin-1",
+      tenantId: "tenant-1",
+      displayName: "Company Admin",
+      role: "company_admin",
+    };
+    const otherCompanyNode = {
+      id: "company-2",
+      tenantId: "tenant-1",
+      parentId: null,
+      type: "company",
+      name: "Other Company",
+      isActive: true,
+      children: [],
+    };
+    const app = await createApp(user, {
+      getOrganizationTree: vi.fn().mockResolvedValue([companyNode, otherCompanyNode]),
+      listAccessibleNodes: vi.fn().mockResolvedValue([companyNode]),
+    });
+
+    const response = await app.inject({ method: "GET", url: "/v1/organization/tree" });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data).toHaveLength(1);
+    expect(body.data[0].id).toBe("company-1");
+    expect(body.data[0].name).toBe("Sentinel Grid");
+  });
 });

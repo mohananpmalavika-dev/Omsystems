@@ -81,8 +81,17 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
         { status: 401, headers: { "cache-control": "no-store" } },
       );
     }
-    const developmentUserId = runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
-    if (developmentUserId) headers.set("x-user-id", developmentUserId);
+    const developmentUserId = process.env.NODE_ENV === "test"
+      ? runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin")
+      : runtimeEnv("DASHBOARD_DEV_USER_ID", "");
+    if (developmentUserId) {
+      headers.set("x-user-id", developmentUserId);
+    } else {
+      return Response.json(
+        { error: "unauthenticated", message: "Sign in to continue" },
+        { status: 401, headers: { "cache-control": "no-store" } },
+      );
+    }
   }
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";

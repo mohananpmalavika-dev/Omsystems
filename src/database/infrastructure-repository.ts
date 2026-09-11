@@ -1403,7 +1403,7 @@ export class InfrastructureRepository {
 
     try {
       const u = await this.getUserById(cleanId).catch(() => undefined);
-      if (u && (u.role === "super_admin" || u.role === "superadmin" || u.role === "company_admin" || u.role === "admin" || u.username?.toLowerCase() === "mgdhanyamohan")) {
+      if (u && (u.role === "super_admin" || u.role === "superadmin" || u.username?.toLowerCase() === "mgdhanyamohan")) {
         return { allowed: true, reason: "Superadmin full access", requiresApproval: false };
       }
     } catch {}

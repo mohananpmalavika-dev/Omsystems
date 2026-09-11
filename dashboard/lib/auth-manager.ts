@@ -120,8 +120,14 @@ export async function logoutAllSessions(): Promise<void> {
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
   
-  const user = localStorage.getItem('user');
-  return !!user;
+  try {
+    const hasBrowserSession = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sentinel_browser_session') === 'active';
+    const user = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('user') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null);
+    return hasBrowserSession && !!user;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -131,7 +137,8 @@ export function getCurrentUser(): any | null {
   if (typeof window === 'undefined') return null;
   
   try {
-    const userStr = localStorage.getItem('user');
+    const userStr = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('user') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null);
     if (userStr) {
       return JSON.parse(userStr);
     }
@@ -141,3 +148,4 @@ export function getCurrentUser(): any | null {
   
   return null;
 }
+
