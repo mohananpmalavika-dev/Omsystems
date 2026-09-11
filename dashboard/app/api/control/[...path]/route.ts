@@ -279,6 +279,9 @@ function isPublicControlPath(routePath: string) {
     "/v1/auth/verify-otp",
     "/v1/auth/reset-password",
     "/v1/auth/reset-password-otp",
+    "/v1/edge-agent/download/certificate",
+    "/v1/edge-agent/download/cert-installer",
+    "/v1/edge-agent/download/signed-package",
   ]).has(routePath);
 }
 

@@ -27,6 +27,7 @@ import {
   Smartphone,
   Laptop,
   StopCircle,
+  ShieldCheck,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1601,7 +1602,7 @@ export function DeviceManager() {
     }
   }
 
-  async function downloadWebsiteScanner() {
+  async function downloadWebsiteScanner(format: "exe" | "zip" = "zip") {
     if (!selectedBranch || !gatewayActivation) return;
     setSaving(true);
     setError(undefined);
@@ -1610,8 +1611,11 @@ export function DeviceManager() {
         activationId: gatewayActivation.id,
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,
+        format,
       });
-      setNotice("Installer download started. Open the downloaded EXE and approve the Windows elevation prompt to install and start the branch agent.");
+      setNotice(format === "zip"
+        ? "Signed package download started (.ZIP). Extract the package, right-click Install-Certificate.bat and run as admin to trust the cert, then run START_SCANNER.bat."
+        : "Standalone installer download started (.EXE). Open the downloaded file to install and start the scanner.");
     } catch (reason) {
       setError(messageOf(reason, "Unable to download the scanner installer."));
     } finally {
@@ -2463,20 +2467,28 @@ export function DeviceManager() {
                 </div>
               ) : null}
 
-              {/* Full installer remains the first-install and offline-repair fallback. */}
+              {/* Full installer and signed package download */}
               <div className="space-y-4">
-                <div className="flex items-center gap-2 pb-3 border-b border-slate-700/60">
-                  <Download size={16} className="text-blue-400" />
-                  <h3 className="text-sm font-semibold text-slate-200">{gateways.length > 0 ? "Full Repair Installer" : "Download Standalone Installer Package"}</h3>
+                <div className="flex items-center justify-between pb-3 border-b border-slate-700/60">
+                  <div className="flex items-center gap-2">
+                    <Download size={16} className="text-blue-400" />
+                    <h3 className="text-sm font-semibold text-slate-200">
+                      {gateways.length > 0 ? "Full Repair Installer" : "Download Pre-Configured Installer Package"}
+                    </h3>
+                  </div>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                    <ShieldCheck size={12} className="text-emerald-400" /> Authenticode Signed
+                  </span>
                 </div>
 
                 <p className="text-xs text-slate-300">
                   {gateways.length > 0
                     ? <>Use this only for offline repair or runtime changes. It downloads the complete package again for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>
-                    : <>Download the pre-configured installer for <strong>{activeBranch?.name ?? "Branch"}</strong>. Run the downloaded EXE on the target branch computer to install and configure the edge agent.</>}
+                    : <>Download the pre-configured package for <strong>{activeBranch?.name ?? "Branch"}</strong>. Choose the recommended signed ZIP (includes certificate & Defender whitelist scripts) or standalone EXE.</>}
                 </p>
-                <div className="pt-2">
-                  {!gatewayActivation ? (
+
+                {!gatewayActivation ? (
+                  <div className="pt-2">
                     <button
                       type="button"
                       className="primary-button"
@@ -2487,17 +2499,60 @@ export function DeviceManager() {
                     >
                       <Download size={14} /> {saving ? "Generating Package..." : "Prepare & Download Installer"}
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() => void downloadWebsiteScanner()}
-                      disabled={saving}
-                    >
-                      <Download size={14} /> {saving ? "Downloading..." : "Download Ready Installer (.EXE)"}
-                    </button>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 pt-1">
+                    <div className="grid sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        className="flex flex-col items-start gap-1 p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 hover:bg-emerald-900/40 text-left transition"
+                        onClick={() => void downloadWebsiteScanner("zip")}
+                        disabled={saving}
+                      >
+                        <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-300">
+                          <Download size={14} /> Download Signed ZIP (Recommended)
+                        </div>
+                        <span className="text-[11px] text-slate-300 leading-tight">
+                          Preserves Authenticode signature. Includes pre-filled .env, Install-Certificate.bat, and Defender whitelist scripts.
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className="flex flex-col items-start gap-1 p-3 rounded-xl border border-slate-700 bg-slate-900/60 hover:bg-slate-800/80 text-left transition"
+                        onClick={() => void downloadWebsiteScanner("exe")}
+                        disabled={saving}
+                      >
+                        <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-200">
+                          <Download size={14} /> Download Standalone EXE
+                        </div>
+                        <span className="text-[11px] text-slate-400 leading-tight">
+                          Single self-configuring executable for quick setup on machines with Defender exclusions already applied.
+                        </span>
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/80 text-xs text-slate-400">
+                      <span className="text-[11px] text-slate-500">Security Certificate Tools:</span>
+                      <button
+                        type="button"
+                        onClick={() => cameraInventoryApi.downloadEdgeAgentCertificate()}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/60 hover:bg-slate-700/80 text-[11px] text-slate-300 transition"
+                        title="Download public certificate (omsystems-edge-agent.cer)"
+                      >
+                        <ShieldCheck size={11} className="text-emerald-400" /> Certificate (.cer)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cameraInventoryApi.downloadEdgeAgentCertInstaller()}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/60 hover:bg-slate-700/80 text-[11px] text-slate-300 transition"
+                        title="Download automated 1-click certificate installer batch script"
+                      >
+                        <Terminal size={11} className="text-blue-400" /> Certificate Installer (.bat)
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Multi-Branch 400 Branches Enterprise Callout */}
