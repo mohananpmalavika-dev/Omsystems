@@ -26,7 +26,15 @@ async function runSurveillancePolicyTests() {
   console.log("================================================================================\n");
 
   const app = Fastify();
-  await app.register(registerSurveillancePolicyRoutes);
+  const branch = { id: "BR-118", type: "branch", tenantId: "omsystems" };
+  const store = {
+    getNode: async (id: string) => id === branch.id ? branch : undefined,
+    checkAccess: async () => ({ allowed: true }),
+  };
+  app.addHook("preHandler", async (request) => {
+    (request as any).currentUser = { id: "test-user", tenantId: "omsystems", role: "company_admin" };
+  });
+  await registerSurveillancePolicyRoutes(app, store as any);
 
   // --------------------------------------------------------------------------
   // Suite 1: Hierarchical Policy Inheritance & Precedence Resolution

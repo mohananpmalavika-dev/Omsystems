@@ -13,7 +13,9 @@ export class SurveillancePolicyResolverService {
   private readonly policies = new Map<string, SurveillancePolicy>();
   private readonly assignments: SurveillancePolicyAssignment[] = [];
 
-  constructor() {}
+  constructor() {
+    this.seedDefaultPolicies();
+  }
 
   private seedDefaultPolicies() {
     const defaultPolicy: SurveillancePolicy = {

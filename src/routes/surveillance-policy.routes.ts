@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { surveillancePolicyResolver } from "../surveillance-policy/services/surveillance-policy-resolver.service.js";
 import { surveillanceComplianceEvaluator } from "../surveillance-policy/services/surveillance-compliance-evaluator.service.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const createPolicySchema = z.object({
   name: z.string().min(2),
@@ -59,27 +60,53 @@ const evaluateBranchSchema = z.object({
   cameras: z.array(z.any()).default([]),
 });
 
-export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: FastifyInstance) => {
+export async function registerSurveillancePolicyRoutes(app: FastifyInstance, store: ControlPlaneStore): Promise<void> {
+  const requireTenantAdmin = async (request: FastifyRequest, reply: any) => {
+    const user = request.currentUser;
+    if (!user?.tenantId) {
+      await reply.code(401).send({ success: false, error: "unauthorized" });
+      return undefined;
+    }
+    if (!(["super_admin", "superadmin", "company_admin"] as string[]).includes(user.role)) {
+      await reply.code(403).send({ success: false, error: "policy_administration_forbidden" });
+      return undefined;
+    }
+    return user;
+  };
+  const requireBranchView = async (request: FastifyRequest, reply: any, branchId: string) => {
+    const user = request.currentUser;
+    const branch = user && await store.getNode(branchId);
+    const access = user && branch && await store.checkAccess(user, "live:view", branchId);
+    if (!user?.tenantId || !branch || branch.type !== "branch" || branch.tenantId !== user.tenantId || !access?.allowed) {
+      await reply.code(user ? 404 : 401).send({ success: false, error: user ? "policy_resource_not_found" : "unauthorized" });
+      return undefined;
+    }
+    return user;
+  };
   // 1. List All Policies
   app.get("/v1/surveillance-policies", async (request, reply) => {
-    const tenantId = (request.query as any)?.tenantId ?? "omsystems";
-    const policies = await surveillancePolicyResolver.listPolicies(tenantId);
+    const user = await requireTenantAdmin(request, reply);
+    if (!user) return;
+    const policies = await surveillancePolicyResolver.listPolicies(user.tenantId);
     return reply.code(200).send({ success: true, data: policies });
   });
 
   // 2. Create Policy
   app.post("/v1/surveillance-policies", async (request, reply) => {
-    const tenantId = (request.body as any)?.tenantId ?? "omsystems";
+    const user = await requireTenantAdmin(request, reply);
+    if (!user) return;
     const body = createPolicySchema.parse(request.body);
-    const policy = await surveillancePolicyResolver.createPolicy(tenantId, body as any);
+    const policy = await surveillancePolicyResolver.createPolicy(user.tenantId, body as any);
     return reply.code(201).send({ success: true, data: policy });
   });
 
   // 3. Get Single Policy
   app.get("/v1/surveillance-policies/:id", async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = await requireTenantAdmin(request, reply);
+    if (!user) return;
     const policy = await surveillancePolicyResolver.getPolicy(id);
-    if (!policy) {
+    if (!policy || policy.tenantId !== user.tenantId) {
       return reply.code(404).send({ error: "policy_not_found", message: `Policy ${id} not found` });
     }
     return reply.code(200).send({ success: true, data: policy });
@@ -88,18 +115,21 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
   // 4. Create Policy Assignment (Override or Template)
   app.post("/v1/surveillance-policy-assignments", async (request, reply) => {
     const body = createAssignmentSchema.parse(request.body);
-    const assignment = await surveillancePolicyResolver.assignPolicy(body as any);
+    const user = await requireTenantAdmin(request, reply);
+    if (!user) return;
+    const assignment = await surveillancePolicyResolver.assignPolicy({ ...body, tenantId: user.tenantId } as any);
     return reply.code(201).send({ success: true, data: assignment });
   });
 
   // 5. Get Effective Policy for Branch (with Provenance)
   app.get("/v1/branches/:branchId/surveillance-policy", async (request, reply) => {
     const { branchId } = request.params as { branchId: string };
-    const tenantId = (request.query as any)?.tenantId ?? "omsystems";
+    const user = await requireBranchView(request, reply, branchId);
+    if (!user) return;
     const regionId = (request.query as any)?.regionId;
 
     const policy = await surveillancePolicyResolver.resolveEffectivePolicy({
-      tenantId,
+      tenantId: user.tenantId,
       branchId,
       regionId,
     });
@@ -109,12 +139,13 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
   // 6. Get Effective Policy for Device (with Provenance)
   app.get("/v1/devices/:deviceId/surveillance-policy", async (request, reply) => {
     const { deviceId } = request.params as { deviceId: string };
-    const tenantId = (request.query as any)?.tenantId ?? "omsystems";
-    const branchId = (request.query as any)?.branchId ?? "default-branch";
+    const branchId = z.object({ branchId: z.string().min(1) }).parse(request.query).branchId;
+    const user = await requireBranchView(request, reply, branchId);
+    if (!user) return;
     const deviceType = (request.query as any)?.deviceType;
 
     const policy = await surveillancePolicyResolver.resolveEffectivePolicy({
-      tenantId,
+      tenantId: user.tenantId,
       branchId,
       deviceId,
       deviceType,
@@ -125,8 +156,10 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
   // 7. Evaluate Single Device Compliance
   app.post("/v1/compliance/evaluate/device", async (request, reply) => {
     const body = evaluateDeviceSchema.parse(request.body);
+    const user = await requireBranchView(request, reply, body.branchId);
+    if (!user) return;
     const effectivePolicy = await surveillancePolicyResolver.resolveEffectivePolicy({
-      tenantId: body.tenantId,
+      tenantId: user.tenantId,
       branchId: body.branchId,
       deviceId: body.deviceId,
       deviceType: body.deviceType,
@@ -151,8 +184,10 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
   // 8. Evaluate Complete Branch Compliance
   app.post("/v1/compliance/evaluate/branch", async (request, reply) => {
     const body = evaluateBranchSchema.parse(request.body);
+    const user = await requireBranchView(request, reply, body.branchId);
+    if (!user) return;
     const effectivePolicy = await surveillancePolicyResolver.resolveEffectivePolicy({
-      tenantId: body.tenantId,
+      tenantId: user.tenantId,
       branchId: body.branchId,
     });
 
@@ -168,4 +203,4 @@ export const registerSurveillancePolicyRoutes: FastifyPluginAsync = async (app: 
 
     return reply.code(200).send({ success: true, data: report });
   });
-};
+}

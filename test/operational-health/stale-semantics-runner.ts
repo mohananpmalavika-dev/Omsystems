@@ -29,9 +29,17 @@ async function runStaleSemanticsTests() {
   console.log("================================================================================\n");
 
   const app = Fastify();
-  await app.register(registerStaleHealthRoutes);
+  const branch = { id: "BR-118", type: "branch", tenantId: "omsystems" };
+  const store = {
+    getNode: async (id: string) => id.startsWith("BR-") ? { ...branch, id } : undefined,
+    checkAccess: async () => ({ allowed: true }),
+  };
+  app.addHook("preHandler", async (request) => {
+    (request as any).currentUser = { id: "test-user", tenantId: "omsystems", role: "company_admin" };
+  });
+  await registerStaleHealthRoutes(app, store as any);
 
-  const baseNow = new Date("2026-08-16T14:30:00.000Z");
+  const baseNow = new Date();
 
   // --------------------------------------------------------------------------
   // Suite 1: Freshness Policies & Timestamp Enrichment
@@ -237,7 +245,7 @@ async function runStaleSemanticsTests() {
 
   const evalRes = await app.inject({
     method: "GET",
-    url: "/v1/health/evaluations/RECORDER/DVR-118",
+    url: "/v1/health/evaluations/RECORDER/DVR-118?branchId=BR-118",
   });
   assert(evalRes.statusCode === 200, "GET /v1/health/evaluations/:entityType/:entityId returns 200 OK");
   const evalData = JSON.parse(evalRes.body);
@@ -256,7 +264,7 @@ async function runStaleSemanticsTests() {
 
   const reportRes = await app.inject({
     method: "GET",
-    url: "/v1/health/telemetry/quality-report",
+    url: "/v1/health/telemetry/quality-report?branchId=BR-118",
   });
   assert(reportRes.statusCode === 200, "GET /v1/health/telemetry/quality-report returns 200 OK");
   const reportData = JSON.parse(reportRes.body);

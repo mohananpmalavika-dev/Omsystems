@@ -2752,7 +2752,7 @@ export async function buildApp(options?: {
 
   // Register Stale-Data Semantics & Health Freshness routes
   try {
-    await registerStaleHealthRoutes(app, {});
+    await registerStaleHealthRoutes(app, store);
     app.log.info('Stale health semantics and freshness routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register stale health routes');
@@ -2760,7 +2760,7 @@ export async function buildApp(options?: {
 
   // Register Policy-Driven Surveillance SLA & Compliance routes
   try {
-    await registerSurveillancePolicyRoutes(app, {});
+    await registerSurveillancePolicyRoutes(app, store);
     app.log.info('Policy-driven surveillance SLA and compliance routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register surveillance policy routes');
