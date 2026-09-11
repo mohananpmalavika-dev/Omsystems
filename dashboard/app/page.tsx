@@ -4,6 +4,8 @@ import { AppLayout } from "@/components/app-layout";
 import { CommandCenterView } from "@/components/operations/command-center-view";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
+export const dynamic = "force-dynamic";
+
 export default async function Page() {
   const cookieStore = await cookies();
   if (!cookieStore.has("sentinel_access")) {
