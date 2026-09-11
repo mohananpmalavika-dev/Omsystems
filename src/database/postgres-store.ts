@@ -320,6 +320,9 @@ export class PostgresStore
   async createEdgeActivation(input: Parameters<EdgeOperationsRepository["createActivation"]>[0]) {
     return this.edgeOperations.createActivation(input);
   }
+  async getActiveEdgeActivation(input: Parameters<EdgeOperationsRepository["getActiveActivation"]>[0]) {
+    return this.edgeOperations.getActiveActivation(input);
+  }
   async activateEdgeAgent(input: Parameters<EdgeOperationsRepository["activate"]>[0]) {
     return this.edgeOperations.activate(input);
   }

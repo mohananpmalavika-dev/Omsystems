@@ -612,6 +612,14 @@ export interface ControlPlaneStore {
   createEdgeActivation(input: {
     branchId: string; agentName: string; createdBy: string; expiresAt: string; tokenHash: string;
   }): Promise<EdgeActivation>;
+  /**
+   * Returns an activation only when the supplied one-time code belongs to the
+   * requested branch and has not been consumed, revoked, or expired. This is
+   * used before embedding an activation in a downloadable installer.
+   */
+  getActiveEdgeActivation(input: {
+    id: string; branchId: string; tokenHash: string;
+  }): Promise<EdgeActivation | undefined>;
   activateEdgeAgent(input: {
     tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
   }): Promise<{ agent: EdgeAgent; tenantId: string }>;

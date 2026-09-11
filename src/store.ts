@@ -1633,6 +1633,20 @@ export class MemoryStore {
     return safe;
   }
 
+  async getActiveEdgeActivation(input: { id: string; branchId: string; tokenHash: string }) {
+    const activation = this.edgeActivations.get(input.id);
+    if (!activation ||
+        activation.branchId !== input.branchId ||
+        activation.tokenHash !== input.tokenHash ||
+        activation.usedAt ||
+        activation.revokedAt ||
+        Date.parse(activation.expiresAt) <= Date.now()) {
+      return undefined;
+    }
+    const { tokenHash: _tokenHash, ...safe } = activation;
+    return structuredClone(safe);
+  }
+
   async activateEdgeAgent(input: {
     tokenHash: string; credentialHash: string; deviceUuid: string; version: string; commandPublicKey?: string;
   }) {
