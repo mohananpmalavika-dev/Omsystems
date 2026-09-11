@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
-import { middleware } from "../middleware";
+import { middleware } from "../proxy";
 
 describe("dashboard middleware navigation and auth guards", () => {
   it("redirects unauthenticated root link to /login", () => {

@@ -1,33 +1,61 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { isPublicDashboardRoute } from "./lib/session-navigation";
 
 export function proxy(request: NextRequest) {
+  // 1. Basic auth check (if configured)
   const expectedUsername = runtimeEnv("DASHBOARD_ACCESS_USERNAME");
   const expectedPassword = runtimeEnv("DASHBOARD_ACCESS_PASSWORD");
-  if (!expectedUsername || !expectedPassword) return NextResponse.next();
+  if (expectedUsername && expectedPassword) {
+    const credentials = parseBasicCredentials(
+      request.headers.get("authorization"),
+    );
+    if (
+      !credentials ||
+      !safeEqual(credentials.username, expectedUsername) ||
+      !safeEqual(credentials.password, expectedPassword)
+    ) {
+      return new NextResponse("Authentication required", {
+        status: 401,
+        headers: {
+          "cache-control": "no-store",
+          "www-authenticate": 'Basic realm="KryptonVision", charset="UTF-8"',
+        },
+      });
+    }
+  }
 
-  const credentials = parseBasicCredentials(
-    request.headers.get("authorization"),
-  );
+  const { pathname } = request.nextUrl;
+
+  // 2. Allow API routes, static assets, and public routes
   if (
-    credentials &&
-    safeEqual(credentials.username, expectedUsername) &&
-    safeEqual(credentials.password, expectedPassword)
+    pathname.startsWith("/api/") ||
+    pathname.startsWith("/_next/") ||
+    pathname.includes(".") ||
+    isPublicDashboardRoute(pathname)
   ) {
     return NextResponse.next();
   }
 
-  return new NextResponse("Authentication required", {
-    status: 401,
-    headers: {
-      "cache-control": "no-store",
-      "www-authenticate": 'Basic realm="KryptonVision", charset="UTF-8"',
-    },
-  });
+  // 3. For any protected route, if sentinel_access cookie is not present, redirect to /login
+  const sessionToken = request.cookies.get("sentinel_access")?.value;
+  if (!sessionToken) {
+    const loginUrl = new URL("/login", request.url);
+    if (pathname !== "/") {
+      loginUrl.searchParams.set("next", pathname + request.nextUrl.search);
+    }
+    return NextResponse.redirect(loginUrl);
+  }
+
+  return NextResponse.next();
 }
 
+export const middleware = proxy;
+
 export const config = {
-  matcher: ["/((?!api/health|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico).*)",
+  ],
 };
 
 function parseBasicCredentials(value: string | null) {
