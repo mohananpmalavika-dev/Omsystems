@@ -801,7 +801,7 @@ export const cameraInventoryApi = {
     ),
   downloadInstallerFromActivation: (
     branchId: string,
-    data: { activationId: string; activationCode: string; agentName: string; format?: "exe" | "zip" },
+    data: { activationId: string; activationCode: string; agentName: string },
   ) =>
     startNativeDownload(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
@@ -809,24 +809,9 @@ export const cameraInventoryApi = {
         activationId: data.activationId,
         activationCode: data.activationCode,
         agentName: data.agentName,
-        format: data.format ?? "zip",
+        format: "zip",
       },
     ),
-  downloadEdgeAgentCertificate: () => {
-    if (typeof window !== "undefined") {
-      window.location.href = `${API_BASE}/v1/edge-agent/download/certificate`;
-    }
-  },
-  downloadEdgeAgentCertInstaller: () => {
-    if (typeof window !== "undefined") {
-      window.location.href = `${API_BASE}/v1/edge-agent/download/cert-installer`;
-    }
-  },
-  downloadEdgeAgentSignedPackage: () => {
-    if (typeof window !== "undefined") {
-      window.location.href = `${API_BASE}/v1/edge-agent/download/signed-package`;
-    }
-  },
   sendGatewayCommand: (
     branchId: string,
     edgeAgentId: string,

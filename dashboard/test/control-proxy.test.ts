@@ -237,12 +237,12 @@ describe("dashboard control-plane BFF", () => {
     expect(String(upstream.mock.calls[0]![0])).toBe("http://sentinel-control.internal:8080/v1/branches");
   });
 
-  it("preserves the filename for the single Windows installer executable", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(Buffer.from("MZfixture"), {
+  it("preserves the filename for the Windows installer ZIP", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(Buffer.from("PKfixture"), {
       status: 200,
       headers: {
-        "content-type": "application/vnd.microsoft.portable-executable",
-        "content-disposition": 'attachment; filename="Branch-edge-agent-setup.exe"',
+        "content-type": "application/zip",
+        "content-disposition": 'attachment; filename="Branch-edge-agent-setup.zip"',
       },
     })));
 
@@ -251,20 +251,20 @@ describe("dashboard control-plane BFF", () => {
       { params: Promise.resolve({ path: ["v1", "branches", "branch-1", "edge-agents", "agent-1", "package"] }) },
     );
     expect(response.status).toBe(200);
-    expect(response.headers.get("content-disposition")).toContain("edge-agent-setup.exe");
-    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("MZ");
+    expect(response.headers.get("content-disposition")).toContain("edge-agent-setup.zip");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("PK");
   });
 
-  it("streams installer form submissions with the cookie-backed employee session", async () => {
+  it("streams signed installer ZIP submissions with the cookie-backed employee session", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     const upstream = vi.fn(async (
       _input: RequestInfo | URL,
       _init?: RequestInit,
-    ) => new Response(Buffer.from("MZfixture"), {
+    ) => new Response(Buffer.from("PKfixture"), {
       status: 200,
       headers: {
-        "content-type": "application/vnd.microsoft.portable-executable",
-        "content-disposition": 'attachment; filename="branch-scanner-setup.exe"',
+        "content-type": "application/zip",
+        "content-disposition": 'attachment; filename="branch-signed-edge-agent.zip"',
         "content-length": "9",
       },
     }));
@@ -299,9 +299,9 @@ describe("dashboard control-plane BFF", () => {
       activationCode: "one-time-code",
       agentName: "Branch Scanner",
     }));
-    expect(response.headers.get("content-disposition")).toContain("branch-scanner-setup.exe");
+    expect(response.headers.get("content-disposition")).toContain("branch-signed-edge-agent.zip");
     expect(response.headers.get("content-length")).toBe("9");
-    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("MZ");
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 2).toString()).toBe("PK");
   });
 
   it("embeds the public Render origin instead of the internal bind address", async () => {

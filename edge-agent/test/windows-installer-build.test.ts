@@ -7,7 +7,7 @@ describe("Windows self-installer release build", () => {
     const script = packageJson.scripts["build:exe"] as string;
 
     expect(script).toContain("verify:windows-installer-assets");
-    expect(script).toContain("release\\edge-agent.exe --verify-bundle");
+    expect(script).toContain("verify:windows-package");
   });
 
   it("requires every asset copied by the self-installer", async () => {
@@ -23,5 +23,28 @@ describe("Windows self-installer release build", () => {
     ]) {
       expect(script).toContain(asset);
     }
+  });
+
+  it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {
+    const script = await readFile("edge-agent/scripts/verify-windows-package.mjs", "utf8");
+
+    expect(script).toContain('process.platform !== "win32"');
+    expect(script).toContain("--verify-bundle");
+  });
+
+  it("writes a signed-release manifest for production installer verification", async () => {
+    const script = await readFile("edge-agent/scripts/build-signed-windows-release.ps1", "utf8");
+
+    expect(script).toContain("windows-release.json");
+    expect(script).toContain("signerThumbprint");
+    expect(script).toContain("installerSha256");
+  });
+
+  it("has a container-safe production release verifier", async () => {
+    const script = await readFile("edge-agent/scripts/verify-windows-production-release.mjs", "utf8");
+
+    expect(script).toContain("windows-release.json");
+    expect(script).toContain("edge-agent.exe");
+    expect(script).toContain("sha256");
   });
 });

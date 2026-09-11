@@ -77,6 +77,19 @@ $hashes = $artifacts | Get-FileHash -Algorithm SHA256 |
 $checksumPath = Join-Path (Split-Path -Parent $installer.FullName) 'SHA256SUMS.txt'
 Set-Content -LiteralPath $checksumPath -Value $hashes -Encoding ascii
 
+# The control plane validates this manifest before serving a production
+# installer. It binds the shipped EXE to the file that was Authenticode-signed
+# and verified on this Windows release runner.
+$releaseManifestPath = Join-Path $projectRoot 'release\windows-release.json'
+$releaseManifest = [ordered]@{
+  sha256 = (Get-FileHash -LiteralPath $agentPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  signedAt = [DateTime]::UtcNow.ToString('o')
+  signerThumbprint = $CertificateThumbprint
+  installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+$releaseManifest | ConvertTo-Json | Set-Content -LiteralPath $releaseManifestPath -Encoding utf8
+
 Write-Host "Signed release is ready:" -ForegroundColor Green
 $artifacts | ForEach-Object { Write-Host "  $_" }
 Write-Host "  $checksumPath"
+Write-Host "  $releaseManifestPath"

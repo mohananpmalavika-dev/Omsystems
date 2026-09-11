@@ -88,4 +88,12 @@ describe("edge-agent runtime configuration", () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+
+  it("keeps a ZIP package configuration outside the signed executable until an explicit install", async () => {
+    const source = await (await import("node:fs/promises")).readFile("edge-agent/src/index.ts", "utf8");
+
+    expect(source).toContain('hasArgument(argv, "--install") && runtime.configPath');
+    expect(source).toContain("launchWindowsSelfInstaller(installEnvironmentFile)");
+    expect(source).toContain("runtime.embeddedEnvironmentFile && argv.length === 0");
+  });
 });

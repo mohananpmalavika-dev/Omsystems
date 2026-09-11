@@ -58,6 +58,12 @@ functions to Microsoft Security Intelligence. Avoid adding download-and-execute
 commands, Defender exclusions, or unsigned replacement binaries to future
 releases; each of those materially increases the chance of detection.
 
+Before building the production control-plane container, place the Windows
+release runner's `release\edge-agent.exe` and `release\windows-release.json`
+in `edge-agent\release`. The container verifies that manifest and refuses to
+build if they are absent or do not match. This prevents Linux cross-compilation
+from being mistaken for a signed production release.
+
 ## Recommended branch installation
 
 1. Configure the control plane with a branch-reachable

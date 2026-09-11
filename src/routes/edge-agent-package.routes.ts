@@ -6,7 +6,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat } from "node:fs/promises";
 import { createReadStream } from "node:fs";
-import { Readable } from "node:stream";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const routeParams = z.object({
@@ -293,17 +292,6 @@ function activationConfiguration(
   });
 }
 
-function streamInstaller(executablePath: string, config: Buffer) {
-  const footer = embeddedConfigurationFooter(config);
-  return {
-    footer,
-    stream: Readable.from((async function* () {
-      for await (const chunk of createReadStream(executablePath)) yield chunk;
-      yield footer;
-    })()),
-  };
-}
-
 function embeddedConfigurationFooter(config: Buffer) {
   const length = Buffer.alloc(4);
   length.writeUInt32LE(config.length, 0);
@@ -325,6 +313,56 @@ function localDiscoveryReadme(branchName: string) {
     "",
     "It discovers direct ONVIF IP cameras plus DVR/NVR channels. Analog cameras appear as DVR channels because the DVR digitizes them. A recorder login is needed to enumerate its individual channels.",
     "This tool exits after one scan. It does not install a Windows service, a tunnel, or a background monitor.",
+  ].join("\r\n");
+}
+
+async function verifyProductionWindowsRelease(releaseDirectory: string, executablePath: string) {
+  if (process.env.NODE_ENV !== "production") return;
+  const manifestPath = join(releaseDirectory, "windows-release.json");
+  let manifest: { sha256?: unknown; signedAt?: unknown };
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { sha256?: unknown; signedAt?: unknown };
+  } catch {
+    throw Object.assign(new Error("A signed Windows release manifest is required before production installers can be downloaded."), {
+      code: "edge_agent_windows_release_not_signed",
+    });
+  }
+  if (typeof manifest.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(manifest.sha256) ||
+      typeof manifest.signedAt !== "string" || Number.isNaN(Date.parse(manifest.signedAt))) {
+    throw Object.assign(new Error("The Windows release manifest is invalid."), { code: "edge_agent_windows_release_not_signed" });
+  }
+  const executableHash = createHash("sha256").update(await readFile(executablePath)).digest("hex");
+  if (executableHash !== manifest.sha256.toLowerCase()) {
+    throw Object.assign(new Error("The Windows executable does not match the signed release manifest."), {
+      code: "edge_agent_windows_release_not_signed",
+    });
+  }
+}
+
+function windowsInstallLauncher() {
+  return [
+    "@echo off",
+    "setlocal",
+    "cd /d \"%~dp0\"",
+    "if not exist \"%~dp0edge-agent.exe\" (",
+    "  echo Edge Agent executable is missing. Download a fresh package from Sentinel Grid.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    "if not exist \"%~dp0edge-agent.env\" (",
+    "  echo Branch configuration is missing. Download a fresh package from Sentinel Grid.",
+    "  pause",
+    "  exit /b 1",
+    ")",
+    "echo Starting Sentinel Grid Edge Agent installation...",
+    "echo Approve the Windows administrator prompt to install the branch service.",
+    "\"%~dp0edge-agent.exe\" --install --config \"%~dp0edge-agent.env\"",
+    "set RESULT=%ERRORLEVEL%",
+    "if not \"%RESULT%\"==\"0\" (",
+    "  echo Installation did not complete. See the installer message above.",
+    "  pause",
+    ")",
+    "exit /b %RESULT%",
   ].join("\r\n");
 }
 
@@ -350,6 +388,12 @@ export async function registerEdgeAgentPackageRoutes(
     const { branchId } = branchParams.parse(request.params);
     const body = activationInstallerBody.parse(request.body);
     const format = body.format ?? "zip";
+    if (format === "exe") {
+      return reply.code(410).send({
+        error: "unsigned_dynamic_installer_removed",
+        message: "Download the signed ZIP installer package. Per-branch configuration is kept outside the signed executable.",
+      });
+    }
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
 
@@ -398,70 +442,39 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
       }
-      const installer = streamInstaller(
-        executablePath,
-        Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8"),
-      );
+      await verifyProductionWindowsRelease(releaseDir, executablePath);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
-      const envConfig = Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8");
+      const envConfig = Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8");
 
       if (format === "zip") {
         const exeBuffer = await readFile(executablePath);
         const exeCrc = getExeCrc(executablePath, exeBuffer, { size: executableSize, mtimeMs: executableMtime });
 
-        const certPath = join(releaseDir, "omsystems-edge-agent.cer");
-        const certData = await readFile(certPath).catch(() => Buffer.alloc(0));
-
-        const certInstallerPath = join(releaseDir, "Install-Certificate.bat");
-        const certInstallerData = await readFile(certInstallerPath).catch(() => Buffer.from(
-          '@echo off\r\nnet session >nul 2>&1 || (powershell -NoProfile -Command "Start-Process \'%~dpnx0\' -Verb RunAs" & exit /b)\r\ncd /d "%~dp0"\r\ncertutil -addstore -f "TrustedPublisher" "omsystems-edge-agent.cer"\r\ncertutil -addstore -f "ROOT" "omsystems-edge-agent.cer"\r\necho Certificate installed successfully.\r\npause\r\n',
-          "utf8",
-        ));
-
-        const defenderPath = join(releaseDir, "Allow-In-Defender.bat");
-        const defenderData = await readFile(defenderPath).catch(() => Buffer.alloc(0));
-
-        const startScannerPath = join(releaseDir, "START_SCANNER.bat");
-        const startScannerData = await readFile(startScannerPath).catch(() => Buffer.from(
-          '@echo off\r\ncd /d "%~dp0"\r\ntaskkill /F /IM edge-agent.exe /T >nul 2>&1\r\n"%~dp0edge-agent.exe"\r\npause\r\n',
-          "utf8",
-        ));
-
         const readmeText = [
           "==============================================================================",
-          `KRYPTOVISION SIGNED EDGE AGENT - QUICK SETUP GUIDE`,
+          "SENTINEL GRID EDGE AGENT - QUICK SETUP GUIDE",
           `Branch: ${branch.name}`,
           "==============================================================================",
           "",
-          "STEP 1: TRUST CERTIFICATE (ONE-TIME ONLY)",
-          '  Right-click "Install-Certificate.bat" and select "Run as administrator".',
-          '  Click "Yes" to install the enterprise code signing certificate.',
-          "  This completely eliminates Windows Defender and SmartScreen warnings.",
+          "1. Extract this ZIP to a local folder.",
+          '2. Double-click "Install Sentinel Grid Edge Agent.bat".',
+          "3. Approve the Windows administrator prompt.",
+          "4. Wait for the installer to validate the configuration and enroll the gateway.",
           "",
-          "STEP 2: START SCANNER",
-          '  Double-click "START_SCANNER.bat" (or run edge-agent.exe).',
-          "  The scanner automatically loads branch settings from edge-agent.env,",
-          "  discovers connected IP cameras/DVRs, and reports telemetry to KryptoVision.",
-          "",
-          "STEP 3 (OPTIONAL): WINDOWS DEFENDER WHITELIST",
-          '  If your antivirus blocks scanner network ports, right-click',
-          '  "Allow-In-Defender.bat" and select "Run as administrator".',
+          "The installer copies the agent to Program Files, protects its configuration,",
+          "installs the media runtime, and creates a SYSTEM startup task. Do not run the",
+          "EXE directly from this extracted folder. Endpoint-security policies must be",
+          "deployed by your organization through Intune or Group Policy; this package does",
+          "not add Defender exclusions or trust certificates.",
           "==============================================================================",
         ].join("\r\n");
 
         const entries: Array<{ name: string; data: Buffer; store?: boolean; crc?: number }> = [
           { name: "edge-agent.exe", data: exeBuffer, store: true, crc: exeCrc },
           { name: "edge-agent.env", data: envConfig },
-          { name: "START_SCANNER.bat", data: startScannerData },
-          { name: "Install-Certificate.bat", data: certInstallerData },
+          { name: "Install Sentinel Grid Edge Agent.bat", data: Buffer.from(windowsInstallLauncher(), "utf8") },
           { name: "README.txt", data: Buffer.from(readmeText, "utf8") },
         ];
-        if (certData.length > 0) {
-          entries.push({ name: "omsystems-edge-agent.cer", data: certData });
-        }
-        if (defenderData.length > 0) {
-          entries.push({ name: "Allow-In-Defender.bat", data: defenderData });
-        }
 
         const zipData = makeZip(entries);
 
@@ -482,22 +495,6 @@ export async function registerEdgeAgentPackageRoutes(
         return reply.send(zipData);
       }
 
-      // format === "exe": standalone single executable
-      const installer = streamInstaller(executablePath, envConfig);
-      await store.writeAudit({
-        tenantId: branch.tenantId,
-        actorUserId: request.currentUser.id,
-        action: "edge_agent.installer_downloaded",
-        resourceNodeId: branchId,
-        outcome: "success",
-        sourceIp: request.ip,
-        details: { activationId: body.activationId, version, platform: "windows", format: "self-installing-executable" },
-      });
-      reply.header("Cache-Control", "no-store, private");
-      reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
-      reply.header("Content-Length", String(executableSize + installer.footer.length));
-      reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-scanner-setup.exe"`);
-      return reply.send(installer.stream);
     } catch (error) {
       app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
@@ -506,60 +503,25 @@ export async function registerEdgeAgentPackageRoutes(
     }
   });
 
-  // Public direct download for enterprise code signing certificate
+  // Endpoint trust and Defender policy must be deployed by enterprise device
+  // management. Shipping scripts that alter ROOT/Defender from the portal is
+  // not a safe production installer workflow.
   app.get("/v1/edge-agent/download/certificate", {
     config: { noAuth: true },
   }, async (_request, reply) => {
-    const root = await findEdgeAgentRoot(options.artifactRoot);
-    const certPath = root ? join(root, "release", "omsystems-edge-agent.cer") : undefined;
-    if (!certPath) return reply.code(404).send({ error: "certificate_not_found" });
-    try {
-      const data = await readFile(certPath);
-      reply.header("Cache-Control", "public, max-age=86400");
-      reply.header("Content-Type", "application/x-x509-ca-cert");
-      reply.header("Content-Disposition", 'attachment; filename="omsystems-edge-agent.cer"');
-      return reply.send(data);
-    } catch {
-      return reply.code(404).send({ error: "certificate_not_found" });
-    }
+    return reply.code(410).send({ error: "endpoint_trust_package_removed" });
   });
 
-  // Public direct download for certificate installer batch script
   app.get("/v1/edge-agent/download/cert-installer", {
     config: { noAuth: true },
   }, async (_request, reply) => {
-    const root = await findEdgeAgentRoot(options.artifactRoot);
-    const scriptPath = root ? join(root, "release", "Install-Certificate.bat") : undefined;
-    if (!scriptPath) return reply.code(404).send({ error: "installer_script_not_found" });
-    try {
-      const data = await readFile(scriptPath);
-      reply.header("Cache-Control", "public, max-age=86400");
-      reply.header("Content-Type", "text/plain; charset=utf-8");
-      reply.header("Content-Disposition", 'attachment; filename="Install-Certificate.bat"');
-      return reply.send(data);
-    } catch {
-      return reply.code(404).send({ error: "installer_script_not_found" });
-    }
+    return reply.code(410).send({ error: "endpoint_trust_package_removed" });
   });
 
-  // Public direct download for the full signed distribution package
   app.get("/v1/edge-agent/download/signed-package", {
     config: { noAuth: true },
   }, async (_request, reply) => {
-    const root = await findEdgeAgentRoot(options.artifactRoot);
-    const zipPath = root ? join(root, "release", "KryptoVision-EdgeAgent-Signed-Windows.zip") : undefined;
-    if (!zipPath) return reply.code(404).send({ error: "signed_package_not_found" });
-    try {
-      const metadata = await stat(zipPath);
-      if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
-      reply.header("Cache-Control", "public, max-age=86400");
-      reply.header("Content-Type", "application/zip");
-      reply.header("Content-Length", String(metadata.size));
-      reply.header("Content-Disposition", 'attachment; filename="KryptoVision-EdgeAgent-Signed-Windows.zip"');
-      return reply.send(createReadStream(zipPath));
-    } catch {
-      return reply.code(404).send({ error: "signed_package_not_found" });
-    }
+    return reply.code(410).send({ error: "unauthenticated_edge_package_removed" });
   });
 
   // Public endpoint to download the edge-agent bundle (referenced by bootstrap installer)
@@ -656,15 +618,13 @@ export async function registerEdgeAgentPackageRoutes(
 
       if (platform === "windows") {
         const executablePath = join(root, "release", "edge-agent.exe");
-        let executableSize: number;
         try {
           const metadata = await stat(executablePath);
-          if (!metadata.isFile()) throw new Error("not a file");
-          executableSize = metadata.size;
+          if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
         } catch {
           throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
         }
-        const installer = streamInstaller(executablePath, config);
+        await verifyProductionWindowsRelease(join(root, "release"), executablePath);
         const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
         if (mode === "scan-once") {
           const scannerName = `${safeBranchName}-local-network-scanner.exe`;
@@ -712,13 +672,23 @@ export async function registerEdgeAgentPackageRoutes(
           tenantId: branch.tenantId, actorUserId: request.currentUser.id,
           action: "edge_agent.package_downloaded", resourceNodeId: branchId,
           outcome: "success", sourceIp: request.ip,
-          details: { edgeAgentId, platform, version, format: "single-executable", mode },
+          details: { edgeAgentId, platform, version, format: "signed-zip-package", mode },
         });
+        const executable = await readFile(executablePath);
+        const zipData = makeZip([
+          { name: "edge-agent.exe", data: executable },
+          { name: "edge-agent.env", data: config },
+          { name: "Install Sentinel Grid Edge Agent.bat", data: Buffer.from(windowsInstallLauncher(), "utf8") },
+          { name: "README.txt", data: Buffer.from(
+            "Extract this ZIP to a local folder, then run Install Sentinel Grid Edge Agent.bat as directed. The installer validates the configuration, installs the media runtime, and creates the protected SYSTEM startup task. Do not run edge-agent.exe directly from the extracted folder.\r\n",
+            "utf8",
+          ) },
+        ]);
         reply.header("Cache-Control", "no-store, private");
-        reply.header("Content-Type", "application/vnd.microsoft.portable-executable");
-        reply.header("Content-Length", String(executableSize + installer.footer.length));
-        reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-edge-agent-setup.exe"`);
-        return reply.send(installer.stream);
+        reply.header("Content-Type", "application/zip");
+        reply.header("Content-Length", String(zipData.length));
+        reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-edge-agent-setup.zip"`);
+        return reply.send(zipData);
       } else {
         const packageBody = JSON.stringify({ private: true, scripts: { start: "node edge-agent.cjs" } }, null, 2);
         entries = [

@@ -159,6 +159,13 @@ const schema = z.object({
       message: "Provide a one-time EDGE_ACTIVATION_CODE, or an existing legacy/development identity",
     });
   }
+  if (value.EDGE_ACTIVATION_CODE && !value.CONTROL_PLANE_URL.startsWith("https://")) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["CONTROL_PLANE_URL"],
+      message: "One-time edge activation requires an HTTPS control-plane URL",
+    });
+  }
   if (value.PHYSICAL_SIREN_ENABLED && (!value.PHYSICAL_SIREN_ON_URL || !value.PHYSICAL_SIREN_OFF_URL)) {
     context.addIssue({
       code: z.ZodIssueCode.custom,

@@ -73,7 +73,7 @@ describe("branch edge-agent package", () => {
     }
   });
 
-  it("downloads one branch-specific Windows installer EXE with embedded configuration", async () => {
+  it("downloads a branch-specific Windows installer ZIP without modifying the signed executable", async () => {
     const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-edge-package-"));
     temporaryRoots.push(artifactRoot);
     await mkdir(join(artifactRoot, "release"), { recursive: true });
@@ -98,11 +98,12 @@ describe("branch edge-agent package", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers["content-type"]).toContain("application/vnd.microsoft.portable-executable");
-      expect(response.headers["content-disposition"]).toContain("edge-agent-setup.exe");
+      expect(response.headers["content-type"]).toContain("application/zip");
+      expect(response.headers["content-disposition"]).toContain("edge-agent-setup.zip");
       expect(response.headers["cache-control"]).toBe("no-store, private");
-      expect(response.rawPayload.subarray(0, 2).toString()).toBe("MZ");
-      const config = embeddedConfig(response.rawPayload);
+      expect(response.rawPayload.subarray(0, 2).toString()).toBe("PK");
+      expect(zipEntry(response.rawPayload, "edge-agent.exe").toString("utf8")).toBe("MZ-test-executable");
+      const config = zipEntry(response.rawPayload, "edge-agent.env").toString("utf8");
       expect(config).toContain('CONTROL_PLANE_URL="https://control.example.com"');
       expect(config).toContain(`EDGE_AGENT_ID="${agent.id}"`);
       expect(config).toContain(`EDGE_BRIDGE_SHARED_KEY="${edgeKey}"`);
@@ -115,6 +116,8 @@ describe("branch edge-agent package", () => {
       expect(config).toContain('PUBLIC_MEDIA_GATEWAY_URL="auto"');
       expect(config).not.toContain('CAMERA_USERNAME="admin"');
       expect(config).not.toContain('REPLACE_WITH_CAMERA_PASSWORD');
+      expect(zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat").toString("utf8"))
+        .toContain("--install --config");
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.package_downloaded");
     } finally {
       await app.close();
@@ -200,11 +203,16 @@ describe("branch edge-agent package", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers["content-disposition"]).toContain("scanner-setup.exe");
-      const config = embeddedConfig(response.rawPayload);
+      expect(response.headers["content-disposition"]).toContain("signed-edge-agent.zip");
+      const config = zipEntry(response.rawPayload, "edge-agent.env").toString("utf8");
       expect(config).toContain(`EDGE_ACTIVATION_CODE=${JSON.stringify(activationCode)}`);
       expect(config).toContain('EDGE_BRIDGE_SHARED_KEY=""');
       expect(config).toContain('EDGE_AGENT_NAME="Bengaluru Scanner"');
+      const launcher = zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat").toString("utf8");
+      expect(launcher).toContain("--install --config");
+      expect(launcher).not.toContain("taskkill");
+      expect(() => zipEntry(response.rawPayload, "Allow-In-Defender.bat")).toThrow();
+      expect(() => zipEntry(response.rawPayload, "Install-Certificate.bat")).toThrow();
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.installer_downloaded");
     } finally {
       await app.close();
@@ -245,9 +253,36 @@ describe("branch edge-agent package", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(embeddedConfig(response.rawPayload)).toContain(
+      expect(zipEntry(response.rawPayload, "edge-agent.env").toString("utf8")).toContain(
         'CONTROL_PLANE_URL="https://dashboard.example.com/api/control"',
       );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("does not produce a branch-specific EXE that would invalidate code signing", async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), "sentinel-dynamic-exe-disabled-"));
+    temporaryRoots.push(artifactRoot);
+    await mkdir(join(artifactRoot, "release"), { recursive: true });
+    await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
+    await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+    const store = new MemoryStore();
+    addTestBranch(store);
+    const activationCode = `sgact_${"a".repeat(48)}`;
+    const activation = await store.createEdgeActivation({
+      branchId: "branch-blr-001", agentName: "Signed Scanner", createdBy: "user-global-admin",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(), tokenHash: activationTokenHash(activationCode),
+    });
+    const app = await buildApp({ store, edgeAgentArtifactRoot: artifactRoot, controlPlanePublicUrl: "https://control.example.com" });
+    try {
+      const response = await app.inject({
+        method: "POST", url: "/v1/branches/branch-blr-001/edge-agent-installer",
+        headers: { "x-user-id": "user-global-admin" },
+        payload: { activationId: activation.id, activationCode, agentName: "Signed Scanner", format: "exe" },
+      });
+      expect(response.statusCode).toBe(410);
+      expect(response.json()).toMatchObject({ error: "unsigned_dynamic_installer_removed" });
     } finally {
       await app.close();
     }

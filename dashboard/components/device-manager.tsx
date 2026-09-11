@@ -1602,7 +1602,7 @@ export function DeviceManager() {
     }
   }
 
-  async function downloadWebsiteScanner(format: "exe" | "zip" = "zip") {
+  async function downloadWebsiteScanner() {
     if (!selectedBranch || !gatewayActivation) return;
     setSaving(true);
     setError(undefined);
@@ -1611,11 +1611,8 @@ export function DeviceManager() {
         activationId: gatewayActivation.id,
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,
-        format,
       });
-      setNotice(format === "zip"
-        ? "Signed package download started (.ZIP). Extract the package, right-click Install-Certificate.bat and run as admin to trust the cert, then run START_SCANNER.bat."
-        : "Standalone installer download started (.EXE). Open the downloaded file to install and start the scanner.");
+      setNotice("Signed installer package download started. Extract it, then run Install Sentinel Grid Edge Agent.bat and approve the Windows administrator prompt.");
     } catch (reason) {
       setError(messageOf(reason, "Unable to download the scanner installer."));
     } finally {
@@ -2484,7 +2481,7 @@ export function DeviceManager() {
                 <p className="text-xs text-slate-300">
                   {gateways.length > 0
                     ? <>Use this only for offline repair or runtime changes. It downloads the complete package again for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>
-                    : <>Download the pre-configured package for <strong>{activeBranch?.name ?? "Branch"}</strong>. Choose the recommended signed ZIP (includes certificate & Defender whitelist scripts) or standalone EXE.</>}
+                    : <>Download the pre-configured, signed installer package for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>}
                 </p>
 
                 {!gatewayActivation ? (
@@ -2502,53 +2499,19 @@ export function DeviceManager() {
                   </div>
                 ) : (
                   <div className="space-y-3 pt-1">
-                    <div className="grid sm:grid-cols-2 gap-2">
+                    <div className="grid gap-2">
                       <button
                         type="button"
                         className="flex flex-col items-start gap-1 p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/30 hover:bg-emerald-900/40 text-left transition"
-                        onClick={() => void downloadWebsiteScanner("zip")}
+                        onClick={() => void downloadWebsiteScanner()}
                         disabled={saving}
                       >
                         <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-300">
                           <Download size={14} /> Download Signed ZIP (Recommended)
                         </div>
                         <span className="text-[11px] text-slate-300 leading-tight">
-                          Preserves Authenticode signature. Includes pre-filled .env, Install-Certificate.bat, and Defender whitelist scripts.
+                          Preserves the signed executable. Includes the pre-filled branch configuration and elevated installation launcher.
                         </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        className="flex flex-col items-start gap-1 p-3 rounded-xl border border-slate-700 bg-slate-900/60 hover:bg-slate-800/80 text-left transition"
-                        onClick={() => void downloadWebsiteScanner("exe")}
-                        disabled={saving}
-                      >
-                        <div className="flex items-center gap-1.5 font-semibold text-xs text-slate-200">
-                          <Download size={14} /> Download Standalone EXE
-                        </div>
-                        <span className="text-[11px] text-slate-400 leading-tight">
-                          Single self-configuring executable for quick setup on machines with Defender exclusions already applied.
-                        </span>
-                      </button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/80 text-xs text-slate-400">
-                      <span className="text-[11px] text-slate-500">Security Certificate Tools:</span>
-                      <button
-                        type="button"
-                        onClick={() => cameraInventoryApi.downloadEdgeAgentCertificate()}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/60 hover:bg-slate-700/80 text-[11px] text-slate-300 transition"
-                        title="Download public certificate (omsystems-edge-agent.cer)"
-                      >
-                        <ShieldCheck size={11} className="text-emerald-400" /> Certificate (.cer)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => cameraInventoryApi.downloadEdgeAgentCertInstaller()}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-800/60 hover:bg-slate-700/80 text-[11px] text-slate-300 transition"
-                        title="Download automated 1-click certificate installer batch script"
-                      >
-                        <Terminal size={11} className="text-blue-400" /> Certificate Installer (.bat)
                       </button>
                     </div>
                   </div>

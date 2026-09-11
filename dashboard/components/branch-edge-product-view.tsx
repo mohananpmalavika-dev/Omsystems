@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Download, FileCode, RefreshCw, Server, ShieldCheck, Terminal } from "lucide-react";
+import { AlertTriangle, FileCode, RefreshCw, Server, ShieldCheck } from "lucide-react";
 import { cameraInventoryApi } from "@/lib/api-client";
 
 type ApiState = {
@@ -72,65 +72,39 @@ export function BranchEdgeProductView() {
         <button type="button" onClick={() => void load()} disabled={loading} className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 disabled:opacity-50"><RefreshCw className={`mr-2 inline h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</button>
       </div>
 
-      {/* Edge Agent Download & Certificate Panel */}
+      {/* Branch installers are issued from the branch device manager so each
+          download is bound to an authenticated one-time activation. */}
       <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-slate-900/90 via-indigo-950/20 to-slate-900/90 p-5 shadow-xl">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-400" />
               <h3 className="text-base font-semibold text-slate-100">
-                Official Edge Agent Software & Security Certificate
+              Managed Edge Agent Installation
               </h3>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
                 Authenticode Signed
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl">
-              Digitally signed by <strong className="text-slate-100">OmSystems Sentinel Edge Agent</strong>. Download the complete signed bundle to run camera discovery and edge stream telemetry on branch PCs without Windows Defender or SmartScreen blocking.
+              Installers are generated from the branch device manager with a one-time activation. The signed executable is not modified per branch; enterprise trust policy is managed through Intune or Group Policy.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => cameraInventoryApi.downloadEdgeAgentSignedPackage()}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/25 transition active:scale-95"
-            >
-              <Download size={15} /> Download Signed ZIP Package (132 MB)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => cameraInventoryApi.downloadEdgeAgentCertificate()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-750 text-xs font-medium text-slate-200 hover:text-white transition"
-              title="Download public certificate (omsystems-edge-agent.cer)"
-            >
-              <ShieldCheck size={14} className="text-emerald-400" /> Certificate (.cer)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => cameraInventoryApi.downloadEdgeAgentCertInstaller()}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-750 text-xs font-medium text-slate-200 hover:text-white transition"
-              title="Download 1-click certificate installer batch script"
-            >
-              <Terminal size={14} className="text-blue-400" /> Installer Script (.bat)
-            </button>
-          </div>
         </div>
 
         <div className="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">1</span>
-            <div><strong className="text-slate-200">Trust Certificate:</strong> Right-click <code>Install-Certificate.bat</code> and run as admin to trust in Windows Root.</div>
+            <div><strong className="text-slate-200">Prepare:</strong> Open the branch in Device Manager and create a gateway activation.</div>
           </div>
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">2</span>
-            <div><strong className="text-slate-200">Configure:</strong> Get branch activation from Device Manager or configure <code>edge-agent.env</code>.</div>
+            <div><strong className="text-slate-200">Download:</strong> Download and extract the activation-bound signed ZIP package.</div>
           </div>
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">3</span>
-            <div><strong className="text-slate-200">Run Scanner:</strong> Double-click <code>START_SCANNER.bat</code> to begin live camera discovery.</div>
+            <div><strong className="text-slate-200">Install:</strong> Run <code>Install Sentinel Grid Edge Agent.bat</code> and approve elevation.</div>
           </div>
         </div>
       </div>

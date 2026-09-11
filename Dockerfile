@@ -21,11 +21,12 @@ ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
 
-# Build the cross-platform edge-agent bundle and the activation-bound
-# Windows self-installer served by the control plane.
+# A production container may serve only a release built and Authenticode-signed
+# on the Windows release runner. Linux can package a Windows executable but
+# cannot establish its publisher trust.
 WORKDIR /app/edge-agent
 RUN npm install --legacy-peer-deps
-RUN npm run build:exe
+RUN npm run verify:windows-production-release
 RUN npm run bundle:delta
 WORKDIR /app
 

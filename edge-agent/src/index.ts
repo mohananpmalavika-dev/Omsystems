@@ -34,6 +34,7 @@ import {
   stageSignedUpdate,
 } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
@@ -62,8 +63,20 @@ if (hasArgument(argv, "--verify-bundle")) {
   process.exit(0);
 }
 const runtime = prepareRuntimeOrExit(argv);
-if (runtime.embeddedEnvironmentFile && (argv.length === 0 || hasArgument(argv, "--install"))) {
-  launchWindowsSelfInstaller(runtime.embeddedEnvironmentFile);
+// A signed distribution ZIP keeps branch configuration beside the signed EXE
+// so the executable itself is not modified per branch. It must explicitly use
+// --install; an ordinary launch from a downloads folder must never elevate or
+// install itself. The legacy self-installing EXE continues to work with its
+// embedded configuration.
+const installEnvironmentFile = runtime.embeddedEnvironmentFile ?? (
+  hasArgument(argv, "--install") && runtime.configPath
+    ? readFileSync(runtime.configPath, "utf8")
+    : undefined
+);
+if (installEnvironmentFile && (
+  hasArgument(argv, "--install") || (runtime.embeddedEnvironmentFile && argv.length === 0)
+)) {
+  launchWindowsSelfInstaller(installEnvironmentFile);
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {

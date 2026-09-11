@@ -11,9 +11,11 @@
     "build:clean": "npm run build",
     "fetch:windows-runtime": "node scripts/fetch-windows-runtime.mjs",
     "verify:windows-installer-assets": "node scripts/verify-windows-installer-assets.mjs",
+    "verify:windows-package": "node scripts/verify-windows-package.mjs",
+    "verify:windows-production-release": "node scripts/verify-windows-production-release.mjs",
     "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=build/edge-agent.cjs",
     "bundle:delta": "node scripts/build-delta-bundle.mjs",
-    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && release\\edge-agent.exe --verify-bundle",
+    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && npm run verify:windows-package",
     "build:signed-windows-release": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File scripts/build-signed-windows-release.ps1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
