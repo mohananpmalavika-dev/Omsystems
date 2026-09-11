@@ -175,7 +175,7 @@ export class CameraRepository {
            EXISTS (
              SELECT 1 FROM users u
              WHERE u.id = $1::uuid
-               AND (u.role IN ('super_admin', 'superadmin')
+               AND (u.role::text IN ('super_admin', 'superadmin')
                     OR u.identity_subject = 'user-global-admin'
                     OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan'))
            )
@@ -217,7 +217,7 @@ export class CameraRepository {
         EXISTS (
           SELECT 1 FROM users u
           WHERE u.id = $1::uuid
-            AND (u.role IN ('super_admin', 'superadmin')
+            AND (u.role::text IN ('super_admin', 'superadmin')
                  OR u.identity_subject = 'user-global-admin'
                  OR LOWER(COALESCE(u.username, '')) IN ('user-global-admin', 'mgdhanyamohan'))
         )
