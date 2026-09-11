@@ -406,8 +406,8 @@ export function AIQualityRegistry() {
                     </div>
                     <div className="text-right">
                       <p className="text-slate-500 text-[10px] uppercase">Drift</p>
-                      <p className={det.driftPercentage > 25 ? "text-amber-400 font-bold" : "text-emerald-400 font-bold"}>
-                        {det.driftPercentage > 0 ? `+${det.driftPercentage}%` : `${det.driftPercentage}%`}
+                      <p className={det.driftPercentage != null && det.driftPercentage > 25 ? "text-amber-400 font-bold" : "text-emerald-400 font-bold"}>
+                        {det.driftPercentage != null ? (det.driftPercentage > 0 ? `+${det.driftPercentage}%` : `${det.driftPercentage}%`) : "0%"}
                       </p>
                     </div>
                   </div>

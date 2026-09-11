@@ -244,7 +244,6 @@ export interface AlertNotificationPolicy {
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
   policyVersion?: number;
   updatedAt: string;
-  policyVersion?: number;
 }
 
 export interface AlertNotificationPolicyInput {

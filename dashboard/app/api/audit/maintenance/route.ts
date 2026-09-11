@@ -41,11 +41,9 @@ export async function GET(request: NextRequest) {
     const assignedTechnicianId = searchParams.get('assignedTechnicianId');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
-    const search = searchParams.get('search')?.trim().toLowerCase();
+    const search = searchParams.get('search')?.trim().toLowerCase() ?? '';
     const slaStatus = searchParams.get('slaStatus');
     const summary = searchParams.get('summary') === 'true';
-    const search = searchParams.get('search')?.toLowerCase() ?? '';
-    const slaStatus = searchParams.get('slaStatus');
 
     const params = new URLSearchParams();
     if (cameraId) params.append('cameraId', cameraId);
