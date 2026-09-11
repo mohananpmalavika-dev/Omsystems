@@ -151,13 +151,14 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
           headers: { "cache-control": "no-store" },
         });
         const isHttps = requestIsHttps(request);
+        // Do NOT set maxAge: browsers treat cookies without maxAge/expires as RFC 6265 Session Cookies
+        // which are automatically destroyed by the browser when the user closes the browser.
         outgoing.cookies.set("sentinel_access", accessToken, {
           httpOnly: true,
           sameSite: isHttps ? "none" : "lax",
           secure: isHttps,
           partitioned: isHttps,
           path: "/",
-          maxAge: payload.expiresIn || 86400,
         } as any);
         if (refreshToken) {
           outgoing.cookies.set("sentinel_refresh", refreshToken, {
@@ -166,7 +167,6 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
             secure: isHttps,
             partitioned: isHttps,
             path: "/",
-            maxAge: 30 * 24 * 60 * 60,
           } as any);
         }
       } catch {
