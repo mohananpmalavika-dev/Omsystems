@@ -38,6 +38,7 @@ reports/*.zip
 
 # Ignore all executable files, including the Edge agent release binary
 *.exe
+edge-agent/release/*.zip
 edge-agent/release/edge-agent.exe
 edge-agent/release/updates/
 edge-agent/release/config/
