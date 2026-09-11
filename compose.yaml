@@ -15,13 +15,17 @@ services:
       ANALYTICS_ENGINE_URL: http://analytics-engine:8092
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:?ANALYTICS_ENGINE_SHARED_KEY is required}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:?ANALYTICS_SOURCE_SHARED_KEY is required}
+      REDIS_URL: redis://redis:6379
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       CORS_ALLOW_CLOUDFLARE: ${CORS_ALLOW_CLOUDFLARE:-false}
+      FEDERATION_LOCAL_PUBLIC_URL: ${FEDERATION_LOCAL_PUBLIC_URL:-}
     ports:
       - "8080:8080"
       - "9464:9464"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   recording-engine:
@@ -43,10 +47,19 @@ services:
       MIN_FREE_STORAGE_BYTES: 1073741824
       EVIDENCE_CHECKSUM_ENABLED: "true"
       STREAM_SECRETS_JSON: "${STREAM_SECRETS_JSON:-{}}"
+      STORAGE_ALERT_SMTP_URL: ${STORAGE_ALERT_SMTP_URL:-}
+      STORAGE_ALERT_EMAIL_FROM: ${STORAGE_ALERT_EMAIL_FROM:-}
     volumes:
       - sentinel-recordings:/recordings
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8091/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   analytics-engine:
     build:
@@ -61,7 +74,8 @@ services:
     ports:
       - "8092:8092"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
   media-gateway:
     build:
@@ -84,9 +98,17 @@ services:
       CORS_ALLOW_CLOUDFLARE: ${CORS_ALLOW_CLOUDFLARE:-false}
     ports:
       - "8090:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:8090/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 6
     depends_on:
-      - api
-      - mediamtx
+      api:
+        condition: service_healthy
+      mediamtx:
+        condition: service_started
 
   dashboard:
     build:
@@ -107,9 +129,17 @@ services:
       DASHBOARD_ACCESS_PASSWORD: ${DASHBOARD_ACCESS_PASSWORD:-}
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
     depends_on:
-      - api
-      - media-gateway
+      api:
+        condition: service_healthy
+      media-gateway:
+        condition: service_healthy
 
   mediamtx:
     # 1.18+ binds HLS child playlists to a cookie that account-less CDN
@@ -122,6 +152,17 @@ services:
       - "8888:8888"
       - "8889:8889"
       - "8189:8189/udp"
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - sentinel-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   postgres:
     image: postgres:17-alpine
@@ -183,6 +224,7 @@ services:
 
 volumes:
   sentinel-postgres:
+  sentinel-redis:
   sentinel-recordings:
   sentinel-prometheus:
   sentinel-grafana:

@@ -11,6 +11,7 @@ import {
   clientMediaSchedulerService,
   ClientMediaSchedulerService,
 } from "../media/scheduler/client-media-scheduler.service.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const codecCapabilitySchema = z.object({
   codec: z.enum(["H264", "H265", "AV1", "VP9", "VP8", "MJPEG"]),
@@ -103,8 +104,29 @@ const adaptFeedbackSchema = z.object({
   activeAlarmCameraIds: z.array(z.string()).default([]),
 });
 
-export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): Promise<void> {
+export async function registerClientMediaSchedulerRoutes(app: FastifyInstance, store: ControlPlaneStore): Promise<void> {
   const scheduler = clientMediaSchedulerService;
+  const profileKey = (request: FastifyRequest, fingerprint: string) => {
+    const user = request.currentUser;
+    if (!user?.tenantId || !user.id) throw new Error("unauthenticated");
+    return `${user.tenantId}:${user.id}:${fingerprint}`;
+  };
+  const authorizeCameras = async (request: FastifyRequest, reply: FastifyReply, cameraIds: string[]) => {
+    const user = request.currentUser;
+    if (!user?.tenantId) {
+      await reply.code(401).send({ error: "unauthenticated" });
+      return undefined;
+    }
+    const cameras = await Promise.all(cameraIds.map((id) => store.getCamera(id)));
+    for (const camera of cameras) {
+      if (!camera || (camera.tenantId && camera.tenantId !== user.tenantId) ||
+          !(await store.checkAccess(user, "live:view", camera.nodeId))?.allowed) {
+        await reply.code(404).send({ error: "camera_not_found" });
+        return undefined;
+      }
+    }
+    return cameras;
+  };
 
   // 1. Ingest & Store Measured Client Hardware Benchmark
   app.post("/v1/media/scheduler/profile", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -113,7 +135,7 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
       ...body,
       benchmarkTimestamp: body.benchmarkTimestamp || new Date().toISOString(),
     };
-    scheduler.registerClientProfile(profile as any);
+    scheduler.registerClientProfile({ ...profile, fingerprint: profileKey(request, profile.fingerprint) } as any);
 
     return {
       status: "profile_registered",
@@ -128,7 +150,7 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
   // 2. Retrieve Stored Client Profile by Fingerprint
   app.get("/v1/media/scheduler/profile/:fingerprint", async (request: FastifyRequest, reply: FastifyReply) => {
     const { fingerprint } = request.params as { fingerprint: string };
-    const profile = scheduler.getClientProfile(fingerprint);
+    const profile = scheduler.getClientProfile(profileKey(request, fingerprint));
     if (!profile) {
       return reply.code(404).send({ error: "profile_not_found", fingerprint });
     }
@@ -144,13 +166,18 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
   });
 
   // 4. Authoritative Schedule Calculation (Zero Guessing)
-  app.post("/v1/media/scheduler/calculate", async (request: FastifyRequest) => {
+  app.post("/v1/media/scheduler/calculate", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = calculateScheduleSchema.parse(request.body);
+    const authorized = await authorizeCameras(request, reply, body.cameras.map((camera) => camera.id));
+    if (!authorized) return;
 
-    const profile = scheduler.resolveEffectiveProfile(body.fingerprint, body.profileOverride as any);
+    const profile = scheduler.resolveEffectiveProfile(
+      body.fingerprint ? profileKey(request, body.fingerprint) : undefined,
+      body.profileOverride as any,
+    );
 
     const result = scheduler.calculateSchedule(
-      body.cameras as any,
+      authorized.map((camera) => ({ id: camera.id, name: camera.name, isOnline: camera.status === "online", hasAudio: camera.capabilities.audio })) as any,
       {
         sessionId: body.sessionId,
         gridRows: body.gridRows,
@@ -171,16 +198,15 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance): 
   });
 
   // 5. Real-Time Feedback Adaptation (Immediate stream throttling/recovery directives)
-  app.post("/v1/media/scheduler/adapt", async (request: FastifyRequest) => {
+  app.post("/v1/media/scheduler/adapt", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = adaptFeedbackSchema.parse(request.body);
+    const authorized = await authorizeCameras(request, reply, body.activeCameraIds);
+    if (!authorized) return;
 
-    const profile = scheduler.resolveEffectiveProfile(body.fingerprint);
+    const profile = scheduler.resolveEffectiveProfile(body.fingerprint ? profileKey(request, body.fingerprint) : undefined);
 
-    // Build synthetic camera list from active IDs
-    const cameras = body.activeCameraIds.map((id, index) => ({
-      id,
-      name: `Camera ${index + 1}`,
-      isOnline: true,
+    const cameras = authorized.map((camera) => ({
+      id: camera.id, name: camera.name, isOnline: camera.status === "online", hasAudio: camera.capabilities.audio,
     }));
 
     const result = scheduler.calculateSchedule(

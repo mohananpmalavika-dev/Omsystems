@@ -7,6 +7,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if (-not $CertificateThumbprint) { throw 'Set WINDOWS_SIGNING_CERT_THUMBPRINT or pass -CertificateThumbprint.' }
+$CertificateThumbprint = $CertificateThumbprint -replace '\s', ''
+$certificate = @(
+  Get-ChildItem -Path 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Thumbprint -eq $CertificateThumbprint }
+) | Select-Object -First 1
+if (-not $certificate) { throw "Code-signing certificate $CertificateThumbprint was not found in CurrentUser\My or LocalMachine\My." }
+if (-not $certificate.HasPrivateKey) { throw "Code-signing certificate $CertificateThumbprint has no accessible private key." }
+if ($certificate.NotAfter -le (Get-Date)) { throw "Code-signing certificate $CertificateThumbprint expired on $($certificate.NotAfter)." }
 $signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
 if (-not $signtool) { throw 'signtool.exe was not found. Install the Windows SDK on the release runner.' }
 

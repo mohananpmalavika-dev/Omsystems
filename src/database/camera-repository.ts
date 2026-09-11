@@ -723,24 +723,13 @@ export class CameraRepository {
            LIMIT 1`,
           [targetCameraId],
         );
-        let fb = fallbackAgent.rows[0];
-        if (!fb) {
-          const anyAgent = await this.pool.query<{
-            id: string;
-            public_media_url: string | null;
-            local_media_url: string | null;
-            status: string;
-            last_seen_at: Date | null;
-          }>(
-            `SELECT agent.id, agent.public_media_url, agent.local_media_url, agent.status, agent.last_seen_at
-             FROM edge_agents agent
-             WHERE agent.credential_revoked_at IS NULL
-               AND agent.last_seen_at >= now() - interval '10 minutes'
-             ORDER BY agent.last_seen_at DESC
-             LIMIT 1`,
-          );
-          fb = anyAgent.rows[0];
-        }
+        // A camera may only be repaired onto an agent at its own branch.  An
+        // earlier fallback selected any recently-seen agent in the fleet and
+        // persisted that association, which could both misroute a stream and
+        // cross a tenant/branch boundary.  If this branch has no gateway the
+        // central media gateway may still serve an already configured route,
+        // but the camera-to-edge binding remains untouched.
+        const fb = fallbackAgent.rows[0];
         if (fb) {
           activeAgent = {
             ...row,

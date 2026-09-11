@@ -169,7 +169,10 @@ export function IncidentMediaModal({
   const primaryImageUrl = imageUrl || snapshotUrl || (alertId ? `/v1/analytics/alerts/${alertId}/snapshot` : null) || (incidentId ? `/v1/incidents/${incidentId}/snapshot` : null);
   const fallbackImageUrl = (alertId && primaryImageUrl !== `/v1/analytics/alerts/${alertId}/snapshot`)
     ? `/v1/analytics/alerts/${alertId}/snapshot`
-    : (cameraId ? `/api/control/v1/media/snapshots/${cameraId}` : null);
+    // Go through the dashboard snapshot relay.  The retired on-demand media
+    // endpoint required a branch query and returned synthetic metadata rather
+    // than image bytes, so it could never serve as an <img> fallback.
+    : (cameraId ? `/api/cameras/${cameraId}/snapshot` : null);
 
   const [currentImgUrl, setCurrentImgUrl] = useState<string | null>(primaryImageUrl);
 

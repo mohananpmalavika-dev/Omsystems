@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, AlertTriangle, CheckCircle2, Cpu, Layers, RefreshCw, Video } from "lucide-react";
 import { type ClientMeasuredProfile, runClientHardwareBenchmark } from "@/lib/viewer-capacity/client-media-benchmark";
 
@@ -20,23 +20,34 @@ export function MediaPipelineSchedulerView() {
   const [error, setError] = useState<string | null>(null);
   const runId = useRef(0);
   const schedulerSessionId = useRef<string | null>(null);
-  const cameras = useMemo(() => Array.from({ length: gridSize }, (_, index) => ({ id: `preview-camera-${index + 1}`, name: `Preview camera ${index + 1}`, isOnline: true })), [gridSize]);
+  const [cameras, setCameras] = useState<Array<{ id: string; name?: string; isOnline?: boolean }>>([]);
 
   const refresh = async () => {
     const currentRun = ++runId.current;
-    const currentSessionId = schedulerSessionId.current ?? crypto.randomUUID();
-    schedulerSessionId.current = currentSessionId;
     setState("measuring"); setError(null);
     try {
+      const [cameraResponse, viewerResponse] = await Promise.all([
+        fetch("/api/control/v1/cameras?action=live%3Aview&limit=256", { credentials: "include" }),
+        fetch("/api/control/v1/media/viewer/session", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ deviceType: "workstation", activeLayout: `${gridSize}` }) }),
+      ]);
+      if (!cameraResponse.ok || !viewerResponse.ok) throw new Error("Unable to load authorized cameras or viewer session");
+      const cameraBody = await cameraResponse.json() as { data?: Array<{ id: string; name?: string; status?: string }> };
+      const viewerBody = await viewerResponse.json() as { session?: { sessionId?: string } };
+      const available = (cameraBody.data ?? []).filter((camera) => camera.status === "online").slice(0, gridSize)
+        .map((camera) => ({ id: camera.id, name: camera.name, isOnline: true }));
+      if (available.length === 0 || !viewerBody.session?.sessionId) throw new Error("No authorized online cameras are available");
+      const currentSessionId = viewerBody.session.sessionId;
+      schedulerSessionId.current = currentSessionId;
+      setCameras(available);
       const measured = await runClientHardwareBenchmark();
       if (currentRun !== runId.current) return;
       setProfile(measured); setState("scheduling");
       const { rows, columns } = gridDimensions(gridSize);
       const tileWidth = Math.max(1, Math.floor(1920 / columns)); const tileHeight = Math.max(1, Math.floor(1080 / rows));
-      const response = await fetch("/v1/media/scheduler/calculate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-        fingerprint: measured.fingerprint, sessionId: currentSessionId, gridRows: rows, gridCols: columns, totalTiles: gridSize, cameras,
-        tiles: cameras.map((camera, tileIndex) => ({ cameraId: camera.id, widthPx: tileWidth, heightPx: tileHeight, tileIndex, isIntersecting: true })),
-        visibleCameraIds: cameras.map((camera) => camera.id), focusedCameraId: cameras[0]?.id,
+      const response = await fetch("/api/control/v1/media/scheduler/calculate", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+        fingerprint: measured.fingerprint, sessionId: currentSessionId, gridRows: rows, gridCols: columns, totalTiles: available.length, cameras: available,
+        tiles: available.map((camera, tileIndex) => ({ cameraId: camera.id, widthPx: tileWidth, heightPx: tileHeight, tileIndex, isIntersecting: true })),
+        visibleCameraIds: available.map((camera) => camera.id), focusedCameraId: available[0]?.id,
         liveTelemetry: { sessionId: currentSessionId, eventLoopLagMs: eventLoopLag ?? 0, totalRenderedFps: renderFps ?? 0, activeDecodedStreams: schedule?.activeLiveDecodes ?? 0, currentDownlinkMbps: measured.measuredDownlinkMbps, currentRttMs: measured.measuredRttMs, currentPacketLossPct: measured.measuredPacketLossPct },
       }) });
       if (!response.ok) throw new Error(`Scheduler request failed (${response.status})`);

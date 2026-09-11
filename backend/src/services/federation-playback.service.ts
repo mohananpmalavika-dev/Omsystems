@@ -52,10 +52,20 @@ export interface MultiCameraPlayback {
 export class FederationPlaybackService {
   private pool: Pool;
   private federationManager: ReturnType<typeof getFederationManager>;
+  private readonly localServerUrl: string;
 
   constructor(pool: Pool) {
     this.pool = pool;
     this.federationManager = getFederationManager(pool);
+    // Never emit localhost as a federation endpoint: it resolves to the
+    // receiving peer, not the server holding the recording.  A missing public
+    // endpoint stays explicitly unavailable rather than becoming a deceptive
+    // but unusable URL.
+    this.localServerUrl = (
+      process.env.FEDERATION_LOCAL_PUBLIC_URL ??
+      process.env.CONTROL_PLANE_PUBLIC_URL ??
+      ""
+    ).replace(/\/$/, "");
   }
 
   /**
@@ -225,17 +235,18 @@ export class FederationPlaybackService {
         rs.size_bytes
        FROM recording_segments rs
        WHERE rs.camera_id = $1::uuid
+         AND rs.tenant_id = $4::uuid
          AND rs.started_at < $3
          AND rs.ended_at > $2
          AND rs.status = 'ready'
        ORDER BY rs.started_at`,
-      [cameraId, timeRange.from, timeRange.to]
+      [cameraId, timeRange.from, timeRange.to, tenantId]
     );
 
     return result.rows.map(row => ({
       serverId: row.server_id,
       serverName: row.server_name,
-      serverUrl: 'http://localhost:8080', // Placeholder
+      serverUrl: this.localServerUrl,
       cameraId: row.camera_id,
       cameraName: '',
       startTime: row.started_at,

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 import { recordingIndexService, RecordingIndexService } from "../recording-index/recording-index.service.js";
 import type { ArchiveState, StorageTier } from "../recording-index/recording-index.types.js";
 
@@ -54,8 +55,39 @@ const registerSegmentSchema = z.object({
 
 export async function registerRecordingIndexRoutes(
   app: FastifyInstance,
+  store: ControlPlaneStore,
   service: RecordingIndexService = recordingIndexService,
 ): Promise<void> {
+  const authorizeCamera = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    cameraId: string,
+  ) => {
+    const user = request.currentUser;
+    if (!user?.tenantId) {
+      await reply.code(401).send({ success: false, error: "unauthorized" });
+      return undefined;
+    }
+
+    const camera = await store.getCamera(cameraId);
+    if (!camera || (camera.tenantId && camera.tenantId !== user.tenantId)) {
+      await reply.code(404).send({ success: false, error: "recording_resource_not_found" });
+      return undefined;
+    }
+
+    const [branch, branchAccess, cameraAccess] = await Promise.all([
+      store.getNode(camera.branchId),
+      store.checkAccess(user, "recording:view", camera.branchId),
+      store.checkAccess(user, "recording:view", camera.nodeId),
+    ]);
+    if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId ||
+        !branchAccess?.allowed || !cameraAccess?.allowed) {
+      await reply.code(404).send({ success: false, error: "recording_resource_not_found" });
+      return undefined;
+    }
+    return camera;
+  };
+
   /**
    * POST /api/v1/recordings/search
    * High-performance authoritative recording search with gaps and keyframes
@@ -66,6 +98,9 @@ export async function registerRecordingIndexRoutes(
     if (!tenantId) return reply.code(401).send({ success: false, error: "unauthorized" });
     if (input.tenantId && input.tenantId !== tenantId) {
       return reply.code(403).send({ success: false, error: "tenant_mismatch" });
+    }
+    for (const cameraId of input.cameraIds) {
+      if (!await authorizeCamera(request, reply, cameraId)) return;
     }
     const result = await service.findRecording({
       tenantId,
@@ -90,6 +125,7 @@ export async function registerRecordingIndexRoutes(
    */
   app.get("/api/v1/recordings/:cameraId/range", async (request: FastifyRequest, reply: FastifyReply) => {
     const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
+    if (!await authorizeCamera(request, reply, cameraId)) return;
     const result = await service.getRecordingRange(cameraId);
     return reply.code(200).send({
       success: true,
@@ -104,6 +140,7 @@ export async function registerRecordingIndexRoutes(
   app.get("/api/v1/recordings/:cameraId/segment-at", async (request: FastifyRequest, reply: FastifyReply) => {
     const { cameraId } = z.object({ cameraId: z.string().min(1) }).parse(request.params);
     const { timestamp } = z.object({ timestamp: z.string().datetime() }).parse(request.query);
+    if (!await authorizeCamera(request, reply, cameraId)) return;
 
     const segment = await service.findSegmentAt(cameraId, new Date(timestamp));
     if (!segment) {
@@ -122,6 +159,7 @@ export async function registerRecordingIndexRoutes(
       timestamp: z.string().datetime(),
       maxLookbackMs: z.coerce.number().int().positive().optional(),
     }).parse(request.query);
+    if (!await authorizeCamera(request, reply, cameraId)) return;
 
     const keyframe = await service.findNearestKeyframe(
       cameraId,

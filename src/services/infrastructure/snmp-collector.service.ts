@@ -5,6 +5,7 @@
  */
 
 import { Pool } from 'pg';
+import snmp from 'net-snmp';
 
 export interface SNMPTarget {
   host: string;
@@ -74,6 +75,30 @@ export const VENDOR_OIDS = {
 export class SNMPCollectorService {
   constructor(private pool: Pool) {}
 
+  private createSession(target: SNMPTarget) {
+    const requestedVersion = target.credentials.version.toLowerCase();
+    const version = requestedVersion === 'v1' || requestedVersion === '1'
+      ? snmp.Version1
+      : requestedVersion === 'v2c' || requestedVersion === '2c' || requestedVersion === '2'
+        ? snmp.Version2c
+        : undefined;
+
+    if (version === undefined) {
+      throw new Error(`unsupported_snmp_version:${target.credentials.version}`);
+    }
+    if (!target.host.trim() || !target.credentials.community) {
+      throw new Error('snmp_target_credentials_required');
+    }
+
+    return snmp.createSession(target.host, target.credentials.community, {
+      version,
+      port: target.port ?? 161,
+      timeout: target.timeout ?? 5_000,
+      retries: target.retries ?? 1,
+      transport: target.host.includes(':') ? 'udp6' : 'udp4',
+    });
+  }
+
   /**
    * Collect single SNMP OID
    */
@@ -83,9 +108,11 @@ export class SNMPCollectorService {
     community: string = 'public',
     version: string = 'v2c'
   ): Promise<any> {
-    // Placeholder - implement actual SNMP polling
-    // In production, use a library like net-snmp
-    return null;
+    const [result] = await this.snmpGet({
+      host: ipAddress,
+      credentials: { community, version },
+    }, [oid]);
+    return result?.value ?? null;
   }
 
   /**
@@ -97,11 +124,12 @@ export class SNMPCollectorService {
     community: string = 'public',
     version: string = 'v2c'
   ): Promise<Record<string, any>> {
-    // Placeholder - implement bulk SNMP polling
+    const varbinds = await this.snmpGet({
+      host: ipAddress,
+      credentials: { community, version },
+    }, oids);
     const results: Record<string, any> = {};
-    for (const oid of oids) {
-      results[oid] = await this.collect(ipAddress, oid, community, version);
-    }
+    for (const varbind of varbinds) results[varbind.oid] = varbind.value;
     return results;
   }
 
@@ -109,16 +137,51 @@ export class SNMPCollectorService {
    * SNMP GET operation
    */
   async snmpGet(target: SNMPTarget, oids: string[]): Promise<any[]> {
-    // Placeholder - implement SNMP GET using target.credentials
-    return new Array(oids.length).fill(null);
+    if (oids.length === 0) return [];
+    const session = this.createSession(target);
+    try {
+      return await new Promise<any[]>((resolve, reject) => {
+        session.get(oids, (error: Error | null, varbinds: any[]) => {
+          if (error) return reject(error);
+          const failures = varbinds.filter((varbind) => snmp.isVarbindError(varbind));
+          if (failures.length > 0) {
+            return reject(new Error(`snmp_get_failed:${failures.map((entry) => snmp.varbindError(entry)).join(',')}`));
+          }
+          resolve(varbinds.map((varbind) => ({ oid: varbind.oid, value: varbind.value, type: varbind.type })));
+        });
+      });
+    } finally {
+      session.close();
+    }
   }
 
   /**
    * SNMP WALK operation
    */
   async snmpWalk(target: SNMPTarget, oid: string): Promise<any[]> {
-    // Placeholder - implement SNMP WALK using target.credentials
-    return [];
+    const session = this.createSession(target);
+    try {
+      return await new Promise<any[]>((resolve, reject) => {
+        const values: any[] = [];
+        session.walk(
+          oid,
+          20,
+          (varbinds: any[]) => {
+            for (const varbind of varbinds) {
+              if (snmp.isVarbindError(varbind)) {
+                reject(new Error(`snmp_walk_failed:${snmp.varbindError(varbind)}`));
+                return false;
+              }
+              values.push({ oid: varbind.oid, value: varbind.value, type: varbind.type });
+            }
+            return true;
+          },
+          (error: Error | null) => error ? reject(error) : resolve(values),
+        );
+      });
+    } finally {
+      session.close();
+    }
   }
 
   /**
