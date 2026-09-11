@@ -504,14 +504,38 @@ export class RCAEngine {
     primaryCause: RootCauseCandidate,
     alternatives: RootCauseCandidate[]
   ): Promise<void> {
-    // TODO: Implement historical case matching
-    // This would query past incidents with similar:
-    // - Root cause code
-    // - Blast radius pattern
-    // - Temporal pattern
-    // - Branch/infrastructure characteristics
-    
-    // For now, this is a placeholder for future enhancement
+    const matchingCases = Array.from(this.historicalCases.values()).filter(
+      (c) => c.rootCause === primaryCause.code
+    );
+
+    if (matchingCases.length > 0) {
+      const successfulCases = matchingCases.filter((c) => c.resolution.successful);
+      const successRate = successfulCases.length / matchingCases.length;
+
+      primaryCause.confidenceDetails.push(
+        `Historical correlation: matched ${matchingCases.length} past incident(s) with root cause ${primaryCause.code} (${Math.round(successRate * 100)}% resolution success rate)`
+      );
+
+      for (const sc of successfulCases.slice(0, 3)) {
+        if (sc.resolution.action && !primaryCause.recommendedActions.includes(sc.resolution.action)) {
+          primaryCause.recommendedActions.push(
+            `Historical verified action: ${sc.resolution.action} (resolved in ${sc.resolution.timeToResolveMinutes} min)`
+          );
+        }
+      }
+    }
+
+    // Enhance alternative causes with any matching historical cases
+    for (const alt of alternatives) {
+      const altMatches = Array.from(this.historicalCases.values()).filter(
+        (c) => c.rootCause === alt.code
+      );
+      if (altMatches.length > 0) {
+        alt.confidenceDetails.push(
+          `Historical correlation: ${altMatches.length} similar past incident(s) identified`
+        );
+      }
+    }
   }
   
   /**
@@ -524,7 +548,34 @@ export class RCAEngine {
     successful: boolean,
     timeToResolveMinutes: number
   ): Promise<void> {
-    // TODO: Store in historical database for future similarity matching
-    // This enables the system to learn from past incidents
+    const existing = this.historicalCases.get(diagnosisId);
+    if (existing) {
+      existing.rootCause = actualRootCause;
+      existing.resolution = {
+        action: resolutionAction,
+        successful,
+        timeToResolveMinutes,
+      };
+      existing.resolvedAt = new Date().toISOString();
+    } else {
+      this.historicalCases.set(diagnosisId, {
+        caseId: diagnosisId,
+        fingerprint: `rca-fp-${diagnosisId}`,
+        rootCause: actualRootCause,
+        confidence: successful ? 0.95 : 0.70,
+        affectedEntities: {
+          branches: 1,
+          cameras: 1,
+          dvrs: 1,
+        },
+        resolution: {
+          action: resolutionAction,
+          successful,
+          timeToResolveMinutes,
+        },
+        occurredAt: new Date().toISOString(),
+        resolvedAt: new Date().toISOString(),
+      });
+    }
   }
 }

@@ -367,10 +367,17 @@ export class BranchLifecycleService {
     const recorders = await this.countRecordersInBranch(tenantId, branchId);
     
     // Count open incidents
+    // Count open incidents
     const openIncidents = await this.countOpenIncidents(tenantId, branchId);
     
     // Count active alerts
     const activeAlerts = await this.countActiveAlerts(tenantId, branchId);
+
+    // Count scheduled jobs
+    const scheduledJobs = await this.countScheduledJobs(tenantId, branchId);
+
+    // Count active users
+    const activeUsers = await this.countActiveUsers(tenantId, branchId);
 
     // Determine blockers and warnings based on target status
     const blockers: Array<{ code: string; message: string; count?: number }> = [];
@@ -428,6 +435,22 @@ export class BranchLifecycleService {
       });
     }
 
+    if (scheduledJobs > 0) {
+      warnings.push({
+        code: 'SCHEDULED_JOBS',
+        message: `${scheduledJobs} scheduled or running job(s) will be halted`,
+        details: { count: scheduledJobs },
+      });
+    }
+
+    if (activeUsers > 0) {
+      warnings.push({
+        code: 'ACTIVE_USERS',
+        message: `${activeUsers} active user(s) assigned to this branch`,
+        details: { count: activeUsers },
+      });
+    }
+
     return {
       branchId,
       branchName: node.name,
@@ -438,8 +461,8 @@ export class BranchLifecycleService {
         recorders,
         activeAlerts,
         openIncidents,
-        scheduledJobs: 0, // TODO: Implement when job scheduler is available
-        activeUsers: 0, // TODO: Implement user assignment counting
+        scheduledJobs,
+        activeUsers,
         descendantNodes: descendants.length,
       },
       blockers,
@@ -531,11 +554,16 @@ export class BranchLifecycleService {
     branchId: string
   ): Promise<number> {
     try {
-      // This would query cameras table filtering by branch hierarchy
-      // For now, return 0 - will be implemented when integrated with camera store
-      return 0;
-    } catch (error) {
-      console.error('Error counting cameras:', error);
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          'SELECT COUNT(*) as count FROM cameras WHERE (branch_id = $1 OR node_id = $1) AND tenant_id = $2',
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
+      const cams = await this.store.listAccessibleCameras({ tenantId } as any, 'live:view', { limit: 1000, offset: 0 });
+      return cams.cameras.filter((c: any) => c.branchId === branchId || c.nodeId === branchId).length;
+    } catch {
       return 0;
     }
   }
@@ -548,11 +576,15 @@ export class BranchLifecycleService {
     branchId: string
   ): Promise<number> {
     try {
-      // This would query recorders/DVRs table filtering by branch hierarchy
-      // For now, return 0 - will be implemented when integrated with recorder store
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          'SELECT COUNT(*) as count FROM recorders WHERE (branch_id = $1 OR node_id = $1) AND tenant_id = $2',
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
       return 0;
-    } catch (error) {
-      console.error('Error counting recorders:', error);
+    } catch {
       return 0;
     }
   }
@@ -565,11 +597,16 @@ export class BranchLifecycleService {
     branchId: string
   ): Promise<number> {
     try {
-      // This would query incidents table for open status
-      // For now, return 0 - will be implemented when integrated with incident store
-      return 0;
-    } catch (error) {
-      console.error('Error counting open incidents:', error);
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          "SELECT COUNT(*) as count FROM incidents WHERE branch_id = $1 AND tenant_id = $2 AND status != 'closed'",
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
+      const incidents = await this.store.listIncidents(tenantId, { branchId, limit: 100 });
+      return incidents.filter((i) => i.status !== 'closed').length;
+    } catch {
       return 0;
     }
   }
@@ -582,11 +619,58 @@ export class BranchLifecycleService {
     branchId: string
   ): Promise<number> {
     try {
-      // This would query analytics_alerts table for active status
-      // For now, return 0 - will be implemented when integrated with alerts store
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          "SELECT COUNT(*) as count FROM analytics_alerts WHERE branch_id = $1 AND tenant_id = $2 AND status IN ('new', 'acknowledged', 'investigating', 'escalated')",
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
+      const alerts = await this.store.listAnalyticsAlerts(tenantId, { branchId, limit: 1000 });
+      return alerts.filter((a) => a.status !== 'resolved' && a.status !== 'false_alarm' && a.status !== 'suppressed').length;
+    } catch {
       return 0;
-    } catch (error) {
-      console.error('Error counting active alerts:', error);
+    }
+  }
+
+  /**
+   * Count scheduled jobs in branch
+   */
+  private async countScheduledJobs(
+    tenantId: string,
+    branchId: string
+  ): Promise<number> {
+    try {
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          "SELECT COUNT(*) as count FROM device_jobs WHERE (branch_id = $1 OR node_id = $1) AND tenant_id = $2 AND status IN ('pending', 'running')",
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Count active users assigned to branch
+   */
+  private async countActiveUsers(
+    tenantId: string,
+    branchId: string
+  ): Promise<number> {
+    try {
+      if ((this.store as any).db?.query) {
+        const res = await (this.store as any).db.query(
+          "SELECT COUNT(*) as count FROM users WHERE (branch_id = $1 OR default_node_id = $1) AND tenant_id = $2 AND status = 'active'",
+          [branchId, tenantId]
+        );
+        return parseInt(res.rows[0]?.count || '0', 10);
+      }
+      return 0;
+    } catch {
       return 0;
     }
   }

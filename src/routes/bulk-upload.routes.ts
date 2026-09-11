@@ -236,10 +236,20 @@ export async function registerBulkUploadRoutes(
           temp_password: tempPassword,
         });
 
-        // TODO: Send welcome email with temporary password
-        // if (employee.send_welcome_email) {
-        //   await sendWelcomeEmail(createdUser.email, tempPassword);
-        // }
+        // Send welcome email with temporary password if requested
+        if (employee.send_welcome_email) {
+          try {
+            const { NotificationService } = await import('../services/notification-service.js');
+            const notifService = (store as any).notificationService || new NotificationService({ email: { provider: 'smtp', from: 'noreply@sentinelgrid.internal' } }, store as any);
+            await notifService.sendEmail({
+              to: [createdUser.email],
+              subject: "Welcome to KryptoVision / SentinelGrid",
+              body: `Hello ${validated.full_name || createdUser.username || "User"},\n\nYour account has been successfully created in SentinelGrid.\n\nYour temporary password is: ${tempPassword}\n\nPlease log in and change your password immediately.`,
+            }, createdUser.tenantId);
+          } catch {
+            // Log and continue; credentials are included in response
+          }
+        }
       } catch (error) {
         results.failed++;
         results.errors.push({

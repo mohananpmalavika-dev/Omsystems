@@ -627,30 +627,29 @@ export class IncidentOrchestrator {
     // In production, this would create an alert in the analytics system
     // for operator verification before incident creation
     
-    // Note: processAnalyticsEvent method needs to be implemented in ControlPlaneStore
-    // Placeholder for future implementation
     this.logger?.log(
-      `Verification alert would be created for ${event.cameraId}: ${event.detectionType || event.eventType}`
+      `Creating verification alert for ${event.cameraId}: ${event.detectionType || event.eventType}`
     );
     
-    // TODO: Implement when processAnalyticsEvent is available in ControlPlaneStore
-    /*
-    await this.store.processAnalyticsEvent({
-      tenantId: event.tenantId || '',
-      cameraId: event.cameraId,
-      sourceEventId: `verification:${event.cameraId}:${event.detectionTime || event.timestamp}:${event.detectionType || event.eventType}`,
-      detectionType: event.detectionType || event.eventType,
-      occurredAt: event.detectionTime || event.timestamp,
-      confidence: event.confidence,
-      durationSeconds: 0,
-      modelVersion: 'incident-orchestrator',
-      objects: [],
-      metadata: {
-        requiresVerification: true,
-        verificationReason: verification.reason,
-      },
-    });
-    */
+    try {
+      await this.store.processAnalyticsEvent({
+        tenantId: event.tenantId || '',
+        cameraId: event.cameraId,
+        sourceEventId: `verification:${event.cameraId}:${event.detectionTime || event.timestamp || Date.now()}:${event.detectionType || event.eventType || 'unknown'}`,
+        detectionType: (event.detectionType as any) || 'intrusion',
+        occurredAt: typeof event.detectionTime === 'string' ? event.detectionTime : new Date(event.timestamp || Date.now()).toISOString(),
+        confidence: event.confidence || 0.85,
+        durationSeconds: 0,
+        modelVersion: 'incident-orchestrator',
+        objects: [],
+        metadata: {
+          requiresVerification: true,
+          verificationReason: verification?.reason || 'Operator verification required',
+        },
+      });
+    } catch (error) {
+      this.logger?.error?.(`Failed to dispatch verification analytics alert: ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
   
   /**

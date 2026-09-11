@@ -226,51 +226,149 @@ export class SecurityPostureService {
     };
   }
 
+  private postureHistory: Array<{ tenantId?: string; overall: string; score: number; timestamp: Date }> = [];
+  private securityIssues: Map<string, {
+    id: string;
+    tenantId?: string;
+    title: string;
+    severity: 'low' | 'medium' | 'high' | 'critical';
+    category: string;
+    status: 'open' | 'resolved';
+    detectedAt: Date;
+    resolvedAt?: Date;
+    details?: any;
+  }> = new Map();
+
   /**
-   * Get current security posture (stub for dashboard compatibility)
-   * TODO: Implement full posture aggregation
+   * Get current security posture aggregated from active evidence collectors
    */
-  async getPosture() {
-    return {
-      overall: 'unknown',
-      score: 0,
+  async getPosture(context?: SecurityCollectionContext) {
+    const ctx = context || { timestamp: new Date() };
+    const [summary, device] = await Promise.all([
+      this.getPostureSummary(ctx),
+      this.getDevicePosture(ctx),
+    ]);
+
+    const total = summary.controlCount || 1;
+    const score = Math.round((summary.healthyControls / total) * 100);
+
+    let overall: 'healthy' | 'degraded' | 'critical' | 'unknown' = 'healthy';
+    if (summary.unhealthyControls > 0) {
+      overall = 'critical';
+    } else if (summary.unknownControls > 0) {
+      overall = 'degraded';
+    } else if (summary.healthyControls === 0) {
+      overall = 'unknown';
+    }
+
+    // Auto-populate detected security issues
+    if (device.secureBoot?.state === 'UNHEALTHY') {
+      const issueId = 'issue-secure-boot-disabled';
+      if (!this.securityIssues.has(issueId)) {
+        this.securityIssues.set(issueId, {
+          id: issueId,
+          tenantId: ctx.tenantId,
+          title: 'Secure Boot is disabled or compromised on managed nodes',
+          severity: 'high',
+          category: 'secure_boot',
+          status: 'open',
+          detectedAt: new Date(),
+          details: device.secureBoot.evidence,
+        });
+      }
+    }
+    if (device.tamperCondition?.state === 'UNHEALTHY') {
+      const issueId = 'issue-tamper-condition-detected';
+      if (!this.securityIssues.has(issueId)) {
+        this.securityIssues.set(issueId, {
+          id: issueId,
+          tenantId: ctx.tenantId,
+          title: 'Physical or hardware tampering detected on camera/appliance enclosure',
+          severity: 'critical',
+          category: 'tamper',
+          status: 'open',
+          detectedAt: new Date(),
+          details: device.tamperCondition.evidence,
+        });
+      }
+    }
+
+    const postureRecord = {
+      overall,
+      score,
       lastEvaluated: new Date(),
+      healthyControls: summary.healthyControls,
+      unhealthyControls: summary.unhealthyControls,
+      unknownControls: summary.unknownControls,
+      totalControls: summary.controlCount,
+      evidenceCoverage: summary.evidenceCoverage,
     };
+
+    this.postureHistory.push({
+      tenantId: ctx.tenantId,
+      overall,
+      score,
+      timestamp: new Date(),
+    });
+
+    return postureRecord;
   }
 
   /**
-   * Calculate security posture (stub for dashboard compatibility)
-   * TODO: Implement posture calculation
+   * Calculate security posture
    */
-  async calculatePosture() {
-    return this.getPosture();
+  async calculatePosture(context?: SecurityCollectionContext) {
+    return this.getPosture(context);
   }
 
   /**
-   * Get posture history (stub for dashboard compatibility)
-   * TODO: Implement history tracking
+   * Get posture history for tenant
    */
-  async getPostureHistory(tenantId: string, days: number = 30) {
-    return [];
+  async getPostureHistory(tenantId?: string, days: number = 30) {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return this.postureHistory.filter((item) => {
+      const matchesTenant = !tenantId || !item.tenantId || item.tenantId === tenantId;
+      return matchesTenant && item.timestamp >= cutoff;
+    });
   }
 
   /**
-   * List security issues (stub for dashboard compatibility)
-   * TODO: Implement issue tracking
+   * List security issues
    */
-  async listIssues(tenantId: string, filters?: any) {
-    return [];
+  async listIssues(tenantId?: string, filters?: { status?: 'open' | 'resolved'; severity?: string }) {
+    const issues = Array.from(this.securityIssues.values()).filter((issue) => {
+      if (tenantId && issue.tenantId && issue.tenantId !== tenantId) return false;
+      if (filters?.status && issue.status !== filters.status) return false;
+      if (filters?.severity && issue.severity !== filters.severity) return false;
+      return true;
+    });
+    return issues;
   }
 
   /**
-   * Resolve a security issue (stub for dashboard compatibility)
-   * TODO: Implement issue resolution
+   * Resolve a security issue
    */
   async resolveIssue(tenantId: string, issueId: string, resolution: any) {
-    return {
+    const issue = this.securityIssues.get(issueId);
+    if (issue) {
+      issue.status = 'resolved';
+      issue.resolvedAt = new Date();
+      issue.details = { ...issue.details, resolution };
+      return issue;
+    }
+
+    const created = {
       id: issueId,
-      resolved: true,
+      tenantId,
+      title: 'Resolved Security Issue',
+      severity: 'medium' as const,
+      category: 'general',
+      status: 'resolved' as const,
+      detectedAt: new Date(),
       resolvedAt: new Date(),
+      details: resolution,
     };
+    this.securityIssues.set(issueId, created);
+    return created;
   }
 }

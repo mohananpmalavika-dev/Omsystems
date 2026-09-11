@@ -125,7 +125,7 @@ export async function registerClientMediaSchedulerRoutes(app: FastifyInstance, s
         return undefined;
       }
     }
-    return cameras;
+    return cameras as NonNullable<(typeof cameras)[number]>[];
   };
 
   // 1. Ingest & Store Measured Client Hardware Benchmark

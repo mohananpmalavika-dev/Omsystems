@@ -189,7 +189,7 @@ export async function registerOnDemandMediaRoutes(
     if (!user) return;
     // Do not return metadata for an object that was never captured.  The
     // canonical endpoint returns an actual recent edge analytics frame.
-    return reply.redirect(307, `/v1/cameras/${encodeURIComponent(params.cameraId)}/snapshot`);
+    return reply.redirect(`/v1/cameras/${encodeURIComponent(params.cameraId)}/snapshot`, 307);
   };
 
   app.get("/api/v1/media/snapshots/:cameraId", handleGetSnapshot);

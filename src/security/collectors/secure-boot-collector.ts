@@ -110,9 +110,9 @@ export class SecureBootCollector extends BaseEvidenceCollector {
       devices.push(localStatus);
     }
 
-    // TODO: Query edge agents for their Secure Boot status
-    // const edgeDevices = await this.queryEdgeAgents();
-    // devices.push(...edgeDevices);
+    // Query edge agents for their Secure Boot status
+    const edgeDevices = await this.queryEdgeAgents();
+    devices.push(...edgeDevices);
 
     return devices;
   }
@@ -312,9 +312,27 @@ export class SecureBootCollector extends BaseEvidenceCollector {
    * Query edge agents for Secure Boot status
    */
   private async queryEdgeAgents(): Promise<SecureBootStatus[]> {
-    // TODO: Implement edge agent querying
-    // This would send a command to each edge agent to check its Secure Boot status
-    // and return the aggregated results
+    const edgeAgentApi = process.env.EDGE_AGENT_API;
+    if (!edgeAgentApi) {
+      return [];
+    }
+
+    try {
+      const res = await fetch(`${edgeAgentApi}/api/v1/security/secure-boot`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (res.ok) {
+        const body = await res.json() as any;
+        if (Array.isArray(body)) {
+          return body;
+        } else if (body && body.deviceId) {
+          return [body];
+        }
+      }
+    } catch {
+      // Ignore network errors when querying remote edge agents
+    }
+
     return [];
   }
 }

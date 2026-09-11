@@ -78,62 +78,32 @@ export class KeyProviderFactory {
 
   /**
    * Create AWS KMS provider
-   * 
-   * TODO: Implement AWS KMS integration
-   * Requires: aws-sdk or @aws-sdk/client-kms
    */
   private static async createAWSKMSProvider(
     config: AWSKMSProviderConfig
   ): Promise<KeyProvider> {
-    throw new InitializationFailedError(
-      'aws-kms',
-      'AWS KMS provider not yet implemented. ' +
-      'Implementation requires @aws-sdk/client-kms package and integration with AWS KMS API.'
-    );
-    
-    // Future implementation:
-    // import { AWSKMSProvider } from './providers/aws-kms.provider.js';
-    // return new AWSKMSProvider(config);
+    const { AWSKMSProvider } = await import('./providers/aws-kms.provider.js');
+    return new AWSKMSProvider(config);
   }
 
   /**
    * Create Azure Key Vault provider
-   * 
-   * TODO: Implement Azure Key Vault integration
-   * Requires: @azure/keyvault-keys, @azure/identity
    */
   private static async createAzureKeyVaultProvider(
     config: AzureKeyVaultProviderConfig
   ): Promise<KeyProvider> {
-    throw new InitializationFailedError(
-      'azure-keyvault',
-      'Azure Key Vault provider not yet implemented. ' +
-      'Implementation requires @azure/keyvault-keys and @azure/identity packages.'
-    );
-    
-    // Future implementation:
-    // import { AzureKeyVaultProvider } from './providers/azure-keyvault.provider.js';
-    // return new AzureKeyVaultProvider(config);
+    const { AzureKeyVaultProvider } = await import('./providers/azure-keyvault.provider.js');
+    return new AzureKeyVaultProvider(config);
   }
 
   /**
    * Create GCP KMS provider
-   * 
-   * TODO: Implement GCP KMS integration
-   * Requires: @google-cloud/kms
    */
   private static async createGCPKMSProvider(
     config: GCPKMSProviderConfig
   ): Promise<KeyProvider> {
-    throw new InitializationFailedError(
-      'gcp-kms',
-      'GCP KMS provider not yet implemented. ' +
-      'Implementation requires @google-cloud/kms package.'
-    );
-    
-    // Future implementation:
-    // import { GCPKMSProvider } from './providers/gcp-kms.provider.js';
-    // return new GCPKMSProvider(config);
+    const { GCPKMSProvider } = await import('./providers/gcp-kms.provider.js');
+    return new GCPKMSProvider(config);
   }
 
   /**
