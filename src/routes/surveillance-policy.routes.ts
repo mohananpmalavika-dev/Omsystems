@@ -67,7 +67,7 @@ export async function registerSurveillancePolicyRoutes(app: FastifyInstance, sto
       await reply.code(401).send({ success: false, error: "unauthorized" });
       return undefined;
     }
-    if (!(["super_admin", "superadmin", "company_admin"] as string[]).includes(user.role)) {
+    if (!user.role || !(["super_admin", "superadmin", "company_admin"] as string[]).includes(user.role)) {
       await reply.code(403).send({ success: false, error: "policy_administration_forbidden" });
       return undefined;
     }
