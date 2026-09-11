@@ -141,6 +141,13 @@ export async function registerUserRoutes(
     return { data: await store.listCustomRoles(request.currentUser.tenantId) };
   });
 
+  app.get("/v1/roles/:id", async (request, reply) => {
+    const { id } = userIdSchema.parse(request.params);
+    if (!canManageRoles(request.currentUser.role)) return reply.code(403).send({ error: "forbidden" });
+    const role = await store.getCustomRole(id, request.currentUser.tenantId);
+    return role ? { data: role } : reply.code(404).send({ error: "role_not_found" });
+  });
+
   app.post("/v1/roles", async (request, reply) => {
     const body = customRoleSchema.parse(request.body);
     if (!canManageRoles(request.currentUser.role) || !canAssignRole(request.currentUser.role, body.baseRole)) {

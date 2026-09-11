@@ -157,4 +157,66 @@ describe("user directory route", () => {
     expect(response.json().error).toBe("role_in_use");
     expect(deleteCustomRole).not.toHaveBeenCalled();
   });
+
+  it("retrieves a custom role by id", async () => {
+    const customRole = {
+      id: "00000000-0000-4000-8000-000000000301",
+      name: "Custom Operator",
+      baseRole: "operator",
+      menuAccess: ["/control-room"],
+      userCount: 3,
+    };
+    const app = await createApp({
+      getCustomRole: vi.fn().mockResolvedValue(customRole),
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/roles/${customRole.id}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual(customRole);
+  });
+
+  it("validates custom role assignment when creating a user", async () => {
+    const createUser = vi.fn().mockResolvedValue({
+      id: "00000000-0000-4000-8000-000000000204",
+      tenantId: currentUser.tenantId,
+      username: "role-user",
+      role: "operator",
+    });
+    const app = await createApp({
+      getNode: vi.fn((id: string) => ({ id, tenantId: currentUser.tenantId })),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      getCustomRole: vi.fn().mockResolvedValue({
+        id: "00000000-0000-4000-8000-000000000301",
+        baseRole: "operator",
+      }),
+      createUser,
+      writeAudit: vi.fn(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/users",
+      payload: {
+        displayName: "Role User",
+        email: "role.user@example.test",
+        username: "role-user",
+        password: "a-safe-password",
+        role: "operator",
+        primaryOrgNodeId: "00000000-0000-4000-8000-000000000201",
+        customRoleId: "00000000-0000-4000-8000-000000000301",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(createUser).toHaveBeenCalledWith(
+      currentUser.tenantId,
+      expect.objectContaining({
+        customRoleId: "00000000-0000-4000-8000-000000000301",
+      }),
+    );
+  });
 });

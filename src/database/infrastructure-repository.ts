@@ -993,9 +993,10 @@ export class InfrastructureRepository {
 
   async getCustomRole(id: string, tenantId: string) {
     const result = await this.pool.query(
-      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access,
+      `SELECT cr.id::text, cr.tenant_id::text, cr.name, cr.description, cr.base_role, cr.menu_access,
+              cr.created_at, cr.updated_at,
               (SELECT count(*)::integer FROM users u WHERE u.custom_role_id=cr.id) AS user_count
-       FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`,
+       FROM custom_roles cr WHERE cr.id=$1::uuid AND cr.tenant_id=$2::uuid`,
       [id, tenantId],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
@@ -1029,8 +1030,10 @@ export class InfrastructureRepository {
       );
     }
     const result = await this.pool.query(
-      `SELECT id::text, tenant_id::text, name, description, base_role, menu_access, created_at, updated_at
-       FROM custom_roles WHERE id=$1::uuid AND tenant_id=$2::uuid`, [id, tenantId],
+      `SELECT cr.id::text, cr.tenant_id::text, cr.name, cr.description, cr.base_role, cr.menu_access,
+              cr.created_at, cr.updated_at,
+              (SELECT count(*)::integer FROM users u WHERE u.custom_role_id=cr.id) AS user_count
+       FROM custom_roles cr WHERE cr.id=$1::uuid AND cr.tenant_id=$2::uuid`, [id, tenantId],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
   }
