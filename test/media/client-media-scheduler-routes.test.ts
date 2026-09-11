@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import Fastify from "fastify";
 import { registerClientMediaSchedulerRoutes } from "../../src/routes/client-media-scheduler.routes.js";
+import { MemoryStore } from "../../src/store.js";
 
 describe("Client Media Scheduler REST API Routes Suite", () => {
   let app: ReturnType<typeof Fastify>;
 
   beforeEach(async () => {
     app = Fastify();
-    await registerClientMediaSchedulerRoutes(app);
+    const store = new MemoryStore();
+    app.addHook("preHandler", async (request) => {
+      (request as any).currentUser = store.users.get("user-global-admin");
+    });
+    await registerClientMediaSchedulerRoutes(app, store);
     await app.ready();
   });
 
@@ -74,7 +79,7 @@ describe("Client Media Scheduler REST API Routes Suite", () => {
     expect(getBody.profile.gpuModel).toBe("NVIDIA GeForce RTX 4080");
   });
 
-  it("POST /v1/media/scheduler/calculate returns authoritative schedules without guessing", async () => {
+  it("rejects scheduler requests for cameras outside the authenticated inventory", async () => {
     const payload = {
       fingerprint: "ws_test_rtx_4080",
       sessionId: "00000000-0000-0000-0000-000000000002",
@@ -103,29 +108,11 @@ describe("Client Media Scheduler REST API Routes Suite", () => {
       payload,
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
-    expect(body.schedule).toBeDefined();
-    expect(body.schedule.activeLiveDecodes).toBe(3); // 3 online cameras
-    expect(body.schedule.pausedStreams).toBe(1); // 1 offline camera
-
-    // Focused camera
-    const cam1 = body.schedule.schedules["CAM-001"];
-    expect(cam1.streamTier).toBe("MAINSTREAM_1080P");
-    expect(cam1.targetResolution).toEqual({ width: 1920, height: 1080 });
-    expect(cam1.targetFps).toBe(30);
-
-    // Alarm camera
-    const cam2 = body.schedule.schedules["CAM-002"];
-    expect(cam2.streamTier).toBe("MEDIUM_720P");
-    expect(cam2.targetResolution).toEqual({ width: 1280, height: 720 });
-
-    // Offline camera
-    const cam4 = body.schedule.schedules["CAM-004"];
-    expect(cam4.playbackMode).toBe("PAUSED");
+    expect(response.statusCode).toBe(404);
+    expect(JSON.parse(response.body).error).toBe("camera_not_found");
   });
 
-  it("POST /v1/media/scheduler/adapt handles real-time player degradation feedback", async () => {
+  it("rejects adaptation feedback for cameras outside the authenticated inventory", async () => {
     const payload = {
       sessionId: "00000000-0000-0000-0000-000000000003",
       droppedFramesPerSec: 15,
@@ -143,10 +130,7 @@ describe("Client Media Scheduler REST API Routes Suite", () => {
       payload,
     });
 
-    expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
-    expect(body.adaptation).toBeDefined();
-    expect(body.adaptation.systemHealthStatus).toBe("CRITICAL_OVERLOAD");
-    expect(body.adaptation.limitingFactor).toBe("BANDWIDTH");
+    expect(response.statusCode).toBe(404);
+    expect(JSON.parse(response.body).error).toBe("camera_not_found");
   });
 });

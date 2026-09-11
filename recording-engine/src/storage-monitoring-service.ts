@@ -1,4 +1,5 @@
 import { storageHealthAgent, type StorageHealthReport, type StorageRiskLevel } from "./storage-health-agent.js";
+import nodemailer from "nodemailer";
 
 export interface StorageMonitoringConfig {
   checkIntervalMs: number; // How often to check storage health
@@ -393,10 +394,29 @@ export class StorageMonitoringService {
         });
       }
 
-      // Email notification (placeholder - implement with your email service)
+      // SMTP is deliberately explicit.  If it has not been configured we
+      // surface delivery as unavailable rather than logging a fictional send.
       if (this.config.notifications.email) {
-        // TODO: Implement email notification
-        console.log(`Email notification would be sent to: ${this.config.notifications.email}`);
+        const smtpUrl = process.env.STORAGE_ALERT_SMTP_URL;
+        const from = process.env.STORAGE_ALERT_EMAIL_FROM;
+        if (!smtpUrl || !from) {
+          console.error("Storage alert email is configured but STORAGE_ALERT_SMTP_URL or STORAGE_ALERT_EMAIL_FROM is missing");
+          return;
+        }
+
+        const transport = nodemailer.createTransport(smtpUrl);
+        await transport.sendMail({
+          from,
+          to: this.config.notifications.email,
+          subject: `[Sentinel Grid] ${alert.severity.toUpperCase()} storage alert`,
+          text: [
+            alert.message,
+            `Category: ${alert.category}`,
+            `Timestamp: ${alert.timestamp.toISOString()}`,
+            alert.devicePath ? `Device: ${alert.devicePath}` : undefined,
+            alert.arrayName ? `RAID: ${alert.arrayName}` : undefined,
+          ].filter(Boolean).join("\n"),
+        });
       }
     } catch (error) {
       console.error("Failed to send notification:", error);

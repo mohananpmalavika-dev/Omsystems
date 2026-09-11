@@ -56,13 +56,13 @@ export default function FloorPlanViewer({
 
   useEffect(() => {
     loadFloorState();
-    
-    // Setup WebSocket for real-time updates
-    const ws = setupWebSocket();
-    
-    return () => {
-      ws?.close();
-    };
+    // The deployed control plane exposes authoritative floor state over the
+    // dashboard BFF.  Do not open a raw WebSocket against a Socket.IO
+    // namespace that is not mounted by this application; polling keeps the
+    // floor view correct across deployments until that authenticated socket
+    // transport is explicitly deployed.
+    const timer = window.setInterval(() => { void loadFloorState(); }, 5_000);
+    return () => window.clearInterval(timer);
   }, [floorId]);
 
   useEffect(() => {
@@ -110,36 +110,6 @@ export default function FloorPlanViewer({
       }
     } catch (error) {
       console.error('Failed to load floor state:', error);
-    }
-  };
-
-  const setupWebSocket = () => {
-    // WebSocket connection for real-time updates
-    const ws = new WebSocket(`${process.env.NEXT_PUBLIC_WS_URL}/digital-twin`);
-    
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'subscribe:floor', floorId }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      handleRealtimeEvent(data);
-    };
-
-    return ws;
-  };
-
-  const handleRealtimeEvent = (event: any) => {
-    switch (event.type) {
-      case 'object_status_change':
-        updateObjectStatus(event.data.objectId, event.data.newStatus, event.data.statusColor);
-        break;
-      case 'alert_triggered':
-        setAlerts(prev => [...prev, event.data]);
-        break;
-      case 'alert_resolved':
-        setAlerts(prev => prev.filter(a => a.id !== event.data.id));
-        break;
     }
   };
 

@@ -25,6 +25,13 @@ export interface ActiveCameraWorker {
   lastKeyframeAt?: string;
 }
 
+/**
+ * The node-local bridge to the real ingest process.  Ownership alone is never
+ * treated as a running stream: the bridge must resolve only after the target
+ * node has accepted the worker and can report it ready.
+ */
+export type CameraWorkerLauncher = (context: CameraExecutionContext) => Promise<void>;
+
 export class CameraSupervisorService {
   private readonly workers = new Map<string, ActiveCameraWorker>();
   private readonly renewIntervalMs = 5_000;
@@ -33,6 +40,7 @@ export class CameraSupervisorService {
   constructor(
     private readonly leaseManager: CameraLeaseManager,
     private readonly onLeaseLostCallback?: (lease: CameraLease) => void,
+    private readonly launchWorker?: CameraWorkerLauncher,
   ) {}
 
   /**
@@ -56,11 +64,20 @@ export class CameraSupervisorService {
       return null;
     }
 
-    // 2. Build execution context with AbortController
+    return this.activateLease(lease);
+  }
+
+  /** Activates a lease that was atomically transferred by the failover coordinator. */
+  async activateLease(lease: CameraLease): Promise<ActiveCameraWorker | null> {
+    const workerKey = `${lease.tenantId}:${lease.cameraId}`;
+    const existing = this.workers.get(workerKey);
+    if (existing?.lease.leaseId === lease.leaseId && existing.state === "STREAMING") return existing;
+
+    // Build execution context with AbortController.
     const abortController = new AbortController();
     const context: CameraExecutionContext = {
-      tenantId,
-      cameraId,
+      tenantId: lease.tenantId,
+      cameraId: lease.cameraId,
       leaseId: lease.leaseId,
       fencingToken: lease.fencingToken,
       acquiredAt: lease.acquiredAt,
@@ -69,8 +86,8 @@ export class CameraSupervisorService {
     };
 
     const worker: ActiveCameraWorker = {
-      tenantId,
-      cameraId,
+      tenantId: lease.tenantId,
+      cameraId: lease.cameraId,
       lease,
       state: "OWNED",
       context,
@@ -78,13 +95,33 @@ export class CameraSupervisorService {
     };
 
     // A lease proves ownership only; it is not evidence that the camera stream
-    // is connected. Until a real ingest worker is injected, release the lease
-    // instead of presenting a synthetic STREAMING worker.
+    // is connected. Fail closed when a deployment did not provide the real
+    // node-local launcher.
     worker.state = "CONNECTING";
-    await this.leaseManager.release(lease);
-    worker.context.abortController.abort("MEDIA_INGEST_WORKER_NOT_CONFIGURED");
-    return null;
+    if (!this.launchWorker) return this.failActivation(worker, "MEDIA_INGEST_WORKER_NOT_CONFIGURED");
 
+    try {
+      await this.launchWorker(context);
+      if (context.abortController.signal.aborted) return this.failActivation(worker, "MEDIA_INGEST_WORKER_ABORTED");
+      worker.state = "STREAMING";
+      this.workers.set(workerKey, worker);
+      worker.renewIntervalTimer = setInterval(() => {
+        void this.leaseManager.renew(lease, this.leaseTtlMs).then((renewed) => {
+          if (!renewed) this.terminateWorker(lease.tenantId, lease.cameraId, "LEASE_RENEWAL_FAILED");
+        }).catch(() => this.terminateWorker(lease.tenantId, lease.cameraId, "LEASE_RENEWAL_FAILED"));
+      }, this.renewIntervalMs);
+      worker.renewIntervalTimer.unref?.();
+      return worker;
+    } catch {
+      return this.failActivation(worker, "MEDIA_INGEST_WORKER_START_FAILED");
+    }
+
+  }
+
+  private async failActivation(worker: ActiveCameraWorker, reason: string): Promise<null> {
+    await this.leaseManager.release(worker.lease);
+    worker.context.abortController.abort(reason);
+    return null;
   }
 
   /**

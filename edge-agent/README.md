@@ -30,6 +30,34 @@ The first build downloads pinned Windows releases of FFmpeg/ffprobe,
 MediaMTX, and cloudflared, verifies their SHA-256 checksums, and embeds them as
 assets. Later builds reuse the verified cache under `edge-agent/vendor`.
 
+## Signed production release
+
+Use a trusted code-signing certificate issued to your organization. Import its
+private key into the release machine's `CurrentUser\My` or `LocalMachine\My`
+certificate store (a hardware-backed certificate is preferred), install the
+Windows SDK's `signtool.exe`, then set only its thumbprint in the environment:
+
+```powershell
+$env:WINDOWS_SIGNING_CERT_THUMBPRINT = 'YOUR_CERTIFICATE_THUMBPRINT'
+cd .\edge-agent
+npm.cmd run build:signed-windows-release
+```
+
+The release command builds `release\edge-agent.exe`, signs and verifies it,
+builds the Inno Setup installer, signs and verifies that outer installer, and
+writes `installer\windows\output\SHA256SUMS.txt`. The certificate file and
+its password are never accepted by this repository or committed to source
+control. To rerun signing after a build, pass `-SkipAgentBuild` or
+`-SkipInstallerBuild` to `scripts\build-signed-windows-release.ps1`.
+
+Authenticode establishes publisher identity and helps SmartScreen reputation;
+it does not override Microsoft Defender malware detections. Submit any
+false-positive with the signed EXE, installer SHA-256, detection name, and a
+clear description of the agent's camera-discovery, media, service, and tunnel
+functions to Microsoft Security Intelligence. Avoid adding download-and-execute
+commands, Defender exclusions, or unsigned replacement binaries to future
+releases; each of those materially increases the chance of detection.
+
 ## Recommended branch installation
 
 1. Configure the control plane with a branch-reachable
@@ -138,7 +166,7 @@ branch. Reissue any activation package created before this configuration.
 Windows releases must be Authenticode signed before distribution:
 
 ```powershell
-./scripts/sign-windows-release.ps1 -Path .\dist\edge-agent-installer.exe -CertificateThumbprint <thumbprint>
+npm.cmd run build:signed-windows-release
 ```
 
 For Defender Controlled Folder Access, deploy the verified allow-list through

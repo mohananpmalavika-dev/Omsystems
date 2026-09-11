@@ -52,16 +52,27 @@ export async function registerPlaybookEngineRoutes(
   engine: PlaybookEngineService,
   store?: ControlPlaneStore,
 ) {
+  const authenticatedUser = (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.currentUser;
+    if (!user?.id || !user.tenantId) {
+      reply.code(401).send({ error: "unauthenticated" });
+      return undefined;
+    }
+    return user;
+  };
+
   // Playbook Engine Route Handlers
 
   // 2. Start Playbook SOP for incident
   app.post("/v1/incidents/:id/playbook/start", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const body = (request.body as any) || {};
+    const user = authenticatedUser(request, reply);
+    if (!user) return;
 
     const instance = await engine.startPlaybook({
       id,
-      tenantId: (request as any).currentUser?.tenantId,
+      tenantId: user.tenantId,
       incidentType: body.incidentType,
       severity: body.severity,
       title: body.title,
@@ -74,8 +85,10 @@ export async function registerPlaybookEngineRoutes(
   // 3. Mark step IN_PROGRESS
   app.post("/v1/incidents/:id/playbook/steps/:stepId/start", async (request: FastifyRequest) => {
     const { id, stepId } = request.params as { id: string; stepId: string };
-    const user = (request as any).currentUser;
-    if (!user) throw new Error("authenticated_operator_required");
+    const user = request.currentUser;
+    if (!user?.id || !user.tenantId) {
+      throw new Error("unauthenticated");
+    }
 
     const instance = await engine.startStep(id, stepId, {
       userId: user.id,
@@ -89,7 +102,8 @@ export async function registerPlaybookEngineRoutes(
   app.post("/v1/incidents/:id/playbook/steps/:stepId/complete", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id, stepId } = request.params as { id: string; stepId: string };
     const body = completeStepSchema.parse(request.body || {});
-    const user = (request as any).currentUser || { id: "usr-operator-1", displayName: "SOC Operator", role: "operator" };
+    const user = authenticatedUser(request, reply);
+    if (!user) return;
 
     try {
       const instance = await engine.completeStep(id, stepId, {
@@ -116,7 +130,8 @@ export async function registerPlaybookEngineRoutes(
   app.post("/v1/incidents/:id/playbook/steps/:stepId/override", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id, stepId } = request.params as { id: string; stepId: string };
     const body = overrideStepSchema.parse(request.body);
-    const user = (request as any).currentUser || { id: "usr-supervisor-1", displayName: "Security Supervisor", role: "supervisor" };
+    const user = authenticatedUser(request, reply);
+    if (!user) return;
 
     try {
       const instance = await engine.overrideStep(id, stepId, {
@@ -140,7 +155,8 @@ export async function registerPlaybookEngineRoutes(
   app.post("/v1/incidents/:id/playbook/decision", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const body = decisionSchema.parse(request.body);
-    const user = (request as any).currentUser || { id: "usr-operator-1", displayName: "SOC Operator" };
+    const user = authenticatedUser(request, reply);
+    if (!user) return;
 
     try {
       const decision = await engine.recordDecision(id, body.stepId, {
@@ -168,7 +184,8 @@ export async function registerPlaybookEngineRoutes(
   app.post("/v1/incidents/:id/resolve", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     const body = resolveIncidentSchema.parse(request.body || {});
-    const user = (request as any).currentUser || { id: "usr-operator-1", displayName: "SOC Operator", role: "operator" };
+    const user = authenticatedUser(request, reply);
+    if (!user) return;
 
     try {
       await engine.resolveIncident(

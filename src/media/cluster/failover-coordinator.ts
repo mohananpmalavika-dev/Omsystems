@@ -110,9 +110,29 @@ export class HaFailoverCoordinator {
     // 4. Update authoritative epoch in Fencing Token service
     this.fencingService.setAuthoritativeEpoch(tenantId, cameraId, newLease.fencingToken);
 
-    // 5. Calculate recovery latency and recording gap
+    // 5. A transferred lease is not a restored stream.  The supervisor waits
+    // for a target-node ingest acknowledgement before this is recorded as a
+    // completed failover.
+    const worker = await this.supervisor.activateLease(newLease);
+    if (!worker) {
+      const failEvent: HaEvent = {
+        id: randomUUID(),
+        type: "CAMERA_FAILOVER_FAILED",
+        tenantId,
+        cameraId,
+        previousNode,
+        previousEpoch,
+        newNode: targetNode.nodeId,
+        newEpoch: newLease.fencingToken,
+        reason: "Target media node did not acknowledge ingest worker readiness",
+        timestamp: new Date().toISOString(),
+      };
+      this.recordEvent(failEvent);
+      return { success: false, event: failEvent };
+    }
+
     const streamRestoredAt = new Date().toISOString();
-    const recordingGapMs = Math.max(100, Date.now() - detectTime + 1200);
+    const recordingGapMs = Date.now() - detectTime;
 
     const completeEvent: HaEvent = {
       id: randomUUID(),

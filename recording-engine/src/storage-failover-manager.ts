@@ -315,6 +315,13 @@ export class StorageFailoverManager extends EventEmitter {
    * Add item to retry queue
    */
   addToRetryQueue(item: Omit<RetryQueueItem, 'id' | 'createdAt' | 'attempts' | 'nextRetry'>): string {
+    const targetTier = this.tiers.get(item.targetTier);
+    if (!targetTier) {
+      throw new Error(`storage_retry_target_not_registered:${item.targetTier}`);
+    }
+    if (!targetTier.adapter.uploadFile) {
+      throw new Error(`storage_retry_target_not_export_capable:${item.targetTier}`);
+    }
     const id = `retry-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     
     const queueItem: RetryQueueItem = {

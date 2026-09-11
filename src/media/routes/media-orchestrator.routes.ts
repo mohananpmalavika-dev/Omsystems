@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { MediaOrchestrator } from "../services/media-orchestrator.js";
 import { MediaMetricsService } from "../services/media-metrics.service.js";
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 
 const createSessionSchema = z.object({
   deviceType: z.enum(["workstation", "video_wall", "mobile", "tablet"]).default("workstation"),
@@ -75,8 +76,32 @@ const gatewayHeartbeatSchema = z.object({
 export async function registerMediaOrchestratorRoutes(
   app: FastifyInstance,
   orchestrator: MediaOrchestrator,
+  store: ControlPlaneStore,
 ) {
   const metrics = MediaMetricsService.getInstance();
+  const ownSession = async (request: FastifyRequest, reply: FastifyReply, sessionId: string) => {
+    const user = request.currentUser;
+    const session = await orchestrator.sessionRepository.getSession(sessionId);
+    if (!user || !session || session.userId !== user.id || session.tenantId !== user.tenantId) {
+      await reply.code(404).send({ error: "viewer_session_not_found" });
+      return false;
+    }
+    return true;
+  };
+  const accessCamera = async (request: FastifyRequest, reply: FastifyReply, cameraId: string) => {
+    const user = request.currentUser;
+    const camera = await store.getCamera(cameraId);
+    if (!user || !camera || (camera.tenantId && camera.tenantId !== user.tenantId)) {
+      await reply.code(404).send({ error: "camera_not_found" });
+      return false;
+    }
+    const decision = await store.checkAccess(user, "live:view", camera.nodeId);
+    if (!decision?.allowed) {
+      await reply.code(404).send({ error: "camera_not_found" });
+      return false;
+    }
+    return true;
+  };
 
   // 1. Create or register viewer session
   app.post("/v1/media/viewer/session", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -98,6 +123,7 @@ export async function registerMediaOrchestratorRoutes(
   app.post("/v1/media/viewer/telemetry", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = reportTelemetrySchema.parse(request.body);
     const userId = (request as any).currentUser?.id;
+    if (!await ownSession(request, reply, body.sessionId)) return;
 
     await orchestrator.reportTelemetry({
       ...body,
@@ -111,6 +137,10 @@ export async function registerMediaOrchestratorRoutes(
   // 3. Run video wall scheduling pass
   app.post("/v1/media/viewer/schedule", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = scheduleGridSchema.parse(request.body);
+    if (!await ownSession(request, reply, body.sessionId)) return;
+    for (const camera of body.cameras) {
+      if (!await accessCamera(request, reply, camera.id)) return;
+    }
 
     const schedule = await orchestrator.scheduleViewerGrid(
       body.sessionId,
@@ -130,6 +160,8 @@ export async function registerMediaOrchestratorRoutes(
   // 4. Acquire distributed stream lease
   app.post("/v1/media/streams/acquire", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = acquireStreamSchema.parse(request.body);
+    if (!await ownSession(request, reply, body.sessionId)) return;
+    if (!await accessCamera(request, reply, body.cameraId)) return;
 
     try {
       const lease = await orchestrator.globalCoordinator.acquireStream(
@@ -190,18 +222,12 @@ export async function registerMediaOrchestratorRoutes(
     return { status: released ? "released" : "not_found" };
   });
 
-  // 7. Gateway heartbeat & registration
-  app.post("/v1/media/gateways/heartbeat", async (request: FastifyRequest) => {
-    const body = gatewayHeartbeatSchema.parse(request.body);
-
-    await orchestrator.gatewayRegistry.registerHeartbeat({
-      ...body,
-      registeredAt: Date.now(),
-      lastHeartbeatAt: Date.now(),
-    } as any);
-
-    return { status: "heartbeat_acknowledged" };
-  });
+  // Gateway registration was a user-authenticated public endpoint and no
+  // deployed media gateway consumes the resulting leases.  Keep the route
+  // explicit until a machine identity + gateway control contract is deployed.
+  app.post("/v1/media/gateways/heartbeat", async (_request: FastifyRequest, reply: FastifyReply) =>
+    reply.code(410).send({ error: "gateway_heartbeat_retired", message: "Use edge-agent heartbeat with machine identity." }),
+  );
 
   // 8. List available cluster media gateways
   app.get("/v1/media/gateways", async (request: FastifyRequest) => {

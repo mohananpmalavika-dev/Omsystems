@@ -243,6 +243,7 @@ export interface AlertNotificationPolicy {
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
   updatedAt: string;
+  policyVersion?: number;
 }
 
 export interface AlertNotificationPolicyInput {

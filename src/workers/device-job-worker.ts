@@ -321,18 +321,14 @@ export class DeviceJobWorker {
       throw new Error('Device not found');
     }
 
-    // TODO: Implement actual password change via vendor adapter
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // await adapter.changePassword({
-    //   ipAddress: device.ipAddress,
-    //   currentUsername: credential.username,
-    //   currentPassword: await this.getCurrentPassword(device),
-    //   newPassword
-    // });
-
-    console.log(`[DeviceJobWorker] Password changed for device ${job.deviceId}`);
-
-    return { changed: true, credentialVersion: credential.credentialVersion };
+    // A credential record must never be reported as rotated until the physical
+    // device has accepted it.  There is no vendor-neutral ONVIF user-management
+    // implementation in the authoritative device adapter yet, so fail closed
+    // and route the job to manual intervention rather than fabricating success.
+    void newPassword;
+    throw new Error(
+      `credential_rotation_unsupported: no verified password-change adapter for ${device.manufacturer ?? "this device"}`,
+    );
   }
 
   /**
@@ -349,19 +345,11 @@ export class DeviceJobWorker {
       throw new Error('Device not found');
     }
 
-    // TODO: Test ONVIF authentication with new credential
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // const authenticated = await adapter.testAuthentication({
-    //   ipAddress: device.ipAddress,
-    //   username: credential.username,
-    //   password: newPassword
-    // });
-    //
-    // if (!authenticated) {
-    //   throw new Error('New credential authentication failed');
-    // }
-
-    return { verified: true };
+    // This step is reachable only after a vendor adapter has changed the
+    // password.  Keep it fail-closed until that adapter exists.
+    void credential;
+    void device;
+    throw new Error("credential_rotation_unsupported: hardware verification adapter unavailable");
   }
 
   /**
@@ -393,10 +381,10 @@ export class DeviceJobWorker {
       await this.store.updateCameraConnectionSecret(camera.id, credential.id);
     }
 
-    // TODO: Trigger stream reconnection
-    // await this.streamService.reconnectCamera(camera.id);
-
-    return { reconnected: true };
+    // Do not claim a reconnection that has not happened.  A successful
+    // credential rotation implementation must dispatch an acknowledged edge
+    // command and then verify decoded media before reaching this point.
+    throw new Error("credential_rotation_unsupported: edge stream reconnection adapter unavailable");
   }
 
   /**
@@ -435,10 +423,9 @@ export class DeviceJobWorker {
         throw new Error('No previous credential for rollback');
       }
 
-      // TODO: Restore old password via vendor adapter
-      // const oldPassword = await this.credentialService.decryptSecret(
-      //   previousCredential.encryptedSecret
-      // );
+      // We only reach rollback after a supported mutating adapter reported a
+      // device-side change.  Until such an adapter exists no mutation was
+      // attempted, so there is nothing safe to roll back on the device.
 
       await this.store.updateDeviceJobResult(job.id, {
         rollback: 'succeeded',

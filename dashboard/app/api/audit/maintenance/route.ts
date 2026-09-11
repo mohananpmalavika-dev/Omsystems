@@ -41,6 +41,8 @@ export async function GET(request: NextRequest) {
     const assignedTechnicianId = searchParams.get('assignedTechnicianId');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
+    const search = searchParams.get('search')?.trim().toLowerCase();
+    const slaStatus = searchParams.get('slaStatus');
     const summary = searchParams.get('summary') === 'true';
 
     const params = new URLSearchParams();
@@ -52,6 +54,8 @@ export async function GET(request: NextRequest) {
     if (assignedTechnicianId) params.append('assignedTechnicianId', assignedTechnicianId);
     if (from) params.append('from', from);
     if (to) params.append('to', to);
+    if (search) params.append('search', search);
+    if (slaStatus) params.append('slaStatus', slaStatus);
     if (summary) params.append('summary', 'true');
 
     const query = params.toString();

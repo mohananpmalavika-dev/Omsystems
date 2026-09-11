@@ -584,6 +584,16 @@ export async function buildApp(options?: {
 
   // Initialize video search and forensic services
   const pool = (store as any).pool; // Access pool from store
+  // Recent JPEG frames are media-plane state. Keep a short local fallback for
+  // development, but use Redis whenever available so a snapshot request can
+  // be served by any control-plane replica.
+  let analyticsFrameRedis: any;
+  try {
+    analyticsFrameRedis = (await initializeRedisService()).getClient();
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") throw error;
+    app.log.warn({ error }, "Redis unavailable; recent analytics frames are local to this development instance");
+  }
   const recordingRoot = options?.recordingRoot ?? process.env.RECORDING_ROOT ?? "./recordings";
   
   let searchService: RecordingSearchService | undefined;
@@ -1221,6 +1231,13 @@ export async function buildApp(options?: {
       buffer: Buffer.from(input.imageBase64, "base64"),
       capturedAt: input.capturedAt,
     });
+    if (analyticsFrameRedis) {
+      await analyticsFrameRedis.set(
+        `analytics:latest-frame:${input.cameraId}`,
+        JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt }),
+        { EX: 90 },
+      ).catch((error: unknown) => request.log.warn({ error, cameraId: input.cameraId }, "Unable to replicate analytics frame to Redis"));
+    }
     const branch = await store.getNode(agent.branchId);
     if (!branch) return reply.code(404).send({ error: "branch_not_found" });
     const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
@@ -1267,7 +1284,21 @@ export async function buildApp(options?: {
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
     if (!(await requireCameraAccess(request, reply, store, camera))) return;
-    const frame = latestAnalyticsFrames.get(id);
+    let frame = latestAnalyticsFrames.get(id);
+    if (!frame && analyticsFrameRedis) {
+      const raw = await analyticsFrameRedis.get(`analytics:latest-frame:${id}`).catch(() => null);
+      if (raw) {
+        try {
+          const cached = JSON.parse(raw) as { imageBase64?: string; capturedAt?: string };
+          if (cached.imageBase64 && cached.capturedAt) {
+            frame = { buffer: Buffer.from(cached.imageBase64, "base64"), capturedAt: cached.capturedAt };
+            latestAnalyticsFrames.set(id, frame);
+          }
+        } catch {
+          // Treat malformed cache data as unavailable rather than returning an unverified frame.
+        }
+      }
+    }
     if (!frame || frame.buffer.length === 0) return reply.code(404).send({ error: "no_frame_available" });
     return reply
       .type("image/jpeg")
@@ -2509,21 +2540,6 @@ export async function buildApp(options?: {
   await registerLiveOperationsRoutes(app, store);
   registerMediaSessionRoutes(app, store);
   
-  // Register media orchestration routes
-  try {
-    const { mediaRoutes } = await import("./media/media.routes.js");
-    await app.register(mediaRoutes, { prefix: "/api/media" });
-    
-    // Initialize media integrations
-    const { getMediaIntegrationService } = await import("./media/integration.service.js");
-    const integrationService = getMediaIntegrationService(store);
-    await integrationService.initialize();
-    
-    app.log.info("Media orchestration routes and integrations initialized");
-  } catch (err: unknown) {
-    app.log.error({ err }, "Failed to register media orchestration routes");
-  }
-  
   await registerDashboardRoutes(app, store);
   await registerCredentialsRoutes(app, (store as any).pool);
   await registerBulkUploadRoutes(app, store);
@@ -2672,7 +2688,7 @@ export async function buildApp(options?: {
 
   // Register On-Demand Media & Local Video Residency routes
   try {
-    await registerOnDemandMediaRoutes(app);
+    await registerOnDemandMediaRoutes(app, store, exportWorker);
     app.log.info('On-demand media and local video residency routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register on-demand media routes');
@@ -2817,8 +2833,8 @@ export async function buildApp(options?: {
       sessionRepo,
       capabilityRepo,
     );
-    await registerMediaOrchestratorRoutes(app, mediaOrchestrator);
-    await registerClientMediaSchedulerRoutes(app);
+    await registerMediaOrchestratorRoutes(app, mediaOrchestrator, store);
+    await registerClientMediaSchedulerRoutes(app, store);
     app.log.info("Distributed Media Orchestration & Client Scheduler routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
@@ -2922,7 +2938,7 @@ export async function buildApp(options?: {
 
   // Register Authoritative Recording Index, Unified Investigation Search, Enterprise Storage, Failover, and ONVIF routes
   try {
-    await registerRecordingIndexRoutes(app);
+    await registerRecordingIndexRoutes(app, store);
     await registerInvestigationRoutes(app);
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);

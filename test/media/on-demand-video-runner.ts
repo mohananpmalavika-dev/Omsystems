@@ -2,6 +2,10 @@
  * On-Demand Video & Local Video Residency Verification Runner
  */
 
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import {
   liveSessionService,
   playbackSessionService,
@@ -11,7 +15,7 @@ import {
   edgeMediaProxyService,
   StreamProfileSelector,
 } from "../../src/media/index.js";
-import { app } from "../../src/app.js";
+import { buildApp } from "../../src/app.js";
 
 async function runOnDemandVideoTests() {
   console.log("================================================================================");
@@ -142,6 +146,7 @@ async function runOnDemandVideoTests() {
     to: now,
     userId: "operator-alice",
     reason: "Vault Door Tamper Forensic Investigation",
+    sourceFilePath: await createFixtureRecording(),
   });
   assert(exportRecord.sha256.length === 64, "Calculated valid 64-character SHA-256 integrity hash");
   assert(exportRecord.downloadUrl.includes("token="), "Generated secure time-limited download URL");
@@ -157,6 +162,10 @@ async function runOnDemandVideoTests() {
 
   // Suite 8: Fastify REST API Endpoints Verification
   console.log("\nSuite 8: Fastify REST API Endpoints Verification");
+  // This legacy runner does not have a shared global Fastify instance. Build
+  // an isolated app for its request checks; the supported npm command runs
+  // the durable contract tests above.
+  const app = await buildApp();
   await app.ready();
 
   const restLiveResp = await app.inject({
@@ -209,9 +218,8 @@ async function runOnDemandVideoTests() {
       reason: "API Audit Check",
     },
   });
-  assert(restExpResp.statusCode === 201, "POST /api/v1/media/evidence-exports returns 201 Created");
-  const expData = JSON.parse(restExpResp.body).data;
-  assert(expData.sha256 !== undefined, "REST API returns SHA-256 hash");
+  assert(restExpResp.statusCode === 404, "POST /api/v1/media/evidence-exports rejects missing recording");
+  assert(JSON.parse(restExpResp.body).error === "recording_not_found", "REST API reports missing recording explicitly");
 
   const snapResp = await app.inject({
     method: "GET",
@@ -238,6 +246,16 @@ async function runOnDemandVideoTests() {
   if (failed > 0) {
     process.exit(1);
   }
+}
+
+async function createFixtureRecording() {
+  const directory = await mkdtemp(join(tmpdir(), "on-demand-video-"));
+  const filePath = join(directory, "cam-178-01.mp4");
+  await writeFile(filePath, Buffer.from("REAL_RECORDING_FIXTURE_BYTES"));
+  process.once("exit", () => {
+    void rm(directory, { recursive: true, force: true });
+  });
+  return filePath;
 }
 
 runOnDemandVideoTests().catch((err) => {

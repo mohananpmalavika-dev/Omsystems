@@ -172,7 +172,10 @@ export class CapabilityRegistryService {
     await this.classifyCapability('helmet-detection', {
       name: 'PPE Helmet Detection',
       category: 'detection',
-      requirements: { models: ['helmet-detector'], dependencies: [] },
+      // The shipped model manifest and the detector both use `helmet`.
+      // Keeping a display/component name here made a provisioned model appear
+      // missing and incorrectly downgraded the capability.
+      requirements: { models: ['helmet'], dependencies: [] },
     });
     
     await this.classifyCapability('fall-detection', {

@@ -332,7 +332,7 @@ export async function runClientHardwareBenchmark(): Promise<ClientMeasuredProfil
   // Submit profile to control plane scheduler
   try {
     if (typeof fetch !== "undefined") {
-      await fetch("/v1/media/scheduler/profile", {
+      await fetch("/api/control/v1/media/scheduler/profile", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

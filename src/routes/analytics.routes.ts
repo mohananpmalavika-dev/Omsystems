@@ -37,7 +37,6 @@ import {
   normalizePlateNumber,
   recordAnprRegistryMatches,
 } from "../analytics/identity-registry.js";
-import { generateAlertEvidenceSvg } from "../alerts/alert-evidence-graphic.js";
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -856,14 +855,9 @@ export async function registerAnalyticsRoutes(
       }
     } catch {}
 
-    // Fallback graphic
-    const camera = await store.getCamera(alert.cameraId).catch(() => null);
-    const branch = camera ? await store.getNode(camera.branchId).catch(() => null) : null;
-    const svg = generateAlertEvidenceSvg(alert, {
-      cameraName: camera?.name,
-      branchName: branch?.name,
-    });
-    return reply.code(200).header("content-type", "image/svg+xml; charset=utf-8").header("cache-control", "public, max-age=300").send(svg);
+    // An illustration is not camera evidence.  Returning a generated graphic
+    // here made an unavailable capture look genuine to operators and exports.
+    return reply.code(404).send({ error: "alert_snapshot_unavailable" });
   });
 
   app.post("/internal/analytics/events", async (request, reply) => {

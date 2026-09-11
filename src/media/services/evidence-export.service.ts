@@ -33,11 +33,11 @@ export class EvidenceExportService {
 
     let sizeBytes = 0;
     let sha256 = "";
+    let sourceMediaPath: string | undefined;
 
-    // 1. Check physical file if supplied or locate segment in DB
-    if (options.sourceFilePath && existsSync(options.sourceFilePath)) {
-      sizeBytes = statSync(options.sourceFilePath).size;
-      sha256 = await this.hashFile(options.sourceFilePath);
+    // A forensic export must be backed by readable, non-empty media bytes.
+    if (options.sourceFilePath && this.isReadableMediaFile(options.sourceFilePath)) {
+      sourceMediaPath = options.sourceFilePath;
     } else if (pool) {
       const segResult = await pool.query(
         `SELECT size_bytes, checksum_sha256, storage_path
@@ -45,30 +45,24 @@ export class EvidenceExportService {
          WHERE camera_id = $1
            AND started_at < $3::timestamptz
            AND ended_at > $2::timestamptz
+           AND status = 'ready'
          ORDER BY started_at ASC
          LIMIT 1`,
         [options.cameraId, options.from.toISOString(), options.to.toISOString()],
       );
 
-      if (segResult.rows[0]) {
-        sizeBytes = Number(segResult.rows[0].size_bytes || 0);
-        sha256 = segResult.rows[0].checksum_sha256 || "";
-        if (!sha256 && segResult.rows[0].storage_path && existsSync(segResult.rows[0].storage_path)) {
-          sha256 = await this.hashFile(segResult.rows[0].storage_path);
-        }
+      const storagePath = segResult.rows[0]?.storage_path;
+      if (typeof storagePath === "string" && this.isReadableMediaFile(storagePath)) {
+        sourceMediaPath = storagePath;
       }
     }
 
-    // If still no file/hash available, calculate from authentic payload bytes
-    if (!sha256) {
-      const payloadBytes = Buffer.from(
-        `KRYPTOVISION_EVIDENCE_CLIP:${options.tenantId}:${options.branchId}:${options.cameraId}:${options.from.toISOString()}:${options.to.toISOString()}:${now.toISOString()}`,
-      );
-      sizeBytes = payloadBytes.length;
-      sha256 = createHash("sha256").update(payloadBytes).digest("hex");
-    }
+    if (!sourceMediaPath) throw new Error("recording_not_found");
 
-    const storageObjectId = `evidence/${options.tenantId}/${options.branchId}/${id}.mp4`;
+    sizeBytes = statSync(sourceMediaPath).size;
+    sha256 = await this.hashFile(sourceMediaPath);
+
+    const storageObjectId = sourceMediaPath;
     const downloadUrl = `/v1/evidence/exports/${id}/download?token=sig-${sha256.slice(0, 16)}`;
 
     const record: EvidenceExport = {
@@ -88,27 +82,28 @@ export class EvidenceExportService {
     };
 
     if (pool) {
-      try {
-        await pool.query(
-          `INSERT INTO evidence_exports (
-             id, case_id, format, reason, exported_by, status, details, created_at
-           ) VALUES ($1, null, 'mp4', $2, $3, 'ready', $4, now())
-           ON CONFLICT (id) DO NOTHING`,
-          [
-            id,
-            options.reason,
-            options.userId,
-            JSON.stringify({
-              downloadUrl,
-              sha256,
-              sizeBytes,
-              storageObjectId,
-            }),
-          ],
-        );
-      } catch {
-        this.fallbackExports.set(id, record);
-      }
+      await pool.query(
+        `INSERT INTO evidence_exports (
+           id, case_id, format, reason, exported_by, status, details, created_at
+         ) VALUES ($1, null, 'mp4', $2, $3, 'ready', $4, now())
+         ON CONFLICT (id) DO NOTHING`,
+        [
+          id,
+          options.reason,
+          options.userId,
+          JSON.stringify({
+            tenantId: options.tenantId,
+            branchId: options.branchId,
+            cameraId: options.cameraId,
+            from: options.from.toISOString(),
+            to: options.to.toISOString(),
+            downloadUrl,
+            sha256,
+            sizeBytes,
+            storageObjectId: sourceMediaPath,
+          }),
+        ],
+      );
     } else {
       this.fallbackExports.set(id, record);
     }
@@ -169,6 +164,14 @@ export class EvidenceExportService {
       stream.on("error", (err) => reject(err));
       stream.on("end", () => resolve(hash.digest("hex")));
     });
+  }
+
+  private isReadableMediaFile(filePath: string): boolean {
+    try {
+      return existsSync(filePath) && statSync(filePath).isFile() && statSync(filePath).size > 0;
+    } catch {
+      return false;
+    }
   }
 }
 

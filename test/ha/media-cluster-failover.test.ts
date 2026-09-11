@@ -19,7 +19,13 @@ describe("media cluster failover", () => {
     const leases = new CameraLeaseService(undefined, { mode: "standalone" });
     const nodes = new MediaNodeRegistry();
     const placement = new MediaPlacementService(nodes);
-    const coordinator = new HaFailoverCoordinator(leases, nodes, placement, new CameraSupervisorService(leases), new FencingTokenService());
+    const coordinator = new HaFailoverCoordinator(
+      leases,
+      nodes,
+      placement,
+      new CameraSupervisorService(leases, undefined, async () => {}),
+      new FencingTokenService(),
+    );
     nodes.registerNode("node-a", "Node A", "10.0.0.1", 9001, { datacenter: "dc-a", zone: "z1", rack: "r1", host: "a", network: "n1", storagePool: "s1" }, capacity);
     nodes.registerNode("node-b", "Node B", "10.0.0.2", 9001, { datacenter: "dc-a", zone: "z1", rack: "r2", host: "b", network: "n2", storagePool: "s2" }, capacity);
     placement.scheduleCamera("tenant-a", "camera-a", "branch-a");

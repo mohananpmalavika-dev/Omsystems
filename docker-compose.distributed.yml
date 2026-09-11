@@ -1,7 +1,6 @@
-version: '3.8'
-
 # ======================================
-# Multi-Server Setup with Redis Pub/Sub
+# Multi-replica control-plane setup. This file intentionally uses the same
+# environment contract as the primary and production Compose definitions.
 # ======================================
 # Test horizontal scaling locally
 # Usage: docker-compose -f docker-compose.distributed.yml up
@@ -55,17 +54,12 @@ services:
       # Database
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
-      # Distributed Events
-      DISTRIBUTED_EVENTS: "true"
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      REDIS_DB: 0
-      EVENT_BUS_NAMESPACE: oms
-      SERVER_ID: control-plane-1
-      
-      # Server Config
-      PORT: 3000
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      AUTH_MODE: ${AUTH_MODE:-session}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+      REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:?REPORT_DOWNLOAD_SECRET is required}
+      PORT: 8080
       NODE_ENV: development
       
       # JWT
@@ -89,17 +83,12 @@ services:
       # Database
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
-      # Distributed Events
-      DISTRIBUTED_EVENTS: "true"
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      REDIS_DB: 0
-      EVENT_BUS_NAMESPACE: oms
-      SERVER_ID: control-plane-2
-      
-      # Server Config
-      PORT: 3000
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      AUTH_MODE: ${AUTH_MODE:-session}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+      REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:?REPORT_DOWNLOAD_SECRET is required}
+      PORT: 8080
       NODE_ENV: development
       
       # JWT
@@ -123,17 +112,12 @@ services:
       # Database
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       
-      # Distributed Events
-      DISTRIBUTED_EVENTS: "true"
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
-      REDIS_DB: 0
-      EVENT_BUS_NAMESPACE: oms
-      SERVER_ID: control-plane-3
-      
-      # Server Config
-      PORT: 3000
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+      AUTH_MODE: ${AUTH_MODE:-session}
+      MEDIA_GATEWAY_SHARED_KEY: ${MEDIA_GATEWAY_SHARED_KEY:?MEDIA_GATEWAY_SHARED_KEY is required}
+      EDGE_BRIDGE_SHARED_KEY: ${EDGE_BRIDGE_SHARED_KEY:?EDGE_BRIDGE_SHARED_KEY is required}
+      REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:?REPORT_DOWNLOAD_SECRET is required}
+      PORT: 8080
       NODE_ENV: development
       
       # JWT

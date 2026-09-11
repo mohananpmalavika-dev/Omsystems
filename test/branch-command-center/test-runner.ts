@@ -2,7 +2,7 @@
  * Standalone Verification Test Runner for Branch Command Center & All-Camera Monitoring
  */
 
-import { BranchOperationalSnapshotService } from "../../src/services/branch-operational-snapshot.service.js";
+import { BranchOperationalSnapshotService } from "../../src/services/branch-operational-snapshot.production.service.js";
 import { MemoryStore } from "../../src/store.js";
 import { buildApp } from "../../src/app.js";
 
