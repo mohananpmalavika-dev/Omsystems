@@ -841,8 +841,8 @@ export class ExportWorker {
 
       // Priority 2: Deterministic multi-camera downloadable ZIP64 package (P0-01, P0-02, P0-03)
       if (
-        job.format !== "manifest-only" &&
-        (job.exportType === "multi-camera" || job.format === "zip" || job.format === "bundle" || cameras.length > 1)
+        (job.format as string) !== "manifest-only" &&
+        (job.exportType === "multi-camera" || (job.format as string) === "zip" || (job.format as string) === "bundle" || cameras.length > 1)
       ) {
         const zipFilename = `KryptoVision-Evidence-${jobId}.zip`;
         const zipPath = resolve(jobDir, zipFilename);
