@@ -425,11 +425,7 @@ function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<strin
   if (hasCustomMenuConfiguration(user)) {
     const selected = new Set((Array.isArray(configured) ? configured : [])
       .filter((value): value is string => typeof value === "string" && allMenuKeys.has(value)));
-    // Custom menus can narrow a base role, never increase its capability.
-    if (!hasUnrestrictedMenuAccess(user)) {
-      const workspace = new Set(defaultMenuAccessForRole(user.role));
-      return new Set([...selected].filter((value) => workspace.has(value) || workspace.has(routePath(value))));
-    }
+    // For users with custom roles, honor all explicitly assigned menus that exist in the system navigation.
     return selected;
   }
   return hasUnrestrictedMenuAccess(user)
@@ -599,6 +595,29 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     [visibleNavigation],
   );
   const visibleQuickActions = quickActions.filter((action) => visibleHrefs.has(menuKey(action)));
+
+  const isExemptRoute =
+    pathname === "/" ||
+    pathname === "/login" ||
+    pathname === "/account/security" ||
+    pathname === "/modules" ||
+    pathname.startsWith("/auth/");
+
+  const isKnownNavRoute = useMemo(() => {
+    return navigation.some((group) =>
+      group.items.some((item) => routeMatches(item.href, pathname, searchParams))
+    );
+  }, [pathname, searchParams]);
+
+  const isRouteAuthorized = useMemo(() => {
+    if (isExemptRoute) return true;
+    if (!operatorResolved) return true;
+    if (hasUnrestrictedMenuAccess(operator)) return true;
+    if (!isKnownNavRoute) return true;
+    return visibleNavigation.some((group) =>
+      group.items.some((item) => routeMatches(item.href, pathname, searchParams))
+    );
+  }, [isExemptRoute, operatorResolved, operator, isKnownNavRoute, visibleNavigation, pathname, searchParams]);
   const currentPage = pageMeta
     .filter((item) => routeMatches(item.path, pathname, searchParams))
     .sort((left, right) => routeSpecificity(right.path) - routeSpecificity(left.path))[0]
@@ -1135,23 +1154,29 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               {createMenuOpen && (
                 <div className="create-menu-panel">
                   <p>Quick actions</p>
-                  {(visibleQuickActions.length > 0 ? visibleQuickActions : quickActions).map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <Link
-                        href={action.href}
-                        key={action.href}
-                        onClick={(e) => {
-                          setCreateMenuOpen(false);
-                          handleNavClick(action.href)(e);
-                        }}
-                      >
-                        <span><Icon size={15} /></span>
-                        <strong>{action.label}</strong>
-                        <ChevronRight size={13} />
-                      </Link>
-                    );
-                  })}
+                  {visibleQuickActions.length > 0 ? (
+                    visibleQuickActions.map((action) => {
+                      const Icon = action.icon;
+                      return (
+                        <Link
+                          href={action.href}
+                          key={action.href}
+                          onClick={(e) => {
+                            setCreateMenuOpen(false);
+                            handleNavClick(action.href)(e);
+                          }}
+                        >
+                          <span><Icon size={15} /></span>
+                          <strong>{action.label}</strong>
+                          <ChevronRight size={13} />
+                        </Link>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">
+                      No quick actions available for your role.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1176,7 +1201,27 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           </div>
         </header>
         <div className="route-surface" data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
-          {children}
+          {isRouteAuthorized ? (
+            children
+          ) : (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-4">
+              <div className="w-16 h-16 rounded-full bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 mb-2">
+                <ShieldAlert size={32} />
+              </div>
+              <h2 className="text-xl font-bold text-slate-100">Access Restricted</h2>
+              <p className="text-sm text-slate-400 max-w-md">
+                Your assigned role (<span className="text-indigo-400 font-medium font-mono">{operator?.customRoleName || operator?.role || "user"}</span>) does not have permission to access <span className="text-slate-200 font-mono text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{pathname}</span>.
+              </p>
+              <div className="pt-2">
+                <Link
+                  href="/"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 rounded-lg text-xs font-bold transition inline-flex items-center gap-2"
+                >
+                  <LayoutDashboard size={14} /> Return to Dashboard
+                </Link>
+              </div>
+            </div>
+          )}
         </div>
       </main>
       <AlertNotificationTray />

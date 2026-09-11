@@ -125,8 +125,14 @@ export function OrganizationTree({
         return { label: "Region", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" };
       case "area":
         return { label: "Area", bg: "#ecfeff", text: "#0e7490", border: "#a5f3fc" };
-      case "branch":
-        return { label: "Branch", bg: "#fff7ed", text: "#c2410c", border: "#fed7aa" };
+      case "building":
+        return { label: "Building", bg: "#f0fdfa", text: "#0f766e", border: "#99f6e4" };
+      case "floor":
+        return { label: "Floor", bg: "#fdf4ff", text: "#a21caf", border: "#f5d0fe" };
+      case "location-group":
+        return { label: "Location Zone", bg: "#eef2ff", text: "#4338ca", border: "#c7d2fe" };
+      case "location":
+        return { label: "Sub-Location", bg: "#f8fafc", text: "#475569", border: "#cbd5e1" };
       default:
         return { label: type, bg: "#f8fafc", text: "#475569", border: "#e2e8f0" };
     }
@@ -146,6 +152,12 @@ export function OrganizationTree({
         return <Layers size={16} style={{ color: "#0891b2" }} />;
       case "branch":
         return <Building2 size={16} style={{ color: "#ea580c" }} />;
+      case "building":
+      case "floor":
+        return <Layers size={16} style={{ color: "#0d9488" }} />;
+      case "location-group":
+      case "location":
+        return <MapPin size={16} style={{ color: "#6366f1" }} />;
       default:
         return <Building2 size={16} style={{ color: "#64748b" }} />;
     }
@@ -274,7 +286,7 @@ export function OrganizationTree({
 
           {/* Right: Quick Action Buttons */}
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", flexShrink: 0 }}>
-            {!isBranch && (
+            {node.type === "company" && (
               <>
                 <button
                   type="button"
@@ -299,18 +311,11 @@ export function OrganizationTree({
                 >
                   <Plus size={12} /> Add Branch
                 </button>
-
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const defaultChild =
-                      node.type === "company" || node.type === "headquarters"
-                        ? "zone"
-                        : node.type === "zone"
-                        ? "region"
-                        : "area";
-                    onAddChild?.(node, defaultChild);
+                    onAddChild?.(node, "zone");
                   }}
                   style={{
                     display: "inline-flex",
@@ -325,11 +330,169 @@ export function OrganizationTree({
                     color: "#334155",
                     cursor: "pointer",
                   }}
-                  title="Add Sub-Node (Zone / Region / Area)"
+                  title="Add Zone under Company"
                 >
-                  <Plus size={12} /> Add Sub-Node
+                  <Plus size={12} /> Add Zone
                 </button>
               </>
+            )}
+
+            {(node.type === "headquarters" || node.type === "zone" || node.type === "division" || node.type === "region" || node.type === "area") && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChild?.(node, "branch");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.25rem 0.625rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    borderRadius: "0.375rem",
+                    border: "1px solid #fed7aa",
+                    background: "#fff7ed",
+                    color: "#c2410c",
+                    cursor: "pointer",
+                  }}
+                  title="Add a Branch under this node"
+                >
+                  <Plus size={12} /> Add Branch
+                </button>
+                {node.type !== "area" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const defaultChild =
+                        node.type === "headquarters" ? "zone" : node.type === "zone" || node.type === "division" ? "region" : "area";
+                      onAddChild?.(node, defaultChild);
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "0.25rem",
+                      padding: "0.25rem 0.625rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      borderRadius: "0.375rem",
+                      border: "1px solid #cbd5e1",
+                      background: "#f8fafc",
+                      color: "#334155",
+                      cursor: "pointer",
+                    }}
+                    title="Add Sub-Node"
+                  >
+                    <Plus size={12} /> Add Sub-Node
+                  </button>
+                )}
+              </>
+            )}
+
+            {node.type === "branch" && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChild?.(node, "location-group");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.25rem 0.625rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    borderRadius: "0.375rem",
+                    border: "1px solid #c7d2fe",
+                    background: "#eef2ff",
+                    color: "#4338ca",
+                    cursor: "pointer",
+                  }}
+                  title="Add Location Zone (e.g. Cash Counter, Vault, Gate)"
+                >
+                  <Plus size={12} /> Add Zone
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddChild?.(node, "floor");
+                  }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.25rem",
+                    padding: "0.25rem 0.625rem",
+                    fontSize: "0.75rem",
+                    fontWeight: 700,
+                    borderRadius: "0.375rem",
+                    border: "1px solid #f5d0fe",
+                    background: "#fdf4ff",
+                    color: "#a21caf",
+                    cursor: "pointer",
+                  }}
+                  title="Add Floor / Level"
+                >
+                  <Plus size={12} /> Add Floor
+                </button>
+              </>
+            )}
+
+            {(node.type === "floor" || node.type === "building") && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddChild?.(node, "location-group");
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                  padding: "0.25rem 0.625rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  borderRadius: "0.375rem",
+                  border: "1px solid #c7d2fe",
+                  background: "#eef2ff",
+                  color: "#4338ca",
+                  cursor: "pointer",
+                }}
+                title="Add Location Zone / Room"
+              >
+                <Plus size={12} /> Add Zone
+              </button>
+            )}
+
+            {(node.type === "location-group" || node.type === "location") && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddChild?.(node, "location");
+                }}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                  padding: "0.25rem 0.625rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  borderRadius: "0.375rem",
+                  border: "1px solid #cbd5e1",
+                  background: "#f8fafc",
+                  color: "#334155",
+                  cursor: "pointer",
+                }}
+                title="Add Sub-Location / Room"
+              >
+                <Plus size={12} /> Add Point
+              </button>
             )}
 
             <button

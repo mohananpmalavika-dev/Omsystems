@@ -14,6 +14,10 @@ interface OrgNodeFormProps {
 
 const NODE_TYPES = [
   { value: "branch", label: "🏦 Branch (e.g. MG Road Branch, InfoPark Branch, Store)" },
+  { value: "building", label: "🏢 Building (e.g. Block A, Tower 1)" },
+  { value: "floor", label: "🏢 Floor / Level (e.g. Ground Floor, 1st Floor)" },
+  { value: "location-group", label: "📍 Location Zone (e.g. Cash Counter, Vault, Entrance, Server Room)" },
+  { value: "location", label: "📍 Sub-Location / Room (e.g. ATM Kiosk, Back Office)" },
   { value: "area", label: "🏙️ Area (e.g. Ernakulam Area, Kozhikode Area)" },
   { value: "region", label: "📍 Region (e.g. Kerala Region, Karnataka Region)" },
   { value: "zone", label: "🌐 Zone (e.g. South Zone, North Zone)" },
@@ -85,9 +89,13 @@ export function OrgNodeForm({
       zone: ["region", "area", "branch"],
       region: ["area", "branch"],
       area: ["branch"],
-      branch: [],
+      branch: ["building", "floor", "location-group", "location"],
+      building: ["floor", "location-group", "location"],
+      floor: ["location-group", "location"],
+      "location-group": ["location-group", "location"],
+      location: ["location"],
     };
-    const defaultAllowed = standardHierarchyMap[parentType] || ["zone", "region", "area", "branch"];
+    const defaultAllowed = standardHierarchyMap[parentType] || ["location-group", "location"];
 
     try {
       const results = await Promise.all(

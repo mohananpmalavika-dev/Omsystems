@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { X, Eye, EyeOff } from "lucide-react";
-import { userApi, organizationApi } from "@/lib/api-client";
+import { userApi, organizationApi, roleApi } from "@/lib/api-client";
 
 interface UserFormProps {
   editUser?: any;
@@ -41,6 +41,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
     employeeId: "",
     phoneNumber: "",
     role: "viewer",
+    customRoleId: "",
     status: "active",
     department: "",
     designation: "",
@@ -50,6 +51,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
   });
 
   const [orgNodes, setOrgNodes] = useState<any[]>([]);
+  const [customRoles, setCustomRoles] = useState<any[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +59,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
 
   useEffect(() => {
     loadOrgNodes();
+    loadCustomRoles();
 
     if (editUser) {
       setFormData({
@@ -68,6 +71,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
         employeeId: editUser.employeeId || "",
         phoneNumber: editUser.phoneNumber || "",
         role: editUser.role || "viewer",
+        customRoleId: editUser.customRoleId || "",
         status: editUser.status || "active",
         department: editUser.department || "",
         designation: editUser.designation || "",
@@ -84,6 +88,15 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
       setOrgNodes(response.data);
     } catch (err) {
       console.error("Failed to load org nodes:", err);
+    }
+  };
+
+  const loadCustomRoles = async () => {
+    try {
+      const response = await roleApi.list();
+      setCustomRoles(response.data || []);
+    } catch (err) {
+      console.error("Failed to load custom roles:", err);
     }
   };
 
@@ -118,6 +131,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
         email: formData.email,
         displayName: formData.displayName,
         role: formData.role,
+        customRoleId: formData.customRoleId || null,
         department: formData.department || undefined,
         designation: formData.designation || undefined,
         employeeId: formData.employeeId || undefined,
@@ -130,6 +144,9 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
         // Update existing user
         payload.status = formData.status;
         await userApi.update(editUser.id, payload);
+        if (formData.primaryOrgNodeId && formData.primaryOrgNodeId !== editUser.primaryOrgNodeId) {
+          await userApi.assignOrganization(editUser.id, formData.primaryOrgNodeId, true);
+        }
       } else {
         // Create new user
         payload.username = formData.username;
@@ -296,6 +313,31 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
                 </select>
               </div>
 
+              <div className="form-group">
+                <label htmlFor="customRoleId">Custom Role (Menu Permissions)</label>
+                <select
+                  id="customRoleId"
+                  name="customRoleId"
+                  value={formData.customRoleId}
+                  onChange={(e) => {
+                    const cid = e.target.value;
+                    const matched = customRoles.find((r) => r.id === cid);
+                    setFormData((prev) => ({
+                      ...prev,
+                      customRoleId: cid,
+                      ...(matched ? { role: matched.baseRole } : {}),
+                    }));
+                  }}
+                >
+                  <option value="">Default built-in role permissions</option>
+                  {customRoles.map((cr) => (
+                    <option key={cr.id} value={cr.id}>
+                      {cr.name} ({cr.menuAccess?.length || 0} menus)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {editUser && (
                 <div className="form-group">
                   <label htmlFor="status">Status</label>
@@ -315,7 +357,6 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
               )}
             </div>
 
-            {!editUser && (
               <div className="form-group">
                 <label htmlFor="primaryOrgNodeId">
                   Primary Organization <span className="required">*</span>
@@ -335,7 +376,6 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
                   ))}
                 </select>
               </div>
-            )}
           </div>
 
           <div className="form-section">

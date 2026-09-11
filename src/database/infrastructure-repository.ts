@@ -737,11 +737,12 @@ export class InfrastructureRepository {
     const user = await this.getUserById(id);
     if (!user) return undefined;
     const assignments = await this.pool.query(
-      `SELECT uoa.id::text, uoa.scope_node_id::text, uoa.is_primary,
-              rn.name AS scope_name, rn.node_type AS scope_type
+      `SELECT uoa.id::text, uoa.scope_node_id::text, uoa.scope_node_id::text AS node_id, uoa.is_primary,
+              rn.name AS scope_name, rn.name AS node_name, rn.node_type AS scope_type
        FROM user_organizational_assignments uoa
        JOIN resource_nodes rn ON rn.id=uoa.scope_node_id
-       WHERE uoa.user_id=$1 ORDER BY uoa.is_primary DESC, rn.name`,
+       WHERE uoa.user_id=$1 AND rn.is_active=true
+       ORDER BY uoa.is_primary DESC, rn.name`,
       [user.id],
     );
     return { ...user, organizations: camelRows(assignments.rows) };

@@ -104,7 +104,8 @@ export function authorize(
   // Check multiple assigned organizations / branches
   if (Array.isArray((user as any).organizations)) {
     for (const org of (user as any).organizations) {
-      const orgNodeId = org.nodeId || org.id;
+      const orgNodeId = org.scopeNodeId || org.nodeId || (org.scopeType ? org.id : undefined);
+      if (!orgNodeId) continue;
       const orgScope = nodesById.get(orgNodeId);
       if (orgScope && canScopeSensitiveResource(orgScope, resource, nodesById) && orgNodeId === resource.id) {
         return { allowed: true, reason: "allowed_by_grant", matchingScopeId: orgNodeId };

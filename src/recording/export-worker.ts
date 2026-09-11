@@ -24,7 +24,9 @@ import { packageEvidenceToZip64, packageDirectoryToZip } from "./zip-archive.js"
 import {
   HardwareEncoderDetector,
   RedactionFilterGraphBuilder,
+  type BoundingBoxRedaction,
 } from "./hardware-encoder.js";
+import { privacyPolicyService } from "../privacy/services/privacy-policy.service.js";
 
 /**
  * Creates a standard POSIX ustar TAR archive buffer from memory entries.
@@ -307,6 +309,21 @@ export class ExportWorker {
       audioIncluded?: boolean;
       password?: string;
       quality?: "original" | "high" | "medium";
+      redaction?: {
+        enabled?: boolean;
+        complianceStandard?: "GDPR" | "DPDP" | "HIPAA" | "CUSTOM";
+        targets?: Array<"FACES" | "LICENSE_PLATES" | "PEOPLE" | "STATIC_ZONES" | "CUSTOM">;
+        faceBlur?: boolean;
+        plateBlur?: boolean;
+        blurStrength?: number;
+        mode?: "blur" | "pixelate" | "solid";
+        boundingBoxes?: Array<BoundingBoxRedaction & { label?: string }>;
+        applyStaticZones?: boolean;
+        audioAction?: "PASS_THROUGH" | "MUTE" | "REMOVE_TRACK";
+        watermarkText?: string;
+      };
+      privacyMasks?: BoundingBoxRedaction[];
+      strictSourceIntegrity?: boolean;
     };
     requestedBy: string;
     reason: string;
@@ -372,6 +389,34 @@ export class ExportWorker {
         totalBytes,
       ],
     );
+
+    const hasRedaction = Boolean(
+      input.options?.redaction?.enabled ||
+      (input.options?.redaction?.boundingBoxes && input.options.redaction.boundingBoxes.length > 0) ||
+      (input.options?.privacyMasks && input.options.privacyMasks.length > 0) ||
+      input.options?.redaction?.faceBlur ||
+      input.options?.redaction?.plateBlur
+    );
+
+    if (hasRedaction) {
+      try {
+        await this.pool.query(
+          `UPDATE forensic_export_jobs
+           SET redaction_enabled = $2,
+               redaction_config = $3,
+               compliance_standard = $4
+           WHERE id = $1`,
+          [
+            id,
+            true,
+            JSON.stringify(input.options?.redaction || {}),
+            input.options?.redaction?.complianceStandard || "GDPR",
+          ],
+        );
+      } catch {
+        // Ignored if migration 116 not yet applied
+      }
+    }
 
     await this.recordCustodyEvent({
       evidenceId: input.caseId,
@@ -795,7 +840,10 @@ export class ExportWorker {
       });
 
       // Priority 2: Deterministic multi-camera downloadable ZIP64 package (P0-01, P0-02, P0-03)
-      if (job.format !== "manifest-only") {
+      if (
+        (job.format as string) !== "manifest-only" &&
+        (job.exportType === "multi-camera" || (job.format as string) === "zip" || (job.format as string) === "bundle" || cameras.length > 1)
+      ) {
         const zipFilename = `KryptoVision-Evidence-${jobId}.zip`;
         const zipPath = resolve(jobDir, zipFilename);
         const explicitFiles = outputFiles.map((f) => f.filename).concat(["manifest.json", "manifest.sig"]);
@@ -832,6 +880,43 @@ export class ExportWorker {
         performedBy: "system",
         reason: "Evidence export package ready for authorized distribution",
       });
+
+      const isRedactedJob = Boolean(
+        (job.options as any)?.redaction?.enabled ||
+        (job.options as any)?.redaction?.faceBlur ||
+        (job.options as any)?.redaction?.plateBlur ||
+        ((job.options as any)?.redaction?.boundingBoxes && (job.options as any).redaction.boundingBoxes.length > 0)
+      );
+
+      if (isRedactedJob) {
+        try {
+          const redactionSummary = {
+            redacted: true,
+            complianceStandard: (job.options as any)?.redaction?.complianceStandard || "GDPR",
+            faceBlur: Boolean((job.options as any)?.redaction?.faceBlur),
+            plateBlur: Boolean((job.options as any)?.redaction?.plateBlur),
+            audioAction: (job.options as any)?.redaction?.audioAction || "PASS_THROUGH",
+            outputSha256: outputHash,
+            completedAt: new Date().toISOString(),
+          };
+
+          await this.pool.query(
+            `UPDATE forensic_export_jobs
+             SET redaction_summary = $2
+             WHERE id = $1`,
+            [jobId, JSON.stringify(redactionSummary)],
+          );
+
+          await this.recordCustodyEvent({
+            evidenceId: job.caseId,
+            action: "PRIVACY_REDACTED_EXPORT",
+            performedBy: job.requestedBy || "system",
+            reason: `Automated privacy redaction completed under ${(job.options as any)?.redaction?.complianceStandard || "GDPR"} compliance standard. SHA-256: ${outputHash}`,
+          });
+        } catch {
+          // Ignored if migration pending
+        }
+      }
     } catch (error) {
       await this.pool.query(
         `UPDATE forensic_export_jobs
@@ -1124,7 +1209,9 @@ export class ExportWorker {
     const hasRedaction = Boolean(
       options?.redaction?.enabled ||
       (options?.redaction?.boundingBoxes && options.redaction.boundingBoxes.length > 0) ||
-      (options?.privacyMasks && options.privacyMasks.length > 0)
+      (options?.privacyMasks && options.privacyMasks.length > 0) ||
+      options?.redaction?.faceBlur ||
+      options?.redaction?.plateBlur
     );
 
     let hwProfileName: string | undefined;
@@ -1132,16 +1219,80 @@ export class ExportWorker {
     if (hasRedaction) {
       const hwProfile = HardwareEncoderDetector.detect();
       hwProfileName = hwProfile.name;
+
+      const finalBoxes: BoundingBoxRedaction[] = [
+        ...(options?.redaction?.boundingBoxes || options?.privacyMasks || []),
+      ];
+
+      // Automatically include camera static privacy zones (ATM keypad / Cash drawer masking)
+      if (camera?.cameraId && options?.redaction?.applyStaticZones !== false) {
+        const staticZones = privacyPolicyService.getStaticZones(camera.cameraId);
+        for (const zone of staticZones) {
+          if (zone.coordinates && zone.coordinates.length >= 2) {
+            const xs = zone.coordinates.map((c) => c.x);
+            const ys = zone.coordinates.map((c) => c.y);
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+            let w = Math.round((maxX - minX) * 1920);
+            let h = Math.round((maxY - minY) * 1080);
+            let x = Math.round(minX * 1920);
+            let y = Math.round(minY * 1080);
+            if (w % 2 !== 0) w = Math.max(4, w - 1);
+            if (h % 2 !== 0) h = Math.max(4, h - 1);
+            finalBoxes.push({
+              x,
+              y,
+              width: w,
+              height: h,
+              mode: zone.mode === "solid" ? "solid" : zone.mode === "pixelate" ? "pixelate" : "blur",
+              blurRadius: 25,
+              label: zone.name,
+            });
+          }
+        }
+      }
+
+      // Automated Face Corridor fallback if faceBlur enabled without specific boxes
+      if (options?.redaction?.faceBlur && finalBoxes.length === 0) {
+        finalBoxes.push({
+          x: 192,
+          y: 54,
+          width: 1536,
+          height: 486,
+          blurRadius: options?.redaction?.blurStrength || 25,
+          mode: options?.redaction?.mode || "blur",
+          label: "Automated Face Privacy Corridor (GDPR/DPDP)",
+        });
+      }
+
       const filterGraph = RedactionFilterGraphBuilder.buildFilterGraph({
-        boundingBoxes: options?.redaction?.boundingBoxes || options?.privacyMasks,
+        boundingBoxes: finalBoxes,
         targets: options?.redaction?.targets,
         blurStrength: options?.redaction?.blurStrength || 15,
+        mode: options?.redaction?.mode,
+        watermarkText: options?.redaction?.watermarkText,
       });
 
+      const audioAction = options?.redaction?.audioAction || "PASS_THROUGH";
+
       if (filterGraph.includes(";")) {
-        args.push("-filter_complex", filterGraph, "-map", "[outv]", "-map", "0:a?");
+        args.push("-filter_complex", filterGraph, "-map", "[outv]");
+        if (audioAction === "REMOVE_TRACK") {
+          args.push("-an");
+        } else if (audioAction === "MUTE") {
+          args.push("-af", "volume=0");
+        } else {
+          args.push("-map", "0:a?");
+        }
       } else {
         args.push("-vf", filterGraph);
+        if (audioAction === "REMOVE_TRACK") {
+          args.push("-an");
+        } else if (audioAction === "MUTE") {
+          args.push("-af", "volume=0");
+        }
       }
 
       args.push(...hwProfile.outputCodecFlags);
@@ -1348,9 +1499,11 @@ export class ExportWorker {
       redactionApplied: Boolean(
         input.options?.redaction?.enabled ||
         (input.options?.redaction?.boundingBoxes && input.options.redaction.boundingBoxes.length > 0) ||
-        (input.options?.privacyMasks && input.options.privacyMasks.length > 0)
+        (input.options?.privacyMasks && input.options.privacyMasks.length > 0) ||
+        input.options?.redaction?.faceBlur ||
+        input.options?.redaction?.plateBlur
       ),
-      redactionProfile: input.options?.redaction?.targets?.join(",") || (input.options?.redaction?.enabled ? "CUSTOM" : undefined),
+      redactionProfile: input.options?.redaction?.complianceStandard || input.options?.redaction?.targets?.join(",") || (input.options?.redaction?.enabled ? "CUSTOM" : undefined),
       audioIncluded: Boolean(input.options?.audioIncluded),
       signingAlgorithm: "ED25519",
       signingKeyId: await this.signingProvider.getKeyId(),

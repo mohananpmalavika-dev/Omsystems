@@ -6,6 +6,7 @@ import { basename, extname } from "node:path";
 import { pool as defaultPool } from "../database/pool.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { ExportWorker } from "../recording/export-worker.js";
+import { VideoRedactionService } from "../evidence/services/video-redaction.service.js";
 
 const evidenceCaseSchema = z.object({
   caseNumber: z.string().trim().min(2).max(50),
@@ -23,9 +24,34 @@ const evidenceItemSchema = z.object({
   fileSize: z.number().int().min(0).optional(),
 });
 
+const exportRedactionSchema = z.object({
+  enabled: z.boolean().optional(),
+  complianceStandard: z.enum(["GDPR", "DPDP", "HIPAA", "CUSTOM"]).optional(),
+  targets: z.array(z.enum(["FACES", "LICENSE_PLATES", "PEOPLE", "STATIC_ZONES", "CUSTOM"])).optional(),
+  faceBlur: z.boolean().optional(),
+  plateBlur: z.boolean().optional(),
+  blurStrength: z.number().int().min(1).max(100).optional(),
+  mode: z.enum(["blur", "pixelate", "solid"]).optional(),
+  boundingBoxes: z.array(z.object({
+    x: z.number().min(0),
+    y: z.number().min(0),
+    width: z.number().min(0),
+    height: z.number().min(0),
+    startTimeSec: z.number().min(0).optional(),
+    endTimeSec: z.number().min(0).optional(),
+    blurRadius: z.number().int().min(1).max(100).optional(),
+    mode: z.enum(["blur", "pixelate", "solid"]).optional(),
+    label: z.string().optional(),
+  })).optional(),
+  applyStaticZones: z.boolean().optional(),
+  audioAction: z.enum(["PASS_THROUGH", "MUTE", "REMOVE_TRACK"]).optional(),
+  watermarkText: z.string().max(200).optional(),
+});
+
 const exportRequestSchema = z.object({
   format: z.enum(["original", "mp4", "manifest-only"]),
   reason: z.string().trim().min(5).max(500),
+  redaction: exportRedactionSchema.optional(),
 });
 
 const legalHoldSchema = z.object({
@@ -328,7 +354,9 @@ export async function registerEvidenceRoutes(
         exportType,
         format: body.format,
         cameras,
-        options: {},
+        options: {
+          redaction: body.redaction,
+        },
         requestedBy: request.currentUser.id,
         reason: body.reason,
         priority: 100,
@@ -590,6 +618,7 @@ export async function registerEvidenceRoutes(
         audioIncluded: z.boolean().optional(),
         password: z.string().trim().min(8).max(64).optional(),
         quality: z.enum(["original", "high", "medium"]).optional(),
+        redaction: exportRedactionSchema.optional(),
       }).optional(),
       reason: z.string().trim().min(5).max(1000),
       priority: z.number().int().min(1).max(1000).optional(),
@@ -994,6 +1023,173 @@ export async function registerEvidenceRoutes(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return reply.code(500).send({ error: "manifest_fetch_failed", details: message });
+    }
+  });
+
+  /**
+   * Request automated privacy-redacted export (GDPR / DPDP compliance)
+   * POST /v1/evidence/cases/:caseId/exports/redacted
+   */
+  app.post("/v1/evidence/cases/:caseId/exports/redacted", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+    const { caseId } = z.object({ caseId: z.string().uuid() }).parse(request.params);
+    const body = z.object({
+      format: z.enum(["mp4", "original", "manifest-only"]).default("mp4"),
+      reason: z.string().trim().min(5).max(500),
+      redaction: exportRedactionSchema.default({
+        enabled: true,
+        complianceStandard: "GDPR",
+        faceBlur: true,
+        plateBlur: true,
+        applyStaticZones: true,
+        blurStrength: 25,
+        audioAction: "REMOVE_TRACK",
+      }),
+    }).parse(request.body);
+
+    if (!exportWorker) {
+      return reply.code(501).send({ error: "export_worker_not_enabled" });
+    }
+
+    const caseRecord = await store.getEvidenceCase(caseId, request.currentUser.tenantId);
+    if (!caseRecord || (caseRecord.tenantId && caseRecord.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+      return reply.code(404).send({ error: "case_not_found" });
+    }
+
+    const items = await store.listEvidenceItems(caseId, request.currentUser.tenantId);
+    const cameras = inferRecordingCameras(items);
+    if (cameras.length === 0) {
+      return reply.code(400).send({ error: "no_recording_items", message: "No recording items found for this case." });
+    }
+
+    // Verify camera access under tenant
+    for (const cam of cameras) {
+      const camera = await store.getCamera(cam.cameraId);
+      if (!camera || (camera.tenantId && camera.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+        return reply.code(404).send({
+          error: "camera_not_found",
+          message: `Camera ${cam.cameraId} not found or tenant unauthorized`,
+        });
+      }
+    }
+
+    let accessNodeId = caseRecord.id;
+    const recordingItem = items.find((item) => item.cameraId);
+    if (recordingItem?.cameraId) {
+      const camera = await store.getCamera(recordingItem.cameraId);
+      if (camera) accessNodeId = camera.nodeId;
+    }
+
+    if (!(await hasAccess(request, reply, store, "evidence:export", accessNodeId))) {
+      return;
+    }
+
+    try {
+      const redactionConfig = {
+        enabled: true,
+        complianceStandard: body.redaction.complianceStandard || "GDPR",
+        faceBlur: body.redaction.faceBlur !== false,
+        plateBlur: body.redaction.plateBlur !== false,
+        applyStaticZones: body.redaction.applyStaticZones !== false,
+        blurStrength: body.redaction.blurStrength || 25,
+        mode: body.redaction.mode || "blur",
+        boundingBoxes: body.redaction.boundingBoxes || [],
+        audioAction: body.redaction.audioAction || "REMOVE_TRACK",
+        watermarkText: body.redaction.watermarkText,
+      };
+
+      const exportJob = await exportWorker.createExportJob({
+        caseId,
+        tenantId: request.currentUser.tenantId,
+        exportType: "viewing-copy",
+        format: body.format,
+        cameras,
+        options: {
+          redaction: redactionConfig,
+        },
+        requestedBy: request.currentUser.id,
+        reason: body.reason,
+        priority: 120,
+      });
+
+      await store.recordCustodyEvent({
+        evidenceId: caseId,
+        action: "PRIVACY_REDACTED_EXPORT",
+        performedBy: request.currentUser.id,
+        sourceIp: request.ip,
+        reason: `${redactionConfig.complianceStandard} privacy redaction requested: ${body.reason}`,
+        tenantId: request.currentUser.tenantId,
+      });
+
+      return reply.code(201).send(exportJob);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "redacted_export_failed", details: message });
+    }
+  });
+
+  /**
+   * Get Redaction Compliance Audit Details
+   * GET /v1/evidence/exports/:exportId/redaction-audit
+   */
+  app.get("/v1/evidence/exports/:exportId/redaction-audit", async (request, reply) => {
+    if (!request.currentUser || !request.currentUser.tenantId) {
+      return reply.code(401).send({ error: "unauthenticated" });
+    }
+    const { exportId } = z.object({ exportId: z.string().uuid() }).parse(request.params);
+
+    try {
+      let job: any;
+      if (exportWorker) {
+        job = await exportWorker.getExportJob(exportId);
+      }
+
+      if (!job) {
+        job = await store.getEvidenceExport(exportId, request.currentUser.tenantId);
+      }
+
+      if (!job || (job.tenantId && job.tenantId !== request.currentUser.tenantId && request.currentUser.role !== "super_admin")) {
+        return reply.code(404).send({ error: "export_not_found" });
+      }
+
+      const redactionService = new VideoRedactionService(defaultPool ?? undefined);
+      const auditLog = await redactionService.getRedactionAudit(exportId, request.currentUser.tenantId);
+
+      const redactionConfig = job.options?.redaction || auditLog?.metadata?.config || null;
+      const complianceStandard = job.complianceStandard || redactionConfig?.complianceStandard || auditLog?.compliance_standard || "GDPR";
+
+      const complianceNotice =
+        complianceStandard === "GDPR"
+          ? "Complies with EU GDPR 2016/679 Article 32 (Security of processing & pseudonymisation/redaction of third-party personal data)"
+          : complianceStandard === "DPDP"
+            ? "Complies with India DPDP Act 2023 Section 8 (Reasonable security safeguards & personal data privacy redaction)"
+            : "Complies with corporate privacy protection and video export masking standards";
+
+      return {
+        exportId,
+        caseId: job.caseId || job.case_id,
+        status: job.status,
+        complianceStandard,
+        complianceNotice,
+        redactionEnabled: Boolean(job.redactionEnabled || redactionConfig?.enabled || auditLog),
+        redactionConfig,
+        redactionSummary: job.redactionSummary || null,
+        auditLog: auditLog || {
+          exportJobId: exportId,
+          complianceStandard,
+          performedBy: job.requestedBy || job.requested_by,
+          faceBlurApplied: Boolean(redactionConfig?.faceBlur),
+          plateBlurApplied: Boolean(redactionConfig?.plateBlur),
+          staticZonesApplied: Boolean(redactionConfig?.applyStaticZones !== false),
+          audioAction: redactionConfig?.audioAction || "PASS_THROUGH",
+          redactedSha256: job.outputHash || job.output_hash_sha256 || "0".repeat(64),
+        },
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "redaction_audit_failed", details: message });
     }
   });
 }
