@@ -19,7 +19,11 @@ import { aiIntelligenceEvents } from "./ai-intelligence-websocket.js";
 // string-based detection types and an occurredAt timestamp.
 function getOccurredAt(alert: AnalyticsAlert): string {
   // Prefer lastDetectedAt then firstDetectedAt for event time
-  return (alert as any).occurredAt ?? alert.lastDetectedAt ?? alert.firstDetectedAt;
+  const ts = (alert as any).occurredAt ?? alert.lastDetectedAt ?? alert.firstDetectedAt ?? (alert as any).createdAt ?? (alert as any).timestamp;
+  if (ts && !isNaN(new Date(ts).getTime())) {
+    return ts;
+  }
+  return new Date().toISOString();
 }
 
 function getDetectionType(alert: AnalyticsAlert): string {
@@ -684,7 +688,10 @@ export class AIIncidentSummaryService {
       camerasOffline: alerts.filter((a) => getDetectionType(a) === "camera-offline").length,
       recordingInterruptions: alerts.filter((a) => getDetectionType(a) === "recording-failure")
         .length,
-      storageIssues: 0, // TODO: Add storage monitoring
+      storageIssues: alerts.filter((a) => {
+        const dt = getDetectionType(a);
+        return dt === "storage-failure" || dt === "disk-failure" || dt === "hdd-smart-warning" || dt === "storage-capacity";
+      }).length,
       networkIssues: this.countByType(clusters, "infrastructure-network"),
     };
 

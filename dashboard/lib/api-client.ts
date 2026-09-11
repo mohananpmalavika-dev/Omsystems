@@ -85,6 +85,23 @@ function isPublicAuthEndpoint(endpoint: string) {
     endpoint.includes('/auth/reset-password');
 }
 
+function getStoredToken(key: 'accessToken' | 'refreshToken'): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const token = sessionStorage.getItem(key);
+      if (token) return token;
+    }
+  } catch {}
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const token = localStorage.getItem(key);
+      if (token) return token;
+    }
+  } catch {}
+  return null;
+}
+
 /**
  * Refresh the BFF's HttpOnly employee session once for every concurrent 401.
  * The refresh token deliberately never reaches JavaScript; the proxy reads it
@@ -94,7 +111,7 @@ export function refreshCookieBackedSession(): Promise<boolean> {
   if (typeof window === 'undefined') return Promise.resolve(false);
   if (cookieRefreshPromise) return cookieRefreshPromise;
 
-  const storedToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
+  const storedToken = getStoredToken('refreshToken');
   const body = storedToken ? JSON.stringify({ refreshToken: storedToken }) : '{}';
 
   cookieRefreshPromise = fetch(`${API_BASE}/v1/auth/refresh`, {
@@ -110,11 +127,9 @@ export function refreshCookieBackedSession(): Promise<boolean> {
           const data = await response.clone().json();
           if (data?.accessToken) {
             sessionStorage.setItem('accessToken', data.accessToken);
-            localStorage.setItem('accessToken', data.accessToken);
           }
           if (data?.refreshToken) {
             sessionStorage.setItem('refreshToken', data.refreshToken);
-            localStorage.setItem('refreshToken', data.refreshToken);
           }
         } catch { }
         return true;
@@ -135,9 +150,7 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = typeof window !== 'undefined'
-    ? localStorage.getItem('accessToken')
-    : null;
+  const token = getStoredToken('accessToken');
 
   const headers = new Headers(options.headers);
   if (!headers.has('Content-Type')) {
@@ -222,9 +235,7 @@ async function fetchApi<T>(
 }
 
 async function downloadApi(endpoint: string, options: RequestInit = {}): Promise<Blob> {
-  const token = typeof window !== 'undefined'
-    ? localStorage.getItem('accessToken')
-    : null;
+  const token = getStoredToken('accessToken');
 
   const headers = new Headers(options.headers);
   if (token) {
@@ -317,19 +328,18 @@ export const authApi = {
       sessionStorage.setItem('sentinel_browser_session', 'active');
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      localStorage.setItem('sentinel_login_time', Date.now().toString());
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
       loginRedirectInProgress = false;
       if (response.accessToken) {
         sessionStorage.setItem('accessToken', response.accessToken);
-        localStorage.setItem('accessToken', response.accessToken);
       }
       if (response.refreshToken) {
         sessionStorage.setItem('refreshToken', response.refreshToken);
-        localStorage.setItem('refreshToken', response.refreshToken);
       }
       if (response.user) {
         sessionStorage.setItem('user', JSON.stringify(response.user));
-        localStorage.setItem('user', JSON.stringify(response.user));
+        sessionStorage.setItem('sentinel_login_time', Date.now().toString());
       }
     }
 
@@ -786,11 +796,34 @@ export const cameraInventoryApi = {
       `/v1/branches/${encodeURIComponent(branchId)}/edge-activations`,
       { method: 'POST', body: JSON.stringify(data) }
     ),
-  downloadInstallerFromActivation: (branchId: string, data: { activationId: string; activationCode: string; agentName: string }) =>
+  downloadInstallerFromActivation: (
+    branchId: string,
+    data: { activationId: string; activationCode: string; agentName: string; format?: "exe" | "zip" },
+  ) =>
     startNativeDownload(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
-      data,
+      {
+        activationId: data.activationId,
+        activationCode: data.activationCode,
+        agentName: data.agentName,
+        format: data.format ?? "zip",
+      },
     ),
+  downloadEdgeAgentCertificate: () => {
+    if (typeof window !== "undefined") {
+      window.location.href = `${API_BASE}/v1/edge-agent/download/certificate`;
+    }
+  },
+  downloadEdgeAgentCertInstaller: () => {
+    if (typeof window !== "undefined") {
+      window.location.href = `${API_BASE}/v1/edge-agent/download/cert-installer`;
+    }
+  },
+  downloadEdgeAgentSignedPackage: () => {
+    if (typeof window !== "undefined") {
+      window.location.href = `${API_BASE}/v1/edge-agent/download/signed-package`;
+    }
+  },
   sendGatewayCommand: (
     branchId: string,
     edgeAgentId: string,

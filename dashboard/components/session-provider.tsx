@@ -7,6 +7,62 @@ import { authApi } from '@/lib/api-client';
 import { setupSessionGuard, teardownSessionGuard, redirectToLogin } from '@/lib/session-guard';
 import { isPublicDashboardRoute } from '@/lib/session-navigation';
 
+// Broadcast channel to sync session between open tabs in the same browser instance
+let syncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && typeof BroadcastChannel !== 'undefined') {
+  try {
+    syncChannel = new BroadcastChannel('sentinel_session_sync');
+    syncChannel.onmessage = (event) => {
+      if (event.data?.type === 'SESSION_ACTIVE_QUERY') {
+        if (sessionStorage.getItem('sentinel_browser_session') === 'active') {
+          const userStr = sessionStorage.getItem('user');
+          syncChannel?.postMessage({
+            type: 'SESSION_ACTIVE_RESPONSE',
+            user: userStr ? JSON.parse(userStr) : null,
+          });
+        }
+      }
+    };
+  } catch {}
+}
+
+async function syncSessionFromOpenTabs(): Promise<boolean> {
+  if (typeof window === 'undefined') return false;
+  if (sessionStorage.getItem('sentinel_browser_session') === 'active') {
+    return true;
+  }
+  if (typeof BroadcastChannel === 'undefined') return false;
+
+  return new Promise((resolve) => {
+    try {
+      const channel = new BroadcastChannel('sentinel_session_sync');
+      let timer: ReturnType<typeof setTimeout> | undefined;
+
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'SESSION_ACTIVE_RESPONSE') {
+          if (timer) clearTimeout(timer);
+          try {
+            sessionStorage.setItem('sentinel_browser_session', 'active');
+            if (event.data.user) {
+              sessionStorage.setItem('user', JSON.stringify(event.data.user));
+            }
+          } catch {}
+          channel.close();
+          resolve(true);
+        }
+      };
+
+      channel.postMessage({ type: 'SESSION_ACTIVE_QUERY' });
+      timer = setTimeout(() => {
+        channel.close();
+        resolve(false);
+      }, 100);
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPublicRoute = isPublicDashboardRoute(pathname);
@@ -31,13 +87,22 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     const validateSession = async () => {
       try {
+        const hasActiveSession = await syncSessionFromOpenTabs();
+        if (cancelled) return;
+
+        // If no active session in this tab or any open tab, the browser was closed!
+        // Terminate any restored session and redirect to login.
+        if (!hasActiveSession) {
+          try { await authApi.logout(); } catch {}
+          redirectToLogin('expired');
+          return;
+        }
+
         const user = await authApi.getCurrentUser();
         if (cancelled) return;
-        // A new tab can have a valid HttpOnly cookie without sessionStorage.
-        // Let the server validate it before restoring the optional UI cache.
         try {
           sessionStorage.setItem('sentinel_browser_session', 'active');
-          if (user?.id) localStorage.setItem('user', JSON.stringify(user));
+          if (user?.id) sessionStorage.setItem('user', JSON.stringify(user));
         } catch { /* Restricted browser storage does not invalidate a session. */ }
         setConnectionError(false);
         setSessionReady(true);

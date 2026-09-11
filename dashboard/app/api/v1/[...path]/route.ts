@@ -68,14 +68,16 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   } else if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
     headers.delete("authorization");
   }
-  if (!employeeSession && !isPublicAuthPath && process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { success: false, error: "unauthenticated", message: "Sign in to continue" },
-      { status: 401, headers: { "cache-control": "no-store" } },
-    );
-  }
-  if (!employeeSession && !pathString.startsWith("auth/") && process.env.NODE_ENV !== "production") {
-    headers.set("x-user-id", process.env.DASHBOARD_DEV_USER_ID || "user-global-admin");
+  if (!employeeSession && !isPublicAuthPath) {
+    const devUserId = process.env.DASHBOARD_DEV_USER_ID;
+    if (devUserId) {
+      headers.set("x-user-id", devUserId);
+    } else {
+      return NextResponse.json(
+        { success: false, error: "unauthenticated", message: "Sign in to continue" },
+        { status: 401, headers: { "cache-control": "no-store" } },
+      );
+    }
   }
 
   const methodHasPotentialBody = request.method !== "GET" && request.method !== "HEAD";
@@ -149,13 +151,14 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
           headers: { "cache-control": "no-store" },
         });
         const isHttps = requestIsHttps(request);
+        // Do NOT set maxAge: browsers treat cookies without maxAge/expires as RFC 6265 Session Cookies
+        // which are automatically destroyed by the browser when the user closes the browser.
         outgoing.cookies.set("sentinel_access", accessToken, {
           httpOnly: true,
           sameSite: isHttps ? "none" : "lax",
           secure: isHttps,
           partitioned: isHttps,
           path: "/",
-          maxAge: payload.expiresIn || 86400,
         } as any);
         if (refreshToken) {
           outgoing.cookies.set("sentinel_refresh", refreshToken, {
@@ -164,7 +167,6 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
             secure: isHttps,
             partitioned: isHttps,
             path: "/",
-            maxAge: 30 * 24 * 60 * 60,
           } as any);
         }
       } catch {

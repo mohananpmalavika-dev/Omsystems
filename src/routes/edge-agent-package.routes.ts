@@ -18,6 +18,7 @@ const activationInstallerBody = z.object({
   activationId: z.string().uuid(),
   activationCode: z.string().startsWith("sgact_").min(40).max(200),
   agentName: z.string().trim().min(2).max(120),
+  format: z.enum(["exe", "zip"]).default("zip").optional(),
 });
 const packageQuery = z.object({
   platform: z.enum(["windows", "linux"]).default("windows"),
@@ -48,19 +49,31 @@ function crc32(buffer: Buffer) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function makeZip(entries: Array<{ name: string; data: Buffer }>) {
+let cachedExeCrc: { path: string; size: number; mtimeMs: number; crc: number } | undefined;
+function getExeCrc(filePath: string, buffer: Buffer, metadata: { size: number; mtimeMs: number }) {
+  if (cachedExeCrc && cachedExeCrc.path === filePath && cachedExeCrc.size === metadata.size && cachedExeCrc.mtimeMs === metadata.mtimeMs) {
+    return cachedExeCrc.crc;
+  }
+  const crc = crc32(buffer);
+  cachedExeCrc = { path: filePath, size: metadata.size, mtimeMs: metadata.mtimeMs, crc };
+  return crc;
+}
+
+function makeZip(entries: Array<{ name: string; data: Buffer; store?: boolean; crc?: number }>) {
   const fileEntries: Array<{ header: Buffer; data: Buffer; centralDir: Buffer }> = [];
   let offset = 0;
 
   for (const entry of entries) {
-    const compressed = deflateRawSync(entry.data);
-    const checksum = crc32(entry.data);
+    const isStore = entry.store === true;
+    const compressed = isStore ? entry.data : deflateRawSync(entry.data);
+    const method = isStore ? 0 : 8;
+    const checksum = entry.crc !== undefined ? entry.crc : crc32(entry.data);
     const name = Buffer.from(entry.name.replaceAll("\\", "/"), "utf8");
     const localHeader = Buffer.alloc(30 + name.length);
     localHeader.writeUInt32LE(0x04034b50, 0);
     localHeader.writeUInt16LE(20, 4);
     localHeader.writeUInt16LE(0x0800, 6);
-    localHeader.writeUInt16LE(8, 8);
+    localHeader.writeUInt16LE(method, 8);
     localHeader.writeUInt32LE(checksum, 14);
     localHeader.writeUInt32LE(compressed.length, 18);
     localHeader.writeUInt32LE(entry.data.length, 22);
@@ -72,7 +85,7 @@ function makeZip(entries: Array<{ name: string; data: Buffer }>) {
     centralDir.writeUInt16LE(20, 4);
     centralDir.writeUInt16LE(20, 6);
     centralDir.writeUInt16LE(0x0800, 8);
-    centralDir.writeUInt16LE(8, 10);
+    centralDir.writeUInt16LE(method, 10);
     centralDir.writeUInt32LE(checksum, 16);
     centralDir.writeUInt32LE(compressed.length, 20);
     centralDir.writeUInt32LE(entry.data.length, 24);
@@ -336,6 +349,7 @@ export async function registerEdgeAgentPackageRoutes(
   app.post("/v1/branches/:branchId/edge-agent-installer", async (request, reply) => {
     const { branchId } = branchParams.parse(request.params);
     const body = activationInstallerBody.parse(request.body);
+    const format = body.format ?? "zip";
     const branch = await store.getNode(branchId);
     if (!branch || branch.type !== "branch") return reply.code(404).send({ error: "branch_not_found" });
 
@@ -372,20 +386,104 @@ export async function registerEdgeAgentPackageRoutes(
         ...options,
         controlPlanePublicUrl: requireControlPlaneUrl(request, options.controlPlanePublicUrl),
       };
-      const executablePath = join(root, "release", "edge-agent.exe");
+      const releaseDir = join(root, "release");
+      const executablePath = join(releaseDir, "edge-agent.exe");
       let executableSize: number;
+      let executableMtime: number;
       try {
         const metadata = await stat(executablePath);
         if (!metadata.isFile()) throw new Error("not a file");
         executableSize = metadata.size;
+        executableMtime = metadata.mtimeMs;
       } catch {
         throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
       }
       const installer = streamInstaller(
         executablePath,
-        Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8"),
+        Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8"),
       );
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
+      const envConfig = Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8");
+
+      if (format === "zip") {
+        const exeBuffer = await readFile(executablePath);
+        const exeCrc = getExeCrc(executablePath, exeBuffer, { size: executableSize, mtimeMs: executableMtime });
+
+        const certPath = join(releaseDir, "omsystems-edge-agent.cer");
+        const certData = await readFile(certPath).catch(() => Buffer.alloc(0));
+
+        const certInstallerPath = join(releaseDir, "Install-Certificate.bat");
+        const certInstallerData = await readFile(certInstallerPath).catch(() => Buffer.from(
+          '@echo off\r\nnet session >nul 2>&1 || (powershell -NoProfile -Command "Start-Process \'%~dpnx0\' -Verb RunAs" & exit /b)\r\ncd /d "%~dp0"\r\ncertutil -addstore -f "TrustedPublisher" "omsystems-edge-agent.cer"\r\ncertutil -addstore -f "ROOT" "omsystems-edge-agent.cer"\r\necho Certificate installed successfully.\r\npause\r\n',
+          "utf8",
+        ));
+
+        const defenderPath = join(releaseDir, "Allow-In-Defender.bat");
+        const defenderData = await readFile(defenderPath).catch(() => Buffer.alloc(0));
+
+        const startScannerPath = join(releaseDir, "START_SCANNER.bat");
+        const startScannerData = await readFile(startScannerPath).catch(() => Buffer.from(
+          '@echo off\r\ncd /d "%~dp0"\r\ntaskkill /F /IM edge-agent.exe /T >nul 2>&1\r\n"%~dp0edge-agent.exe"\r\npause\r\n',
+          "utf8",
+        ));
+
+        const readmeText = [
+          "==============================================================================",
+          `KRYPTOVISION SIGNED EDGE AGENT - QUICK SETUP GUIDE`,
+          `Branch: ${branch.name}`,
+          "==============================================================================",
+          "",
+          "STEP 1: TRUST CERTIFICATE (ONE-TIME ONLY)",
+          '  Right-click "Install-Certificate.bat" and select "Run as administrator".',
+          '  Click "Yes" to install the enterprise code signing certificate.',
+          "  This completely eliminates Windows Defender and SmartScreen warnings.",
+          "",
+          "STEP 2: START SCANNER",
+          '  Double-click "START_SCANNER.bat" (or run edge-agent.exe).',
+          "  The scanner automatically loads branch settings from edge-agent.env,",
+          "  discovers connected IP cameras/DVRs, and reports telemetry to KryptoVision.",
+          "",
+          "STEP 3 (OPTIONAL): WINDOWS DEFENDER WHITELIST",
+          '  If your antivirus blocks scanner network ports, right-click',
+          '  "Allow-In-Defender.bat" and select "Run as administrator".',
+          "==============================================================================",
+        ].join("\r\n");
+
+        const entries: Array<{ name: string; data: Buffer; store?: boolean; crc?: number }> = [
+          { name: "edge-agent.exe", data: exeBuffer, store: true, crc: exeCrc },
+          { name: "edge-agent.env", data: envConfig },
+          { name: "START_SCANNER.bat", data: startScannerData },
+          { name: "Install-Certificate.bat", data: certInstallerData },
+          { name: "README.txt", data: Buffer.from(readmeText, "utf8") },
+        ];
+        if (certData.length > 0) {
+          entries.push({ name: "omsystems-edge-agent.cer", data: certData });
+        }
+        if (defenderData.length > 0) {
+          entries.push({ name: "Allow-In-Defender.bat", data: defenderData });
+        }
+
+        const zipData = makeZip(entries);
+
+        await store.writeAudit({
+          tenantId: branch.tenantId,
+          actorUserId: request.currentUser.id,
+          action: "edge_agent.installer_downloaded",
+          resourceNodeId: branchId,
+          outcome: "success",
+          sourceIp: request.ip,
+          details: { activationId: body.activationId, version, platform: "windows", format: "signed-zip-package" },
+        });
+
+        reply.header("Cache-Control", "no-store, private");
+        reply.header("Content-Type", "application/zip");
+        reply.header("Content-Length", String(zipData.length));
+        reply.header("Content-Disposition", `attachment; filename="${safeBranchName}-signed-edge-agent.zip"`);
+        return reply.send(zipData);
+      }
+
+      // format === "exe": standalone single executable
+      const installer = streamInstaller(executablePath, envConfig);
       await store.writeAudit({
         tenantId: branch.tenantId,
         actorUserId: request.currentUser.id,
@@ -405,6 +503,62 @@ export async function registerEdgeAgentPackageRoutes(
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
       const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
+    }
+  });
+
+  // Public direct download for enterprise code signing certificate
+  app.get("/v1/edge-agent/download/certificate", {
+    config: { noAuth: true },
+  }, async (_request, reply) => {
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    const certPath = root ? join(root, "release", "omsystems-edge-agent.cer") : undefined;
+    if (!certPath) return reply.code(404).send({ error: "certificate_not_found" });
+    try {
+      const data = await readFile(certPath);
+      reply.header("Cache-Control", "public, max-age=86400");
+      reply.header("Content-Type", "application/x-x509-ca-cert");
+      reply.header("Content-Disposition", 'attachment; filename="omsystems-edge-agent.cer"');
+      return reply.send(data);
+    } catch {
+      return reply.code(404).send({ error: "certificate_not_found" });
+    }
+  });
+
+  // Public direct download for certificate installer batch script
+  app.get("/v1/edge-agent/download/cert-installer", {
+    config: { noAuth: true },
+  }, async (_request, reply) => {
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    const scriptPath = root ? join(root, "release", "Install-Certificate.bat") : undefined;
+    if (!scriptPath) return reply.code(404).send({ error: "installer_script_not_found" });
+    try {
+      const data = await readFile(scriptPath);
+      reply.header("Cache-Control", "public, max-age=86400");
+      reply.header("Content-Type", "text/plain; charset=utf-8");
+      reply.header("Content-Disposition", 'attachment; filename="Install-Certificate.bat"');
+      return reply.send(data);
+    } catch {
+      return reply.code(404).send({ error: "installer_script_not_found" });
+    }
+  });
+
+  // Public direct download for the full signed distribution package
+  app.get("/v1/edge-agent/download/signed-package", {
+    config: { noAuth: true },
+  }, async (_request, reply) => {
+    const root = await findEdgeAgentRoot(options.artifactRoot);
+    const zipPath = root ? join(root, "release", "KryptoVision-EdgeAgent-Signed-Windows.zip") : undefined;
+    if (!zipPath) return reply.code(404).send({ error: "signed_package_not_found" });
+    try {
+      const metadata = await stat(zipPath);
+      if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
+      reply.header("Cache-Control", "public, max-age=86400");
+      reply.header("Content-Type", "application/zip");
+      reply.header("Content-Length", String(metadata.size));
+      reply.header("Content-Disposition", 'attachment; filename="KryptoVision-EdgeAgent-Signed-Windows.zip"');
+      return reply.send(createReadStream(zipPath));
+    } catch {
+      return reply.code(404).send({ error: "signed_package_not_found" });
     }
   });
 

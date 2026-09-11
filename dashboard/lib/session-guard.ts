@@ -17,8 +17,14 @@ let sessionGuardCleanup: (() => void) | null = null;
 export function isAuthenticated(): boolean {
   if (typeof window === 'undefined') return false;
   
-  const user = localStorage.getItem('user');
-  return !!user;
+  try {
+    const hasBrowserSession = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sentinel_browser_session') === 'active';
+    const user = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('user') : null) ||
+      (typeof localStorage !== 'undefined' ? localStorage.getItem('user') : null);
+    return hasBrowserSession && !!user;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -47,13 +53,11 @@ export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' 
   }
   
   // Clear all session data
+  sessionStorage.clear();
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
   localStorage.removeItem('sentinel_login_time');
-  sessionStorage.removeItem('activitySessionId');
-  sessionStorage.removeItem('activityAccessToken');
-  sessionStorage.removeItem('currentPageVisitId');
   
   // Stop session checking
   teardownSessionGuard();
@@ -75,7 +79,7 @@ async function checkSession() {
   isCheckingSession = true;
   
   try {
-    const token = localStorage.getItem('accessToken');
+    const token = sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };

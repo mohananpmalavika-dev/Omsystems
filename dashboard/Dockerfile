@@ -25,6 +25,8 @@ ENV CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
 ENV MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
 WORKDIR /app
 COPY --from=build /app/dashboard/.next/standalone ./
+COPY --from=build /app/dashboard/.next/server ./dashboard/.next/server
+COPY --from=build /app/dashboard/.next/server ./.next/server
 COPY --from=build /app/dashboard/.next/static ./dashboard/.next/static
 COPY --from=build /app/dashboard/.next/static ./.next/static
 COPY --from=build /app/dashboard/public ./dashboard/public

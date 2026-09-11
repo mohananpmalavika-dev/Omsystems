@@ -36,18 +36,32 @@ export class OperationalHealthRepository {
   }
 
   async listLatest(tenantId: string, branchIds?: string[]) {
-    const result = await this.pool.query<TelemetryRow>(
-      `SELECT DISTINCT ON (tenant_id, branch_id, device_type, device_id)
-         tenant_id::text, branch_id::text, edge_agent_id::text, device_type,
-         device_id, observed_at, received_at, source, quality, idempotency_key,
-         metrics, reason_codes
-       FROM operational_health_telemetry
-       WHERE tenant_id = $1
-         AND ($2::uuid[] IS NULL OR branch_id = ANY($2::uuid[]))
-       ORDER BY tenant_id, branch_id, device_type, device_id, observed_at DESC, received_at DESC`,
-      [tenantId, branchIds?.length ? branchIds : null],
-    );
-    return result.rows.map(mapTelemetry);
+    try {
+      const result = await this.pool.query<TelemetryRow>(
+        `SELECT tenant_id::text, branch_id::text, edge_agent_id::text, device_type,
+                device_id, observed_at, received_at, source, quality, idempotency_key,
+                metrics, reason_codes
+         FROM operational_health_latest
+         WHERE tenant_id = $1
+           AND ($2::uuid[] IS NULL OR branch_id = ANY($2::uuid[]))
+         ORDER BY tenant_id, branch_id, device_type, device_id`,
+        [tenantId, branchIds?.length ? branchIds : null],
+      );
+      return result.rows.map(mapTelemetry);
+    } catch {
+      const result = await this.pool.query<TelemetryRow>(
+        `SELECT DISTINCT ON (t.tenant_id, t.branch_id, t.device_type, t.device_id)
+           t.tenant_id::text, t.branch_id::text, t.edge_agent_id::text, t.device_type,
+           t.device_id, t.observed_at, t.received_at, t.source, t.quality, t.idempotency_key,
+           t.metrics, t.reason_codes
+         FROM operational_health_telemetry t
+         WHERE t.tenant_id = $1
+           AND ($2::uuid[] IS NULL OR t.branch_id = ANY($2::uuid[]))
+         ORDER BY t.tenant_id, t.branch_id, t.device_type, t.device_id, t.observed_at DESC, t.received_at DESC`,
+        [tenantId, branchIds?.length ? branchIds : null],
+      );
+      return result.rows.map(mapTelemetry);
+    }
   }
 
   async listHistory(tenantId: string, branchId: string, from: string, to: string, limit = 1000) {

@@ -11,7 +11,9 @@ echo.
 echo Starting Sentinel Grid Edge Agent / Camera Scanner...
 echo.
 
-if exist "start-with-env.mjs" (
+if exist "%~dp0edge-agent.exe" (
+    "%~dp0edge-agent.exe"
+) else if exist "start-with-env.mjs" (
     node start-with-env.mjs
 ) else (
     npx tsx src/index.ts

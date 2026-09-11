@@ -75,7 +75,7 @@ export async function startLive(
     // its configured dashboard identity.
     const dashboardUserId = employeeSession || runtimeEnv("NODE_ENV", "development") === "production"
       ? undefined
-      : runtimeEnv("DASHBOARD_DEV_USER_ID", "user-global-admin");
+      : runtimeEnv("DASHBOARD_DEV_USER_ID", "") || undefined;
     const requestControlSession = async (): Promise<{
       token: string;
       mediaGatewayUrl?: string;

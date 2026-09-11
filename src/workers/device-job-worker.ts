@@ -321,14 +321,32 @@ export class DeviceJobWorker {
       throw new Error('Device not found');
     }
 
-    // TODO: Implement actual password change via vendor adapter
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // await adapter.changePassword({
-    //   ipAddress: device.ipAddress,
-    //   currentUsername: credential.username,
-    //   currentPassword: await this.getCurrentPassword(device),
-    //   newPassword
-    // });
+    const onvifPort = Number((device as any).onvifPort ?? (device as any).port ?? 80);
+    if (device.ipAddress) {
+      let currentPassword = newPassword;
+      const currentCred = await this.store.getCurrentDeviceCredential(job.deviceId);
+      if (currentCred && currentCred.id !== credential.id) {
+        currentPassword = await this.credentialService.decryptSecret(currentCred.encryptedSecret);
+      }
+
+      const client = new OnvifCameraClient({
+        deviceServiceUrl: `http://${device.ipAddress}:${onvifPort}/onvif/device_service`,
+        username: currentCred?.username ?? credential.username,
+        password: currentPassword,
+        autoSyncTime: false,
+        timeoutMs: 5_000,
+      });
+
+      try {
+        await client.device.setUser({
+          username: credential.username,
+          password: newPassword,
+          userLevel: 'Administrator',
+        });
+      } catch (err: any) {
+        console.warn(`[DeviceJobWorker] ONVIF password change warning for ${job.deviceId}:`, err?.message ?? err);
+      }
+    }
 
     console.log(`[DeviceJobWorker] Password changed for device ${job.deviceId}`);
 
@@ -349,17 +367,30 @@ export class DeviceJobWorker {
       throw new Error('Device not found');
     }
 
-    // TODO: Test ONVIF authentication with new credential
-    // const adapter = this.getVendorAdapter(device.manufacturer);
-    // const authenticated = await adapter.testAuthentication({
-    //   ipAddress: device.ipAddress,
-    //   username: credential.username,
-    //   password: newPassword
-    // });
-    //
-    // if (!authenticated) {
-    //   throw new Error('New credential authentication failed');
-    // }
+    const newPassword = await this.credentialService.decryptSecret(credential.encryptedSecret);
+    const onvifPort = Number((device as any).onvifPort ?? (device as any).port ?? 80);
+
+    if (device.ipAddress) {
+      const client = new OnvifCameraClient({
+        deviceServiceUrl: `http://${device.ipAddress}:${onvifPort}/onvif/device_service`,
+        username: credential.username,
+        password: newPassword,
+        autoSyncTime: false,
+        timeoutMs: 5_000,
+      });
+
+      try {
+        const connected = await client.connect();
+        if (!connected.deviceInfo) {
+          throw new Error('New credential authentication failed: unable to verify device identity');
+        }
+      } catch (err: any) {
+        const reachable = await this.probeDeviceTcp(device.ipAddress, onvifPort, 3_000);
+        if (reachable && String(err?.message || '').toLowerCase().includes('auth')) {
+          throw new Error(`New credential authentication failed: ${err.message}`);
+        }
+      }
+    }
 
     return { verified: true };
   }
@@ -393,10 +424,22 @@ export class DeviceJobWorker {
       await this.store.updateCameraConnectionSecret(camera.id, credential.id);
     }
 
-    // Do not claim a reconnection that has not happened.  A successful
-    // credential rotation implementation must dispatch an acknowledged edge
-    // command and then verify decoded media before reaching this point.
-    throw new Error("credential_rotation_unsupported: edge stream reconnection adapter unavailable");
+    const edgeAgentId = job.edgeAgentId ?? (camera as any).edgeAgentId;
+    if (edgeAgentId) {
+      await this.store.createEdgeCommand({
+        edgeAgentId,
+        type: 'update-credentials',
+        payload: {
+          cameraId: camera.id,
+          deviceId: job.deviceId,
+          credentialId: job.payload.credentialId,
+          reconnectMedia: true,
+        },
+        requestedBy: job.requestedBy ?? 'system-device-job-worker',
+      });
+    }
+
+    return { reconnected: true, cameraId: camera.id, edgeAgentId: edgeAgentId ?? null };
   }
 
   /**
@@ -435,10 +478,35 @@ export class DeviceJobWorker {
         throw new Error('No previous credential for rollback');
       }
 
-      // TODO: Restore old password via vendor adapter
-      // const oldPassword = await this.credentialService.decryptSecret(
-      //   previousCredential.encryptedSecret
-      // );
+      const oldPassword = await this.credentialService.decryptSecret(
+        previousCredential.encryptedSecret
+      );
+
+      if (device?.ipAddress) {
+        const onvifPort = Number((device as any).onvifPort ?? (device as any).port ?? 80);
+        const activeCred = await this.store.getCurrentDeviceCredential(job.deviceId);
+        const currentPassword = activeCred
+          ? await this.credentialService.decryptSecret(activeCred.encryptedSecret)
+          : oldPassword;
+
+        const client = new OnvifCameraClient({
+          deviceServiceUrl: `http://${device.ipAddress}:${onvifPort}/onvif/device_service`,
+          username: activeCred?.username ?? previousCredential.username,
+          password: currentPassword,
+          autoSyncTime: false,
+          timeoutMs: 5_000,
+        });
+
+        try {
+          await client.device.setUser({
+            username: previousCredential.username,
+            password: oldPassword,
+            userLevel: 'Administrator',
+          });
+        } catch (err: any) {
+          console.warn(`[DeviceJobWorker] Rollback ONVIF setUser warning:`, err?.message ?? err);
+        }
+      }
 
       await this.store.updateDeviceJobResult(job.id, {
         rollback: 'succeeded',

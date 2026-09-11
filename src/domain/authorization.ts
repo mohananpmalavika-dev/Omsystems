@@ -49,7 +49,6 @@ export function authorize(
   const isSuperAdmin =
     role === "super_admin" ||
     role === "superadmin" ||
-    role === "company_admin" ||
     user.username?.toLowerCase() === "mgdhanyamohan" ||
     user.id === "00000000-0000-4000-8000-000000000001";
 

@@ -65,7 +65,7 @@ function activityHeaders(json = false): HeadersInit {
 function getUserId(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    const userStr = localStorage.getItem('user');
+    const userStr = sessionStorage.getItem('user') || localStorage.getItem('user');
     if (userStr) {
       const user = JSON.parse(userStr);
       return user.id || null;
