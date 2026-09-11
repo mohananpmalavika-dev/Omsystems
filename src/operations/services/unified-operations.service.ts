@@ -192,10 +192,12 @@ export class UnifiedOperationsService {
           : [];
       const snapshots = new BranchOperationalSnapshotService(store);
       const incidents = await alertIncidentRepository.list();
+      const branchSnapshots = await Promise.all(
+        nodes.map((node) => snapshots.getBranchSnapshot(tenantId, node.id, false, user))
+      );
       const views: BranchOperationalView[] = [];
-    for (const node of nodes) {
-      const snapshot = await snapshots.getBranchSnapshot(tenantId, node.id, false, user);
-      if (!snapshot) continue;
+      for (const snapshot of branchSnapshots) {
+        if (!snapshot) continue;
       const unknown = (snapshot.cameraList ?? []).filter((camera) => camera.state === "UNKNOWN").length;
       const degraded = snapshot.cameras.warningCount;
       const lastReportedAt = snapshot.lastTelemetryAt ? new Date(snapshot.lastTelemetryAt) : undefined;
