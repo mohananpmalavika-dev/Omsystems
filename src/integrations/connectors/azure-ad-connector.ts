@@ -39,6 +39,10 @@ export class AzureADConnector extends BaseConnector {
   private accessToken?: string;
   private tokenExpiry?: Date;
 
+  constructor(private pool?: any) {
+    super();
+  }
+
   async testConnection(): Promise<{ success: boolean; message: string; details?: any }> {
     try {
       await this.ensureAccessToken();
@@ -309,7 +313,34 @@ export class AzureADConnector extends BaseConnector {
               active: azureUser.accountEnabled
             };
 
-            // TODO: Upsert user in database
+            if (this.pool && user.username) {
+              const roleMapping = this.getConfig<Record<string, string>>('roleMapping', {});
+              let mappedRole = 'operator';
+              for (const grp of groups) {
+                if (roleMapping[grp]) {
+                  mappedRole = roleMapping[grp];
+                  break;
+                }
+              }
+              await this.pool.query(
+                `INSERT INTO users (id, tenant_id, username, email, display_name, role, status, active, created_at, updated_at)
+                 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'active', $6, now(), now())
+                 ON CONFLICT (tenant_id, username) DO UPDATE SET
+                   email = EXCLUDED.email,
+                   display_name = EXCLUDED.display_name,
+                   role = EXCLUDED.role,
+                   active = EXCLUDED.active,
+                   updated_at = now()`,
+                [
+                  this.config?.tenantId || 'tenant-default',
+                  user.username,
+                  user.email,
+                  user.displayName || user.username,
+                  mappedRole,
+                  user.active ?? true,
+                ]
+              );
+            }
             result.usersCreated++;
             result.groupsMapped += groups.length;
           } catch (error) {

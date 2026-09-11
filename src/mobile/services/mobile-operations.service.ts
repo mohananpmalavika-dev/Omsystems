@@ -855,17 +855,17 @@ export class MobileOperationsService {
     sessionUrl: string;
     expiresAt: string;
   }> {
-    // TODO: Integrate with actual live streaming service
+    const session = await this.store.createLiveSession(cameraId, operator.id, "view");
     return {
-      sessionId: `mobile-${randomUUID().slice(0, 8)}`,
+      sessionId: session.id,
       cameraId,
       protocol: "WEBRTC",
       streamResolution: "720p_H264_SUBSTREAM",
       bitrateKbps: 700,
       fps: 15,
       privacyMode: "REDACTED_FACE_BLUR",
-      sessionUrl: `/api/live?cameraId=${cameraId}&substream=true`,
-      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      sessionUrl: `/api/live?cameraId=${cameraId}&sessionToken=${session.token}&substream=true`,
+      expiresAt: session.expiresAt,
     };
   }
 
