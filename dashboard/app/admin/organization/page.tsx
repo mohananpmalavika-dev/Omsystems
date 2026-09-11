@@ -35,10 +35,12 @@ import {
   ScanFace,
   Check,
   RotateCcw,
+  Key,
 } from "lucide-react";
 import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/components/app-layout";
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
-import { organizationApi } from "@/lib/api-client";
+import { organizationApi, userApi } from "@/lib/api-client";
+import { CameraPermissionManager } from "@/components/camera-permission-manager";
 
 type OrgNode = {
   id: string;
@@ -80,8 +82,10 @@ type Employee = {
   facePhotoBase64?: string;
   faceEnrolled?: boolean;
   organizations?: Array<{
-    nodeId: string;
+    nodeId?: string;
+    scopeNodeId?: string;
     nodeName?: string;
+    scopeName?: string;
     isPrimary: boolean;
   }>;
 };
@@ -184,11 +188,42 @@ export default function OrganizationHierarchyPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Permission Matrix Modal
+  // Permission Matrix Modal (Multi-scope supported)
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [showPermModal, setShowPermModal] = useState(false);
-  const [permScopeNodeId, setPermScopeNodeId] = useState("");
+  const [permScopeNodeIds, setPermScopeNodeIds] = useState<string[]>([]);
+  const [permPrimaryNodeId, setPermPrimaryNodeId] = useState("");
   const [selectedCustomRoleId, setSelectedCustomRoleId] = useState("");
+
+  // Edit Employee Modal
+  const [showEditEmpModal, setShowEditEmpModal] = useState(false);
+  const [editingEmp, setEditingEmp] = useState<Employee | null>(null);
+  const [editEmpName, setEditEmpName] = useState("");
+  const [editEmpEmail, setEditEmpEmail] = useState("");
+  const [editEmpRole, setEditEmpRole] = useState("operator");
+  const [editEmpCustomRoleId, setEditEmpCustomRoleId] = useState("");
+  const [editEmpDesignation, setEditEmpDesignation] = useState("");
+  const [editEmpDept, setEditEmpDept] = useState("");
+  const [editEmpPhotoData, setEditEmpPhotoData] = useState("");
+  const editEmpPhotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Camera Permissions Modal state
+  const [cameraPermEmp, setCameraPermEmp] = useState<Employee | null>(null);
+
+  // Reset Password Modal state
+  const [resetPasswordEmp, setResetPasswordEmp] = useState<Employee | null>(null);
+  const [newPasswordVal, setNewPasswordVal] = useState("");
+  const [confirmPasswordVal, setConfirmPasswordVal] = useState("");
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  // Employee Directory Filters & Pagination
+  const [empSearchQuery, setEmpSearchQuery] = useState("");
+  const [empRoleFilter, setEmpRoleFilter] = useState("all");
+  const [empFaceFilter, setEmpFaceFilter] = useState("all");
+  const [empCurrentPage, setEmpCurrentPage] = useState(1);
+  const EMP_PAGE_SIZE = 10;
+
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
   const [roleName, setRoleName] = useState("");
@@ -201,8 +236,8 @@ export default function OrganizationHierarchyPage() {
   const allowedRoleMenuKeys = new Set(
     defaultMenuAccessForRole(roleBaseRole).flatMap((entry) => [entry, entry.split(/[?#]/)[0]]),
   );
-  const isMenuAllowedForBaseRole = (href: string) =>
-    allowedRoleMenuKeys.has(href) || allowedRoleMenuKeys.has(href.split(/[?#]/)[0]);
+  // Custom roles can be granted access to any operational or platform module
+  const isMenuAllowedForBaseRole = (_href: string) => true;
 
   useEffect(() => {
     loadAllData();
@@ -479,9 +514,73 @@ export default function OrganizationHierarchyPage() {
     }
   }
 
-  function openAddNode(parent: OrgNode | null, defaultType: OrgNode["type"] = "branch") {
+  function getValidChildTypes(parent: OrgNode | null): Array<{ value: OrgNode["type"]; label: string }> {
+    if (!parent) {
+      return [{ value: "company", label: "Company / Root Organization" }];
+    }
+    switch (parent.type) {
+      case "company":
+        return [
+          { value: "branch", label: "Branch / Operational Facility" },
+          { value: "zone", label: "Zone / Division" },
+          { value: "region", label: "Region" },
+          { value: "area", label: "Area" },
+          { value: "headquarters", label: "Headquarters / Corporate Center" },
+        ];
+      case "headquarters":
+        return [
+          { value: "zone", label: "Zone" },
+          { value: "region", label: "Region" },
+          { value: "branch", label: "Branch / Operational Facility" },
+        ];
+      case "zone":
+      case "division":
+        return [
+          { value: "region", label: "Region" },
+          { value: "area", label: "Area" },
+          { value: "branch", label: "Branch / Operational Facility" },
+        ];
+      case "region":
+        return [
+          { value: "area", label: "Area" },
+          { value: "branch", label: "Branch / Operational Facility" },
+        ];
+      case "area":
+        return [
+          { value: "branch", label: "Branch / Operational Facility" },
+        ];
+      case "branch":
+        return [
+          { value: "location-group", label: "Location Zone (Vault, Cash Counter, Gate, Store)" },
+          { value: "floor", label: "Floor / Level" },
+          { value: "building", label: "Building / Wing" },
+          { value: "camera-group", label: "Camera Group" },
+        ];
+      case "floor":
+      case "building":
+        return [
+          { value: "location-group", label: "Specific Location (Room, Counter, Vault)" },
+          { value: "location", label: "Specific Point / Sub-Area" },
+          { value: "camera-group", label: "Camera Group" },
+        ];
+      case "location-group":
+      case "location":
+        return [
+          { value: "camera-group", label: "Camera Group" },
+          { value: "location", label: "Specific Point / Sub-Area" },
+        ];
+      default:
+        return [
+          { value: "location-group", label: "Location Zone" },
+          { value: "branch", label: "Branch" },
+        ];
+    }
+  }
+
+  function openAddNode(parent: OrgNode | null, defaultType?: OrgNode["type"]) {
     setSelectedParentNode(parent);
-    setNewNodeType(defaultType);
+    const valid = getValidChildTypes(parent);
+    setNewNodeType(defaultType && valid.some((v) => v.value === defaultType) ? defaultType : valid[0].value);
     setNewNodeName("");
     setNewNodeCode("");
     setNewNodeDesc("");
@@ -494,9 +593,10 @@ export default function OrganizationHierarchyPage() {
     setSaving(true);
     setError(null);
     try {
+      const targetType = selectedParentNode ? newNodeType : "company";
       const payload = {
         parentNodeId: selectedParentNode ? selectedParentNode.id : undefined,
-        nodeType: newNodeType,
+        nodeType: targetType,
         name: newNodeName.trim(),
         code: newNodeCode.trim() || undefined,
         description: newNodeDesc.trim() || undefined,
@@ -606,7 +706,11 @@ export default function OrganizationHierarchyPage() {
 
   function openEmployeePermissions(emp: Employee) {
     setSelectedEmployee(emp);
-    setPermScopeNodeId(emp.organizations?.[0]?.nodeId || flatNodes[0]?.id || "");
+    const existingNodeIds = emp.organizations?.map((o) => (o as any).scopeNodeId || o.nodeId).filter(Boolean) || [];
+    const primaryOrg = emp.organizations?.find((o) => o.isPrimary);
+    const primaryId = (primaryOrg as any)?.scopeNodeId || primaryOrg?.nodeId || existingNodeIds[0] || flatNodes[0]?.id || "";
+    setPermPrimaryNodeId(primaryId);
+    setPermScopeNodeIds(existingNodeIds.length > 0 ? existingNodeIds : (primaryId ? [primaryId] : []));
     setSelectedCustomRoleId(emp.customRoleId ?? "");
     setShowPermModal(true);
   }
@@ -671,7 +775,7 @@ export default function OrganizationHierarchyPage() {
 
   async function handleAssignPermission(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedEmployee || !permScopeNodeId) return;
+    if (!selectedEmployee || !permScopeNodeIds.length) return;
     setSaving(true);
     try {
       const rolePayload = {
@@ -688,24 +792,158 @@ export default function OrganizationHierarchyPage() {
       });
       if (!roleResponse.ok) throw new Error("Failed to assign role");
 
-      const orgPayload = {
-        scopeNodeId: permScopeNodeId,
-        isPrimary: true,
-        replaceExisting: true,
-      };
-
-      const orgResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
+      // 1. Assign primary scope (with replaceExisting: true to clear older stale grants)
+      const primaryScopeId = permPrimaryNodeId || permScopeNodeIds[0];
+      const primaryOrgResponse = await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orgPayload),
+        body: JSON.stringify({
+          scopeNodeId: primaryScopeId,
+          isPrimary: true,
+          replaceExisting: true,
+        }),
       });
-      if (!orgResponse.ok) throw new Error("Failed to assign location scope");
+      if (!primaryOrgResponse.ok) throw new Error("Failed to assign primary location scope");
 
-      setNotice(`Permission policy updated for ${selectedEmployee.displayName}!`);
+      // 2. Assign any additional scopes (with replaceExisting: false)
+      for (const scopeId of permScopeNodeIds) {
+        if (scopeId === primaryScopeId) continue;
+        await fetchWithAuth(`/api/control/v1/users/${selectedEmployee.id}/organizations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            scopeNodeId: scopeId,
+            isPrimary: false,
+            replaceExisting: false,
+          }),
+        });
+      }
+
+      setNotice(`Permission policy and ${permScopeNodeIds.length} location scope(s) updated for ${selectedEmployee.displayName}!`);
       setShowPermModal(false);
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to assign permission");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openEditEmployee(emp: Employee) {
+    setEditingEmp(emp);
+    setEditEmpName(emp.displayName || "");
+    setEditEmpEmail(emp.email || "");
+    setEditEmpRole(emp.role || "operator");
+    setEditEmpCustomRoleId(emp.customRoleId || "");
+    setEditEmpDesignation(emp.designation || "");
+    setEditEmpDept(emp.department || "");
+    setEditEmpPhotoData(emp.facePhotoBase64 || emp.photoUrl || emp.avatarUrl || "");
+    setShowEditEmpModal(true);
+  }
+
+  async function handleUpdateEmployee(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingEmp || !editEmpName.trim() || !editEmpEmail.trim()) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const payload: any = {
+        displayName: editEmpName.trim(),
+        email: editEmpEmail.trim(),
+        role: editEmpRole,
+        customRoleId: editEmpCustomRoleId || null,
+        designation: editEmpDesignation.trim() || undefined,
+        department: editEmpDept.trim() || undefined,
+      };
+      if (editEmpPhotoData && editEmpPhotoData.startsWith("data:image/")) {
+        payload.facePhotoBase64 = editEmpPhotoData;
+      }
+      const res = await fetchWithAuth(`/api/control/v1/users/${editingEmp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to update employee");
+      }
+      setNotice(`Updated employee details for "${editEmpName}"!`);
+      setShowEditEmpModal(false);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to update employee");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function openResetPassword(emp: Employee) {
+    setResetPasswordEmp(emp);
+    setNewPasswordVal("");
+    setConfirmPasswordVal("");
+    setResetPasswordError(null);
+  }
+
+  async function handleResetPasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!resetPasswordEmp) return;
+    if (newPasswordVal.length < 8) {
+      setResetPasswordError("Password must be at least 8 characters long.");
+      return;
+    }
+    if (newPasswordVal !== confirmPasswordVal) {
+      setResetPasswordError("Passwords do not match.");
+      return;
+    }
+    setResettingPassword(true);
+    setResetPasswordError(null);
+    try {
+      await userApi.resetPassword(resetPasswordEmp.id, newPasswordVal);
+      setNotice(`Password for "${resetPasswordEmp.displayName}" was successfully reset.`);
+      setResetPasswordEmp(null);
+    } catch (err: any) {
+      setResetPasswordError(err.message || "Failed to reset password.");
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
+  async function handleDeleteEmployee(emp: Employee) {
+    if (!confirm(`Are you sure you want to deactivate and remove employee "${emp.displayName}"?`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/control/v1/users/${emp.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to delete employee");
+      }
+      setNotice(`Deactivated employee "${emp.displayName}".`);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete employee");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnlockEmployee(emp: Employee) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/control/v1/users/${emp.id}/unlock`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to unlock account");
+      }
+      setNotice(`Account for ${emp.displayName} unlocked successfully.`);
+      await loadAllData();
+    } catch (err: any) {
+      setError(err.message || "Failed to unlock account");
     } finally {
       setSaving(false);
     }
@@ -795,16 +1033,61 @@ export default function OrganizationHierarchyPage() {
                 </button>
               </>
             )}
+            {node.type === "headquarters" && (
+              <>
+                <button
+                  onClick={() => openAddNode(node, "zone")}
+                  className="text-xs px-2 py-1 bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 rounded flex items-center gap-1"
+                  title="Add Zone"
+                >
+                  <Plus size={12} /> Add Zone
+                </button>
+                <button
+                  onClick={() => openAddNode(node, "branch")}
+                  className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 rounded flex items-center gap-1"
+                  title="Add Branch"
+                >
+                  <Plus size={12} /> Add Branch
+                </button>
+              </>
+            )}
             {(node.type === "zone" || node.type === "division") && (
-              <button
-                onClick={() => openAddNode(node, "region")}
-                className="text-xs px-2 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 rounded flex items-center gap-1"
-                title="Add Region"
-              >
-                <Plus size={12} /> Add Region
-              </button>
+              <>
+                <button
+                  onClick={() => openAddNode(node, "region")}
+                  className="text-xs px-2 py-1 bg-blue-500/10 border border-blue-500/30 text-blue-300 hover:bg-blue-500/20 rounded flex items-center gap-1"
+                  title="Add Region"
+                >
+                  <Plus size={12} /> Add Region
+                </button>
+                <button
+                  onClick={() => openAddNode(node, "branch")}
+                  className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 rounded flex items-center gap-1"
+                  title="Add Branch"
+                >
+                  <Plus size={12} /> Add Branch
+                </button>
+              </>
             )}
             {node.type === "region" && (
+              <>
+                <button
+                  onClick={() => openAddNode(node, "area")}
+                  className="text-xs px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-500/20 rounded flex items-center gap-1"
+                  title="Add Area"
+                >
+                  <Plus size={12} /> Add Area
+                </button>
+                <button
+                  onClick={() => openAddNode(node, "branch")}
+                  className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 rounded flex items-center gap-1"
+                  title="Add Branch / Facility"
+                >
+                  <Plus size={12} /> Add Branch
+                </button>
+              </>
+            )}
+            {node.type === "area" && (
               <button
                 onClick={() => openAddNode(node, "branch")}
                 className="text-xs px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 rounded flex items-center gap-1"
@@ -814,12 +1097,39 @@ export default function OrganizationHierarchyPage() {
               </button>
             )}
             {node.type === "branch" && (
+              <>
+                <button
+                  onClick={() => openAddNode(node, "location-group")}
+                  className="text-xs px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded flex items-center gap-1"
+                  title="Add Specific Location Zone (e.g. Main Gate, Cash Counter, Vault, Store Room)"
+                >
+                  <Plus size={12} /> Add Location Zone
+                </button>
+                <button
+                  onClick={() => openAddNode(node, "floor")}
+                  className="text-xs px-2 py-1 bg-teal-500/10 border border-teal-500/30 text-teal-300 hover:bg-teal-500/20 rounded flex items-center gap-1"
+                  title="Add Floor / Level"
+                >
+                  <Plus size={12} /> Add Floor
+                </button>
+              </>
+            )}
+            {(node.type === "floor" || node.type === "building") && (
               <button
                 onClick={() => openAddNode(node, "location-group")}
                 className="text-xs px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded flex items-center gap-1"
-                title="Add Specific Location Zone (e.g. Main Gate, Cash Counter, Vault, Store Room)"
+                title="Add Location Zone / Room"
               >
                 <Plus size={12} /> Add Location Zone
+              </button>
+            )}
+            {(node.type === "location-group" || node.type === "location") && (
+              <button
+                onClick={() => openAddNode(node, "camera-group")}
+                className="text-xs px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded flex items-center gap-1"
+                title="Add Sub-Zone / Point"
+              >
+                <Plus size={12} /> Add Point
               </button>
             )}
             <button
@@ -1127,99 +1437,317 @@ export default function OrganizationHierarchyPage() {
         )}
 
         {/* TAB 2: Employee Permissions & Roster */}
-        {activeTab === "employees" && (
-          <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-slate-100">Employee Directory & Facial Biometrics</h2>
-                <p className="text-xs text-slate-400">
-                  Manage employee profiles, captured facial photos, and location-scoped access permissions.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setEmpPhotoData("");
-                  setShowAddEmpModal(true);
-                }}
-                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5"
-              >
-                <Plus size={13} /> Enroll Employee
-              </button>
-            </div>
+        {activeTab === "employees" && (() => {
+          const filteredEmployees = employees.filter((emp) => {
+            if (empRoleFilter !== "all" && emp.role !== empRoleFilter) return false;
+            if (empFaceFilter === "enrolled" && !emp.photoUrl && !emp.avatarUrl && !emp.facePhotoBase64) return false;
+            if (empFaceFilter === "pending" && (emp.photoUrl || emp.avatarUrl || emp.facePhotoBase64)) return false;
+            if (empSearchQuery.trim()) {
+              const q = empSearchQuery.toLowerCase();
+              const matchName = emp.displayName?.toLowerCase().includes(q);
+              const matchEmail = emp.email?.toLowerCase().includes(q);
+              const matchRole = emp.role?.toLowerCase().includes(q);
+              const matchDesig = emp.designation?.toLowerCase().includes(q);
+              const matchDept = emp.department?.toLowerCase().includes(q);
+              if (!matchName && !matchEmail && !matchRole && !matchDesig && !matchDept) return false;
+            }
+            return true;
+          });
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase text-[10px]">
-                    <th className="py-3 px-3">Photo / Face Profile</th>
-                    <th className="py-3 px-3">Employee Name</th>
-                    <th className="py-3 px-3">Email</th>
-                    <th className="py-3 px-3">Designation / Role</th>
-                    <th className="py-3 px-3">Primary Location Scope</th>
-                    <th className="py-3 px-3">Biometrics</th>
-                    <th className="py-3 px-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60">
-                  {employees.map((emp) => {
-                    const primaryOrg = emp.organizations?.find((o) => o.isPrimary) || emp.organizations?.[0];
-                    const photo = emp.photoUrl || emp.avatarUrl || emp.facePhotoBase64;
-                    return (
-                      <tr key={emp.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="py-3 px-3">
-                          {photo ? (
-                            <img
-                              src={photo}
-                              alt={emp.displayName}
-                              className="w-9 h-9 rounded-full object-cover border-2 border-emerald-500/60 shadow"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 font-bold text-xs">
-                              {emp.displayName.slice(0, 2).toUpperCase()}
+          const totalEmpPages = Math.max(1, Math.ceil(filteredEmployees.length / EMP_PAGE_SIZE));
+          const safePage = Math.min(empCurrentPage, totalEmpPages);
+          const paginatedEmployees = filteredEmployees.slice(
+            (safePage - 1) * EMP_PAGE_SIZE,
+            safePage * EMP_PAGE_SIZE
+          );
+
+          return (
+            <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <Users size={18} className="text-emerald-400" />
+                    Employee Directory & Facial Biometrics
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Manage employee profiles, biometric face credentials, and location-scoped access permissions.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setEmpPhotoData("");
+                    setShowAddEmpModal(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition self-start sm:self-auto shadow-lg shadow-emerald-950"
+                >
+                  <Plus size={13} /> Enroll Employee
+                </button>
+              </div>
+
+              {/* Search and Filters Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1">
+                <div className="sm:col-span-2 relative">
+                  <Search size={14} className="absolute left-3 top-2.5 text-slate-500" />
+                  <input
+                    type="text"
+                    value={empSearchQuery}
+                    onChange={(e) => {
+                      setEmpSearchQuery(e.target.value);
+                      setEmpCurrentPage(1);
+                    }}
+                    placeholder="Search by name, email, department, designation..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-8 py-2 text-slate-200 text-xs focus:border-emerald-500 focus:outline-none"
+                  />
+                  {empSearchQuery && (
+                    <button
+                      onClick={() => setEmpSearchQuery("")}
+                      className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300 text-xs"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+
+                <div>
+                  <select
+                    value={empRoleFilter}
+                    onChange={(e) => {
+                      setEmpRoleFilter(e.target.value);
+                      setEmpCurrentPage(1);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="operator">Operator</option>
+                    <option value="branch_manager">Branch Manager</option>
+                    <option value="security_officer">Security Officer</option>
+                    <option value="viewer">Viewer</option>
+                    <option value="auditor">Auditor</option>
+                    <option value="company_admin">Company Admin</option>
+                    <option value="super_admin">Super Admin</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={empFaceFilter}
+                    onChange={(e) => {
+                      setEmpFaceFilter(e.target.value);
+                      setEmpCurrentPage(1);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs"
+                  >
+                    <option value="all">All Biometric Statuses</option>
+                    <option value="enrolled">Face Enrolled</option>
+                    <option value="pending">Pending Photo</option>
+                  </select>
+                  {(empSearchQuery || empRoleFilter !== "all" || empFaceFilter !== "all") && (
+                    <button
+                      onClick={() => {
+                        setEmpSearchQuery("");
+                        setEmpRoleFilter("all");
+                        setEmpFaceFilter("all");
+                        setEmpCurrentPage(1);
+                      }}
+                      className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg text-xs transition"
+                      title="Reset filters"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-950/60 text-slate-400 font-semibold uppercase text-[10px]">
+                      <th className="py-3 px-3">Photo / Face Profile</th>
+                      <th className="py-3 px-3">Employee Name</th>
+                      <th className="py-3 px-3">Email & Dept</th>
+                      <th className="py-3 px-3">Designation / Role</th>
+                      <th className="py-3 px-3">Location Scopes</th>
+                      <th className="py-3 px-3">Biometrics</th>
+                      <th className="py-3 px-3">Status</th>
+                      <th className="py-3 px-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60">
+                    {paginatedEmployees.map((emp) => {
+                      const primaryOrg = emp.organizations?.find((o) => o.isPrimary) || emp.organizations?.[0];
+                      const totalScopes = emp.organizations?.length || 0;
+                      const photo = emp.photoUrl || emp.avatarUrl || emp.facePhotoBase64;
+                      const isLocked = emp.status === "locked" || emp.status === "suspended";
+
+                      return (
+                        <tr key={emp.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="py-3 px-3">
+                            {photo ? (
+                              <img
+                                src={photo}
+                                alt={emp.displayName}
+                                className="w-9 h-9 rounded-full object-cover border-2 border-emerald-500/60 shadow"
+                              />
+                            ) : (
+                              <div className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 font-bold text-xs">
+                                {emp.displayName.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-medium text-slate-100">{emp.displayName}</div>
+                            {emp.customRoleName && (
+                              <span className="text-[10px] text-indigo-400 block font-mono">
+                                Role: {emp.customRoleName}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="font-mono text-slate-400 block">{emp.email}</span>
+                            {emp.department && (
+                              <span className="text-slate-500 text-[10px] block">{emp.department}</span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className="px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-mono text-[11px]">
+                              {emp.role}
+                            </span>
+                            <span className="text-slate-500 text-[11px] block mt-0.5">{emp.designation || "Staff"}</span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-emerald-400 font-medium flex items-center gap-1 text-[11px]">
+                                <MapPin size={11} />
+                                {primaryOrg?.nodeName || primaryOrg?.nodeId || "Global Root"}
+                              </span>
+                              {totalScopes > 1 && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-indigo-950/70 border border-indigo-800/50 text-indigo-300 rounded font-mono">
+                                  +{totalScopes - 1} more
+                                </span>
+                              )}
                             </div>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 font-medium text-slate-100">{emp.displayName}</td>
-                        <td className="py-3 px-3 font-mono text-slate-400">{emp.email}</td>
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 bg-slate-800 rounded text-slate-300 font-mono text-[11px]">
-                            {emp.role}
-                          </span>
-                          <span className="text-slate-500 text-[11px] block">{emp.designation}</span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="text-emerald-400 font-medium flex items-center gap-1">
-                            <MapPin size={12} />
-                            {primaryOrg?.nodeName || primaryOrg?.nodeId || "Global / Organization Root"}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3">
-                          {photo ? (
-                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-mono flex items-center gap-1 w-fit">
-                              <Check size={10} /> Face Enrolled
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-mono w-fit">
-                              Pending Photo
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-3 text-right">
-                          <button
-                            onClick={() => openEmployeePermissions(emp)}
-                            className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded text-xs font-semibold flex items-center gap-1 ml-auto"
-                          >
-                            <Sliders size={12} /> Manage Location Scope
-                          </button>
+                          </td>
+                          <td className="py-3 px-3">
+                            {photo ? (
+                              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-mono flex items-center gap-1 w-fit">
+                                <Check size={10} /> Face Enrolled
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-mono w-fit">
+                                Pending Photo
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3">
+                            {isLocked ? (
+                              <span className="px-2 py-0.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full text-[10px] font-mono">
+                                {emp.status}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-mono">
+                                {emp.status || "active"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openEmployeePermissions(emp)}
+                                className="px-2 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 rounded text-[11px] font-semibold flex items-center gap-1 transition"
+                                title="Manage location scope and menu roles"
+                              >
+                                <Sliders size={12} /> Scopes
+                              </button>
+                              <button
+                                onClick={() => setCameraPermEmp(emp)}
+                                className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition"
+                                title="Manage granular camera exceptions"
+                              >
+                                <Camera size={13} />
+                              </button>
+                              <button
+                                onClick={() => openResetPassword(emp)}
+                                className="p-1 text-slate-400 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition"
+                                title="Reset employee password"
+                              >
+                                <Key size={13} />
+                              </button>
+                              <button
+                                onClick={() => openEditEmployee(emp)}
+                                className="p-1 text-slate-400 hover:text-amber-400 hover:bg-amber-500/10 rounded transition"
+                                title="Edit employee profile"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                              {isLocked && (
+                                <button
+                                  onClick={() => handleUnlockEmployee(emp)}
+                                  className="p-1 text-amber-400 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition"
+                                  title="Unlock account"
+                                >
+                                  <Unlock size={13} />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteEmployee(emp)}
+                                className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
+                                title="Deactivate employee"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!paginatedEmployees.length && (
+                      <tr>
+                        <td colSpan={8} className="py-10 text-center text-slate-500 text-xs">
+                          {employees.length === 0
+                            ? "No employees found. Click \"Enroll Employee\" above to get started."
+                            : "No employees match your search/filter criteria."}
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Pagination Controls */}
+              {totalEmpPages > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-800 pt-3 text-xs text-slate-400">
+                  <span>
+                    Showing{" "}
+                    <strong className="text-slate-200">
+                      {(safePage - 1) * EMP_PAGE_SIZE + 1}-
+                      {Math.min(safePage * EMP_PAGE_SIZE, filteredEmployees.length)}
+                    </strong>{" "}
+                    of <strong className="text-slate-200">{filteredEmployees.length}</strong> employees
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setEmpCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={safePage <= 1}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded flex items-center gap-1 transition"
+                    >
+                      <ChevronLeft size={13} /> Prev
+                    </button>
+                    <span className="px-2 text-slate-300 font-mono">
+                      {safePage} / {totalEmpPages}
+                    </span>
+                    <button
+                      onClick={() => setEmpCurrentPage((p) => Math.min(totalEmpPages, p + 1))}
+                      disabled={safePage >= totalEmpPages}
+                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 rounded flex items-center gap-1 transition"
+                    >
+                      Next <ChevronRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {activeTab === "roles" && (
           <div className="p-5 bg-slate-900/60 border border-slate-800 rounded-xl space-y-4">
@@ -1354,14 +1882,16 @@ export default function OrganizationHierarchyPage() {
                     value={roleBaseRole}
                     onChange={(e) => {
                       const nextRole = e.target.value;
-                      const nextAllowed = new Set(defaultMenuAccessForRole(nextRole).flatMap((entry) => [entry, entry.split(/[?#]/)[0]]));
                       setRoleBaseRole(nextRole);
-                      setRoleMenuAccess((current) => current.filter((key) => nextAllowed.has(key) || nextAllowed.has(key.split(/[?#]/)[0])));
                     }}
                     className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"
                   >
                     <option value="operator">Operator capability (Live View)</option>
                     <option value="branch_manager">Branch Manager capability</option>
+                    <option value="area_manager">Area Manager capability</option>
+                    <option value="region_manager">Region Manager capability</option>
+                    <option value="zone_manager">Zone Manager capability</option>
+                    <option value="company_admin">Company Admin capability</option>
                     <option value="security_officer">Security Officer capability</option>
                     <option value="viewer">Viewer capability</option>
                     <option value="auditor">Auditor capability</option>
@@ -1526,17 +2056,8 @@ export default function OrganizationHierarchyPage() {
                     onChange={(e) => {
                       const found = flatNodes.find((n) => n.id === e.target.value) || null;
                       setSelectedParentNode(found);
-                      if (!found) {
-                        setNewNodeType("company");
-                      } else if (found.type === "company") {
-                        setNewNodeType("branch");
-                      } else if (found.type === "zone" || found.type === "division") {
-                        setNewNodeType("region");
-                      } else if (found.type === "region") {
-                        setNewNodeType("branch");
-                      } else if (found.type === "branch") {
-                        setNewNodeType("location-group");
-                      }
+                      const valid = getValidChildTypes(found);
+                      setNewNodeType(valid[0].value);
                     }}
                     className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
                   >
@@ -1550,19 +2071,23 @@ export default function OrganizationHierarchyPage() {
                 </div>
 
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Node Type</label>
+                  <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
+                    <span>Node Type</span>
+                    {!selectedParentNode && (
+                      <span className="text-[10px] text-amber-400 font-normal">Root must be Company</span>
+                    )}
+                  </label>
                   <select
                     value={newNodeType}
+                    disabled={!selectedParentNode}
                     onChange={(e) => setNewNodeType(e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs disabled:opacity-75"
                   >
-                    <option value="company">Company / Organization</option>
-                    <option value="zone">Zone / Division</option>
-                    <option value="region">Region</option>
-                    <option value="branch">Branch / Facility</option>
-                    <option value="floor">Floor / Building</option>
-                    <option value="location-group">Location Zone (Gate, Cash Counter, Vault, Store)</option>
-                    <option value="camera-group">Camera Group</option>
+                    {getValidChildTypes(selectedParentNode).map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -1902,9 +2427,13 @@ export default function OrganizationHierarchyPage() {
                     >
                       <option value="operator">Operator (Live View)</option>
                       <option value="branch_manager">Branch Manager</option>
-                      <option value="security_officer">Security Officer</option>
-                      <option value="auditor">Auditor / Compliance</option>
+                      <option value="area_manager">Area Manager</option>
+                      <option value="region_manager">Region Manager</option>
+                      <option value="zone_manager">Zone Manager</option>
                       <option value="company_admin">Company Admin</option>
+                      <option value="security_officer">Security Officer</option>
+                      <option value="viewer">Viewer (Read Only)</option>
+                      <option value="auditor">Auditor / Compliance</option>
                     </select>
                     <select
                       value={newEmpCustomRoleId}
@@ -1921,14 +2450,27 @@ export default function OrganizationHierarchyPage() {
                     </select>
                   </div>
 
-                  <div>
-                    <label className="block text-slate-300 font-medium mb-1">Designation</label>
-                    <input
-                      type="text"
-                      value={newEmpDesignation}
-                      onChange={(e) => setNewEmpDesignation(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
-                    />
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Designation</label>
+                      <input
+                        type="text"
+                        value={newEmpDesignation}
+                        onChange={(e) => setNewEmpDesignation(e.target.value)}
+                        placeholder="e.g. Security Officer"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-slate-300 font-medium mb-1">Department</label>
+                      <input
+                        type="text"
+                        value={newEmpDept}
+                        onChange={(e) => setNewEmpDept(e.target.value)}
+                        placeholder="e.g. Surveillance SOC, Branch Operations"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1977,14 +2519,14 @@ export default function OrganizationHierarchyPage() {
           </div>
         )}
 
-        {/* MODAL 3: Manage Permissions */}
+        {/* MODAL 3: Manage Location Scopes & Permissions */}
         {showPermModal && selectedEmployee && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-8">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                 <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
                   <Shield size={16} className="text-indigo-400" />
-                  Location Permissions: {selectedEmployee.displayName}
+                  Location Scopes & Role: {selectedEmployee.displayName}
                 </h3>
                 <button
                   onClick={() => setShowPermModal(false)}
@@ -1997,17 +2539,32 @@ export default function OrganizationHierarchyPage() {
               <form onSubmit={handleAssignPermission} className="space-y-3.5 text-xs">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Menu Role</label>
-                  <select value={selectedCustomRoleId} onChange={(e) => setSelectedCustomRoleId(e.target.value)} className="w-full bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs">
+                  <select
+                    value={selectedCustomRoleId}
+                    onChange={(e) => setSelectedCustomRoleId(e.target.value)}
+                    className="w-full bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs"
+                  >
                     <option value="">Use built-in role menu ({selectedEmployee.role})</option>
-                    {roles.map((role) => <option key={role.id} value={role.id}>{role.name} ({role.menuAccess.length} menus)</option>)}
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name} ({role.menuAccess.length} menus)
+                      </option>
+                    ))}
                   </select>
                   <p className="text-[10px] text-slate-500 mt-1">The selected role controls menus shown after the employee logs in.</p>
                 </div>
+
                 <div>
-                  <label className="block text-slate-300 font-medium mb-1">Target Location Node</label>
+                  <label className="block text-slate-300 font-medium mb-1">Primary Location Scope *</label>
                   <select
-                    value={permScopeNodeId}
-                    onChange={(e) => setPermScopeNodeId(e.target.value)}
+                    value={permPrimaryNodeId}
+                    onChange={(e) => {
+                      const newPrimary = e.target.value;
+                      setPermPrimaryNodeId(newPrimary);
+                      if (newPrimary && !permScopeNodeIds.includes(newPrimary)) {
+                        setPermScopeNodeIds((curr) => [...curr, newPrimary]);
+                      }
+                    }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
                   >
                     {flatNodes.map((n) => (
@@ -2016,6 +2573,46 @@ export default function OrganizationHierarchyPage() {
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-slate-500 mt-1">This node serves as the default operational branch / facility.</p>
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Assigned Operational Scopes (Multi-Select) *</label>
+                  <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-800 bg-slate-950 p-2 space-y-1">
+                    {flatNodes.filter((n) => ["company", "headquarters", "zone", "division", "region", "area", "branch", "building", "floor", "location", "location-group"].includes(n.type)).map((n) => {
+                      const isChecked = permScopeNodeIds.includes(n.id);
+                      const isPrimary = permPrimaryNodeId === n.id;
+                      return (
+                        <label key={n.id} className="flex items-center gap-2 text-slate-300 text-xs cursor-pointer hover:bg-slate-900/60 p-1 rounded">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(event) => {
+                              if (event.target.checked) {
+                                setPermScopeNodeIds((curr) => [...curr, n.id]);
+                                if (!permPrimaryNodeId) setPermPrimaryNodeId(n.id);
+                              } else {
+                                if (isPrimary && permScopeNodeIds.length > 1) {
+                                  const remaining = permScopeNodeIds.filter((id) => id !== n.id);
+                                  setPermPrimaryNodeId(remaining[0]);
+                                }
+                                setPermScopeNodeIds((curr) => curr.filter((id) => id !== n.id));
+                              }
+                            }}
+                            className="accent-indigo-500 rounded"
+                          />
+                          <span className="font-mono text-slate-400">[{n.type.toUpperCase()}]</span>
+                          <span className="truncate">{n.name}</span>
+                          {isPrimary && (
+                            <span className="text-emerald-400 font-bold ml-auto text-[10px] bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60">
+                              Primary
+                            </span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">Select all facilities this employee is authorized to view or supervise.</p>
                 </div>
 
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
@@ -2028,15 +2625,299 @@ export default function OrganizationHierarchyPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={saving}
-                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-slate-100 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                    disabled={saving || !permScopeNodeIds.length}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-slate-100 rounded-lg text-xs font-bold flex items-center gap-1.5"
                   >
-                    {saving ? "Applying..." : "Apply Role & Location"}
+                    {saving ? "Applying..." : "Save Scopes & Role"}
                   </button>
                 </div>
               </form>
             </div>
           </div>
+        )}
+
+        {/* MODAL 4: Edit Employee Profile */}
+        {showEditEmpModal && editingEmp && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-8">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Edit2 size={16} className="text-amber-400" />
+                  Edit Employee: {editingEmp.displayName}
+                </h3>
+                <button
+                  onClick={() => setShowEditEmpModal(false)}
+                  className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleUpdateEmployee} className="space-y-3.5 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={editEmpName}
+                    onChange={(e) => setEditEmpName(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Corporate Email *</label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmpEmail}
+                    onChange={(e) => setEditEmpEmail(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Role</label>
+                    <select
+                      value={editEmpRole}
+                      onChange={(e) => setEditEmpRole(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    >
+                      <option value="operator">Operator (Live View)</option>
+                      <option value="branch_manager">Branch Manager</option>
+                      <option value="area_manager">Area Manager</option>
+                      <option value="region_manager">Region Manager</option>
+                      <option value="zone_manager">Zone Manager</option>
+                      <option value="company_admin">Company Admin</option>
+                      <option value="security_officer">Security Officer</option>
+                      <option value="viewer">Viewer (Read Only)</option>
+                      <option value="auditor">Auditor / Compliance</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Custom Role</label>
+                    <select
+                      value={editEmpCustomRoleId}
+                      onChange={(e) => {
+                        const customRoleId = e.target.value;
+                        setEditEmpCustomRoleId(customRoleId);
+                        const found = roles.find((r) => r.id === customRoleId);
+                        if (found) setEditEmpRole(found.baseRole);
+                      }}
+                      className="w-full bg-slate-950 border border-indigo-500/40 rounded-lg p-2.5 text-indigo-200 text-xs"
+                    >
+                      <option value="">Default built-in role</option>
+                      {roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Designation</label>
+                    <input
+                      type="text"
+                      value={editEmpDesignation}
+                      onChange={(e) => setEditEmpDesignation(e.target.value)}
+                      placeholder="e.g. SOC Supervisor"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-medium mb-1">Department</label>
+                    <input
+                      type="text"
+                      value={editEmpDept}
+                      onChange={(e) => setEditEmpDept(e.target.value)}
+                      placeholder="e.g. Surveillance SOC"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
+                    />
+                  </div>
+                </div>
+
+                {/* Biometric Face Photo in Edit Mode */}
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-300 font-semibold flex items-center gap-1.5 text-xs">
+                      <ScanFace size={14} className="text-emerald-400" />
+                      Facial Biometric Enrollment
+                    </span>
+                    {editEmpPhotoData ? (
+                      <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                        Enrolled
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-amber-400 font-mono bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                        Pending Photo
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 pt-1">
+                    {editEmpPhotoData ? (
+                      <div className="relative">
+                        <img
+                          src={editEmpPhotoData}
+                          alt="Face Preview"
+                          className="w-14 h-14 object-cover rounded-lg border-2 border-emerald-500/50 shadow"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setEditEmpPhotoData("")}
+                          className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow hover:bg-rose-500"
+                          title="Remove photo"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg border border-dashed border-slate-700 bg-slate-900 flex items-center justify-center text-slate-500">
+                        <ScanFace size={22} />
+                      </div>
+                    )}
+                    <div className="space-y-1">
+                      <input
+                        ref={editEmpPhotoInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 5 * 1024 * 1024) {
+                              alert("Photo must be less than 5MB");
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onload = () => setEditEmpPhotoData(String(reader.result));
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => editEmpPhotoInputRef.current?.click()}
+                        className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-semibold flex items-center gap-1 transition"
+                      >
+                        <Upload size={12} /> {editEmpPhotoData ? "Change Photo" : "Upload Face Photo"}
+                      </button>
+                      <p className="text-[10px] text-slate-500">
+                        PNG, JPG, WebP under 5MB. Matches authorized face in restricted areas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditEmpModal(false)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5"
+                  >
+                    {saving ? "Saving..." : "Update Profile"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL 5: Reset Employee Password */}
+        {resetPasswordEmp && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <Key size={16} className="text-cyan-400" />
+                  Reset Password
+                </h3>
+                <button
+                  onClick={() => setResetPasswordEmp(null)}
+                  className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              <form onSubmit={handleResetPasswordSubmit} className="space-y-3.5 text-xs">
+                <div>
+                  <span className="text-slate-400 block mb-2">
+                    Resetting password for:{" "}
+                    <strong className="text-slate-200">{resetPasswordEmp.displayName}</strong> ({resetPasswordEmp.email})
+                  </span>
+                </div>
+
+                {resetPasswordError && (
+                  <div className="p-2.5 bg-rose-950/60 border border-rose-500/40 text-rose-300 rounded-lg text-xs">
+                    {resetPasswordError}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">New Password (min 8 chars) *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={newPasswordVal}
+                    onChange={(e) => setNewPasswordVal(e.target.value)}
+                    placeholder="Enter new password..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:border-cyan-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1">Confirm New Password *</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={confirmPasswordVal}
+                    onChange={(e) => setConfirmPasswordVal(e.target.value)}
+                    placeholder="Re-enter new password..."
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs focus:border-cyan-500 outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordEmp(null)}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={resettingPassword}
+                    className="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {resettingPassword ? "Resetting..." : "Confirm Password Reset"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Camera Permissions Manager Modal */}
+        {cameraPermEmp && (
+          <CameraPermissionManager
+            userId={cameraPermEmp.id}
+            userName={cameraPermEmp.displayName || "Employee"}
+            onClose={() => setCameraPermEmp(null)}
+          />
         )}
       </main>
     </AppLayout>

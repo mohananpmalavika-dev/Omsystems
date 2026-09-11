@@ -37,4 +37,22 @@ describe("hierarchical authorization", () => {
       ),
     ).toMatchObject({ allowed: false, reason: "explicitly_denied" });
   });
+
+  it("authorizes access via assigned organization scopeNodeId", () => {
+    const user = {
+      id: "test-user-multi-scope",
+      tenantId: "omsystems",
+      role: "operator",
+      organizations: [
+        { id: "uoa-1", scopeNodeId: "A005", isPrimary: true, scopeType: "branch" },
+        { id: "uoa-2", scopeNodeId: "A008", isPrimary: false, scopeType: "branch" },
+      ],
+    } as any;
+    const camera = store.nodes.get("camera-entrance")!;
+
+    expect(
+      authorize(user, "live:view", camera, store.nodes, store.grants),
+    ).toMatchObject({ allowed: true, reason: "allowed_by_grant", matchingScopeId: "A005" });
+  });
 });
+

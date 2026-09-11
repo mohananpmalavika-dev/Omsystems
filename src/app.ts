@@ -2585,6 +2585,15 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register security dashboard routes');
   }
 
+  // Register TPM 2.0 remote attestation routes
+  try {
+    const { registerAttestationRoutes } = await import("./routes/attestation.routes.js");
+    await registerAttestationRoutes(app, store);
+    app.log.info('TPM 2.0 Attestation routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register TPM 2.0 attestation routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");

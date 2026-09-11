@@ -9,6 +9,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@sentinel/contracts": resolve(__dirname, "./packages/contracts/src/index.ts"),
+      "@": resolve(__dirname, "./dashboard"),
     },
   },
   test: {

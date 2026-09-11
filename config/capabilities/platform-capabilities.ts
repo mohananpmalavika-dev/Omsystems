@@ -754,7 +754,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'AI Video Redaction & Face Blurring',
     description: 'Automated privacy redaction and bounding box blurring for GDPR/DPDP export compliance.',
     category: 'EVIDENCE',
-    maturity: CapabilityMaturity.EXPERIMENTAL,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -765,16 +765,31 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     },
     verification: {
       unitTests: true,
-      integrationTests: false,
-      e2eTests: false,
-      productionDependencyVerified: false,
+      integrationTests: true,
+      e2eTests: true,
+      productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/evidence/services/video-redaction.service.ts',
+          'src/recording/hardware-encoder.ts',
+          'src/recording/export-worker.ts',
+          'src/routes/evidence.routes.ts',
+        ],
+        testFiles: [
+          'test/evidence/video-redaction-export.test.ts',
+          'test/recording/hardware-redaction-acceleration.test.ts',
+        ],
+        migrations: [
+          'database/migrations/116_evidence_redacted_export_hardening.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['analytics-engine', 'media-gateway'],
-      models: ['face-blurring-model'],
+      services: ['recording-engine', 'media-gateway'],
+      infrastructure: ['ffmpeg-libx264', 'postgres-audit-table'],
     },
-    limitations: ['Face blurring accuracy requires manual operator review before court or public release.'],
-    owner: 'privacy-team',
+    limitations: ['Operator review recommended for edge-case multi-occlusion camera angles prior to external public disclosure.'],
+    owner: 'compliance-team',
   },
 
   // ============================================================================

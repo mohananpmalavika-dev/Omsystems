@@ -45,6 +45,14 @@ function createMockPool(data: MockTableData): Pool {
       return { rows: [{ locked: true }], rowCount: 1 };
     }
 
+    if (cleanSql.includes("FROM cameras") && !cleanSql.includes("COUNT(*) as count")) {
+      return { rows: [{ id: params[0] }], rowCount: 1 };
+    }
+
+    if (cleanSql.includes("FROM evidence_cases")) {
+      return { rows: [{ id: params[0] }], rowCount: 1 };
+    }
+
     // SELECT COUNT(*) as count, COALESCE(SUM(size_bytes), 0) as bytes FROM recording_segments
     if (cleanSql.includes("COUNT(*) as count") && cleanSql.includes("FROM recording_segments")) {
       const cameraId = params[0];
@@ -216,7 +224,7 @@ function createMockPool(data: MockTableData): Pool {
 
   const client = {
     query: executeQuery,
-    release: () => {},
+    release: () => { },
   };
 
   return {
@@ -311,7 +319,7 @@ describe("KryptoVision — Real FFmpeg Multi-Segment Export & Failure Recovery S
   afterEach(async () => {
     try {
       await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {}
+    } catch { }
   });
 
   // --------------------------------------------------------------------------

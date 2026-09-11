@@ -577,6 +577,22 @@ export const userApi = {
 
 };
 
+export const roleApi = {
+  list: () => fetchApi<{ data: any[] }>('/v1/roles'),
+  get: (id: string) => fetchApi<any>(`/v1/roles/${id}`),
+  create: (data: any) => fetchApi<any>('/v1/roles', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  update: (id: string, data: any) => fetchApi<any>(`/v1/roles/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  }),
+  delete: (id: string) => fetchApi<void>(`/v1/roles/${id}`, {
+    method: 'DELETE',
+  }),
+};
+
 export const deviceInventoryApi = {
   list: (branch?: string) => {
     const params = new URLSearchParams();
@@ -1765,11 +1781,34 @@ export const evidenceApi = {
   listExports: (caseId: string) =>
     fetchApi<{ data: any[] }>(`/v1/evidence/cases/${caseId}/exports`),
 
-  requestExport: (caseId: string, data: { format: string; reason: string }) =>
+  requestExport: (caseId: string, data: { format: string; reason: string; redaction?: any }) =>
     fetchApi<any>(`/v1/evidence/cases/${caseId}/exports`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  requestRedactedExport: (caseId: string, data: {
+    format?: string;
+    reason: string;
+    redaction: {
+      complianceStandard?: "GDPR" | "DPDP" | "HIPAA" | "CUSTOM";
+      faceBlur?: boolean;
+      plateBlur?: boolean;
+      applyStaticZones?: boolean;
+      blurStrength?: number;
+      mode?: "blur" | "pixelate" | "solid";
+      audioAction?: "PASS_THROUGH" | "MUTE" | "REMOVE_TRACK";
+      watermarkText?: string;
+      boundingBoxes?: Array<{ x: number; y: number; width: number; height: number; startTimeSec?: number; endTimeSec?: number; label?: string }>;
+    };
+  }) =>
+    fetchApi<any>(`/v1/evidence/cases/${caseId}/exports/redacted`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getRedactionAudit: (exportId: string) =>
+    fetchApi<any>(`/v1/evidence/exports/${exportId}/redaction-audit`),
 
   getExport: (exportId: string) =>
     fetchApi<any>(`/v1/evidence/exports/${exportId}`),

@@ -9,7 +9,7 @@ import {
   AttestationChallenge,
   AttestationError
 } from './attestation-provider.interface.js';
-import { LinuxTpmProvider } from './linux-tpm-provider.js';
+import { createPlatformTpmProvider } from './create-tpm-provider.js';
 
 export class AttestationClient {
   private provider: AttestationProvider;
@@ -21,12 +21,12 @@ export class AttestationClient {
     private config: {
       backendUrl: string;
       deviceId: string;
-      apiKey?: string;
-      provider?: AttestationProvider;
+      apiKey?: string | undefined;
+      provider?: AttestationProvider | undefined;
     }
   ) {
     this.deviceId = config.deviceId;
-    this.provider = config.provider || new LinuxTpmProvider();
+    this.provider = config.provider || createPlatformTpmProvider();
     
     this.api = axios.create({
       baseURL: `${config.backendUrl}/api/attestation`,

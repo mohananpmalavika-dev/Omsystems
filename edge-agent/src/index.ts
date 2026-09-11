@@ -245,6 +245,32 @@ if (config.LIVE_MEDIA_ENABLED) {
   lastMediaRuntimeStartAttemptAt = Date.now();
   edgeMediaRuntime = await startEdgeMediaRuntimeIfAvailable({ config, gateway: control, agentId, secrets });
 }
+
+// Hardware TPM 2.0 Attestation Initialization
+try {
+  const { AttestationClient } = await import("./security/attestation-client.js");
+  const attestationClient = new AttestationClient({
+    backendUrl: config.CONTROL_PLANE_URL,
+    deviceId: agentId,
+    apiKey: identity?.credential ?? config.EDGE_BRIDGE_SHARED_KEY,
+  });
+  const supported = await attestationClient.initialize();
+  if (supported) {
+    logger.info("Hardware TPM 2.0 Attestation initialized successfully", { agentId });
+    // Perform initial boot attestation
+    await attestationClient.attest().catch((err: any) => {
+      logger.warn("Initial hardware TPM attestation deferred", { error: err.message });
+    });
+    // Schedule periodic attestation (every 60 minutes)
+    attestationClient.startPeriodicAttestation(60);
+  } else {
+    logger.info("Hardware TPM 2.0 Attestation not supported on this platform", { agentId });
+  }
+} catch (attestErr) {
+  logger.warn("TPM 2.0 Attestation setup encountered an error", {
+    error: attestErr instanceof Error ? attestErr.message : String(attestErr),
+  });
+}
 const cameraHeartbeat = initializeCameraHeartbeat(
   config.CONTROL_PLANE_URL,
   branchId,

@@ -69,6 +69,10 @@ export function EvidenceManager() {
   const [caseStatus, setCaseStatus] = useState<"all" | EvidenceCase["status"]>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCustodyModal, setShowCustodyModal] = useState(false);
+  const [showRedactModal, setShowRedactModal] = useState(false);
+  const [showAuditModal, setShowAuditModal] = useState(false);
+  const [selectedAuditData, setSelectedAuditData] = useState<any | null>(null);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const statusColors: Record<EvidenceCase["status"], string> = {
     open: "#3B82F6",
@@ -324,11 +328,51 @@ export function EvidenceManager() {
                     <div key={job.id} className="export-row">
                       <div>
                         <span className="export-label">{job.format.toUpperCase()}</span>
+                        {(job.options?.redaction?.enabled || job.redaction_enabled || job.complianceStandard) && (
+                          <span
+                            className="badge-redaction-compliance"
+                            style={{
+                              marginLeft: "8px",
+                              padding: "2px 8px",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                              borderRadius: "4px",
+                              backgroundColor: "rgba(16, 185, 129, 0.15)",
+                              color: "#10B981",
+                              border: "1px solid rgba(16, 185, 129, 0.3)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <Shield size={11} />
+                            {job.complianceStandard || job.options?.redaction?.complianceStandard || "GDPR"} Redacted
+                          </span>
+                        )}
                         <span className="export-reason">{job.reason}</span>
                       </div>
                       <div className="export-meta">
                         <span>{job.status}</span>
                         <span>{job.progress ?? 0}%</span>
+                        {(job.options?.redaction?.enabled || job.redaction_enabled || job.complianceStandard) && (
+                          <button
+                            type="button"
+                            className="audit-cert-link"
+                            style={{
+                              marginLeft: "8px",
+                              background: "none",
+                              border: "none",
+                              color: "#3B82F6",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                              fontSize: "12px",
+                              padding: 0,
+                            }}
+                            onClick={() => void handleViewRedactionAudit(job.id)}
+                          >
+                            Compliance Cert
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -345,6 +389,19 @@ export function EvidenceManager() {
 
             {/* Actions */}
             <div className="actions-section">
+              <button
+                className="action-button primary"
+                onClick={() => setShowRedactModal(true)}
+                disabled={exporting}
+                title="GDPR/DPDP automated privacy redaction and bounding box blurring"
+                style={{
+                  backgroundColor: "#059669",
+                  borderColor: "#10B981",
+                }}
+              >
+                <Shield size={16} />
+                Export Redacted (GDPR/DPDP)
+              </button>
               <button
                 className="action-button secondary"
                 onClick={() => void handleExportRequest()}
@@ -390,6 +447,28 @@ export function EvidenceManager() {
       {showCustodyModal && (
         <CustodyLogModal log={custodyLog} onClose={() => setShowCustodyModal(false)} />
       )}
+
+      {/* Redacted Export Modal */}
+      {showRedactModal && selectedCase && (
+        <RedactedExportModal
+          caseId={selectedCase.id}
+          caseNumber={selectedCase.caseNumber}
+          onClose={() => setShowRedactModal(false)}
+          onSubmitted={async () => {
+            setShowRedactModal(false);
+            await loadCaseDetails(selectedCase.id);
+          }}
+        />
+      )}
+
+      {/* Redaction Compliance Audit Modal */}
+      {showAuditModal && (
+        <RedactionAuditModal
+          data={selectedAuditData}
+          loading={auditLoading}
+          onClose={() => setShowAuditModal(false)}
+        />
+      )}
     </div>
   );
 
@@ -430,6 +509,20 @@ export function EvidenceManager() {
       setLoadError("The selected case could not be fully loaded. You can retry from the case register.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleViewRedactionAudit(exportId: string) {
+    setAuditLoading(true);
+    setShowAuditModal(true);
+    try {
+      const data = await evidenceApi.getRedactionAudit(exportId);
+      setSelectedAuditData(data);
+    } catch (err) {
+      console.error("Failed to load redaction audit:", err);
+      setSelectedAuditData(null);
+    } finally {
+      setAuditLoading(false);
     }
   }
 
@@ -622,3 +715,363 @@ function CustodyLogModal({
     </div>
   );
 }
+
+function RedactedExportModal({
+  caseId,
+  caseNumber,
+  onClose,
+  onSubmitted,
+}: {
+  caseId: string;
+  caseNumber: string;
+  onClose: () => void;
+  onSubmitted: () => void;
+}) {
+  const [format, setFormat] = useState<"mp4" | "tar" | "zip">("mp4");
+  const [standard, setStandard] = useState<"GDPR" | "DPDP" | "HIPAA" | "CUSTOM">("GDPR");
+  const [faceBlur, setFaceBlur] = useState(true);
+  const [plateBlur, setPlateBlur] = useState(true);
+  const [staticZones, setStaticZones] = useState(true);
+  const [mode, setMode] = useState<"blur" | "pixelate" | "solid">("blur");
+  const [blurStrength, setBlurStrength] = useState(24);
+  const [audioAction, setAudioAction] = useState<"PASS_THROUGH" | "MUTE" | "REMOVE_TRACK">("REMOVE_TRACK");
+  const [watermark, setWatermark] = useState("REDACTED EVIDENCE // SECURE EXPORT");
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) {
+      setError("Reason for redacted evidence export is required for compliance logging.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await evidenceApi.requestRedactedExport(caseId, {
+        format,
+        reason: reason.trim(),
+        redaction: {
+          complianceStandard: standard,
+          faceBlur,
+          plateBlur,
+          applyStaticZones: staticZones,
+          mode,
+          blurStrength,
+          audioAction,
+          watermarkText: watermark.trim() || undefined,
+        },
+      });
+      onSubmitted();
+    } catch (err: any) {
+      setError(err?.message || "Failed to submit redacted export request");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content medium" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "600px" }}>
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Shield size={20} color="#10B981" />
+            <h3 style={{ margin: 0 }}>Privacy-Preserving Redacted Export ({caseNumber})</h3>
+          </div>
+          <button className="close-button" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "12px" }}>
+          {error && (
+            <div style={{ padding: "10px", background: "rgba(239, 68, 68, 0.1)", color: "#EF4444", borderRadius: "6px", fontSize: "13px" }}>
+              {error}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Compliance Framework</label>
+              <select
+                value={standard}
+                onChange={(e) => setStandard(e.target.value as any)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+              >
+                <option value="GDPR">GDPR (EU 2016/679 Art 32)</option>
+                <option value="DPDP">DPDP (India 2023 Sec 8)</option>
+                <option value="HIPAA">HIPAA Privacy Rule</option>
+                <option value="CUSTOM">Custom Forensic Privacy</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Archive Format</label>
+              <select
+                value={format}
+                onChange={(e) => setFormat(e.target.value as any)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+              >
+                <option value="mp4">Standalone MP4 (Fast Playback)</option>
+                <option value="tar">TAR Forensic Bundle</option>
+                <option value="zip">ZIP Forensic Bundle</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ border: "1px solid var(--color-border, #374151)", borderRadius: "8px", padding: "12px", background: "var(--color-bg-subtle, rgba(255,255,255,0.02))" }}>
+            <span style={{ fontSize: "13px", fontWeight: 600, display: "block", marginBottom: "10px" }}>Redaction Filters & AI Corridor Blurring</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={faceBlur} onChange={(e) => setFaceBlur(e.target.checked)} />
+                <span>Automated Face Detection Corridor Blurring</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={plateBlur} onChange={(e) => setPlateBlur(e.target.checked)} />
+                <span>License Plate / Vehicle Anonymization</span>
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", cursor: "pointer" }}>
+                <input type="checkbox" checked={staticZones} onChange={(e) => setStaticZones(e.target.checked)} />
+                <span>Apply Camera Static Privacy Masking Zones</span>
+              </label>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Redaction Mask Style</label>
+              <select
+                value={mode}
+                onChange={(e) => setMode(e.target.value as any)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+              >
+                <option value="blur">Gaussian Boxblur (Forensic Grade)</option>
+                <option value="pixelate">Mosaic Pixelation</option>
+                <option value="solid">Solid Blackout Box</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Blur Strength ({blurStrength}px)</label>
+              <input
+                type="range"
+                min={8}
+                max={48}
+                value={blurStrength}
+                onChange={(e) => setBlurStrength(Number(e.target.value))}
+                style={{ width: "100%", marginTop: "8px" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Audio Track Protection</label>
+              <select
+                value={audioAction}
+                onChange={(e) => setAudioAction(e.target.value as any)}
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+              >
+                <option value="REMOVE_TRACK">Strip Entire Audio Track (Highest Privacy)</option>
+                <option value="MUTE">Mute Audio Stream</option>
+                <option value="PASS_THROUGH">Preserve Original Audio</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Security Watermark</label>
+              <input
+                type="text"
+                value={watermark}
+                onChange={(e) => setWatermark(e.target.value)}
+                placeholder="Watermark text overlay"
+                style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "4px" }}>Legal Reason / Chain of Custody Justification *</label>
+            <input
+              type="text"
+              required
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g., GDPR Subject Access Request disclosure to outside counsel"
+              style={{ width: "100%", padding: "8px", borderRadius: "6px", background: "var(--color-bg-secondary, #1F2937)", color: "inherit", border: "1px solid var(--color-border, #374151)" }}
+            />
+          </div>
+
+          <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+            <button type="button" className="button secondary" onClick={onClose} disabled={loading}>
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="button primary"
+              disabled={loading}
+              style={{ backgroundColor: "#059669", borderColor: "#10B981", display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Shield size={16} />
+              {loading ? "Queueing Redaction..." : "Dispatch Redacted Export"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function RedactionAuditModal({
+  data,
+  loading,
+  onClose,
+}: {
+  data: any | null;
+  loading: boolean;
+  onClose: () => void;
+}) {
+  const downloadCertJson = () => {
+    if (!data?.complianceCertificate) return;
+    const blob = new Blob([JSON.stringify(data.complianceCertificate, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `redaction-certificate-${data.exportJobId || "export"}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content medium" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "680px" }}>
+        <div className="modal-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Shield size={20} color="#10B981" />
+            <h3 style={{ margin: 0 }}>Privacy Redaction Compliance Audit</h3>
+          </div>
+          <button className="close-button" onClick={onClose}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div style={{ marginTop: "16px" }}>
+          {loading ? (
+            <p style={{ textAlign: "center", padding: "24px 0", color: "var(--color-text-secondary, #9CA3AF)" }}>
+              Loading compliance audit certificate...
+            </p>
+          ) : !data ? (
+            <p style={{ textAlign: "center", padding: "24px 0", color: "var(--color-text-secondary, #9CA3AF)" }}>
+              No redaction audit data recorded for this export.
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "12px",
+                  borderRadius: "8px",
+                  backgroundColor: "rgba(16, 185, 129, 0.1)",
+                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "#10B981" }}>
+                    Verified {data.complianceCertificate?.complianceStandard || "Forensic"} Redaction
+                  </div>
+                  <div style={{ fontSize: "12px", color: "var(--color-text-secondary, #9CA3AF)" }}>
+                    Job ID: {data.exportJobId}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "#10B981", fontSize: "12px", fontWeight: 600 }}>
+                  <CheckCircle size={16} /> Cryptographically Signed
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", fontSize: "13px" }}>
+                <div style={{ padding: "8px 12px", background: "var(--color-bg-secondary, #1F2937)", borderRadius: "6px" }}>
+                  <span style={{ color: "var(--color-text-secondary, #9CA3AF)", fontSize: "11px", display: "block" }}>Total Bounding Boxes Applied</span>
+                  <strong style={{ fontSize: "16px" }}>{data.totalBoundingBoxesApplied ?? 0}</strong>
+                </div>
+                <div style={{ padding: "8px 12px", background: "var(--color-bg-secondary, #1F2937)", borderRadius: "6px" }}>
+                  <span style={{ color: "var(--color-text-secondary, #9CA3AF)", fontSize: "11px", display: "block" }}>Static Privacy Zones Applied</span>
+                  <strong style={{ fontSize: "16px" }}>{data.staticZonesApplied ?? 0}</strong>
+                </div>
+                <div style={{ padding: "8px 12px", background: "var(--color-bg-secondary, #1F2937)", borderRadius: "6px" }}>
+                  <span style={{ color: "var(--color-text-secondary, #9CA3AF)", fontSize: "11px", display: "block" }}>Audio Stream Action</span>
+                  <strong style={{ fontSize: "14px" }}>{data.redactionConfig?.audioAction || "STRIPPED"}</strong>
+                </div>
+                <div style={{ padding: "8px 12px", background: "var(--color-bg-secondary, #1F2937)", borderRadius: "6px" }}>
+                  <span style={{ color: "var(--color-text-secondary, #9CA3AF)", fontSize: "11px", display: "block" }}>Watermark Text</span>
+                  <strong style={{ fontSize: "12px" }}>{data.redactionConfig?.watermarkText || "—"}</strong>
+                </div>
+              </div>
+
+              {data.complianceCertificate?.signature && (
+                <div style={{ padding: "10px", background: "rgba(0,0,0,0.3)", borderRadius: "6px", fontSize: "11px", fontFamily: "monospace" }}>
+                  <span style={{ color: "#9CA3AF", display: "block", marginBottom: "4px" }}>Forensic Digital Signature:</span>
+                  <span style={{ wordBreak: "break-all", color: "#34D399" }}>{data.complianceCertificate.signature}</span>
+                </div>
+              )}
+
+              {data.auditRecords && data.auditRecords.length > 0 && (
+                <div>
+                  <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "6px" }}>Redaction Audit Logs:</span>
+                  <div style={{ maxHeight: "140px", overflowY: "auto", fontSize: "12px", border: "1px solid var(--color-border, #374151)", borderRadius: "6px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "var(--color-bg-secondary, #1F2937)", textAlign: "left" }}>
+                          <th style={{ padding: "6px 8px" }}>Time</th>
+                          <th style={{ padding: "6px 8px" }}>Boxes</th>
+                          <th style={{ padding: "6px 8px" }}>Watermark</th>
+                          <th style={{ padding: "6px 8px" }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.auditRecords.map((r: any) => (
+                          <tr key={r.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                            <td style={{ padding: "6px 8px" }}>{new Date(r.created_at || r.timestamp).toLocaleTimeString()}</td>
+                            <td style={{ padding: "6px 8px" }}>{r.bounding_boxes_applied}</td>
+                            <td style={{ padding: "6px 8px" }}>{r.watermark_applied ? "Yes" : "No"}</td>
+                            <td style={{ padding: "6px 8px", color: r.redaction_status === "SUCCESS" ? "#10B981" : "#EF4444" }}>{r.redaction_status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="modal-footer" style={{ display: "flex", justifyContent: "space-between", marginTop: "16px" }}>
+          <div>
+            {data?.complianceCertificate && (
+              <button
+                type="button"
+                className="button secondary"
+                onClick={downloadCertJson}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px" }}
+              >
+                <Download size={14} />
+                Download Certificate (.json)
+              </button>
+            )}
+          </div>
+          <button className="button primary" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+

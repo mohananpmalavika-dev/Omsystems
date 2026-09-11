@@ -398,10 +398,6 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
       }
-      const installer = streamInstaller(
-        executablePath,
-        Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8"),
-      );
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(body.agentName, version, packageOptions, body.activationCode), "utf8");
 

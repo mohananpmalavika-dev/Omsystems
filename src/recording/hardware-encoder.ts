@@ -19,12 +19,17 @@ export interface BoundingBoxRedaction {
   startTimeSec?: number;
   endTimeSec?: number;
   blurRadius?: number;
+  mode?: "blur" | "pixelate" | "solid";
+  label?: string;
 }
 
 export interface RedactionFilterOptions {
   boundingBoxes?: BoundingBoxRedaction[];
-  targets?: Array<"FACES" | "LICENSE_PLATES" | "PEOPLE" | "CUSTOM">;
+  targets?: Array<"FACES" | "LICENSE_PLATES" | "PEOPLE" | "STATIC_ZONES" | "CUSTOM">;
   blurStrength?: number;
+  mode?: "blur" | "pixelate" | "solid";
+  watermarkText?: string;
+  audioAction?: "PASS_THROUGH" | "MUTE" | "REMOVE_TRACK";
   videoWidth?: number;
   videoHeight?: number;
 }
@@ -178,30 +183,73 @@ export class HardwareEncoderDetector {
  */
 export class RedactionFilterGraphBuilder {
   /**
+   * Alias for buildFilterGraph for filter complex invocations
+   */
+  public static buildFilterComplex(options: RedactionFilterOptions): string {
+    return RedactionFilterGraphBuilder.buildFilterGraph(options);
+  }
+
+  /**
    * Builds the filter graph string for FFmpeg `-vf` or `-filter_complex`
    */
   public static buildFilterGraph(options: RedactionFilterOptions): string {
     const boxes = options.boundingBoxes || [];
     const blurRadius = options.blurStrength || 15;
+    const defaultMode = options.mode || "blur";
+
+    const getFilterForBox = (box: BoundingBoxRedaction, w: number, h: number): string => {
+      const mode = box.mode || defaultMode;
+      if (mode === "solid") {
+        return `drawbox=x=0:y=0:w=${w}:h=${h}:color=black:t=fill`;
+      }
+      const requestedRadius = box.blurRadius || blurRadius;
+      const maxLuma = Math.max(2, Math.floor(Math.min(w, h) / 2) - 1);
+      const maxChroma = Math.max(1, Math.floor(Math.min(w, h) / 4) - 1);
+      const lumaR = Math.min(requestedRadius, maxLuma);
+      const chromaR = Math.min(requestedRadius, maxChroma);
+
+      if (mode === "pixelate") {
+        return `boxblur=luma_radius=${lumaR}:luma_power=3:chroma_radius=${chromaR}`;
+      }
+      return `boxblur=luma_radius=${lumaR}:luma_power=2:chroma_radius=${chromaR}`;
+    };
+
+    const formatWatermarkFilter = (text: string): string => {
+      const clean = text.replace(/'/g, "\\'").replace(/:/g, "\\:");
+      const fontOpt = process.platform === "win32" ? "fontfile=/Windows/Fonts/arial.ttf:" : "";
+      return `drawtext=${fontOpt}text='${clean}':fontcolor=white@0.85:fontsize=16:x=24:y=h-44:box=1:boxcolor=black@0.6`;
+    };
 
     // If no specific bounding boxes are provided, construct a standard privacy region mask
     if (boxes.length === 0) {
-      // Default privacy mask: 4-corner margin blur / top-third face zone blur
-      return `boxblur=luma_radius=${blurRadius}:luma_power=2`;
+      const baseFilter = `boxblur=luma_radius=${blurRadius}:luma_power=2`;
+      if (options.watermarkText) {
+        return `${baseFilter},${formatWatermarkFilter(options.watermarkText)}`;
+      }
+      return baseFilter;
     }
 
     if (boxes.length === 1) {
       const box = boxes[0]!;
+      const bw = Math.round(box.width);
+      const bh = Math.round(box.height);
+      const bx = Math.round(box.x);
+      const by = Math.round(box.y);
       const enableCondition = this.buildEnableExpression(box.startTimeSec, box.endTimeSec);
       const conditionStr = enableCondition ? `:enable='${enableCondition}'` : "";
+      const boxFilter = getFilterForBox(box, bw, bh);
 
-      // Single box: crop area, blur it, and overlay it back on top of original stream
-      return (
+      const targetOut = options.watermarkText ? "pre_wm" : "outv";
+      let graph =
         `[0:v]split=2[orig][crop_src];` +
-        `[crop_src]crop=${Math.round(box.width)}:${Math.round(box.height)}:${Math.round(box.x)}:${Math.round(box.y)},` +
-        `boxblur=luma_radius=${blurRadius}:luma_power=2[blurred];` +
-        `[orig][blurred]overlay=${Math.round(box.x)}:${Math.round(box.y)}${conditionStr}[outv]`
-      );
+        `[crop_src]crop=${bw}:${bh}:${bx}:${by},` +
+        `${boxFilter}[blurred];` +
+        `[orig][blurred]overlay=${bx}:${by}${conditionStr}[${targetOut}]`;
+
+      if (options.watermarkText) {
+        graph += `;[${targetOut}]${formatWatermarkFilter(options.watermarkText)}[outv]`;
+      }
+      return graph;
     }
 
     // Multi-box daisy chain
@@ -214,17 +262,26 @@ export class RedactionFilterGraphBuilder {
     let lastOverlay = "orig";
     for (let i = 0; i < boxes.length; i++) {
       const box = boxes[i]!;
+      const bw = Math.round(box.width);
+      const bh = Math.round(box.height);
+      const bx = Math.round(box.x);
+      const by = Math.round(box.y);
       const enableCondition = this.buildEnableExpression(box.startTimeSec, box.endTimeSec);
       const conditionStr = enableCondition ? `:enable='${enableCondition}'` : "";
       const isLast = i === boxes.length - 1;
-      const nextOverlay = isLast ? "outv" : `ov_${i}`;
+      const nextOverlay = isLast ? (options.watermarkText ? "pre_wm" : "outv") : `ov_${i}`;
+      const boxFilter = getFilterForBox(box, bw, bh);
 
       graph +=
-        `[crop_${i}]crop=${Math.round(box.width)}:${Math.round(box.height)}:${Math.round(box.x)}:${Math.round(box.y)},` +
-        `boxblur=luma_radius=${blurRadius}:luma_power=2[blur_${i}];` +
-        `[${lastOverlay}][blur_${i}]overlay=${Math.round(box.x)}:${Math.round(box.y)}${conditionStr}[${nextOverlay}];`;
+        `[crop_${i}]crop=${bw}:${bh}:${bx}:${by},` +
+        `${boxFilter}[blur_${i}];` +
+        `[${lastOverlay}][blur_${i}]overlay=${bx}:${by}${conditionStr}[${nextOverlay}];`;
 
       lastOverlay = nextOverlay;
+    }
+
+    if (options.watermarkText) {
+      graph += `[pre_wm]${formatWatermarkFilter(options.watermarkText)}[outv];`;
     }
 
     // Remove trailing semicolon
