@@ -325,8 +325,11 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     const auth = await authenticateRequest(request);
     const { reportId } = request.params as any;
 
-    // Would fetch from store
-    return { report: {} };
+    const report = await investigationService.getReport(reportId);
+    if (!report) {
+      return reply.code(404).send({ error: "report_not_found", message: `Investigation report ${reportId} not found` });
+    }
+    return { report };
   });
 
   /**
@@ -370,20 +373,60 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
 
   /**
    * GET /v1/ai/investigation-reports/:reportId/export
-   * Export report
+   * Export report (PDF, JSON, HTML)
    */
   app.get("/v1/ai/investigation-reports/:reportId/export", async (request, reply) => {
-    const auth = await authenticateRequest(request);
+    await authenticateRequest(request);
     const { reportId } = request.params as any;
     const { format } = request.query as any;
 
-    return {
-      feature: 'investigation_report_export',
-      status: 'unavailable',
-      reason: 'feature_not_implemented',
-      requestedFormat: format,
-      reportId,
-    };
+    const targetFormat = (String(format || "pdf").toLowerCase() === "json"
+      ? "json"
+      : String(format || "").toLowerCase() === "html"
+      ? "html"
+      : "pdf") as "pdf" | "json" | "html";
+
+    try {
+      const exported = await investigationService.exportReport(reportId, targetFormat);
+      reply.header("content-type", exported.contentType);
+      reply.header("content-disposition", `attachment; filename="${exported.filename}"`);
+      return reply.send(exported.data);
+    } catch (err: any) {
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: "report_not_found", message: err.message });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * POST /v1/ai/investigation-reports/:reportId/export
+   * Export report alternative endpoint
+   */
+  app.post("/v1/ai/investigation-reports/:reportId/export", async (request, reply) => {
+    await authenticateRequest(request);
+    const { reportId } = request.params as any;
+    const body = (request.body as any) || {};
+    const query = (request.query as any) || {};
+    const rawFormat = body.format || query.format || "pdf";
+
+    const targetFormat = (String(rawFormat).toLowerCase() === "json"
+      ? "json"
+      : String(rawFormat).toLowerCase() === "html"
+      ? "html"
+      : "pdf") as "pdf" | "json" | "html";
+
+    try {
+      const exported = await investigationService.exportReport(reportId, targetFormat);
+      reply.header("content-type", exported.contentType);
+      reply.header("content-disposition", `attachment; filename="${exported.filename}"`);
+      return reply.send(exported.data);
+    } catch (err: any) {
+      if (err?.message?.includes("not found")) {
+        return reply.code(404).send({ error: "report_not_found", message: err.message });
+      }
+      throw err;
+    }
   });
 
   // ============ EVIDENCE PACKAGES ============

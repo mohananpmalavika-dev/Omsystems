@@ -29,22 +29,52 @@ export async function registerOfflineSyncRoutes(app: FastifyInstance) {
       })),
     }).parse(request.body);
 
-    const ack = cloudSyncReplayer.ingestSyncBatch(body as any);
+    const ack = await cloudSyncReplayer.ingestSyncBatch(body as any);
     return reply.send({ success: true, data: ack });
   });
 
-  // 2. Query Branch Connectivity & Backlog State
+  // 2. Query Branch Connectivity & Backlog State (Migration 073)
   app.get('/v1/edge/sync/status/:branchId', async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as { branchId: string };
-    const state = localEdgeSurvivability.getBranchState(params.branchId);
+    const state = await cloudSyncReplayer.getBranchConnectivityStatus(params.branchId);
     return reply.send({ success: true, data: state });
   });
 
-  // 3. Trigger Outbox Sync Replay
+  // 3. Query Branch Backlog Metrics (Migration 073)
+  app.get('/v1/edge/sync/metrics/:branchId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { branchId: string };
+    const metrics = await cloudSyncReplayer.getBranchBacklogMetrics(params.branchId);
+    return reply.send({ success: true, data: metrics });
+  });
+
+  // 4. Query Cloud Sync Ingest Journal (Migration 073)
+  app.get('/v1/edge/sync/journal/:branchId', async (request: FastifyRequest, reply: FastifyReply) => {
+    const params = request.params as { branchId: string };
+    const journal = await cloudSyncReplayer.listIngestJournal(params.branchId);
+    return reply.send({ success: true, data: journal });
+  });
+
+  // 5. Ingest Bulk Video Backfill Chunk
+  app.post('/v1/edge/sync/video-chunk', async (request: FastifyRequest, reply: FastifyReply) => {
+    const body = z.object({
+      segmentId: z.string(),
+      branchId: z.string(),
+      cameraId: z.string(),
+      startTime: z.string(),
+      endTime: z.string(),
+      sizeBytes: z.number(),
+      sha256: z.string(),
+      dataBase64: z.string().optional(),
+    }).parse(request.body);
+
+    const result = await cloudSyncReplayer.ingestVideoChunk(body);
+    return reply.send({ success: true, data: result });
+  });
+
+  // 6. Trigger Outbox Sync Replay
   app.post('/v1/edge/sync/trigger/:branchId', async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as { branchId: string };
     const result = await cloudSyncReplayer.replayPendingBacklogs(params.branchId);
     return reply.send({ success: true, data: result });
   });
-
 }

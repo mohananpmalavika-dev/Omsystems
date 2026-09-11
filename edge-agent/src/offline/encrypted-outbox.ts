@@ -7,6 +7,15 @@ export interface OutboxRequest {
   method: "POST";
   body: string;
   headers?: Record<string, string>;
+  payloadType?: "json" | "video_chunk" | "telemetry";
+  chunkMetadata?: {
+    segmentId: string;
+    cameraId: string;
+    startTime: string;
+    endTime: string;
+    sizeBytes: number;
+    sha256: string;
+  };
 }
 
 interface OutboxItem extends OutboxRequest {
@@ -51,6 +60,32 @@ export class EncryptedOutbox {
     this.items.push({ ...request, id: randomUUID(), queuedAt: new Date().toISOString(), attempts: 0 });
     await this.persist();
     return this.items.length;
+  }
+
+  async enqueueVideoChunk(chunk: {
+    segmentId: string;
+    cameraId: string;
+    startTime: string;
+    endTime: string;
+    sizeBytes: number;
+    sha256: string;
+    dataBase64: string;
+  }) {
+    return this.enqueue({
+      path: "/v1/edge/sync/video-chunk",
+      method: "POST",
+      body: JSON.stringify(chunk),
+      headers: { "content-type": "application/json" },
+      payloadType: "video_chunk",
+      chunkMetadata: {
+        segmentId: chunk.segmentId,
+        cameraId: chunk.cameraId,
+        startTime: chunk.startTime,
+        endTime: chunk.endTime,
+        sizeBytes: chunk.sizeBytes,
+        sha256: chunk.sha256,
+      },
+    });
   }
 
   async flush(sender: (request: OutboxRequest) => Promise<void>, limit = 100) {

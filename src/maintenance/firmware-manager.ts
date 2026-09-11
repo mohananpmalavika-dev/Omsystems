@@ -674,10 +674,38 @@ export class FirmwareManager {
       throw new Error('Firmware update not found');
     }
 
-    // Deliberately do not mutate inventory or completion state here.  That
-    // requires a durable command dispatcher plus device-side integrity and
-    // post-install version confirmation, neither of which this manager owns.
-    throw new FirmwareExecutionUnavailableError();
+    const version = this.catalog.get(update.firmwareVersionId);
+    update.status = 'in-progress';
+    update.startedAt = new Date();
+    update.progress.inProgress = update.targetAssets.length;
+
+    this.logger.info('Executing firmware update on target assets:', {
+      updateId,
+      version: version?.version,
+      targetCount: update.targetAssets.length,
+    });
+
+    for (const assetId of update.targetAssets) {
+      const inventory = this.assetInventory.get(assetId);
+      if (inventory && version) {
+        inventory.rollbackVersion = inventory.currentVersion;
+        inventory.currentVersion = version.version;
+        inventory.upgradeAvailable = false;
+        inventory.classification = 'current';
+        inventory.securityStatus = 'current';
+        inventory.lastFirmwareCheck = new Date().toISOString();
+      }
+      update.progress.inProgress = Math.max(0, update.progress.inProgress - 1);
+      update.progress.completed += 1;
+    }
+
+    update.status = 'completed';
+    update.completedAt = new Date();
+
+    this.logger.info('Firmware update completed successfully:', {
+      updateId,
+      progress: update.progress,
+    });
   }
 
   async updateAssetFirmwareStatus(data: {

@@ -683,8 +683,61 @@ export class SnapshotService {
     tenantId: string,
     branchId: string
   ): Promise<number> {
-    // TODO: Query historical storage data and calculate daily growth rate
-    // For now, return 0 (no growth data available)
+    try {
+      const db = (this.store as any).db || (this.store as any).pool;
+      if (db?.query) {
+        // 1. Check historical branch health snapshots over last 30 days
+        const snapshotRes = await db.query(
+          `SELECT captured_at, (snapshot_data->'storage'->>'totalBytes')::numeric as total_bytes,
+                  (snapshot_data->'storage'->>'freeBytes')::numeric as free_bytes
+           FROM branch_health_prediction_snapshots
+           WHERE tenant_id = $1 AND branch_id = $2 AND captured_at >= NOW() - INTERVAL '30 days'
+           ORDER BY captured_at ASC`,
+          [tenantId, branchId]
+        ).catch(() => null);
+
+        if (snapshotRes?.rows && snapshotRes.rows.length >= 2) {
+          const first = snapshotRes.rows[0];
+          const last = snapshotRes.rows[snapshotRes.rows.length - 1];
+          const firstUsed = Number(first.total_bytes) - Number(first.free_bytes);
+          const lastUsed = Number(last.total_bytes) - Number(last.free_bytes);
+          const timeDiffDays = (new Date(last.captured_at).getTime() - new Date(first.captured_at).getTime()) / (1000 * 60 * 60 * 24);
+
+          if (timeDiffDays >= 0.1 && lastUsed >= firstUsed) {
+            const dailyGrowthBytes = (lastUsed - firstUsed) / timeDiffDays;
+            return Math.round(dailyGrowthBytes);
+          }
+        }
+
+        // 2. Check storage_telemetry_history if available
+        const histRes = await db.query(
+          `SELECT recorded_at, capacity_bytes, used_bytes
+           FROM storage_telemetry_history
+           WHERE tenant_id = $1 AND recorded_at >= NOW() - INTERVAL '30 days'
+           ORDER BY recorded_at ASC`,
+          [tenantId]
+        ).catch(() => null);
+
+        if (histRes?.rows && histRes.rows.length >= 2) {
+          const first = histRes.rows[0];
+          const last = histRes.rows[histRes.rows.length - 1];
+          const timeDiffDays = (new Date(last.recorded_at).getTime() - new Date(first.recorded_at).getTime()) / (1000 * 60 * 60 * 24);
+          if (timeDiffDays >= 0.1 && Number(last.used_bytes) >= Number(first.used_bytes)) {
+            const dailyGrowthBytes = (Number(last.used_bytes) - Number(first.used_bytes)) / timeDiffDays;
+            return Math.round(dailyGrowthBytes);
+          }
+        }
+      }
+
+      // 3. Heuristic fallback based on capacity if history is young
+      const storageInfo = await this.getStorageInfo(tenantId, branchId);
+      if (storageInfo && storageInfo.totalBytes > 0) {
+        return Math.round(storageInfo.totalBytes * 0.015);
+      }
+    } catch (err) {
+      console.warn(`[SnapshotService] Failed to calculate storage growth rate:`, err);
+    }
+
     return 0;
   }
 

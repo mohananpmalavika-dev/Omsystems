@@ -12,6 +12,7 @@
  * @see DEVICE_MANAGEMENT_PRODUCTION_GUIDE.md for complete documentation
  */
 
+import { Socket } from 'node:net';
 import type { ExtendedControlPlaneStore } from '../control-plane-store.js';
 
 interface IpAssignmentInput {
@@ -183,19 +184,49 @@ export class IpamService {
       return dbConflicts;
     }
 
-    // TODO: Implement network probing via edge agent
-    // const edgeAgent = await this.store.getBranchEdgeAgent(branchId);
-    // if (edgeAgent) {
-    //   const probe = await this.edgeService.probeIpAddress(edgeAgent.id, ipAddress);
-    //   if (probe.exists) {
-    //     return [{
-    //       deviceId: 'unknown',
-    //       detected: true
-    //     }];
-    //   }
-    // }
+    // Network probe: check if IP is actively responding on common camera/device ports
+    const liveDetected = await this.probeHostTcp(ipAddress).catch(() => false);
+    if (liveDetected) {
+      return [{
+        deviceId: 'unmanaged-network-device',
+        deviceName: `Host actively responding on ${ipAddress}`,
+        detected: true,
+      }];
+    }
 
     return [];
+  }
+
+  /**
+   * Probe host across common IP camera and device ports (80, 554, 8000, 8080, 443, 22)
+   */
+  private async probeHostTcp(
+    host: string,
+    ports: number[] = [80, 554, 8000, 8080, 443],
+    timeoutMs = 1200
+  ): Promise<boolean> {
+    const probePort = (port: number) =>
+      new Promise<boolean>((resolve) => {
+        const socket = new Socket();
+        let finished = false;
+        const done = (result: boolean) => {
+          if (finished) return;
+          finished = true;
+          socket.destroy();
+          resolve(result);
+        };
+        socket.setTimeout(timeoutMs);
+        socket.once('connect', () => done(true));
+        socket.once('timeout', () => done(false));
+        socket.once('error', () => done(false));
+        socket.connect(port, host);
+      });
+
+    for (const port of ports) {
+      const alive = await probePort(port).catch(() => false);
+      if (alive) return true;
+    }
+    return false;
   }
 
   /**

@@ -6,7 +6,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { getHealthMonitoring } from "../maintenance/health-monitor.js";
-import { getReportingEngine } from "../maintenance/reporting-engine.js";
+import { getReportingEngine, initReportingEngine } from "../maintenance/reporting-engine.js";
 import { getFirmwareManager } from "../maintenance/firmware-manager.js";
 import { getPredictiveEngine } from "../maintenance/predictive-engine.js";
 
@@ -83,11 +83,9 @@ export async function registerMaintenanceAdvancedRoutes(
     request,
     reply
   ) => {
-    // TODO: Implement PDF export once reportingEngine has exportReportToPDF method
-    return reply.status(501).send({ error: "PDF export not yet implemented" });
-    /*
-    const reportingEngine = getReportingEngine();
-    const report = reportingEngine.getReport(request.params.reportId);
+    const { reportId } = request.params as { reportId: string };
+    const reportingEngine = getReportingEngine() || initReportingEngine(store, app.log);
+    const report = reportingEngine.getReport(reportId);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
@@ -98,29 +96,25 @@ export async function registerMaintenanceAdvancedRoutes(
       `attachment; filename="report-${report.reportId}.pdf"`
     );
     return reply.send(pdfBuffer);
-    */
   });
 
   app.get("/v1/maintenance/reports/:reportId/export/json", async (
     request,
     reply
   ) => {
-    // TODO: Implement JSON export once reportingEngine has exportReportToJSON method
-    return reply.status(501).send({ error: "JSON export not yet implemented" });
-    /*
-    const reportingEngine = getReportingEngine();
-    const report = reportingEngine.getReport(request.params.reportId);
+    const { reportId } = request.params as { reportId: string };
+    const reportingEngine = getReportingEngine() || initReportingEngine(store, app.log);
+    const report = reportingEngine.getReport(reportId);
     if (!report) {
       return reply.status(404).send({ error: "Report not found" });
     }
     const jsonString = await reportingEngine.exportReportToJSON(report);
-    reply.header("Content-Type", "application/json");
+    reply.header("Content-Type", "application/json; charset=utf-8");
     reply.header(
       "Content-Disposition",
       `attachment; filename="report-${report.reportId}.json"`
     );
     return reply.send(jsonString);
-    */
   });
 
   // NOTE: GET /v1/maintenance/reports moved to maintenance-reports.routes.ts to avoid duplication

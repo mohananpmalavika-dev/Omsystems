@@ -324,6 +324,35 @@ export class DeviceService {
   }
 
   /**
+   * tds:SetUser
+   */
+  async setUser(options: {
+    username: string;
+    password?: string;
+    userLevel?: "Administrator" | "Operator" | "User" | "Anonymous";
+  }): Promise<void> {
+    const usernameEscaped = options.username.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const passwordEscaped = (options.password || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const userLevel = options.userLevel || "Administrator";
+
+    const bodyXml = `
+<tds:SetUser xmlns:tds="http://www.onvif.org/ver10/device/wsdl" xmlns:tt="http://www.onvif.org/ver10/schema">
+  <tds:User>
+    <tt:Username>${usernameEscaped}</tt:Username>
+    <tt:Password>${passwordEscaped}</tt:Password>
+    <tt:UserLevel>${userLevel}</tt:UserLevel>
+  </tds:User>
+</tds:SetUser>`.trim();
+
+    await this.soap.request({
+      endpoint: this.endpoint,
+      action: "http://www.onvif.org/ver10/device/wsdl/SetUser",
+      bodyXml,
+      credentials: this.credentials,
+    });
+  }
+
+  /**
    * tds:GetNetworkInterfaces
    */
   async getNetworkInterfaces(): Promise<OnvifNetworkInterface[]> {

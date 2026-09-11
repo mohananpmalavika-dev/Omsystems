@@ -206,6 +206,33 @@ export class PredictionService {
         bp.prediction && bp.prediction.horizonHours === 168 && bp.prediction.probability > 0.5
     ).length;
 
+    // Calculate historical risk trends across branches
+    let riskIncreasing = 0;
+    let riskDecreasing = 0;
+    let riskStable = 0;
+
+    for (const { branch, prediction } of branchPredictions) {
+      if (!prediction) {
+        riskStable++;
+        continue;
+      }
+      const history = await this.getBranchRiskHistory(branch.id, user.tenantId, 14).catch(() => null);
+      const pastPredictions = history?.predictions || [];
+      const prior = pastPredictions.length >= 2 ? pastPredictions[pastPredictions.length - 2] : undefined;
+      if (prior) {
+        const diff = prediction.probability - prior.probability;
+        if (diff > 0.05) {
+          riskIncreasing++;
+        } else if (diff < -0.05) {
+          riskDecreasing++;
+        } else {
+          riskStable++;
+        }
+      } else {
+        riskStable++;
+      }
+    }
+
     return {
       tenantId: user.tenantId,
       generatedAt: new Date(),
@@ -216,9 +243,9 @@ export class PredictionService {
       predictedFailures72h,
       predictedFailures7d,
       trends: {
-        riskIncreasing: 0, // TODO: Calculate from historical
-        riskDecreasing: 0,
-        riskStable: 0,
+        riskIncreasing,
+        riskDecreasing,
+        riskStable,
       },
     };
   }
