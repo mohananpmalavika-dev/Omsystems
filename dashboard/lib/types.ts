@@ -242,6 +242,7 @@ export interface AlertNotificationPolicy {
   escalationAfterSeconds: Partial<Record<AlertSeverity, number>>;
   smsTemplates?: Partial<Record<"P1" | "P2", string>>;
   smsTemplateIds?: Partial<Record<"P1" | "P2", string>>;
+  policyVersion?: number;
   updatedAt: string;
   policyVersion?: number;
 }
