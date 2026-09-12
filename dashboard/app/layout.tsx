@@ -11,6 +11,16 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",
   description: "Multi-branch CCTV monitoring and security operations",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "KryptonVision",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 const THEME_SCRIPT = `
@@ -31,6 +41,15 @@ const THEME_SCRIPT = `
     document.documentElement.setAttribute('data-theme', 'light');
     document.documentElement.classList.add('light');
   }
+
+  // Register PWA Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+        console.debug('ServiceWorker registration:', err);
+      });
+    });
+  }
 })();
 `;
 
@@ -40,6 +59,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#0f172a" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="KryptonVision" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body suppressHydrationWarning>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw, Upload, CheckCircle2 } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw, Upload, CheckCircle2, Download, Laptop, Smartphone, Check } from "lucide-react";
 import QRCode from "qrcode";
 import { authApi, organizationApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,6 +34,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const [faceCameraActive, setFaceCameraActive] = useState(false);
   const [faceCameraReady, setFaceCameraReady] = useState(false);
   const [faceCameraError, setFaceCameraError] = useState<string | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [activeInstallTab, setActiveInstallTab] = useState<"desktop" | "ios" | "android">("desktop");
   const [loginUrl, setLoginUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -123,6 +128,69 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       );
     }
   }, [showQR, loginUrl]);
+
+  // Listen for PWA installation events and detect standalone application mode
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const checkStandalone = () => {
+        const isStandaloneMode =
+          window.matchMedia("(display-mode: standalone)").matches ||
+          (window.navigator as any).standalone === true ||
+          document.referrer.includes("android-app://");
+        setIsStandalone(isStandaloneMode);
+        if (isStandaloneMode) setIsInstalled(true);
+      };
+
+      checkStandalone();
+
+      const handleBeforeInstallPrompt = (e: Event) => {
+        e.preventDefault();
+        setDeferredPrompt(e);
+      };
+
+      const handleAppInstalled = () => {
+        setIsInstalled(true);
+        setDeferredPrompt(null);
+        setShowInstallModal(false);
+      };
+
+      window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+      window.addEventListener("appinstalled", handleAppInstalled);
+
+      const ua = navigator.userAgent || "";
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        setActiveInstallTab("ios");
+      } else if (/Android/i.test(ua)) {
+        setActiveInstallTab("android");
+      } else {
+        setActiveInstallTab("desktop");
+      }
+
+      return () => {
+        window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+        window.removeEventListener("appinstalled", handleAppInstalled);
+      };
+    }
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      try {
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice && choice.outcome === "accepted") {
+          setIsInstalled(true);
+          setDeferredPrompt(null);
+          setShowInstallModal(false);
+        }
+      } catch (err) {
+        console.warn("PWA prompt error:", err);
+        setShowInstallModal(true);
+      }
+    } else {
+      setShowInstallModal(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -447,7 +515,22 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <div style={{ display: "flex", justifyContent: "flex-end", width: "100%", marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "6px" }}>
+            {isStandalone ? (
+              <span className="pwa-status-badge standalone" title="Running in standalone desktop/mobile app mode">
+                <Check size={12} /> App Mode
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                className="pwa-quick-install-btn"
+                title="Install as Desktop or Mobile Application"
+              >
+                <Download size={13} />
+                <span>Install App</span>
+              </button>
+            )}
             <ThemeSwitcher />
           </div>
           <div className="login-brand">
@@ -687,6 +770,32 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </p>
         </div>
 
+        {/* PWA Application Installation Banner */}
+        <div className="login-install-section">
+          <div className="install-banner">
+            <div className="install-banner-icon">
+              <img src="/icon-192.png" alt="KryptonVision App" className="install-app-icon" />
+            </div>
+            <div className="install-banner-text">
+              <h4>{isStandalone ? "KryptonVision App Active" : "Install KryptonVision Application"}</h4>
+              <p>
+                {isStandalone
+                  ? "You are currently running in standalone application mode."
+                  : "Install on Windows, Mac, Android, or iOS as a native standalone app."}
+              </p>
+            </div>
+            {!isStandalone && (
+              <button
+                type="button"
+                onClick={handleInstallClick}
+                className="btn-install-pwa"
+              >
+                <Download size={13} /> Install Now
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="login-qr-section">
           <button
             type="button"
@@ -731,6 +840,213 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           <a href="/terms">Terms of Service</a>
         </div>
       </footer>
+
+      {/* Interactive Install Guide Modal */}
+      {showInstallModal && (
+        <div className="pwa-modal-overlay" onClick={() => setShowInstallModal(false)}>
+          <div className="pwa-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80">
+              <div className="flex items-center gap-3">
+                <img src="/icon-192.png" alt="KryptonVision" className="w-8 h-8 rounded-lg shadow-sm" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Install KryptonVision Application
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Enterprise Security Command Center
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowInstallModal(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold px-2 py-1 rounded-md"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Platform Selection Tabs */}
+            <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-950/50 p-1.5 gap-1.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveInstallTab("desktop")}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                  activeInstallTab === "desktop"
+                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Laptop size={14} /> Desktop (PC/Mac)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInstallTab("ios")}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                  activeInstallTab === "ios"
+                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Smartphone size={14} /> iOS (iPhone)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInstallTab("android")}
+                className={`flex-1 py-1.5 px-2 rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors ${
+                  activeInstallTab === "android"
+                    ? "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                }`}
+              >
+                <Smartphone size={14} /> Android
+              </button>
+            </div>
+
+            {/* Tab Instructions Content */}
+            <div className="p-5 space-y-4 text-xs">
+              {activeInstallTab === "desktop" && (
+                <div className="space-y-3">
+                  {deferredPrompt && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-blue-900 dark:text-blue-200 text-xs">Browser Ready</p>
+                        <p className="text-[11px] text-blue-700 dark:text-blue-300">Click to launch the 1-click installer</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (deferredPrompt) {
+                            await deferredPrompt.prompt();
+                            const res = await deferredPrompt.userChoice;
+                            if (res?.outcome === "accepted") {
+                              setIsInstalled(true);
+                              setDeferredPrompt(null);
+                              setShowInstallModal(false);
+                            }
+                          }
+                        }}
+                        className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <Download size={13} /> Install Now
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="space-y-2.5 text-slate-700 dark:text-slate-300">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on Chrome, Edge, or Brave:</p>
+                    <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                      <p className="text-[11px] leading-relaxed">
+                        Look at the right side of your <strong>browser address bar</strong> at the top.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                      <p className="text-[11px] leading-relaxed">
+                        Click the <strong>Install icon (⤓ or ⊕)</strong>, or open the browser menu (<strong>⋮</strong> or <strong>⋯</strong>) and select <strong>&quot;Install KryptonVision&quot;</strong>.
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                      <p className="text-[11px] leading-relaxed">
+                        Click <strong>Install</strong>. KryptonVision will launch in its own standalone window and add a desktop/start menu shortcut!
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeInstallTab === "ios" && (
+                <div className="space-y-3 text-slate-700 dark:text-slate-300">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on iPhone or iPad:</p>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Make sure you are opening this page in <strong>Apple Safari</strong>.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Tap the <strong>Share</strong> button (the square icon with an upward arrow ⎋ at the bottom toolbar).
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong> (➕).
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">4</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Tap <strong>Add</strong> in the top-right corner. KryptonVision will now appear on your iPhone home screen!
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {activeInstallTab === "android" && (
+                <div className="space-y-3 text-slate-700 dark:text-slate-300">
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on Android:</p>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Tap the <strong>three dots (⋮)</strong> in the top-right corner of Google Chrome.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Tap <strong>&quot;Install App&quot;</strong> or <strong>&quot;Add to Home screen&quot;</strong>.
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Tap <strong>Install</strong> to add the native app shortcut to your home screen and app drawer.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Native App Benefits */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Installed Application Benefits:</p>
+                <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                  <div className="flex items-center gap-1.5">
+                    <Check size={12} className="text-emerald-500 flex-shrink-0" />
+                    <span>Clean Standalone Window</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check size={12} className="text-emerald-500 flex-shrink-0" />
+                    <span>Fast Desktop / App Launch</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check size={12} className="text-emerald-500 flex-shrink-0" />
+                    <span>No Browser Address Bar</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Check size={12} className="text-emerald-500 flex-shrink-0" />
+                    <span>Direct Camera Access</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowInstallModal(false)}
+                className="py-1.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
