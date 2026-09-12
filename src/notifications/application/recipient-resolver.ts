@@ -411,7 +411,10 @@ export class RecipientResolver {
     const hasVoice = res.recipients.some((r) => !!r.channels.voice);
     const hasEmail = res.recipients.some((r) => !!r.channels.email);
 
-    const ready = hasManager && hasRegional && hasHo && hasSms && hasVoice;
+    // A P1 preflight must prove every recipient role and every channel in the
+    // customer notification matrix.  Treating a branch as ready when email or
+    // the after-hours on-call rota is absent would silently downgrade a P1.
+    const ready = hasManager && hasRegional && hasHo && hasOnCall && hasSms && hasEmail && hasVoice;
 
     return {
       branchId,
@@ -450,7 +453,16 @@ export class RecipientResolver {
         email: hasEmail,
         dashboard: true,
       },
-      warnings: res.warnings.map((w) => w.message),
+      warnings: [
+        ...res.warnings.map((w) => w.message),
+        ...(hasManager ? [] : ["P1 preflight: no branch manager recipient resolved"]),
+        ...(hasRegional ? [] : ["P1 preflight: no regional security recipient resolved"]),
+        ...(hasHo ? [] : ["P1 preflight: no HO operator recipient resolved"]),
+        ...(hasOnCall ? [] : ["P1 preflight: after-hours on-call rota is not resolved"]),
+        ...(hasSms ? [] : ["P1 preflight: no verified SMS recipient resolved"]),
+        ...(hasEmail ? [] : ["P1 preflight: no verified email recipient resolved"]),
+        ...(hasVoice ? [] : ["P1 preflight: no verified voice recipient resolved"]),
+      ],
     };
   }
 }

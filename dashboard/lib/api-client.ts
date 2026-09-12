@@ -461,8 +461,30 @@ export type OrganizationTreeResponse = {
   };
 };
 
+let organizationTreeCache: { value: OrganizationTreeResponse; expiresAt: number } | null = null;
+let organizationTreeRequest: Promise<OrganizationTreeResponse> | null = null;
+
 export const organizationApi = {
-  getTree: () => fetchApi<OrganizationTreeResponse>('/v1/organization/tree'),
+  getTree: () => {
+    if (organizationTreeCache && organizationTreeCache.expiresAt > Date.now()) {
+      return Promise.resolve(organizationTreeCache.value);
+    }
+    if (!organizationTreeRequest) {
+      organizationTreeRequest = fetchApi<OrganizationTreeResponse>('/v1/organization/tree')
+        .then((value) => {
+          organizationTreeCache = { value, expiresAt: Date.now() + 10_000 };
+          return value;
+        })
+        .finally(() => {
+          organizationTreeRequest = null;
+        });
+    }
+    return organizationTreeRequest;
+  },
+
+  invalidateTree: () => {
+    organizationTreeCache = null;
+  },
 
   getStatistics: () => fetchApi<any>('/v1/organization/statistics'),
 

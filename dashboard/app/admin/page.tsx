@@ -66,6 +66,7 @@ export default function AdminPage() {
   };
 
   const refresh = () => {
+    organizationApi.invalidateTree();
     setParentNode(undefined);
     setInitialNodeType(undefined);
     setEditNode(undefined);

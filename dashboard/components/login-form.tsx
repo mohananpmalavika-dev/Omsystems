@@ -141,7 +141,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       if (onSuccess) {
         onSuccess();
       } else {
-        window.location.href = safeReturnPath(searchParams?.get("next"));
+        const destination = safeReturnPath(searchParams?.get("next"));
+        window.location.href = destination === "/" ? "/operations" : destination;
       }
 
     } catch (err: any) {
