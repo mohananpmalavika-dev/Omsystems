@@ -9,6 +9,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { pool as globalPool } from "../../database/pool.js";
 
 export interface OutboxEventInput {
   eventId?: string;
@@ -42,10 +43,18 @@ export class TransactionalOutboxService {
   private readonly memoryOutbox = new Map<string, OutboxRecord>();
   private readonly memoryInbox = new Set<string>();
 
-  constructor(private readonly pool?: Pool) {
-    if (process.env.NODE_ENV === "production" && !this.pool) {
-      throw new Error("OUTBOX_STORE_UNAVAILABLE: TransactionalOutboxService requires PostgreSQL pool in production");
+  constructor(private pool?: Pool) {
+    if (!this.pool && globalPool) {
+      this.pool = globalPool;
     }
+  }
+
+  public setPool(databasePool: Pool): void {
+    this.pool = databasePool;
+  }
+
+  private getActivePool(): Pool | null {
+    return this.pool || globalPool;
   }
 
   async writeOutboxEvent(clientOrPool: Pool | PoolClient | undefined, event: OutboxEventInput): Promise<OutboxRecord> {
@@ -70,7 +79,7 @@ export class TransactionalOutboxService {
       createdAt: now,
     };
 
-    const client = clientOrPool || this.pool;
+    const client = clientOrPool || this.getActivePool();
     if (isProduction && !client) {
       throw new Error("OUTBOX_STORE_UNAVAILABLE: PostgreSQL client required in production for outbox");
     }
@@ -147,8 +156,9 @@ export class TransactionalOutboxService {
   }
 
   async claimUnpublishedEvents(limit = 50): Promise<OutboxRecord[]> {
-    if (this.pool) {
-      const client = await this.pool.connect();
+    const activePool = this.getActivePool();
+    if (activePool) {
+      const client = await activePool.connect();
       try {
         await client.query("BEGIN");
         const res = await client.query(
@@ -190,8 +200,9 @@ export class TransactionalOutboxService {
 
   async markPublished(eventId: string): Promise<void> {
     const now = new Date();
-    if (this.pool) {
-      await this.pool.query(
+    const activePool = this.getActivePool();
+    if (activePool) {
+      await activePool.query(
         `UPDATE event_outbox SET published = true, published_at = $1 WHERE event_id = $2`,
         [now, eventId]
       );
@@ -209,14 +220,15 @@ export class TransactionalOutboxService {
   async recordInboxProcessed(eventId: string, consumerId: string): Promise<boolean> {
     const isProduction = process.env.NODE_ENV === "production";
     const key = `${eventId}:${consumerId}`;
+    const activePool = this.getActivePool();
 
-    if (isProduction && !this.pool) {
+    if (isProduction && !activePool) {
       throw new Error("INBOX_STORE_UNAVAILABLE: PostgreSQL pool required in production for event inbox");
     }
 
-    if (this.pool) {
+    if (activePool) {
       try {
-        const res = await this.pool.query(
+        const res = await activePool.query(
           `INSERT INTO event_inbox (event_id, consumer_id, result)
            VALUES ($1, $2, 'SUCCESS')
            ON CONFLICT (event_id, consumer_id) DO NOTHING

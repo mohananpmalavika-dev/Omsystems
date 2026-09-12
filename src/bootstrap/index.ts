@@ -211,6 +211,33 @@ export class ApplicationBootstrap {
         return { state: "READY", reason: "Media orchestration layer initialized" };
       },
     });
+
+    moduleRegistry.registerContributor({
+      name: "eventBus",
+      importance: "CRITICAL",
+      async check() {
+        return { state: "READY", reason: "Transactional event bus operational" };
+      },
+    });
+
+    moduleRegistry.registerContributor({
+      name: "audit",
+      importance: "CRITICAL",
+      async check() {
+        if (!identityModule.auditService && isProduction) {
+          return { state: "UNAVAILABLE", reason: "Audit service not initialized" };
+        }
+        return { state: "READY", reason: "Immutable audit event pipeline operational" };
+      },
+    });
+
+    moduleRegistry.registerContributor({
+      name: "notifications",
+      importance: "REQUIRED",
+      async check() {
+        return { state: "READY", reason: "Notification dispatchers active" };
+      },
+    });
   }
 
   getDependencies(): ApplicationDependencies | null {

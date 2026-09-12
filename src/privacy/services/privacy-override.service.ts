@@ -9,6 +9,7 @@
 
 import { randomUUID, createHash } from 'node:crypto';
 import type { Pool } from 'pg';
+import { pool as globalPool } from '../../database/pool.js';
 import type {
   PrivacyAuditEvent,
   PrivacyAuditEventType,
@@ -37,10 +38,18 @@ export class PrivacyOverrideService {
   private auditLogs: PrivacyAuditEvent[] = [];
   private lastAuditHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
-  constructor(private readonly pool?: Pool) {
-    if (process.env.NODE_ENV === 'production' && !this.pool) {
-      throw new Error('PRIVACY_AUDIT_STORE_UNAVAILABLE: PrivacyOverrideService requires a PostgreSQL pool in production');
+  constructor(private pool?: Pool) {
+    if (!this.pool && globalPool) {
+      this.pool = globalPool;
     }
+  }
+
+  public setPool(databasePool: Pool): void {
+    this.pool = databasePool;
+  }
+
+  private getActivePool(): Pool | null {
+    return this.pool || globalPool;
   }
 
   /**
@@ -72,9 +81,10 @@ export class PrivacyOverrideService {
       status: 'ACTIVE',
     };
 
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        await this.pool.query(
+        await activePool.query(
           `INSERT INTO privacy_override_grants (
              id, tenant_id, branch_id, camera_id, user_id, username, operation, reason,
              case_number, incident_id, approved_by, issued_at, expires_at, status
@@ -101,6 +111,8 @@ export class PrivacyOverrideService {
         }
         console.warn('[PrivacyOverrideService] DB save grant failed, using memory:', err);
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      throw new Error('PRIVACY_AUDIT_STORE_UNAVAILABLE: PrivacyOverrideService requires a PostgreSQL pool in production');
     }
 
     // Immutable audit record MUST succeed before grant is usable
@@ -134,11 +146,12 @@ export class PrivacyOverrideService {
     tenantId?: string,
   ): Promise<PrivacyOverrideGrant | undefined> {
     const now = new Date();
+    const activePool = this.getActivePool();
 
-    if (this.pool) {
+    if (activePool) {
       try {
-        const res = await this.pool.query(
-          `SELECT * FROM privacy_override_grants
+        const res = await activePool.query(
+          `SELECT * FROM privacy_override_grants 
            WHERE user_id = $1 AND camera_id = $2 AND operation = $3 AND status = 'ACTIVE' AND expires_at > $4
            ORDER BY expires_at DESC LIMIT 1`,
           [userId, cameraId, operation, now],
@@ -189,13 +202,14 @@ export class PrivacyOverrideService {
    * Explicitly revokes a grant
    */
   async revokeGrant(grantId: string, revokedBy: string): Promise<void> {
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        await this.pool.query(
+        await activePool.query(
           `UPDATE privacy_override_grants SET status = 'REVOKED', revoked_at = NOW() WHERE id = $1`,
           [grantId],
         );
-        await this.pool.query(
+        await activePool.query(
           `INSERT INTO privacy_override_revocations (id, grant_id, revoked_by_user_id, revocation_reason, revoked_at)
            VALUES ($1, $2, $3, $4, NOW())`,
           [`rev-${randomUUID()}`, grantId, revokedBy, 'Explicit operator or admin revocation'],
@@ -228,9 +242,10 @@ export class PrivacyOverrideService {
     const prevHash = this.lastAuditHash;
     this.lastAuditHash = recordHash;
 
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        await this.pool.query(
+        await activePool.query(
           `INSERT INTO privacy_access_audit (
              id, tenant_id, branch_id, camera_id, user_id, username, event, operation,
              incident_id, case_number, reason, source_ip, prev_hash, record_hash, timestamp
@@ -259,6 +274,8 @@ export class PrivacyOverrideService {
         }
         console.warn('[PrivacyOverrideService] DB audit log insert error:', err);
       }
+    } else if (process.env.NODE_ENV === 'production') {
+      throw new Error('PRIVACY_AUDIT_STORE_UNAVAILABLE: PrivacyOverrideService requires a PostgreSQL pool in production');
     }
 
     this.auditLogs.push(event);
@@ -268,13 +285,14 @@ export class PrivacyOverrideService {
   }
 
   async getAuditLogsAsync(tenantId?: string): Promise<PrivacyAuditEvent[]> {
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
         const query = tenantId
           ? `SELECT * FROM privacy_access_audit WHERE tenant_id = $1 ORDER BY timestamp DESC LIMIT 500`
           : `SELECT * FROM privacy_access_audit ORDER BY timestamp DESC LIMIT 500`;
         const params = tenantId ? [tenantId] : [];
-        const res = await this.pool.query(query, params);
+        const res = await activePool.query(query, params);
         return res.rows.map((r) => ({
           id: r.id,
           tenantId: r.tenant_id,
