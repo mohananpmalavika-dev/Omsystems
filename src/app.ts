@@ -1774,6 +1774,22 @@ export async function buildApp(options?: {
     }
     try {
       const session = await store.createLiveSession(camera.id, request.currentUser.id, "talk");
+      if ((store as any).talkbackRepository) {
+        await (store as any).talkbackRepository.createSession({
+          tenantId: camera.tenantId || "default-tenant",
+          cameraId: camera.id,
+          userId: request.currentUser.id,
+          token: session.token,
+          ttlMs: 60_000,
+        });
+        await (store as any).talkbackRepository.acquireLease(
+          camera.id,
+          session.id,
+          request.currentUser.id,
+          camera.tenantId || "default-tenant",
+          60_000,
+        );
+      }
       await audit(request, store, "talk_session.created", camera.nodeId, "success", {
         sessionId: session.id,
         cameraId: camera.id,
@@ -2393,6 +2409,17 @@ export async function buildApp(options?: {
         ...(body.error ? { error: body.error } : {}),
       },
     });
+    if ((store as any).talkbackRepository) {
+      await (store as any).talkbackRepository.completeSession({
+        sessionId,
+        outcome: body.outcome,
+        durationMs: body.durationMs,
+        bytesSent: body.bytesSent,
+        adapter: body.adapter,
+        codec: body.codec,
+        error: body.error,
+      });
+    }
     return reply.code(202).send({ accepted: true });
   });
   await registerCameraDiscoveryRoutes(app, store, pool);
@@ -2727,7 +2754,8 @@ export async function buildApp(options?: {
 
   // Register Audio Stream Monitoring (video.audio) routes
   try {
-    const { registerAudioMonitoringRoutes } = await import("./routes/audio-monitoring.routes.js");
+    const audioRouteModule = "./routes/audio-monitoring.routes.js";
+    const { registerAudioMonitoringRoutes } = await (import(audioRouteModule) as Promise<any>);
     await registerAudioMonitoringRoutes(app, store);
     app.log.info('Audio Stream Monitoring (video.audio) routes registered');
   } catch (err: unknown) {

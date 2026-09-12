@@ -4547,6 +4547,10 @@ export const videoBookmarksApi = {
       : '/v1/video/bookmarks/metrics';
     return fetchApi<{ success: boolean; data: any }>(url);
   },
+
+  getCameras: () => fetchApi<{ data?: any[] } | any[]>('/v1/cameras'),
+
+  getIncidents: () => fetchApi<{ data?: any[] } | any[]>('/v1/incidents'),
 };
 
 export const talkbackApi = {
