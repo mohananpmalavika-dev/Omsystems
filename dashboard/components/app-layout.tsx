@@ -12,6 +12,7 @@ import {
   Boxes,
   Building2,
   CalendarClock,
+  Bookmark,
   Camera,
   CarFront,
   ChevronDown,
@@ -71,6 +72,7 @@ import {
   UserRoundCog,
   Users,
   Video,
+  Volume2,
   Wifi,
 
   Workflow,
@@ -174,6 +176,8 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "AI Smart Video Search", href: "/video-search", icon: Search },
       { label: "Multi-Camera Synced Playback", href: "/playback/synced", icon: Play },
+      { label: "Audio Stream Monitoring", href: "/video/audio", icon: Volume2 },
+      { label: "Video Timeline Bookmarks", href: "/playback/bookmarks", icon: Bookmark },
       { label: "Video Recordings Vault", href: "/recordings", icon: FileVideo2 },
       { label: "Evidence & Chain of Custody", href: "/evidence", icon: FileCheck2 },
       { label: "Root-Cause Analysis (RCA)", href: "/operations/rca-analysis", icon: FileSearch },

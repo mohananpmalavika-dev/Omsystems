@@ -278,6 +278,28 @@ const seedCameras: Camera[] = [
     capabilities: { ptz: false, audio: true, events: true },
     connectionSecretRef: "secret://cam-001",
   },
+  {
+    id: "cam-002",
+    deviceIdentityId: "device-002",
+    nodeId: "camera-entrance",
+    branchId: "A005",
+    name: "Video-Only Hallway Camera",
+    vendor: "hikvision",
+    model: "DS-2CD1023G0-E",
+    status: "online",
+    channel: 2,
+    protocol: "onvif-s",
+    profiles: [
+      { name: "main", codec: "H264", width: 1920, height: 1080, role: "main" },
+    ],
+    capabilities: {
+      ptz: false,
+      audio: false,
+      events: true,
+      talkback: { supported: false, transport: "none", reason: "device_does_not_advertise_two_way_audio" },
+    },
+    connectionSecretRef: "secret://cam-002",
+  },
   // ==========================================
   // BRANCH A005 (Kochi Marine Drive Flagship)
   // ==========================================

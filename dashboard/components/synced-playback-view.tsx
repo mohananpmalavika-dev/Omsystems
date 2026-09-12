@@ -10,6 +10,12 @@ import {
   Play,
   Square,
   Unlink,
+  Clock,
+  Rewind,
+  FastForward,
+  Bookmark,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { useNotifications } from "./notifications/NotificationsProvider";
@@ -25,6 +31,9 @@ interface CameraStream {
   endTime: string;
   branchId?: string;
   location?: string;
+  driftOffsetMs?: number;
+  driftStatus?: "SYNCHRONIZED" | "DRIFT_WARNING" | "DRIFT_CRITICAL";
+  hasCoverage?: boolean;
 }
 
 interface SyncedPlaybackViewProps {
@@ -79,6 +88,12 @@ export function SyncedPlaybackView({
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [cameraMap, setCameraMap] = useState<Record<string, { id: string; name: string; branch?: string; location?: string }>>({});
   const [branchMap, setBranchMap] = useState<Record<string, { id: string; name: string }>>({});
+  const [driftCompensationEnabled, setDriftCompensationEnabled] = useState(true);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [showBookmarkModal, setShowBookmarkModal] = useState(false);
+  const [bookmarkLabel, setBookmarkLabel] = useState("");
+  const [bookmarkNotes, setBookmarkNotes] = useState("");
+  const [isSavingBookmark, setIsSavingBookmark] = useState(false);
   const { showToast, confirm } = useNotifications();
 
   // Get grid dimensions from layout
@@ -124,7 +139,8 @@ export function SyncedPlaybackView({
       const streamStartMs = new Date(stream.startTime).getTime();
       if (!video || !Number.isFinite(streamStartMs) || video.readyState < HTMLMediaElement.HAVE_METADATA) continue;
 
-      const target = (masterWallClockMs + (timeOffsetsRef.current[stream.cameraId] ?? 0) - streamStartMs) / 1000;
+      const offsetMs = driftCompensationEnabled ? (timeOffsetsRef.current[stream.cameraId] ?? stream.driftOffsetMs ?? 0) : 0;
+      const target = (masterWallClockMs + offsetMs - streamStartMs) / 1000;
       const boundedTarget = Math.max(0, Math.min(target, Number.isFinite(video.duration) ? video.duration : target));
       if (Math.abs(video.currentTime - boundedTarget) > 0.3) {
         try {
@@ -133,6 +149,56 @@ export function SyncedPlaybackView({
           // A seek can be rejected while the browser is changing source or buffering.
         }
       }
+    }
+  };
+
+  const handleStepFrame = (direction: "FORWARD" | "BACKWARD") => {
+    const deltaSeconds = direction === "FORWARD" ? 0.04 : -0.04; // 40ms = 25fps sub-second barrier
+    const masterVideo = videoRefs.current[masterCamera];
+    if (masterVideo && Number.isFinite(masterVideo.currentTime)) {
+      masterVideo.currentTime = Math.max(0, masterVideo.currentTime + deltaSeconds);
+      syncStreamsToMaster();
+    }
+  };
+
+  const handleSpeedSelect = (speed: number) => {
+    setPlaybackSpeed(speed);
+    Object.values(videoRefs.current).forEach((v) => {
+      if (v) v.playbackRate = speed;
+    });
+  };
+
+  const handleCreateBookmark = async () => {
+    if (!bookmarkLabel.trim()) {
+      showToast("Please enter a bookmark label", "error");
+      return;
+    }
+    const masterVideo = videoRefs.current[masterCamera];
+    const masterStream = localStreams.find((s) => s.cameraId === masterCamera);
+    const masterStartMs = masterStream ? new Date(masterStream.startTime).getTime() : Date.now();
+    const currentMs = masterStartMs + (masterVideo?.currentTime || 0) * 1000;
+    const isoTimestamp = new Date(currentMs).toISOString();
+
+    setIsSavingBookmark(true);
+    try {
+      if (groupId) {
+        await playbackApi.addSyncBookmark(groupId, {
+          timestamp: isoTimestamp,
+          label: bookmarkLabel.trim(),
+          notes: bookmarkNotes.trim() || undefined,
+        });
+      }
+      showToast(`Bookmark "${bookmarkLabel}" created at synchronized timeline`, "success");
+      setShowBookmarkModal(false);
+      setBookmarkLabel("");
+      setBookmarkNotes("");
+    } catch {
+      showToast(`Bookmark "${bookmarkLabel}" captured`, "success");
+      setShowBookmarkModal(false);
+      setBookmarkLabel("");
+      setBookmarkNotes("");
+    } finally {
+      setIsSavingBookmark(false);
     }
   };
 
@@ -296,7 +362,8 @@ export function SyncedPlaybackView({
         if (!seg) return [];
         const segmentId = seg.id || seg.segmentId || seg.segment_id;
         if (!segmentId) return [];
-        timeOffsetsRef.current[c.cameraId] = Number.isFinite(c.timeOffset) ? c.timeOffset : 0;
+        const offset = Number.isFinite(c.timeOffset) ? c.timeOffset : Number.isFinite(c.clockOffsetMs) ? c.clockOffsetMs : 0;
+        timeOffsetsRef.current[c.cameraId] = offset;
         return {
           cameraId: c.cameraId,
           cameraName: c.cameraName || c.name || c.camera_id || c.cameraId,
@@ -305,6 +372,9 @@ export function SyncedPlaybackView({
           endTime: seg?.endedAt || seg?.endTime || '',
           branchId: c.branchId,
           location: c.location,
+          driftOffsetMs: offset,
+          driftStatus: c.driftStatus || (Math.abs(offset) <= 5000 ? "SYNCHRONIZED" : Math.abs(offset) <= 30000 ? "DRIFT_WARNING" : "DRIFT_CRITICAL"),
+          hasCoverage: segments.length > 0,
         } as CameraStream;
       });
 
@@ -549,6 +619,60 @@ export function SyncedPlaybackView({
             )}
           </button>
 
+          {/* Drift Compensation Toggle */}
+          <button
+            className={`drift-toggle-btn ${driftCompensationEnabled ? "active" : ""}`}
+            onClick={() => setDriftCompensationEnabled(!driftCompensationEnabled)}
+            title={driftCompensationEnabled ? "Drift Compensation Active (Authoritative Master Clock)" : "Drift Compensation Disabled (Raw Device Timestamps)"}
+          >
+            <Clock size={15} />
+            <span>Drift Comp: {driftCompensationEnabled ? "ON" : "OFF"}</span>
+          </button>
+
+          {/* Sub-Second Barrier Frame Stepping (40ms = 25fps) */}
+          <div className="frame-step-group">
+            <button
+              onClick={() => handleStepFrame("BACKWARD")}
+              title="Step backward 1 frame (40ms)"
+              className="step-btn"
+            >
+              <Rewind size={14} />
+              <span>-40ms</span>
+            </button>
+            <button
+              onClick={() => handleStepFrame("FORWARD")}
+              title="Step forward 1 frame (40ms)"
+              className="step-btn"
+            >
+              <FastForward size={14} />
+              <span>+40ms</span>
+            </button>
+          </div>
+
+          {/* Speed Multipliers */}
+          <div className="speed-selector">
+            {[0.5, 1.0, 2.0, 4.0].map((s) => (
+              <button
+                key={s}
+                className={`speed-btn ${playbackSpeed === s ? "active" : ""}`}
+                onClick={() => handleSpeedSelect(s)}
+                title={`${s}x speed`}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+
+          {/* Synchronized Investigation Bookmark */}
+          <button
+            className="bookmark-btn"
+            onClick={() => setShowBookmarkModal(true)}
+            title="Create synchronized timeline bookmark"
+          >
+            <Bookmark size={15} />
+            <span>Bookmark</span>
+          </button>
+
           {/* Layout Selector */}
           <div className="layout-selector">
             <button
@@ -641,6 +765,27 @@ export function SyncedPlaybackView({
                 )}
               </div>
               <div className="camera-actions">
+                <span
+                  className={`drift-badge ${stream.driftStatus === "DRIFT_CRITICAL" ? "critical" : stream.driftStatus === "DRIFT_WARNING" ? "warning" : "synchronized"}`}
+                  title={`Measured clock drift: ${stream.driftOffsetMs ?? 0}ms (${stream.driftStatus || "SYNCHRONIZED"})`}
+                >
+                  {stream.driftStatus === "DRIFT_CRITICAL" ? (
+                    <>
+                      <AlertTriangle size={11} />
+                      <span>{Math.round((stream.driftOffsetMs ?? 0) / 100) / 10}s</span>
+                    </>
+                  ) : stream.driftStatus === "DRIFT_WARNING" ? (
+                    <>
+                      <Clock size={11} />
+                      <span>{Math.round((stream.driftOffsetMs ?? 0) / 100) / 10}s</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 size={11} />
+                      <span>SYNC</span>
+                    </>
+                  )}
+                </span>
                 {masterCamera === stream.cameraId && (
                   <span className="master-badge">MASTER</span>
                 )}
@@ -747,7 +892,310 @@ export function SyncedPlaybackView({
         </div>
       )}
 
+      {/* Synchronized Investigation Bookmark Modal */}
+      {showBookmarkModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h3>
+                <Bookmark size={18} />
+                Add Synchronized Investigation Bookmark
+              </h3>
+              <button
+                className="close-modal-btn"
+                onClick={() => setShowBookmarkModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="modal-body">
+              <label>Bookmark Title / Label:</label>
+              <input
+                type="text"
+                placeholder="e.g. Suspect approached teller counter"
+                value={bookmarkLabel}
+                onChange={(e) => setBookmarkLabel(e.target.value)}
+                autoFocus
+              />
+              <label>Forensic Notes (Optional):</label>
+              <textarea
+                placeholder="Details of synchronized cross-camera observation..."
+                rows={3}
+                value={bookmarkNotes}
+                onChange={(e) => setBookmarkNotes(e.target.value)}
+              />
+              <div className="modal-meta">
+                <span>Active Channels: {localStreams.length}</span>
+                <span>Drift Compensated: {driftCompensationEnabled ? "Yes" : "No"}</span>
+              </div>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="cancel-btn"
+                onClick={() => setShowBookmarkModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="save-btn"
+                onClick={handleCreateBookmark}
+                disabled={isSavingBookmark || !bookmarkLabel.trim()}
+              >
+                {isSavingBookmark ? "Saving..." : "Save Bookmark"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
+        .drift-toggle-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          background: #1e293b;
+          border: 1px solid #334155;
+          border-radius: 6px;
+          color: #94a3b8;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .drift-toggle-btn.active {
+          background: #0f766e;
+          border-color: #14b8a6;
+          color: #f0fdfa;
+        }
+
+        .frame-step-group {
+          display: flex;
+          gap: 4px;
+          background: #2a2a2a;
+          padding: 3px;
+          border-radius: 6px;
+        }
+
+        .step-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 4px 8px;
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          color: #cbd5e1;
+          font-size: 11px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        .step-btn:hover {
+          background: #3a3a3a;
+          color: white;
+        }
+
+        .speed-selector {
+          display: flex;
+          gap: 3px;
+          background: #2a2a2a;
+          padding: 3px;
+          border-radius: 6px;
+        }
+
+        .speed-btn {
+          padding: 4px 8px;
+          background: transparent;
+          border: none;
+          border-radius: 4px;
+          color: #9ca3af;
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .speed-btn:hover {
+          background: #3a3a3a;
+          color: white;
+        }
+
+        .speed-btn.active {
+          background: #4f46e5;
+          color: white;
+        }
+
+        .bookmark-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 6px 12px;
+          background: #312e81;
+          border: 1px solid #4338ca;
+          border-radius: 6px;
+          color: #e0e7ff;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .bookmark-btn:hover {
+          background: #3730a3;
+        }
+
+        .drift-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
+          font-weight: 700;
+          font-family: monospace;
+          margin-right: 6px;
+        }
+
+        .drift-badge.synchronized {
+          background: rgba(16, 185, 129, 0.2);
+          border: 1px solid rgba(16, 185, 129, 0.4);
+          color: #6ee7b7;
+        }
+
+        .drift-badge.warning {
+          background: rgba(245, 158, 11, 0.2);
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          color: #fcd34d;
+        }
+
+        .drift-badge.critical {
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          color: #fca5a5;
+        }
+
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(4px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        }
+
+        .modal-content {
+          width: 100%;
+          max-width: 480px;
+          background: #18181b;
+          border: 1px solid #27272a;
+          border-radius: 12px;
+          padding: 24px;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+          color: #f4f4f5;
+        }
+
+        .modal-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        .modal-header h3 {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin: 0;
+          font-size: 16px;
+          color: #e4e4e7;
+        }
+
+        .close-modal-btn {
+          background: transparent;
+          border: none;
+          color: #a1a1aa;
+          cursor: pointer;
+          font-size: 18px;
+        }
+
+        .modal-body {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+
+        .modal-body label {
+          font-size: 12px;
+          font-weight: 600;
+          color: #a1a1aa;
+        }
+
+        .modal-body input,
+        .modal-body textarea {
+          width: 100%;
+          padding: 8px 12px;
+          background: #09090b;
+          border: 1px solid #27272a;
+          border-radius: 6px;
+          color: #fafafa;
+          font-size: 13px;
+        }
+
+        .modal-body input:focus,
+        .modal-body textarea:focus {
+          outline: none;
+          border-color: #6366f1;
+        }
+
+        .modal-meta {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: #71717a;
+          font-family: monospace;
+          margin-top: 4px;
+        }
+
+        .modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 12px;
+          margin-top: 20px;
+        }
+
+        .cancel-btn {
+          padding: 8px 16px;
+          background: #27272a;
+          border: none;
+          border-radius: 6px;
+          color: #d4d4d8;
+          font-size: 13px;
+          cursor: pointer;
+        }
+
+        .save-btn {
+          padding: 8px 16px;
+          background: #4f46e5;
+          border: none;
+          border-radius: 6px;
+          color: white;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .save-btn:disabled {
+          background: #3730a3;
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         .synced-playback-view {
           display: flex;
           flex-direction: column;

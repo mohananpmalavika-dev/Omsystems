@@ -86,6 +86,7 @@ import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
+import { registerSynchronizedPlaybackRoutes } from "./routes/synchronized-playback.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
@@ -2724,6 +2725,33 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register abandoned object detection routes');
   }
 
+  // Register Audio Stream Monitoring (video.audio) routes
+  try {
+    const { registerAudioMonitoringRoutes } = await import("./routes/audio-monitoring.routes.js");
+    await registerAudioMonitoringRoutes(app, store);
+    app.log.info('Audio Stream Monitoring (video.audio) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register audio stream monitoring routes');
+  }
+
+  // Register Video Timeline Bookmarks (video.bookmarks) routes
+  try {
+    const { registerVideoBookmarkRoutes } = await import("./routes/video-bookmark.routes.js");
+    await registerVideoBookmarkRoutes(app, store);
+    app.log.info('Video Timeline Bookmarks (video.bookmarks) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register video timeline bookmarks routes');
+  }
+
+  // Register Two-Way Audio Talkback (video.talkback) routes
+  try {
+    const { registerTalkbackRoutes } = await import("./routes/talkback.routes.js");
+    await registerTalkbackRoutes(app, store);
+    app.log.info('Two-Way Audio Talkback (video.talkback) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register two-way audio talkback routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");
@@ -3055,6 +3083,14 @@ export async function buildApp(options?: {
     } catch (error) {
       app.log.warn({ error }, "Failed to register AI video search routes");
     }
+  }
+
+  // Register Multi-Camera Synchronized Playback and Timeline Drift Compensation routes
+  try {
+    await registerSynchronizedPlaybackRoutes(app, pool);
+    app.log.info("Multi-camera synchronized playback routes registered");
+  } catch (error) {
+    app.log.warn({ error }, "Failed to register synchronized playback routes");
   }
 
   // Start export worker if enabled

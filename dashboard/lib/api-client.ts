@@ -2639,6 +2639,73 @@ export const playbackApi = {
     }),
   listGroups: () =>
     fetchApi<{ data: any[] }>(`/v1/recordings/playback/groups`),
+
+  // Production Multi-Camera Synchronized Playback & Drift Compensation APIs
+  createSyncSession: (data: {
+    branchId: string;
+    title: string;
+    cameraIds: string[];
+    startTime: string;
+    endTime: string;
+    description?: string;
+    masterCameraId?: string;
+    layout?: string;
+    driftCompensationEnabled?: boolean;
+  }) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listSyncSessions: (params?: { branchId?: string }) =>
+    fetchApi<{ data: any[] }>(`/v1/playback/sync/sessions${params?.branchId ? `?branchId=${encodeURIComponent(params.branchId)}` : ''}`),
+
+  getSyncSession: (id: string) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}`),
+
+  seekSyncSession: (id: string, targetTimestamp: string) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/seek`, {
+      method: 'POST',
+      body: JSON.stringify({ targetTimestamp }),
+    }),
+
+  stepSyncFrame: (id: string, direction?: 'FORWARD' | 'BACKWARD', fps?: number) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/step`, {
+      method: 'POST',
+      body: JSON.stringify({ direction: direction || 'FORWARD', fps: fps || 25 }),
+    }),
+
+  setSyncState: (id: string, state: 'PLAYING' | 'PAUSED' | 'BUFFERING' | 'STOPPED', speed?: number) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/state`, {
+      method: 'POST',
+      body: JSON.stringify({ state, speed: speed ?? 1.0 }),
+    }),
+
+  toggleSyncDrift: (id: string, enabled: boolean) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/drift-toggle`, {
+      method: 'POST',
+      body: JSON.stringify({ enabled }),
+    }),
+
+  addSyncBookmark: (id: string, data: { timestamp: string; label: string; notes?: string }) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/bookmarks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  listSyncBookmarks: (id: string) =>
+    fetchApi<{ data: any[] }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/bookmarks`),
+
+  calibrateSyncDrift: (id: string, cameraId: string, manualOffsetMs: number) =>
+    fetchApi<{ data: any }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}/calibrate`, {
+      method: 'POST',
+      body: JSON.stringify({ cameraId, manualOffsetMs }),
+    }),
+
+  deleteSyncSession: (id: string) =>
+    fetchApi<{ success: boolean }>(`/v1/playback/sync/sessions/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
 };
 
 export const evidenceApi = {
@@ -4300,6 +4367,312 @@ export const abandonedObjectApi = {
     }),
 };
 
+export const audioMonitoringApi = {
+  getChannels: () => fetchApi<{ success: boolean; data: any[]; count: number }>('/v1/audio-monitoring/channels'),
+  getChannel: (cameraId: string) => fetchApi<{ success: boolean; data: any }>(`/v1/audio-monitoring/channels/${encodeURIComponent(cameraId)}`),
+  updateConfig: (cameraId: string, updates: any) => fetchApi<{ success: boolean; data: any }>(`/v1/audio-monitoring/channels/${encodeURIComponent(cameraId)}/config`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  }),
+  decodeAndMeter: (cameraId: string, payloadBase64: string, codec?: string) => fetchApi<{ success: boolean; data: any; alerts: any[] }>(`/v1/audio-monitoring/channels/${encodeURIComponent(cameraId)}/decode-and-meter`, {
+    method: 'POST',
+    body: JSON.stringify({ payloadBase64, codec }),
+  }),
+  ingestTelemetry: (cameraId: string, telemetry: any) => fetchApi<{ success: boolean; alerts: any[] }>(`/v1/audio-monitoring/channels/${encodeURIComponent(cameraId)}/telemetry`, {
+    method: 'POST',
+    body: JSON.stringify(telemetry),
+  }),
+  getHistory: (cameraId: string, limit: number = 60) => fetchApi<{ success: boolean; data: any[]; count: number }>(`/v1/audio-monitoring/channels/${encodeURIComponent(cameraId)}/metrics/history?limit=${limit}`),
+  getAlerts: (filters?: { cameraId?: string; status?: string; alertType?: string; severity?: string; limit?: number; offset?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.cameraId) params.append('cameraId', filters.cameraId);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.alertType) params.append('alertType', filters.alertType);
+    if (filters?.severity) params.append('severity', filters.severity);
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    if (filters?.offset) params.append('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: any[]; pagination: { total: number; limit: number; offset: number } }>(`/v1/audio-monitoring/alerts?${params}`);
+  },
+  acknowledgeAlert: (alertId: string, notes?: string) => fetchApi<{ success: boolean; data: any }>(`/v1/audio-monitoring/alerts/${encodeURIComponent(alertId)}/acknowledge`, {
+    method: 'POST',
+    body: JSON.stringify({ notes }),
+  }),
+  getStats: () => fetchApi<{ success: boolean; data: any }>('/v1/audio-monitoring/stats'),
+};
+
+export const videoBookmarksApi = {
+  listBookmarks: (filters?: {
+    cameraId?: string;
+    cameraIds?: string[];
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    reason?: string;
+    hasIncident?: boolean;
+    incidentId?: string;
+    operatorId?: string;
+    from?: string;
+    to?: string;
+    tags?: string[];
+    search?: string;
+    reviewStatus?: 'pending' | 'reviewed' | 'approved' | 'rejected';
+    verifiedOnly?: boolean;
+    limit?: number;
+    offset?: number;
+    sortBy?: 'timestamp' | 'priority' | 'created_at' | 'title';
+    sortOrder?: 'asc' | 'desc';
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.cameraId) params.append('cameraId', filters.cameraId);
+    if (filters?.cameraIds && filters.cameraIds.length > 0) {
+      filters.cameraIds.forEach((id) => params.append('cameraIds', id));
+    }
+    if (filters?.priority) params.append('priority', filters.priority);
+    if (filters?.reason) params.append('reason', filters.reason);
+    if (filters?.hasIncident !== undefined) params.append('hasIncident', String(filters.hasIncident));
+    if (filters?.incidentId) params.append('incidentId', filters.incidentId);
+    if (filters?.operatorId) params.append('operatorId', filters.operatorId);
+    if (filters?.from) params.append('from', filters.from);
+    if (filters?.to) params.append('to', filters.to);
+    if (filters?.tags && filters.tags.length > 0) {
+      filters.tags.forEach((t) => params.append('tags', t));
+    }
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.reviewStatus) params.append('reviewStatus', filters.reviewStatus);
+    if (filters?.verifiedOnly !== undefined) params.append('verifiedOnly', String(filters.verifiedOnly));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    if (filters?.offset) params.append('offset', String(filters.offset));
+    if (filters?.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters?.sortOrder) params.append('sortOrder', filters.sortOrder);
+    return fetchApi<{
+      success: boolean;
+      data: any[];
+      pagination: { total: number; limit: number; offset: number };
+    }>(`/v1/video/bookmarks?${params.toString()}`);
+  },
+
+  getBookmark: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/video/bookmarks/${encodeURIComponent(id)}`),
+
+  createBookmark: (input: {
+    cameraId: string;
+    timestamp: string;
+    title: string;
+    notes?: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    reason?: string;
+    tags?: string[];
+    incidentId?: string;
+    incidentTable?: 'incidents' | 'live_incidents';
+    associationNotes?: string;
+    recordingSegmentId?: string;
+    snapshotReference?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/video/bookmarks', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  updateBookmark: (id: string, updates: {
+    title?: string;
+    notes?: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    reason?: string;
+    tags?: string[];
+    reviewStatus?: 'pending' | 'reviewed' | 'approved' | 'rejected';
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/video/bookmarks/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    }),
+
+  deleteBookmark: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/v1/video/bookmarks/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  associateIncident: (id: string, input: {
+    incidentId: string;
+    incidentTable?: 'incidents' | 'live_incidents';
+    associationNotes?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/video/bookmarks/${encodeURIComponent(id)}/incidents`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+
+  disassociateIncident: (id: string, incidentId: string) =>
+    fetchApi<{ success: boolean; message: string }>(
+      `/v1/video/bookmarks/${encodeURIComponent(id)}/incidents/${encodeURIComponent(incidentId)}`,
+      { method: 'DELETE' }
+    ),
+
+  createIncidentFromBookmark: (id: string, input: {
+    title?: string;
+    description?: string;
+    severity?: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+    preRollSeconds?: number;
+    postRollSeconds?: number;
+    applyLegalHold?: boolean;
+    notes?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: { incidentId: string; bookmark: any; legalHoldId?: string } }>(
+      `/v1/video/bookmarks/${encodeURIComponent(id)}/create-incident`,
+      {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }
+    ),
+
+  getIncidentBookmarks: (incidentId: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(`/v1/incidents/${encodeURIComponent(incidentId)}/bookmarks`),
+
+  getTimelineBookmarks: (cameraId: string, from?: string, to?: string) => {
+    const params = new URLSearchParams();
+    if (from) params.append('from', from);
+    if (to) params.append('to', to);
+    return fetchApi<{ success: boolean; data: any[] }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/timeline-bookmarks?${params.toString()}`
+    );
+  },
+
+  verifyBookmark: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/video/bookmarks/${encodeURIComponent(id)}/verify`, {
+      method: 'POST',
+    }),
+
+  getMetrics: (cameraId?: string) => {
+    const url = cameraId
+      ? `/v1/video/bookmarks/metrics?cameraId=${encodeURIComponent(cameraId)}`
+      : '/v1/video/bookmarks/metrics';
+    return fetchApi<{ success: boolean; data: any }>(url);
+  },
+};
+
+export const talkbackApi = {
+  /**
+   * Check if a camera is currently active in a talkback session
+   */
+  getActiveSession: (cameraId: string) =>
+    fetchApi<{
+      active: boolean;
+      lease?: {
+        camera_id: string;
+        session_id: string;
+        user_id: string;
+        acquired_at: string;
+        lease_expires_at: string;
+      };
+      session?: any;
+    }>(`/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions/active`),
+
+  /**
+   * Heartbeat to extend push-to-talk lease
+   */
+  heartbeat: (cameraId: string, sessionId: string, ttlMs?: number) =>
+    fetchApi<{ status: string; leaseActive: boolean }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions/${encodeURIComponent(sessionId)}/heartbeat`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ ttlMs }),
+      }
+    ),
+
+  /**
+   * Stop an active talkback session
+   */
+  stopSession: (cameraId: string, sessionId: string) =>
+    fetchApi<{ status: string; session?: any }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions/${encodeURIComponent(sessionId)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  /**
+   * Supervisor emergency kill switch
+   */
+  terminateSession: (cameraId: string, sessionId: string, reason?: string) =>
+    fetchApi<{ status: string; session?: any }>(
+      `/v1/cameras/${encodeURIComponent(cameraId)}/talk-sessions/${encodeURIComponent(sessionId)}/terminate`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      }
+    ),
+
+  /**
+   * List historical talk sessions with filters
+   */
+  getHistory: (filter?: {
+    cameraId?: string;
+    userId?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filter?.cameraId) params.append('cameraId', filter.cameraId);
+    if (filter?.userId) params.append('userId', filter.userId);
+    if (filter?.status) params.append('status', filter.status);
+    if (filter?.fromDate) params.append('fromDate', filter.fromDate);
+    if (filter?.toDate) params.append('toDate', filter.toDate);
+    if (filter?.limit) params.append('limit', String(filter.limit));
+    if (filter?.offset) params.append('offset', String(filter.offset));
+    return fetchApi<{ success: boolean; data: any[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/talk-sessions/history?${params.toString()}`
+    );
+  },
+
+  /**
+   * Operational telemetry stats
+   */
+  getStats: () =>
+    fetchApi<{
+      totalSessions: number;
+      activeSessions: number;
+      completedSessions: number;
+      failedSessions: number;
+      totalDurationMs: number;
+      totalBytesSent: number;
+      averageDurationMs: number;
+      codecDistribution: Record<string, number>;
+      adapterDistribution: Record<string, number>;
+    }>('/v1/talk-sessions/stats'),
+
+  /**
+   * Query or probe camera talkback hardware capability
+   */
+  getCapability: (cameraId: string) =>
+    fetchApi<{
+      camera_id: string;
+      supported: boolean;
+      transport: string;
+      codecs: string[];
+      sample_rates: number[];
+      verified_at: string;
+      reason?: string;
+    }>(`/v1/cameras/${encodeURIComponent(cameraId)}/talkback/capability`),
+
+  /**
+   * Diagnostic probe of backchannel connection
+   */
+  testBackchannel: (cameraId: string) =>
+    fetchApi<{
+      status: string;
+      transport: string;
+      codecs: string[];
+      sampleRates: number[];
+      verifiedAt: string;
+      diagnostics: Record<string, any>;
+    }>(`/v1/cameras/${encodeURIComponent(cameraId)}/talkback/test`, {
+      method: 'POST',
+    }),
+};
+
 export { ApiError };
+
 
 

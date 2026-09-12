@@ -24,11 +24,15 @@ export interface SynchronizedPlayback {
     name: string;
     segments: RecordingSegment[];
     timeOffset: number; // milliseconds adjustment for sync
+    clockOffsetMs?: number;
+    measuredDriftMs?: number;
+    driftStatus?: "SYNCHRONIZED" | "DRIFT_WARNING" | "DRIFT_CRITICAL";
   }>;
   masterCameraId: string;
   fromTime: string;
   toTime: string;
   layout: "grid" | "stacked" | "custom";
+  driftCompensationEnabled?: boolean;
 }
 
 export interface FrameExtractionRequest {
@@ -177,6 +181,26 @@ export class PlaybackEngine {
       masterCameraId = cameraIds[0] ?? "";
     }
 
+    // Query clock_drift_telemetry for cameras to obtain authoritative real-time/historical clock offset
+    const telemetryDrifts = new Map<string, { offsetMs: number; status: "SYNCHRONIZED" | "DRIFT_WARNING" | "DRIFT_CRITICAL" }>();
+    try {
+      const driftRes = await this.pool.query(
+        `SELECT DISTINCT ON (node_id) node_id, offset_ms, status 
+         FROM clock_drift_telemetry 
+         WHERE node_id = ANY($1::varchar[])
+         ORDER BY node_id, measured_at DESC`,
+        [cameraIds],
+      );
+      for (const row of driftRes.rows) {
+        const offset = Number(row.offset_ms || 0);
+        const absOffset = Math.abs(offset);
+        const status = absOffset <= 5000 ? "SYNCHRONIZED" : absOffset <= 30000 ? "DRIFT_WARNING" : "DRIFT_CRITICAL";
+        telemetryDrifts.set(String(row.node_id), { offsetMs: offset, status });
+      }
+    } catch {
+      // Non-fatal, fallback to group offsets
+    }
+
     // Get authoritative recording search result from RecordingIndex
     const searchResult = await recordingIndexService.findRecording({
       tenantId: input.tenantId,
@@ -210,11 +234,18 @@ export class PlaybackEngine {
           createdAt: s.startTime.toISOString(),
         }));
 
+        const telemetry = telemetryDrifts.get(camRes.cameraId);
+        const effectiveOffset = timeOffsets[camRes.cameraId] ?? telemetry?.offsetMs ?? 0;
+        const driftStatus = telemetry?.status ?? (Math.abs(effectiveOffset) <= 5000 ? "SYNCHRONIZED" : Math.abs(effectiveOffset) <= 30000 ? "DRIFT_WARNING" : "DRIFT_CRITICAL");
+
         return {
           cameraId: camRes.cameraId,
           name: cameraResult.rows[0]?.name || camRes.cameraId,
           segments: mappedSegments,
-          timeOffset: normalizeTimeOffset(timeOffsets[camRes.cameraId]),
+          timeOffset: normalizeTimeOffset(effectiveOffset),
+          clockOffsetMs: effectiveOffset,
+          measuredDriftMs: telemetry?.offsetMs ?? effectiveOffset,
+          driftStatus,
         };
       }),
     );
@@ -226,6 +257,7 @@ export class PlaybackEngine {
       fromTime: input.fromTime,
       toTime: input.toTime,
       layout,
+      driftCompensationEnabled: true,
     };
   }
 
@@ -534,6 +566,175 @@ export class PlaybackEngine {
       codecs: row.codecs?.filter(Boolean) || [],
       totalBytes: parseInt(row.total_bytes || "0", 10),
     };
+  }
+
+  async createPlaybackSession(
+    userId: string,
+    segmentId: string,
+    cameraId: string,
+    evidenceCaseId?: string,
+  ): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO playback_sessions (user_id, segment_id, camera_id, evidence_case_id, created_at, status)
+       VALUES ($1, $2, $3, $4, now(), 'active')
+       RETURNING *`,
+      [userId, segmentId, cameraId, evidenceCaseId ?? null],
+    );
+    return result.rows[0];
+  }
+
+  async trackPlaybackProgress(sessionId: string, currentPosition: number): Promise<void> {
+    await this.pool.query(
+      `UPDATE playback_sessions
+       SET current_position = $2, last_activity = now()
+       WHERE id = $1`,
+      [sessionId, currentPosition],
+    );
+  }
+
+  async endPlaybackSession(sessionId: string): Promise<any> {
+    const result = await this.pool.query(
+      `UPDATE playback_sessions
+       SET status = 'completed', ended_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [sessionId],
+    );
+    return result.rows[0];
+  }
+
+  async getActiveSession(sessionId: string): Promise<any> {
+    const result = await this.pool.query(
+      `SELECT * FROM playback_sessions WHERE id = $1 AND status = 'active'`,
+      [sessionId],
+    );
+    return result.rows[0] || null;
+  }
+
+  async createSyncGroup(
+    name: string,
+    sessionIds: string[],
+    masterSessionId?: string,
+  ): Promise<any> {
+    const master = masterSessionId || sessionIds[0];
+    const groupRes = await this.pool.query(
+      `INSERT INTO sync_groups (name, master_session_id, created_at)
+       VALUES ($1, $2, now())
+       RETURNING *`,
+      [name, master],
+    );
+    const group = groupRes.rows[0];
+
+    if (sessionIds.length > 0) {
+      await this.pool.query(
+        `INSERT INTO sync_group_sessions (group_id, session_id, is_master)
+         SELECT $1, unnest($2::text[]), unnest($3::boolean[])`,
+        [group.id, sessionIds, sessionIds.map((s) => s === master)],
+      );
+    }
+    return group;
+  }
+
+  async syncGroupProgress(groupId: string, masterPosition: number): Promise<void> {
+    const sessionsRes = await this.pool.query(
+      `SELECT session_id, is_master FROM sync_group_sessions WHERE group_id = $1`,
+      [groupId],
+    );
+    const nonMasterSessionIds = (sessionsRes.rows || [])
+      .filter((s: any) => !s.is_master)
+      .map((s: any) => s.session_id);
+
+    if (nonMasterSessionIds.length > 0) {
+      await this.pool.query(
+        `UPDATE playback_sessions
+         SET current_position = $1
+         WHERE id = ANY($2::uuid[])`,
+        [masterPosition, nonMasterSessionIds],
+      );
+    }
+  }
+
+  async getPlaybackHistory(userId: string, limit = 20): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT s.*, c.name as camera_name
+       FROM playback_sessions s
+       LEFT JOIN cameras c ON s.camera_id = c.id
+       WHERE s.user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit],
+    );
+    return result.rows;
+  }
+
+  async getSessionStatistics(userId: string): Promise<any> {
+    const result = await this.pool.query(
+      `SELECT COUNT(*)::int as total_sessions,
+              COALESCE(SUM(duration_seconds), 0)::int as total_playback_time,
+              COALESCE(AVG(duration_seconds), 0)::int as avg_session_duration,
+              (SELECT camera_id FROM playback_sessions WHERE user_id = $1 GROUP BY camera_id ORDER BY COUNT(*) DESC LIMIT 1) as most_viewed_camera
+       FROM playback_sessions
+       WHERE user_id = $1`,
+      [userId],
+    );
+    return result.rows[0];
+  }
+
+  async cleanupInactiveSessions(inactiveDurationSeconds: number): Promise<number> {
+    const result = await this.pool.query(
+      `UPDATE playback_sessions
+       SET status = 'expired'
+       WHERE status = 'active' AND last_activity < NOW() - INTERVAL '1 second' * $1
+       RETURNING id`,
+      [inactiveDurationSeconds],
+    );
+    const firstRow = result.rows[0];
+    if (firstRow && "count" in firstRow) {
+      return Number(firstRow.count);
+    }
+    return result.rows.length;
+  }
+
+  async getActiveSessionsByCamera(cameraId: string): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM playback_sessions WHERE camera_id = $1 AND status = 'active'`,
+      [cameraId],
+    );
+    return result.rows;
+  }
+
+  async updatePlaybackSpeed(sessionId: string, speed: number): Promise<any> {
+    const validSpeeds = [0.25, 0.5, 1, 2, 4, 8, 16];
+    if (!validSpeeds.includes(speed)) {
+      throw new Error(`Invalid playback speed ${speed}`);
+    }
+    const result = await this.pool.query(
+      `UPDATE playback_sessions SET playback_speed = $2 WHERE id = $1 RETURNING *`,
+      [sessionId, speed],
+    );
+    return result.rows[0];
+  }
+
+  async addBookmark(
+    sessionId: string,
+    timestampSeconds: number,
+    description: string,
+  ): Promise<any> {
+    const result = await this.pool.query(
+      `INSERT INTO playback_bookmarks (session_id, timestamp_seconds, description, created_at)
+       VALUES ($1, $2, $3, now())
+       RETURNING *`,
+      [sessionId, timestampSeconds, description],
+    );
+    return result.rows[0];
+  }
+
+  async getSessionBookmarks(sessionId: string): Promise<any[]> {
+    const result = await this.pool.query(
+      `SELECT * FROM playback_bookmarks WHERE session_id = $1 ORDER BY timestamp_seconds ASC`,
+      [sessionId],
+    );
+    return result.rows;
   }
 }
 

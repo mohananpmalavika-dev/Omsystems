@@ -26,7 +26,8 @@ describe("High Availability Clustering & Disaster Recovery", () => {
     expect(res2.isLeader).toBe(false);
 
     // Simulate leader node 1 timeout (> 15000ms)
-    const check = await arbiter.checkNodeLiveness(0); // immediate timeout for test
+    (arbiter as any).nodes.get("api-node-1").heartbeatAt = new Date(Date.now() - 20000);
+    const check = await arbiter.checkNodeLiveness(15000);
     expect(check.leaderPromoted).toBe(true);
     expect(arbiter.getCurrentEpoch()).toBeGreaterThan(1);
     expect(arbiter.getLeaderId()).toBe("api-node-2");

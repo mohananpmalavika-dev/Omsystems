@@ -77,6 +77,29 @@ export class ModuleRegistry {
     });
   }
 
+  registerModule(params: {
+    module: string;
+    importance: ModuleImportance;
+    state?: ModuleState;
+    reason?: string;
+    metadata?: Record<string, unknown>;
+  }): void {
+    this.register(params.module, params.importance, params.state || "STARTING", params.reason, params.metadata);
+  }
+
+  updateModuleState(
+    module: string,
+    state: ModuleState,
+    reason?: string,
+    metadata?: Record<string, unknown>
+  ): void {
+    this.updateStatus(module, state, reason, metadata);
+  }
+
+  getReadiness(): ReadinessEvaluation {
+    return this.evaluateReadiness();
+  }
+
   getStatus(module: string): ModuleStatus | undefined {
     return this.modules.get(module);
   }

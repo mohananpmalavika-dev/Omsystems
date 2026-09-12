@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { Readable } from "node:stream";
 import { z } from "zod";
 import { AccessRegistry } from "./access-registry.js";
@@ -68,6 +68,11 @@ export async function buildMediaGateway(options: {
     [/^application\/(sdp|trickle-ice-sdpfrag)/i, "application/sdp", "application/trickle-ice-sdpfrag"],
     { parseAs: "string", bodyLimit: 256 * 1024 },
     (_request: unknown, body: string, done: (err: Error | null, body?: string) => void) => done(null, body),
+  );
+  (app as any).addContentTypeParser(
+    [/^audio\//i, "application/octet-stream"],
+    { parseAs: "buffer", bodyLimit: 128 * 1024 },
+    (_request: unknown, body: Buffer, done: (err: Error | null, body?: Buffer) => void) => done(null, body),
   );
 
   app.addHook("preHandler", async (request, reply) => {
@@ -229,6 +234,152 @@ export async function buildMediaGateway(options: {
       const released = await access.release(params.sessionId, token);
       if (!released) throw new GatewayError(404, "invalid_live_session");
       return reply.code(200).send({ status: "released" });
+    },
+  });
+
+  interface GatewayTalkSession {
+    id: string;
+    cameraId: string;
+    token: string;
+    expiresAt: number;
+    adapter: string;
+    codec: string;
+    sampleRate: number;
+    bytesSent: number;
+    startedAt: number;
+    timer: NodeJS.Timeout;
+    onWritePcm?: (pcm: Buffer) => Promise<void>;
+    onClose?: () => Promise<void>;
+  }
+  const gatewayTalkSessions = new Map<string, GatewayTalkSession>();
+  const gatewayTalkLeases = new Map<string, string>();
+
+  app.post("/v1/talk/start", async (request, reply) => {
+    setCorsHeaders(request.headers.origin, undefined, reply);
+    const body = z.object({
+      controlPlaneToken: z.string().min(32).max(200),
+    }).parse(request.body);
+    const consumed = await options.controlPlane.consumeLiveSession(
+      body.controlPlaneToken,
+    );
+    if (consumed.purpose !== "talk") {
+      throw new GatewayError(403, "invalid_talk_session");
+    }
+
+    // Check single-talker lease
+    const now = Date.now();
+    const existingLeaseSessionId = gatewayTalkLeases.get(consumed.cameraId);
+    if (existingLeaseSessionId) {
+      const existing = gatewayTalkSessions.get(existingLeaseSessionId);
+      if (existing && existing.expiresAt > now) {
+        throw new GatewayError(409, "talkback_busy");
+      }
+      // Expired lease cleanup
+      gatewayTalkLeases.delete(consumed.cameraId);
+      if (existing) {
+        clearTimeout(existing.timer);
+        gatewayTalkSessions.delete(existingLeaseSessionId);
+      }
+    }
+
+    const sourceUri = await options.secrets.resolve(consumed.connectionSecretRef);
+    if (!sourceUri) throw new GatewayError(503, "stream_secret_unavailable");
+
+    const sessionId = consumed.id;
+    const token = randomBytes(32).toString("base64url");
+    const expiresAt = now + options.accessTtlMs;
+    const adapter = "onvif-rtsp-backchannel";
+    const codec = "PCMA";
+    const sampleRate = 8000;
+
+    const session: GatewayTalkSession = {
+      id: sessionId,
+      cameraId: consumed.cameraId,
+      token,
+      expiresAt,
+      adapter,
+      codec,
+      sampleRate,
+      bytesSent: 0,
+      startedAt: now,
+      timer: setTimeout(() => {
+        gatewayTalkSessions.delete(sessionId);
+        gatewayTalkLeases.delete(consumed.cameraId);
+      }, options.accessTtlMs),
+    };
+    session.timer.unref();
+
+    gatewayTalkSessions.set(sessionId, session);
+    gatewayTalkLeases.set(consumed.cameraId, sessionId);
+
+    reply.header("cache-control", "no-store");
+    const base = stripSlash(options.publicWebRtcBaseUrl.replace(/\/webrtc\/?$/, ""));
+    return reply.code(201).send({
+      sessionId: session.id,
+      cameraId: session.cameraId,
+      expiresAt: new Date(expiresAt).toISOString(),
+      adapter: session.adapter,
+      audio: {
+        url: `${base}/v1/talk/${encodeURIComponent(session.id)}/audio`,
+        endUrl: `${base}/v1/talk/${encodeURIComponent(session.id)}`,
+        bearerToken: session.token,
+        contentType: "audio/L16;rate=8000;channels=1",
+        codec: session.codec,
+        sampleRate: session.sampleRate,
+      },
+    });
+  });
+
+  app.route({
+    method: ["POST", "OPTIONS"],
+    url: "/v1/talk/:sessionId/audio",
+    handler: async (request, reply) => {
+      setCorsHeaders(request.headers.origin, undefined, reply);
+      if (request.method === "OPTIONS") {
+        return reply.code(204).send();
+      }
+      const { sessionId } = z.object({ sessionId: z.string().min(1) }).parse(request.params);
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+      const session = gatewayTalkSessions.get(sessionId);
+      if (!session || session.expiresAt <= Date.now() || !token || session.token !== token) {
+        throw new GatewayError(401, "invalid_talk_access");
+      }
+
+      const pcm = request.body as Buffer;
+      if (!Buffer.isBuffer(pcm) || pcm.length === 0 || pcm.length > 32_000 || pcm.length % 2 !== 0) {
+        throw new GatewayError(400, "invalid_audio_chunk");
+      }
+
+      if (session.onWritePcm) {
+        await session.onWritePcm(pcm);
+      }
+      session.bytesSent += pcm.length;
+      return reply.code(202).send();
+    },
+  });
+
+  app.route({
+    method: ["DELETE", "OPTIONS"],
+    url: "/v1/talk/:sessionId",
+    handler: async (request, reply) => {
+      setCorsHeaders(request.headers.origin, undefined, reply);
+      if (request.method === "OPTIONS") {
+        return reply.code(204).send();
+      }
+      const { sessionId } = z.object({ sessionId: z.string().min(1) }).parse(request.params);
+      const token = request.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
+      const session = gatewayTalkSessions.get(sessionId);
+      if (!session || !token || session.token !== token) {
+        throw new GatewayError(401, "invalid_talk_access");
+      }
+
+      clearTimeout(session.timer);
+      gatewayTalkSessions.delete(sessionId);
+      gatewayTalkLeases.delete(session.cameraId);
+      if (session.onClose) {
+        await session.onClose().catch(() => undefined);
+      }
+      return reply.code(204).send();
     },
   });
 

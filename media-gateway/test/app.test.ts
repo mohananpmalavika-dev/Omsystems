@@ -264,4 +264,114 @@ describe("authorized media startup", () => {
       );
     }
   });
+
+  it("handles push-to-talk backchannel startup, audio streaming, and single-talker locking", async () => {
+    const controlPlane: ControlPlaneClient = {
+      consumeLiveSession: vi.fn(async (token: string) => {
+        if (token === "talk-token-busy") {
+          return {
+            id: "talk-session-2",
+            cameraId: "cam-talk-01",
+            cameraNodeId: "node-1",
+            userId: "user-2",
+            tenantId: "tenant-1",
+            purpose: "talk" as const,
+            connectionSecretRef: "secret://cam-talk-01",
+            profiles: [],
+          };
+        }
+        return {
+          id: "talk-session-1",
+          cameraId: "cam-talk-01",
+          cameraNodeId: "node-1",
+          userId: "user-1",
+          tenantId: "tenant-1",
+          purpose: "talk" as const,
+          connectionSecretRef: "secret://cam-talk-01",
+          profiles: [],
+        };
+      }),
+    };
+    const secrets: StreamSecretProvider = {
+      resolve: vi.fn(async () => "rtsp://camera:554/live"),
+    };
+    const router: MediaRouter = {
+      ensurePath: vi.fn(async () => undefined),
+      removePath: vi.fn(async () => undefined),
+    };
+
+    app = await buildMediaGateway({
+      controlPlane,
+      router,
+      secrets,
+      publicHlsBaseUrl: "https://media.example/hls",
+      publicWebRtcBaseUrl: "https://media.example/webrtc",
+      accessTtlMs: 30_000,
+    });
+
+    // 1. Start talkback session
+    const startRes = await app.inject({
+      method: "POST",
+      url: "/v1/talk/start",
+      payload: { controlPlaneToken: "a".repeat(43) },
+    });
+    expect(startRes.statusCode).toBe(201);
+    const session = startRes.json();
+    expect(session.sessionId).toBe("talk-session-1");
+    expect(session.cameraId).toBe("cam-talk-01");
+    expect(session.adapter).toBe("onvif-rtsp-backchannel");
+    expect(session.audio.url).toContain("/v1/talk/talk-session-1/audio");
+
+    // 2. Reject concurrent talkback on same camera (Single-Talker Mutex)
+    const busyRes = await app.inject({
+      method: "POST",
+      url: "/v1/talk/start",
+      payload: { controlPlaneToken: "talk-token-busy" + "b".repeat(30) },
+    });
+    expect(busyRes.statusCode).toBe(409);
+    expect(busyRes.json().error).toBe("talkback_busy");
+
+    // 3. Send PCM16 audio chunk
+    const pcmChunk = Buffer.from(new Int16Array([0, 500, -500, 1000]).buffer);
+    const audioRes = await app.inject({
+      method: "POST",
+      url: `/v1/talk/${session.sessionId}/audio`,
+      headers: {
+        authorization: `Bearer ${session.audio.bearerToken}`,
+        "content-type": "audio/L16",
+      },
+      payload: pcmChunk,
+    });
+    expect(audioRes.statusCode).toBe(202);
+
+    // 4. Unauthorized audio chunk rejected
+    const unauthRes = await app.inject({
+      method: "POST",
+      url: `/v1/talk/${session.sessionId}/audio`,
+      headers: {
+        authorization: "Bearer wrong-token",
+        "content-type": "audio/L16",
+      },
+      payload: pcmChunk,
+    });
+    expect(unauthRes.statusCode).toBe(401);
+
+    // 5. End talk session
+    const endRes = await app.inject({
+      method: "DELETE",
+      url: `/v1/talk/${session.sessionId}`,
+      headers: {
+        authorization: `Bearer ${session.audio.bearerToken}`,
+      },
+    });
+    expect(endRes.statusCode).toBe(204);
+
+    // 6. Camera is now free for new talker
+    const nextStartRes = await app.inject({
+      method: "POST",
+      url: "/v1/talk/start",
+      payload: { controlPlaneToken: "talk-token-busy" + "b".repeat(30) },
+    });
+    expect(nextStartRes.statusCode).toBe(201);
+  });
 });
