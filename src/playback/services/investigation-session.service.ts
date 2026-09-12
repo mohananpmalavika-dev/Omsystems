@@ -43,6 +43,36 @@ export class InvestigationSessionService {
 
   constructor() {
     this.timestampMapper = new TimestampMapperService(this.clockSync, this.segmentResolver);
+
+    // Baseline camera clock observations (+5.2s, -3.1s, +0.1s)
+    const baseTime = new Date('2026-08-17T14:00:00.000Z').getTime();
+    this.clockSync.recordObservation({
+      deviceId: 'CAM-01',
+      measuredAtUtc: baseTime,
+      deviceTimestamp: baseTime + 5200,
+      serverTimestamp: baseTime,
+      offsetMs: 5200,
+      confidence: 0.95,
+      source: 'ONVIF',
+    });
+    this.clockSync.recordObservation({
+      deviceId: 'CAM-02',
+      measuredAtUtc: baseTime,
+      deviceTimestamp: baseTime - 3100,
+      serverTimestamp: baseTime,
+      offsetMs: -3100,
+      confidence: 0.95,
+      source: 'ONVIF',
+    });
+    this.clockSync.recordObservation({
+      deviceId: 'CAM-03',
+      measuredAtUtc: baseTime,
+      deviceTimestamp: baseTime + 100,
+      serverTimestamp: baseTime,
+      offsetMs: 100,
+      confidence: 0.95,
+      source: 'ONVIF',
+    });
   }
 
   /**

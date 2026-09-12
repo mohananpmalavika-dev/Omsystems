@@ -2780,6 +2780,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register two-way audio talkback routes');
   }
 
+  // Register Synchronized Multi-Camera Playback (video.synchronized_playback) routes
+  try {
+    await registerSynchronizedPlaybackRoutes(app, pool);
+    app.log.info('Synchronized Multi-Camera Playback (video.synchronized_playback) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register synchronized playback routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");

@@ -28,9 +28,15 @@ describe('UI Gating & Usability Logic Tests', () => {
     const registry = getCapabilityRegistry();
     registry.setDeploymentPolicy({ allowBeta: false, allowExperimental: false });
 
-    const betaResult = registry.canUse('video.synchronized_playback');
+    // recording.recovery is BETA, so it must be disabled when allowBeta is false
+    const betaResult = registry.canUse('recording.recovery');
     expect(betaResult.usable).toBe(false);
     expect(betaResult.reason).toBe('beta_features_disabled');
+
+    // video.synchronized_playback is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('video.synchronized_playback', CapabilityRuntimeState.HEALTHY);
+    const syncResult = registry.canUse('video.synchronized_playback');
+    expect(syncResult.usable).toBe(true);
 
     // Restore standard policy
     registry.setDeploymentPolicy({ allowBeta: true, allowExperimental: false });

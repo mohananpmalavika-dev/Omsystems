@@ -1,0 +1,13 @@
+{
+  "name": "@kryptovision/offline-player",
+  "version": "1.0.0",
+  "description": "Zero-dependency Standalone Offline Forensic Evidence Player & Synchronized Multi-Stream Viewer",
+  "type": "module",
+  "main": "dist/offline-player.js",
+  "types": "dist/offline-player.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": ["evidence", "forensic", "offline-player", "vms"],
+  "license": "UNLICENSED"
+}

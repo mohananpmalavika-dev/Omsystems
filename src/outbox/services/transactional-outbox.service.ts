@@ -65,6 +65,11 @@ export class TransactionalOutboxService {
       createdAt: now,
     };
 
+    const existingMemory = this.memoryOutbox.get(idempotencyKey);
+    if (existingMemory) {
+      return existingMemory;
+    }
+
     const client = clientOrPool || this.pool;
     if (client) {
       try {
@@ -93,6 +98,29 @@ export class TransactionalOutboxService {
           const row = res.rows[0];
           record.id = row.id;
           return record;
+        }
+
+        // On conflict do nothing returned 0 rows, retrieve existing record
+        const conflictRes = await (client as any).query(
+          `SELECT * FROM event_outbox WHERE idempotency_key = $1`,
+          [record.idempotencyKey]
+        );
+        if (conflictRes.rows.length > 0) {
+          const row = conflictRes.rows[0];
+          return {
+            id: row.id,
+            eventId: row.event_id,
+            tenantId: row.tenant_id,
+            aggregateType: row.aggregate_type,
+            aggregateId: row.aggregate_id,
+            eventType: row.event_type,
+            schemaVersion: row.schema_version,
+            correlationId: row.correlation_id,
+            idempotencyKey: row.idempotency_key,
+            payload: typeof row.payload === "string" ? JSON.parse(row.payload) : row.payload,
+            published: row.published,
+            createdAt: new Date(row.created_at),
+          };
         }
       } catch {
         // Fallback for memory mode

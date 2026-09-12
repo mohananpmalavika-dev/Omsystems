@@ -29,7 +29,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
 } from "lucide-react";
-import { videoBookmarksApi, camerasApi, incidentsApi } from "@/lib/api-client";
+import { videoBookmarksApi } from "@/lib/api-client";
 
 interface CameraItem {
   id: string;
@@ -167,8 +167,8 @@ export function VideoBookmarksWorkspace() {
           limit: 100,
         }),
         videoBookmarksApi.getMetrics(selectedCameraId || undefined),
-        camerasApi.list(),
-        incidentsApi.list({ limit: 100 }),
+        videoBookmarksApi.getCameras(),
+        videoBookmarksApi.getIncidents(),
       ]);
 
       if (bmRes.status === "fulfilled" && bmRes.value.success) {
