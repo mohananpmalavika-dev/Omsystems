@@ -317,14 +317,23 @@ export default function OrganizationHierarchyPage() {
     }
   }, [showAddEmpModal]);
 
-  async function loadAllData() {
+  async function loadAllData(options: { tree?: boolean; users?: boolean; roles?: boolean; cameras?: boolean } = {}) {
+    const loadTree = options.tree !== false;
+    const loadUsers = options.users !== false;
+    const loadRoles = options.roles !== false;
+    const loadCameras = options.cameras !== false;
     setLoading(true);
     setError(null);
     try {
-      // 1. Fetch Tree
-      const treeRes = await fetchWithAuth("/api/control/v1/organization/tree");
-      if (treeRes.ok) {
-        const treeJson = await treeRes.json();
+      const [treeRes, usersRes, rolesRes, camsRes] = await Promise.all([
+        loadTree ? organizationApi.getTree() : Promise.resolve(null),
+        loadUsers ? fetchWithAuth("/api/control/v1/users") : Promise.resolve(null),
+        loadRoles ? fetchWithAuth("/api/control/v1/roles") : Promise.resolve(null),
+        loadCameras ? fetchWithAuth("/api/control/v1/cameras") : Promise.resolve(null),
+      ]);
+
+      if (treeRes) {
+        const treeJson: any = treeRes;
         if (typeof treeJson.meta?.canCreateRoot === "boolean") {
           setCanCreateOrg(treeJson.meta.canCreateRoot);
         }
@@ -354,22 +363,17 @@ export default function OrganizationHierarchyPage() {
         setExpandedNodes(expanded);
       }
 
-      // 2. Fetch Users / Employees
-      const usersRes = await fetchWithAuth("/api/control/v1/users");
-      if (usersRes.ok) {
+      if (usersRes?.ok) {
         const usersJson = await usersRes.json();
         setEmployees(Array.isArray(usersJson) ? usersJson : usersJson.data || []);
       }
 
-      const rolesRes = await fetchWithAuth("/api/control/v1/roles");
-      if (rolesRes.ok) {
+      if (rolesRes?.ok) {
         const rolesJson = await rolesRes.json();
         setRoles(Array.isArray(rolesJson) ? rolesJson : rolesJson.data || []);
       }
 
-      // 3. Fetch Cameras
-      const camsRes = await fetchWithAuth("/api/control/v1/cameras");
-      if (camsRes.ok) {
+      if (camsRes?.ok) {
         const camsJson = await camsRes.json();
         setCameras(Array.isArray(camsJson) ? camsJson : camsJson.data || []);
       }
@@ -725,7 +729,7 @@ export default function OrganizationHierarchyPage() {
       setNewEmpCustomRoleId("");
       setEmpPhotoData("");
       stopWebcam();
-      await loadAllData();
+      await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to create employee");
     } finally {
@@ -764,7 +768,7 @@ export default function OrganizationHierarchyPage() {
       setRoleName("");
       setRoleDescription("");
       setRoleMenuAccess([]);
-      await loadAllData();
+      await loadAllData({ tree: false, users: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to create role");
     } finally {
@@ -794,7 +798,7 @@ export default function OrganizationHierarchyPage() {
       });
       if (!res.ok) throw new Error("Failed to delete role");
       setNotice(`Role "${role.name}" deleted successfully.`);
-      await loadAllData();
+      await loadAllData({ tree: false, users: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to delete role");
     } finally {
@@ -850,7 +854,7 @@ export default function OrganizationHierarchyPage() {
 
       setNotice(`Permission policy and ${permScopeNodeIds.length} location scope(s) updated for ${selectedEmployee.displayName}!`);
       setShowPermModal(false);
-      await loadAllData();
+      await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to assign permission");
     } finally {
@@ -898,7 +902,7 @@ export default function OrganizationHierarchyPage() {
       }
       setNotice(`Updated employee details for "${editEmpName}"!`);
       setShowEditEmpModal(false);
-      await loadAllData();
+      await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to update employee");
     } finally {
@@ -950,7 +954,7 @@ export default function OrganizationHierarchyPage() {
         throw new Error(errJson.message || "Failed to delete employee");
       }
       setNotice(`Deactivated employee "${emp.displayName}".`);
-      await loadAllData();
+      await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to delete employee");
     } finally {
@@ -970,7 +974,7 @@ export default function OrganizationHierarchyPage() {
         throw new Error(errJson.message || "Failed to unlock account");
       }
       setNotice(`Account for ${emp.displayName} unlocked successfully.`);
-      await loadAllData();
+      await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to unlock account");
     } finally {
@@ -1212,7 +1216,7 @@ export default function OrganizationHierarchyPage() {
 
           <div className="flex items-center gap-2.5">
             <button
-              onClick={loadAllData}
+              onClick={() => void loadAllData()}
               disabled={loading}
               className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-2 transition-colors"
             >

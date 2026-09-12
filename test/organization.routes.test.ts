@@ -45,6 +45,17 @@ describe("organization routes", () => {
     expect(tree.find((node) => node.id === organization.id)?.logoUrl).toBeNull();
   });
 
+  it("scopes in-memory organization trees and statistics by tenant", async () => {
+    const store = new MemoryStore();
+    const first = await store.createOrganizationNode("tenant-one", { nodeType: "company", name: "Tenant One" });
+    await store.createOrganizationNode("tenant-two", { nodeType: "company", name: "Tenant Two" });
+
+    const tree = await store.getOrganizationTree("tenant-one");
+    expect(tree.map((node) => node.id)).toEqual([first.id]);
+    const statistics = await store.getOrganizationStatistics("tenant-one");
+    expect(statistics.nodes.company).toBe(1);
+  });
+
   async function createApp(user: User, store: Record<string, unknown>) {
     const app = Fastify({ logger: false });
     apps.push(app);
