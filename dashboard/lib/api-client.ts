@@ -5757,6 +5757,225 @@ export const recordingFailoverApi = {
 
   getMetrics: () =>
     fetchApi<{ data: RecordingFailoverMetricsItem }>('/v1/recording/failover/metrics'),
+// ============================================================================
+// Hardware Security Module (HSM) Evidence Signing API Client (security.hsm_evidence_signing)
+// ============================================================================
+
+export interface HsmStatusReportItem {
+  status: 'ONLINE' | 'OFFLINE' | 'DEGRADED' | 'UNINITIALIZED';
+  provider: string;
+  modulePath: string;
+  slotId: number;
+  tokenLabel: string;
+  tokenSerial: string;
+  activeKeyLabel: string;
+  algorithm: string;
+  fipsLevel: number;
+  sessionPool: {
+    total: number;
+    active: number;
+    authenticated: boolean;
+  };
+  supportedMechanisms: string[];
+  airGappedQualified: boolean;
+  lastHeartbeatAt: string;
+}
+
+export interface HsmTokenItem {
+  id: string;
+  slotId: number;
+  tokenLabel: string;
+  tokenSerial: string;
+  manufacturer: string;
+  model: string;
+  firmwareVersion?: string;
+  hardwareVersion?: string;
+  fipsLevel: number;
+  modulePath: string;
+  status: 'ONLINE' | 'OFFLINE' | 'LOCKED' | 'DEGRADED';
+  pinSourceType: 'env' | 'file' | 'secret';
+  totalSessions: number;
+  activeSessions: number;
+  mechanisms: string[];
+  metadata: Record<string, unknown>;
+  lastHeartbeatAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HsmKeyItem {
+  id: string;
+  keyLabel: string;
+  tokenSerial?: string;
+  ckaId?: string;
+  algorithm: string;
+  keySize: number;
+  purpose: string;
+  publicKeyPem: string;
+  publicKeyFingerprint: string;
+  certificatePem?: string;
+  certificateChain: string[];
+  isActive: boolean;
+  signCount: number;
+  verifyCount: number;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HsmSignedPackageItem {
+  id: string;
+  evidenceId: string;
+  tenantId: string;
+  branchId?: string;
+  cameraId?: string;
+  manifestSha256: string;
+  keyLabel: string;
+  keyFingerprint: string;
+  algorithm: string;
+  signatureBase64: string;
+  signatureDerHex: string;
+  certificatePem?: string;
+  certificateChain: string[];
+  manifestPayload: Record<string, unknown>;
+  artifactsSummary: unknown[];
+  timeSyncSummary: Record<string, unknown>;
+  verificationStatus: 'VERIFIED' | 'FAILED' | 'UNCHECKED';
+  signedAt: string;
+  createdAt: string;
+}
+
+export interface HsmAuditLogItem {
+  id: string;
+  operation: string;
+  keyLabel?: string;
+  tokenSerial?: string;
+  evidenceId?: string;
+  actorId: string;
+  actorType: string;
+  status: 'SUCCESS' | 'FAILURE';
+  errorMessage?: string;
+  durationMs: number;
+  details: Record<string, unknown>;
+  timestamp: string;
+}
+
+export const hsmSigningApi = {
+  getStatus: () =>
+    fetchApi<{ success: boolean; data: HsmStatusReportItem }>('/v1/security/hsm/status'),
+
+  getTokens: () =>
+    fetchApi<{ success: boolean; data: HsmTokenItem[] }>('/v1/security/hsm/tokens'),
+
+  registerToken: (body: {
+    slotId: number;
+    tokenLabel: string;
+    tokenSerial: string;
+    manufacturer: string;
+    model: string;
+    firmwareVersion?: string;
+    hardwareVersion?: string;
+    fipsLevel?: number;
+    modulePath: string;
+    pinSourceType?: 'env' | 'file' | 'secret';
+    totalSessions?: number;
+    mechanisms?: string[];
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmTokenItem }>('/v1/security/hsm/tokens/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getKeys: () =>
+    fetchApi<{ success: boolean; data: HsmKeyItem[] }>('/v1/security/hsm/keys'),
+
+  registerKey: (body: {
+    keyLabel: string;
+    tokenSerial?: string;
+    ckaId?: string;
+    algorithm?: 'ECDSA_P256' | 'ECDSA_P384' | 'RSA_PSS_SHA256' | 'RSA_PKCS1_SHA256';
+    keySize?: number;
+    purpose?: string;
+    publicKeyPem: string;
+    certificatePem?: string;
+    certificateChain?: string[];
+    isActive?: boolean;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmKeyItem }>('/v1/security/hsm/keys/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getKeyCertificate: (keyLabel: string) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        keyLabel: string;
+        algorithm: string;
+        publicKeyPem: string;
+        publicKeyFingerprint: string;
+        certificatePem?: string;
+        certificateChain: string[];
+        isActive: boolean;
+        signCount: number;
+        verifyCount: number;
+      };
+    }>(`/v1/security/hsm/keys/${encodeURIComponent(keyLabel)}/certificate`),
+
+  signEvidence: (body: {
+    evidenceId?: string;
+    tenantId?: string;
+    branchId?: string;
+    cameraId?: string;
+    manifest: Record<string, unknown>;
+    artifactsSummary?: unknown[];
+    timeSyncSummary?: Record<string, unknown>;
+    reason?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmSignedPackageItem }>('/v1/security/hsm/sign-evidence', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  verifyEvidence: (body: {
+    manifestSha256?: string;
+    manifest?: Record<string, unknown>;
+    signatureBase64: string;
+    publicKeyPem?: string;
+    keyLabel?: string;
+    evidenceId?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        isValid: boolean;
+        manifestSha256: string;
+        verifiedAt: string;
+        keyId: string;
+      };
+    }>('/v1/security/hsm/verify-evidence', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getPackage: (evidenceId: string) =>
+    fetchApi<{ success: boolean; data: HsmSignedPackageItem }>(
+      `/v1/security/hsm/packages/${encodeURIComponent(evidenceId)}`
+    ),
+
+  getAuditLogs: (params?: { keyLabel?: string; evidenceId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.keyLabel) qs.append('keyLabel', params.keyLabel);
+    if (params?.evidenceId) qs.append('evidenceId', params.evidenceId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ success: boolean; data: HsmAuditLogItem[] }>(
+      `/v1/security/hsm/audit-log?${qs.toString()}`
+    );
+  },
+
+  getHealth: () =>
+    fetchApi<{ success: boolean; data: HsmStatusReportItem }>('/v1/security/hsm/health'),
 };
 
 export { ApiError };

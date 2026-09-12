@@ -85,6 +85,7 @@ import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.rou
 import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
+import { registerHsmSigningRoutes } from "./routes/hsm-signing.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerSynchronizedPlaybackRoutes } from "./routes/synchronized-playback.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
@@ -141,6 +142,8 @@ import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
 import { registerMediaGatewayFailoverRoutes } from "./routes/media-gateway-failover.routes.js";
+import { registerMtlsRoutes } from "./routes/mtls.routes.js";
+import { mtlsAuthenticator } from "./security/mtls/index.js";
 import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerSloRoutes } from "./routes/slo.routes.js";
 import { registerCeoScreenRoutes } from "./routes/ceo-screen.routes.js";
@@ -688,12 +691,48 @@ export async function buildApp(options?: {
       || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
       || request.url.startsWith("/v1/edge-updates/artifacts/")
+      || request.url.startsWith("/v1/security/mtls/")
     ) return;
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
+
+    // Mutual TLS (mTLS) Client Certificate Authentication
+    const clientCertPem = extractClientCertificate(request);
+    let edgeMtlsAuthenticated = false;
+    let mtlsValidationResult: any = undefined;
+
+    if (clientCertPem) {
+      mtlsValidationResult = mtlsAuthenticator.validateClientCert(clientCertPem, "EDGE_AGENT", {
+        clientIp: request.ip,
+        endpoint: request.url,
+      });
+      if (mtlsValidationResult.valid) {
+        edgeMtlsAuthenticated = true;
+      } else if (process.env.EDGE_MTLS_ENFORCED === "true") {
+        return reply.code(401).send({
+          error: "invalid_client_certificate",
+          reason: mtlsValidationResult.rejectionReason,
+          fingerprint: mtlsValidationResult.fingerprint,
+        });
+      }
+    } else if (process.env.EDGE_MTLS_ENFORCED === "true" && edgeAgentIngressRoute) {
+      return reply.code(401).send({
+        error: "client_certificate_required",
+        message: "Mutual TLS client certificate authentication is strictly enforced.",
+      });
+    }
+
+    const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
+
+    if (edgeAgentIngressRoute && edgeMtlsAuthenticated) {
+      request.edgeAgentAuthenticated = true;
+      request.edgeAgentId = mtlsValidationResult.nodeId || ingressAgentId;
+      (request as any).clientCertFingerprint = mtlsValidationResult.fingerprint;
+      return;
+    }
+
     const edgeBridgeHeader = request.headers["x-edge-bridge-key"];
     const edgeAgentToken = request.headers["x-edge-agent-token"];
-    const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
     const userIdentitySupplied = typeof request.headers.authorization === "string"
       || typeof request.headers["x-user-id"] === "string";
     const legacyBridgeAllowed = options?.allowLegacyEdgeBridgeKey ?? Boolean(options?.edgeBridgeSharedKey);
@@ -2615,6 +2654,7 @@ export async function buildApp(options?: {
     workerKey: options?.reportWorkerKey ?? process.env.REPORT_WORKER_SHARED_KEY,
   });
   await registerEvidenceRoutes(app, store, exportWorker);
+  await registerHsmSigningRoutes(app, store);
   await registerLiveOperationsRoutes(app, store);
   registerMediaSessionRoutes(app, store);
   
@@ -3182,6 +3222,7 @@ export async function buildApp(options?: {
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);
     await registerMediaGatewayFailoverRoutes(app);
+    await registerMtlsRoutes(app, store);
     await registerOnvifRoutes(app);
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);
@@ -3276,6 +3317,46 @@ function secureEqual(left: string, right: string) {
 
 function secureEqualHeader(value: string | string[] | undefined, expected: string) {
   return typeof value === "string" && secureEqual(value, expected);
+}
+
+function extractClientCertificate(request: FastifyRequest): string | undefined {
+  // 1. Direct TLS socket inspection (when terminating TLS directly)
+  const socket = request.raw.socket as any;
+  if (socket && typeof socket.getPeerCertificate === "function") {
+    try {
+      const peerCert = socket.getPeerCertificate(true);
+      if (peerCert?.raw && Buffer.isBuffer(peerCert.raw)) {
+        const b64 = peerCert.raw.toString("base64");
+        const lines = b64.match(/.{1,64}/g);
+        return `-----BEGIN CERTIFICATE-----\n${lines ? lines.join("\n") : b64}\n-----END CERTIFICATE-----`;
+      }
+    } catch {}
+  }
+
+  // 2. Verified reverse proxy headers (Envoy, Nginx, ALB, Cloudflare, Traefik)
+  const header = request.headers["x-client-cert"] || request.headers["x-ssl-cert"] || request.headers["ssl-client-cert"];
+  if (typeof header === "string" && header.trim()) {
+    let raw = header.trim();
+    if (raw.includes("%20") || raw.includes("%0A") || raw.includes("%2B")) {
+      try { raw = decodeURIComponent(raw); } catch {}
+    }
+    if (raw.includes("BEGIN CERTIFICATE")) {
+      return raw;
+    }
+    try {
+      const buf = Buffer.from(raw, "base64");
+      const utf8 = buf.toString("utf8");
+      if (utf8.includes("BEGIN CERTIFICATE")) {
+        return utf8;
+      }
+      const b64 = buf.toString("base64");
+      const lines = b64.match(/.{1,64}/g);
+      return `-----BEGIN CERTIFICATE-----\n${lines ? lines.join("\n") : b64}\n-----END CERTIFICATE-----`;
+    } catch {}
+    return raw;
+  }
+
+  return undefined;
 }
 
 function isEdgeAgentIngressRoute(method: string, url: string) {
