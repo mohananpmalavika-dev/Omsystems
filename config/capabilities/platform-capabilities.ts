@@ -1864,9 +1864,9 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
   {
     id: 'security.signed_configuration',
     name: 'Cryptographically Signed Edge Config Bundles',
-    description: 'HMAC/RSA signature verification ensuring edge agents only accept untampered configuration files.',
+    description: 'Canonical Ed25519 signatures, expiry, scope binding, and anti-replay checks ensure edge agents accept only untampered configuration bundles.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1878,7 +1878,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
@@ -2204,7 +2204,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Remote Edge Agent Binary OTA Upgrade',
     description: 'Over-the-air binary delta packaging, staged deployment, and atomic process replacement.',
     category: 'EDGE',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -2216,7 +2216,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
@@ -2229,7 +2229,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Signed Firmware & Binary Verification',
     description: 'Cryptographic signature checking on edge update payloads before execution.',
     category: 'EDGE',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -2241,7 +2241,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
@@ -2255,7 +2255,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Automatic Failure Rollback',
     description: 'Automatic binary rollback to previous working version if edge health check fails after upgrade.',
     category: 'EDGE',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -2267,7 +2267,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {

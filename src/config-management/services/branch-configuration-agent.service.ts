@@ -142,8 +142,19 @@ export class BranchConfigurationAgentService {
       return this.failedResult(input, startedAt, `Integrity verification rejected: ${verification.reason}`);
     }
 
+    if (input.manifest.scope.type === 'branch' && input.manifest.scope.targetId !== input.branchId) {
+      return this.failedResult(input, startedAt, 'CONFIGURATION_SCOPE_MISMATCH: package is signed for another branch');
+    }
+    // Cohort membership is control-plane policy. An agent cannot establish it
+    // from a bare signed manifest, so it must fail closed until an explicit,
+    // signed branch-targeted package is delivered.
+    if (input.manifest.scope.type === 'cohort') {
+      return this.failedResult(input, startedAt, 'CONFIGURATION_SCOPE_UNVERIFIABLE: cohort package requires branch targeting');
+    }
+
     const key = this.stateKey(input.manifest.tenantId, input.branchId);
-    const highestAccepted = this.highestAcceptedVersions.get(key) ?? 0;
+    const persistedVersion = signedConfigService.getBranchState(input.branchId, input.manifest.tenantId)?.actualVersion ?? 0;
+    const highestAccepted = Math.max(this.highestAcceptedVersions.get(key) ?? 0, persistedVersion);
     if (!input.isRollbackOperation && input.manifest.configVersion < highestAccepted) {
       return this.failedResult(
         input,

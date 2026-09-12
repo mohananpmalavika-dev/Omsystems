@@ -29,6 +29,7 @@ import { DeviceIdentityStore } from "./security/device-identity.js";
 import { EncryptedOutbox } from "./offline/encrypted-outbox.js";
 import {
   activateSignedUpdate,
+  confirmActiveSignedUpdate,
   rejectActiveSignedUpdate,
   resolveActiveSignedUpdate,
   stageSignedUpdate,
@@ -227,6 +228,22 @@ if (hasArgument(argv, "--diagnose")) {
     advertisedMediaUrl,
     resolveLocalMediaUrl(),
   );
+  // A signed patch remains a trial until it completes a real control-plane
+  // heartbeat. Startup/runtime failure before this point restores the previous
+  // pointer automatically; telemetry loss must not crash a healthy appliance.
+  if (process.env.SENTINEL_EDGE_PATCH_RUNTIME === "1" &&
+      process.env.SENTINEL_EDGE_PATCH_HEALTH_CONFIRMED !== "1") {
+    const confirmed = await confirmActiveSignedUpdate(
+      config.EDGE_UPDATE_STAGING_PATH,
+      config.EDGE_AGENT_VERSION,
+    ).catch((error) => {
+      logger.warn("Unable to persist edge patch health confirmation", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    });
+    if (confirmed) process.env.SENTINEL_EDGE_PATCH_HEALTH_CONFIRMED = "1";
+  }
   process.stdout.write(`Connected to ${config.CONTROL_PLANE_URL} as edge agent ${agentId}.\n`);
   process.exit(0);
 }
@@ -1046,6 +1063,19 @@ async function heartbeatAndReport() {
     edgeMediaRuntime?.publicUrl,
     resolveLocalMediaUrl(),
   );
+  if (process.env.SENTINEL_EDGE_PATCH_RUNTIME === "1" &&
+      process.env.SENTINEL_EDGE_PATCH_HEALTH_CONFIRMED !== "1") {
+    const confirmed = await confirmActiveSignedUpdate(
+      config.EDGE_UPDATE_STAGING_PATH,
+      config.EDGE_AGENT_VERSION,
+    ).catch((error) => {
+      logger.warn("Unable to persist edge patch health confirmation", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return false;
+    });
+    if (confirmed) process.env.SENTINEL_EDGE_PATCH_HEALTH_CONFIRMED = "1";
+  }
   if (Date.now() - lastCameraConfigSyncAt >= config.CAMERA_CONFIG_REFRESH_MS) {
     await syncCameraHeartbeatConfig().catch((error) => {
       logger.error("Camera monitoring configuration refresh failed", { error: error instanceof Error ? error.message : String(error) });
@@ -1291,7 +1321,12 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
       const publicKey = identity?.updatePublicKey ?? config.EDGE_UPDATE_PUBLIC_KEY;
       if (!publicKey) throw new Error("edge_update_public_key_unavailable");
       const staged = await stageSignedUpdate(release, publicKey, config.EDGE_UPDATE_STAGING_PATH);
-      await activateSignedUpdate(release, staged, config.EDGE_UPDATE_STAGING_PATH);
+      await activateSignedUpdate(
+        release,
+        staged,
+        config.EDGE_UPDATE_STAGING_PATH,
+        config.EDGE_AGENT_VERSION,
+      );
       return {
         result: { ...staged, status: "verified_and_activated", applicationPatchOnly: true },
         restartAgent: true,
@@ -1425,6 +1460,10 @@ async function runActivePatch(
 ) {
   const previousImportOnly = process.env.SENTINEL_EDGE_IMPORT_ONLY;
   process.env.SENTINEL_EDGE_IMPORT_ONLY = "1";
+  // The bundle reads configuration while it is imported. Set the trial
+  // version first so heartbeats and the health-confirmation gate describe the
+  // runtime actually being evaluated, rather than the packaged launcher.
+  process.env.EDGE_AGENT_VERSION = patch.version;
   let loaded: unknown;
   try {
     const require = createRequire(join(process.cwd(), "edge-patch-loader.cjs"));
@@ -1446,7 +1485,6 @@ async function runActivePatch(
     throw new Error("edge_update_entrypoint_missing");
   }
   process.env.SENTINEL_EDGE_PATCH_RUNTIME = "1";
-  process.env.EDGE_AGENT_VERSION = patch.version;
   logger.info("Starting verified application-only edge patch", {
     releaseId: patch.releaseId,
     version: patch.version,

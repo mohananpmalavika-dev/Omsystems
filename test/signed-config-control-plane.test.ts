@@ -180,6 +180,22 @@ describe('Signed Configuration & Fleet Version Management Control Plane', () => 
     expect(tamperedCheck.reason).toContain('Configuration hash mismatch');
   });
 
+  it('fails closed for malformed signatures, replay windows, and branch scope changes', async () => {
+    const manifest = configKeyService.signConfiguration({
+      packageId: 'cfgpkg-security-boundary', tenantId: 'BANK-001', configVersion: 99,
+      schemaVersion: '3.1', config: sampleBaseConfig,
+      scope: { type: 'branch', targetId: 'BR-SECURE' },
+    });
+    expect(configKeyService.verifyManifest({ ...manifest, signature: `${manifest.signature}=` }).valid).toBe(false);
+    expect(configKeyService.verifyManifest({ ...manifest, expiresAt: new Date(Date.now() - 1).toISOString() }).valid).toBe(false);
+
+    const result = await branchConfigurationAgentService.reconcileBranch({
+      branchId: 'BR-OTHER', gatewayId: 'GW-OTHER', manifest, config: sampleBaseConfig,
+    });
+    expect(result.overallStatus).toBe('APPLY_FAILED');
+    expect(result.components[0]?.errorMessage).toContain('CONFIGURATION_SCOPE_MISMATCH');
+  });
+
   it('edge agent enforces anti-downgrade monotonic version guard and read-back verification', async () => {
     const v34 = signedConfigService.getActiveSignedVersion()!;
 

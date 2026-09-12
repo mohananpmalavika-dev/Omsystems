@@ -13,14 +13,25 @@ export interface KeyProvider {
  * Recursively sorts keys and serializes with stable whitespace and numeric precision.
  */
 export function canonicalJsonStringify(obj: unknown): string {
-  if (obj === null || obj === undefined) return 'null';
-  if (typeof obj === 'number' || typeof obj === 'boolean') return JSON.stringify(obj);
+  if (obj === null) return 'null';
+  if (obj === undefined || typeof obj === 'function' || typeof obj === 'symbol' || typeof obj === 'bigint') {
+    throw new Error('config_canonicalization_unsupported_value');
+  }
+  if (typeof obj === 'number') {
+    if (!Number.isFinite(obj)) throw new Error('config_canonicalization_non_finite_number');
+    return JSON.stringify(obj);
+  }
+  if (typeof obj === 'boolean') return JSON.stringify(obj);
   if (typeof obj === 'string') return JSON.stringify(obj);
   if (Array.isArray(obj)) {
-    return '[' + obj.map((item) => canonicalJsonStringify(item)).join(',') + ']';
+    return '[' + obj.map((item) => item === undefined ? 'null' : canonicalJsonStringify(item)).join(',') + ']';
   }
   if (typeof obj === 'object') {
-    const keys = Object.keys(obj as Record<string, unknown>).sort();
+    // Optional configuration fields are omitted by JSON serialization. Keep
+    // that stable behavior while rejecting unsupported values when present.
+    const keys = Object.keys(obj as Record<string, unknown>)
+      .filter((key) => (obj as Record<string, unknown>)[key] !== undefined)
+      .sort();
     const entries = keys.map(
       (key) => `${JSON.stringify(key)}:${canonicalJsonStringify((obj as Record<string, unknown>)[key])}`
     );
@@ -46,15 +57,25 @@ export class SoftwareEd25519KeyProvider implements KeyProvider {
   private publicKeyPem: string;
   private keyStore = new Map<string, { publicPem: string; privatePem?: string }>();
 
-  constructor(keyId = 'config-signing-key-2026-03') {
+  constructor(keyId = process.env.CONFIG_SIGNING_KEY_ID || 'config-signing-key-2026-03') {
+    const configuredPrivateKey = process.env.CONFIG_SIGNING_PRIVATE_KEY?.replaceAll('\\n', '\n').trim();
+    const configuredPublicKey = process.env.CONFIG_SIGNING_PUBLIC_KEY?.replaceAll('\\n', '\n').trim();
+    if (process.env.NODE_ENV === 'production' && (!configuredPrivateKey || !configuredPublicKey)) {
+      throw new Error('config_signing_key_not_configured');
+    }
     this.keyId = keyId;
-    const { publicKey, privateKey } = generateKeyPairSync('ed25519', {
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    });
-    this.privateKeyPem = privateKey;
-    this.publicKeyPem = publicKey;
-    this.keyStore.set(keyId, { publicPem: publicKey, privatePem: privateKey });
+    if (configuredPrivateKey && configuredPublicKey) {
+      this.privateKeyPem = configuredPrivateKey;
+      this.publicKeyPem = configuredPublicKey;
+    } else {
+      const { publicKey, privateKey } = generateKeyPairSync('ed25519', {
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+      this.privateKeyPem = privateKey;
+      this.publicKeyPem = publicKey;
+    }
+    this.keyStore.set(keyId, { publicPem: this.publicKeyPem, privatePem: this.privateKeyPem });
   }
 
   getKeyId(): string {
@@ -148,14 +169,20 @@ export class ConfigKeyService {
     valid: boolean;
     reason?: string;
   } {
-    if (!manifest.signature || !manifest.keyId) {
-      return { valid: false, reason: 'Missing signature or keyId' };
-    }
+    const structuralError = validateManifestShape(manifest);
+    if (structuralError) return { valid: false, reason: structuralError };
 
     // Check expiration
-    const expiry = new Date(manifest.expiresAt);
-    if (Date.now() > expiry.getTime()) {
+    const issuedAt = Date.parse(manifest.issuedAt);
+    const expiry = Date.parse(manifest.expiresAt);
+    if (!Number.isFinite(issuedAt) || !Number.isFinite(expiry) || expiry <= issuedAt) {
+      return { valid: false, reason: 'Configuration manifest timestamps are invalid' };
+    }
+    if (Date.now() > expiry) {
       return { valid: false, reason: 'Configuration manifest has expired' };
+    }
+    if (issuedAt > Date.now() + 5 * 60_000 || expiry - issuedAt > 31 * 86400_000) {
+      return { valid: false, reason: 'Configuration manifest validity window is invalid' };
     }
 
     const unsigned: Omit<SignedConfigManifest, 'signature'> = {
@@ -172,9 +199,14 @@ export class ConfigKeyService {
       signatureAlgorithm: manifest.signatureAlgorithm,
     };
 
-    const canonical = canonicalJsonStringify(unsigned);
-    const sigBuffer = Buffer.from(manifest.signature, 'base64');
-    const isValid = this.provider.verifyData(Buffer.from(canonical, 'utf8'), sigBuffer, manifest.keyId);
+    let isValid = false;
+    try {
+      const canonical = canonicalJsonStringify(unsigned);
+      const sigBuffer = decodeEd25519Signature(manifest.signature);
+      isValid = this.provider.verifyData(Buffer.from(canonical, 'utf8'), sigBuffer, manifest.keyId);
+    } catch {
+      return { valid: false, reason: 'Configuration manifest encoding is invalid' };
+    }
 
     if (!isValid) {
       return { valid: false, reason: 'Cryptographic signature verification failed' };
@@ -214,6 +246,34 @@ export class ConfigKeyService {
   getPublicKeyPem(keyId?: string): string {
     return this.provider.getPublicKeyPem(keyId);
   }
+}
+
+function validateManifestShape(manifest: SignedConfigManifest): string | undefined {
+  if (!manifest || manifest.signatureAlgorithm !== 'Ed25519' || !manifest.signature || !manifest.keyId) {
+    return 'Missing or unsupported configuration signature metadata';
+  }
+  if (!/^[A-Za-z0-9._:-]{1,128}$/.test(manifest.keyId) ||
+      !/^[A-Za-z0-9._:-]{1,160}$/.test(manifest.packageId) ||
+      !/^[A-Za-z0-9._:-]{1,160}$/.test(manifest.tenantId) ||
+      !Number.isSafeInteger(manifest.configVersion) || manifest.configVersion < 1 ||
+      typeof manifest.schemaVersion !== 'string' || manifest.schemaVersion.length > 64 ||
+      !/^[a-f0-9]{64}$/i.test(manifest.configHash) ||
+      !manifest.scope || !['fleet', 'branch', 'cohort'].includes(manifest.scope.type) ||
+      (manifest.scope.targetId !== undefined && !/^[A-Za-z0-9._:-]{1,160}$/.test(manifest.scope.targetId))) {
+    return 'Configuration manifest fields are invalid';
+  }
+  return undefined;
+}
+
+function decodeEd25519Signature(signature: string): Buffer {
+  // Standard base64 Ed25519 signatures are always 88 characters (64 bytes
+  // plus canonical padding). Buffer.from is permissive, so validate first.
+  if (!/^[A-Za-z0-9+/]{86}==$/.test(signature)) throw new Error('config_signature_encoding_invalid');
+  const decoded = Buffer.from(signature, 'base64');
+  if (decoded.length !== 64 || decoded.toString('base64') !== signature) {
+    throw new Error('config_signature_encoding_invalid');
+  }
+  return decoded;
 }
 
 export const configKeyService = new ConfigKeyService();

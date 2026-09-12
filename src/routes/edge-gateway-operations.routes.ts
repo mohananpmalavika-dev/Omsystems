@@ -48,10 +48,13 @@ export async function registerEdgeGatewayOperationsRoutes(
     requireManagedTunnel?: boolean;
   } = {},
 ) {
-  const updateForAgent = async (edgeAgentId: string, currentVersion: string) => {
+  const updateForAgent = async (edgeAgentId: string, currentVersion: string, allowPackagedFallback = true) => {
     const assigned = await store.getEdgeUpdateReleaseForAgent(edgeAgentId, currentVersion);
     if (assigned && compareVersions(assigned.version, currentVersion) > 0) return assigned;
-    return packagedEdgeUpdate(options, currentVersion);
+    // A fleet rollout must respect the persisted release's deterministic
+    // rollout bucket. Falling back to a locally packaged build here would let
+    // a canary-only release reach every gateway.
+    return allowPackagedFallback ? packagedEdgeUpdate(options, currentVersion) : undefined;
   };
   app.post("/v1/branches/:branchId/edge-activations", async (request, reply) => {
     const { branchId } = z.object({ branchId: z.string().min(1) }).parse(request.params);
@@ -581,7 +584,7 @@ export async function registerEdgeGatewayOperationsRoutes(
           summary.commandAlreadyPending += 1;
           continue;
         }
-        const release = await updateForAgent(agent.id, agent.version);
+        const release = await updateForAgent(agent.id, agent.version, false);
         if (!release || release.version !== body.version) {
           summary.updateUnavailable += 1;
           continue;
