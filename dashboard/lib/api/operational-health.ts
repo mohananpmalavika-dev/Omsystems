@@ -17,6 +17,7 @@ import {
   EdgeAgentHealth,
   HealthTrend,
   OperationalAlert,
+  OperationalAlertsResult,
   ApiResponse,
   BranchHealthFilters,
   CameraHealthFilters,
@@ -262,7 +263,7 @@ export async function fetchHealthTrends(filters?: HealthTrendFilters): Promise<H
 /**
  * Fetch operational alerts
  */
-export async function fetchOperationalAlerts(filters?: AlertFilters) {
+export async function fetchOperationalAlerts(filters?: AlertFilters): Promise<OperationalAlertsResult> {
   const params = new URLSearchParams();
   if (filters?.severity) params.append('severity', filters.severity);
   if (filters?.status) params.append('status', filters.status);

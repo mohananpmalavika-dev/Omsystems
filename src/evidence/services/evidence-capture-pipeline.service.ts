@@ -533,9 +533,36 @@ const recordingEvidenceClient = process.env.RECORDING_ENGINE_URL && process.env.
   ? new HttpAlertEvidenceClient(process.env.RECORDING_ENGINE_URL, process.env.RECORDING_ENGINE_SHARED_KEY)
   : (isTestEnv ? new InProcessTestAlertEvidenceClient() : undefined);
 
-export const evidenceCapturePipeline = new EvidenceCapturePipelineService(
-  evidencePolicyService,
-  evidenceStorageService,
-  recordingEvidenceClient,
-);
+let authoritativePipelineInstance: EvidenceCapturePipelineService | null = null;
+
+export function setAuthoritativeEvidencePipeline(pipeline: EvidenceCapturePipelineService): void {
+  authoritativePipelineInstance = pipeline;
+}
+
+export function getAuthoritativeEvidencePipeline(): EvidenceCapturePipelineService {
+  if (authoritativePipelineInstance) return authoritativePipelineInstance;
+  const isProd = process.env.NODE_ENV === "production";
+  const activePool = globalPool;
+  if (isProd && !activePool) {
+    throw new Error(
+      "EVIDENCE_STORE_UNAVAILABLE: EvidenceCapturePipelineService requires a PostgreSQL pool in production. Ensure ApplicationBootstrap has initialized the EvidenceModule.",
+    );
+  }
+  authoritativePipelineInstance = new EvidenceCapturePipelineService(
+    evidencePolicyService,
+    evidenceStorageService,
+    recordingEvidenceClient,
+    activePool ?? undefined,
+  );
+  return authoritativePipelineInstance;
+}
+
+export const evidenceCapturePipeline = new Proxy({} as EvidenceCapturePipelineService, {
+  get(_target, prop, receiver) {
+    const instance = getAuthoritativeEvidencePipeline();
+    const value = Reflect.get(instance, prop, receiver);
+    return typeof value === "function" ? value.bind(instance) : value;
+  },
+});
 export const evidenceCapturePipelineService = evidenceCapturePipeline;
+

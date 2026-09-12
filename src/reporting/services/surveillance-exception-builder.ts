@@ -84,7 +84,7 @@ export class SurveillanceExceptionBuilder {
           summary: `${disk.diskId} failed SMART health check (${disk.smartStatus || "Critical errors"})`,
           detectedAt: disk.observedAt || now,
           ageSeconds: 0,
-          recommendedAction: "Replace surveillance HDD immediately before overwrite data loss occurs.",
+          recommendedAction: "Replace HDD immediately before overwrite data loss occurs.",
         });
       } else if (disk.state === "WARNING") {
         exceptions.push({

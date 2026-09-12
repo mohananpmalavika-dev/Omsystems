@@ -108,6 +108,7 @@ import { initializePredictiveHealthWorker } from "./workers/predictive-health-wo
 import { registerRCAIncidentIntegrationRoutes } from "./routes/rca-incident-integration.routes.js";
 import { registerDigitalTwinRoutes } from "./routes/digital-twin.routes.js";
 import { registerOperationalReportRoutes } from "./routes/operational-reports.routes.js";
+import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
 import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
@@ -694,6 +695,8 @@ export async function buildApp(options?: {
       request.url.startsWith("/internal/alerts/")
       || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
+      || request.url.startsWith("/api/v1/reports/daily-surveillance-health")
+      || request.url.startsWith("/v1/reports/daily-surveillance-health")
       || request.url.startsWith("/v1/edge-updates/artifacts/")
       || request.url.startsWith("/v1/security/mtls/")
     ) return;
@@ -2651,6 +2654,7 @@ export async function buildApp(options?: {
     downloadSecret: reportDownloadSecret, exportRoot: reportExportRoot,
     workerKey: options?.reportWorkerKey ?? process.env.REPORT_WORKER_SHARED_KEY,
   });
+  await registerDailySurveillanceReportRoutes(app, store);
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerHsmSigningRoutes(app, store);
   await registerSignedConfigurationRoutes(app, store);

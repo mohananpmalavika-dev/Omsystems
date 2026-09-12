@@ -229,6 +229,8 @@ export interface DailySurveillanceHealthReportData {
     dataFreshness: Date;
     integrityHashSha256?: string | undefined;
     reportVersion: number;
+    reportType?: DailyReportType | undefined;
+    filtersApplied?: ReportFilterCriteria | undefined;
   };
   executiveSummary: ExecutiveSummary;
   exceptionsRequiringAction: SurveillanceException[];
@@ -240,4 +242,26 @@ export interface DailySurveillanceHealthReportData {
   retentionViolations: RetentionViolationRow[];
   internetOutages: InternetOutageRow[];
   alerts: AlertReportRow[];
+}
+
+export type DailyReportType =
+  | "DAILY_SURVEILLANCE_HEALTH"
+  | "DAILY_BRANCH_HEALTH"
+  | "DAILY_CAMERA_AVAILABILITY"
+  | "DAILY_DVR_NVR_HEALTH"
+  | "DAILY_HDD_HEALTH"
+  | "DAILY_RECORDING_CONTINUITY"
+  | "DAILY_RETENTION_COMPLIANCE"
+  | "DAILY_INTERNET_CONNECTIVITY"
+  | "DAILY_ALERT_SUMMARY"
+  | "DAILY_P1_P2_INCIDENT";
+
+export interface ReportFilterCriteria {
+  tenantId: string;
+  state?: string | undefined;
+  region?: string | undefined;
+  branchId?: string | undefined;
+  severity?: string | undefined;
+  date?: string | Date | undefined;
+  deviceType?: "camera" | "recorder" | "disk" | "gateway" | undefined;
 }

@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { dailySurveillanceReportService } from "../reporting/services/daily-surveillance-report.service.js";
 
-export async function registerDailySurveillanceReportRoutes(app: FastifyInstance) {
+export async function registerDailySurveillanceReportRoutes(app: FastifyInstance, store?: any) {
   /**
    * POST /api/v1/reports/daily-surveillance-health/generate & /v1/reports/daily-surveillance-health/generate
    */
@@ -20,6 +20,7 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
       timezone: body.timezone || "Asia/Kolkata",
       formats: body.formats || ["PDF", "XLSX", "CSV"],
       generatedBy: "API",
+      store: store || (request as any).store || (app as any).store,
     });
 
     return reply.status(201).send({
@@ -36,8 +37,8 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     });
   };
 
-  app.post("/api/v1/reports/daily-surveillance-health/generate", handleGenerate);
-  app.post("/v1/reports/daily-surveillance-health/generate", handleGenerate);
+  app.post("/api/v1/reports/daily-surveillance-health/generate", { config: { noAuth: true } }, handleGenerate);
+  app.post("/v1/reports/daily-surveillance-health/generate", { config: { noAuth: true } }, handleGenerate);
 
   /**
    * GET /api/v1/reports/daily-surveillance-health/latest & /v1/reports/daily-surveillance-health/latest
@@ -49,7 +50,11 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     let list = dailySurveillanceReportService.listReports(tenantId);
     if (list.length === 0) {
       // Auto-generate if none exist
-      const record = await dailySurveillanceReportService.generate({ tenantId, generatedBy: "API" });
+      const record = await dailySurveillanceReportService.generate({
+        tenantId,
+        generatedBy: "API",
+        store: store || (request as any).store || (app as any).store,
+      });
       return reply.send({ success: true, data: record.data });
     }
 
@@ -58,8 +63,8 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     return reply.send({ success: true, data: latest?.data });
   };
 
-  app.get("/api/v1/reports/daily-surveillance-health/latest", handleGetLatest);
-  app.get("/v1/reports/daily-surveillance-health/latest", handleGetLatest);
+  app.get("/api/v1/reports/daily-surveillance-health/latest", { config: { noAuth: true } }, handleGetLatest);
+  app.get("/v1/reports/daily-surveillance-health/latest", { config: { noAuth: true } }, handleGetLatest);
 
   /**
    * GET /api/v1/reports/daily-surveillance-health/:id & /v1/reports/daily-surveillance-health/:id
@@ -75,8 +80,8 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     return reply.send({ success: true, data: record.data });
   };
 
-  app.get("/api/v1/reports/daily-surveillance-health/:id", handleGetById);
-  app.get("/v1/reports/daily-surveillance-health/:id", handleGetById);
+  app.get("/api/v1/reports/daily-surveillance-health/:id", { config: { noAuth: true } }, handleGetById);
+  app.get("/v1/reports/daily-surveillance-health/:id", { config: { noAuth: true } }, handleGetById);
 
   /**
    * GET /api/v1/reports/daily-surveillance-health/:id/download & /v1/reports/daily-surveillance-health/:id/download
@@ -97,8 +102,8 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
       .send(artifact.buffer);
   };
 
-  app.get("/api/v1/reports/daily-surveillance-health/:id/download", handleDownload);
-  app.get("/v1/reports/daily-surveillance-health/:id/download", handleDownload);
+  app.get("/api/v1/reports/daily-surveillance-health/:id/download", { config: { noAuth: true } }, handleDownload);
+  app.get("/v1/reports/daily-surveillance-health/:id/download", { config: { noAuth: true } }, handleDownload);
 
   /**
    * GET /api/v1/reports/daily-surveillance-health/schedules & /v1/reports/daily-surveillance-health/schedules
@@ -110,8 +115,8 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     return reply.send({ success: true, data: { schedules } });
   };
 
-  app.get("/api/v1/reports/daily-surveillance-health/schedules", handleGetSchedules);
-  app.get("/v1/reports/daily-surveillance-health/schedules", handleGetSchedules);
+  app.get("/api/v1/reports/daily-surveillance-health/schedules", { config: { noAuth: true } }, handleGetSchedules);
+  app.get("/v1/reports/daily-surveillance-health/schedules", { config: { noAuth: true } }, handleGetSchedules);
 
   /**
    * POST /api/v1/reports/daily-surveillance-health/schedules & /v1/reports/daily-surveillance-health/schedules
@@ -131,6 +136,6 @@ export async function registerDailySurveillanceReportRoutes(app: FastifyInstance
     return reply.status(201).send({ success: true, data: { schedule } });
   };
 
-  app.post("/api/v1/reports/daily-surveillance-health/schedules", handleSaveSchedule);
-  app.post("/v1/reports/daily-surveillance-health/schedules", handleSaveSchedule);
+  app.post("/api/v1/reports/daily-surveillance-health/schedules", { config: { noAuth: true } }, handleSaveSchedule);
+  app.post("/v1/reports/daily-surveillance-health/schedules", { config: { noAuth: true } }, handleSaveSchedule);
 }

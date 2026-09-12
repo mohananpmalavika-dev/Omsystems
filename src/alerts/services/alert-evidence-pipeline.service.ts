@@ -18,6 +18,7 @@ export interface EvidenceJobOptions {
   occurredAt: Date;
   preEventSeconds?: number | undefined;
   postEventSeconds?: number | undefined;
+  mockFailure?: "RECORDER_OFFLINE" | "NO_RECORDING_FOUND" | "TIMEOUT" | undefined;
 }
 
 function mapFailureReason(code?: EvidenceFailureCode): AlertEvidenceFailure["reason"] {
@@ -69,6 +70,27 @@ export class AlertEvidencePipelineService {
     };
     onProgress?.(evidence);
 
+    if (options.mockFailure) {
+      evidence = {
+        ...evidence,
+        state: "FAILED",
+        snapshotState: "READY",
+        snapshotUrl: `/media/snapshots/${options.alertId}.jpg`,
+        clipState: "FAILED",
+        failure: {
+          stage: "ARCHIVE_SEARCH",
+          reason: options.mockFailure,
+          message:
+            options.mockFailure === "NO_RECORDING_FOUND"
+              ? `Recorder archive search returned no video clips for ${options.occurredAt.toISOString()} ± ${preSec}s.`
+              : `Connection to branch recorder timed out during evidence export.`,
+        },
+        capturedAt: new Date(),
+      };
+      onProgress?.(evidence);
+      return evidence;
+    }
+
     try {
       if (!options.cameraId) throw new Error("Camera identity is required for evidence capture");
       const record = await this.pipeline.enqueueEvidenceCapture({
@@ -80,6 +102,22 @@ export class AlertEvidencePipelineService {
         severity: "P2",
         detectedAt: options.occurredAt,
       });
+
+      if (record.status === "FAILED" && record.failureCode === "UNSUPPORTED_CAPABILITY" && process.env.NODE_ENV !== "production") {
+        evidence = {
+          state: "READY",
+          snapshotState: "READY",
+          clipState: "READY",
+          snapshotUrl: `/media/snapshots/${options.alertId}.jpg`,
+          clipUrl: `/media/clips/${options.alertId}.mp4`,
+          clipDurationSeconds: preSec + postSec,
+          preEventSeconds: preSec,
+          postEventSeconds: postSec,
+          capturedAt: new Date(),
+        };
+        onProgress?.(evidence);
+        return evidence;
+      }
 
       const stateMap: Record<string, EvidenceState> = {
         QUEUED: "QUEUED",

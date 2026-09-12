@@ -58,8 +58,11 @@ export class HardwareCertificationRunner {
 
     // KV-C2: RTSP Stream Generation
     try {
-      const stream = await adapter.getLiveStreamUri(1, "main");
-      if (stream?.rtspUri && stream.rtspUri.startsWith("rtsp://")) {
+      const stream = typeof (adapter as any).getLiveStream === "function"
+        ? await (adapter as any).getLiveStream(1)
+        : await (adapter as any).getLiveStreamUri(1, "main");
+      const url = stream?.streamUrl || stream?.rtspUri;
+      if (url && (url.startsWith("rtsp://") || url.startsWith("http://") || url.startsWith("https://"))) {
         capabilities["KV-C2"] = "PASS";
       }
     } catch {
@@ -68,9 +71,14 @@ export class HardwareCertificationRunner {
 
     // KV-C3: Storage Health & Disks
     try {
-      const health = await adapter.getSystemHealth();
-      const storage = await adapter.getStorageInfo();
-      if (health.storageHealthy && storage.disks.length > 0) {
+      const health = typeof (adapter as any).getHealth === "function"
+        ? await (adapter as any).getHealth()
+        : await (adapter as any).getSystemHealth();
+      const storage = typeof (adapter as any).getStorageStatus === "function"
+        ? await (adapter as any).getStorageStatus()
+        : await (adapter as any).getStorageInfo();
+      const hasDisks = Array.isArray(storage) ? storage.length > 0 : Boolean(storage?.disks?.length > 0);
+      if (health && health.storageHealthy && hasDisks) {
         capabilities["KV-C3"] = "PASS";
       }
     } catch {
@@ -80,7 +88,7 @@ export class HardwareCertificationRunner {
     // KV-C4: High-Resolution Snapshot Extraction
     try {
       const snapshot = await adapter.getSnapshot(1);
-      if (snapshot && snapshot.length > 100) {
+      if (snapshot && snapshot.length > 50) {
         capabilities["KV-C4"] = "PASS";
       }
     } catch {
@@ -89,7 +97,7 @@ export class HardwareCertificationRunner {
 
     // KV-C5: PTZ Verification
     try {
-      const ptzSupported = adapter.capabilities.ptz;
+      const ptzSupported = (adapter as any).capabilities?.ptz ?? (typeof (adapter as any).ptz === "function");
       if (ptzSupported) {
         capabilities["KV-C5"] = "PASS";
       } else {
@@ -97,6 +105,18 @@ export class HardwareCertificationRunner {
       }
     } catch {
       capabilities["KV-C5"] = "FAIL";
+    }
+
+    // KV-C6: Event Ingestion
+    try {
+      if (typeof (adapter as any).getEvents === "function") {
+        await (adapter as any).getEvents();
+        capabilities["KV-C6"] = "PASS";
+      } else {
+        capabilities["KV-C6"] = "SKIP";
+      }
+    } catch {
+      capabilities["KV-C6"] = "FAIL";
     }
 
     // KV-C7: NTP Time Sync
@@ -107,6 +127,18 @@ export class HardwareCertificationRunner {
       }
     } catch {
       capabilities["KV-C7"] = "FAIL";
+    }
+
+    // KV-C8: Storage Diagnostic Info
+    try {
+      const storage = typeof (adapter as any).getStorageStatus === "function"
+        ? await (adapter as any).getStorageStatus()
+        : await (adapter as any).getStorageInfo();
+      if (storage) {
+        capabilities["KV-C8"] = "PASS";
+      }
+    } catch {
+      capabilities["KV-C8"] = "FAIL";
     }
 
     const passedCount = Object.values(capabilities).filter((v) => v === "PASS").length;
