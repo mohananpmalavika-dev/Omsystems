@@ -5,7 +5,7 @@
  * Alert → Correlation → SOP → Investigation → Evidence
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { AIIncidentSummaryService } from '../src/services/ai-incident-summary';
 import { AISOPEngineService } from '../src/services/ai-sop-engine';
 import { AIInvestigationReportService } from '../src/services/ai-investigation-report';
@@ -16,10 +16,10 @@ import type { AnalyticsAlert } from '../src/domain/models';
 
 // Mock store
 const mockStore = {
-  listAnalyticsAlerts: jest.fn(),
-  getAlert: jest.fn(),
+  listAnalyticsAlerts: vi.fn(),
+  getAlert: vi.fn(),
   pool: {
-    query: jest.fn(),
+    query: vi.fn(),
   },
 } as unknown as ControlPlaneStore;
 
@@ -59,7 +59,7 @@ describe('AI Intelligence Layer Integration', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('AI Incident Summary Service', () => {
@@ -123,7 +123,7 @@ describe('AI Intelligence Layer Integration', () => {
         })
       );
 
-      mockStore.listAnalyticsAlerts = jest.fn().mockResolvedValue(alerts);
+      mockStore.listAnalyticsAlerts = vi.fn().mockResolvedValue(alerts);
 
       const summary = await incidentSummaryService.generateDailySummary(
         'tenant-001',
@@ -197,7 +197,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should execute SOP workflow with step completion', async () => {
-      mockStore.pool.query = jest.fn()
+      mockStore.pool.query = vi.fn()
         .mockResolvedValueOnce({
           rows: [{
             id: 'sop-001',
@@ -227,7 +227,7 @@ describe('AI Intelligence Layer Integration', () => {
 
       expect(executionId).toBe('exec-001');
 
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'exec-001',
           current_step: 2,
@@ -244,7 +244,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should trigger escalation on SLA breach', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'exec-002',
           sop_id: 'sop-001',
@@ -313,7 +313,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should export report in multiple formats', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'report-001',
           incident_id: 'incident-001',
@@ -350,7 +350,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should add evidence with SHA-256 hash', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'evidence-001',
           sha256_hash: 'abc123...',
@@ -374,7 +374,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should maintain chain of custody', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'custody-001',
           package_id: 'package-001',
@@ -393,7 +393,7 @@ describe('AI Intelligence Layer Integration', () => {
 
       expect(custodyId).toBeDefined();
 
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [
           {
             id: 'custody-001',
@@ -418,7 +418,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should verify evidence integrity with hash check', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'evidence-001',
           sha256_hash: 'abc123def456...',
@@ -433,7 +433,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should sign evidence package digitally', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [{
           id: 'package-001',
           digital_signature: 'signature-data',
@@ -465,7 +465,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should search video by attributes', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [
           {
             id: 'detection-001',
@@ -494,7 +494,7 @@ describe('AI Intelligence Layer Integration', () => {
     });
 
     it('should perform cross-camera tracking', async () => {
-      mockStore.pool.query = jest.fn().mockResolvedValueOnce({
+      mockStore.pool.query = vi.fn().mockResolvedValueOnce({
         rows: [
           {
             camera_id: 'camera-03',
@@ -569,7 +569,7 @@ describe('AI Intelligence Layer Integration', () => {
       expect(cluster.incidentType).toBe('security-intrusion');
 
       // Step 3: SOP automatically launched
-      mockStore.pool.query = jest.fn()
+      mockStore.pool.query = vi.fn()
         .mockResolvedValueOnce({
           rows: [{
             id: 'sop-intrusion',

@@ -40,33 +40,13 @@ describe("AI Model Quality, Evaluation & Certification Platform", () => {
   });
 
   describe("Suite 2: Benchmark Evaluation & Multi-Condition Scenario Breakdown", () => {
-    it("evaluates candidate model on validation dataset and computes scenario metrics and threshold curve", async () => {
-      const evalRun = await platform.evaluateModel(
+    it("refuses to fabricate a benchmark when no measured local runner is configured", async () => {
+      await expect(platform.evaluateModel(
         "model-intrusion-v3-2",
         "ds-bank-intrusion-2026-08",
         "hw-rtx-a4000",
         0.60,
-      );
-
-      expect(evalRun.status).toBe("completed");
-      expect(evalRun.overallMetrics.precision).toBeGreaterThanOrEqual(0.95);
-      expect(evalRun.overallMetrics.recall).toBeGreaterThanOrEqual(0.92);
-      expect(evalRun.overallMetrics.f1).toBeGreaterThanOrEqual(0.93);
-      expect(evalRun.overallMetrics.falseAlertsPerCameraHour).toBeLessThanOrEqual(0.10);
-      expect(evalRun.overallMetrics.detectionLatencyP95Ms).toBeLessThanOrEqual(100);
-
-      // Verify scenario breakdowns (Day, Night, IR, Rain)
-      expect(evalRun.scenarioBreakdown.length).toBeGreaterThanOrEqual(5);
-      const nightScenario = evalRun.scenarioBreakdown.find((s) => s.scenarioName.includes("Night"));
-      expect(nightScenario?.precision).toBeGreaterThanOrEqual(0.90);
-
-      const rainScenario = evalRun.scenarioBreakdown.find((s) => s.scenarioName.includes("Rain"));
-      expect(rainScenario).toBeDefined();
-
-      // Verify threshold curve (0.40 -> 0.80)
-      expect(evalRun.thresholdCurve.length).toBe(5);
-      expect(evalRun.thresholdCurve[0]?.threshold).toBe(0.40);
-      expect(evalRun.thresholdCurve[4]?.threshold).toBe(0.80);
+      )).rejects.toMatchObject({ name: "BenchmarkUnavailableError" });
     });
   });
 
@@ -163,9 +143,9 @@ describe("AI Model Quality, Evaluation & Certification Platform", () => {
         0.28, // 0.28 false alarms / hr (>3x fleet baseline of 0.08)
       );
 
-      expect(rec.recommendedThreshold).toBe(0.68);
-      expect(rec.expectedRecallImpactPercent).toBe(-2.1);
-      expect(rec.recommendationReason).toContain("fleet baseline");
+      expect(rec.recommendedThreshold).toBe(rec.currentThreshold);
+      expect(rec.expectedRecallImpactPercent).toBeNull();
+      expect(rec.recommendationReason).toContain("measured validation");
     });
   });
 
@@ -215,7 +195,7 @@ describe("AI Model Quality, Evaluation & Certification Platform", () => {
 
       const intrusionHealth = fleetHealth.detectors.find((d) => d.detectorCode === "intrusion");
       expect(intrusionHealth).toBeDefined();
-      expect(intrusionHealth?.driftStatus).toBe("HEALTHY");
+      expect(intrusionHealth?.driftStatus).toBe("INSUFFICIENT_DATA");
       expect(intrusionHealth?.highFalseAlarmCameraIds).toContain("cam-reflection-1");
     });
   });

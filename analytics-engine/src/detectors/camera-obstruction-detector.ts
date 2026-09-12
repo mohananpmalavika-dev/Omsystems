@@ -219,6 +219,7 @@ export class CameraObstructionDetector extends BaseDetector {
 
         results.push({
           detectionType: 'camera-obstruction',
+          label: detectedType,
           confidence,
           objects: [
             {
@@ -239,6 +240,9 @@ export class CameraObstructionDetector extends BaseDetector {
             requiresReview: severity === 'P1',
           },
           metadata: {
+            status: 'SUCCESS',
+            provenance: 'HEURISTIC_RULE_ENGINE',
+            simulated: false,
             severity,
             obstructionPercent,
             reasons,

@@ -364,6 +364,7 @@ export class ConditionalScheduler {
         case 'loitering':
         case 'intrusion':
         case 'line-crossing':
+        case 'wrong-direction':
           required.add('yolov8n'); // Base person detection
           break;
 

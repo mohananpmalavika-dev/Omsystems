@@ -83,6 +83,7 @@ export class AIQualityPlatformFacade {
       this.cameraTuningRepo as any,
       this.detectorRepo as any,
       this.auditRepo as any,
+      this.evaluationRepo as any,
     );
   }
 

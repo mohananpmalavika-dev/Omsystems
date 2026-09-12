@@ -8,7 +8,7 @@
  * can autonomously move from prediction to preventive action.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { IntelligenceOrchestrator } from '../../src/intelligence/intelligence-orchestrator';
 import type { Prediction } from '../../analytics-engine/src/detectors/ai-prediction-engine';
 import type { RootCauseAnalysis } from '../../root-cause-analysis-engine/src/types';

@@ -386,6 +386,24 @@ export async function registerDetectionApiRoutes(
           supported: true,
         },
         {
+          type: "wrong-direction",
+          name: "Wrong-direction Detection",
+          features: ["vehicle-lane-monitoring", "virtual-line-direction"],
+          supported: true,
+        },
+        {
+          type: "camera-tamper",
+          name: "Camera Tampering",
+          features: ["covering", "blinding", "defocus", "repositioning"],
+          supported: true,
+        },
+        {
+          type: "abandoned-object",
+          name: "Abandoned Object",
+          features: ["static-foreground", "owner-separation", "quiet-scene-monitoring"],
+          supported: true,
+        },
+        {
           type: "heatmap",
           name: "Heat Map Analysis",
           features: ["traffic-flow", "hotspot-detection", "pattern-analysis"],
@@ -398,6 +416,8 @@ export async function registerDetectionApiRoutes(
       "line-crossing": "zone",
       heatmap: "heatmap",
       "crowd-density": "crowd",
+      "camera-tamper": "camera-tamper",
+      "abandoned-object": "unattended-objects",
     };
     return {
       detectors: capabilities.map((capability) => {

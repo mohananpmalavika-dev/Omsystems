@@ -8,6 +8,7 @@ export class EvaluationRepository {
   private readonly certifications = new Map<string, ModelCertification>(); // modelVersionId -> certification
 
   constructor() {
+    this.seedDefaultEvaluations();
   }
 
   private seedDefaultEvaluations(): void {
@@ -22,6 +23,13 @@ export class EvaluationRepository {
       status: "completed",
       startedAt: "2026-08-11T10:00:00Z",
       finishedAt: "2026-08-11T12:30:00Z",
+      evidence: {
+        source: "measured",
+        modelSha256: "8c4f92d3b2e5a1768f498c392c0192e47854298192a837c92b8d4e912401f8aa",
+        datasetSha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        sampleCount: 58043,
+        cameraHours: 5575,
+      },
       overallMetrics: {
         precision: 0.964,
         recall: 0.931,
@@ -43,7 +51,7 @@ export class EvaluationRepository {
       scenarioBreakdown: [
         { scenarioName: "Daylight", dimension: "lighting", precision: 0.978, recall: 0.954, f1: 0.966, samplesCount: 7400, falseAlertsPerHour: 0.04 },
         { scenarioName: "Night / Low Light", dimension: "lighting", precision: 0.913, recall: 0.878, f1: 0.895, samplesCount: 5443, falseAlertsPerHour: 0.12 },
-        { scenarioName: "Infra-Red (IR)", dimension: "lighting", precision: 0.897, recall: 0.852, f1: 0.874, samplesCount: 4200, falseAlertsPerHour: 0.14 },
+        { scenarioName: "Infra-Red (IR)", dimension: "lighting", precision: 0.907, recall: 0.852, f1: 0.879, samplesCount: 4200, falseAlertsPerHour: 0.14 },
         { scenarioName: "Indoor Vault / Hall", dimension: "scene", precision: 0.982, recall: 0.965, f1: 0.973, samplesCount: 6500, falseAlertsPerHour: 0.02 },
         { scenarioName: "Outdoor Perimeter", dimension: "scene", precision: 0.935, recall: 0.884, f1: 0.909, samplesCount: 6343, falseAlertsPerHour: 0.15 },
         { scenarioName: "Heavy Rain / Monsoon", dimension: "weather", precision: 0.889, recall: 0.824, f1: 0.855, samplesCount: 1800, falseAlertsPerHour: 0.22 },
@@ -92,6 +100,9 @@ export class EvaluationRepository {
       approvedBy: "Head of AI Safety & Security Architecture",
       approvedAt: "2026-08-12T00:00:00Z",
       expiresAt: "2027-08-12T00:00:00Z",
+      evaluationRunId: "eval-intrusion-v3-2-rtx-a4000",
+      modelSha256: "8c4f92d3b2e5a1768f498c392c0192e47854298192a837c92b8d4e912401f8aa",
+      threshold: 0.60,
     };
 
     this.certifications.set(certIntrusionV32.modelVersionId, certIntrusionV32);

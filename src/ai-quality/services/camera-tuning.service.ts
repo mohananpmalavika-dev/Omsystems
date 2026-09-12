@@ -8,6 +8,7 @@ import type {
 import type { CameraTuningRepository } from "../repositories/camera-tuning.repository.js";
 import type { DetectorRegistryRepository } from "../repositories/detector-registry.repository.js";
 import type { AIQualityAuditRepository } from "../repositories/ai-quality-audit.repository.js";
+import type { EvaluationRepository } from "../repositories/evaluation.repository.js";
 
 export interface ThresholdRecommendation {
   cameraId: string;
@@ -26,6 +27,7 @@ export class CameraTuningService {
     private readonly cameraTuningRepo: CameraTuningRepository,
     private readonly detectorRepo: DetectorRegistryRepository,
     private readonly auditRepo: AIQualityAuditRepository,
+    private readonly evaluationRepo?: Pick<EvaluationRepository, "getLatestEvaluationForModel">,
   ) {}
 
   /**
@@ -165,12 +167,19 @@ export class CameraTuningService {
     const config = detector
       ? await this.cameraTuningRepo.getConfiguration(cameraId, detector.id)
       : null;
+    const evaluation = model && this.evaluationRepo
+      ? await this.evaluationRepo.getLatestEvaluationForModel(model.id)
+      : null;
 
     const threshold = config?.confidenceThreshold ?? model?.defaultThreshold ?? 0.60;
 
     if (!detector || !model || !/^[a-f0-9]{64}$/i.test(model.artifactSha256)) {
       throw new Error("Registered model artifact is required for AI provenance");
     }
+
+    const hardware = evaluation?.hardwareProfileId
+      ? await this.detectorRepo.getHardwareProfile(evaluation.hardwareProfileId)
+      : null;
 
     return {
       detectorId: detector.id,
@@ -181,7 +190,7 @@ export class CameraTuningService {
       threshold,
       confidence,
       inferenceNodeId,
-      hardwareProfile: "unreported",
+      hardwareProfile: hardware?.name ?? "unreported",
       inferenceTimestamp: new Date().toISOString(),
     };
   }

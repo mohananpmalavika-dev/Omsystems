@@ -12,7 +12,7 @@
  * - Multi-detector pipeline
  */
 
-import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PersonDetector } from '../../analytics-engine/src/detectors/person-detector';
 import { VehicleDetector } from '../../analytics-engine/src/detectors/vehicle-detector';
 import { ZoneDetector } from '../../analytics-engine/src/detectors/zone-detector';

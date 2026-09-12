@@ -115,6 +115,8 @@ export function shouldRunLocalSpecialtyInference(frame: DetectionFrame): boolean
 
 export interface DetectionResult {
   detectionType: string;
+  /** Legacy single-object label retained for consumers that predate objects[]. */
+  label?: string;
   status?: ExecutionStatus;
   provenance?: ResultProvenance;
   confidence: number | null;

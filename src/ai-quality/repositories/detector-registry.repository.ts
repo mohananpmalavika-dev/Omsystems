@@ -12,6 +12,9 @@ export class DetectorRegistryRepository {
   private readonly hardwareProfiles = new Map<string, HardwareProfile>();
 
   constructor() {
+    // The in-memory implementation is used by local development and unit
+    // tests. It must expose the same baseline catalog as the durable store.
+    this.seedDefaults();
   }
 
   private seedDefaults(): void {

@@ -16,6 +16,7 @@ export interface SnapshotRecord {
 }
 export const snapshotCache = new Map<string, SnapshotRecord>();
 import { CameraHealthDetector } from "./detectors/camera-health-detector.js";
+import { CameraTamperDetector } from "./detectors/camera-tamper-detector.js";
 import { MotionDetector } from "./detectors/motion-detector.js";
 import { ObjectDetector } from "./detectors/object-detector.js";
 import { ZoneDetector } from "./detectors/zone-detector.js";
@@ -27,6 +28,7 @@ import { FallDetector } from "./detectors/fall-detector.js";
 import { SmokeFireDetector } from "./detectors/smoke-fire-detector.js";
 import { CrowdDensityDetector } from "./detectors/crowd-density-detector.js";
 import { TailgatingDetector } from "./detectors/tailgating-detector.js";
+import { UnattendedObjectsDetector } from "./detectors/unattended-objects-detector.js";
 import { QueueDetector } from "./detectors/queue-detector.js";
 import { HeatMapGenerator } from "./detectors/heatmap-generator.js";
 import { FaceAnalyticsDetector } from "./detectors/face-analytics.js";
@@ -74,6 +76,7 @@ export class AnalyticsPipeline {
   private objectDetector: ObjectDetector;
   private zoneDetector: ZoneDetector;
   private healthDetector: CameraHealthDetector;
+  private cameraTamperDetector: CameraTamperDetector;
   
   // Enhanced detectors
   private personDetector: PersonDetector;
@@ -84,6 +87,7 @@ export class AnalyticsPipeline {
   private smokeFireDetector: SmokeFireDetector;
   private crowdDensityDetector: CrowdDensityDetector;
   private tailgatingDetector: TailgatingDetector;
+  private unattendedObjectsDetector: UnattendedObjectsDetector;
   private queueDetector: QueueDetector;
   private heatMapGenerator: HeatMapGenerator;
   private faceDetector: FaceDetector;
@@ -129,6 +133,7 @@ export class AnalyticsPipeline {
     this.objectDetector = new ObjectDetector();
     this.zoneDetector = new ZoneDetector();
     this.healthDetector = new CameraHealthDetector();
+    this.cameraTamperDetector = new CameraTamperDetector();
     
     // Initialize enhanced detectors
     this.personDetector = new PersonDetector();
@@ -139,6 +144,7 @@ export class AnalyticsPipeline {
     this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
     this.crowdDensityDetector = new CrowdDensityDetector();
     this.tailgatingDetector = new TailgatingDetector();
+    this.unattendedObjectsDetector = new UnattendedObjectsDetector();
     this.queueDetector = new QueueDetector();
     this.heatMapGenerator = new HeatMapGenerator();
     this.faceDetector = new FaceDetector({
@@ -175,6 +181,7 @@ export class AnalyticsPipeline {
       this.objectDetector,
       this.zoneDetector,
       this.healthDetector,
+      this.cameraTamperDetector,
       this.personDetector,
       this.vehicleDetector,
       this.helmetDetector,
@@ -183,6 +190,7 @@ export class AnalyticsPipeline {
       this.smokeFireDetector,
       this.crowdDensityDetector,
       this.tailgatingDetector,
+      this.unattendedObjectsDetector,
       this.queueDetector,
       this.heatMapGenerator,
       this.faceDetector,
@@ -270,6 +278,30 @@ export class AnalyticsPipeline {
     for (const result of healthResults) {
       if (this.matchesAnyRule(result.detectionType, rules)) {
         events.push(await this.createEvent(frame, result));
+      }
+    }
+
+    // Optical tamper detection is intentionally independent of motion and
+    // object inference: a covered, defocused, or redirected camera often has
+    // no usable motion signal.  It uses only local frame statistics.
+    if (this.needsDetection(rules, ["camera-tamper", "camera-tampering"])) {
+      const tamperResults = await this.cameraTamperDetector.detect(frame);
+      for (const result of tamperResults) {
+        if (this.matchesAnyRule(result.detectionType, rules)) {
+          events.push(await this.createEvent(frame, result));
+        }
+      }
+    }
+
+    // An abandoned object becomes meaningful precisely after activity stops.
+    // Run this local, low-cost background tracker before motion-first
+    // scheduling so a static bag is not skipped on an otherwise quiet scene.
+    if (this.needsDetection(rules, ["unattended-object", "abandoned-object", "removed-object"])) {
+      const unattendedResults = await this.unattendedObjectsDetector.detect(frame);
+      for (const result of unattendedResults) {
+        if (this.matchesAnyRule(result.detectionType, rules)) {
+          events.push(await this.createEvent(frame, result));
+        }
       }
     }
 
@@ -505,6 +537,38 @@ export class AnalyticsPipeline {
         }
         break;
 
+      case "wrong-direction":
+        // The configured direction is the permitted direction across this
+        // virtual lane line.  Evaluate crossings in both directions and only
+        // emit an alert for the opposite direction.
+        if (rule.zone.shape === "line" && (rule.direction === "a-to-b" || rule.direction === "b-to-a")) {
+          const permittedDirection = rule.direction;
+          const crossings = await this.zoneDetector.detectLineCrossing(
+            frame,
+            filteredObjects.filter((object) => ["car", "motorcycle", "bus", "truck", "bicycle", "auto-rickshaw"].includes(object.label)),
+            {
+              line: {
+                start: rule.zone.points[0]!,
+                end: rule.zone.points[1]!,
+              },
+              direction: "any",
+            },
+          );
+          results = crossings
+            .filter((result) => result.metadata?.direction !== permittedDirection)
+            .map((result) => ({
+              ...result,
+              detectionType: "wrong-direction",
+              metadata: {
+                ...result.metadata,
+                permittedDirection,
+                observedDirection: result.metadata?.direction,
+                zoneName: rule.zone!.name,
+              },
+            }));
+        }
+        break;
+
       case "intrusion":
         if (rule.zone.shape === "polygon") {
           results = await this.zoneDetector.detectIntrusion(
@@ -664,6 +728,7 @@ export class AnalyticsPipeline {
   private needsVehicleDetection(rules: AnalyticsRule[]): boolean {
     const vehicleTypes = [
       "vehicle",
+      "wrong-direction",
       "helmet",
       "helmet-worn",
       "no-helmet",
@@ -677,7 +742,9 @@ export class AnalyticsPipeline {
       "object", "person", "person-counting", "occupancy-counting", "footfall", "customer-counting",
       "vehicle", "helmet", "helmet-worn", "no-helmet", "no-safety-vest", "no-gloves", "no-shoes", "fall", "fire", "smoke",
       "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
+      "wrong-direction",
       "face", "face-recognition", "watchlist-match",
+      "camera-tamper", "camera-tampering", "unattended-object", "abandoned-object", "removed-object",
     ]);
   }
 
@@ -724,6 +791,7 @@ export class AnalyticsPipeline {
       "vehicle",
       "object",
       "line-crossing",
+      "wrong-direction",
       "intrusion",
       "loitering",
       "crowd-density",
@@ -732,6 +800,8 @@ export class AnalyticsPipeline {
       "fall",
       "tailgating",
       "queue",
+      "unattended-object",
+      "abandoned-object",
     ];
 
     return rules.some(
