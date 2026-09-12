@@ -1,8 +1,9 @@
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { User } from "../domain/models.js";
-import type { OperationalTelemetryEnvelope } from "../operational-health/types.js";
+import type { OperationalHealthPolicy, OperationalTelemetryEnvelope } from "../operational-health/types.js";
 import { defaultOperationalHealthPolicy } from "../operational-health/types.js";
 import { telemetryStatus } from "../operational-health/service.js";
+import { freshnessPolicyService } from "../operational-health/services/freshness-policy.service.js";
 import { isFreshEdgeAgent } from "../edge-agent/presence.js";
 
 export type HealthState = "HEALTHY" | "WARNING" | "CRITICAL" | "UNKNOWN";
@@ -136,12 +137,39 @@ const metricString = (item: OperationalTelemetryEnvelope | undefined, key: strin
 const mapHealth = (status: ReturnType<typeof telemetryStatus>): HealthState =>
   status === "healthy" ? "HEALTHY" : status === "warning" ? "WARNING" : status === "critical" ? "CRITICAL" : "UNKNOWN";
 
+const freshnessEntityType = (deviceType: OperationalTelemetryEnvelope["deviceType"]) =>
+  deviceType === "camera" ? "CAMERA" as const
+    : deviceType === "recorder" || deviceType === "recorder-channel" || deviceType === "archive" ? "RECORDER" as const
+      : deviceType === "disk" ? "DISK" as const
+        : deviceType === "network" || deviceType === "router" || deviceType === "sdwan" ? "INTERNET" as const
+          : deviceType === "edge-agent" ? "EDGE_GATEWAY" as const
+            : "BRANCH" as const;
+
+/**
+ * Snapshot views must never show an old "healthy" probe as current.  Device
+ * polling cadences differ substantially, so derive the effective state from
+ * the shared per-entity freshness policy before considering reported health.
+ */
+const snapshotHealth = (item: OperationalTelemetryEnvelope | undefined, policy: OperationalHealthPolicy): HealthState => {
+  if (!item) return "UNKNOWN";
+  const observedAt = Date.parse(item.observedAt);
+  if (!Number.isFinite(observedAt)) return "UNKNOWN";
+  const ageSeconds = Math.max(0, (Date.now() - observedAt) / 1_000);
+  const freshness = freshnessPolicyService.getPolicy(freshnessEntityType(item.deviceType));
+  if (ageSeconds > Math.max(policy.offlineAfterSeconds, freshness.staleAfterSeconds * 3)) return "CRITICAL";
+  if (ageSeconds > freshness.staleAfterSeconds) return "UNKNOWN";
+  if (ageSeconds > freshness.warningAfterSeconds) return "WARNING";
+  return mapHealth(telemetryStatus(item, policy));
+};
+
 const aggregateHealth = (states: HealthState[]): HealthState => {
   const known = states.filter((state) => state !== "UNKNOWN");
   if (known.length === 0) return "UNKNOWN";
   if (known.includes("CRITICAL")) return "CRITICAL";
   if (known.includes("WARNING")) return "WARNING";
-  return "HEALTHY";
+  // A branch with incomplete evidence is visible as degraded rather than
+  // silently green, while the individual component remains explicitly UNKNOWN.
+  return known.length === states.length ? "HEALTHY" : "WARNING";
 };
 
 const scoreForHealth = (state: HealthState): number | undefined =>
@@ -254,14 +282,14 @@ export class BranchOperationalSnapshotService {
 
     const cameraList: CameraOperationalStatus[] = cameras.map((camera) => {
       const observed = byDevice.get(`camera:${camera.id}`);
-      const health = mapHealth(telemetryStatus(observed, policy));
+      const health = snapshotHealth(observed, policy);
       const onlineStatus = health === "CRITICAL" ? "offline" : health === "UNKNOWN" ? "unknown" : "online";
       const streamAvailable = observed?.metrics.streamActive === true;
       const rawRecording = metricString(observed, "recordingStatus")?.toLowerCase();
       const recordingStatus: CameraOperationalStatus["recordingStatus"] = rawRecording === "recording"
         ? "recording" : rawRecording === "stopped" || rawRecording === "not_recording"
           ? "stopped" : rawRecording === "error" || rawRecording === "failed" ? "error" : "unknown";
-      const retentionDays = metricNumber(observed, "retentionDays");
+      const retentionDays = health === "UNKNOWN" || health === "CRITICAL" ? undefined : metricNumber(observed, "retentionDays");
       const retentionState: RetentionState = retentionDays === undefined ? "UNKNOWN"
         : retentionDays >= policy.retentionDays ? "COMPLIANT"
           : retentionDays >= Math.max(0, policy.retentionDays - policy.retentionWarningDays) ? "WARNING" : "VIOLATION";
@@ -304,6 +332,50 @@ export class BranchOperationalSnapshotService {
       };
     });
 
+    // Telemetry can arrive before inventory approval (or after a device has
+    // been removed from inventory). Surface those observed cameras instead of
+    // making a branch look fully monitored merely because its registry is
+    // incomplete.
+    const registeredCameraIds = new Set(cameras.map((camera) => camera.id));
+    for (const observed of telemetry.filter((item) => item.deviceType === "camera" && !registeredCameraIds.has(item.deviceId))) {
+      const health = snapshotHealth(observed, policy);
+      const rawRecording = metricString(observed, "recordingStatus")?.toLowerCase();
+      const recordingStatus: CameraOperationalStatus["recordingStatus"] = rawRecording === "recording"
+        ? "recording" : rawRecording === "stopped" || rawRecording === "not_recording"
+          ? "stopped" : rawRecording === "error" || rawRecording === "failed" ? "error" : "unknown";
+      const retentionDays = health === "UNKNOWN" || health === "CRITICAL" ? undefined : metricNumber(observed, "retentionDays");
+      cameraList.push({
+        id: observed.deviceId,
+        name: metricString(observed, "name") ?? `Unenrolled camera ${observed.deviceId}`,
+        channelNumber: `CH-${String(metricNumber(observed, "channel") ?? 0).padStart(2, "0")}`,
+        state: health === "CRITICAL" ? "OFFLINE" : health === "UNKNOWN" ? "UNKNOWN"
+          : observed.metrics.streamActive === false ? "STREAM_LOSS"
+            : recordingStatus === "stopped" || recordingStatus === "error" ? "NO_RECORD"
+              : observed.metrics.streamActive === true && recordingStatus === "recording" ? "LIVE" : "ONLINE",
+        healthScore: scoreForHealth(health) ?? 0,
+        onlineStatus: health === "CRITICAL" ? "offline" : health === "UNKNOWN" ? "unknown" : "online",
+        streamAvailable: observed.metrics.streamActive === true,
+        recordingStatus,
+        retentionDays,
+        retentionState: retentionDays === undefined ? "UNKNOWN" : retentionDays >= policy.retentionDays ? "COMPLIANT" : "VIOLATION",
+        currentFps: metricNumber(observed, "fps"),
+        latencyMs: metricNumber(observed, "responseTimeMs") ?? metricNumber(observed, "latencyMs"),
+        videoLoss: observed.metrics.videoLoss === true,
+        tamperingDetected: observed.metrics.tamperingDetected === true,
+        imageFrozen: observed.metrics.imageFrozen === true,
+        blackScreen: observed.metrics.blackScreen === true,
+        ptzSupported: false,
+        audioSupported: false,
+        lastHeartbeat: observed.observedAt,
+        observedAt: observed.observedAt,
+      });
+      reasons.push({
+        code: "UNENROLLED_CAMERA_TELEMETRY", severity: "WARNING", component: "CAMERA",
+        message: `Camera ${observed.deviceId} reports telemetry but is not in approved inventory`,
+        affectedCameras: [observed.deviceId], impactLevel: "MEDIUM",
+      });
+    }
+
     const cameraHealth = aggregateHealth(cameraList.map((camera) => camera.onlineStatus === "online" ? "HEALTHY" : camera.onlineStatus === "offline" ? "CRITICAL" : "UNKNOWN"));
     const cameraSummary: BranchOperationalSnapshot["cameras"] = {
       total: cameraList.length,
@@ -321,7 +393,7 @@ export class BranchOperationalSnapshotService {
 
     const recorderItems = telemetry.filter((item) => item.deviceType === "recorder");
     const recorders = recorderItems.map((item) => {
-      const health = mapHealth(telemetryStatus(item, policy));
+      const health = snapshotHealth(item, policy);
       const state = recorderState(health);
       const reportedType = metricString(item, "type");
       const type: "DVR" | "NVR" | "Hybrid" | "Server" | "Unknown" =
@@ -340,7 +412,7 @@ export class BranchOperationalSnapshotService {
         observedAt: item.observedAt,
       };
     });
-    const recorderHealth = aggregateHealth(recorderItems.map((item) => mapHealth(telemetryStatus(item, policy))));
+    const recorderHealth = aggregateHealth(recorderItems.map((item) => snapshotHealth(item, policy)));
     for (const recorder of recorders.filter((item) => item.state === "OFFLINE")) reasons.push({
       code: "RECORDER_UNAVAILABLE", severity: "CRITICAL", component: "RECORDER",
       message: `Recorder ${recorder.name} has critical or expired telemetry`, affectedRecorders: [recorder.id], impactLevel: "HIGH",
@@ -348,9 +420,11 @@ export class BranchOperationalSnapshotService {
 
     const diskItems = telemetry.filter((item) => item.deviceType === "disk");
     const diskStatuses = diskItems.map((item) => {
+      const health = snapshotHealth(item, policy);
       const smart = metricString(item, "smartStatus")?.toLowerCase();
       const normalized: "healthy" | "warning" | "failure_predicted" | "failed" | "unknown" =
-        smart === "healthy" || smart === "warning" || smart === "failure_predicted" || smart === "failed" ? smart : "unknown";
+        health === "UNKNOWN" || health === "CRITICAL" ? "unknown"
+          : smart === "healthy" || smart === "warning" || smart === "failure_predicted" || smart === "failed" ? smart : "unknown";
       return { item, normalized };
     });
     const storageState: StorageState = diskStatuses.length === 0 ? "UNKNOWN"
@@ -386,8 +460,8 @@ export class BranchOperationalSnapshotService {
     const networkItems = telemetry.filter((item) => item.deviceType === "network");
     const primary = networkItems.find((item) => item.metrics.role !== "backup") ?? networkItems[0];
     const secondary = networkItems.find((item) => item.metrics.role === "backup");
-    const primaryState = connectivityState(mapHealth(telemetryStatus(primary, policy)));
-    const secondaryState = secondary ? connectivityState(mapHealth(telemetryStatus(secondary, policy))) : undefined;
+    const primaryState = connectivityState(snapshotHealth(primary, policy));
+    const secondaryState = secondary ? connectivityState(snapshotHealth(secondary, policy)) : undefined;
     const networkState: ConnectivityState = primaryState === "OFFLINE" && secondaryState === "ONLINE" ? "FAILOVER" : primaryState;
     if (networkState === "OFFLINE") reasons.push({
       code: "NETWORK_UNAVAILABLE", severity: "CRITICAL", component: "NETWORK",
@@ -414,7 +488,7 @@ export class BranchOperationalSnapshotService {
     const telemetryFreshness: TelemetryFreshness = latestAgeSeconds <= policy.staleAfterSeconds ? "CURRENT"
       : latestAgeSeconds <= policy.offlineAfterSeconds ? "RECENT" : latestAgeSeconds <= 86_400 ? "STALE" : "OUTDATED";
     const recentEvents = telemetry.flatMap((item) => (item.reasonCodes ?? []).map((reasonCode) => {
-      const health = mapHealth(telemetryStatus(item, policy));
+      const health = snapshotHealth(item, policy);
       return {
         id: `${item.idempotencyKey}:${reasonCode}`,
         type: "TELEMETRY_REASON",

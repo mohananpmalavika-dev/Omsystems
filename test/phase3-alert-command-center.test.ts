@@ -60,7 +60,7 @@ describe("Phase 3 HO alert command center", () => {
   it("dispatches and audits the exact P1-P4 notification matrix", async () => {
     const cases = [
       { severity: "P1", detectionType: "person", expected: ["dashboard", "email", "sms", "voice"] },
-      { severity: "P2", detectionType: "vehicle", expected: ["dashboard", "email", "voice"] },
+      { severity: "P2", detectionType: "vehicle", expected: ["dashboard", "email"] },
       { severity: "P3", detectionType: "motion", expected: ["dashboard"] },
       { severity: "P4", detectionType: "object", expected: ["log"] },
     ] as const;

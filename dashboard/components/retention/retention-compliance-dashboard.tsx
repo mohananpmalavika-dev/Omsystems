@@ -27,15 +27,26 @@ export function RetentionComplianceDashboard() {
   async function fetchRetentionData() {
     setLoading(true);
     try {
-      const resp = await fetch("/api/control/v1/retention/branches?limit=400", {
-        credentials: "include",
-      });
-      if (resp.ok) {
+      // The API deliberately caps individual requests. Fetch every page so a
+      // growing fleet is never silently truncated at the original 400-branch
+      // planning target.
+      const pageSize = 200;
+      const all: BranchRetentionRow[] = [];
+      let offset = 0;
+      let total = Number.POSITIVE_INFINITY;
+      while (offset < total) {
+        const resp = await fetch(`/api/control/v1/retention/branches?limit=${pageSize}&offset=${offset}`, {
+          credentials: "include",
+        });
+        if (!resp.ok) throw new Error("retention_fleet_unavailable");
         const json = await resp.json();
-        setBranches(json.data?.branches || []);
-      } else {
-        setBranches([]);
+        const page = Array.isArray(json.data?.branches) ? json.data.branches as BranchRetentionRow[] : [];
+        total = Number.isSafeInteger(json.data?.total) ? json.data.total : all.length + page.length;
+        all.push(...page);
+        if (page.length === 0) break;
+        offset += page.length;
       }
+      setBranches(all);
     } catch {
       setBranches([]);
     } finally {
