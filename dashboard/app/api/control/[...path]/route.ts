@@ -152,7 +152,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
 
     if (
       response.ok &&
-      (routePath === "/v1/auth/login" || routePath === "/v1/auth/refresh")
+      (routePath === "/v1/auth/login" || routePath === "/v1/auth/face-login" || routePath === "/v1/auth/refresh")
     ) {
       const payload = await response.json() as {
         accessToken: string;
@@ -282,6 +282,7 @@ function normalizeHttpOrigin(value: string) {
 function isPublicControlPath(routePath: string) {
   return new Set([
     "/v1/auth/login",
+    "/v1/auth/face-login",
     "/v1/auth/refresh",
     "/v1/auth/forgot-password",
     "/v1/auth/request-password-reset",
