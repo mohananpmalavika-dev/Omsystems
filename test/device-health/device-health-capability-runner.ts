@@ -17,7 +17,13 @@ async function runDeviceHealthCapabilityTests() {
   console.log("================================================================================\n");
 
   const app = Fastify();
-  await registerDeviceHealthRoutes(app);
+  app.addHook("onRequest", async (request) => {
+    request.currentUser = { id: "device-health-test-user", tenantId: "bank-corp" } as any;
+  });
+  await registerDeviceHealthRoutes(app, {
+    getNode: async () => ({ type: "branch", tenantId: "bank-corp" }),
+    checkAccess: async () => ({ allowed: true }),
+  } as any);
   let passed = 0;
   let failed = 0;
 
