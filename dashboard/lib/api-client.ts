@@ -4676,7 +4676,1520 @@ export const talkbackApi = {
     }),
 };
 
+export interface RecordingGapItem {
+  id: string;
+  tenantId: string;
+  branchId?: string;
+  cameraId: string;
+  startTime: string;
+  endTime?: string;
+  gapDurationSeconds: number;
+  reason: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'HEALED' | 'UNRECOVERABLE';
+  detail: Record<string, any>;
+  healedAt?: string;
+  healedBy?: string;
+  backfillJobId?: string;
+  segmentsRecoveredCount: number;
+  bytesRecovered: number;
+  detectedAt: string;
+  resolvedAt?: string;
+}
+
+export interface BackfillJobItem {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  cameraId: string;
+  gapId?: string;
+  status: 'PENDING' | 'SCANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  triggerSource: 'AUTO_WAN_RECOVERY' | 'MANUAL_OPERATOR' | 'SCHEDULED_AUDIT';
+  windowStart: string;
+  windowEnd: string;
+  totalSegments: number;
+  syncedSegments: number;
+  skippedDuplicates: number;
+  reconciledOverlaps: number;
+  failedSegments: number;
+  totalBytes: number;
+  transferredBytes: number;
+  rateLimitKbps: number;
+  errorMessage?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface RecoveryStats {
+  totalGaps: number;
+  openGaps: number;
+  inProgressGaps: number;
+  healedGaps: number;
+  unrecoverableGaps: number;
+  largestGapSeconds: number;
+  totalLostSeconds: number;
+  healingSuccessRate: number;
+  activeJobsCount: number;
+  completedJobsCount: number;
+  totalBackfilledBytes: number;
+  totalRecoveredSegments: number;
+  totalSkippedDuplicates: number;
+  totalReconciledOverlaps: number;
+}
+
+export interface EdgeBackfillAuditEntry {
+  id: string;
+  job_id?: string;
+  tenant_id: string;
+  branch_id: string;
+  camera_id: string;
+  segment_id: string;
+  action: string;
+  file_size: number;
+  checksum_sha256: string;
+  start_time: string;
+  end_time: string;
+  details: Record<string, any>;
+  logged_at: string;
+}
+
+export const recordingRecoveryApi = {
+  /**
+   * List recording gaps with filtering
+   */
+  listGaps: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.startDate) qs.append('startDate', params.startDate);
+    if (params?.endDate) qs.append('endDate', params.endDate);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: RecordingGapItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/gaps?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Trigger gap detection scan for a camera time range
+   */
+  scanGaps: (body: {
+    cameraId: string;
+    branchId?: string;
+    startTime: string;
+    endTime: string;
+    toleranceSeconds?: number;
+  }) =>
+    fetchApi<{ data: RecordingGapItem[] }>('/v1/recording/recovery/scan-gaps', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * List backfill jobs
+   */
+  listJobs: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: BackfillJobItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/jobs?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get backfill job details
+   */
+  getJob: (jobId: string) =>
+    fetchApi<{ data: BackfillJobItem }>(`/v1/recording/recovery/jobs/${encodeURIComponent(jobId)}`),
+
+  /**
+   * Create and trigger an edge backfill job
+   */
+  createJob: (body: {
+    branchId: string;
+    cameraId: string;
+    gapId?: string;
+    triggerSource?: string;
+    windowStart: string;
+    windowEnd: string;
+    rateLimitKbps?: number;
+  }) =>
+    fetchApi<{ data: BackfillJobItem }>('/v1/recording/recovery/jobs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Cancel an active backfill job
+   */
+  cancelJob: (jobId: string) =>
+    fetchApi<{ data: BackfillJobItem }>(`/v1/recording/recovery/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: 'POST',
+    }),
+
+  /**
+   * Upload single backfilled segment chunk
+   */
+  uploadSegment: (body: {
+    jobId?: string;
+    branchId: string;
+    cameraId: string;
+    segmentId: string;
+    startTime: string;
+    endTime: string;
+    durationMs: number;
+    fileSize: number;
+    sha256: string;
+    storagePath: string;
+    dataBase64?: string;
+  }) =>
+    fetchApi<{ data: any }>('/v1/recording/recovery/backfill/upload', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Batch ingest backfilled edge segments
+   */
+  syncBatch: (body: {
+    jobId?: string;
+    branchId: string;
+    cameraId: string;
+    rateLimitKbps?: number;
+    segments: Array<{
+      segmentId: string;
+      startTime: string;
+      endTime: string;
+      durationMs: number;
+      fileSize: number;
+      sha256: string;
+      storagePath: string;
+    }>;
+  }) =>
+    fetchApi<{ data: any }>('/v1/recording/recovery/backfill/sync-batch', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Get gap and recovery statistics
+   */
+  getStats: (params?: { branchId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ data: RecoveryStats }>(`/v1/recording/recovery/stats?${qs.toString()}`);
+  },
+
+  /**
+   * List forensic audit log entries
+   */
+  getAuditLogs: (params?: { cameraId?: string; jobId?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.jobId) qs.append('jobId', params.jobId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: EdgeBackfillAuditEntry[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/audit?${qs.toString()}`
+    );
+  },
+};
+
+export interface ColdCloudArchiveJobItem {
+  id: string;
+  tenantId: string;
+  incidentId: string;
+  incidentNumber: string;
+  cameraId: string;
+  branchId?: string;
+  evidencePackageId?: string;
+  clipId?: string;
+  storageTier: 'GLACIER' | 'DEEP_ARCHIVE' | 'GLACIER_IR' | 'INTELLIGENT_TIERING';
+  s3Bucket: string;
+  s3Key: string;
+  s3Region: string;
+  s3Endpoint?: string;
+  fileSizeBytes: number;
+  checksumSha256: string;
+  encryptionKmsKeyId?: string;
+  archiveStatus: 'PENDING' | 'EXPORTING' | 'ARCHIVED' | 'FAILED' | 'CANCELLED';
+  restoreStatus: 'NONE' | 'RESTORE_REQUESTED' | 'RESTORING' | 'RESTORED' | 'EXPIRED';
+  restoreRequestedAt?: string;
+  restoreCompletedAt?: string;
+  restoreExpiresAt?: string;
+  restoreTier?: 'Expedited' | 'Standard' | 'Bulk';
+  attempts: number;
+  maxAttempts: number;
+  errorMessage?: string;
+  metadata: Record<string, any>;
+  createdBy?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface ArchivePolicyItem {
+  id: string;
+  tenantId: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  targetStorageClass: 'GLACIER' | 'DEEP_ARCHIVE' | 'GLACIER_IR';
+  targetBucket: string;
+  targetPrefix: string;
+  triggerCondition: Record<string, any>;
+  encryptionKmsKeyId?: string;
+  retentionDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArchiveAuditLogItem {
+  id: string;
+  jobId?: string;
+  tenantId: string;
+  incidentId?: string;
+  incidentNumber?: string;
+  action: string;
+  operatorId?: string;
+  checksumSha256?: string;
+  s3Uri?: string;
+  storageClass?: string;
+  details: Record<string, any>;
+  timestamp: string;
+}
+
+export interface ArchiveStatisticsItem {
+  totalJobs: number;
+  archivedJobs: number;
+  pendingJobs: number;
+  failedJobs: number;
+  totalBytesArchived: number;
+  totalBytesGlacier: number;
+  totalBytesDeepArchive: number;
+  activeRestoresCount: number;
+  completedRestoresCount: number;
+  estimatedMonthlyHotCostUsd: number;
+  estimatedMonthlyColdCostUsd: number;
+  estimatedMonthlySavingsUsd: number;
+  savingsPercentage: number;
+}
+
+export const coldCloudArchiveApi = {
+  /**
+   * List cold cloud archive export jobs
+   */
+  listJobs: (params?: {
+    incidentId?: string;
+    cameraId?: string;
+    branchId?: string;
+    status?: string;
+    restoreStatus?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.incidentId) qs.append('incidentId', params.incidentId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.restoreStatus) qs.append('restoreStatus', params.restoreStatus);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: ColdCloudArchiveJobItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/archive/jobs?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get single archive job details
+   */
+  getJob: (jobId: string) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(`/v1/recording/archive/jobs/${encodeURIComponent(jobId)}`),
+
+  /**
+   * Create manual archive job
+   */
+  createJob: (body: {
+    incidentId: string;
+    cameraId: string;
+    branchId?: string;
+    incidentNumber?: string;
+    evidencePackageId?: string;
+    clipId?: string;
+    storageTier?: string;
+    videoData?: string;
+    videoFilePath?: string;
+    metadata?: Record<string, any>;
+  }) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>('/v1/recording/archive/jobs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Request Glacier restore
+   */
+  requestRestore: (
+    jobId: string,
+    body?: {
+      tier?: 'Expedited' | 'Standard' | 'Bulk';
+      validityDays?: number;
+    }
+  ) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(`/v1/recording/archive/jobs/${encodeURIComponent(jobId)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  /**
+   * Query Glacier restore status
+   */
+  checkRestoreStatus: (jobId: string) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(
+      `/v1/recording/archive/jobs/${encodeURIComponent(jobId)}/restore-status`
+    ),
+
+  /**
+   * Trigger automated policy sweep
+   */
+  runAutoExport: () =>
+    fetchApi<{
+      data: {
+        sweptPoliciesCount: number;
+        discoveredIncidentsCount: number;
+        createdJobsCount: number;
+        failedJobsCount: number;
+        jobIds: string[];
+      };
+    }>('/v1/recording/archive/auto-export', {
+      method: 'POST',
+    }),
+
+  /**
+   * List automated policies
+   */
+  listPolicies: () => fetchApi<{ data: ArchivePolicyItem[] }>('/v1/recording/archive/policies'),
+
+  /**
+   * Create automated policy
+   */
+  createPolicy: (body: {
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    targetStorageClass?: string;
+    targetBucket?: string;
+    targetPrefix?: string;
+    triggerCondition?: Record<string, any>;
+    encryptionKmsKeyId?: string;
+    retentionDays?: number;
+  }) =>
+    fetchApi<{ data: ArchivePolicyItem }>('/v1/recording/archive/policies', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * List immutable audit logs
+   */
+  getAuditLogs: (params?: { jobId?: string; incidentId?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.jobId) qs.append('jobId', params.jobId);
+    if (params?.incidentId) qs.append('incidentId', params.incidentId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: ArchiveAuditLogItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/archive/audit?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get archive statistics
+   */
+  getStatistics: () => fetchApi<{ data: ArchiveStatisticsItem }>('/v1/recording/archive/statistics'),
+};
+
+export interface StorageTargetItem {
+  id: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  storageNodeId: string;
+  targetName: string;
+  targetPath: string;
+  priority: number;
+  isActive: boolean;
+  healthState: 'HEALTHY' | 'DEGRADED' | 'FULL' | 'OFFLINE' | 'READ_ONLY' | 'REBUILDING';
+  spilloverThresholdPercent: number;
+  consecutiveFailures: number;
+  lastFailureReason?: string;
+  lastErrorDetail?: string;
+  lastCheckedAt: string;
+  capacityBytes?: number;
+  usedBytes?: number;
+  availableBytes?: number;
+  usagePercent?: number;
+  actionTaken?: 'NONE' | 'FAILOVER_TRIGGERED' | 'RECOVERED';
+}
+
+export interface StorageFailoverEventItem {
+  id: string;
+  tenantId: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  fromStorageNodeId: string;
+  fromTargetPath: string;
+  toStorageNodeId: string;
+  toTargetPath: string;
+  reason: string;
+  errorDetail?: string;
+  occurredAt: string;
+  recoveredAt?: string;
+  createdAt: string;
+}
+
+export interface StorageFailoverMetricsItem {
+  mediaNodeId?: string;
+  totalEvents: number;
+  unrecoveredEvents: number;
+  meanTimeToRecoveryMs: number;
+  reasonBreakdown: Record<string, number>;
+  targetsSummary: {
+    total: number;
+    healthy: number;
+    full: number;
+    offline: number;
+    degraded: number;
+  };
+}
+
+export const storageFailoverApi = {
+  /**
+   * Get configured permitted recording targets and active target
+   */
+  getTargets: (params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{
+      data: {
+        mediaNodeId: string;
+        cameraId?: string;
+        activeTarget: StorageTargetItem;
+        permittedTargets: StorageTargetItem[];
+      };
+    }>(`/v1/storage/failover/targets?${qs.toString()}`);
+  },
+
+  /**
+   * Configure a storage target (Local NVMe, NAS, SAN, etc.)
+   */
+  configureTarget: (body: {
+    tenantId?: string;
+    mediaNodeId: string;
+    cameraId?: string;
+    storageNodeId: string;
+    targetName: string;
+    targetPath: string;
+    storageType?: 'local-disk' | 'nas' | 'san' | 's3' | 'archive';
+    storageTier?: 'hot' | 'warm' | 'cold' | 'archive';
+    priority?: number;
+    isActive?: boolean;
+    maxCapacityBytes?: number;
+    spilloverThresholdPercent?: number;
+  }) =>
+    fetchApi<{ data: StorageTargetItem }>('/v1/storage/failover/targets', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Remove / unregister a storage target
+   */
+  deleteTarget: (targetId: string, params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ success: boolean; data: { targetId: string; removed: boolean } }>(
+      `/v1/storage/failover/targets/${encodeURIComponent(targetId)}?${qs.toString()}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  /**
+   * Update storage target configuration (priority, status, spillover threshold)
+   */
+  updateTarget: (
+    targetId: string,
+    body: {
+      mediaNodeId: string;
+      cameraId?: string;
+      priority?: number;
+      isActive?: boolean;
+      targetName?: string;
+      targetPath?: string;
+      spilloverThresholdPercent?: number;
+    }
+  ) =>
+    fetchApi<{ data: StorageTargetItem }>(`/v1/storage/failover/targets/${encodeURIComponent(targetId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Manually or synthetically trigger target failover
+   */
+  triggerFailover: (body: {
+    mediaNodeId: string;
+    targetId: string;
+    reason?: 'DISK_FULL' | 'STORAGE_OFFLINE' | 'READ_ONLY' | 'WRITE_FAILURE' | 'LATENCY_SPIKE' | 'MOUNT_DISCONNECTED' | 'MANUAL_OVERRIDE';
+    errorDetail?: string;
+    cameraId?: string;
+  }) =>
+    fetchApi<{
+      data: {
+        failoverOccurred: boolean;
+        newTarget?: StorageTargetItem;
+        event?: StorageFailoverEventItem;
+      };
+    }>('/v1/storage/failover/trigger', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Recover a failed target and restore priority
+   */
+  recoverTarget: (body: { mediaNodeId: string; targetId: string; cameraId?: string }) =>
+    fetchApi<{
+      data: {
+        recovered: boolean;
+        activeTarget?: StorageTargetItem;
+      };
+    }>('/v1/storage/failover/recover', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Trigger real filesystem probe across all targets
+   */
+  probeHealth: (body: { mediaNodeId: string; cameraId?: string }) =>
+    fetchApi<{
+      data: {
+        activeTarget: StorageTargetItem;
+        targets: StorageTargetItem[];
+      };
+    }>('/v1/storage/failover/probe', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Query target health and status
+   */
+  getHealth: (params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{
+      data: {
+        activeTarget: StorageTargetItem;
+        targets: StorageTargetItem[];
+      };
+    }>(`/v1/storage/failover/health?${qs.toString()}`);
+  },
+
+  /**
+   * Get failover audit events
+   */
+  getEvents: (params?: { mediaNodeId?: string; limit?: number; reason?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.mediaNodeId) qs.append('mediaNodeId', params.mediaNodeId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.reason) qs.append('reason', params.reason);
+    return fetchApi<{ data: StorageFailoverEventItem[] }>(`/v1/storage/failover/events?${qs.toString()}`);
+  },
+
+  /**
+   * Get failover telemetry and MTTR metrics
+   */
+  getMetrics: (params?: { mediaNodeId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.mediaNodeId) qs.append('mediaNodeId', params.mediaNodeId);
+    return fetchApi<{ data: StorageFailoverMetricsItem }>(`/v1/storage/failover/metrics?${qs.toString()}`);
+  },
+};
+
+// ============================================================================
+// Media Gateway Failover API Client (ha.media_failover)
+// ============================================================================
+
+export interface MediaGatewayNodeItem {
+  gatewayId: string;
+  gatewayName: string;
+  ipAddress: string;
+  port: number;
+  apiPort: number;
+  publicUrl: string;
+  region: string;
+  status: 'HEALTHY' | 'DEGRADED' | 'DRAINING' | 'FAILED' | 'OFFLINE';
+  maxStreams: number;
+  activeStreams: number;
+  maxNetworkMbps: number;
+  currentNetworkMbps: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  consecutiveFailures: number;
+  lastHeartbeatAt: string;
+  registeredAt: string;
+  updatedAt: string;
+}
+
+export interface MediaStreamRouteItem {
+  id: string;
+  cameraId: string;
+  streamProfile: 'main' | 'sub' | 'preview';
+  assignedGatewayId: string;
+  standbyGatewayId?: string;
+  sourceUri: string;
+  streamPath: string;
+  redirectUrl: string;
+  status: 'ACTIVE' | 'FAILOVER_IN_PROGRESS' | 'FAILED_OVER' | 'DEGRADED' | 'OFFLINE';
+  fencingToken: number;
+  viewerCount: number;
+  bitrateKbps: number;
+  fps: number;
+  lastFailoverAt?: string;
+  failoverCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaGatewayFailoverEventItem {
+  id: string;
+  eventType:
+    | 'FAILOVER_INITIATED'
+    | 'STREAM_REDIRECTED'
+    | 'FAILOVER_COMPLETED'
+    | 'FAILOVER_FAILED'
+    | 'GATEWAY_DRAINED'
+    | 'GATEWAY_RECOVERED'
+    | 'REBALANCE_COMPLETED';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  failedGatewayId: string;
+  targetGatewayId?: string;
+  affectedStreams: number;
+  redirectedStreams: number;
+  failedRedirects: number;
+  rtoMs: number;
+  reason: string;
+  details?: Record<string, unknown>;
+  triggeredBy: string;
+  createdAt: string;
+}
+
+export interface MediaGatewayFailoverPolicyItem {
+  policyId: string;
+  heartbeatTimeoutMs: number;
+  watchdogIntervalMs: number;
+  maxStreamsPerGateway: number;
+  maxLoadPercent: number;
+  autoFailoverEnabled: boolean;
+  autoFailbackEnabled: boolean;
+  flapDampingSeconds: number;
+  updatedAt: string;
+}
+
+export interface MediaGatewayFailoverMetricsItem {
+  totalGateways: number;
+  healthyGateways: number;
+  degradedGateways: number;
+  drainingGateways: number;
+  failedGateways: number;
+  offlineGateways: number;
+  totalCapacityStreams: number;
+  totalActiveStreams: number;
+  clusterHeadroomPercent: number;
+  totalFailoversToday: number;
+  avgRtoMs: number;
+  p95RtoMs: number;
+  maxRtoMs: number;
+  streamContinuityPercent: number;
+  lastFailoverAt?: string;
+}
+
+export const mediaGatewayFailoverApi = {
+  getGateways: () =>
+    fetchApi<{ data: MediaGatewayNodeItem[] }>('/v1/ha/media-gateways'),
+
+  registerGateway: (body: {
+    gatewayId: string;
+    gatewayName: string;
+    ipAddress: string;
+    port?: number;
+    apiPort?: number;
+    publicUrl?: string;
+    region?: string;
+    maxStreams?: number;
+    maxNetworkMbps?: number;
+  }) =>
+    fetchApi<{ data: MediaGatewayNodeItem }>('/v1/ha/media-gateways/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  sendHeartbeat: (body: {
+    gatewayId: string;
+    gatewayName?: string;
+    ipAddress: string;
+    port?: number;
+    apiPort?: number;
+    publicUrl?: string;
+    region?: string;
+    cpuPercent: number;
+    memoryPercent: number;
+    networkInMbps: number;
+    networkOutMbps: number;
+    activeStreams: number;
+    recordingStreams?: number;
+    liveViewStreams?: number;
+    healthyStreams?: number;
+    degradedStreams?: number;
+    failedStreams?: number;
+    packetLoss?: number;
+    frameDrops?: number;
+    maxStreams?: number;
+    maxNetworkMbps?: number;
+  }) =>
+    fetchApi<{ data: MediaGatewayNodeItem }>('/v1/ha/media-gateways/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getStreams: () =>
+    fetchApi<{ data: MediaStreamRouteItem[] }>('/v1/ha/media-gateways/streams'),
+
+  routeStream: (body: {
+    cameraId: string;
+    streamProfile?: 'main' | 'sub' | 'preview';
+    sourceUri: string;
+    preferredGatewayId?: string;
+    preferredRegion?: string;
+    bitrateKbps?: number;
+    fps?: number;
+  }) =>
+    fetchApi<{ data: MediaStreamRouteItem }>('/v1/ha/media-gateways/streams/route', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  redirectStream: (cameraId: string, body: { targetGatewayId: string; streamProfile?: 'main' | 'sub' | 'preview' }) =>
+    fetchApi<{ data: MediaStreamRouteItem }>(`/v1/ha/media-gateways/streams/${encodeURIComponent(cameraId)}/redirect`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  triggerFailover: (gatewayId: string, body?: { reason?: string; triggeredBy?: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        affectedStreams: number;
+        redirectedStreams: number;
+        failedRedirects: number;
+        rtoMs: number;
+        event: MediaGatewayFailoverEventItem;
+      };
+    }>(`/v1/ha/media-gateways/${encodeURIComponent(gatewayId)}/failover`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  drainGateway: (gatewayId: string, body?: { reason?: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        drainedStreams: number;
+        failedRedirects: number;
+        rtoMs: number;
+      };
+    }>(`/v1/ha/media-gateways/${encodeURIComponent(gatewayId)}/drain`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  rebalanceStreams: () =>
+    fetchApi<{
+      data: {
+        rebalancedStreams: number;
+        transfers: Array<{ cameraId: string; fromGateway: string; toGateway: string }>;
+      };
+    }>('/v1/ha/media-gateways/rebalance', {
+      method: 'POST',
+    }),
+
+  getEvents: (params?: { limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ data: MediaGatewayFailoverEventItem[] }>(`/v1/ha/media-gateways/events?${qs.toString()}`);
+  },
+
+  getMetrics: () =>
+    fetchApi<{ data: MediaGatewayFailoverMetricsItem }>('/v1/ha/media-gateways/metrics'),
+
+  getPolicy: () =>
+    fetchApi<{ data: MediaGatewayFailoverPolicyItem }>('/v1/ha/media-gateways/policy'),
+
+  updatePolicy: (body: Partial<MediaGatewayFailoverPolicyItem>) =>
+    fetchApi<{ data: MediaGatewayFailoverPolicyItem }>('/v1/ha/media-gateways/policy', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  probeCluster: () =>
+    fetchApi<{
+      data: {
+        cycle: { detectedFailures: string[]; failoversExecuted: number };
+        metrics: MediaGatewayFailoverMetricsItem;
+        nodes: MediaGatewayNodeItem[];
+      };
+    }>('/v1/ha/media-gateways/probe', {
+      method: 'POST',
+    }),
+// ============================================================================
+// Recording Engine N+1 Failover API Client (ha.recording_failover)
+// ============================================================================
+
+export interface RecordingNodeItem {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  role: 'ACTIVE' | 'STANDBY' | 'DRAINING' | 'MAINTENANCE';
+  state: 'HEALTHY' | 'DEGRADED' | 'HEARTBEAT_EXPIRED' | 'OFFLINE' | 'FAILOVER_ACTIVE';
+  currentEpoch: number;
+  maxStreamCapacity: number;
+  activeStreamCount: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  diskWriteMbps: number;
+  networkInMbps: number;
+  heartbeatAt: string;
+  heartbeatAgeMs?: number;
+}
+
+export interface RecordingNodeAssignmentItem {
+  id: string;
+  cameraId: string;
+  tenantId: string;
+  primaryNodeId: string;
+  currentNodeId: string;
+  streamUri: string;
+  streamProfile: string;
+  status: 'ACTIVE' | 'FAILED_OVER' | 'DRAINING' | 'STOPPED';
+  takeoverEpoch: number;
+  failedOverAt?: string;
+}
+
+export interface RecordingFailoverEventItem {
+  id: string;
+  tenantId: string;
+  failedNodeId: string;
+  standbyNodeId: string;
+  affectedCameras: number;
+  transferredCameras: number;
+  detectionTimeMs: number;
+  takeoverTimeMs: number;
+  totalRtoMs: number;
+  reason: string;
+  status: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+  recoveredAt?: string;
+}
+
+export interface RecordingFailoverMetricsItem {
+  totalNodes: number;
+  activeNodes: number;
+  standbyNodes: number;
+  healthyNodes: number;
+  heartbeatExpiredNodes: number;
+  totalAssignedStreams: number;
+  failedOverStreams: number;
+  totalFailovers: number;
+  averageRtoMs: number;
+  streamContinuityPercent: number;
+  activeAlerts: Array<{
+    nodeId: string;
+    level: 'WARNING' | 'CRITICAL';
+    message: string;
+  }>;
+}
+
+export const recordingFailoverApi = {
+  getNodes: (params?: { role?: string; state?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.role) qs.append('role', params.role);
+    if (params?.state) qs.append('state', params.state);
+    return fetchApi<{ data: RecordingNodeItem[] }>(`/v1/recording/failover/nodes?${qs.toString()}`);
+  },
+
+  registerNode: (body: {
+    id: string;
+    name: string;
+    host: string;
+    port?: number;
+    role?: 'ACTIVE' | 'STANDBY' | 'DRAINING' | 'MAINTENANCE';
+    maxStreamCapacity?: number;
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ data: RecordingNodeItem }>('/v1/recording/failover/nodes', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  sendHeartbeat: (
+    nodeId: string,
+    body: {
+      cpuPercent?: number;
+      memoryPercent?: number;
+      diskWriteMbps?: number;
+      activeStreamCount?: number;
+    }
+  ) =>
+    fetchApi<{ data: RecordingNodeItem }>(`/v1/recording/failover/nodes/${encodeURIComponent(nodeId)}/heartbeat`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getAssignments: (params?: { nodeId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.nodeId) qs.append('nodeId', params.nodeId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ data: RecordingNodeAssignmentItem[] }>(`/v1/recording/failover/assignments?${qs.toString()}`);
+  },
+
+  assignCamera: (body: {
+    cameraId: string;
+    primaryNodeId: string;
+    streamUri: string;
+    streamProfile?: string;
+    tenantId?: string;
+  }) =>
+    fetchApi<{ data: RecordingNodeAssignmentItem }>('/v1/recording/failover/assignments', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  triggerFailover: (body: {
+    failedNodeId: string;
+    reason?: 'HEARTBEAT_EXPIRED' | 'NODE_CRASH' | 'MANUAL_FAILOVER' | 'NETWORK_PARTITION' | 'HIGH_ERROR_RATE' | 'STORAGE_UNAVAILABLE';
+  }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        failedNodeId: string;
+        standbyNodeId: string;
+        affectedCameras: number;
+        transferredCameras: number;
+        totalRtoMs: number;
+        newEpoch: number;
+        event: RecordingFailoverEventItem;
+      };
+    }>('/v1/recording/failover/trigger', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  executeFailback: (body: { primaryNodeId: string; standbyNodeId: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        primaryNodeId: string;
+        standbyNodeId: string;
+        restoredCameras: number;
+        message: string;
+      };
+    }>('/v1/recording/failover/failback', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  checkLiveness: () =>
+    fetchApi<{
+      data: {
+        expiredNodes: string[];
+        failoverResults: Array<{
+          success: boolean;
+          failedNodeId: string;
+          standbyNodeId: string;
+          transferredCameras: number;
+          totalRtoMs: number;
+        }>;
+      };
+    }>('/v1/recording/failover/check-liveness', {
+      method: 'POST',
+    }),
+
+  getEvents: (params?: { failedNodeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.failedNodeId) qs.append('failedNodeId', params.failedNodeId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ data: RecordingFailoverEventItem[] }>(`/v1/recording/failover/events?${qs.toString()}`);
+  },
+
+  getMetrics: () =>
+    fetchApi<{ data: RecordingFailoverMetricsItem }>('/v1/recording/failover/metrics'),
+// ============================================================================
+// Hardware Security Module (HSM) Evidence Signing API Client (security.hsm_evidence_signing)
+// ============================================================================
+
+export interface HsmStatusReportItem {
+  status: 'ONLINE' | 'OFFLINE' | 'DEGRADED' | 'UNINITIALIZED';
+  provider: string;
+  modulePath: string;
+  slotId: number;
+  tokenLabel: string;
+  tokenSerial: string;
+  activeKeyLabel: string;
+  algorithm: string;
+  fipsLevel: number;
+  sessionPool: {
+    total: number;
+    active: number;
+    authenticated: boolean;
+  };
+  supportedMechanisms: string[];
+  airGappedQualified: boolean;
+  lastHeartbeatAt: string;
+}
+
+export interface HsmTokenItem {
+  id: string;
+  slotId: number;
+  tokenLabel: string;
+  tokenSerial: string;
+  manufacturer: string;
+  model: string;
+  firmwareVersion?: string;
+  hardwareVersion?: string;
+  fipsLevel: number;
+  modulePath: string;
+  status: 'ONLINE' | 'OFFLINE' | 'LOCKED' | 'DEGRADED';
+  pinSourceType: 'env' | 'file' | 'secret';
+  totalSessions: number;
+  activeSessions: number;
+  mechanisms: string[];
+  metadata: Record<string, unknown>;
+  lastHeartbeatAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HsmKeyItem {
+  id: string;
+  keyLabel: string;
+  tokenSerial?: string;
+  ckaId?: string;
+  algorithm: string;
+  keySize: number;
+  purpose: string;
+  publicKeyPem: string;
+  publicKeyFingerprint: string;
+  certificatePem?: string;
+  certificateChain: string[];
+  isActive: boolean;
+  signCount: number;
+  verifyCount: number;
+  lastUsedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HsmSignedPackageItem {
+  id: string;
+  evidenceId: string;
+  tenantId: string;
+  branchId?: string;
+  cameraId?: string;
+  manifestSha256: string;
+  keyLabel: string;
+  keyFingerprint: string;
+  algorithm: string;
+  signatureBase64: string;
+  signatureDerHex: string;
+  certificatePem?: string;
+  certificateChain: string[];
+  manifestPayload: Record<string, unknown>;
+  artifactsSummary: unknown[];
+  timeSyncSummary: Record<string, unknown>;
+  verificationStatus: 'VERIFIED' | 'FAILED' | 'UNCHECKED';
+  signedAt: string;
+  createdAt: string;
+}
+
+export interface HsmAuditLogItem {
+  id: string;
+  operation: string;
+  keyLabel?: string;
+  tokenSerial?: string;
+  evidenceId?: string;
+  actorId: string;
+  actorType: string;
+  status: 'SUCCESS' | 'FAILURE';
+  errorMessage?: string;
+  durationMs: number;
+  details: Record<string, unknown>;
+  timestamp: string;
+}
+
+export const hsmSigningApi = {
+  getStatus: () =>
+    fetchApi<{ success: boolean; data: HsmStatusReportItem }>('/v1/security/hsm/status'),
+
+  getTokens: () =>
+    fetchApi<{ success: boolean; data: HsmTokenItem[] }>('/v1/security/hsm/tokens'),
+
+  registerToken: (body: {
+    slotId: number;
+    tokenLabel: string;
+    tokenSerial: string;
+    manufacturer: string;
+    model: string;
+    firmwareVersion?: string;
+    hardwareVersion?: string;
+    fipsLevel?: number;
+    modulePath: string;
+    pinSourceType?: 'env' | 'file' | 'secret';
+    totalSessions?: number;
+    mechanisms?: string[];
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmTokenItem }>('/v1/security/hsm/tokens/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getKeys: () =>
+    fetchApi<{ success: boolean; data: HsmKeyItem[] }>('/v1/security/hsm/keys'),
+
+  registerKey: (body: {
+    keyLabel: string;
+    tokenSerial?: string;
+    ckaId?: string;
+    algorithm?: 'ECDSA_P256' | 'ECDSA_P384' | 'RSA_PSS_SHA256' | 'RSA_PKCS1_SHA256';
+    keySize?: number;
+    purpose?: string;
+    publicKeyPem: string;
+    certificatePem?: string;
+    certificateChain?: string[];
+    isActive?: boolean;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmKeyItem }>('/v1/security/hsm/keys/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getKeyCertificate: (keyLabel: string) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        keyLabel: string;
+        algorithm: string;
+        publicKeyPem: string;
+        publicKeyFingerprint: string;
+        certificatePem?: string;
+        certificateChain: string[];
+        isActive: boolean;
+        signCount: number;
+        verifyCount: number;
+      };
+    }>(`/v1/security/hsm/keys/${encodeURIComponent(keyLabel)}/certificate`),
+
+  signEvidence: (body: {
+    evidenceId?: string;
+    tenantId?: string;
+    branchId?: string;
+    cameraId?: string;
+    manifest: Record<string, unknown>;
+    artifactsSummary?: unknown[];
+    timeSyncSummary?: Record<string, unknown>;
+    reason?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: HsmSignedPackageItem }>('/v1/security/hsm/sign-evidence', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  verifyEvidence: (body: {
+    manifestSha256?: string;
+    manifest?: Record<string, unknown>;
+    signatureBase64: string;
+    publicKeyPem?: string;
+    keyLabel?: string;
+    evidenceId?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        isValid: boolean;
+        manifestSha256: string;
+        verifiedAt: string;
+        keyId: string;
+      };
+    }>('/v1/security/hsm/verify-evidence', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getPackage: (evidenceId: string) =>
+    fetchApi<{ success: boolean; data: HsmSignedPackageItem }>(
+      `/v1/security/hsm/packages/${encodeURIComponent(evidenceId)}`
+    ),
+
+  getAuditLogs: (params?: { keyLabel?: string; evidenceId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.keyLabel) qs.append('keyLabel', params.keyLabel);
+    if (params?.evidenceId) qs.append('evidenceId', params.evidenceId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ success: boolean; data: HsmAuditLogItem[] }>(
+      `/v1/security/hsm/audit-log?${qs.toString()}`
+    );
+  },
+
+// ============================================================================
+// Cryptographically Signed Edge Config Bundles API Client (security.signed_configuration)
+// ============================================================================
+
+export interface SignedConfigKeyItem {
+  keyId: string;
+  algorithm: 'RSA-PSS-SHA256' | 'RSA-PKCS1-SHA256' | 'HMAC-SHA256' | 'ED25519';
+  keySize: number;
+  publicKeyPem: string | null;
+  keyFingerprint: string;
+  status: 'ACTIVE' | 'RETIRED' | 'REVOKED';
+  validFrom: string;
+  validUntil?: string | null;
+  signCount: number;
+  verifyCount: number;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  revocationReason?: string | null;
+}
+
+export interface SignedConfigBundleItem {
+  bundleId: string;
+  edgeId: string;
+  branchId?: string | null;
+  version: number;
+  previousVersion?: number | null;
+  payload: Record<string, unknown>;
+  payloadHash: string;
+  canonicalPayloadHash: string;
+  headerPayload: Record<string, unknown>;
+  nonce: string;
+  signature: string;
+  algorithm: string;
+  keyId: string;
+  signerIdentity: string;
+  signerRole: string;
+  status: 'DESIRED' | 'APPLIED' | 'DRIFTED' | 'ROLLED_BACK' | 'REVOKED';
+  verificationStatus: 'VERIFIED' | 'FAILED' | 'TAMPERED' | 'UNCHECKED';
+  verificationError?: string | null;
+  expiresAt?: string | null;
+  appliedVersion?: number | null;
+  appliedAt?: string | null;
+  appliedHash?: string | null;
+  driftDetails?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SignedConfigDriftItem {
+  edgeId: string;
+  desiredVersion: number;
+  appliedVersion: number | null;
+  desiredHash: string;
+  appliedHash: string | null;
+  verificationStatus: string;
+  status: 'IN_SYNC' | 'DRIFTED' | 'PENDING_APPLY' | 'ROLLED_BACK' | 'TAMPERED';
+  isDrifted: boolean;
+  driftReason?: string;
+  details?: Record<string, unknown>;
+  lastAppliedAt?: string | null;
+}
+
+export interface SignedConfigAuditItem {
+  id: string;
+  eventType: string;
+  keyId?: string | null;
+  bundleId?: string | null;
+  edgeId?: string | null;
+  version?: number | null;
+  actorId: string;
+  actorType: string;
+  status: 'SUCCESS' | 'FAILURE';
+  details: Record<string, unknown>;
+  ipAddress?: string | null;
+  createdAt: string;
+}
+
+export const signedConfigApi = {
+  getKeys: () =>
+    fetchApi<{ success: boolean; data: SignedConfigKeyItem[] }>('/v1/edge/config/keys'),
+
+  getPublicKeys: () =>
+    fetchApi<{
+      success: boolean;
+      data: Array<{
+        keyId: string;
+        algorithm: string;
+        publicKeyPem: string | null;
+        keyFingerprint: string;
+        status: string;
+        validFrom: string;
+        validUntil?: string | null;
+      }>;
+    }>('/v1/edge/config/keys/public'),
+
+  generateKey: (body: {
+    keyId?: string;
+    algorithm?: 'RSA-PSS-SHA256' | 'RSA-PKCS1-SHA256' | 'HMAC-SHA256' | 'ED25519';
+    keySize?: number;
+    validDays?: number;
+  }) =>
+    fetchApi<{ success: boolean; data: SignedConfigKeyItem }>('/v1/edge/config/keys/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  rotateKey: (keyId: string, body?: { newAlgorithm?: string; keySize?: number }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        retiredKeyId: string;
+        newKeyId: string;
+        newAlgorithm: string;
+        newPublicKeyPem: string | null;
+      };
+    }>(`/v1/edge/config/keys/${encodeURIComponent(keyId)}/rotate`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  revokeKey: (keyId: string, body: { reason: string }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        keyId: string;
+        status: string;
+        revokedAt: string;
+        revocationReason: string;
+      };
+    }>(`/v1/edge/config/keys/${encodeURIComponent(keyId)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  signBundle: (body: {
+    edgeId: string;
+    branchId?: string;
+    version: number;
+    previousVersion?: number;
+    payload: Record<string, unknown>;
+    signerIdentity?: string;
+    signerRole?: string;
+    algorithm?: string;
+    keyId?: string;
+    expiresInSeconds?: number;
+  }) =>
+    fetchApi<{ success: boolean; data: SignedConfigBundleItem }>('/v1/edge/config/bundles/sign', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  verifyBundle: (body: Record<string, unknown>) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        isValid: boolean;
+        algorithm: string;
+        keyId: string;
+        error?: string;
+        canonicalPayloadHash: string;
+        verifiedAt: string;
+      };
+    }>('/v1/edge/config/bundles/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getDesiredBundle: (edgeId: string) =>
+    fetchApi<{ success: boolean; data: SignedConfigBundleItem }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/desired`
+    ),
+
+  getBundleHistory: (edgeId: string, limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : '';
+    return fetchApi<{ success: boolean; data: SignedConfigBundleItem[] }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/history${qs}`
+    );
+  },
+
+  reportApplied: (
+    edgeId: string,
+    body: {
+      bundleId: string;
+      version: number;
+      appliedHash: string;
+      verificationResult: 'VERIFIED' | 'FAILED' | 'TAMPERED';
+      rejectionReason?: string;
+      edgeAgentVersion?: string;
+    }
+  ) =>
+    fetchApi<{ success: boolean; data: { status: string; isDrifted: boolean } }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/report-applied`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  getDrift: (edgeId: string) =>
+    fetchApi<{ success: boolean; data: SignedConfigDriftItem }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/drift`
+    ),
+
+  getAuditLogs: (params?: { edgeId?: string; keyId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.edgeId) qs.append('edgeId', params.edgeId);
+    if (params?.keyId) qs.append('keyId', params.keyId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ success: boolean; data: SignedConfigAuditItem[] }>(
+      `/v1/edge/config/audit-logs?${qs.toString()}`
+    );
+  },
+};
+
 export { ApiError };
+
 
 
 

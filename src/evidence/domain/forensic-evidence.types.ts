@@ -114,12 +114,12 @@ export interface ForensicManifest {
   createdBy: string;
   createdAt: string;
   hashAlgorithm: 'SHA-256';
-  signatureAlgorithm: 'Ed25519' | 'RSA-SHA256';
+  signatureAlgorithm: 'Ed25519' | 'RSA-SHA256' | 'ECDSA_P256' | string;
   signingKeyId: string;
 }
 
 export interface ManifestSignature {
-  algorithm: 'Ed25519' | 'RSA-SHA256';
+  algorithm: 'Ed25519' | 'RSA-SHA256' | 'ECDSA_P256' | string;
   keyId: string;
   publicKey: string;
   manifestSha256: string;

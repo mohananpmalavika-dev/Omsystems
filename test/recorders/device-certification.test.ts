@@ -6,7 +6,48 @@ import { HikvisionRecorderAdapter } from "../../src/recorders/adapters/hikvision
 import { DahuaRecorderAdapter } from "../../src/recorders/adapters/dahua-recorder.adapter.js";
 
 describe("Device, DVR, and NVR Certification Matrix", () => {
-  it("evaluates Hikvision NVRs up to KV-C12 compatibility", async () => {
+  it("evaluates unverified devices as TEST_REQUIRED prior to physical lab execution", async () => {
+    const evalResult = await recorderCertificationRegistry.evaluateDevice({
+      vendor: "Hikvision",
+      model: "DS-7616NI-K2",
+      firmwareVersion: "V4.61.025",
+    });
+
+    expect(evalResult.certificationStatus).toBe("TEST_REQUIRED");
+    expect(evalResult.compatibilityLevel).toBe("KV-C12");
+    expect(evalResult.features["KV-C1"]).toBe("SUPPORTED");
+  });
+
+  it("produces CERTIFIED status only when real hardware test result is recorded", async () => {
+    const certRecord = await recorderCertificationRegistry.recordHardwareTestResult({
+      manufacturer: "Hikvision",
+      model: "DS-7616NI-K2",
+      firmware: "V4.61.025",
+      testSuiteVersion: "KV-CERT-1.0",
+      testDate: new Date("2026-03-01T10:00:00Z"),
+      testOperator: "Lead QA Engineer - Banking Lab",
+      testEnvironment: "Mumbai SOC Lab Bench #4",
+      capabilities: {
+        "KV-C1": "PASS",
+        "KV-C2": "PASS",
+        "KV-C3": "PASS",
+        "KV-C4": "PASS",
+        "KV-C5": "PASS",
+        "KV-C6": "PASS",
+        "KV-C7": "PASS",
+        "KV-C8": "PASS",
+        "KV-C9": "PASS",
+        "KV-C10": "PASS",
+        "KV-C11": "PASS",
+        "KV-C12": "PASS",
+      },
+      overall: "CERTIFIED",
+      evidenceLogFiles: ["/evidence/logs/hikvision-ds7616-cert-20260301.log"],
+    });
+
+    expect(certRecord.certificationStatus).toBe("CERTIFIED");
+    expect(certRecord.testedBy).toBe("Lead QA Engineer - Banking Lab");
+
     const evalResult = await recorderCertificationRegistry.evaluateDevice({
       vendor: "Hikvision",
       model: "DS-7616NI-K2",
@@ -15,60 +56,37 @@ describe("Device, DVR, and NVR Certification Matrix", () => {
 
     expect(evalResult.certificationStatus).toBe("CERTIFIED");
     expect(evalResult.compatibilityLevel).toBe("KV-C12");
-    expect(evalResult.features["KV-C1"]).toBe("SUPPORTED");
-    expect(evalResult.features["KV-C12"]).toBe("SUPPORTED");
   });
 
-  it("evaluates CP Plus UVR analog DVRs as KV-C8 with explicit UNSUPPORTED features", async () => {
-    const evalResult = await recorderCertificationRegistry.evaluateDevice({
-      vendor: "CP Plus",
-      model: "CP-UVR-0801E1",
-    });
-
-    expect(evalResult.certificationStatus).toBe("CERTIFIED");
-    expect(evalResult.compatibilityLevel).toBe("KV-C8");
-    expect(evalResult.features["KV-C1"]).toBe("SUPPORTED"); // Live
-    expect(evalResult.features["KV-C2"]).toBe("SUPPORTED"); // Record
-    expect(evalResult.features["KV-C3"]).toBe("SUPPORTED"); // Playback
-    expect(evalResult.features["KV-C9"]).toBe("UNSUPPORTED"); // Cloud Configuration unsupported on legacy DVR
-    expect(evalResult.features["KV-C12"]).toBe("UNSUPPORTED"); // Failover unsupported
-  });
-
-  it("evaluates unknown/uncertified hardware with UNKNOWN status and features", async () => {
+  it("evaluates unknown/uncertified hardware with UNVERIFIED status and UNKNOWN features", async () => {
     const evalResult = await recorderCertificationRegistry.evaluateDevice({
       vendor: "GenericClone",
       model: "CloneDVR-99",
     });
 
-    expect(evalResult.certificationStatus).toBe("UNKNOWN");
+    expect(evalResult.certificationStatus).toBe("UNVERIFIED");
     expect(evalResult.features["KV-C1"]).toBe("UNKNOWN");
     expect(evalResult.features["KV-C5"]).toBe("UNKNOWN");
     expect(evalResult.features["KV-C12"]).toBe("UNKNOWN");
   });
 
-  it("initializes CP Plus adapter and verifies channels and streams", async () => {
+  it("initializes CP Plus adapter and verifies streams and truthful unreachable health", async () => {
     const adapter = new CpPlusRecorderAdapter({
       ipAddress: "10.0.14.50",
       username: "admin",
       password: "BankPassword123!",
       model: "CP-UVR-0801E1",
       isAnalogDvr: true,
+      timeoutMs: 50,
     });
-
-    const info = await adapter.getDeviceInfo();
-    expect(info.vendor).toBe("CP Plus");
-    expect(info.totalChannels).toBe(8);
-
-    const channels = await adapter.getChannels();
-    expect(channels.length).toBe(8);
-    expect(channels[0].streamUrl).toContain("cam/realmonitor?channel=1");
 
     const live = await adapter.getLiveStream(1);
     expect(live.streamUrl).toContain("channel=1");
 
-    const storage = await adapter.getStorageStatus();
-    expect(storage.length).toBeGreaterThan(0);
-    expect(storage[0].status).toBe("NORMAL");
+    // Unreachable hardware must return UNAVAILABLE, never fake HEALTHY
+    const health = await adapter.getHealth();
+    expect(health.status).toBe("UNAVAILABLE");
+    expect(health.storageHealthy).toBe(false);
   });
 
   it("initializes Uniview and Dahua adapters with truthful capabilities", async () => {

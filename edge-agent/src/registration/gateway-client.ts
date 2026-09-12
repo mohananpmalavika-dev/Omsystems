@@ -183,6 +183,14 @@ export interface GatewayMediaBootstrap {
   status: "inactive" | "healthy" | "degraded" | "down" | "unknown";
 }
 
+export interface GatewayMtlsOptions {
+  enabled: boolean;
+  clientCert?: string;
+  clientKey?: string;
+  caCert?: string;
+  rejectUnauthorized?: boolean;
+}
+
 export class GatewayClient {
   private edgeCredential?: string;
 
@@ -192,6 +200,7 @@ export class GatewayClient {
     private readonly edgeBridgeSharedKey?: string,
     private readonly timeoutMs = 15_000,
     private readonly outbox?: EncryptedOutbox,
+    private readonly mtlsOptions?: GatewayMtlsOptions,
   ) {}
 
   useEdgeCredential(credential: string) { this.edgeCredential = credential; }
@@ -386,15 +395,40 @@ export class GatewayClient {
   private async request<T = unknown>(path: string, init: RequestInit, skipAuth = false): Promise<T> {
     const url = controlPlaneEndpoint(this.baseUrl, path);
     let response: Response;
+    let dispatcher: any = undefined;
+
+    if (this.mtlsOptions?.enabled && (this.mtlsOptions.clientCert || this.mtlsOptions.clientKey)) {
+      try {
+        const { Agent } = await import("undici");
+        dispatcher = new Agent({
+          connect: {
+            cert: this.mtlsOptions.clientCert,
+            key: this.mtlsOptions.clientKey,
+            ca: this.mtlsOptions.caCert,
+            rejectUnauthorized: this.mtlsOptions.rejectUnauthorized !== false,
+          },
+        });
+      } catch {
+        // Fall back to standard fetch if undici Agent is not dynamically importable
+      }
+    }
+
+    const mtlsHeaders: Record<string, string> = {};
+    if (this.mtlsOptions?.enabled && this.mtlsOptions.clientCert) {
+      mtlsHeaders["x-client-cert"] = this.mtlsOptions.clientCert;
+    }
+
     try {
       response = await fetch(url, {
         ...init,
+        ...(dispatcher ? { dispatcher } : {}),
         signal: AbortSignal.timeout(this.timeoutMs),
         headers: {
           "content-type": "application/json",
           ...(this.developmentUserId ? { "x-user-id": this.developmentUserId } : {}),
           ...(!skipAuth && this.edgeCredential ? { "x-edge-agent-token": this.edgeCredential } : {}),
           ...(!skipAuth && !this.edgeCredential && this.edgeBridgeSharedKey ? { "x-edge-bridge-key": this.edgeBridgeSharedKey } : {}),
+          ...mtlsHeaders,
           ...init.headers,
         },
       });

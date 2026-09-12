@@ -42,9 +42,14 @@ export class TransactionalOutboxService {
   private readonly memoryOutbox = new Map<string, OutboxRecord>();
   private readonly memoryInbox = new Set<string>();
 
-  constructor(private readonly pool?: Pool) {}
+  constructor(private readonly pool?: Pool) {
+    if (process.env.NODE_ENV === "production" && !this.pool) {
+      throw new Error("OUTBOX_STORE_UNAVAILABLE: TransactionalOutboxService requires PostgreSQL pool in production");
+    }
+  }
 
   async writeOutboxEvent(clientOrPool: Pool | PoolClient | undefined, event: OutboxEventInput): Promise<OutboxRecord> {
+    const isProduction = process.env.NODE_ENV === "production";
     const eventId = event.eventId || randomUUID();
     const idempotencyKey = event.idempotencyKey || `${event.tenantId}:${event.eventType}:${eventId}`;
     const schemaVersion = event.schemaVersion || "1.0.0";
@@ -65,12 +70,11 @@ export class TransactionalOutboxService {
       createdAt: now,
     };
 
-    const existingMemory = this.memoryOutbox.get(idempotencyKey);
-    if (existingMemory) {
-      return existingMemory;
+    const client = clientOrPool || this.pool;
+    if (isProduction && !client) {
+      throw new Error("OUTBOX_STORE_UNAVAILABLE: PostgreSQL client required in production for outbox");
     }
 
-    const client = clientOrPool || this.pool;
     if (client) {
       try {
         const res = await (client as any).query(
@@ -122,9 +126,20 @@ export class TransactionalOutboxService {
             createdAt: new Date(row.created_at),
           };
         }
-      } catch {
-        // Fallback for memory mode
+      } catch (err) {
+        if (isProduction) {
+          throw new Error(`OUTBOX_STORE_UNAVAILABLE: Database error writing outbox event: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+    }
+
+    if (isProduction) {
+      throw new Error("OUTBOX_STORE_UNAVAILABLE: In-memory outbox is forbidden in production");
+    }
+
+    const existingMemory = this.memoryOutbox.get(idempotencyKey);
+    if (existingMemory) {
+      return existingMemory;
     }
 
     this.memoryOutbox.set(idempotencyKey, record);
@@ -192,7 +207,12 @@ export class TransactionalOutboxService {
   }
 
   async recordInboxProcessed(eventId: string, consumerId: string): Promise<boolean> {
+    const isProduction = process.env.NODE_ENV === "production";
     const key = `${eventId}:${consumerId}`;
+
+    if (isProduction && !this.pool) {
+      throw new Error("INBOX_STORE_UNAVAILABLE: PostgreSQL pool required in production for event inbox");
+    }
 
     if (this.pool) {
       try {
@@ -204,9 +224,16 @@ export class TransactionalOutboxService {
           [eventId, consumerId]
         );
         return (res.rowCount || 0) > 0;
-      } catch {
+      } catch (err) {
+        if (isProduction) {
+          throw new Error(`INBOX_STORE_UNAVAILABLE: Failed to record inbox event: ${err instanceof Error ? err.message : String(err)}`);
+        }
         return false;
       }
+    }
+
+    if (isProduction) {
+      throw new Error("INBOX_STORE_UNAVAILABLE: In-memory inbox is forbidden in production");
     }
 
     if (this.memoryInbox.has(key)) {

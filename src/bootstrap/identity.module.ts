@@ -7,9 +7,11 @@
 import type { Pool } from "pg";
 import { moduleRegistry } from "../platform/module-registry.service.js";
 import { CentralAuditService } from "../audit/services/central-audit.service.js";
+import { LdapDirectorySyncService } from "../security/ldap/ldap-directory-sync.service.js";
 
 export class IdentityModule {
   public auditService: CentralAuditService | null = null;
+  public ldapSyncService: LdapDirectorySyncService | null = null;
 
   async initialize(pool?: Pool): Promise<void> {
     moduleRegistry.registerModule({
@@ -21,7 +23,10 @@ export class IdentityModule {
 
     try {
       this.auditService = new CentralAuditService(pool);
-      moduleRegistry.updateModuleState("identity", "READY", "Identity and immutable audit platform active");
+      if (pool) {
+        this.ldapSyncService = new LdapDirectorySyncService(pool);
+      }
+      moduleRegistry.updateModuleState("identity", "READY", "Identity, LDAP directory sync, and immutable audit platform active");
     } catch (err: any) {
       moduleRegistry.updateModuleState("identity", "UNAVAILABLE", err.message);
     }

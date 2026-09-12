@@ -35,6 +35,7 @@ export interface AccessEventInput {
   direction: AccessDirection;
   timestamp?: Date;
   detectedPersonCount?: number;
+  confidence?: number;
 }
 
 export interface AccessEvaluationResult {
@@ -177,7 +178,7 @@ export class UnifiedAccessControlService {
           accessEventId: eventId,
           badgesGrantedCount: 1,
           detectedPersonsCount: input.detectedPersonCount,
-          confidence: 0.94,
+          confidence: (input as any).confidence ?? (input.detectedPersonCount > 1 ? 0.95 : 0.85),
           timestamp,
           status: "DETECTED",
         };

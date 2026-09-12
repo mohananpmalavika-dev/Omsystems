@@ -141,13 +141,16 @@ export class EventBusFactory {
           namespace: config?.namespace || process.env.EVENT_BUS_NAMESPACE || 'sentinel',
         };
 
-        const { initializeDistributedEventBus } = await import('../../backend/src/services/distributed-event-bus.service.js');
+        const { initializeDistributedEventBus } = await import('./distributed-event-bus.service.js');
         const distributedBus = initializeDistributedEventBus(redisConfig);
         await distributedBus.connect();
 
         this.instance = new RedisEventBusWrapper(distributedBus);
         console.log('[EventBusFactory] Redis event bus initialized and connected');
       } catch (error) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(`EVENT_BUS_UNAVAILABLE: Failed to connect to Redis event bus in production: ${error instanceof Error ? error.message : error}`);
+        }
         console.error('[EventBusFactory] Failed to connect to Redis event bus, falling back to in-memory mode:', error instanceof Error ? error.message : error);
         this.mode = 'memory';
         this.instance = new InMemoryEventBus();

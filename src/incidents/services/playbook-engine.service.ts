@@ -5,32 +5,52 @@ import type {
   IncidentDecisionRecord,
   IncidentStateWorkspace,
 } from "../domain/playbook.types.js";
+import type { Pool } from "pg";
 import { PlaybookDefinitionRepository } from "../repositories/playbook-definition.repository.js";
 import { PlaybookInstanceRepository } from "../repositories/playbook-instance.repository.js";
 import { IncidentAuditRepository } from "../repositories/incident-audit.repository.js";
+import { PostgresPlaybookDefinitionRepository } from "../repositories/postgres-playbook-definition.repository.js";
+import { PostgresPlaybookInstanceRepository } from "../repositories/postgres-playbook-instance.repository.js";
+import { PostgresIncidentAuditRepository } from "../repositories/postgres-incident-audit.repository.js";
 import { StepExecutorService, type StepExecutionInput, type StepOverrideInput } from "./step-executor.service.js";
 import { IncidentResolutionService } from "./incident-resolution.service.js";
 
+export type PlaybookDefRepo = PostgresPlaybookDefinitionRepository | PlaybookDefinitionRepository;
+export type PlaybookInstRepo = PostgresPlaybookInstanceRepository | PlaybookInstanceRepository;
+export type IncidentAuditRepo = PostgresIncidentAuditRepository | IncidentAuditRepository;
+
 export class PlaybookEngineService {
-  readonly definitions: PlaybookDefinitionRepository;
-  readonly instances: PlaybookInstanceRepository;
-  readonly audit: IncidentAuditRepository;
+  readonly definitions: PlaybookDefRepo;
+  readonly instances: PlaybookInstRepo;
+  readonly audit: IncidentAuditRepo;
   readonly stepExecutor: StepExecutorService;
   readonly resolutionService: IncidentResolutionService;
+  readonly pool?: Pool;
 
-  // In-memory structured decision records
+  // In-memory fallback for test / standalone only
   private readonly decisions = new Map<string, IncidentDecisionRecord[]>();
 
   constructor(
-    definitions?: PlaybookDefinitionRepository,
-    instances?: PlaybookInstanceRepository,
-    audit?: IncidentAuditRepository,
+    definitions?: PlaybookDefRepo,
+    instances?: PlaybookInstRepo,
+    audit?: IncidentAuditRepo,
+    pool?: Pool,
   ) {
-    this.definitions = definitions || new PlaybookDefinitionRepository();
-    this.instances = instances || new PlaybookInstanceRepository();
-    this.audit = audit || new IncidentAuditRepository();
+    this.pool = pool;
+    if (this.pool) {
+      this.definitions = definitions || new PostgresPlaybookDefinitionRepository(this.pool);
+      this.instances = instances || new PostgresPlaybookInstanceRepository(this.pool);
+      this.audit = audit || new PostgresIncidentAuditRepository(this.pool);
+    } else {
+      if (process.env.NODE_ENV === "production" && (!definitions || !instances || !audit)) {
+        throw new Error("INCIDENT_STORE_UNAVAILABLE: PlaybookEngineService requires durable PostgreSQL repositories in production");
+      }
+      this.definitions = definitions || new PlaybookDefinitionRepository();
+      this.instances = instances || new PlaybookInstanceRepository();
+      this.audit = audit || new IncidentAuditRepository();
+    }
     this.stepExecutor = new StepExecutorService();
-    this.resolutionService = new IncidentResolutionService(this.definitions, this.audit);
+    this.resolutionService = new IncidentResolutionService(this.definitions as any, this.audit as any);
   }
 
   /**
@@ -295,6 +315,35 @@ export class PlaybookEngineService {
     list.push(record);
     this.decisions.set(incidentId, list);
 
+    if (this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO incident_playbook_decisions (
+             id, instance_id, step_instance_id, decision_key, chosen_option, rationale, threat_level, operator_id, decided_at
+           ) VALUES ($1,
+             COALESCE((SELECT instance_id FROM incident_playbook_instances WHERE incident_id = $2 LIMIT 1), 'inst-' || $2),
+             COALESCE((SELECT id FROM incident_playbook_step_instances WHERE instance_id = (SELECT instance_id FROM incident_playbook_instances WHERE incident_id = $2 LIMIT 1) AND step_id = $3 LIMIT 1), 'step-' || $3),
+             $4, $5, $6, $7, $8, NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [
+            record.decisionId,
+            incidentId,
+            stepId,
+            input.decisionType,
+            input.chosenOption,
+            input.operatorNotes,
+            input.confidence,
+            input.actor.userId,
+          ],
+        );
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`INCIDENT_STORE_UNAVAILABLE: Failed to persist decision: ${(err as Error).message}`);
+        }
+        console.warn("[PlaybookEngineService] DB recordDecision failed:", err);
+      }
+    }
+
     // Complete the decision step on the playbook instance
     await this.completeStep(incidentId, stepId, {
       stepId,
@@ -378,7 +427,37 @@ export class PlaybookEngineService {
 
     const { canResolve, incompleteMandatorySteps } = await this.resolutionService.validateResolutionGates(instance);
     const timeline = await this.audit.getTimeline(incident.id);
-    const incidentDecisions = this.decisions.get(incident.id) || [];
+    let incidentDecisions = this.decisions.get(incident.id) || [];
+    if (this.pool) {
+      try {
+        const decRes = await this.pool.query(
+          `SELECT d.id, d.decision_key, d.chosen_option, d.rationale, d.threat_level, d.operator_id, d.decided_at, s.step_id
+           FROM incident_playbook_decisions d
+           LEFT JOIN incident_playbook_step_instances s ON s.id = d.step_instance_id
+           LEFT JOIN incident_playbook_instances i ON i.instance_id = d.instance_id
+           WHERE i.incident_id = $1 OR d.instance_id = 'inst-' || $1
+           ORDER BY d.decided_at ASC`,
+          [incident.id],
+        );
+        if (decRes.rows.length > 0) {
+          incidentDecisions = decRes.rows.map((r) => ({
+            decisionId: r.id,
+            incidentId: incident.id,
+            stepId: r.step_id || "step-unknown",
+            decisionType: r.decision_key as any,
+            chosenOption: r.chosen_option,
+            confidence: (r.threat_level as any) || "HIGH",
+            operatorNotes: r.rationale,
+            recordedBy: { userId: r.operator_id, userName: r.operator_id },
+            recordedAt: new Date(r.decided_at).toISOString(),
+          }));
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`INCIDENT_STORE_UNAVAILABLE: Failed to read incident decisions: ${(err as Error).message}`);
+        }
+      }
+    }
 
     const allowedActions: IncidentStateWorkspace["allowedActions"] = [
       "START_STEP",

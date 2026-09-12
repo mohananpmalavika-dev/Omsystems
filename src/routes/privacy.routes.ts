@@ -9,7 +9,7 @@ import type {
 } from "../control-plane-store.js";
 import { privacyPolicyService } from "../privacy/services/privacy-policy.service.js";
 import { privacyDecisionService } from "../privacy/services/privacy-decision.service.js";
-import { privacyOverrideService } from "../privacy/services/privacy-override.service.js";
+import { privacyOverrideService, PrivacyOverrideService } from "../privacy/services/privacy-override.service.js";
 
 const idParams = z.object({ id: z.string().uuid() });
 const cameraParams = z.object({ cameraId: z.string().min(1) });
@@ -137,7 +137,9 @@ async function requireCameraView(
 export async function registerPrivacyRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
+  overrideService?: PrivacyOverrideService,
 ) {
+  const activeOverrideService = overrideService || privacyOverrideService;
   app.get("/v1/privacy/summary", async (request, reply) => {
     if (!(await requirePrivacyAccess(request, reply, "view"))) return;
     return await store.getPrivacySummary(request.currentUser.tenantId);
@@ -412,7 +414,7 @@ export async function registerPrivacyRoutes(
     if (body.branchId && body.branchId !== camera.nodeId) return reply.code(400).send({ error: "unmask_camera_branch_mismatch" });
     const user = request.currentUser;
 
-    const grant = await privacyOverrideService.requestUnmask({
+    const grant = await activeOverrideService.requestUnmask({
       tenantId: user.tenantId,
       userId: user.id,
       username: user.username ?? user.id,
@@ -477,7 +479,7 @@ export async function registerPrivacyRoutes(
 
   app.get("/v1/privacy/audit-logs", async (request, reply) => {
     if (!(await requirePrivacyAccess(request, reply, "view"))) return;
-    const logs = privacyOverrideService.getAuditLogs(request.currentUser.tenantId);
+    const logs = activeOverrideService.getAuditLogs(request.currentUser.tenantId);
     return { data: logs };
   });
 }

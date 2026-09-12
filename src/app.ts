@@ -44,6 +44,7 @@ import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.rou
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
 import { moduleRegistry } from "./platform/module-registry.service.js";
+import type { ApplicationDependencies } from "./bootstrap/index.js";
 import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
 import { registerUnifiedOperationsRoutes } from "./routes/unified-operations.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
@@ -85,6 +86,7 @@ import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.rou
 import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
+import { registerHsmSigningRoutes } from "./routes/hsm-signing.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerSynchronizedPlaybackRoutes } from "./routes/synchronized-playback.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
@@ -140,6 +142,12 @@ import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
+import { registerMediaGatewayFailoverRoutes } from "./routes/media-gateway-failover.routes.js";
+import { registerMtlsRoutes } from "./routes/mtls.routes.js";
+import { registerAbacRoutes } from "./routes/abac.routes.js";
+import { registerSignedConfigurationRoutes } from "./routes/signed-configuration.routes.js";
+import { registerLdapSyncRoutes } from "./routes/ldap-sync.routes.js";
+import { mtlsAuthenticator } from "./security/mtls/index.js";
 import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerSloRoutes } from "./routes/slo.routes.js";
 import { registerCeoScreenRoutes } from "./routes/ceo-screen.routes.js";
@@ -147,7 +155,7 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
-import { initializeRedisService } from "../backend/src/services/redis.service.js";
+import { redisModule } from "./bootstrap/redis.module.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
@@ -494,6 +502,8 @@ export async function buildApp(options?: {
   recorderProviderResolver?: RecorderProviderResolver;
   /** Optional device configuration service orchestrator. */
   deviceConfigurationService?: DeviceConfigurationService;
+  /** Authoritative bootstrap dependencies */
+  dependencies?: Partial<ApplicationDependencies>;
 }): Promise<FastifyInstance> {
   // PRODUCTION SECRET VALIDATION
   // In production mode, validate all critical secrets before proceeding
@@ -505,7 +515,7 @@ export async function buildApp(options?: {
   
   if (shouldValidateSecrets) {
     try {
-      const { validateProductionSecrets } = await import('../backend/src/services/production-secret-validator.service.js');
+      const { validateProductionSecrets } = await import('./security/production-secret-validator.service.js');
       validateProductionSecrets();
       console.log('✅ Production secret validation passed');
     } catch (error) {
@@ -591,7 +601,7 @@ export async function buildApp(options?: {
   // be served by any control-plane replica.
   let analyticsFrameRedis: any;
   try {
-    analyticsFrameRedis = (await initializeRedisService()).getClient();
+    analyticsFrameRedis = redisModule.getClient();
   } catch (error) {
     if (process.env.NODE_ENV === "production") throw error;
     app.log.warn({ error }, "Redis unavailable; recent analytics frames are local to this development instance");
@@ -687,12 +697,55 @@ export async function buildApp(options?: {
       || request.url.startsWith("/internal/federation/")
       || request.url.startsWith("/internal/reports/")
       || request.url.startsWith("/v1/edge-updates/artifacts/")
+      || request.url.startsWith("/v1/security/mtls/")
     ) return;
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
+
+    // Mutual TLS (mTLS) Client Certificate Authentication
+    const clientCertPem = extractClientCertificate(request);
+    let edgeMtlsAuthenticated = false;
+    let mtlsValidationResult: any = undefined;
+
+    if (clientCertPem) {
+      mtlsValidationResult = mtlsAuthenticator.validateClientCert(clientCertPem, "EDGE_AGENT", {
+        clientIp: request.ip,
+        endpoint: request.url,
+      });
+      if (mtlsValidationResult.valid) {
+        const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
+        if (ingressAgentId && mtlsValidationResult.nodeId && mtlsValidationResult.nodeId !== ingressAgentId) {
+          return reply.code(401).send({
+            error: "invalid_client_certificate",
+            reason: `Certificate pinned for node '${mtlsValidationResult.nodeId}' cannot access endpoint for '${ingressAgentId}'`,
+          });
+        }
+        edgeMtlsAuthenticated = true;
+      } else {
+        return reply.code(401).send({
+          error: "invalid_client_certificate",
+          reason: mtlsValidationResult.rejectionReason,
+          fingerprint: mtlsValidationResult.fingerprint,
+        });
+      }
+    } else if (process.env.EDGE_MTLS_ENFORCED === "true" && edgeAgentIngressRoute) {
+      return reply.code(401).send({
+        error: "client_certificate_required",
+        message: "Mutual TLS client certificate authentication is strictly enforced.",
+      });
+    }
+
+    const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
+
+    if (edgeAgentIngressRoute && edgeMtlsAuthenticated) {
+      request.edgeAgentAuthenticated = true;
+      request.edgeAgentId = mtlsValidationResult.nodeId || ingressAgentId;
+      (request as any).clientCertFingerprint = mtlsValidationResult.fingerprint;
+      return;
+    }
+
     const edgeBridgeHeader = request.headers["x-edge-bridge-key"];
     const edgeAgentToken = request.headers["x-edge-agent-token"];
-    const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
     const userIdentitySupplied = typeof request.headers.authorization === "string"
       || typeof request.headers["x-user-id"] === "string";
     const legacyBridgeAllowed = options?.allowLegacyEdgeBridgeKey ?? Boolean(options?.edgeBridgeSharedKey);
@@ -809,19 +862,8 @@ export async function buildApp(options?: {
       moduleRegistry.updateStatus("redis", "DEGRADED", "Operating in standalone / local mode without Redis");
     }
 
-    // Mark other core components as READY if base connections are intact
-    if (moduleRegistry.getStatus("database")?.state === "READY") {
-      moduleRegistry.updateStatus("recordingIndex", "READY", "Recording index durable tables verified");
-      moduleRegistry.updateStatus("evidenceService", "READY", "Forensic evidence pipeline active");
-      moduleRegistry.updateStatus("audit", "READY", "Audit ledger operational");
-      moduleRegistry.updateStatus("identity", "READY", "Identity provider active");
-    }
-    if (moduleRegistry.getStatus("redis")?.state === "READY" || process.env.MEDIA_STATE_MODE === "standalone") {
-      moduleRegistry.updateStatus("mediaOrchestration", "READY", "Media lease fencing coordinator active");
-      moduleRegistry.updateStatus("eventBus", "READY", "Distributed event bus connected");
-    }
-
-    const readiness = moduleRegistry.evaluateReadiness();
+    // Authoritatively evaluate registered module readiness contributors
+    const readiness = await moduleRegistry.evaluateReadinessAsync();
     if (!readiness.isReady) {
       return reply.code(503).send(readiness);
     }
@@ -2607,13 +2649,15 @@ export async function buildApp(options?: {
       }
     }
   }
-  await registerPrivacyRoutes(app, store);
+  await registerPrivacyRoutes(app, store, options?.dependencies?.privacyService ?? undefined);
   await registerReportsRoutes(app, store);
   await registerOperationalReportRoutes(app, store, operationalReportWorker, {
     downloadSecret: reportDownloadSecret, exportRoot: reportExportRoot,
     workerKey: options?.reportWorkerKey ?? process.env.REPORT_WORKER_SHARED_KEY,
   });
   await registerEvidenceRoutes(app, store, exportWorker);
+  await registerHsmSigningRoutes(app, store);
+  await registerSignedConfigurationRoutes(app, store);
   await registerLiveOperationsRoutes(app, store);
   registerMediaSessionRoutes(app, store);
   
@@ -2786,6 +2830,33 @@ export async function buildApp(options?: {
     app.log.info('Synchronized Multi-Camera Playback (video.synchronized_playback) routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register synchronized playback routes');
+  }
+
+  // Register Recording Gap Recovery & Edge Backfill (recording.recovery) routes
+  try {
+    const { registerRecordingRecoveryRoutes } = await import("./routes/recording-recovery.routes.js");
+    await registerRecordingRecoveryRoutes(app, store);
+    app.log.info('Recording Gap Recovery & Edge Backfill (recording.recovery) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recording recovery routes');
+  }
+
+  // Register Cold Cloud Archive Export (recording.archive) routes
+  try {
+    const { registerColdCloudArchiveRoutes } = await import("./routes/cold-cloud-archive.routes.js");
+    await registerColdCloudArchiveRoutes(app, store);
+    app.log.info('Cold Cloud Archive Export (recording.archive) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register cold cloud archive routes');
+  }
+
+  // Register Recording Engine N+1 Failover (ha.recording_failover) routes
+  try {
+    const { registerRecordingFailoverRoutes } = await import("./routes/recording-failover.routes.js");
+    await registerRecordingFailoverRoutes(app);
+    app.log.info('Recording Engine N+1 Failover (ha.recording_failover) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recording failover routes');
   }
 
   // Register capabilities routes
@@ -3019,47 +3090,65 @@ export async function buildApp(options?: {
 
   // Register Distributed Media Orchestrator & Stream Scheduler routes
   try {
-    let redis: unknown;
-    try {
-      redis = (await initializeRedisService()).getClient();
-    } catch (error) {
-      if (process.env.NODE_ENV === "production") throw error;
-      app.log.warn({ error }, "Redis unavailable; media orchestration is using development-only in-memory state");
+    let mediaOrchestrator = options?.dependencies?.mediaOrchestrator;
+    if (!mediaOrchestrator) {
+      let redis: unknown;
+      try {
+        redis = redisModule.getClient();
+      } catch (error) {
+        if (process.env.NODE_ENV === "production") throw error;
+        app.log.warn({ error }, "Redis unavailable; media orchestration is using development-only in-memory state");
+      }
+      const streamLeaseRepo = new RedisStreamLeaseRepository(redis);
+      const gatewayRegistry = new RedisMediaGatewayRegistry(redis);
+      const sessionRepo = new RedisViewerSessionRepository(redis);
+      const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
+      mediaOrchestrator = new MediaOrchestrator(
+        streamLeaseRepo,
+        gatewayRegistry,
+        sessionRepo,
+        capabilityRepo,
+      );
     }
-    const streamLeaseRepo = new RedisStreamLeaseRepository(redis);
-    const gatewayRegistry = new RedisMediaGatewayRegistry(redis);
-    const sessionRepo = new RedisViewerSessionRepository(redis);
-    const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
-    const mediaOrchestrator = new MediaOrchestrator(
-      streamLeaseRepo,
-      gatewayRegistry,
-      sessionRepo,
-      capabilityRepo,
-    );
     await registerMediaOrchestratorRoutes(app, mediaOrchestrator, store);
     await registerClientMediaSchedulerRoutes(app, store);
     app.log.info("Distributed Media Orchestration & Client Scheduler routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register Stateful Incident Playbook Engine & Dynamic Operator SOP routes
   try {
-    const playbookEngine = new PlaybookEngineService();
+    let playbookEngine = options?.dependencies?.playbookEngine;
+    if (!playbookEngine) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("INCIDENT_STORE_UNAVAILABLE: PlaybookEngineService requires PostgreSQL pool in production");
+      }
+      playbookEngine = new PlaybookEngineService();
+    }
     await registerPlaybookEngineRoutes(app, playbookEngine, store);
     await registerInvestigationWorkspaceRoutes(app, store, playbookEngine);
     app.log.info("Stateful Incident Playbook Engine & Dynamic Operator SOP routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register incident playbook engine routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register AI Quality, Model Registry, Benchmarks & Certification routes
   try {
-    const aiQualityPlatform = new AIQualityPlatformFacade();
+    let aiQualityPlatform = options?.dependencies?.aiQuality;
+    if (!aiQualityPlatform) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("AI_QUALITY_STORE_UNAVAILABLE: AIQualityPlatformFacade requires PostgreSQL pool in production");
+      }
+      aiQualityPlatform = new AIQualityPlatformFacade();
+    }
     await registerAiQualityRoutes(app, aiQualityPlatform);
     app.log.info("AI Model Quality, Evaluation & Certification Platform routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register AI quality platform routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register Enterprise SOC Operations (Signed Config, Edge Lifecycle, Clock Drift, Maps, SOC Analytics, Maintenance, Deterministic RCA)
@@ -3153,10 +3242,16 @@ export async function buildApp(options?: {
     await registerInvestigationRoutes(app);
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);
+    await registerMediaGatewayFailoverRoutes(app);
+    await registerMtlsRoutes(app, store);
+    await registerAbacRoutes(app, store);
+    if (pool) {
+      await registerLdapSyncRoutes(app, pool);
+    }
     await registerOnvifRoutes(app);
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, and CEO Screen routes registered");
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, and LDAP Sync routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }
@@ -3247,6 +3342,46 @@ function secureEqual(left: string, right: string) {
 
 function secureEqualHeader(value: string | string[] | undefined, expected: string) {
   return typeof value === "string" && secureEqual(value, expected);
+}
+
+function extractClientCertificate(request: FastifyRequest): string | undefined {
+  // 1. Direct TLS socket inspection (when terminating TLS directly)
+  const socket = request.raw.socket as any;
+  if (socket && typeof socket.getPeerCertificate === "function") {
+    try {
+      const peerCert = socket.getPeerCertificate(true);
+      if (peerCert?.raw && Buffer.isBuffer(peerCert.raw)) {
+        const b64 = peerCert.raw.toString("base64");
+        const lines = b64.match(/.{1,64}/g);
+        return `-----BEGIN CERTIFICATE-----\n${lines ? lines.join("\n") : b64}\n-----END CERTIFICATE-----`;
+      }
+    } catch {}
+  }
+
+  // 2. Verified reverse proxy headers (Envoy, Nginx, ALB, Cloudflare, Traefik)
+  const header = request.headers["x-client-cert"] || request.headers["x-ssl-cert"] || request.headers["ssl-client-cert"];
+  if (typeof header === "string" && header.trim()) {
+    let raw = header.trim();
+    if (raw.includes("%20") || raw.includes("%0A") || raw.includes("%2B")) {
+      try { raw = decodeURIComponent(raw); } catch {}
+    }
+    if (raw.includes("BEGIN CERTIFICATE")) {
+      return raw;
+    }
+    try {
+      const buf = Buffer.from(raw, "base64");
+      const utf8 = buf.toString("utf8");
+      if (utf8.includes("BEGIN CERTIFICATE")) {
+        return utf8;
+      }
+      const b64 = buf.toString("base64");
+      const lines = b64.match(/.{1,64}/g);
+      return `-----BEGIN CERTIFICATE-----\n${lines ? lines.join("\n") : b64}\n-----END CERTIFICATE-----`;
+    } catch {}
+    return raw;
+  }
+
+  return undefined;
 }
 
 function isEdgeAgentIngressRoute(method: string, url: string) {

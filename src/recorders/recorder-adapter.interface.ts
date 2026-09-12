@@ -113,4 +113,15 @@ export interface RecorderAdapter {
   getStorageStatus(): Promise<StorageStatusInfo[]>;
   getHealth(): Promise<RecorderHealthInfo>;
   getEvents(startTime?: Date): Promise<RecorderEvent[]>;
+
+  // Optional hardware configuration extensions
+  getRecordingSchedule?(channelId: string | number): Promise<any>;
+  setRecordingSchedule?(channelId: string | number, schedule: any): Promise<any>;
+  getChannelEncoding?(channelId: string | number): Promise<any>;
+  setChannelEncoding?(channelId: string | number, encoding: any): Promise<any>;
+  getNetworkConfiguration?(): Promise<any>;
+  setNetworkConfiguration?(config: any): Promise<any>;
+  getRecordingStatus?(channelId: string | number): Promise<any>;
+  getDeviceTime?(): Promise<any>;
+  setTimeConfiguration?(config: any): Promise<any>;
 }

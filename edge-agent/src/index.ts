@@ -138,12 +138,32 @@ if (hasArgument(argv, "--check-config")) {
   }, null, 2)}\n`);
   process.exit(0);
 }
+let edgeClientCert = config.EDGE_CLIENT_CERT;
+if (!edgeClientCert && config.EDGE_CLIENT_CERT_PATH) {
+  try { edgeClientCert = readFileSync(config.EDGE_CLIENT_CERT_PATH, "utf8"); } catch {}
+}
+let edgeClientKey = config.EDGE_CLIENT_KEY;
+if (!edgeClientKey && config.EDGE_CLIENT_KEY_PATH) {
+  try { edgeClientKey = readFileSync(config.EDGE_CLIENT_KEY_PATH, "utf8"); } catch {}
+}
+let edgeCaCert = config.EDGE_CA_CERT;
+if (!edgeCaCert && config.EDGE_CA_CERT_PATH) {
+  try { edgeCaCert = readFileSync(config.EDGE_CA_CERT_PATH, "utf8"); } catch {}
+}
+
 const gateway = new GatewayClient(
   config.CONTROL_PLANE_URL,
   config.DEV_USER_ID,
   config.EDGE_BRIDGE_SHARED_KEY,
   config.CONTROL_PLANE_TIMEOUT_MS,
   undefined,
+  config.EDGE_MTLS_ENABLED ? {
+    enabled: true,
+    clientCert: edgeClientCert,
+    clientKey: edgeClientKey,
+    caCert: edgeCaCert,
+    rejectUnauthorized: config.EDGE_MTLS_REJECT_UNAUTHORIZED,
+  } : undefined,
 );
 const identityStore = new DeviceIdentityStore(config.EDGE_IDENTITY_PATH, config.EDGE_IDENTITY_KEY_PATH);
 const outbox = new EncryptedOutbox(

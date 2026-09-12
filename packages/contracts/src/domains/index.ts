@@ -24,9 +24,11 @@
 export interface EventEnvelope<T = unknown> {
   schemaVersion: string;
   eventId: string;
-  timestamp: string;
+  eventType: string;
   tenantId: string;
+  timestamp: string;
   correlationId: string;
+  causationId?: string;
   payload: T;
 }
 
@@ -43,11 +45,14 @@ export function validateEventEnvelope<T>(data: unknown): EventEnvelope<T> {
   if (typeof env.eventId !== "string" || !env.eventId) {
     throw new Error("Invalid event envelope: missing or invalid eventId");
   }
-  if (typeof env.timestamp !== "string" || !env.timestamp) {
-    throw new Error("Invalid event envelope: missing or invalid timestamp");
+  if (typeof env.eventType !== "string" || !env.eventType) {
+    throw new Error("Invalid event envelope: missing or invalid eventType");
   }
   if (typeof env.tenantId !== "string" || !env.tenantId) {
     throw new Error("Invalid event envelope: missing or invalid tenantId");
+  }
+  if (typeof env.timestamp !== "string" || !env.timestamp) {
+    throw new Error("Invalid event envelope: missing or invalid timestamp");
   }
   if (typeof env.correlationId !== "string" || !env.correlationId) {
     throw new Error("Invalid event envelope: missing or invalid correlationId");

@@ -297,7 +297,7 @@ export class ForensicEvidencePackageService {
       createdBy: input.capturedBy,
       createdAt: capturedAt,
       hashAlgorithm: 'SHA-256',
-      signatureAlgorithm: 'Ed25519',
+      signatureAlgorithm: (this.signingProvider as any).algorithm || 'Ed25519',
       signingKeyId: keyId,
     };
 
@@ -309,7 +309,7 @@ export class ForensicEvidencePackageService {
     const signatureBase64 = signatureResult.signature.toString('base64');
 
     const manifestSignature: ManifestSignature = {
-      algorithm: 'Ed25519',
+      algorithm: signatureResult.algorithm || (this.signingProvider as any).algorithm || 'Ed25519',
       keyId,
       publicKey,
       manifestSha256,

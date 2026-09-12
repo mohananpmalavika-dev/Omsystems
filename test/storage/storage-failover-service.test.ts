@@ -122,6 +122,62 @@ describe("Storage Failover Service & REST API Suite", () => {
     expect(eventsData[0].fromStorageNodeId).toBe("node-video1");
     expect(eventsData[0].toStorageNodeId).toBe("node-video2");
     expect(eventsData[0].reason).toBe("STORAGE_OFFLINE");
+    // 6. PATCH Target (PATCH /api/v1/storage/failover/targets/:targetId)
+    const patchResp = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/storage/failover/targets/${target2Resp.json().data.id}`,
+      payload: {
+        mediaNodeId: "media-node-vault-01",
+        priority: 1,
+        spilloverThresholdPercent: 90,
+      },
+    });
+    expect(patchResp.statusCode).toBe(200);
+    expect(patchResp.json().data.priority).toBe(1);
+
+    // 7. GET Metrics (GET /api/v1/storage/failover/metrics)
+    const metricsResp = await app.inject({
+      method: "GET",
+      url: "/api/v1/storage/failover/metrics?mediaNodeId=media-node-vault-01",
+    });
+    expect(metricsResp.statusCode).toBe(200);
+    expect(metricsResp.json().data.totalEvents).toBe(1);
+
+    // 8. Recover Target (POST /api/v1/storage/failover/recover)
+    const recoverResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/storage/failover/recover",
+      payload: {
+        mediaNodeId: "media-node-vault-01",
+        targetId: target1Data.id,
+      },
+    });
+    expect(recoverResp.statusCode).toBe(200);
+    expect(recoverResp.json().data.recovered).toBe(true);
+
+    // 9. Health & Probe Endpoint (GET & POST)
+    const healthResp = await app.inject({
+      method: "GET",
+      url: "/api/v1/storage/failover/health?mediaNodeId=media-node-vault-01",
+    });
+    expect(healthResp.statusCode).toBe(200);
+    expect(healthResp.json().data.targets.length).toBe(2);
+
+    const probeResp = await app.inject({
+      method: "POST",
+      url: "/api/v1/storage/failover/probe",
+      payload: { mediaNodeId: "media-node-vault-01" },
+    });
+    expect(probeResp.statusCode).toBe(200);
+
+    // 10. Delete Target (DELETE /api/v1/storage/failover/targets/:targetId)
+    const deleteResp = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/storage/failover/targets/${target2Resp.json().data.id}?mediaNodeId=media-node-vault-01`,
+    });
+    expect(deleteResp.statusCode).toBe(200);
+    expect(deleteResp.json().success).toBe(true);
+    await app.close();
   });
 
   it("rejects invalid audit-event page sizes at the API boundary", async () => {
@@ -140,3 +196,4 @@ describe("Storage Failover Service & REST API Suite", () => {
     await app.close();
   });
 });
+

@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
 import { AlertOperationsService, type AlertRealtimeEvent } from "../../alerts/services/alert-operations.service.js";
+import { pushNotificationProvider } from "../../notifications/infrastructure/providers/push.provider.js";
 
 export interface PushNotificationDevice {
   id: string;
@@ -371,61 +372,21 @@ export class MobilePushNotificationService extends EventEmitter {
     device: PushNotificationDevice,
     notification: PushNotificationMessage,
   ): Promise<boolean> {
-    // TODO: Implement actual FCM integration
-    // This requires firebase-admin SDK and service account credentials
-    
-    console.log(`[PushNotification] FCM: Would send to ${device.platform} device ${device.deviceToken.slice(0, 10)}...`);
-    
-    // Simulated FCM payload
-    const fcmPayload = {
-      token: device.deviceToken,
-      notification: {
-        title: notification.title,
-        body: notification.body,
+    const result = await pushNotificationProvider.send({
+      id: notification.id,
+      tenantId: notification.tenantId,
+      channel: "push",
+      destination: `fcm:${device.deviceToken}`,
+      priority: notification.priority === "high" ? "P1" : "P3",
+      payload: {
+        subject: notification.title,
+        text: notification.body,
+        metadata: notification.data,
       },
-      data: notification.data || {},
-      android: {
-        priority: notification.priority === "high" ? "high" : "normal",
-        notification: {
-          sound: notification.sound || "default",
-          channelId: notification.category,
-        },
-      },
-      apns: {
-        payload: {
-          aps: {
-            alert: {
-              title: notification.title,
-              body: notification.body,
-            },
-            sound: notification.sound || "default",
-            badge: notification.badge,
-            category: notification.category,
-          },
-        },
-      },
-    };
-
-    const serverKey = process.env.FCM_SERVER_KEY;
-    if (serverKey) {
-      try {
-        const resp = await fetch('https://fcm.googleapis.com/fcm/send', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `key=${serverKey}`,
-          },
-          body: JSON.stringify(fcmPayload),
-        });
-        return resp.ok;
-      } catch (err) {
-        console.error('[PushNotification] FCM dispatch error:', err);
-        return false;
-      }
-    }
-
-    console.log(`[PushNotification] FCM simulated dispatch recorded for ${device.deviceToken.slice(0, 10)}`);
-    return true;
+      attemptCount: 1,
+      createdAt: new Date(),
+    });
+    return result.accepted && result.state === "DELIVERED";
   }
 
   /**
@@ -435,42 +396,26 @@ export class MobilePushNotificationService extends EventEmitter {
     device: PushNotificationDevice,
     notification: PushNotificationMessage,
   ): Promise<boolean> {
-    console.log(`[PushNotification] Web Push: Would send to endpoint ${device.endpoint?.slice(0, 50)}...`);
-
-    // Simulated web push payload
-    const webPushPayload = {
-      title: notification.title,
-      body: notification.body,
-      icon: "/icons/sentinel-grid-icon.png",
-      badge: "/icons/badge-icon.png",
-      tag: notification.id,
-      data: {
-        ...notification.data,
-        clickAction: notification.clickAction,
+    if (!device.endpoint) return false;
+    const subPayload = JSON.stringify({
+      endpoint: device.endpoint,
+      keys: device.keys,
+    });
+    const result = await pushNotificationProvider.send({
+      id: notification.id,
+      tenantId: notification.tenantId,
+      channel: "push",
+      destination: subPayload,
+      priority: notification.priority === "high" ? "P1" : "P3",
+      payload: {
+        subject: notification.title,
+        text: notification.body,
+        metadata: notification.data,
       },
-      requireInteraction: notification.priority === "high",
-      vibrate: notification.priority === "high" ? [200, 100, 200] : undefined,
-    };
-
-    if (device.endpoint && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-      try {
-        const resp = await fetch(device.endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'TTL': '60',
-          },
-          body: JSON.stringify(webPushPayload),
-        });
-        return resp.ok;
-      } catch (err) {
-        console.error('[PushNotification] Web Push dispatch error:', err);
-        return false;
-      }
-    }
-
-    console.log(`[PushNotification] Web Push simulated dispatch recorded for ${device.endpoint?.slice(0, 50)}`);
-    return true;
+      attemptCount: 1,
+      createdAt: new Date(),
+    });
+    return result.accepted && result.state === "DELIVERED";
   }
 
   /**

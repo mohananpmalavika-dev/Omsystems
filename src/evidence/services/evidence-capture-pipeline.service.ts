@@ -23,6 +23,12 @@ export interface EvidenceJobRequest {
   incidentId?: string;
 }
 
+import { createHash } from "node:crypto";
+import {
+  getEvidenceSigningProvider,
+  type EvidenceSigningProvider,
+} from "../signing/evidence-signing-provider.js";
+
 /** 
  * Durable Evidence Capture Pipeline Service
  * Enforces PostgreSQL backing store with idempotent 8-stage state machine.
@@ -31,13 +37,20 @@ export class EvidenceCapturePipelineService {
   private readonly memoryRecords = new Map<string, AlertEvidenceRecord>();
   private readonly memoryManifests = new Map<string, EvidenceManifest>();
   private readonly latencies: { snapshotMs: number[]; completeMs: number[] } = { snapshotMs: [], completeMs: [] };
+  private readonly signingProvider: EvidenceSigningProvider;
 
   constructor(
     private readonly policyService: EvidencePolicyService = evidencePolicyService,
     private readonly storageService: EvidenceStorageService = evidenceStorageService,
     private readonly recordingClient?: AlertEvidenceClient,
     private readonly pool?: Pool,
-  ) {}
+    signingProvider?: EvidenceSigningProvider,
+  ) {
+    this.signingProvider = signingProvider || getEvidenceSigningProvider();
+    if (process.env.NODE_ENV === "production" && !this.pool) {
+      throw new Error("EVIDENCE_STORE_UNAVAILABLE: EvidenceCapturePipelineService requires a PostgreSQL pool in production");
+    }
+  }
 
   async enqueueEvidenceCapture(request: EvidenceJobRequest): Promise<AlertEvidenceRecord> {
     const existing = await this.getEvidenceForAlert(request.alertId);
@@ -93,6 +106,9 @@ export class EvidenceCapturePipelineService {
           ],
         );
       } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`EVIDENCE_STORE_UNAVAILABLE: Failed to enqueue evidence capture job: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn("[EvidencePipeline] DB enqueue failed, fallback memory:", err);
       }
     }
@@ -199,15 +215,66 @@ export class EvidenceCapturePipelineService {
       record.manifestHash = manifestData.manifestSha256;
       this.memoryManifests.set(record.id, manifestData);
 
+      // Real cryptographic signing using injected signing provider
+      let signatureBytes = "";
+      let signatureAlgorithm = "RSASSA-PKCS1-v1_5-SHA256";
+      try {
+        const sigResult = await this.signingProvider.signDigest(
+          Buffer.from(manifestData.manifestSha256, "hex"),
+        );
+        signatureBytes = sigResult.signature.toString("base64");
+        signatureAlgorithm = sigResult.algorithm;
+      } catch (signErr) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error("EVIDENCE_SIGNING_UNAVAILABLE: Cryptographic evidence signing failed: " + (signErr instanceof Error ? signErr.message : String(signErr)));
+        }
+      }
+
       // Persist to PostgreSQL if available
       if (this.pool) {
         try {
+          if (record.videoClip) {
+            await this.pool.query(
+              `INSERT INTO evidence_assets (
+                 id, job_id, asset_type, file_name, mime_type, byte_size, sha256, storage_node, storage_path, duration_seconds, created_at
+               ) VALUES ($1, $2, 'clip', $3, $4, $5, $6, 'primary', $7, $8, NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [
+                `asset-${record.id}-clip`,
+                record.id,
+                "evidence_clip.mp4",
+                record.videoClip.mimeType,
+                record.videoClip.sizeBytes,
+                record.videoClip.sha256,
+                record.videoClip.storageKey,
+                record.videoClip.durationSeconds || null,
+              ],
+            );
+          }
+          if (record.snapshot) {
+            await this.pool.query(
+              `INSERT INTO evidence_assets (
+                 id, job_id, asset_type, file_name, mime_type, byte_size, sha256, storage_node, storage_path, created_at
+               ) VALUES ($1, $2, 'snapshot', $3, $4, $5, $6, 'primary', $7, NOW())
+               ON CONFLICT (id) DO NOTHING`,
+              [
+                `asset-${record.id}-snapshot`,
+                record.id,
+                "snapshot.jpg",
+                record.snapshot.mimeType,
+                record.snapshot.sizeBytes,
+                record.snapshot.sha256,
+                record.snapshot.storageKey,
+              ],
+            );
+          }
+
           await this.pool.query(
             `INSERT INTO evidence_manifests (
                id, job_id, tenant_id, alert_id, branch_id, camera_id, capture_start, capture_end,
                device_timestamp, server_timestamp, capture_reason, asset_sha256, manifest_sha256,
-               signature_bytes, created_at
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+               signature_algorithm, signature_bytes, created_at
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
              ON CONFLICT (job_id) DO NOTHING`,
             [
               `manifest-${record.id}`,
@@ -223,10 +290,14 @@ export class EvidenceCapturePipelineService {
               "P1/P2 Security Incident Automatic Evidence Capture",
               record.videoClip?.sha256 || record.snapshot?.sha256 || "none",
               manifestData.manifestSha256,
-              "sig-mock-rsassa-sha256",
+              signatureAlgorithm,
+              signatureBytes,
             ],
           );
         } catch (err) {
+          if (process.env.NODE_ENV === "production") {
+            throw new Error(`EVIDENCE_STORE_UNAVAILABLE: Failed to persist evidence manifest or assets: ${err instanceof Error ? err.message : String(err)}`);
+          }
           console.warn("[EvidencePipeline] DB manifest persist error:", err);
         }
       }

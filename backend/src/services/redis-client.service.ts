@@ -10,6 +10,7 @@
  */
 
 import * as IORedis from 'ioredis';
+import { createRedisTlsConfig } from '../../../src/security/tls/database-tls-config.js';
 
 type RedisConnection = any;
 type RedisOptions = Record<string, unknown>;
@@ -27,6 +28,7 @@ export interface RedisConfig {
   enableOfflineQueue?: boolean;
   connectTimeout?: number;
   lazyConnect?: boolean;
+  tls?: any;
 }
 
 export interface RedisHealth {
@@ -176,9 +178,13 @@ export class RedisClientService {
    * Build Redis options from config
    */
   private buildOptions(): RedisOptions {
+    const redisTls = this.config.tls !== undefined ? this.config.tls : createRedisTlsConfig();
+    const tlsOption = redisTls ? { tls: redisTls } : {};
+
     if (this.config.url) {
       return {
         ...this.parseRedisUrl(this.config.url),
+        ...tlsOption,
         maxRetriesPerRequest: this.config.maxRetriesPerRequest ?? 3,
         enableReadyCheck: this.config.enableReadyCheck ?? true,
         enableOfflineQueue: this.config.enableOfflineQueue ?? true,
@@ -201,6 +207,7 @@ export class RedisClientService {
       port: this.config.port ?? 6379,
       password: this.config.password,
       db: this.config.db ?? 0,
+      ...tlsOption,
       maxRetriesPerRequest: this.config.maxRetriesPerRequest ?? 3,
       enableReadyCheck: this.config.enableReadyCheck ?? true,
       enableOfflineQueue: this.config.enableOfflineQueue ?? true,

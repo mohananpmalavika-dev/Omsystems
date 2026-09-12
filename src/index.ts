@@ -8,6 +8,7 @@ import { RedisEdgePresenceCache } from "./platform/edge-presence-cache.js";
 import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js";
 import { getEventBus } from "./infrastructure/event-bus/event-bus.js";
 import { initializeTelemetry } from "./observability/telemetry.js";
+import { applicationBootstrap } from "./bootstrap/index.js";
 
 await initializeTelemetry();
 const config = loadConfig();
@@ -66,9 +67,17 @@ const edgeTunnelProvider = config.CLOUDFLARE_ACCOUNT_ID && config.CLOUDFLARE_ZON
       mediaBaseDomain: config.EDGE_MEDIA_BASE_DOMAIN,
     })
   : undefined;
+console.log('Initializing application bootstrap architecture...');
+const dependencies = await applicationBootstrap.bootstrap({
+  databaseUrl: config.DATABASE_URL,
+  redisUrl: config.REDIS_URL,
+});
+console.log('✓ Application bootstrap architecture initialized');
+
 const app = await buildApp({
   logger: true,
   store,
+  dependencies,
   authMode: config.AUTH_MODE,
   maxInFlightRequests: config.MAX_IN_FLIGHT_REQUESTS,
   ...(edgePresenceCache ? { edgePresenceCache } : {}),
@@ -133,6 +142,8 @@ const gracefulShutdown = async (signal: string) => {
       console.log("  - Disconnecting edge presence cache...");
       await (edgePresenceCache as any).disconnect?.();
     }
+    console.log("  - Shutting down application bootstrap modules...");
+    await applicationBootstrap.shutdown();
     if (store && "close" in store && typeof (store as any).close === "function") {
       console.log("  - Closing database store pools...");
       await (store as any).close();

@@ -37,7 +37,11 @@ export class PrivacyOverrideService {
   private auditLogs: PrivacyAuditEvent[] = [];
   private lastAuditHash = '0000000000000000000000000000000000000000000000000000000000000000';
 
-  constructor(private readonly pool?: Pool) {}
+  constructor(private readonly pool?: Pool) {
+    if (process.env.NODE_ENV === 'production' && !this.pool) {
+      throw new Error('PRIVACY_AUDIT_STORE_UNAVAILABLE: PrivacyOverrideService requires a PostgreSQL pool in production');
+    }
+  }
 
   /**
    * Requests a temporary unmasked viewing grant
@@ -92,12 +96,14 @@ export class PrivacyOverrideService {
           ],
         );
       } catch (err) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(`PRIVACY_AUDIT_STORE_UNAVAILABLE: Failed to persist unmask grant in production database: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn('[PrivacyOverrideService] DB save grant failed, using memory:', err);
       }
     }
 
-    this.grants.set(grantId, grant);
-
+    // Immutable audit record MUST succeed before grant is usable
     await this.recordAudit({
       id: randomUUID(),
       tenantId: input.tenantId,
@@ -114,6 +120,7 @@ export class PrivacyOverrideService {
       timestamp: now.toISOString(),
     });
 
+    this.grants.set(grantId, grant);
     return grant;
   }
 
@@ -247,6 +254,9 @@ export class PrivacyOverrideService {
           ],
         );
       } catch (err) {
+        if (process.env.NODE_ENV === 'production') {
+          throw new Error(`PRIVACY_AUDIT_STORE_UNAVAILABLE: Failed to record immutable privacy audit: ${err instanceof Error ? err.message : String(err)}`);
+        }
         console.warn('[PrivacyOverrideService] DB audit log insert error:', err);
       }
     }

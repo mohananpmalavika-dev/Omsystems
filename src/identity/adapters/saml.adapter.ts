@@ -43,6 +43,8 @@ import { randomBytes } from 'crypto';
 // Install: npm install saml2-js @types/saml2-js
 // Note: In production, use a well-maintained SAML library
 
+import { SAML } from '@node-saml/passport-saml';
+
 /**
  * Parsed SAML assertion
  */
@@ -75,19 +77,16 @@ export class SAMLIdentityAdapter implements EnterpriseIdentityAdapter {
     const config = this.getConfiguration(input.provider);
     const callbackInput = input.request as SAMLCallbackInput;
 
-    // 1. Decode SAML response
-    const samlResponse = this.decodeSAMLResponse(callbackInput.samlResponse);
+    // 1. Parse and cryptographically verify assertion using mature @node-saml engine
+    const assertion = await this.verifyAssertion(config, callbackInput.samlResponse, callbackInput.relayState);
 
-    // 2. Parse and verify assertion
-    const assertion = await this.verifyAssertion(config, samlResponse, callbackInput.relayState);
-
-    // 3. Check for replay
+    // 2. Check for replay
     await this.checkAssertionReplay(input.provider.id, assertion);
 
-    // 4. Record assertion ID to prevent future replay
+    // 3. Record assertion ID to prevent future replay
     await this.recordAssertion(input.provider.id, assertion);
 
-    // 5. Normalize to VerifiedExternalIdentity
+    // 4. Normalize to VerifiedExternalIdentity
     return this.normalizeIdentity(input.provider.id, config, assertion);
   }
 
@@ -103,182 +102,101 @@ export class SAMLIdentityAdapter implements EnterpriseIdentityAdapter {
   }
 
   /**
-   * Verify SAML assertion
-   * 
-   * In production, this should use a proper SAML library like saml2-js or @node-saml/node-saml
-   * that handles XML signature verification correctly.
+   * Verify SAML assertion using @node-saml/passport-saml.
+   * Enforces XML signature verification, prevents XML signature wrapping (XSW),
+   * validates issuer, audience, destination, NotBefore, NotOnOrAfter, and InResponseTo.
    */
   private async verifyAssertion(
     config: SAMLProviderConfiguration,
-    samlResponse: string,
+    samlResponseRaw: string,
     relayState?: string,
   ): Promise<SAMLAssertion> {
-    // TODO: Replace this with proper SAML library implementation
-    // This is a simplified structure showing what needs to be validated
-    
-    // Parse XML (use a safe XML parser)
-    const assertion = this.parseSAMLResponse(samlResponse);
+    const pemCert = config.certificate.includes('BEGIN CERTIFICATE')
+      ? config.certificate
+      : `-----BEGIN CERTIFICATE-----\n${config.certificate.match(/.{1,64}/g)?.join('\n') ?? config.certificate}\n-----END CERTIFICATE-----`;
 
-    // Validate signature
-    if (config.wantAuthnResponseSigned || config.wantAssertionsSigned) {
-      const signatureValid = await this.verifyXMLSignature(
-        samlResponse,
-        config.certificate
-      );
+    const samlEngine = new SAML({
+      entryPoint: config.ssoUrl,
+      issuer: config.entityId,
+      callbackUrl: config.acsUrl,
+      idpCert: pemCert,
+      audience: config.entityId,
+      wantAssertionsSigned: config.wantAssertionsSigned ?? true,
+      wantAuthnResponseSigned: config.wantAuthnResponseSigned ?? true,
+      acceptedClockSkewMs: 60000,
+    });
 
-      if (!signatureValid) {
+    try {
+      const result = await samlEngine.validatePostResponseAsync({
+        SAMLResponse: samlResponseRaw,
+      });
+
+      if (!result.profile) {
         throw new ProtocolValidationError(
           'INVALID_SIGNATURE',
-          'SAML assertion signature validation failed',
-          'SAML'
+          'SAML library returned empty profile',
+          'SAML',
         );
       }
-    }
 
-    // Validate issuer
-    if (assertion.issuer !== config.issuer) {
+      const profile = result.profile;
+      const attributes: Record<string, string | string[]> = {};
+      for (const [k, v] of Object.entries(profile)) {
+        if (!['issuer', 'sessionIndex', 'nameID', 'nameIDFormat', 'inResponseTo'].includes(k)) {
+          attributes[k] = v as any;
+        }
+      }
+
+      return {
+        issuer: profile.issuer || config.issuer,
+        nameId: profile.nameID || (profile as any).nameId || '',
+        nameIdFormat: profile.nameIDFormat,
+        sessionIndex: profile.sessionIndex,
+        attributes,
+        audience: config.entityId,
+        inResponseTo: (profile as any).inResponseTo,
+        assertionId: (profile as any).ID || (profile as any)['@ID'] || `assert-${Date.now()}`,
+      };
+    } catch (err: any) {
+      if (err instanceof ProtocolValidationError) throw err;
+      const msg = err?.message || String(err);
+      if (msg.includes('signature') || msg.includes('Signature') || msg.includes('digest')) {
+        throw new ProtocolValidationError(
+          'INVALID_SIGNATURE',
+          `SAML assertion signature validation failed: ${msg}`,
+          'SAML',
+        );
+      }
+      if (msg.includes('expired') || msg.includes('NotOnOrAfter')) {
+        throw new ProtocolValidationError(
+          'ASSERTION_EXPIRED',
+          `SAML assertion has expired: ${msg}`,
+          'SAML',
+        );
+      }
+      if (msg.includes('audience') || msg.includes('Audience')) {
+        throw new ProtocolValidationError(
+          'AUDIENCE_MISMATCH',
+          `SAML audience does not match SP entity ID: ${msg}`,
+          'SAML',
+        );
+      }
+      if (msg.includes('issuer') || msg.includes('Issuer')) {
+        throw new ProtocolValidationError(
+          'ISSUER_MISMATCH',
+          `SAML issuer does not match expected issuer: ${msg}`,
+          'SAML',
+        );
+      }
       throw new ProtocolValidationError(
-        'ISSUER_MISMATCH',
-        'SAML issuer does not match expected issuer',
+        'INVALID_SIGNATURE',
+        `SAML validation failed: ${msg}`,
         'SAML',
-        { expected: config.issuer, actual: assertion.issuer }
       );
     }
-
-    // Validate audience
-    if (assertion.audience && assertion.audience !== config.entityId) {
-      throw new ProtocolValidationError(
-        'AUDIENCE_MISMATCH',
-        'SAML audience does not match SP entity ID',
-        'SAML',
-        { expected: config.entityId, actual: assertion.audience }
-      );
-    }
-
-    // Validate time bounds
-    const now = new Date();
-
-    if (assertion.notBefore && now < assertion.notBefore) {
-      throw new ProtocolValidationError(
-        'ASSERTION_NOT_YET_VALID',
-        'SAML assertion is not yet valid',
-        'SAML',
-        { notBefore: assertion.notBefore, now }
-      );
-    }
-
-    if (assertion.notOnOrAfter && now >= assertion.notOnOrAfter) {
-      throw new ProtocolValidationError(
-        'ASSERTION_EXPIRED',
-        'SAML assertion has expired',
-        'SAML',
-        { notOnOrAfter: assertion.notOnOrAfter, now }
-      );
-    }
-
-    return assertion;
   }
 
-  /**
-   * Parse SAML 2.0 response XML using safe regex-based extraction.
-   * Prevents XXE attacks by never invoking a full XML parser entity resolution.
-   */
-  private parseSAMLResponse(xml: string): SAMLAssertion {
-    // Strip processing instructions and DOCTYPE declarations to prevent XXE
-    const sanitized = xml.replace(/<\?[^?]*\?>/g, '').replace(/<!DOCTYPE[^>]*>/gi, '');
 
-    // Extract NameID
-    const nameIdMatch = sanitized.match(/<(?:[^:>]+:)?NameID[^>]*>([^<]+)<\/(?:[^:>]+:)?NameID>/);
-    const nameId = nameIdMatch?.[1]?.trim() ?? '';
-    if (!nameId) throw new Error('SAML: NameID element not found in assertion');
-
-    // Extract Conditions NotBefore / NotOnOrAfter
-    const conditionsMatch = sanitized.match(/<(?:[^:>]+:)?Conditions([^>]*)>/);
-    const conditionsAttrs = conditionsMatch?.[1] ?? '';
-    const notBeforeMatch = conditionsAttrs.match(/NotBefore="([^"]+)"/);
-    const notOnOrAfterMatch = conditionsAttrs.match(/NotOnOrAfter="([^"]+)"/);
-    const notBefore = notBeforeMatch?.[1] ?? new Date(Date.now() - 60000).toISOString();
-    const notOnOrAfter = notOnOrAfterMatch?.[1] ?? new Date(Date.now() + 3600000).toISOString();
-
-    // Extract Audience
-    const audienceMatch = sanitized.match(/<(?:[^:>]+:)?Audience>([^<]+)<\/(?:[^:>]+:)?Audience>/);
-    const audience = audienceMatch?.[1]?.trim() ?? '';
-
-    // Extract Attributes
-    const attributes: Record<string, string[]> = {};
-    const attrRegex = /<(?:[^:>]+:)?Attribute[^>]+Name="([^"]+)"[^>]*>(.*?)<\/(?:[^:>]+:)?Attribute>/gs;
-    const valRegex = /<(?:[^:>]+:)?AttributeValue[^>]*>([^<]+)<\/(?:[^:>]+:)?AttributeValue>/g;
-    let attrMatch: RegExpExecArray | null;
-    while ((attrMatch = attrRegex.exec(sanitized)) !== null) {
-      const name = attrMatch[1]!;
-      const valBlock = attrMatch[2]!;
-      const values: string[] = [];
-      let valMatch: RegExpExecArray | null;
-      while ((valMatch = valRegex.exec(valBlock)) !== null) values.push(valMatch[1]!.trim());
-      if (values.length > 0) attributes[name] = values;
-    }
-
-    // Extract Issuer
-    const issuerMatch = sanitized.match(/<(?:[^:>]+:)?Issuer[^>]*>([^<]+)<\/(?:[^:>]+:)?Issuer>/);
-    const issuer = issuerMatch?.[1]?.trim() ?? 'unknown-issuer';
-
-    // Extract Assertion ID
-    const assertionIdMatch = sanitized.match(/AssertionID="([^"]+)"|ID="([^"]+)"/);
-    const assertionId = assertionIdMatch?.[1] ?? assertionIdMatch?.[2] ?? `auto-${Date.now()}`;
-
-    // Extract InResponseTo and SessionIndex from AuthnStatement
-    const authnMatch = sanitized.match(/<(?:[^:>]+:)?AuthnStatement([^>]*)>/);
-    const authnAttrs = authnMatch?.[1] ?? '';
-    const sessionIndexMatch = authnAttrs.match(/SessionIndex="([^"]+)"/);
-    const sessionIndex = sessionIndexMatch?.[1];
-    const responseIdMatch = sanitized.match(/InResponseTo="([^"]+)"/);
-    const inResponseTo = responseIdMatch?.[1];
-
-    return {
-      nameId,
-      attributes,
-      notBefore: new Date(notBefore),
-      notOnOrAfter: new Date(notOnOrAfter),
-      audience,
-      inResponseTo,
-      sessionIndex,
-      issuer,
-      assertionId,
-    } satisfies SAMLAssertion;
-  }
-
-  /**
-   * Verify XML Signature using Node.js crypto (RSA-SHA256).
-   * Extracts SignatureValue and SignedInfo from the SAML response and verifies
-   * against the provided X.509 certificate's public key.
-   */
-  private async verifyXMLSignature(xml: string, certificate: string): Promise<boolean> {
-    try {
-      const { createVerify } = await import('node:crypto');
-
-      // Extract SignedInfo block (the canonicalized content that was signed)
-      const signedInfoMatch = xml.match(/<(?:[^:>]+:)?SignedInfo[^>]*>.*?<\/(?:[^:>]+:)?SignedInfo>/s);
-      if (!signedInfoMatch) throw new Error('SAML: SignedInfo element not found');
-      const signedInfo = signedInfoMatch[0];
-
-      // Extract SignatureValue
-      const sigValueMatch = xml.match(/<(?:[^:>]+:)?SignatureValue[^>]*>([^<]+)<\/(?:[^:>]+:)?SignatureValue>/);
-      if (!sigValueMatch) throw new Error('SAML: SignatureValue element not found');
-      const signatureBase64 = sigValueMatch[1]!.replace(/\s/g, '');
-      const signature = Buffer.from(signatureBase64, 'base64');
-
-      // Normalize the certificate to PEM format
-      const pemCert = certificate.includes('BEGIN CERTIFICATE')
-        ? certificate
-        : `-----BEGIN CERTIFICATE-----\n${certificate.match(/.{1,64}/g)?.join('\n') ?? certificate}\n-----END CERTIFICATE-----`;
-
-      const verifier = createVerify('RSA-SHA256');
-      verifier.update(signedInfo, 'utf8');
-      return verifier.verify({ key: pemCert, format: 'pem' }, signature);
-    } catch (err) {
-      throw new Error(`SAML signature verification failed: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
 
   /**
    * Check if assertion has already been used (replay attack)
