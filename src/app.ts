@@ -140,6 +140,7 @@ import { registerRecordingIndexRoutes } from "./routes/recording-index.routes.js
 import { registerInvestigationRoutes } from "./routes/investigation.routes.js";
 import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.routes.js";
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
+import { registerMediaGatewayFailoverRoutes } from "./routes/media-gateway-failover.routes.js";
 import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerSloRoutes } from "./routes/slo.routes.js";
 import { registerCeoScreenRoutes } from "./routes/ceo-screen.routes.js";
@@ -2806,6 +2807,15 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register cold cloud archive routes');
   }
 
+  // Register Recording Engine N+1 Failover (ha.recording_failover) routes
+  try {
+    const { registerRecordingFailoverRoutes } = await import("./routes/recording-failover.routes.js");
+    await registerRecordingFailoverRoutes(app);
+    app.log.info('Recording Engine N+1 Failover (ha.recording_failover) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recording failover routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");
@@ -3171,6 +3181,7 @@ export async function buildApp(options?: {
     await registerInvestigationRoutes(app);
     await registerEnterpriseStorageRoutes(app);
     await registerStorageFailoverRoutes(app);
+    await registerMediaGatewayFailoverRoutes(app);
     await registerOnvifRoutes(app);
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);

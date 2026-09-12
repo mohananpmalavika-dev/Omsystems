@@ -5338,6 +5338,427 @@ export const storageFailoverApi = {
   },
 };
 
+// ============================================================================
+// Media Gateway Failover API Client (ha.media_failover)
+// ============================================================================
+
+export interface MediaGatewayNodeItem {
+  gatewayId: string;
+  gatewayName: string;
+  ipAddress: string;
+  port: number;
+  apiPort: number;
+  publicUrl: string;
+  region: string;
+  status: 'HEALTHY' | 'DEGRADED' | 'DRAINING' | 'FAILED' | 'OFFLINE';
+  maxStreams: number;
+  activeStreams: number;
+  maxNetworkMbps: number;
+  currentNetworkMbps: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  consecutiveFailures: number;
+  lastHeartbeatAt: string;
+  registeredAt: string;
+  updatedAt: string;
+}
+
+export interface MediaStreamRouteItem {
+  id: string;
+  cameraId: string;
+  streamProfile: 'main' | 'sub' | 'preview';
+  assignedGatewayId: string;
+  standbyGatewayId?: string;
+  sourceUri: string;
+  streamPath: string;
+  redirectUrl: string;
+  status: 'ACTIVE' | 'FAILOVER_IN_PROGRESS' | 'FAILED_OVER' | 'DEGRADED' | 'OFFLINE';
+  fencingToken: number;
+  viewerCount: number;
+  bitrateKbps: number;
+  fps: number;
+  lastFailoverAt?: string;
+  failoverCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaGatewayFailoverEventItem {
+  id: string;
+  eventType:
+    | 'FAILOVER_INITIATED'
+    | 'STREAM_REDIRECTED'
+    | 'FAILOVER_COMPLETED'
+    | 'FAILOVER_FAILED'
+    | 'GATEWAY_DRAINED'
+    | 'GATEWAY_RECOVERED'
+    | 'REBALANCE_COMPLETED';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  failedGatewayId: string;
+  targetGatewayId?: string;
+  affectedStreams: number;
+  redirectedStreams: number;
+  failedRedirects: number;
+  rtoMs: number;
+  reason: string;
+  details?: Record<string, unknown>;
+  triggeredBy: string;
+  createdAt: string;
+}
+
+export interface MediaGatewayFailoverPolicyItem {
+  policyId: string;
+  heartbeatTimeoutMs: number;
+  watchdogIntervalMs: number;
+  maxStreamsPerGateway: number;
+  maxLoadPercent: number;
+  autoFailoverEnabled: boolean;
+  autoFailbackEnabled: boolean;
+  flapDampingSeconds: number;
+  updatedAt: string;
+}
+
+export interface MediaGatewayFailoverMetricsItem {
+  totalGateways: number;
+  healthyGateways: number;
+  degradedGateways: number;
+  drainingGateways: number;
+  failedGateways: number;
+  offlineGateways: number;
+  totalCapacityStreams: number;
+  totalActiveStreams: number;
+  clusterHeadroomPercent: number;
+  totalFailoversToday: number;
+  avgRtoMs: number;
+  p95RtoMs: number;
+  maxRtoMs: number;
+  streamContinuityPercent: number;
+  lastFailoverAt?: string;
+}
+
+export const mediaGatewayFailoverApi = {
+  getGateways: () =>
+    fetchApi<{ data: MediaGatewayNodeItem[] }>('/v1/ha/media-gateways'),
+
+  registerGateway: (body: {
+    gatewayId: string;
+    gatewayName: string;
+    ipAddress: string;
+    port?: number;
+    apiPort?: number;
+    publicUrl?: string;
+    region?: string;
+    maxStreams?: number;
+    maxNetworkMbps?: number;
+  }) =>
+    fetchApi<{ data: MediaGatewayNodeItem }>('/v1/ha/media-gateways/register', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  sendHeartbeat: (body: {
+    gatewayId: string;
+    gatewayName?: string;
+    ipAddress: string;
+    port?: number;
+    apiPort?: number;
+    publicUrl?: string;
+    region?: string;
+    cpuPercent: number;
+    memoryPercent: number;
+    networkInMbps: number;
+    networkOutMbps: number;
+    activeStreams: number;
+    recordingStreams?: number;
+    liveViewStreams?: number;
+    healthyStreams?: number;
+    degradedStreams?: number;
+    failedStreams?: number;
+    packetLoss?: number;
+    frameDrops?: number;
+    maxStreams?: number;
+    maxNetworkMbps?: number;
+  }) =>
+    fetchApi<{ data: MediaGatewayNodeItem }>('/v1/ha/media-gateways/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getStreams: () =>
+    fetchApi<{ data: MediaStreamRouteItem[] }>('/v1/ha/media-gateways/streams'),
+
+  routeStream: (body: {
+    cameraId: string;
+    streamProfile?: 'main' | 'sub' | 'preview';
+    sourceUri: string;
+    preferredGatewayId?: string;
+    preferredRegion?: string;
+    bitrateKbps?: number;
+    fps?: number;
+  }) =>
+    fetchApi<{ data: MediaStreamRouteItem }>('/v1/ha/media-gateways/streams/route', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  redirectStream: (cameraId: string, body: { targetGatewayId: string; streamProfile?: 'main' | 'sub' | 'preview' }) =>
+    fetchApi<{ data: MediaStreamRouteItem }>(`/v1/ha/media-gateways/streams/${encodeURIComponent(cameraId)}/redirect`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  triggerFailover: (gatewayId: string, body?: { reason?: string; triggeredBy?: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        affectedStreams: number;
+        redirectedStreams: number;
+        failedRedirects: number;
+        rtoMs: number;
+        event: MediaGatewayFailoverEventItem;
+      };
+    }>(`/v1/ha/media-gateways/${encodeURIComponent(gatewayId)}/failover`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  drainGateway: (gatewayId: string, body?: { reason?: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        drainedStreams: number;
+        failedRedirects: number;
+        rtoMs: number;
+      };
+    }>(`/v1/ha/media-gateways/${encodeURIComponent(gatewayId)}/drain`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  rebalanceStreams: () =>
+    fetchApi<{
+      data: {
+        rebalancedStreams: number;
+        transfers: Array<{ cameraId: string; fromGateway: string; toGateway: string }>;
+      };
+    }>('/v1/ha/media-gateways/rebalance', {
+      method: 'POST',
+    }),
+
+  getEvents: (params?: { limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ data: MediaGatewayFailoverEventItem[] }>(`/v1/ha/media-gateways/events?${qs.toString()}`);
+  },
+
+  getMetrics: () =>
+    fetchApi<{ data: MediaGatewayFailoverMetricsItem }>('/v1/ha/media-gateways/metrics'),
+
+  getPolicy: () =>
+    fetchApi<{ data: MediaGatewayFailoverPolicyItem }>('/v1/ha/media-gateways/policy'),
+
+  updatePolicy: (body: Partial<MediaGatewayFailoverPolicyItem>) =>
+    fetchApi<{ data: MediaGatewayFailoverPolicyItem }>('/v1/ha/media-gateways/policy', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
+
+  probeCluster: () =>
+    fetchApi<{
+      data: {
+        cycle: { detectedFailures: string[]; failoversExecuted: number };
+        metrics: MediaGatewayFailoverMetricsItem;
+        nodes: MediaGatewayNodeItem[];
+      };
+    }>('/v1/ha/media-gateways/probe', {
+      method: 'POST',
+    }),
+// ============================================================================
+// Recording Engine N+1 Failover API Client (ha.recording_failover)
+// ============================================================================
+
+export interface RecordingNodeItem {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  role: 'ACTIVE' | 'STANDBY' | 'DRAINING' | 'MAINTENANCE';
+  state: 'HEALTHY' | 'DEGRADED' | 'HEARTBEAT_EXPIRED' | 'OFFLINE' | 'FAILOVER_ACTIVE';
+  currentEpoch: number;
+  maxStreamCapacity: number;
+  activeStreamCount: number;
+  cpuPercent: number;
+  memoryPercent: number;
+  diskWriteMbps: number;
+  networkInMbps: number;
+  heartbeatAt: string;
+  heartbeatAgeMs?: number;
+}
+
+export interface RecordingNodeAssignmentItem {
+  id: string;
+  cameraId: string;
+  tenantId: string;
+  primaryNodeId: string;
+  currentNodeId: string;
+  streamUri: string;
+  streamProfile: string;
+  status: 'ACTIVE' | 'FAILED_OVER' | 'DRAINING' | 'STOPPED';
+  takeoverEpoch: number;
+  failedOverAt?: string;
+}
+
+export interface RecordingFailoverEventItem {
+  id: string;
+  tenantId: string;
+  failedNodeId: string;
+  standbyNodeId: string;
+  affectedCameras: number;
+  transferredCameras: number;
+  detectionTimeMs: number;
+  takeoverTimeMs: number;
+  totalRtoMs: number;
+  reason: string;
+  status: string;
+  details: Record<string, unknown>;
+  createdAt: string;
+  recoveredAt?: string;
+}
+
+export interface RecordingFailoverMetricsItem {
+  totalNodes: number;
+  activeNodes: number;
+  standbyNodes: number;
+  healthyNodes: number;
+  heartbeatExpiredNodes: number;
+  totalAssignedStreams: number;
+  failedOverStreams: number;
+  totalFailovers: number;
+  averageRtoMs: number;
+  streamContinuityPercent: number;
+  activeAlerts: Array<{
+    nodeId: string;
+    level: 'WARNING' | 'CRITICAL';
+    message: string;
+  }>;
+}
+
+export const recordingFailoverApi = {
+  getNodes: (params?: { role?: string; state?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.role) qs.append('role', params.role);
+    if (params?.state) qs.append('state', params.state);
+    return fetchApi<{ data: RecordingNodeItem[] }>(`/v1/recording/failover/nodes?${qs.toString()}`);
+  },
+
+  registerNode: (body: {
+    id: string;
+    name: string;
+    host: string;
+    port?: number;
+    role?: 'ACTIVE' | 'STANDBY' | 'DRAINING' | 'MAINTENANCE';
+    maxStreamCapacity?: number;
+    metadata?: Record<string, unknown>;
+  }) =>
+    fetchApi<{ data: RecordingNodeItem }>('/v1/recording/failover/nodes', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  sendHeartbeat: (
+    nodeId: string,
+    body: {
+      cpuPercent?: number;
+      memoryPercent?: number;
+      diskWriteMbps?: number;
+      activeStreamCount?: number;
+    }
+  ) =>
+    fetchApi<{ data: RecordingNodeItem }>(`/v1/recording/failover/nodes/${encodeURIComponent(nodeId)}/heartbeat`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getAssignments: (params?: { nodeId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.nodeId) qs.append('nodeId', params.nodeId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ data: RecordingNodeAssignmentItem[] }>(`/v1/recording/failover/assignments?${qs.toString()}`);
+  },
+
+  assignCamera: (body: {
+    cameraId: string;
+    primaryNodeId: string;
+    streamUri: string;
+    streamProfile?: string;
+    tenantId?: string;
+  }) =>
+    fetchApi<{ data: RecordingNodeAssignmentItem }>('/v1/recording/failover/assignments', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  triggerFailover: (body: {
+    failedNodeId: string;
+    reason?: 'HEARTBEAT_EXPIRED' | 'NODE_CRASH' | 'MANUAL_FAILOVER' | 'NETWORK_PARTITION' | 'HIGH_ERROR_RATE' | 'STORAGE_UNAVAILABLE';
+  }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        failedNodeId: string;
+        standbyNodeId: string;
+        affectedCameras: number;
+        transferredCameras: number;
+        totalRtoMs: number;
+        newEpoch: number;
+        event: RecordingFailoverEventItem;
+      };
+    }>('/v1/recording/failover/trigger', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  executeFailback: (body: { primaryNodeId: string; standbyNodeId: string }) =>
+    fetchApi<{
+      data: {
+        success: boolean;
+        primaryNodeId: string;
+        standbyNodeId: string;
+        restoredCameras: number;
+        message: string;
+      };
+    }>('/v1/recording/failover/failback', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  checkLiveness: () =>
+    fetchApi<{
+      data: {
+        expiredNodes: string[];
+        failoverResults: Array<{
+          success: boolean;
+          failedNodeId: string;
+          standbyNodeId: string;
+          transferredCameras: number;
+          totalRtoMs: number;
+        }>;
+      };
+    }>('/v1/recording/failover/check-liveness', {
+      method: 'POST',
+    }),
+
+  getEvents: (params?: { failedNodeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.failedNodeId) qs.append('failedNodeId', params.failedNodeId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ data: RecordingFailoverEventItem[] }>(`/v1/recording/failover/events?${qs.toString()}`);
+  },
+
+  getMetrics: () =>
+    fetchApi<{ data: RecordingFailoverMetricsItem }>('/v1/recording/failover/metrics'),
+};
+
 export { ApiError };
 
 

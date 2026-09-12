@@ -6,6 +6,7 @@
 // Core Types and Interfaces
 export * from './types.js';
 export * from './interfaces.js';
+export * from './mtls/index.js';
 
 // Security Services
 export {

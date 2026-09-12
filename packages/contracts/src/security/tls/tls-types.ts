@@ -40,6 +40,21 @@ export interface DatabaseTlsConfigOptions {
   rejectUnauthorized?: boolean;
   servername?: string;
   isProduction?: boolean;
+  requireClientCert?: boolean;
+}
+
+export interface RedisTlsConfigOptions {
+  enabled?: boolean;
+  ca?: string | Buffer;
+  caFile?: string;
+  cert?: string | Buffer;
+  certFile?: string;
+  key?: string | Buffer;
+  keyFile?: string;
+  rejectUnauthorized?: boolean;
+  servername?: string;
+  isProduction?: boolean;
+  requireClientCert?: boolean;
 }
 
 export type DeviceTlsTrustState =

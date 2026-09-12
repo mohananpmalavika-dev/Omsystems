@@ -28,10 +28,20 @@ describe('UI Gating & Usability Logic Tests', () => {
     const registry = getCapabilityRegistry();
     registry.setDeploymentPolicy({ allowBeta: false, allowExperimental: false });
 
-    // ha.media_failover is BETA, so it must be disabled when allowBeta is false
-    const betaResult = registry.canUse('ha.media_failover');
+    // security.abac is BETA, so it must be disabled when allowBeta is false
+    const betaResult = registry.canUse('security.abac');
     expect(betaResult.usable).toBe(false);
     expect(betaResult.reason).toBe('beta_features_disabled');
+
+    // ha.recording_failover is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('ha.recording_failover', CapabilityRuntimeState.HEALTHY);
+    const recordingFailoverResult = registry.canUse('ha.recording_failover');
+    expect(recordingFailoverResult.usable).toBe(true);
+
+    // ha.media_failover is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('ha.media_failover', CapabilityRuntimeState.HEALTHY);
+    const mediaFailoverResult = registry.canUse('ha.media_failover');
+    expect(mediaFailoverResult.usable).toBe(true);
 
     // recording.storage_failover is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
     registry.updateRuntimeState('recording.storage_failover', CapabilityRuntimeState.HEALTHY);

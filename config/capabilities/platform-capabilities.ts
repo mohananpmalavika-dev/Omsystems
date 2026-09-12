@@ -1453,7 +1453,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Automatic Media Gateway Failover',
     description: 'Automatic stream redirection to healthy media gateway instance during node failure.',
     category: 'HA',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1465,7 +1465,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
@@ -1504,7 +1504,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Recording Engine N+1 Failover',
     description: 'Standby recording node takes over stream ingest when active recording node heartbeat expires.',
     category: 'HA',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1516,11 +1516,12 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
       services: ['recording-engine', 'control-plane'],
+      infrastructure: ['postgresql', 'redis'],
     },
     owner: 'infrastructure-team',
   },
