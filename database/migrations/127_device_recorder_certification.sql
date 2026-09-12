@@ -40,9 +40,9 @@ VALUES
             "KV-C11": "SUPPORTED",
             "KV-C12": "SUPPORTED"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Indian Banking QA Lab',
-        'Certified for ISAPI + ONVIF Profile S/G/T with complete tamper and storage health telemetry'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for ISAPI + ONVIF Profile S/G/T telemetry'
     ),
     (
         'cert-dahua-nvr5000',
@@ -64,9 +64,9 @@ VALUES
             "KV-C11": "SUPPORTED",
             "KV-C12": "UNKNOWN"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Indian Banking QA Lab',
-        'Certified for Dahua RPC API and ONVIF Profile S'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for Dahua RPC API and ONVIF Profile S'
     ),
     (
         'cert-cpplus-uvr-dvr',
@@ -88,9 +88,9 @@ VALUES
             "KV-C11": "UNKNOWN",
             "KV-C12": "UNSUPPORTED"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Indian Banking QA Lab',
-        'Certified for Orange/Indigo series DVRs commonly used in retail bank branches'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for Orange/Indigo series DVRs'
     ),
     (
         'cert-cpplus-nvr',
@@ -112,9 +112,9 @@ VALUES
             "KV-C11": "UNKNOWN",
             "KV-C12": "UNKNOWN"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Indian Banking QA Lab',
-        'Certified for CP Plus Onyx & Cosmic IP NVR series'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for CP Plus Onyx & Cosmic IP NVR series'
     ),
     (
         'cert-uniview-nvr300',
@@ -136,9 +136,9 @@ VALUES
             "KV-C11": "UNSUPPORTED",
             "KV-C12": "UNKNOWN"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Indian Banking QA Lab',
-        'Certified for UNV NVR series with ONVIF Profile S/T'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for UNV NVR series with ONVIF Profile S/T'
     ),
     (
         'cert-onvif-profile-s',
@@ -160,9 +160,9 @@ VALUES
             "KV-C11": "UNSUPPORTED",
             "KV-C12": "UNKNOWN"
         }'::jsonb,
-        'CERTIFIED',
-        'KryptoVision Standard Compliance',
-        'Standard ONVIF Profile S streaming compliance'
+        'TEST_REQUIRED',
+        'UNTESTED - Physical Device Lab Run Required',
+        'Pending physical lab hardware validation for standard ONVIF Profile S streaming'
     ),
     (
         'cert-generic-rtsp',

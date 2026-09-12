@@ -496,6 +496,13 @@ export interface AlertFilters {
   offset?: number;
 }
 
+export interface OperationalAlertsResult {
+  alerts: OperationalAlert[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 /**
  * Alert action payloads
  * 

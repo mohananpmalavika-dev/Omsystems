@@ -74,8 +74,23 @@ export interface StorageStatusInfo {
   diskIndex: number;
   totalBytes: number;
   freeBytes: number;
+  usedBytes?: number;
   status: "NORMAL" | "FULL" | "ERROR" | "REBUILDING" | "UNKNOWN";
   smartStatus?: "PASS" | "WARN" | "FAIL";
+  temperatureC?: number;
+  serialNumber?: string;
+  model?: string;
+  isReadOnly?: boolean;
+  diskErrors?: number;
+  lastSuccessfulWrite?: Date;
+  overallHddState?: "HEALTHY" | "WARNING" | "CRITICAL" | "FAILED" | "UNKNOWN";
+}
+
+export interface ComponentHealthCheck {
+  name: "CONNECTIVITY" | "AUTHENTICATION" | "CHANNELS" | "STORAGE" | "SMART" | "RECORDING" | "NTP";
+  status: "HEALTHY" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
+  latencyMs?: number;
+  details?: string;
 }
 
 export interface RecorderHealthInfo {
@@ -86,6 +101,9 @@ export interface RecorderHealthInfo {
   totalChannels: number;
   storageHealthy: boolean;
   networkLatencyMs?: number;
+  components?: ComponentHealthCheck[];
+  clockDriftSeconds?: number;
+  overallReason?: string;
 }
 
 export interface RecorderEvent {

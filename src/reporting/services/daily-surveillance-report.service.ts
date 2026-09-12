@@ -2,15 +2,21 @@
  * Daily Surveillance Report Service
  * 
  * Manages immutable report snapshots, artifact storage, on-demand generation,
- * historical downloads, and automated daily schedule execution.
+ * historical downloads, and automated daily schedule execution for all 9 required
+ * daily reports plus composite executive reports.
  */
 
 import { createHash } from "node:crypto";
-import type { DailySurveillanceHealthReportData } from "../domain/daily-surveillance-report.types.js";
+import type {
+  DailySurveillanceHealthReportData,
+  DailyReportType,
+  ReportFilterCriteria,
+} from "../domain/daily-surveillance-report.types.js";
 import { dailySurveillanceCollectorService, DailySurveillanceCollectorService } from "./daily-surveillance-collector.service.js";
 import { renderDailySurveillanceHealthPdf } from "../renderers/daily-surveillance-pdf.renderer.js";
 import { renderDailySurveillanceHealthXlsx } from "../renderers/daily-surveillance-xlsx.renderer.js";
 import { renderDailySurveillanceHealthCsv } from "../renderers/daily-surveillance-csv.renderer.js";
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 
 export interface ReportScheduleConfig {
   id: string;
@@ -19,6 +25,7 @@ export interface ReportScheduleConfig {
   dailyAt: string; // e.g. "06:00"
   timezone: string; // e.g. "Asia/Kolkata"
   formats: Array<"PDF" | "XLSX" | "CSV">;
+  reportType?: DailyReportType | undefined;
   recipients: string[];
   lastRunAt?: Date | undefined;
   nextRunAt?: Date | undefined;
@@ -27,6 +34,7 @@ export interface ReportScheduleConfig {
 export interface StoredReportRecord {
   reportId: string;
   tenantId: string;
+  reportType: DailyReportType;
   periodStart: Date;
   periodEnd: Date;
   timezone: string;
@@ -46,7 +54,8 @@ export class DailySurveillanceReportService {
   private schedules: Map<string, ReportScheduleConfig> = new Map();
 
   constructor(
-    private readonly collector: DailySurveillanceCollectorService = dailySurveillanceCollectorService
+    private readonly collector: DailySurveillanceCollectorService = dailySurveillanceCollectorService,
+    private readonly store?: ControlPlaneStore,
   ) {
     // Seed default daily schedule for tenant
     this.schedules.set("sched-bank-corp-01", {
@@ -55,26 +64,34 @@ export class DailySurveillanceReportService {
       enabled: true,
       dailyAt: "06:00",
       timezone: "Asia/Kolkata",
-      formats: ["PDF", "XLSX"],
+      reportType: "DAILY_SURVEILLANCE_HEALTH",
+      formats: ["PDF", "XLSX", "CSV"],
       recipients: ["security-officer@bank-corp.internal", "soc-manager@bank-corp.internal"],
     });
   }
 
   async generate(options: {
     tenantId: string;
+    store?: ControlPlaneStore | undefined;
+    reportType?: DailyReportType | undefined;
     periodStart?: Date | undefined;
     periodEnd?: Date | undefined;
     timezone?: string | undefined;
     formats?: Array<"PDF" | "XLSX" | "CSV"> | undefined;
+    filters?: ReportFilterCriteria | undefined;
     generatedBy?: "SCHEDULED" | "MANUAL" | "API" | undefined;
   }): Promise<StoredReportRecord> {
     const formats = options.formats || ["PDF", "XLSX", "CSV"];
+    const reportType = options.reportType || "DAILY_SURVEILLANCE_HEALTH";
     const data = await this.collector.collect({
       tenantId: options.tenantId,
+      store: options.store || this.store,
       periodStart: options.periodStart,
       periodEnd: options.periodEnd,
       timezone: options.timezone,
       generatedBy: options.generatedBy,
+      reportType,
+      filters: options.filters,
     });
 
     const artifacts: StoredReportRecord["artifacts"] = {};
@@ -92,7 +109,7 @@ export class DailySurveillanceReportService {
     }
 
     if (formats.includes("CSV")) {
-      const csvBuffer = renderDailySurveillanceHealthCsv(data);
+      const csvBuffer = renderDailySurveillanceHealthCsv(data, reportType);
       const sha = createHash("sha256").update(csvBuffer).digest("hex");
       artifacts.csv = { sizeBytes: csvBuffer.length, sha256: sha, buffer: csvBuffer };
     }
@@ -100,6 +117,7 @@ export class DailySurveillanceReportService {
     const record: StoredReportRecord = {
       reportId: data.metadata.reportId,
       tenantId: options.tenantId,
+      reportType,
       periodStart: data.metadata.periodStart,
       periodEnd: data.metadata.periodEnd,
       timezone: data.metadata.timezone,
@@ -112,6 +130,25 @@ export class DailySurveillanceReportService {
 
     this.reports.set(data.metadata.reportId, record);
     return record;
+  }
+
+  async generateDiscreteReport(
+    type: DailyReportType,
+    options: {
+      tenantId: string;
+      store?: ControlPlaneStore | undefined;
+      periodStart?: Date | undefined;
+      periodEnd?: Date | undefined;
+      timezone?: string | undefined;
+      formats?: Array<"PDF" | "XLSX" | "CSV"> | undefined;
+      filters?: ReportFilterCriteria | undefined;
+      generatedBy?: "SCHEDULED" | "MANUAL" | "API" | undefined;
+    }
+  ): Promise<StoredReportRecord> {
+    return this.generate({
+      ...options,
+      reportType: type,
+    });
   }
 
   getReport(reportId: string): StoredReportRecord | undefined {
@@ -132,10 +169,13 @@ export class DailySurveillanceReportService {
       csv: "text/csv; charset=utf-8",
     };
 
+    const prefix = record.reportType.toLowerCase().replace(/_/g, "-");
+    const datePart = record.periodEnd.toISOString().slice(0, 10);
+
     return {
       buffer: artifact.buffer,
       mimeType: mimeTypes[fmtKey] || "application/octet-stream",
-      filename: `daily-surveillance-health-${record.periodEnd.toISOString().slice(0, 10)}.${fmtKey}`,
+      filename: `${prefix}-${datePart}.${fmtKey}`,
     };
   }
 
@@ -145,6 +185,7 @@ export class DailySurveillanceReportService {
       .map((r) => ({
         reportId: r.reportId,
         tenantId: r.tenantId,
+        reportType: r.reportType,
         periodStart: r.periodStart,
         periodEnd: r.periodEnd,
         timezone: r.timezone,

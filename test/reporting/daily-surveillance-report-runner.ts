@@ -9,9 +9,14 @@ import { renderDailySurveillanceHealthPdf } from "../../src/reporting/renderers/
 import { renderDailySurveillanceHealthXlsx } from "../../src/reporting/renderers/daily-surveillance-xlsx.renderer.js";
 import { renderDailySurveillanceHealthCsv } from "../../src/reporting/renderers/daily-surveillance-csv.renderer.js";
 import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
+import { seedScaleFleet } from "../fixtures/scale-fleet.fixture.js";
 
 async function runDailySurveillanceReportTests() {
-  const app = await buildApp();
+  const store = new MemoryStore();
+  await seedScaleFleet(store, 400, "bank-corp");
+  const app = await buildApp({ store: store as any });
+
   console.log("================================================================================");
   console.log("  DAILY SURVEILLANCE HEALTH REPORT - COMPREHENSIVE VERIFICATION RUNNER");
   console.log("================================================================================\n");
@@ -34,6 +39,7 @@ async function runDailySurveillanceReportTests() {
   console.log("Suite 1: Canonical Data Collector & UNKNOWN State Invariant");
   const reportData = await dailySurveillanceCollectorService.collect({
     tenantId: "bank-corp",
+    store,
     timezone: "Asia/Kolkata",
     generatedBy: "SCHEDULED",
   });
@@ -85,6 +91,7 @@ async function runDailySurveillanceReportTests() {
   console.log("\nSuite 4: End-to-End Report Service Lifecycle");
   const storedRecord = await dailySurveillanceReportService.generate({
     tenantId: "bank-corp",
+    store,
     timezone: "Asia/Kolkata",
     formats: ["PDF", "XLSX", "CSV"],
     generatedBy: "API",

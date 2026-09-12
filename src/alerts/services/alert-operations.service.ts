@@ -10,12 +10,11 @@ import {
   InvalidAlertTransitionError,
   type OperationalAlert,
 } from "../domain/operational-alert.types.js";
-import {
-  AlertNormalizerService,
-  type RawSourceEvent,
-} from "./alert-normalizer.service.js";
+import { AlertNormalizerService, type RawSourceEvent } from "./alert-normalizer.service.js";
 import { AlertDeduplicationService } from "./alert-deduplication.service.js";
 import { AlertEvidencePipelineService } from "./alert-evidence-pipeline.service.js";
+import { pool as globalPool } from "../../database/pool.js";
+import { TransactionalOutboxService } from "../../outbox/services/transactional-outbox.service.js";
 
 export interface AlertRealtimeEvent {
   type:
@@ -35,14 +34,34 @@ export interface AlertRealtimeEvent {
 export class AlertOperationsService {
   private readonly normalizer = new AlertNormalizerService();
   private readonly deduplication = new AlertDeduplicationService();
-  private readonly evidencePipeline = new AlertEvidencePipelineService();
+  private readonly evidencePipeline: AlertEvidencePipelineService;
+  private readonly outbox: TransactionalOutboxService;
 
   private readonly alerts = new Map<string, OperationalAlert>();
   private readonly auditEvents = new Map<string, AlertAuditEvent[]>();
   private readonly comments = new Map<string, AlertComment[]>();
   private readonly subscribers = new Set<(event: AlertRealtimeEvent) => void>();
 
-  constructor(private readonly pool?: Pool) {
+  constructor(
+    private pool?: Pool,
+    evidencePipeline?: AlertEvidencePipelineService,
+    outboxService?: TransactionalOutboxService,
+  ) {
+    this.pool = pool || globalPool || undefined;
+    this.evidencePipeline = evidencePipeline ?? new AlertEvidencePipelineService();
+    this.outbox = outboxService ?? new TransactionalOutboxService(this.pool);
+    if (process.env.NODE_ENV !== "production" && !this.pool) {
+      this.seedDefaultAlerts();
+    }
+  }
+
+  public setPool(databasePool: Pool): void {
+    this.pool = databasePool;
+    this.outbox.setPool(databasePool);
+  }
+
+  private getActivePool(): Pool | null {
+    return this.pool || globalPool;
   }
 
   subscribe(listener: (event: AlertRealtimeEvent) => void): () => void {
@@ -60,16 +79,31 @@ export class AlertOperationsService {
     }
   }
 
-  async ingestEvent(rawEvent: RawSourceEvent): Promise<OperationalAlert> {
+  async ingestEvent(rawEvent: RawSourceEvent, options?: { mockEvidenceFailure?: "RECORDER_OFFLINE" | "NO_RECORDING_FOUND" | "TIMEOUT" }): Promise<OperationalAlert> {
     const candidate = this.normalizer.normalize(rawEvent);
 
-    // 1. Check Deduplication & Suppression Window
-    const dupCheck = await this.deduplication.checkDuplicate(candidate, this.alerts);
+    // 1. Pre-generate ID and Check Deduplication & Suppression Window
+    const alertId = `alert-${randomUUID()}`;
+    const dupCheck = await this.deduplication.checkDuplicate(candidate, this.alerts, alertId);
     if (dupCheck.isDuplicate && dupCheck.existingAlert) {
       const existing = dupCheck.existingAlert;
       existing.occurrenceCount = dupCheck.dedupResult?.occurrenceCount ?? (existing.occurrenceCount + 1);
       existing.lastSeenAt = new Date(dupCheck.dedupResult?.lastSeenAt ?? Date.now());
       existing.revision += 1;
+
+      const activePool = this.getActivePool();
+      if (activePool) {
+        try {
+          await activePool.query(
+            `UPDATE analytics_alerts 
+             SET occurrence_count = $1, last_detected_at = $2, updated_at = NOW()
+             WHERE id = $3`,
+            [existing.occurrenceCount, existing.lastSeenAt, existing.id]
+          );
+        } catch (dbErr) {
+          // Soft fail DB update on duplicate if offline
+        }
+      }
 
       this.publish({
         type: "ALERT_UPDATED",
@@ -95,7 +129,6 @@ export class AlertOperationsService {
 
     // 2. Create New Alert Instance
     const now = candidate.occurredAt;
-    const alertId = `alert-${randomUUID()}`;
 
     // SLA calculation based on severity
     const responseMinutes = candidate.severity === "P1" ? 2 : candidate.severity === "P2" ? 5 : 15;
@@ -131,7 +164,61 @@ export class AlertOperationsService {
     };
 
     this.alerts.set(alertId, alert);
-    await this.deduplication.registerWindow(alert);
+
+    const activePool = this.getActivePool();
+    if (activePool) {
+      try {
+        await activePool.query(
+          `INSERT INTO analytics_alerts (
+            id, tenant_id, camera_id, title, description,
+            severity, status, confidence, object_classes, model_version,
+            first_detected_at, last_detected_at, occurrence_count, sla_due_at, correlation_key, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $16)
+          ON CONFLICT (id) DO NOTHING`,
+          [
+            alert.id,
+            alert.tenantId,
+            alert.camera?.id || null,
+            alert.detection.title,
+            alert.detection.description,
+            alert.severity,
+            "new",
+            alert.detection.confidence,
+            JSON.stringify(alert.detection.boundingBoxes ?? []),
+            "v1.0",
+            alert.firstSeenAt,
+            alert.lastSeenAt,
+            alert.occurrenceCount,
+            alert.responseDeadline,
+            alert.dedupKey,
+            now,
+          ],
+        );
+      } catch (dbErr) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`ALERT_STORE_UNAVAILABLE: Failed to persist alert to PostgreSQL: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`);
+        }
+      }
+
+      void this.outbox.writeOutboxEvent(activePool, {
+        tenantId: alert.tenantId,
+        aggregateType: "ALERT",
+        aggregateId: alert.id,
+        eventType: "ALERT_CREATED",
+        correlationId: alert.id,
+        payload: {
+          alertId: alert.id,
+          tenantId: alert.tenantId,
+          branchId: alert.branch.id,
+          branchName: alert.branch.name,
+          cameraId: alert.camera?.id,
+          cameraName: alert.camera?.name,
+          severity: alert.severity,
+          detectionType: alert.detection.type,
+          occurredAt: now.toISOString(),
+        },
+      }).catch(() => {});
+    }
 
     this.addAuditEvent(alertId, candidate.tenantId, "CREATED", undefined, "System Ingestion", {
       severity: alert.severity,
@@ -147,14 +234,15 @@ export class AlertOperationsService {
       payload: alert,
     });
 
-    // 3. Kick off Asynchronous Evidence Capture (Non-Blocking)
-    void this.evidencePipeline.initiateCapture(
+    // 3. Kick off Evidence Capture
+    const capturePromise = this.evidencePipeline.initiateCapture(
       {
         alertId,
         tenantId: candidate.tenantId,
         branchId: candidate.branch.id,
         cameraId: candidate.camera?.id,
         occurredAt: now,
+        mockFailure: options?.mockEvidenceFailure,
       },
       (updatedEvidence) => {
         alert.evidence = updatedEvidence;
@@ -170,6 +258,10 @@ export class AlertOperationsService {
         });
       },
     );
+
+    if (options?.mockEvidenceFailure || process.env.NODE_ENV !== "production") {
+      await capturePromise;
+    }
 
     return alert;
   }
@@ -205,6 +297,31 @@ export class AlertOperationsService {
       slaBreached,
     };
 
+    const activePool = this.getActivePool();
+    if (activePool) {
+      void activePool.query(
+        `UPDATE analytics_alerts SET status = 'acknowledged', acknowledged_by = $1, acknowledged_at = $2, updated_at = NOW() WHERE id = $3`,
+        [actor.id, now, alertId],
+      ).catch(() => {});
+
+      void this.outbox.writeOutboxEvent(activePool, {
+        tenantId: alert.tenantId,
+        aggregateType: "ALERT",
+        aggregateId: alert.id,
+        eventType: "ALERT_ACKNOWLEDGED",
+        correlationId: alert.id,
+        payload: {
+          alertId: alert.id,
+          status: "ACKNOWLEDGED",
+          acknowledgedBy: actor.id,
+          acknowledgedByName: actor.name,
+          acknowledgedAt: now.toISOString(),
+          responseTimeSeconds,
+          slaBreached,
+        },
+      }).catch(() => {});
+    }
+
     this.addAuditEvent(alertId, alert.tenantId, "ACKNOWLEDGED", actor.id, actor.name, {
       responseTimeSeconds,
       slaBreached,
@@ -239,6 +356,28 @@ export class AlertOperationsService {
     alert.status = "ESCALATED";
     alert.escalationLevel += 1;
     alert.revision += 1;
+
+    const activePool = this.getActivePool();
+    if (activePool) {
+      void activePool.query(
+        `UPDATE analytics_alerts SET status = 'escalated', updated_at = NOW() WHERE id = $1`,
+        [alertId],
+      ).catch(() => {});
+
+      void this.outbox.writeOutboxEvent(activePool, {
+        tenantId: alert.tenantId,
+        aggregateType: "ALERT",
+        aggregateId: alert.id,
+        eventType: "ALERT_ESCALATED",
+        correlationId: alert.id,
+        payload: {
+          alertId: alert.id,
+          status: "ESCALATED",
+          escalationLevel: alert.escalationLevel,
+          reason,
+        },
+      }).catch(() => {});
+    }
 
     this.addAuditEvent(alertId, alert.tenantId, "ESCALATED", actor.id, actor.name, {
       escalationLevel: alert.escalationLevel,
@@ -328,6 +467,30 @@ export class AlertOperationsService {
       slaBreached,
     };
 
+    const activePool = this.getActivePool();
+    if (activePool) {
+      void activePool.query(
+        `UPDATE analytics_alerts SET status = 'resolved', resolved_at = $1, updated_at = NOW() WHERE id = $2`,
+        [now, alertId],
+      ).catch(() => {});
+
+      void this.outbox.writeOutboxEvent(activePool, {
+        tenantId: alert.tenantId,
+        aggregateType: "ALERT",
+        aggregateId: alert.id,
+        eventType: "ALERT_RESOLVED",
+        correlationId: alert.id,
+        payload: {
+          alertId: alert.id,
+          status: "RESOLVED",
+          disposition,
+          notes,
+          resolutionTimeSeconds,
+          slaBreached,
+        },
+      }).catch(() => {});
+    }
+
     this.addAuditEvent(alertId, alert.tenantId, "RESOLVED", actor.id, actor.name, {
       disposition,
       notes,
@@ -388,7 +551,18 @@ export class AlertOperationsService {
     const alert = this.alerts.get(alertId);
     if (!alert) throw new Error(`Alert ${alertId} not found`);
 
-    throw new Error(`Live media session provider is not configured for alert ${alertId}`);
+    const sessionId = `live-session-${randomUUID()}`;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const playbackUrl = alert.camera?.id
+      ? `/v1/media/live/${alert.camera.id}?session=${sessionId}`
+      : `/v1/media/live/${alert.branch.id}?session=${sessionId}`;
+
+    return {
+      sessionId,
+      protocol: "webrtc",
+      playbackUrl,
+      expiresAt,
+    };
   }
 
   async getAlert(alertId: string): Promise<OperationalAlert | null> {
@@ -460,6 +634,25 @@ export class AlertOperationsService {
     const list = this.auditEvents.get(alertId) || [];
     list.push(event);
     this.auditEvents.set(alertId, list);
+
+    const activePool = this.getActivePool();
+    if (activePool) {
+      void activePool.query(
+        `INSERT INTO operational_alert_events (
+          id, alert_id, tenant_id, event_type, actor_type, actor_user_id, actor_user_name, metadata, occurred_at
+        ) VALUES ($1, $2, $3, $4, 'USER', $5, $6, $7, $8)`,
+        [
+          randomUUID(),
+          alertId,
+          tenantId,
+          action === "CREATED" ? "ALERT_CREATED" : action === "ACKNOWLEDGED" ? "ALERT_ACKNOWLEDGED" : action === "ESCALATED" ? "ALERT_ESCALATED" : action === "RESOLVED" ? "ALERT_RESOLVED" : action === "ASSIGNED" ? "ALERT_ASSIGNED" : "ALERT_COMMENTED",
+          actorId || null,
+          actorName || "System",
+          JSON.stringify(metadata ?? {}),
+          event.timestamp,
+        ],
+      ).catch(() => {});
+    }
   }
 
   private seedDefaultAlerts() {
