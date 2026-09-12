@@ -266,7 +266,7 @@ export default function BranchCompliancePage() {
             {/* Action Button */}
             <div className="mt-4 flex gap-2">
               <button
-                onClick={() => router.push(`/audit/branch/${branch.branchId}`)}
+                onClick={() => router.push(`/operations/branches/${encodeURIComponent(branch.branchId)}`)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
               >
                 View Details
