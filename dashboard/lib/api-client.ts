@@ -3014,7 +3014,7 @@ export const deviceConfigurationApi = {
     ),
 };
 
-export const signedConfigApi = {
+export const configVersionsApi = {
   listVersions: () =>
     fetchApi<{ success: boolean; data: any[] }>(`/v1/config/versions`),
 
@@ -5573,6 +5573,8 @@ export const mediaGatewayFailoverApi = {
     }>('/v1/ha/media-gateways/probe', {
       method: 'POST',
     }),
+};
+
 // ============================================================================
 // Recording Engine N+1 Failover API Client (ha.recording_failover)
 // ============================================================================
@@ -5757,6 +5759,8 @@ export const recordingFailoverApi = {
 
   getMetrics: () =>
     fetchApi<{ data: RecordingFailoverMetricsItem }>('/v1/recording/failover/metrics'),
+};
+
 // ============================================================================
 // Hardware Security Module (HSM) Evidence Signing API Client (security.hsm_evidence_signing)
 // ============================================================================
@@ -5973,6 +5977,7 @@ export const hsmSigningApi = {
       `/v1/security/hsm/audit-log?${qs.toString()}`
     );
   },
+};
 
 // ============================================================================
 // Cryptographically Signed Edge Config Bundles API Client (security.signed_configuration)
