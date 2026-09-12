@@ -2788,6 +2788,24 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register synchronized playback routes');
   }
 
+  // Register Recording Gap Recovery & Edge Backfill (recording.recovery) routes
+  try {
+    const { registerRecordingRecoveryRoutes } = await import("./routes/recording-recovery.routes.js");
+    await registerRecordingRecoveryRoutes(app, store);
+    app.log.info('Recording Gap Recovery & Edge Backfill (recording.recovery) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register recording recovery routes');
+  }
+
+  // Register Cold Cloud Archive Export (recording.archive) routes
+  try {
+    const { registerColdCloudArchiveRoutes } = await import("./routes/cold-cloud-archive.routes.js");
+    await registerColdCloudArchiveRoutes(app, store);
+    app.log.info('Cold Cloud Archive Export (recording.archive) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register cold cloud archive routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");

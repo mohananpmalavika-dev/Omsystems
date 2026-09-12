@@ -4676,7 +4676,670 @@ export const talkbackApi = {
     }),
 };
 
+export interface RecordingGapItem {
+  id: string;
+  tenantId: string;
+  branchId?: string;
+  cameraId: string;
+  startTime: string;
+  endTime?: string;
+  gapDurationSeconds: number;
+  reason: string;
+  status: 'OPEN' | 'IN_PROGRESS' | 'HEALED' | 'UNRECOVERABLE';
+  detail: Record<string, any>;
+  healedAt?: string;
+  healedBy?: string;
+  backfillJobId?: string;
+  segmentsRecoveredCount: number;
+  bytesRecovered: number;
+  detectedAt: string;
+  resolvedAt?: string;
+}
+
+export interface BackfillJobItem {
+  id: string;
+  tenantId: string;
+  branchId: string;
+  cameraId: string;
+  gapId?: string;
+  status: 'PENDING' | 'SCANNING' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+  triggerSource: 'AUTO_WAN_RECOVERY' | 'MANUAL_OPERATOR' | 'SCHEDULED_AUDIT';
+  windowStart: string;
+  windowEnd: string;
+  totalSegments: number;
+  syncedSegments: number;
+  skippedDuplicates: number;
+  reconciledOverlaps: number;
+  failedSegments: number;
+  totalBytes: number;
+  transferredBytes: number;
+  rateLimitKbps: number;
+  errorMessage?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface RecoveryStats {
+  totalGaps: number;
+  openGaps: number;
+  inProgressGaps: number;
+  healedGaps: number;
+  unrecoverableGaps: number;
+  largestGapSeconds: number;
+  totalLostSeconds: number;
+  healingSuccessRate: number;
+  activeJobsCount: number;
+  completedJobsCount: number;
+  totalBackfilledBytes: number;
+  totalRecoveredSegments: number;
+  totalSkippedDuplicates: number;
+  totalReconciledOverlaps: number;
+}
+
+export interface EdgeBackfillAuditEntry {
+  id: string;
+  job_id?: string;
+  tenant_id: string;
+  branch_id: string;
+  camera_id: string;
+  segment_id: string;
+  action: string;
+  file_size: number;
+  checksum_sha256: string;
+  start_time: string;
+  end_time: string;
+  details: Record<string, any>;
+  logged_at: string;
+}
+
+export const recordingRecoveryApi = {
+  /**
+   * List recording gaps with filtering
+   */
+  listGaps: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    status?: string;
+    startDate?: string;
+    endDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.startDate) qs.append('startDate', params.startDate);
+    if (params?.endDate) qs.append('endDate', params.endDate);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: RecordingGapItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/gaps?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Trigger gap detection scan for a camera time range
+   */
+  scanGaps: (body: {
+    cameraId: string;
+    branchId?: string;
+    startTime: string;
+    endTime: string;
+    toleranceSeconds?: number;
+  }) =>
+    fetchApi<{ data: RecordingGapItem[] }>('/v1/recording/recovery/scan-gaps', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * List backfill jobs
+   */
+  listJobs: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    status?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: BackfillJobItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/jobs?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get backfill job details
+   */
+  getJob: (jobId: string) =>
+    fetchApi<{ data: BackfillJobItem }>(`/v1/recording/recovery/jobs/${encodeURIComponent(jobId)}`),
+
+  /**
+   * Create and trigger an edge backfill job
+   */
+  createJob: (body: {
+    branchId: string;
+    cameraId: string;
+    gapId?: string;
+    triggerSource?: string;
+    windowStart: string;
+    windowEnd: string;
+    rateLimitKbps?: number;
+  }) =>
+    fetchApi<{ data: BackfillJobItem }>('/v1/recording/recovery/jobs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Cancel an active backfill job
+   */
+  cancelJob: (jobId: string) =>
+    fetchApi<{ data: BackfillJobItem }>(`/v1/recording/recovery/jobs/${encodeURIComponent(jobId)}/cancel`, {
+      method: 'POST',
+    }),
+
+  /**
+   * Upload single backfilled segment chunk
+   */
+  uploadSegment: (body: {
+    jobId?: string;
+    branchId: string;
+    cameraId: string;
+    segmentId: string;
+    startTime: string;
+    endTime: string;
+    durationMs: number;
+    fileSize: number;
+    sha256: string;
+    storagePath: string;
+    dataBase64?: string;
+  }) =>
+    fetchApi<{ data: any }>('/v1/recording/recovery/backfill/upload', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Batch ingest backfilled edge segments
+   */
+  syncBatch: (body: {
+    jobId?: string;
+    branchId: string;
+    cameraId: string;
+    rateLimitKbps?: number;
+    segments: Array<{
+      segmentId: string;
+      startTime: string;
+      endTime: string;
+      durationMs: number;
+      fileSize: number;
+      sha256: string;
+      storagePath: string;
+    }>;
+  }) =>
+    fetchApi<{ data: any }>('/v1/recording/recovery/backfill/sync-batch', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Get gap and recovery statistics
+   */
+  getStats: (params?: { branchId?: string; cameraId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ data: RecoveryStats }>(`/v1/recording/recovery/stats?${qs.toString()}`);
+  },
+
+  /**
+   * List forensic audit log entries
+   */
+  getAuditLogs: (params?: { cameraId?: string; jobId?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.jobId) qs.append('jobId', params.jobId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: EdgeBackfillAuditEntry[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/recovery/audit?${qs.toString()}`
+    );
+  },
+};
+
+export interface ColdCloudArchiveJobItem {
+  id: string;
+  tenantId: string;
+  incidentId: string;
+  incidentNumber: string;
+  cameraId: string;
+  branchId?: string;
+  evidencePackageId?: string;
+  clipId?: string;
+  storageTier: 'GLACIER' | 'DEEP_ARCHIVE' | 'GLACIER_IR' | 'INTELLIGENT_TIERING';
+  s3Bucket: string;
+  s3Key: string;
+  s3Region: string;
+  s3Endpoint?: string;
+  fileSizeBytes: number;
+  checksumSha256: string;
+  encryptionKmsKeyId?: string;
+  archiveStatus: 'PENDING' | 'EXPORTING' | 'ARCHIVED' | 'FAILED' | 'CANCELLED';
+  restoreStatus: 'NONE' | 'RESTORE_REQUESTED' | 'RESTORING' | 'RESTORED' | 'EXPIRED';
+  restoreRequestedAt?: string;
+  restoreCompletedAt?: string;
+  restoreExpiresAt?: string;
+  restoreTier?: 'Expedited' | 'Standard' | 'Bulk';
+  attempts: number;
+  maxAttempts: number;
+  errorMessage?: string;
+  metadata: Record<string, any>;
+  createdBy?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface ArchivePolicyItem {
+  id: string;
+  tenantId: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  targetStorageClass: 'GLACIER' | 'DEEP_ARCHIVE' | 'GLACIER_IR';
+  targetBucket: string;
+  targetPrefix: string;
+  triggerCondition: Record<string, any>;
+  encryptionKmsKeyId?: string;
+  retentionDays: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArchiveAuditLogItem {
+  id: string;
+  jobId?: string;
+  tenantId: string;
+  incidentId?: string;
+  incidentNumber?: string;
+  action: string;
+  operatorId?: string;
+  checksumSha256?: string;
+  s3Uri?: string;
+  storageClass?: string;
+  details: Record<string, any>;
+  timestamp: string;
+}
+
+export interface ArchiveStatisticsItem {
+  totalJobs: number;
+  archivedJobs: number;
+  pendingJobs: number;
+  failedJobs: number;
+  totalBytesArchived: number;
+  totalBytesGlacier: number;
+  totalBytesDeepArchive: number;
+  activeRestoresCount: number;
+  completedRestoresCount: number;
+  estimatedMonthlyHotCostUsd: number;
+  estimatedMonthlyColdCostUsd: number;
+  estimatedMonthlySavingsUsd: number;
+  savingsPercentage: number;
+}
+
+export const coldCloudArchiveApi = {
+  /**
+   * List cold cloud archive export jobs
+   */
+  listJobs: (params?: {
+    incidentId?: string;
+    cameraId?: string;
+    branchId?: string;
+    status?: string;
+    restoreStatus?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.incidentId) qs.append('incidentId', params.incidentId);
+    if (params?.cameraId) qs.append('cameraId', params.cameraId);
+    if (params?.branchId) qs.append('branchId', params.branchId);
+    if (params?.status) qs.append('status', params.status);
+    if (params?.restoreStatus) qs.append('restoreStatus', params.restoreStatus);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: ColdCloudArchiveJobItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/archive/jobs?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get single archive job details
+   */
+  getJob: (jobId: string) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(`/v1/recording/archive/jobs/${encodeURIComponent(jobId)}`),
+
+  /**
+   * Create manual archive job
+   */
+  createJob: (body: {
+    incidentId: string;
+    cameraId: string;
+    branchId?: string;
+    incidentNumber?: string;
+    evidencePackageId?: string;
+    clipId?: string;
+    storageTier?: string;
+    videoData?: string;
+    videoFilePath?: string;
+    metadata?: Record<string, any>;
+  }) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>('/v1/recording/archive/jobs', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Request Glacier restore
+   */
+  requestRestore: (
+    jobId: string,
+    body?: {
+      tier?: 'Expedited' | 'Standard' | 'Bulk';
+      validityDays?: number;
+    }
+  ) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(`/v1/recording/archive/jobs/${encodeURIComponent(jobId)}/restore`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  /**
+   * Query Glacier restore status
+   */
+  checkRestoreStatus: (jobId: string) =>
+    fetchApi<{ data: ColdCloudArchiveJobItem }>(
+      `/v1/recording/archive/jobs/${encodeURIComponent(jobId)}/restore-status`
+    ),
+
+  /**
+   * Trigger automated policy sweep
+   */
+  runAutoExport: () =>
+    fetchApi<{
+      data: {
+        sweptPoliciesCount: number;
+        discoveredIncidentsCount: number;
+        createdJobsCount: number;
+        failedJobsCount: number;
+        jobIds: string[];
+      };
+    }>('/v1/recording/archive/auto-export', {
+      method: 'POST',
+    }),
+
+  /**
+   * List automated policies
+   */
+  listPolicies: () => fetchApi<{ data: ArchivePolicyItem[] }>('/v1/recording/archive/policies'),
+
+  /**
+   * Create automated policy
+   */
+  createPolicy: (body: {
+    name: string;
+    description?: string;
+    enabled?: boolean;
+    targetStorageClass?: string;
+    targetBucket?: string;
+    targetPrefix?: string;
+    triggerCondition?: Record<string, any>;
+    encryptionKmsKeyId?: string;
+    retentionDays?: number;
+  }) =>
+    fetchApi<{ data: ArchivePolicyItem }>('/v1/recording/archive/policies', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * List immutable audit logs
+   */
+  getAuditLogs: (params?: { jobId?: string; incidentId?: string; limit?: number; offset?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.jobId) qs.append('jobId', params.jobId);
+    if (params?.incidentId) qs.append('incidentId', params.incidentId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.offset) qs.append('offset', String(params.offset));
+    return fetchApi<{ data: ArchiveAuditLogItem[]; meta: { total: number; limit: number; offset: number } }>(
+      `/v1/recording/archive/audit?${qs.toString()}`
+    );
+  },
+
+  /**
+   * Get archive statistics
+   */
+  getStatistics: () => fetchApi<{ data: ArchiveStatisticsItem }>('/v1/recording/archive/statistics'),
+};
+
+export interface StorageTargetItem {
+  id: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  storageNodeId: string;
+  targetName: string;
+  targetPath: string;
+  priority: number;
+  isActive: boolean;
+  healthState: 'HEALTHY' | 'DEGRADED' | 'FULL' | 'OFFLINE' | 'READ_ONLY' | 'REBUILDING';
+  spilloverThresholdPercent: number;
+  consecutiveFailures: number;
+  lastFailureReason?: string;
+  lastErrorDetail?: string;
+  lastCheckedAt: string;
+  capacityBytes?: number;
+  usedBytes?: number;
+  availableBytes?: number;
+  usagePercent?: number;
+  actionTaken?: 'NONE' | 'FAILOVER_TRIGGERED' | 'RECOVERED';
+}
+
+export interface StorageFailoverEventItem {
+  id: string;
+  tenantId: string;
+  mediaNodeId: string;
+  cameraId?: string;
+  fromStorageNodeId: string;
+  fromTargetPath: string;
+  toStorageNodeId: string;
+  toTargetPath: string;
+  reason: string;
+  errorDetail?: string;
+  occurredAt: string;
+  recoveredAt?: string;
+  createdAt: string;
+}
+
+export interface StorageFailoverMetricsItem {
+  mediaNodeId?: string;
+  totalEvents: number;
+  unrecoveredEvents: number;
+  meanTimeToRecoveryMs: number;
+  reasonBreakdown: Record<string, number>;
+  targetsSummary: {
+    total: number;
+    healthy: number;
+    full: number;
+    offline: number;
+    degraded: number;
+  };
+}
+
+export const storageFailoverApi = {
+  /**
+   * Get configured permitted recording targets and active target
+   */
+  getTargets: (params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{
+      data: {
+        mediaNodeId: string;
+        cameraId?: string;
+        activeTarget: StorageTargetItem;
+        permittedTargets: StorageTargetItem[];
+      };
+    }>(`/v1/storage/failover/targets?${qs.toString()}`);
+  },
+
+  /**
+   * Configure a storage target (Local NVMe, NAS, SAN, etc.)
+   */
+  configureTarget: (body: {
+    tenantId?: string;
+    mediaNodeId: string;
+    cameraId?: string;
+    storageNodeId: string;
+    targetName: string;
+    targetPath: string;
+    storageType?: 'local-disk' | 'nas' | 'san' | 's3' | 'archive';
+    storageTier?: 'hot' | 'warm' | 'cold' | 'archive';
+    priority?: number;
+    isActive?: boolean;
+    maxCapacityBytes?: number;
+    spilloverThresholdPercent?: number;
+  }) =>
+    fetchApi<{ data: StorageTargetItem }>('/v1/storage/failover/targets', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Remove / unregister a storage target
+   */
+  deleteTarget: (targetId: string, params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{ success: boolean; data: { targetId: string; removed: boolean } }>(
+      `/v1/storage/failover/targets/${encodeURIComponent(targetId)}?${qs.toString()}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  /**
+   * Update storage target configuration (priority, status, spillover threshold)
+   */
+  updateTarget: (
+    targetId: string,
+    body: {
+      mediaNodeId: string;
+      cameraId?: string;
+      priority?: number;
+      isActive?: boolean;
+      targetName?: string;
+      targetPath?: string;
+      spilloverThresholdPercent?: number;
+    }
+  ) =>
+    fetchApi<{ data: StorageTargetItem }>(`/v1/storage/failover/targets/${encodeURIComponent(targetId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Manually or synthetically trigger target failover
+   */
+  triggerFailover: (body: {
+    mediaNodeId: string;
+    targetId: string;
+    reason?: 'DISK_FULL' | 'STORAGE_OFFLINE' | 'READ_ONLY' | 'WRITE_FAILURE' | 'LATENCY_SPIKE' | 'MOUNT_DISCONNECTED' | 'MANUAL_OVERRIDE';
+    errorDetail?: string;
+    cameraId?: string;
+  }) =>
+    fetchApi<{
+      data: {
+        failoverOccurred: boolean;
+        newTarget?: StorageTargetItem;
+        event?: StorageFailoverEventItem;
+      };
+    }>('/v1/storage/failover/trigger', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Recover a failed target and restore priority
+   */
+  recoverTarget: (body: { mediaNodeId: string; targetId: string; cameraId?: string }) =>
+    fetchApi<{
+      data: {
+        recovered: boolean;
+        activeTarget?: StorageTargetItem;
+      };
+    }>('/v1/storage/failover/recover', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Trigger real filesystem probe across all targets
+   */
+  probeHealth: (body: { mediaNodeId: string; cameraId?: string }) =>
+    fetchApi<{
+      data: {
+        activeTarget: StorageTargetItem;
+        targets: StorageTargetItem[];
+      };
+    }>('/v1/storage/failover/probe', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Query target health and status
+   */
+  getHealth: (params: { mediaNodeId: string; cameraId?: string }) => {
+    const qs = new URLSearchParams({ mediaNodeId: params.mediaNodeId });
+    if (params.cameraId) qs.append('cameraId', params.cameraId);
+    return fetchApi<{
+      data: {
+        activeTarget: StorageTargetItem;
+        targets: StorageTargetItem[];
+      };
+    }>(`/v1/storage/failover/health?${qs.toString()}`);
+  },
+
+  /**
+   * Get failover audit events
+   */
+  getEvents: (params?: { mediaNodeId?: string; limit?: number; reason?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.mediaNodeId) qs.append('mediaNodeId', params.mediaNodeId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    if (params?.reason) qs.append('reason', params.reason);
+    return fetchApi<{ data: StorageFailoverEventItem[] }>(`/v1/storage/failover/events?${qs.toString()}`);
+  },
+
+  /**
+   * Get failover telemetry and MTTR metrics
+   */
+  getMetrics: (params?: { mediaNodeId?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.mediaNodeId) qs.append('mediaNodeId', params.mediaNodeId);
+    return fetchApi<{ data: StorageFailoverMetricsItem }>(`/v1/storage/failover/metrics?${qs.toString()}`);
+  },
+};
+
 export { ApiError };
+
 
 
 

@@ -218,10 +218,17 @@ export class CameraObstructionDetector extends BaseDetector {
           : { x: 0, y: 0, width: 1, height: 1 };
 
         results.push({
-          label: detectedType,
+          detectionType: 'camera-obstruction',
           confidence,
-          boundingBox,
-          metadata: {
+          objects: [
+            {
+              label: detectedType,
+              confidence,
+              boundingBox,
+            },
+          ],
+          requiresAlert: severity === 'P1' || severity === 'P2',
+          executionMetadata: {
             status: 'SUCCESS',
             provenance: 'HEURISTIC_RULE_ENGINE',
             modelId: 'camera-obstruction-heuristic',
@@ -230,6 +237,8 @@ export class CameraObstructionDetector extends BaseDetector {
             simulated: false,
             timestamp: now.toISOString(),
             requiresReview: severity === 'P1',
+          },
+          metadata: {
             severity,
             obstructionPercent,
             reasons,
@@ -240,7 +249,7 @@ export class CameraObstructionDetector extends BaseDetector {
               entropy: Math.round(entropy * 1000) / 1000,
               shadowFraction: Math.round(shadowFraction * 10000) / 10000,
             },
-          } as any,
+          },
         });
       }
     } else {
@@ -249,5 +258,16 @@ export class CameraObstructionDetector extends BaseDetector {
     }
 
     return results;
+  }
+
+  async cleanup(): Promise<void> {
+    this.cameraStates.clear();
+  }
+
+  getHealth() {
+    return {
+      status: 'healthy' as const,
+      details: `Monitoring optical obstruction state for ${this.cameraStates.size} cameras`,
+    };
   }
 }

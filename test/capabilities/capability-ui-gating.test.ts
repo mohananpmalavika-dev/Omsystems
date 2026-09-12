@@ -28,15 +28,30 @@ describe('UI Gating & Usability Logic Tests', () => {
     const registry = getCapabilityRegistry();
     registry.setDeploymentPolicy({ allowBeta: false, allowExperimental: false });
 
-    // recording.recovery is BETA, so it must be disabled when allowBeta is false
-    const betaResult = registry.canUse('recording.recovery');
+    // ha.media_failover is BETA, so it must be disabled when allowBeta is false
+    const betaResult = registry.canUse('ha.media_failover');
     expect(betaResult.usable).toBe(false);
     expect(betaResult.reason).toBe('beta_features_disabled');
+
+    // recording.storage_failover is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('recording.storage_failover', CapabilityRuntimeState.HEALTHY);
+    const failoverResult = registry.canUse('recording.storage_failover');
+    expect(failoverResult.usable).toBe(true);
+
+    // recording.recovery is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('recording.recovery', CapabilityRuntimeState.HEALTHY);
+    const recoveryResult = registry.canUse('recording.recovery');
+    expect(recoveryResult.usable).toBe(true);
 
     // video.synchronized_playback is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
     registry.updateRuntimeState('video.synchronized_playback', CapabilityRuntimeState.HEALTHY);
     const syncResult = registry.canUse('video.synchronized_playback');
     expect(syncResult.usable).toBe(true);
+
+    // recording.archive is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('recording.archive', CapabilityRuntimeState.HEALTHY);
+    const archiveResult = registry.canUse('recording.archive');
+    expect(archiveResult.usable).toBe(true);
 
     // Restore standard policy
     registry.setDeploymentPolicy({ allowBeta: true, allowExperimental: false });

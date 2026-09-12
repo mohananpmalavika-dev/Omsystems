@@ -291,6 +291,75 @@ export class StorageFailoverRouter extends EventEmitter {
     throw new Error(`Write failed after failover attempts: ${lastError?.message || "Unknown error"}`);
   }
 
+  /**
+   * Unregisters a storage target from a route
+   */
+  unregisterTarget(targetId: string, mediaNodeId: string, cameraId?: string): boolean {
+    const routeKey = this.getRouteKey(mediaNodeId, cameraId);
+    const existing = this.targetRegistry.get(routeKey);
+    if (!existing) return false;
+
+    const filtered = existing.filter((t) => t.id !== targetId);
+    if (filtered.length === existing.length) return false;
+
+    this.targetRegistry.set(routeKey, filtered);
+
+    // If unregistering active target, point to next available
+    if (this.activeTargetPointer.get(routeKey) === targetId) {
+      if (filtered.length > 0 && filtered[0]) {
+        this.activeTargetPointer.set(routeKey, filtered[0].id);
+      } else {
+        this.activeTargetPointer.delete(routeKey);
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Updates fields on an existing target in memory
+   */
+  updateTarget(
+    targetId: string,
+    mediaNodeId: string,
+    updates: Partial<Pick<FailoverTargetEntry, "priority" | "isActive" | "targetName" | "targetPath" | "spilloverThresholdPercent">>,
+    cameraId?: string,
+  ): FailoverTargetEntry | undefined {
+    const routeKey = this.getRouteKey(mediaNodeId, cameraId);
+    const targets = this.targetRegistry.get(routeKey);
+    if (!targets) return undefined;
+
+    const target = targets.find((t) => t.id === targetId);
+    if (!target) return undefined;
+
+    if (updates.priority !== undefined) target.priority = updates.priority;
+    if (updates.isActive !== undefined) target.isActive = updates.isActive;
+    if (updates.targetName !== undefined) target.targetName = updates.targetName;
+    if (updates.targetPath !== undefined) target.targetPath = updates.targetPath;
+    if (updates.spilloverThresholdPercent !== undefined) target.spilloverThresholdPercent = updates.spilloverThresholdPercent;
+
+    targets.sort((a, b) => a.priority - b.priority);
+
+    return target;
+  }
+
+  /**
+   * Clears registry for a media node or everything
+   */
+  clearTargets(mediaNodeId?: string): void {
+    if (!mediaNodeId) {
+      this.targetRegistry.clear();
+      this.activeTargetPointer.clear();
+      return;
+    }
+    for (const key of Array.from(this.targetRegistry.keys())) {
+      if (key.startsWith(`${mediaNodeId}:`)) {
+        this.targetRegistry.delete(key);
+        this.activeTargetPointer.delete(key);
+      }
+    }
+  }
+
   private isTargetHealthy(target: FailoverTargetEntry): boolean {
     return target.healthState === "HEALTHY" || target.healthState === "DEGRADED" || target.healthState === "REBUILDING";
   }
@@ -301,15 +370,56 @@ export class StorageFailoverRouter extends EventEmitter {
 
   private detectFailoverReason(err: any): StorageFailoverReason {
     const msg = (err?.message || "").toLowerCase();
-    const code = err?.code || "";
+    const code = (err?.code || "").toUpperCase();
 
-    if (code === "ENOSPC" || msg.includes("full") || msg.includes("no space")) return "DISK_FULL";
-    if (code === "EROFS" || msg.includes("read-only") || msg.includes("read_only")) return "READ_ONLY";
-    if (code === "ENOENT" || code === "EBUSY" || msg.includes("unreachable") || msg.includes("offline")) return "STORAGE_OFFLINE";
-    if (code === "ESTALE" || msg.includes("stale")) return "MOUNT_DISCONNECTED";
-    if (msg.includes("timeout") || msg.includes("latency")) return "LATENCY_SPIKE";
+    if (
+      code === "ENOSPC" ||
+      code === "EDQUOT" ||
+      msg.includes("full") ||
+      msg.includes("no space") ||
+      msg.includes("quota exceeded") ||
+      msg.includes("capacity limit")
+    ) {
+      return "DISK_FULL";
+    }
+
+    if (code === "EROFS" || msg.includes("read-only") || msg.includes("read_only")) {
+      return "READ_ONLY";
+    }
+
+    if (
+      code === "ESTALE" ||
+      code === "EPIPE" ||
+      msg.includes("stale") ||
+      msg.includes("disconnected") ||
+      msg.includes("mount dropped")
+    ) {
+      return "MOUNT_DISCONNECTED";
+    }
+
+    if (
+      code === "ENOENT" ||
+      code === "EBUSY" ||
+      code === "ENODEV" ||
+      msg.includes("unreachable") ||
+      msg.includes("offline") ||
+      msg.includes("unavailable")
+    ) {
+      return "STORAGE_OFFLINE";
+    }
+
+    if (
+      code === "ETIMEDOUT" ||
+      code === "ECONNRESET" ||
+      msg.includes("timeout") ||
+      msg.includes("latency")
+    ) {
+      return "LATENCY_SPIKE";
+    }
+
     return "WRITE_FAILURE";
   }
 }
 
 export const storageFailoverRouter = new StorageFailoverRouter();
+

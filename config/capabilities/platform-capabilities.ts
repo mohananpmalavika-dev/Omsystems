@@ -411,7 +411,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Recording Gap Recovery & Edge Backfill',
     description: 'Automatic synchronization and backfill of local edge recordings after network disconnection.',
     category: 'RECORDING',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -423,7 +423,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
     },
     dependencies: {
@@ -497,7 +497,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Storage Target Failover',
     description: 'Automatic seamless switchover to secondary NAS/SAN mount on primary disk full or I/O failure.',
     category: 'RECORDING',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -508,9 +508,25 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     },
     verification: {
       unitTests: true,
-      integrationTests: false,
-      e2eTests: false,
+      integrationTests: true,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/storage/storage-failover.service.ts',
+          'src/storage/storage-failover-router.ts',
+          'src/storage/enterprise-storage-pool.ts',
+          'src/routes/storage-failover.routes.ts',
+        ],
+        testFiles: [
+          'test/storage/storage-failover-service.test.ts',
+          'test/storage/storage-failover-router.test.ts',
+          'test/storage/storage-failover-integration.test.ts',
+        ],
+        migrations: [
+          'database/migrations/069_automatic_storage_failover.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['recording-engine'],
@@ -523,7 +539,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Cold Cloud Archive Export',
     description: 'Long-term automated archival of marked incident video to S3/Glacier object storage.',
     category: 'RECORDING',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -535,8 +551,18 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/recording/archive/index.ts',
+          'src/recording/archive/cold-cloud-archive-coordinator.service.ts',
+          'src/recording/archive/s3-glacier-client.service.ts',
+          'src/routes/cold-cloud-archive.routes.ts',
+        ],
+        testFiles: ['test/recording/cold-cloud-archive.test.ts'],
+        migrations: ['database/migrations/136_cold_cloud_archive_export.sql'],
+      },
     },
     dependencies: {
       services: ['control-plane'],
