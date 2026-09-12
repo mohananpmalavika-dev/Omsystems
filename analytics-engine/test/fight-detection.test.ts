@@ -78,8 +78,8 @@ describe('BehaviorDetector Physical Fight Detection Engine', () => {
       frameNumber: 1,
       metadata: {
         detections: [
-          { label: 'person', confidence: 0.92, trackId: 'p1', boundingBox: { x: 50, y: 50, width: 40, height: 80 } },
-          { label: 'person', confidence: 0.90, trackId: 'p2', boundingBox: { x: 75, y: 50, width: 40, height: 80 } },
+          { label: 'person', confidence: 0.92, trackId: 'p1', boundingBox: { x: 0.16, y: 0.20, width: 0.14, height: 0.35 } },
+          { label: 'person', confidence: 0.90, trackId: 'p2', boundingBox: { x: 0.24, y: 0.20, width: 0.14, height: 0.35 } },
         ],
       },
     };
@@ -96,8 +96,8 @@ describe('BehaviorDetector Physical Fight Detection Engine', () => {
       frameNumber: 2,
       metadata: {
         detections: [
-          { label: 'person', confidence: 0.94, trackId: 'p1', boundingBox: { x: 58, y: 52, width: 42, height: 78 } },
-          { label: 'person', confidence: 0.91, trackId: 'p2', boundingBox: { x: 68, y: 48, width: 40, height: 80 } },
+          { label: 'person', confidence: 0.94, trackId: 'p1', boundingBox: { x: 0.20, y: 0.21, width: 0.14, height: 0.34 } },
+          { label: 'person', confidence: 0.91, trackId: 'p2', boundingBox: { x: 0.22, y: 0.19, width: 0.14, height: 0.35 } },
         ],
       },
     };
@@ -114,8 +114,8 @@ describe('BehaviorDetector Physical Fight Detection Engine', () => {
       frameNumber: 3,
       metadata: {
         detections: [
-          { label: 'person', confidence: 0.93, trackId: 'p1', boundingBox: { x: 52, y: 49, width: 41, height: 79 } },
-          { label: 'person', confidence: 0.92, trackId: 'p2', boundingBox: { x: 74, y: 53, width: 40, height: 80 } },
+          { label: 'person', confidence: 0.93, trackId: 'p1', boundingBox: { x: 0.17, y: 0.20, width: 0.14, height: 0.35 } },
+          { label: 'person', confidence: 0.92, trackId: 'p2', boundingBox: { x: 0.25, y: 0.21, width: 0.14, height: 0.35 } },
         ],
       },
     };

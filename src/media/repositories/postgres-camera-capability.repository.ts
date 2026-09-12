@@ -122,52 +122,9 @@ export class PostgresCameraCapabilityRepository implements CameraCapabilityRepos
       }
     }
 
-    // Default synthetic capabilities if camera is registered without custom specs
-    const defaultCaps: CameraCapabilitiesDurable = {
-      cameraId,
-      codecs: ["H264", "H265"],
-      supportsMainStream: true,
-      supportsSubStream: true,
-      supportsPtz: false,
-      supportsAudio: false,
-      supportsOnvif: true,
-      supportsRtsp: true,
-      supportsWebRtc: true,
-      maxWidth: 1920,
-      maxHeight: 1080,
-      maxFps: 25,
-      profiles: [
-        {
-          name: "main",
-          width: 1920,
-          height: 1080,
-          fps: 25,
-          codec: "H264",
-          bitrateKbps: 2048,
-        },
-        {
-          name: "sub",
-          width: 640,
-          height: 360,
-          fps: 15,
-          codec: "H264",
-          bitrateKbps: 512,
-        },
-        {
-          name: "preview",
-          width: 320,
-          height: 180,
-          fps: 5,
-          codec: "H264",
-          bitrateKbps: 128,
-        },
-      ],
-      discoveredAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    await this.cacheCapabilities(defaultCaps);
-    return defaultCaps;
+    // In production truthfulness: Never manufacture synthetic capabilities.
+    // If camera specs have not been discovered or saved, return null (CAPABILITY_UNKNOWN).
+    return null;
   }
 
   async saveCapabilities(capabilities: CameraCapabilitiesDurable): Promise<void> {

@@ -297,7 +297,7 @@ export class TailgatingSequenceCorrelator {
       // Rule B: Unbadged entry / Forced entry into airlock chamber with zero badge authorizations
       detected = true;
       violationType = 'unbadged_entry';
-      confidence = 0.94;
+      confidence = Math.min(0.96, 0.89 + Math.min(detectedPersonCount, 3) * 0.02);
       explanation = `Unbadged entry detected: ${detectedPersonCount} person(s) entered airlock chamber with zero authorized badge swipe events.`;
     } else if (totalAuthorizedCount > 0 && detectedPersonCount > totalAuthorizedCount) {
       // Rule C: Piggybacking / Tailgating — more people entered than authorized badges swiped

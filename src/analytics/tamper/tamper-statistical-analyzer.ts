@@ -444,7 +444,7 @@ export class TamperStatisticalAnalyzer {
     const isDefocused =
       normalIllumination &&
       metrics.laplacianVariance < adjustedDefocusThreshold &&
-      metrics.variance >= 15; // Has some brightness variation, but no crisp high frequencies
+      metrics.variance >= 5; // Has some brightness variation, but no crisp high frequencies
 
     if (isDefocused && alertOnDefocus) {
       reasons.push(
@@ -498,13 +498,13 @@ export class TamperStatisticalAnalyzer {
     // 5. Check Camera Movement / Scene Shift
     // Structural similarity to baseline is low, or scene change is high,
     // while the scene is well-illuminated and sharp (not covered, blinded, or defocused!)
-    const effectiveMovementThreshold = Math.max(0.40, movementThreshold * (1.1 - sensitivity * 0.2));
+    const effectiveMovementThreshold = Math.max(0.35, movementThreshold * (1.1 - sensitivity * 0.2));
     const isMoved =
       baseline &&
       normalIllumination &&
       !isDefocused &&
-      metrics.structuralSimilarity < (1.0 - effectiveMovementThreshold) &&
-      metrics.sceneChangeScore >= effectiveMovementThreshold;
+      (metrics.structuralSimilarity < (1.0 - effectiveMovementThreshold) || metrics.sceneChangeScore >= effectiveMovementThreshold) &&
+      (metrics.structuralSimilarity <= 0.60 || metrics.sceneChangeScore >= 0.30);
 
     if (isMoved && alertOnMovement) {
       reasons.push(

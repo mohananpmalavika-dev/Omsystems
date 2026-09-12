@@ -1,3 +1,4 @@
+import type { Pool } from "pg";
 import type {
   OnCallEntry,
   RoleAssignment,
@@ -9,7 +10,11 @@ export class OrganizationalDirectoryService {
   private readonly shiftMembers: ShiftMember[] = [];
   private readonly onCallEntries: OnCallEntry[] = [];
 
-  constructor() {}
+  constructor(private readonly pool?: Pool) {
+    if (!this.pool) {
+      this.seedDefaultAssignments();
+    }
+  }
 
   async findRoleAssignments(params: {
     tenantId: string;
@@ -19,6 +24,36 @@ export class OrganizationalDirectoryService {
     at?: Date | undefined;
   }): Promise<RoleAssignment[]> {
     const at = params.at ?? new Date();
+
+    if (this.pool) {
+      try {
+        let query = `
+          SELECT r.id, r.tenant_id, r.user_id, r.role as role_key, s.branch_id as scope_id
+          FROM notification_roster r
+          LEFT JOIN notification_shifts s ON r.shift_id = s.id
+          WHERE r.tenant_id = $1 AND r.role = $2 AND r.status = 'ACTIVE'
+        `;
+        const queryParams: any[] = [params.tenantId, params.roleKey];
+
+        if (params.scopeType === "BRANCH" && params.scopeId) {
+          query += ` AND s.branch_id = $3`;
+          queryParams.push(params.scopeId);
+        }
+
+        const res = await this.pool.query(query, queryParams);
+        return res.rows.map((row) => ({
+          id: row.id,
+          tenantId: row.tenant_id,
+          userId: row.user_id,
+          roleKey: row.role_key,
+          scopeType: params.scopeType,
+          scopeId: row.scope_id || params.scopeId,
+          enabled: true,
+        }));
+      } catch {
+        // Fallback to memory if table not yet migrated
+      }
+    }
 
     return this.roleAssignments.filter((a) => {
       if (a.tenantId !== params.tenantId) return false;
@@ -41,6 +76,29 @@ export class OrganizationalDirectoryService {
   }): Promise<ShiftMember[]> {
     const at = params.at ?? new Date();
 
+    if (this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT r.id, r.shift_id, r.tenant_id, r.user_id, r.status
+           FROM notification_roster r
+           JOIN notification_shifts s ON r.shift_id = s.id
+           WHERE r.tenant_id = $1 AND r.status IN ('ACTIVE', 'SCHEDULED') AND s.is_active = true`,
+          [params.tenantId]
+        );
+        return res.rows.map((row) => ({
+          id: row.id,
+          shiftId: row.shift_id,
+          tenantId: row.tenant_id,
+          userId: row.user_id,
+          startsAt: new Date(at.getTime() - 3600_000),
+          endsAt: new Date(at.getTime() + 3600_000),
+          status: row.status as any,
+        }));
+      } catch {
+        // Fallback to memory
+      }
+    }
+
     return this.shiftMembers.filter((m) => {
       if (m.tenantId !== params.tenantId) return false;
       if (m.status !== "ACTIVE" && m.status !== "SCHEDULED") return false;
@@ -55,6 +113,35 @@ export class OrganizationalDirectoryService {
     at?: Date | undefined;
   }): Promise<OnCallEntry | null> {
     const at = params.at ?? new Date();
+
+    if (this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT id, schedule_key, tenant_id, user_id, starts_at, ends_at, priority, enabled
+           FROM notification_on_call
+           WHERE tenant_id = $1 AND schedule_key = $2 AND enabled = true
+             AND starts_at <= $3 AND ends_at > $3
+           ORDER BY priority ASC
+           LIMIT 1`,
+          [params.tenantId, params.scheduleKey, at]
+        );
+        if (res.rows.length > 0) {
+          const row = res.rows[0];
+          return {
+            id: row.id,
+            scheduleKey: row.schedule_key,
+            tenantId: row.tenant_id,
+            userId: row.user_id,
+            startsAt: new Date(row.starts_at),
+            endsAt: new Date(row.ends_at),
+            priority: row.priority,
+            enabled: row.enabled,
+          };
+        }
+      } catch {
+        // Fallback to memory
+      }
+    }
 
     const matches = this.onCallEntries
       .filter((e) => {
@@ -98,7 +185,7 @@ export class OrganizationalDirectoryService {
     this.addRoleAssignment({
       id: "assign-bm-aluva",
       tenantId,
-      userId: "user-bm-thrissur", // same user can be manager of nearby branch or test
+      userId: "user-bm-thrissur",
       roleKey: "BRANCH_MANAGER",
       scopeType: "BRANCH",
       scopeId: "branch-178",
@@ -133,8 +220,8 @@ export class OrganizationalDirectoryService {
       shiftId: "shift-ho-day",
       tenantId,
       userId: "user-ho-sanjay",
-      startsAt: new Date(baseNow.getTime() - 4 * 3600_000), // started 4h ago
-      endsAt: new Date(baseNow.getTime() + 4 * 3600_000), // ends in 4h
+      startsAt: new Date(baseNow.getTime() - 4 * 3600_000),
+      endsAt: new Date(baseNow.getTime() + 4 * 3600_000),
       status: "ACTIVE",
     });
 

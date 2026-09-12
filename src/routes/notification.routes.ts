@@ -69,8 +69,8 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
     const alertId = query?.alertId;
 
     const jobs = alertId
-      ? notificationOutbox.getJobsByAlert(alertId)
-      : notificationOutbox.getAllJobs(Number(query?.limit) || 100);
+      ? await notificationOutbox.getJobsByAlert(alertId)
+      : await notificationOutbox.getAllJobs(Number(query?.limit) || 100);
 
     return reply.send({
       success: true,
@@ -192,7 +192,7 @@ export async function registerNotificationRoutes(app: FastifyInstance) {
    */
   const handleDeadLetters = async (request: FastifyRequest, reply: FastifyReply) => {
     if (!request.currentUser) return reply.status(401).send({ success: false, error: "Authentication required" });
-    const deadLetters = notificationOutbox.getDeadLetters();
+    const deadLetters = await notificationOutbox.getDeadLetters();
     return reply.send({
       success: true,
       data: {

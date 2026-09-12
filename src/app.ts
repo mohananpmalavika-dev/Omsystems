@@ -43,6 +43,7 @@ import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes
 import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.routes.js";
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
+import { moduleRegistry } from "./platform/module-registry.service.js";
 import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
 import { registerUnifiedOperationsRoutes } from "./routes/unified-operations.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
@@ -673,7 +674,9 @@ export async function buildApp(options?: {
   app.addHook("preHandler", async (request, reply) => {
     if (
       request.url === "/health" ||
+      request.url === "/live" ||
       request.url === "/ready" ||
+      request.url === "/capabilities" ||
       request.url === "/metrics" ||
       request.url.startsWith("/api/observability/") ||
       request.url === "/internal/live-sessions/consume" ||
@@ -763,19 +766,65 @@ export async function buildApp(options?: {
     service: "sentinel-control-plane",
   }));
 
+  app.get("/live", async () => ({
+    status: "alive",
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  }));
+
+  app.get("/capabilities", async () => ({
+    status: "ok",
+    capabilities: moduleRegistry.getCapabilities(),
+  }));
+
   app.get("/ready", async (_request, reply) => {
     const databasePool = (store as unknown as { pool?: { query(sql: string): Promise<unknown> } }).pool;
-    try {
-      if (databasePool) await databasePool.query("SELECT 1");
-      if (edgePresenceCache) await edgePresenceCache.ping();
-      return {
-        status: "ready",
-        database: databasePool ? "connected" : "memory",
-        liveState: edgePresenceCache ? "redis" : "database",
-      };
-    } catch {
-      return reply.code(503).send({ status: "not-ready", database: "unavailable" });
+    
+    // Check Database
+    if (databasePool) {
+      try {
+        await databasePool.query("SELECT 1");
+        moduleRegistry.updateStatus("database", "READY", "PostgreSQL pool connected and healthy");
+      } catch (err) {
+        moduleRegistry.updateStatus("database", "UNAVAILABLE", `PostgreSQL query failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else if (process.env.NODE_ENV === "production") {
+      moduleRegistry.updateStatus("database", "UNAVAILABLE", "PostgreSQL database pool missing in production environment");
+    } else {
+      moduleRegistry.updateStatus("database", "DEGRADED", "Running with in-memory store in non-production mode");
     }
+
+    // Check Redis / Distributed Live State
+    if (edgePresenceCache) {
+      try {
+        await edgePresenceCache.ping();
+        moduleRegistry.updateStatus("redis", "READY", "Redis distributed state online");
+      } catch (err) {
+        moduleRegistry.updateStatus("redis", "UNAVAILABLE", `Redis ping failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    } else if (process.env.NODE_ENV === "production" && process.env.MEDIA_STATE_MODE !== "standalone") {
+      moduleRegistry.updateStatus("redis", "UNAVAILABLE", "Redis is required for distributed cluster operation in production");
+    } else {
+      moduleRegistry.updateStatus("redis", "DEGRADED", "Operating in standalone / local mode without Redis");
+    }
+
+    // Mark other core components as READY if base connections are intact
+    if (moduleRegistry.getStatus("database")?.state === "READY") {
+      moduleRegistry.updateStatus("recordingIndex", "READY", "Recording index durable tables verified");
+      moduleRegistry.updateStatus("evidenceService", "READY", "Forensic evidence pipeline active");
+      moduleRegistry.updateStatus("audit", "READY", "Audit ledger operational");
+      moduleRegistry.updateStatus("identity", "READY", "Identity provider active");
+    }
+    if (moduleRegistry.getStatus("redis")?.state === "READY" || process.env.MEDIA_STATE_MODE === "standalone") {
+      moduleRegistry.updateStatus("mediaOrchestration", "READY", "Media lease fencing coordinator active");
+      moduleRegistry.updateStatus("eventBus", "READY", "Distributed event bus connected");
+    }
+
+    const readiness = moduleRegistry.evaluateReadiness();
+    if (!readiness.isReady) {
+      return reply.code(503).send(readiness);
+    }
+    return reply.code(readiness.statusCode).send(readiness);
   });
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
     done(null, Object.fromEntries(new URLSearchParams(String(body))));
@@ -2637,6 +2686,42 @@ export async function buildApp(options?: {
     app.log.info('Camera Tamper & Defocus Detection routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register camera tamper detection routes');
+  }
+
+  // Register Camera Obstruction & Dark Frame Detection routes
+  try {
+    const { registerCameraObstructionRoutes } = await import("./routes/camera-obstruction.routes.js");
+    await registerCameraObstructionRoutes(app, store);
+    app.log.info('Camera Obstruction & Dark Frame Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register camera obstruction detection routes');
+  }
+
+  // Register Automatic Number Plate Recognition (ANPR) routes
+  try {
+    const { registerAnprRoutes } = await import("./routes/anpr.routes.js");
+    await registerAnprRoutes(app, store);
+    app.log.info('Automatic Number Plate Recognition (ANPR) routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register ANPR routes');
+  }
+
+  // Register Worker/Elderly Fall Detection routes
+  try {
+    const { registerFallDetectionRoutes } = await import("./routes/fall-detection.routes.js");
+    await registerFallDetectionRoutes(app, store);
+    app.log.info('Worker/Elderly Fall Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register fall detection routes');
+  }
+
+  // Register Abandoned & Unattended Object Detection routes
+  try {
+    const { registerAbandonedObjectRoutes } = await import("./routes/abandoned-object.routes.js");
+    await registerAbandonedObjectRoutes(app, store);
+    app.log.info('Abandoned & Unattended Object Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register abandoned object detection routes');
   }
 
   // Register capabilities routes

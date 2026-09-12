@@ -1,4 +1,5 @@
 import type { ControlPlaneStore } from '../control-plane-store.js';
+import type { DurableIncidentEscalationService } from '../incidents/services/durable-incident-escalation.service.js';
 
 /**
  * SLA Management and Auto-Assignment Service
@@ -104,8 +105,20 @@ export class IncidentSLAService {
   
   constructor(
     private readonly store: ControlPlaneStore,
-    private readonly logger?: Console
+    private readonly logger?: Console,
+    private readonly durableEscalationService?: DurableIncidentEscalationService,
   ) {
+    if (this.durableEscalationService) {
+      this.durableEscalationService.setHandler(async (job) => {
+        if (job.ruleId === 'acknowledge') {
+          await this.checkAcknowledgement(job.incidentId);
+        } else if (job.ruleId === 'investigate') {
+          await this.checkInvestigation(job.incidentId);
+        }
+      });
+      this.durableEscalationService.start();
+    }
+
     // Check SLA breaches every minute
     setInterval(() => this.checkSLABreaches(), 60 * 1000);
     
@@ -315,54 +328,47 @@ export class IncidentSLAService {
   /**
    * Start SLA timers for an incident
    */
-  async startSLATimers(incidentId: string, severity: string): Promise<void> {
-    const config = SLA_CONFIGS[severity];
-    if (!config) {
-      this.logger?.warn(`No SLA config found for severity ${severity}, using P3 default`);
-      const defaultConfig = SLA_CONFIGS['P3'];
-      if (!defaultConfig) return;
-      
-      const now = Date.now();
-      
-      // Schedule acknowledgement check
-      const acknowledgeTimer = setTimeout(
-        () => this.checkAcknowledgement(incidentId),
-        defaultConfig.acknowledgeWithinMinutes * 60 * 1000
-      );
-      
-      this.slaTimers.set(`${incidentId}:acknowledge`, acknowledgeTimer);
-      
-      // Schedule investigation check
-      const investigateTimer = setTimeout(
-        () => this.checkInvestigation(incidentId),
-        defaultConfig.investigateWithinMinutes * 60 * 1000
-      );
-      
-      this.slaTimers.set(`${incidentId}:investigate`, investigateTimer);
-      
-      this.logger?.log(`SLA timers started for incident ${incidentId} (${severity})`);
-      return;
+  async startSLATimers(incidentId: string, severity: string, tenantId = "global"): Promise<void> {
+    const config = SLA_CONFIGS[severity] || SLA_CONFIGS['P3'];
+    if (!config) return;
+
+    const ackDelayMs = config.acknowledgeWithinMinutes * 60 * 1000;
+    const invDelayMs = config.investigateWithinMinutes * 60 * 1000;
+
+    if (this.durableEscalationService) {
+      await this.durableEscalationService.scheduleEscalation(tenantId, incidentId, 'acknowledge', ackDelayMs);
+      await this.durableEscalationService.scheduleEscalation(tenantId, incidentId, 'investigate', invDelayMs);
     }
-    
-    const now = Date.now();
-    
-    // Schedule acknowledgement check
-    const acknowledgeTimer = setTimeout(
-      () => this.checkAcknowledgement(incidentId),
-      config.acknowledgeWithinMinutes * 60 * 1000
-    );
-    
+
+    // Local in-memory timer as backup for immediate reaction in local dev
+    const acknowledgeTimer = setTimeout(() => this.checkAcknowledgement(incidentId), ackDelayMs);
     this.slaTimers.set(`${incidentId}:acknowledge`, acknowledgeTimer);
-    
-    // Schedule investigation check
-    const investigateTimer = setTimeout(
-      () => this.checkInvestigation(incidentId),
-      config.investigateWithinMinutes * 60 * 1000
-    );
-    
+
+    const investigateTimer = setTimeout(() => this.checkInvestigation(incidentId), invDelayMs);
     this.slaTimers.set(`${incidentId}:investigate`, investigateTimer);
-    
-    this.logger?.log(`SLA timers started for incident ${incidentId} (${severity})`);
+
+    this.logger?.log(`SLA timers and durable escalation jobs started for incident ${incidentId} (${severity})`);
+  }
+
+  /**
+   * Cancel SLA timers and durable escalation jobs
+   */
+  async cancelSLATimers(incidentId: string, tenantId = "global"): Promise<void> {
+    const ackTimer = this.slaTimers.get(`${incidentId}:acknowledge`);
+    if (ackTimer) {
+      clearTimeout(ackTimer);
+      this.slaTimers.delete(`${incidentId}:acknowledge`);
+    }
+    const invTimer = this.slaTimers.get(`${incidentId}:investigate`);
+    if (invTimer) {
+      clearTimeout(invTimer);
+      this.slaTimers.delete(`${incidentId}:investigate`);
+    }
+
+    if (this.durableEscalationService) {
+      await this.durableEscalationService.cancelEscalation(tenantId, incidentId, 'acknowledge');
+      await this.durableEscalationService.cancelEscalation(tenantId, incidentId, 'investigate');
+    }
   }
   
   /**

@@ -23,6 +23,8 @@ export interface SamlConfig {
   digestAlgorithm?: 'sha1' | 'sha256' | 'sha512';
   wantAssertionsSigned?: boolean;
   wantAuthnResponseSigned?: boolean;
+  acceptedClockSkewMs?: number;
+  redisClient?: any;
   attributeMapping?: {
     userId?: string;
     email?: string;
@@ -60,26 +62,40 @@ export class SamlProvider {
       wantAssertionsSigned: config.wantAssertionsSigned ?? true,
       wantAuthnResponseSigned: config.wantAuthnResponseSigned ?? true,
       validateInResponseTo: 'always' as any,
-      requestIdExpirationPeriodMs: 600000, // 10 minutes
-      cacheProvider: {
-        saveAsync: async (key: string, value: string) => {
-          this.pendingRequests.set(key, {
-            created: new Date(),
-            relayState: value
-          });
-          return null;
-        },
-        getAsync: async (key: string) => {
-          const entry = this.pendingRequests.get(key);
-          return entry?.relayState || null;
-        },
-        removeAsync: async (key: string | null) => {
-          if (key) {
-            this.pendingRequests.delete(key);
+      acceptedClockSkewMs: config.acceptedClockSkewMs || 60000,
+      cacheProvider: config.redisClient
+        ? {
+            saveAsync: async (key: string, value: string) => {
+              await config.redisClient.set(`saml:req:${key}`, value, { EX: 600 });
+              return null;
+            },
+            getAsync: async (key: string) => {
+              return await config.redisClient.get(`saml:req:${key}`);
+            },
+            removeAsync: async (key: string | null) => {
+              if (key) await config.redisClient.del(`saml:req:${key}`);
+              return null;
+            },
           }
-          return null;
-        }
-      }
+        : {
+            saveAsync: async (key: string, value: string) => {
+              this.pendingRequests.set(key, {
+                created: new Date(),
+                relayState: value,
+              });
+              return null;
+            },
+            getAsync: async (key: string) => {
+              const entry = this.pendingRequests.get(key);
+              return entry?.relayState || null;
+            },
+            removeAsync: async (key: string | null) => {
+              if (key) {
+                this.pendingRequests.delete(key);
+              }
+              return null;
+            },
+          },
     };
 
     this.saml = new SAML(samlConfig);

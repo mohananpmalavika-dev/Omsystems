@@ -943,7 +943,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Camera Tamper & Defocus Detection',
     description: 'Edge-based statistical frame analysis detecting camera movement, blinding, or spray.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -955,8 +955,26 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/analytics/tamper/tamper-statistical-analyzer.ts',
+          'src/analytics/tamper/tamper-repository.ts',
+          'src/analytics/tamper/tamper-service.ts',
+          'src/routes/camera-tamper.routes.ts',
+          'edge-agent/src/monitoring/camera-tamper/tamper-analyzer.ts',
+          'analytics-engine/src/detectors/camera-tamper-detector.ts',
+          'dashboard/app/analytics/camera-tamper/page.tsx',
+          'dashboard/components/camera-tamper-workspace.tsx',
+        ],
+        testFiles: [
+          'test/analytics/camera-tamper-detection.test.ts',
+        ],
+        migrations: [
+          'database/migrations/121_camera_tamper_defocus_detection.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['edge-agent', 'analytics-engine'],
@@ -968,7 +986,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Camera Obstruction & Dark Frame Detection',
     description: 'Heuristic detection of lens covering, darkness, or loss of visual variance.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -980,11 +998,30 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/analytics/obstruction/obstruction-types.ts',
+          'src/analytics/obstruction/obstruction-heuristic-analyzer.ts',
+          'src/analytics/obstruction/obstruction-repository.ts',
+          'src/analytics/obstruction/obstruction-service.ts',
+          'src/routes/camera-obstruction.routes.ts',
+          'edge-agent/src/monitoring/camera-obstruction/obstruction-analyzer.ts',
+          'analytics-engine/src/detectors/camera-obstruction-detector.ts',
+          'dashboard/app/analytics/camera-obstruction/page.tsx',
+          'dashboard/components/camera-obstruction-workspace.tsx',
+        ],
+        testFiles: [
+          'test/analytics/camera-obstruction-detection.test.ts',
+        ],
+        migrations: [
+          'database/migrations/122_camera_obstruction_dark_frame_detection.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['edge-agent'],
+      services: ['edge-agent', 'analytics-engine'],
     },
     owner: 'edge-team',
   },
@@ -993,7 +1030,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Automatic Number Plate Recognition (ANPR)',
     description: 'Vehicle license plate localization and OCR text extraction with watchlist matching.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1005,15 +1042,34 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T11:00:00Z',
+      verifiedVersion: '1.0.0',
+      proof: {
+        sourceFiles: [
+          'src/analytics/anpr/plate-syntax-normalizer.ts',
+          'src/analytics/anpr/plate-watchlist-matcher.ts',
+          'src/analytics/anpr/anpr-repository.ts',
+          'src/analytics/anpr/anpr-service.ts',
+          'src/routes/anpr.routes.ts',
+          'dashboard/components/anpr-workspace.tsx',
+        ],
+        testFiles: [
+          'test/analytics/anpr-plate-recognition.test.ts',
+        ],
+        migrations: [
+          'database/migrations/122_anpr_production_hardening.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['analytics-engine'],
+      services: ['analytics-engine', 'control-plane'],
       models: ['anpr-detector', 'anpr-recognizer'],
     },
     limitations: ['Requires minimum 150px plate width and less than 30 degree camera angle for optimal OCR accuracy.'],
     owner: 'ai-team',
+    documentation: 'docs/analytics/AUTOMATIC_NUMBER_PLATE_RECOGNITION.md',
   },
   {
     id: 'analytics.face_recognition',
@@ -1071,7 +1127,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Worker/Elderly Fall Detection',
     description: 'Pose estimation and bounding box aspect ratio dynamics to detect sudden falls.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1083,14 +1139,42 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/analytics/fall/types.ts',
+          'src/analytics/fall/aspect-ratio-dynamics.ts',
+          'src/analytics/fall/pose-kinematics.ts',
+          'src/analytics/fall/fall-state-machine.ts',
+          'src/analytics/fall/fall-detector.ts',
+          'src/analytics/fall/fall-repository.ts',
+          'src/analytics/fall/fall-service.ts',
+          'src/analytics/fall/index.ts',
+          'src/routes/fall-detection.routes.ts',
+          'analytics-engine/src/detectors/fall-detector.ts',
+          'dashboard/lib/api-client.ts',
+          'dashboard/components/fall-detection-workspace.tsx',
+          'dashboard/app/analytics/fall/page.tsx',
+        ],
+        testFiles: [
+          'test/analytics/fall-detection.test.ts',
+        ],
+        migrations: [
+          'database/migrations/122_fall_detection_hardening.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['analytics-engine'],
+      services: ['control-plane', 'analytics-engine'],
       models: ['pose-estimator'],
     },
+    limitations: [
+      'Rapid vertical drops and recumbent posture changes require minimum 10 FPS video streams for high temporal granularity.',
+      'Partial occlusions (e.g. low partitions, desks) may rely on bounding box aspect ratio dynamics if lower limbs are obscured.',
+    ],
     owner: 'ai-team',
+    documentation: 'docs/analytics/WORKER_ELDERLY_FALL_DETECTION.md',
   },
   {
     id: 'analytics.violence',
@@ -1185,7 +1269,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Abandoned & Unattended Object Detection',
     description: 'Static foreground blob tracking for bags, boxes, or parcels left in sensitive areas.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1197,13 +1281,31 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/analytics/abandoned-object/static-blob-tracker.ts',
+          'src/analytics/abandoned-object/abandoned-object-repository.ts',
+          'src/analytics/abandoned-object/abandoned-object-service.ts',
+          'src/routes/abandoned-object.routes.ts',
+          'dashboard/components/abandoned-object-workspace.tsx',
+          'edge-agent/src/monitoring/abandoned-object/abandoned-object-analyzer.ts',
+          'analytics-engine/src/detectors/unattended-objects-detector.ts',
+        ],
+        testFiles: [
+          'test/analytics/abandoned-object-detection.test.ts',
+        ],
+        migrations: [
+          'database/migrations/122_abandoned_unattended_object_detection.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['analytics-engine'],
+      services: ['analytics-engine', 'control-plane'],
     },
     owner: 'ai-team',
+    documentation: 'docs/analytics/ABANDONED_AND_UNATTENDED_OBJECT_DETECTION.md',
   },
   {
     id: 'analytics.heatmap',

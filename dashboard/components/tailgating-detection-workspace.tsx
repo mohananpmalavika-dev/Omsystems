@@ -201,7 +201,7 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
         {
           trackId: 'track-manager-1',
           timestamp: now - 3500,
-          confidence: 0.94,
+          confidence: 0.92,
           boundingBox: { x: 0.25, y: 0.25, width: 0.18, height: 0.45 },
         },
         {
@@ -236,7 +236,7 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
         {
           trackId: 'track-forced-1',
           timestamp: now - 2000,
-          confidence: 0.94,
+          confidence: 0.96,
           boundingBox: { x: 0.40, y: 0.35, width: 0.20, height: 0.45 },
         },
       ];

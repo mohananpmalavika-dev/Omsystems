@@ -1,0 +1,14 @@
+{
+  "name": "@kryptovision/evidence-verifier",
+  "version": "1.0.0",
+  "description": "Standalone Offline Evidence Verifier for KryptoVision Bank Evidence Packages",
+  "type": "module",
+  "bin": {
+    "kryptovision-evidence-verifier": "./dist/evidence-verifier.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": ["forensic", "evidence", "cctv", "verification", "sha256"],
+  "license": "UNLICENSED"
+}

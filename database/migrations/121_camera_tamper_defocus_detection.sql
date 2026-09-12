@@ -1,5 +1,5 @@
 -- ============================================================================
--- Migration 120: Camera Tamper & Defocus Detection Hardening (analytics.camera_tamper)
+-- Migration 121: Camera Tamper & Defocus Detection Hardening (analytics.camera_tamper)
 --
 -- Authoritative schema for edge-based statistical frame analysis detecting
 -- camera movement, blinding, lens covering/occlusion, defocus/blur, and spray paint.

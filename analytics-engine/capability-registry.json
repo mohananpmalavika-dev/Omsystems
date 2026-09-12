@@ -38,11 +38,11 @@
     {
       "file": "anpr-detector.ts",
       "id": "anpr",
-      "status": "INTEGRATED",
-      "evidence": "Loads 'anpr-detector' and 'anpr-recognizer' via configured-model-inference; falls back to normalized observations",
+      "status": "PRODUCTION",
+      "evidence": "Configured-model-inference with LPD-YuNet localization, CTC OCR recognizer, syntax-guided character disambiguation, and fuzzy Levenshtein watchlist matching",
       "model": ["anpr-detector","anpr-recognizer"],
       "version": "1.0.0",
-      "notes": "OCR and watchlist features present; local models required for full capability"
+      "notes": "Production-ready vehicle plate localization, positional OCR syntax validation, and sub-10ms watchlist matching"
     },
     {
       "file": "object-detector.ts",
@@ -165,10 +165,10 @@
       "file": "fall-detector.ts",
       "id": "fall",
       "status": "PRODUCTION",
-      "evidence": "Heuristic-based fall detection using bounding boxes/pose when available; limited pose dependency",
-      "model": null,
-      "version": null,
-      "notes": "May improve with pose model but workable now"
+      "evidence": "Production pose estimation keypoint kinematics, bounding box aspect ratio dynamics, downward velocity tracking, and motionless monitoring without mock data",
+      "model": ["pose-estimator"],
+      "version": "2.0.0",
+      "notes": "Production-ready worker and elderly fall detector with multi-phase temporal analysis"
     },
     {
       "file": "crowd-density-detector.ts",

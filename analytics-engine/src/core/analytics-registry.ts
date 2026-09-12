@@ -242,6 +242,26 @@ export class AnalyticsRegistry {
       enabled: true,
       description: 'Production optical flow and rapid limb acceleration heuristic engine for detecting violent encounters and physical altercations.',
     });
+
+    this.register({
+      id: 'detector-abandoned-object-v1',
+      detectorType: 'abandoned_object',
+      name: 'Abandoned & Unattended Object Detection',
+      version: '2.0.0',
+      maturity: AnalyticsMaturity.PRODUCTION,
+      modelName: 'static-blob-tracker-v2',
+      modelVersion: '2.0.0',
+      modelSha256: '4f92bc31a8e9927d3129c914fb014e3b7890aa39cb7725dc39f280148721c009',
+      supportedObjects: ['backpack', 'suitcase', 'box', 'parcel', 'handbag', 'generic_blob'],
+      supportsCpu: true,
+      supportsGpu: true,
+      supportsEdge: true,
+      minimumFps: 2,
+      recommendedFps: 10,
+      benchmarkId: 'BM-2026-ABANDONED-OBJECT',
+      enabled: true,
+      description: 'Static foreground blob tracking and spatial polygon zone monitoring for bags, boxes, or parcels left unattended.',
+    });
   }
 
   register(capability: AnalyticsCapability): void {

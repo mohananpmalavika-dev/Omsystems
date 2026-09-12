@@ -2308,12 +2308,38 @@ export const crowdApi = {
     const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
     return fetchApi<{ success: boolean; data: CrowdZone[] }>(`/v1/analytics/crowd/zones${q}`);
   },
-  createZone: (data: Partial<CrowdZone> & { zoneName: string; zoneType: string; polygon: Array<{ x: number; y: number }> }) =>
+  createZone: (data: {
+    id?: string;
+    branchId?: string | null;
+    cameraId?: string | null;
+    zoneName: string;
+    zoneType: string;
+    polygon: Array<{ x: number; y: number }>;
+    areaSqm?: number;
+    nominalCapacity?: number;
+    warningCapacity?: number;
+    maxCapacity?: number;
+    enabled?: boolean;
+    metadata?: Record<string, any>;
+  }) =>
     fetchApi<{ success: boolean; data: CrowdZone }>('/v1/analytics/crowd/zones', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateZone: (data: Partial<CrowdZone> & { id: string; zoneName: string; zoneType: string; polygon: Array<{ x: number; y: number }> }) =>
+  updateZone: (data: {
+    id: string;
+    branchId?: string | null;
+    cameraId?: string | null;
+    zoneName: string;
+    zoneType: string;
+    polygon: Array<{ x: number; y: number }>;
+    areaSqm?: number;
+    nominalCapacity?: number;
+    warningCapacity?: number;
+    maxCapacity?: number;
+    enabled?: boolean;
+    metadata?: Record<string, any>;
+  }) =>
     fetchApi<{ success: boolean; data: CrowdZone }>('/v1/analytics/crowd/zones', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -2326,12 +2352,40 @@ export const crowdApi = {
     const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
     return fetchApi<{ success: boolean; data: CounterQueue[] }>(`/v1/analytics/crowd/queues${q}`);
   },
-  createQueue: (data: Partial<CounterQueue> & { counterNumber: string; counterName: string; counterType: string; queuePolygon: Array<{ x: number; y: number }>; serviceStationPolygon: Array<{ x: number; y: number }> }) =>
+  createQueue: (data: {
+    id?: string;
+    branchId?: string | null;
+    cameraId?: string | null;
+    counterNumber: string;
+    counterName: string;
+    counterType: string;
+    queuePolygon: Array<{ x: number; y: number }>;
+    serviceStationPolygon: Array<{ x: number; y: number }>;
+    maxQueueLengthThreshold?: number;
+    maxWaitTimeSecondsThreshold?: number;
+    alertSeverity?: 'P1' | 'P2' | 'P3';
+    enabled?: boolean;
+    metadata?: Record<string, any>;
+  }) =>
     fetchApi<{ success: boolean; data: CounterQueue }>('/v1/analytics/crowd/queues', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateQueue: (data: Partial<CounterQueue> & { id: string; counterNumber: string; counterName: string; counterType: string; queuePolygon: Array<{ x: number; y: number }>; serviceStationPolygon: Array<{ x: number; y: number }> }) =>
+  updateQueue: (data: {
+    id: string;
+    branchId?: string | null;
+    cameraId?: string | null;
+    counterNumber: string;
+    counterName: string;
+    counterType: string;
+    queuePolygon: Array<{ x: number; y: number }>;
+    serviceStationPolygon: Array<{ x: number; y: number }>;
+    maxQueueLengthThreshold?: number;
+    maxWaitTimeSecondsThreshold?: number;
+    alertSeverity?: 'P1' | 'P2' | 'P3';
+    enabled?: boolean;
+    metadata?: Record<string, any>;
+  }) =>
     fetchApi<{ success: boolean; data: CounterQueue }>('/v1/analytics/crowd/queues', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -3248,5 +3302,1004 @@ export const cameraTamperApi = {
   },
 };
 
+export interface CameraObstructionTileMetric {
+  row: number;
+  col: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  luminance: number;
+  variance: number;
+  edgeScore: number;
+  isObstructed: boolean;
+  obstructionReason?: string;
+}
+
+export interface CameraObstructionTileAnalysis {
+  gridRows: number;
+  gridCols: number;
+  totalTiles: number;
+  obstructedTiles: number;
+  obstructionPercent: number;
+  tiles: CameraObstructionTileMetric[];
+  obstructedBoundingBox?: { x: number; y: number; width: number; height: number } | null;
+}
+
+export interface CameraObstructionMetrics {
+  luminance: number;
+  variance: number;
+  edgeDensity: number;
+  entropy: number;
+  laplacianVariance: number;
+  shadowFraction: number;
+  highlightFraction: number;
+  obstructionPercent: number;
+  tileAnalysis: CameraObstructionTileAnalysis;
+  histogram?: number[];
+}
+
+export interface CameraObstructionEvent {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  branch_id?: string | null;
+  obstruction_type: 'dark_frame' | 'lens_covering' | 'variance_loss' | 'partial_obstruction' | 'glare_whiteout';
+  severity: 'P1' | 'P2' | 'P3' | 'P4';
+  confidence: number;
+  obstruction_percent: number;
+  metrics: CameraObstructionMetrics;
+  tile_analysis: CameraObstructionTileAnalysis;
+  status: 'detected' | 'acknowledged' | 'resolved' | 'false_positive';
+  snapshot_url?: string | null;
+  baseline_snapshot_url?: string | null;
+  notes?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  detected_at: string;
+  created_at: string;
+}
+
+export interface CameraObstructionBaseline {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  baseline_luminance: number;
+  baseline_variance: number;
+  baseline_edge_density: number;
+  baseline_entropy: number;
+  baseline_laplacian_variance: number;
+  tile_baselines: Array<{ row: number; col: number; luminance: number; variance: number }>;
+  reference_histogram: number[];
+  reference_frame_hash?: string | null;
+  calibrated_at: string;
+  sample_frames_count: number;
+  updated_at: string;
+}
+
+export interface CameraObstructionConfig {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  sensitivity: number;
+  darkness_threshold: number;
+  variance_floor: number;
+  obstruction_percent_threshold: number;
+  partial_threshold: number;
+  debounce_frames: number;
+  auto_recalibrate_hours: number;
+  alert_on_dark_frame: boolean;
+  alert_on_covering: boolean;
+  alert_on_variance_loss: boolean;
+  alert_on_partial: boolean;
+  alert_on_glare: boolean;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CameraObstructionStats {
+  totalEvents: number;
+  activeEvents: number;
+  darkFrameCount: number;
+  lensCoveringCount: number;
+  varianceLossCount: number;
+  partialObstructionCount: number;
+  glareWhiteoutCount: number;
+  p1Count: number;
+  p2Count: number;
+  p3Count: number;
+  p4Count: number;
+  acknowledgedCount: number;
+  resolvedCount: number;
+  falsePositiveCount: number;
+  camerasMonitored: number;
+  camerasAtRisk: number;
+  lastEventAt?: string | null;
+}
+
+export const cameraObstructionApi = {
+  listEvents: (params?: {
+    cameraId?: string;
+    branchId?: string;
+    obstructionType?: string;
+    severity?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.cameraId) q.set('cameraId', params.cameraId);
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.obstructionType) q.set('obstructionType', params.obstructionType);
+    if (params?.severity) q.set('severity', params.severity);
+    if (params?.status) q.set('status', params.status);
+    if (params?.fromDate) q.set('fromDate', params.fromDate);
+    if (params?.toDate) q.set('toDate', params.toDate);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    return fetchApi<{
+      success: boolean;
+      data: CameraObstructionEvent[];
+      pagination: { total: number; limit: number; offset: number };
+    }>(`/v1/analytics/obstruction/events?${q}`);
+  },
+
+  getEvent: (id: string) =>
+    fetchApi<{ success: boolean; data: CameraObstructionEvent }>(`/v1/analytics/obstruction/events/${encodeURIComponent(id)}`),
+
+  updateEventStatus: (id: string, status: 'acknowledged' | 'resolved' | 'false_positive', notes?: string) =>
+    fetchApi<{ success: boolean; data: CameraObstructionEvent }>(
+      `/v1/analytics/obstruction/events/${encodeURIComponent(id)}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      }
+    ),
+
+  ingestEvent: (data: Partial<CameraObstructionEvent> & {
+    cameraId: string;
+    obstructionType: string;
+    severity: string;
+    confidence: number;
+  }) =>
+    fetchApi<{ success: boolean; data: CameraObstructionEvent }>('/v1/analytics/obstruction/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  analyzeFrame: (payload: {
+    cameraId: string;
+    branchId?: string;
+    frameBase64?: string;
+    width?: number;
+    height?: number;
+    channels?: number;
+    bypassDebounce?: boolean;
+    snapshotUrl?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        evaluation: {
+          isObstructed: boolean;
+          obstructionType: string | null;
+          severity: string | null;
+          confidence: number;
+          metrics: CameraObstructionMetrics;
+          reasons: string[];
+          requiresAlert: boolean;
+        };
+        confirmed: boolean;
+        consecutiveFrames: number;
+        savedEvent: CameraObstructionEvent | null;
+      };
+    }>('/v1/analytics/obstruction/analyze-frame', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getBaseline: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: CameraObstructionBaseline }>(
+      `/v1/analytics/obstruction/baselines/${encodeURIComponent(cameraId)}`
+    ),
+
+  recalibrateBaseline: (cameraId: string, payload?: { frameBase64?: string; width?: number; height?: number; channels?: number }) =>
+    fetchApi<{ success: boolean; data: CameraObstructionBaseline }>(
+      `/v1/analytics/obstruction/baselines/${encodeURIComponent(cameraId)}/recalibrate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }
+    ),
+
+  getConfig: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: CameraObstructionConfig }>(
+      `/v1/analytics/obstruction/config/${encodeURIComponent(cameraId)}`
+    ),
+
+  updateConfig: (cameraId: string, updates: Partial<CameraObstructionConfig>) =>
+    fetchApi<{ success: boolean; data: CameraObstructionConfig }>(
+      `/v1/analytics/obstruction/config/${encodeURIComponent(cameraId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }
+    ),
+
+  getStats: (cameraId?: string) => {
+    const q = cameraId ? `?cameraId=${encodeURIComponent(cameraId)}` : '';
+    return fetchApi<{ success: boolean; data: CameraObstructionStats }>(`/v1/analytics/obstruction/stats${q}`);
+  },
+};
+
+// ============================================================================
+// AUTOMATIC NUMBER PLATE RECOGNITION (ANPR) API & TYPES
+// ============================================================================
+
+export interface AnprBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface AnprCharacterReading {
+  char: string;
+  confidence: number;
+  bbox?: AnprBoundingBox;
+}
+
+export interface AnprPlateReading {
+  plateNumber: string;
+  normalizedPlate: string;
+  confidence: number;
+  countryCode: string;
+  regionCode?: string;
+  plateType: 'standard' | 'commercial' | 'electric' | 'government' | 'diplomatic' | 'military' | 'temporary';
+  characters: AnprCharacterReading[];
+  plateBbox: AnprBoundingBox;
+  isValidSyntax: boolean;
+  syntaxFormatName?: string;
+  correctionsApplied: number;
+  contrastScore?: number;
+}
+
+export interface AnprVehicleAttributes {
+  category: 'car' | 'motorcycle' | 'bus' | 'truck' | 'van' | 'auto_rickshaw' | 'other';
+  confidence: number;
+  color?: string;
+  make?: string;
+  model?: string;
+  bbox?: AnprBoundingBox;
+}
+
+export interface AnprWatchlistMatchDetail {
+  matched: boolean;
+  watchlistId?: string;
+  watchlistName?: string;
+  listType?: 'alert' | 'stolen' | 'wanted' | 'vip' | 'staff' | 'blacklist';
+  plateId?: string;
+  targetPlate?: string;
+  reason?: string;
+  severity?: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+  alertAuthorities?: boolean;
+  matchType?: 'exact' | 'fuzzy' | 'wildcard';
+  editDistance?: number;
+  similarity?: number;
+}
+
+export interface AnprEvaluationResult {
+  plate: AnprPlateReading;
+  vehicle?: AnprVehicleAttributes;
+  watchlistMatch: AnprWatchlistMatchDetail;
+  processingTimeMs: number;
+  requiresAlert: boolean;
+  observedAt: string;
+}
+
+export interface AnprEventItem {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  camera_name?: string;
+  branch_id?: string | null;
+  watchlist_id?: string | null;
+  watchlist_name?: string | null;
+  plate_id?: string | null;
+  plate_number: string;
+  normalized_plate: string;
+  plate_confidence: number;
+  country_code: string;
+  region_code?: string;
+  plate_type: string;
+  vehicle_type?: string;
+  vehicle_color?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  vehicle_bbox?: AnprBoundingBox;
+  plate_bbox: AnprBoundingBox;
+  ocr_details?: {
+    characters: AnprCharacterReading[];
+    correctionsApplied?: number;
+    syntaxFormat?: string;
+  };
+  snapshot_reference?: string;
+  plate_crop_url?: string;
+  entry_direction: 'entry' | 'exit' | 'unknown';
+  review_status: 'pending' | 'confirmed' | 'false_positive' | 'dismissed';
+  reviewed_by?: string;
+  reviewed_at?: string;
+  review_notes?: string;
+  processing_time_ms: number;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface AnprVehicleSessionItem {
+  id: string;
+  tenant_id: string;
+  plate_number: string;
+  normalized_plate: string;
+  entry_event_id?: string;
+  exit_event_id?: string;
+  entry_camera_id?: string;
+  exit_camera_id?: string;
+  entry_camera_name?: string;
+  exit_camera_name?: string;
+  vehicle_type?: string;
+  vehicle_color?: string;
+  entry_at: string;
+  exit_at?: string;
+  duration_seconds?: number;
+  max_dwell_minutes: number;
+  overstay_alerted: boolean;
+  status: 'inside' | 'exited' | 'overstay' | 'unknown';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnprWatchlistRecordItem {
+  id: string;
+  tenant_id: string;
+  name: string;
+  description?: string;
+  list_type: 'alert' | 'stolen' | 'wanted' | 'vip' | 'staff' | 'blacklist';
+  enabled: boolean;
+  alert_on_match: boolean;
+  alert_severity: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+  alert_authorities: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnprWatchlistPlateItem {
+  id: string;
+  tenant_id: string;
+  watchlist_id: string;
+  plate_number: string;
+  normalized_plate: string;
+  country_code: string;
+  region_code?: string;
+  vehicle_make?: string;
+  vehicle_model?: string;
+  vehicle_color?: string;
+  vehicle_type?: string;
+  owner_name?: string;
+  reason: string;
+  notes?: string;
+  fuzzy_match: boolean;
+  max_levenshtein_distance: number;
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  added_by: string;
+  added_at: string;
+  expires_at?: string;
+  last_matched_at?: string;
+  match_count: number;
+}
+
+export interface AnprStatsData {
+  totalReads: number;
+  uniquePlates: number;
+  watchlistHits: number;
+  averageConfidence: number;
+  pendingReviews: number;
+  activeParkedVehicles: number;
+  overstayAlerts: number;
+  readsByHour: Array<{ hour: string; count: number }>;
+  vehicleTypeBreakdown: Record<string, number>;
+  watchlistTypeBreakdown: Record<string, number>;
+}
+
+export const anprApi = {
+  evaluatePlate: (data: {
+    rawPlateText: string;
+    countryPreference?: string;
+    plateConfidence?: number;
+    plateBbox?: AnprBoundingBox;
+    vehicle?: AnprVehicleAttributes;
+  }) => fetchApi<{ success: boolean; data: AnprEvaluationResult }>('/v1/analytics/anpr/recognize', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  ingestEvent: (data: {
+    cameraId: string;
+    cameraName?: string;
+    branchId?: string | null;
+    rawPlateText: string;
+    plateConfidence?: number;
+    countryPreference?: string;
+    entryDirection?: 'entry' | 'exit' | 'unknown';
+    plateBbox?: AnprBoundingBox;
+    vehicle?: AnprVehicleAttributes;
+    snapshotReference?: string;
+    plateCropUrl?: string;
+    occurredAt?: string;
+  }) => fetchApi<{ success: boolean; data: { evaluation: AnprEvaluationResult; event: AnprEventItem; session: AnprVehicleSessionItem } }>('/v1/analytics/anpr/events', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  listEvents: (filters?: {
+    cameraId?: string;
+    branchId?: string;
+    plateNumber?: string;
+    watchlistId?: string;
+    entryDirection?: 'entry' | 'exit' | 'unknown';
+    reviewStatus?: 'pending' | 'confirmed' | 'false_positive' | 'dismissed';
+    hasWatchlistMatch?: boolean;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.cameraId) params.set('cameraId', filters.cameraId);
+    if (filters?.branchId) params.set('branchId', filters.branchId);
+    if (filters?.plateNumber) params.set('plateNumber', filters.plateNumber);
+    if (filters?.watchlistId) params.set('watchlistId', filters.watchlistId);
+    if (filters?.entryDirection) params.set('entryDirection', filters.entryDirection);
+    if (filters?.reviewStatus) params.set('reviewStatus', filters.reviewStatus);
+    if (filters?.hasWatchlistMatch !== undefined) params.set('hasWatchlistMatch', String(filters.hasWatchlistMatch));
+    if (filters?.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params.set('toDate', filters.toDate);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: AnprEventItem[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/anpr/events?${params}`
+    );
+  },
+
+  getEvent: (id: string) =>
+    fetchApi<{ success: boolean; data: AnprEventItem }>(`/v1/analytics/anpr/events/${encodeURIComponent(id)}`),
+
+  reviewEvent: (id: string, decision: { status: 'confirmed' | 'false_positive' | 'dismissed'; notes?: string }) =>
+    fetchApi<{ success: boolean; data: AnprEventItem }>(`/v1/analytics/anpr/events/${encodeURIComponent(id)}/reviews`, {
+      method: 'POST',
+      body: JSON.stringify(decision),
+    }),
+
+  listSessions: (filters?: {
+    plateNumber?: string;
+    status?: 'inside' | 'exited' | 'overstay' | 'unknown';
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.plateNumber) params.set('plateNumber', filters.plateNumber);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params.set('toDate', filters.toDate);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: AnprVehicleSessionItem[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/anpr/sessions?${params}`
+    );
+  },
+
+  getVehicleSessions: (plateNumber: string) =>
+    fetchApi<{ success: boolean; data: AnprVehicleSessionItem[] }>(
+      `/v1/analytics/anpr/sessions/${encodeURIComponent(plateNumber)}`
+    ),
+
+  listWatchlists: () =>
+    fetchApi<{ success: boolean; data: AnprWatchlistRecordItem[] }>('/v1/analytics/anpr/watchlists'),
+
+  createWatchlist: (data: {
+    name: string;
+    description?: string;
+    listType: 'alert' | 'stolen' | 'wanted' | 'vip' | 'staff' | 'blacklist';
+    enabled?: boolean;
+    alertOnMatch?: boolean;
+    alertSeverity?: 'P1' | 'P2' | 'P3' | 'P4' | 'P5';
+    alertAuthorities?: boolean;
+  }) => fetchApi<{ success: boolean; data: AnprWatchlistRecordItem }>('/v1/analytics/anpr/watchlists', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+
+  updateWatchlist: (id: string, data: Partial<AnprWatchlistRecordItem>) =>
+    fetchApi<{ success: boolean; data: AnprWatchlistRecordItem }>(`/v1/analytics/anpr/watchlists/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteWatchlist: (id: string) =>
+    fetchApi<{ success: boolean }>(`/v1/analytics/anpr/watchlists/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+
+  listWatchlistPlates: (watchlistId: string) =>
+    fetchApi<{ success: boolean; data: AnprWatchlistPlateItem[] }>(
+      `/v1/analytics/anpr/watchlists/${encodeURIComponent(watchlistId)}/plates`
+    ),
+
+  addWatchlistPlate: (watchlistId: string, data: {
+    plateNumber: string;
+    countryCode?: string;
+    regionCode?: string;
+    vehicleMake?: string;
+    vehicleModel?: string;
+    vehicleColor?: string;
+    vehicleType?: 'car' | 'motorcycle' | 'bus' | 'truck' | 'van' | 'auto_rickshaw' | 'other';
+    ownerName?: string;
+    reason: string;
+    notes?: string;
+    fuzzyMatch?: boolean;
+    maxLevenshteinDistance?: number;
+    priority?: 'critical' | 'high' | 'medium' | 'low';
+    expiresAt?: string;
+  }) => fetchApi<{ success: boolean; data: AnprWatchlistPlateItem }>(
+    `/v1/analytics/anpr/watchlists/${encodeURIComponent(watchlistId)}/plates`,
+    {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }
+  ),
+
+  removeWatchlistPlate: (watchlistId: string, plateId: string) =>
+    fetchApi<{ success: boolean }>(
+      `/v1/analytics/anpr/watchlists/${encodeURIComponent(watchlistId)}/plates/${encodeURIComponent(plateId)}`,
+      {
+        method: 'DELETE',
+      }
+    ),
+
+  bulkImportPlates: (watchlistId: string, plates: any[]) =>
+    fetchApi<{ success: boolean; importedCount: number; data: AnprWatchlistPlateItem[] }>(
+      `/v1/analytics/anpr/watchlists/${encodeURIComponent(watchlistId)}/plates/bulk`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ plates }),
+      }
+    ),
+
+  getStats: (cameraId?: string) => {
+    const q = cameraId ? `?cameraId=${encodeURIComponent(cameraId)}` : '';
+    return fetchApi<{ success: boolean; data: AnprStatsData }>(`/v1/analytics/anpr/stats${q}`);
+  },
+};
+
+export interface FallEvent {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  track_id: string;
+  person_category: 'worker' | 'elderly' | 'general';
+  fall_type: 'forward' | 'backward' | 'sideways' | 'slump' | 'scaffold_drop' | 'unknown';
+  confidence: number;
+  severity: 'P1' | 'P2' | 'P3';
+  impact_speed: number;
+  aspect_ratio_peak: number;
+  torso_angle_degrees: number | null;
+  motionless_duration_seconds: number;
+  recovery_detected: boolean;
+  recovery_time_seconds: number | null;
+  bounding_box: { x: number; y: number; width: number; height: number };
+  pose_keypoints: Record<string, { x: number; y: number; confidence: number; z?: number }>;
+  dynamics_telemetry: {
+    kinematics: {
+      currentAspectRatio: number;
+      peakAspectRatio: number;
+      aspectRatioVelocity: number;
+      verticalVelocity: number;
+      verticalAcceleration: number;
+      torsoAngleDegrees: number | null;
+      headToHipDistance: number | null;
+      floorProximityScore: number;
+      motionEnergy: number;
+    };
+    stateHistory: string[];
+    isIntentionalSuppressed?: boolean;
+    suppressionReason?: string;
+  };
+  snapshot_reference?: string | null;
+  review_status: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface FallCameraConfig {
+  camera_id: string;
+  tenant_id: string;
+  enabled: boolean;
+  profile: 'worker' | 'elderly' | 'general';
+  sensitivity: number;
+  min_confidence: number;
+  aspect_ratio_threshold: number;
+  velocity_threshold: number;
+  torso_angle_threshold: number;
+  motionless_delay_seconds: number;
+  recovery_timeout_seconds: number;
+  alert_severity: 'P1' | 'P2' | 'P3';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface FallStats {
+  totalFalls: number;
+  workerFalls: number;
+  elderlyFalls: number;
+  unrecoveredEmergencyCount: number;
+  recoveredCount: number;
+  pendingReviewCount: number;
+  falsePositiveCount: number;
+  avgConfidence: number;
+  p1Count: number;
+}
+
+export const fallApi = {
+  listEvents: (filters?: {
+    cameraId?: string;
+    personCategory?: 'worker' | 'elderly' | 'general';
+    severity?: 'P1' | 'P2' | 'P3';
+    reviewStatus?: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.cameraId) params.set('cameraId', filters.cameraId);
+    if (filters?.personCategory) params.set('personCategory', filters.personCategory);
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.reviewStatus) params.set('reviewStatus', filters.reviewStatus);
+    if (filters?.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params.set('toDate', filters.toDate);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: FallEvent[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/fall/events?${params}`
+    );
+  },
+
+  getEvent: (eventId: string) =>
+    fetchApi<{ success: boolean; data: FallEvent }>(`/v1/analytics/fall/events/${encodeURIComponent(eventId)}`),
+
+  reviewEvent: (
+    eventId: string,
+    data: { reviewStatus: 'confirmed' | 'false_positive' | 'escalated'; reviewNotes?: string }
+  ) =>
+    fetchApi<{ success: boolean; data: FallEvent }>(
+      `/v1/analytics/fall/events/${encodeURIComponent(eventId)}/review`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  getCameraConfig: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: FallCameraConfig }>(
+      `/v1/analytics/fall/config/${encodeURIComponent(cameraId)}`
+    ),
+
+  updateCameraConfig: (cameraId: string, updates: Partial<FallCameraConfig>) =>
+    fetchApi<{ success: boolean; data: FallCameraConfig }>(
+      `/v1/analytics/fall/config/${encodeURIComponent(cameraId)}`,
+      { method: 'PUT', body: JSON.stringify(updates) }
+    ),
+
+  getStats: () =>
+    fetchApi<{ success: boolean; data: FallStats }>('/v1/analytics/fall/stats'),
+
+  detect: (payload: {
+    cameraId: string;
+    timestamp?: number;
+    activeTracks: Array<{
+      trackId: string;
+      category?: 'worker' | 'elderly' | 'general';
+      observations: Array<{
+        timestamp: number;
+        boundingBox: { x: number; y: number; width: number; height: number };
+        keypoints?: Record<string, { x: number; y: number; confidence: number; z?: number }>;
+      }>;
+    }>;
+    snapshotReference?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        results: any[];
+        savedEvents: FallEvent[];
+      };
+    }>('/v1/analytics/fall/detect', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
+// ============================================================================
+// Abandoned & Unattended Object Detection (analytics.abandoned_object)
+// ============================================================================
+
+export interface AbandonedObjectZone {
+  id: string;
+  tenant_id: string;
+  branch_id?: string | null;
+  camera_id?: string | null;
+  zone_name: string;
+  zone_type: 'sterile_zone' | 'atm_vestibule' | 'cash_counter' | 'vault_perimeter' | 'emergency_exit' | 'customer_lobby' | 'hallway' | 'baggage_area';
+  polygon: Array<{ x: number; y: number }>;
+  sensitivity: 'low' | 'medium' | 'high' | 'critical';
+  unattended_threshold_seconds: number;
+  abandoned_threshold_seconds: number;
+  min_blob_area_pixels: number;
+  max_blob_area_pixels: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AbandonedObjectEvent {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  zone_id?: string | null;
+  branch_id?: string | null;
+  event_type: 'unattended_object' | 'abandoned_object' | 'removed_object' | 'suspicious_package';
+  object_type: 'backpack' | 'suitcase' | 'box' | 'parcel' | 'handbag' | 'generic_blob' | 'duffel_bag';
+  severity: 'P1' | 'P2' | 'P3' | 'P4';
+  confidence: number;
+  bounding_box: { x: number; y: number; width: number; height: number };
+  dwell_time_seconds: number;
+  owner_track_id?: string | null;
+  owner_distance_pixels?: number | null;
+  status: 'detected' | 'investigating' | 'cleared' | 'false_positive' | 'escalated';
+  snapshot_url?: string | null;
+  thermal_score?: number | null;
+  notes?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  first_seen_at: string;
+  detected_at: string;
+  created_at: string;
+}
+
+export interface AbandonedObjectConfig {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  stationary_pixel_threshold: number;
+  default_unattended_threshold_sec: number;
+  default_abandoned_threshold_sec: number;
+  owner_proximity_threshold_px: number;
+  debounce_frames: number;
+  alert_on_sterile_zone_entry: boolean;
+  alert_on_exit_corridor_obstruction: boolean;
+  thermal_verification_enabled: boolean;
+  updated_at: string;
+}
+
+export interface AbandonedObjectStats {
+  totalActive: number;
+  criticalP1Count: number;
+  highP2Count: number;
+  avgDwellTimeSeconds: number;
+  totalCleared: number;
+  totalEscalated: number;
+  zonesMonitored: number;
+  lastEventAt?: string | null;
+}
+
+export const abandonedObjectApi = {
+  listEvents: (params?: {
+    cameraId?: string;
+    branchId?: string;
+    zoneId?: string;
+    eventType?: string;
+    severity?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.cameraId) q.set('cameraId', params.cameraId);
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.zoneId) q.set('zoneId', params.zoneId);
+    if (params?.eventType) q.set('eventType', params.eventType);
+    if (params?.severity) q.set('severity', params.severity);
+    if (params?.status) q.set('status', params.status);
+    if (params?.fromDate) q.set('fromDate', params.fromDate);
+    if (params?.toDate) q.set('toDate', params.toDate);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    return fetchApi<{
+      success: boolean;
+      data: AbandonedObjectEvent[];
+      pagination: { total: number; limit: number; offset: number };
+    }>(`/v1/analytics/abandoned-objects/events?${q}`);
+  },
+
+  getEvent: (id: string) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectEvent }>(
+      `/v1/analytics/abandoned-objects/events/${encodeURIComponent(id)}`
+    ),
+
+  updateEventStatus: (
+    id: string,
+    status: 'detected' | 'investigating' | 'cleared' | 'false_positive' | 'escalated',
+    notes?: string
+  ) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectEvent }>(
+      `/v1/analytics/abandoned-objects/events/${encodeURIComponent(id)}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      }
+    ),
+
+  ingestEvent: (data: Partial<AbandonedObjectEvent> & {
+    cameraId: string;
+    eventType: string;
+    objectType: string;
+    severity: string;
+    confidence: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+    dwellTimeSeconds: number;
+  }) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectEvent }>(
+      '/v1/analytics/abandoned-objects/events',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  listZones: (params?: { branchId?: string; cameraId?: string; zoneType?: string; enabledOnly?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.cameraId) q.set('cameraId', params.cameraId);
+    if (params?.zoneType) q.set('zoneType', params.zoneType);
+    if (params?.enabledOnly !== undefined) q.set('enabledOnly', String(params.enabledOnly));
+    return fetchApi<{ success: boolean; data: AbandonedObjectZone[] }>(
+      `/v1/analytics/abandoned-objects/zones?${q}`
+    );
+  },
+
+  getZone: (id: string) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectZone }>(
+      `/v1/analytics/abandoned-objects/zones/${encodeURIComponent(id)}`
+    ),
+
+  createZone: (data: {
+    zoneName: string;
+    zoneType: string;
+    polygon: Array<{ x: number; y: number }>;
+    sensitivity?: 'low' | 'medium' | 'high' | 'critical';
+    unattendedThresholdSeconds?: number;
+    abandonedThresholdSeconds?: number;
+    minBlobAreaPixels?: number;
+    maxBlobAreaPixels?: number;
+    enabled?: boolean;
+    branchId?: string;
+    cameraId?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectZone }>(
+      '/v1/analytics/abandoned-objects/zones',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    ),
+
+  updateZone: (id: string, updates: Partial<{
+    zoneName: string;
+    zoneType: string;
+    polygon: Array<{ x: number; y: number }>;
+    sensitivity: 'low' | 'medium' | 'high' | 'critical';
+    unattendedThresholdSeconds: number;
+    abandonedThresholdSeconds: number;
+    minBlobAreaPixels: number;
+    maxBlobAreaPixels: number;
+    enabled: boolean;
+  }>) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectZone }>(
+      `/v1/analytics/abandoned-objects/zones/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }
+    ),
+
+  deleteZone: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(
+      `/v1/analytics/abandoned-objects/zones/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    ),
+
+  getStats: (cameraId?: string) => {
+    const q = cameraId ? `?cameraId=${encodeURIComponent(cameraId)}` : '';
+    return fetchApi<{ success: boolean; data: AbandonedObjectStats }>(
+      `/v1/analytics/abandoned-objects/stats${q}`
+    );
+  },
+
+  getConfig: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectConfig }>(
+      `/v1/analytics/abandoned-objects/config/${encodeURIComponent(cameraId)}`
+    ),
+
+  updateConfig: (cameraId: string, updates: Partial<AbandonedObjectConfig>) =>
+    fetchApi<{ success: boolean; data: AbandonedObjectConfig }>(
+      `/v1/analytics/abandoned-objects/config/${encodeURIComponent(cameraId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }
+    ),
+
+  analyzeFrame: (payload: {
+    cameraId: string;
+    branchId?: string;
+    frameBase64?: string;
+    width?: number;
+    height?: number;
+    channels?: number;
+    candidateBlobs?: Array<{ x: number; y: number; width: number; height: number }>;
+    persons?: Array<{ trackId: string; boundingBox: { x: number; y: number; width: number; height: number }; confidence: number }>;
+    saveToDb?: boolean;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        analysis: {
+          isUnattendedOrAbandoned: boolean;
+          blobs: Array<{
+            blobId: string;
+            objectType: string;
+            eventType: string;
+            severity: string;
+            confidence: number;
+            boundingBox: { x: number; y: number; width: number; height: number };
+            dwellTimeSeconds: number;
+            zoneName?: string;
+            zoneType?: string;
+            ownerTrackId?: string | null;
+            ownerDistancePixels?: number | null;
+            requiresAlert: boolean;
+          }>;
+          summary: {
+            totalStaticBlobs: number;
+            activeAlerts: number;
+            highestSeverity?: string | null;
+          };
+        };
+        savedEvents: AbandonedObjectEvent[];
+      };
+    }>('/v1/analytics/abandoned-objects/analyze-frame', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};
+
 export { ApiError };
+
 

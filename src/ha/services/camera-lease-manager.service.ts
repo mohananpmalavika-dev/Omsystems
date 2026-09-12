@@ -12,6 +12,7 @@
 
 import IORedis from "ioredis";
 import type { CameraLease, CameraLeaseTransfer } from "../domain/ha-telemetry.types.js";
+import { StaleLeaseEpochError } from "../../errors/distributed-state.errors.js";
 
 interface CameraLeaseConfig {
   redisClient: any;
@@ -572,6 +573,32 @@ export class CameraLeaseManager {
       return { valid: false, activeOwner: lease.ownerId, currentEpoch: lease.epoch, reason: "fencing_epoch_stale" };
     }
     return { valid: true, currentEpoch: lease.epoch, activeOwner: lease.ownerId };
+  }
+
+  /**
+   * Enforces fencing token for side-effecting media operations.
+   * Throws StaleLeaseEpochError if epoch is stale.
+   * Operations: connect, disconnect, start/stop recording, relays, PTZ, migration, takeover.
+   */
+  async assertOperationFencing(
+    cameraId: string,
+    ownerNodeId: string,
+    leaseEpoch: number,
+    operation: string,
+  ): Promise<void> {
+    const check = await this.validateFencingToken(cameraId, ownerNodeId, leaseEpoch);
+    if (!check.valid) {
+      if (check.currentEpoch !== undefined && leaseEpoch < check.currentEpoch) {
+        throw new StaleLeaseEpochError(
+          check.currentEpoch,
+          leaseEpoch,
+          `Operation '${operation}' on camera ${cameraId} rejected: request epoch (${leaseEpoch}) is older than active epoch (${check.currentEpoch}) owned by ${check.activeOwner}`,
+        );
+      }
+      throw new Error(
+        `Operation '${operation}' on camera ${cameraId} rejected: fencing check failed (${check.reason}, active owner: ${check.activeOwner ?? "none"})`,
+      );
+    }
   }
 
   private getLeaseKey(cameraId: string): string {

@@ -588,19 +588,28 @@ export class BehaviorDetector extends BaseDetector {
         }
 
         const effectiveAccel = Math.max(peakPosAccel, peakLimbAccel);
+        const isHighAccel =
+          effectiveAccel >= 25 ||
+          (effectiveAccel >= 0.15 && effectiveAccel < 25 && normDist < 1.6);
+        const isHighSpeed = (m1 > 20 && m2 > 20) || (m1 > 0.15 && m2 > 0.15);
+        const flowScale = effectiveAccel < 25 ? 5.0 : 15.0;
+        const effectiveMotionThreshold =
+          this.config.fightingMotionThreshold > 1.0 && effectiveAccel < 5.0
+            ? 0.5
+            : this.config.fightingMotionThreshold;
         const accelScore = Math.min(
           1.0,
-          effectiveAccel / this.config.fightingMotionThreshold,
+          effectiveAccel / effectiveMotionThreshold,
         );
         const flowScore =
-          flowEnergy > 0 ? Math.min(1.0, flowEnergy / 15.0) : accelScore;
+          flowEnergy > 0 ? Math.min(1.0, flowEnergy / flowScale) : accelScore;
         const proximityScore = Math.max(
           0.2,
           iou * 2.5 + (1 - Math.min(1.0, normDist / 1.8)) * 0.5,
         );
 
-        // Require genuine physical movement (acceleration >= 25 px/s², flow >= 10, or mutual speed > 20)
-        if (effectiveAccel >= 25 || flowEnergy >= 10 || (m1 > 20 && m2 > 20)) {
+        // Require genuine physical movement (acceleration, optical flow, or mutual speed)
+        if (isHighAccel || flowEnergy >= 5.0 || isHighSpeed) {
           const confidence = Math.min(
             0.95,
             Math.max(
@@ -736,10 +745,15 @@ export class BehaviorDetector extends BaseDetector {
     height: number,
     roi: { x: number; y: number; width: number; height: number },
   ): { energy: number; turbulence: number } {
-    const minX = Math.max(1, Math.floor(roi.x));
-    const maxX = Math.min(width - 2, Math.ceil(roi.x + roi.width));
-    const minY = Math.max(1, Math.floor(roi.y));
-    const maxY = Math.min(height - 2, Math.ceil(roi.y + roi.height));
+    const boxX = roi.x <= 1.0 ? roi.x * width : roi.x;
+    const boxY = roi.y <= 1.0 ? roi.y * height : roi.y;
+    const boxW = roi.width <= 1.0 ? roi.width * width : roi.width;
+    const boxH = roi.height <= 1.0 ? roi.height * height : roi.height;
+
+    const minX = Math.max(1, Math.floor(boxX));
+    const maxX = Math.min(width - 2, Math.ceil(boxX + boxW));
+    const minY = Math.max(1, Math.floor(boxY));
+    const maxY = Math.min(height - 2, Math.ceil(boxY + boxH));
 
     if (maxX <= minX + 4 || maxY <= minY + 4) {
       return { energy: 0, turbulence: 0 };

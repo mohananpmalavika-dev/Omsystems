@@ -2,17 +2,33 @@ import { randomUUID } from "node:crypto";
 import type { RedisClientType } from "redis";
 import type { StreamLease, StreamLeaseAcquireInput } from "../domain/distributed-lease.types.js";
 import type { StreamLeaseRepository } from "../domain/stream-lease-repository.contract.js";
+import {
+  DistributedStateUnavailableError,
+  NoHealthyMediaGatewayError,
+} from "../../errors/distributed-state.errors.js";
 
 const DEFAULT_LEASE_TTL_MS = 30_000; // 30 seconds
 
 export class RedisStreamLeaseRepository implements StreamLeaseRepository {
-  // In-memory fallback for local dev / testing if Redis is not provided
+  // In-memory fallback ONLY for explicit local dev / standalone / test environments
   private readonly memoryLeases = new Map<string, StreamLease>();
 
   constructor(
     private readonly redis?: RedisClientType | any,
     private readonly keyPrefix = "media:stream-lease:",
   ) {}
+
+  private isStandaloneOrTest(): boolean {
+    return process.env.NODE_ENV === "test" || process.env.MEDIA_STATE_MODE === "standalone";
+  }
+
+  private assertDistributedBackendReady(operation: string): void {
+    if (!this.redis && !this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError(
+        `Distributed state backend (Redis) is required for stream leases (${operation}) in production mode`,
+      );
+    }
+  }
 
   private getCameraKey(cameraId: string, profile = "main"): string {
     return `${this.keyPrefix}${cameraId}:${profile}`;
@@ -23,13 +39,20 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async acquire(input: StreamLeaseAcquireInput): Promise<StreamLease | null> {
+    this.assertDistributedBackendReady("acquire");
     const profile = input.streamProfile || "main";
     const key = this.getCameraKey(input.cameraId, profile);
     const ttlMs = input.ttlMs || DEFAULT_LEASE_TTL_MS;
     const now = Date.now();
     const token = randomUUID();
     const leaseId = randomUUID();
-    const gatewayId = input.preferredGatewayId || "gateway-default-1";
+
+    if (!input.preferredGatewayId) {
+      throw new NoHealthyMediaGatewayError(
+        `Cannot acquire stream lease for camera ${input.cameraId}: no preferred or active media gateway specified`,
+      );
+    }
+    const gatewayId = input.preferredGatewayId;
 
     const lease: StreamLease = {
       leaseId,
@@ -39,7 +62,7 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
       sessionId: input.sessionId,
       ownerInstanceId: input.ownerInstanceId,
       token,
-      relayUrl: `wss://${gatewayId}.sentinel.local/live/${input.cameraId}/${profile}`,
+      relayUrl: `wss://${gatewayId}/live/${input.cameraId}/${profile}`,
       webrtcSessionId: randomUUID(),
       bitrateKbps: input.bitrateKbps || (profile === "main" ? 2048 : 512),
       acquiredAt: now,
@@ -64,14 +87,22 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
         await this.redis.set(this.getLeaseLookupKey(leaseId), key, { PX: ttlMs });
         return lease;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis error during acquire, falling back to memory:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease acquire: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test mode: falling back to memory on Redis error:", err);
       }
     }
 
-    // In-memory fallback
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
+    }
+
     const existing = this.memoryLeases.get(key);
     if (existing && existing.expiresAt > now) {
-      return null; // Active lease exists
+      return null;
     }
 
     this.memoryLeases.set(key, lease);
@@ -79,16 +110,15 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async renew(leaseId: string, token: string, ttlMs = DEFAULT_LEASE_TTL_MS): Promise<boolean> {
+    this.assertDistributedBackendReady("renew");
     const now = Date.now();
     const newExpiresAt = now + ttlMs;
 
     if (this.redis) {
       try {
-        // Resolve camera key from lease lookup index
         const key = await this.redis.get(this.getLeaseLookupKey(leaseId));
         if (!key) return false;
 
-        // Lua Script for atomic token-guarded renewal
         const luaScript = `
           local cur = redis.call("get", KEYS[1])
           if not cur then return 0 end
@@ -110,11 +140,19 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
 
         return result === 1;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis renew error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease renew: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test renew error:", err);
       }
     }
 
-    // In-memory renewal check
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
+    }
+
     for (const [k, l] of this.memoryLeases.entries()) {
       if (l.leaseId === leaseId && l.token === token) {
         if (l.expiresAt < now) {
@@ -130,13 +168,13 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async release(leaseId: string, token: string): Promise<boolean> {
+    this.assertDistributedBackendReady("release");
     if (this.redis) {
       try {
         const lookupKey = this.getLeaseLookupKey(leaseId);
         const key = await this.redis.get(lookupKey);
         if (!key) return false;
 
-        // Lua script: only delete if token matches
         const luaScript = `
           local cur = redis.call("get", KEYS[1])
           if not cur then 
@@ -160,11 +198,19 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
 
         return result === 1;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis release error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease release: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test release error:", err);
       }
     }
 
-    // In-memory release
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
+    }
+
     for (const [k, l] of this.memoryLeases.entries()) {
       if (l.leaseId === leaseId && l.token === token) {
         this.memoryLeases.delete(k);
@@ -176,6 +222,7 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async getByCamera(cameraId: string, profile = "main"): Promise<StreamLease | null> {
+    this.assertDistributedBackendReady("getByCamera");
     const key = this.getCameraKey(cameraId, profile);
     const now = Date.now();
 
@@ -187,8 +234,17 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
         if (lease.expiresAt <= now) return null;
         return lease;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis getByCamera error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease getByCamera: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test getByCamera error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
     }
 
     const lease = this.memoryLeases.get(key);
@@ -202,6 +258,7 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async getById(leaseId: string): Promise<StreamLease | null> {
+    this.assertDistributedBackendReady("getById");
     const now = Date.now();
 
     if (this.redis) {
@@ -214,8 +271,17 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
         if (lease.expiresAt <= now) return null;
         return lease;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis getById error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease getById: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test getById error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
     }
 
     for (const [k, l] of this.memoryLeases.entries()) {
@@ -229,6 +295,7 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async listByInstance(ownerInstanceId: string): Promise<StreamLease[]> {
+    this.assertDistributedBackendReady("listByInstance");
     const results: StreamLease[] = [];
     const now = Date.now();
 
@@ -250,8 +317,17 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
         }
         return results;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis listByInstance error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease listByInstance: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test listByInstance error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
     }
 
     for (const [k, l] of this.memoryLeases.entries()) {
@@ -265,6 +341,7 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
   }
 
   async listByGateway(gatewayId: string): Promise<StreamLease[]> {
+    this.assertDistributedBackendReady("listByGateway");
     const results: StreamLease[] = [];
     const now = Date.now();
 
@@ -286,8 +363,17 @@ export class RedisStreamLeaseRepository implements StreamLeaseRepository {
         }
         return results;
       } catch (err) {
-        console.warn("[RedisStreamLease] Redis listByGateway error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during stream lease listByGateway: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisStreamLease] Standalone/test listByGateway error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory stream lease fallback is prohibited in production mode");
     }
 
     for (const [k, l] of this.memoryLeases.entries()) {

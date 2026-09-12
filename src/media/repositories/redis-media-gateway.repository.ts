@@ -5,6 +5,7 @@ import type {
   GatewayReservation,
 } from "../domain/distributed-lease.types.js";
 import type { MediaGatewayRegistry } from "../domain/media-gateway-registry.contract.js";
+import { DistributedStateUnavailableError } from "../../errors/distributed-state.errors.js";
 
 const DEFAULT_GATEWAY_TTL_SECONDS = 15; // 15s heartbeat timeout
 const DEFAULT_RESERVATION_TTL_SECONDS = 30;
@@ -18,6 +19,18 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
     private readonly keyPrefix = "media:gateway:",
   ) {}
 
+  private isStandaloneOrTest(): boolean {
+    return process.env.NODE_ENV === "test" || process.env.MEDIA_STATE_MODE === "standalone";
+  }
+
+  private assertDistributedBackendReady(operation: string): void {
+    if (!this.redis && !this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError(
+        `Distributed state backend (Redis) is required for media gateways (${operation}) in production mode`,
+      );
+    }
+  }
+
   private getGatewayKey(gatewayId: string): string {
     return `${this.keyPrefix}${gatewayId}:capacity`;
   }
@@ -30,6 +43,7 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
     capacity: GatewayCapacity,
     ttlSeconds = DEFAULT_GATEWAY_TTL_SECONDS,
   ): Promise<void> {
+    this.assertDistributedBackendReady("registerHeartbeat");
     const updated: GatewayCapacity = {
       ...capacity,
       lastHeartbeatAt: Date.now(),
@@ -43,14 +57,24 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
         });
         return;
       } catch (err) {
-        console.warn("[RedisMediaGateway] Redis heartbeat error, using memory:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during gateway heartbeat: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisMediaGateway] Standalone/test heartbeat fallback:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory gateway registration is prohibited in production mode");
     }
 
     this.memoryGateways.set(capacity.gatewayId, updated);
   }
 
   async getGateway(gatewayId: string): Promise<GatewayCapacity | null> {
+    this.assertDistributedBackendReady("getGateway");
     const now = Date.now();
 
     if (this.redis) {
@@ -60,13 +84,21 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
         if (!raw) return null;
         return JSON.parse(raw) as GatewayCapacity;
       } catch (err) {
-        console.warn("[RedisMediaGateway] Redis getGateway error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during getGateway: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisMediaGateway] Standalone/test getGateway error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory gateway state is prohibited in production mode");
     }
 
     const gateway = this.memoryGateways.get(gatewayId);
     if (gateway) {
-      // Check if heartbeat is within 15 seconds
       if (now - gateway.lastHeartbeatAt <= DEFAULT_GATEWAY_TTL_SECONDS * 1000) {
         return gateway;
       }
@@ -76,6 +108,7 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
   }
 
   async listAvailableGateways(region?: string): Promise<GatewayCapacity[]> {
+    this.assertDistributedBackendReady("listAvailableGateways");
     const results: GatewayCapacity[] = [];
     const now = Date.now();
 
@@ -91,13 +124,22 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
               results.push(gw);
             }
           } catch {
-            // ignore
+            // ignore malformed
           }
         }
         return results.sort((a, b) => (a.activeStreams / (a.maxStreams || 1)) - (b.activeStreams / (b.maxStreams || 1)));
       } catch (err) {
-        console.warn("[RedisMediaGateway] Redis listAvailableGateways error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during listAvailableGateways: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisMediaGateway] Standalone/test listAvailableGateways error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory gateway listing is prohibited in production mode");
     }
 
     for (const [id, gw] of this.memoryGateways.entries()) {
@@ -118,6 +160,7 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
     bandwidthMbps = 2,
     ttlSeconds = DEFAULT_RESERVATION_TTL_SECONDS,
   ): Promise<GatewayReservation | null> {
+    this.assertDistributedBackendReady("reserveSlot");
     const reservationId = randomUUID();
     const now = Date.now();
     const expiresAt = now + ttlSeconds * 1000;
@@ -141,8 +184,17 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
         if (!setOk) return null;
         return reservation;
       } catch (err) {
-        console.warn("[RedisMediaGateway] Redis reserveSlot error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during reserveSlot: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisMediaGateway] Standalone/test reserveSlot error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory slot reservation is prohibited in production mode");
     }
 
     this.memoryReservations.set(reservationId, reservation);
@@ -150,14 +202,24 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
   }
 
   async releaseSlot(gatewayId: string, reservationId: string): Promise<boolean> {
+    this.assertDistributedBackendReady("releaseSlot");
     if (this.redis) {
       try {
         const key = this.getReservationKey(gatewayId, reservationId);
         const deleted = await this.redis.del(key);
         return deleted > 0;
       } catch (err) {
-        console.warn("[RedisMediaGateway] Redis releaseSlot error:", err);
+        if (!this.isStandaloneOrTest()) {
+          throw new DistributedStateUnavailableError(
+            `Redis error during releaseSlot: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+        console.warn("[RedisMediaGateway] Standalone/test releaseSlot error:", err);
       }
+    }
+
+    if (!this.isStandaloneOrTest()) {
+      throw new DistributedStateUnavailableError("Local in-memory slot release is prohibited in production mode");
     }
 
     return this.memoryReservations.delete(reservationId);
@@ -169,26 +231,8 @@ export class RedisMediaGatewayRegistry implements MediaGatewayRegistry {
   ): Promise<GatewayCapacity | null> {
     const available = await this.listAvailableGateways(region);
     if (available.length === 0) {
-      // Return a default virtual gateway if none registered
-      return {
-        gatewayId: "gateway-default-cluster-1",
-        instanceId: "inst-primary-1",
-        host: "127.0.0.1",
-        port: 8554,
-        region: region || "global",
-        activeStreams: 0,
-        maxStreams: 500,
-        activeRelays: 0,
-        maxRelays: 200,
-        cpuPercent: 15,
-        gpuPercent: 10,
-        bandwidthMbps: 0,
-        maxBandwidthMbps: 1000,
-        transcodingSessions: 0,
-        healthStatus: "HEALTHY",
-        registeredAt: Date.now(),
-        lastHeartbeatAt: Date.now(),
-      };
+      // Never manufacture synthetic healthy gateways (e.g. gateway-default-cluster-1 / 127.0.0.1)
+      return null;
     }
 
     // Filter gateways that have capacity and bandwidth

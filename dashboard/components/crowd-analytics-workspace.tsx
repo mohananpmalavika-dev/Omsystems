@@ -137,7 +137,7 @@ export function CrowdAnalyticsWorkspace({ branchId }: { branchId?: string }) {
         { x: 10, y: 90 },
       ];
       const res = await crowdApi.createZone({
-        branch_id: selectedBranchId || null,
+        branchId: selectedBranchId || null,
         zoneName: newZoneName,
         zoneType: newZoneType,
         polygon: defaultPolygon,
@@ -174,7 +174,7 @@ export function CrowdAnalyticsWorkspace({ branchId }: { branchId?: string }) {
         { x: 20, y: 38 },
       ];
       const res = await crowdApi.createQueue({
-        branch_id: selectedBranchId || null,
+        branchId: selectedBranchId || null,
         counterNumber: newCounterNum,
         counterName: newCounterName,
         counterType: newCounterType,
