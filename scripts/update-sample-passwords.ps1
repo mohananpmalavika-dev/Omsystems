@@ -8,7 +8,8 @@ $instanceId = "i-03fda9a80e75865fd"
 
 $sql = @"
 UPDATE users SET password_hash = 'scrypt`$ARrxo02jwt7jo6XFNttO7A`$9afGMFkRFIjV4gp8HFhvlAV-7UMLz7Mfnzfj5D2IIRJwtKyvEcrCzpfikeUBw9EXER9vrTS0u3Rwy0qyBi-AUQ', must_change_password = false WHERE lower(username) = 'mgdhanyamohan';
-UPDATE users SET password_hash = 'scrypt`$ynebwQs6K58fQfkWIZXRNA`$xKN35LIv5eMYRyXiWlencHSVRVtEHtk2e-VO0FNnEzXVdVF4KCZtpP2ZxGNhiIMh5DSclooPRLvyyf86wLYLGg', must_change_password = false WHERE lower(username) IN ('basanth', 'admin', 'krypton', 'test');
+UPDATE users SET password_hash = 'scrypt`$ynebwQs6K58fQfkWIZXRNA`$xKN35LIv5eMYRyXiWlencHSVRVtEHtk2e-VO0FNnEzXVdVF4KCZtpP2ZxGNhiIMh5DSclooPRLvyyf86wLYLGg', must_change_password = false WHERE lower(username) IN ('basanth', 'admin', 'krypton');
+UPDATE users SET password_hash = 'scrypt`$EFqOh9Knu1-KIAzLbHR6NA`$xhb7y4QDcBoS4pUR9hM0lT4ayXVwZWv379dcDIG52C7bxGnfTZ-AkGims5wASD9RPvXCp7x2VjfX_fLhP-9xVw', must_change_password = false WHERE lower(username) = 'test';
 "@
 
 $b64 = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($sql))
