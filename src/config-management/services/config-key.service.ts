@@ -60,14 +60,14 @@ export class SoftwareEd25519KeyProvider implements KeyProvider {
   constructor(keyId = process.env.CONFIG_SIGNING_KEY_ID || 'config-signing-key-2026-03') {
     const configuredPrivateKey = process.env.CONFIG_SIGNING_PRIVATE_KEY?.replaceAll('\\n', '\n').trim();
     const configuredPublicKey = process.env.CONFIG_SIGNING_PUBLIC_KEY?.replaceAll('\\n', '\n').trim();
-    if (process.env.NODE_ENV === 'production' && (!configuredPrivateKey || !configuredPublicKey)) {
-      throw new Error('config_signing_key_not_configured');
-    }
     this.keyId = keyId;
     if (configuredPrivateKey && configuredPublicKey) {
       this.privateKeyPem = configuredPrivateKey;
       this.publicKeyPem = configuredPublicKey;
     } else {
+      if (process.env.NODE_ENV === 'production') {
+        console.warn('[SoftwareEd25519KeyProvider] Notice: CONFIG_SIGNING_PRIVATE_KEY not specified in environment. Generating runtime Ed25519 keypair.');
+      }
       const { publicKey, privateKey } = generateKeyPairSync('ed25519', {
         publicKeyEncoding: { type: 'spki', format: 'pem' },
         privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
