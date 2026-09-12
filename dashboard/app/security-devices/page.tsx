@@ -39,6 +39,7 @@ interface DeviceStats {
 
 interface DeviceTypeBreakdown {
   type: string;
+  deviceType?: string;
   count: number;
   online: number;
   offline: number;
@@ -145,7 +146,7 @@ function SecurityDeviceHubContent() {
               Refresh
             </button>
             <Link
-              href="/security-devices/settings"
+              href="/security-devices/integrations"
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
             >
               <Settings className="w-4 h-4" />
@@ -254,7 +255,7 @@ function SecurityDeviceHubContent() {
               return (
                 <Link
                   key={device.type}
-                  href={`/security-devices/${device.type.toLowerCase().replace(/\s+/g, '-')}`}
+                  href={`/security-devices/devices?type=${encodeURIComponent(device.deviceType || device.type)}`}
                   className="block bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-3">
