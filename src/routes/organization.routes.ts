@@ -76,6 +76,51 @@ const updateNodeSchema = z.object({
 
 const nodeIdSchema = z.object({ id: z.string().min(1) });
 
+export function isSuperAdminOrgCreator(user?: any): boolean {
+  if (!user) return false;
+  const role = String(user.role ?? "").toLowerCase();
+  const username = String(user.username ?? "").toLowerCase();
+  const id = String(user.id ?? "").toLowerCase();
+  const email = String(user.email ?? "").toLowerCase();
+
+  const isSuper =
+    role === "super_admin" ||
+    role === "superadmin" ||
+    user.isSuperAdmin === true ||
+    id === "user-superadmin-mgdhanyamohan" ||
+    id === "00000000-0000-4000-8000-000000000001";
+
+  const isAllowedSuperIdentity =
+    username === "mgdhanyamohan" ||
+    username === "krypton" ||
+    username === "kryptonlogic" ||
+    email.startsWith("mgdhanyamohan@") ||
+    email.startsWith("krypton@") ||
+    id === "user-superadmin-mgdhanyamohan" ||
+    id === "user-mgdhanyamohan" ||
+    id === "00000000-0000-4000-8000-000000000001";
+
+  return isSuper && isAllowedSuperIdentity;
+}
+
+export function isSuperAdminUser(user?: any): boolean {
+  if (!user) return false;
+  const role = String(user.role ?? "").toLowerCase();
+  const username = String(user.username ?? "").toLowerCase();
+  const id = String(user.id ?? "").toLowerCase();
+
+  return (
+    role === "super_admin" ||
+    role === "superadmin" ||
+    user.isSuperAdmin === true ||
+    username === "mgdhanyamohan" ||
+    username === "krypton" ||
+    username === "kryptonlogic" ||
+    id === "user-superadmin-mgdhanyamohan" ||
+    id === "00000000-0000-4000-8000-000000000001"
+  );
+}
+
 export async function registerOrganizationRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore & OrganizationStore & UserManagementStore,
@@ -90,12 +135,8 @@ export async function registerOrganizationRoutes(
       request.log.warn({ err, tenantId }, "Failed to fetch organization tree, returning empty tree");
       nodes = [];
     }
-    const role = (request.currentUser?.role ?? "") as string;
-    const isSuperAdmin =
-      role === "super_admin" ||
-      role === "superadmin" ||
-      request.currentUser.username?.toLowerCase() === "mgdhanyamohan" ||
-      request.currentUser.id === "00000000-0000-4000-8000-000000000001";
+    const isSuperAdmin = isSuperAdminUser(request.currentUser);
+    const canCreateOrg = isSuperAdminOrgCreator(request.currentUser);
 
     let data = nodes;
     if (!isSuperAdmin) {
@@ -109,20 +150,14 @@ export async function registerOrganizationRoutes(
       meta: {
         organizationExists,
         accessRestricted: organizationExists && data.length === 0,
-        canCreateRoot: !organizationExists || isSuperAdmin,
+        canCreateRoot: canCreateOrg,
       },
     };
   });
 
   // Get organization statistics
   app.get("/v1/organization/statistics", async (request) => {
-    const role = (request.currentUser?.role ?? "") as string;
-    if (
-      role === "super_admin" ||
-      role === "superadmin" ||
-      request.currentUser.username?.toLowerCase() === "mgdhanyamohan" ||
-      request.currentUser.id === "00000000-0000-4000-8000-000000000001"
-    ) {
+    if (isSuperAdminUser(request.currentUser)) {
       return store.getOrganizationStatistics(request.currentUser.tenantId);
     }
     const visibleNodes = await visibleOrganizationNodes(request, store);
@@ -232,10 +267,20 @@ export async function registerOrganizationRoutes(
   app.post("/v1/organization/nodes", async (request, reply) => {
     const body = createNodeSchema.parse(request.body);
 
+    const isOrganizationRoot = !body.parentNodeId || body.nodeType === "company";
+
     // Check permission
-    if (!body.parentNodeId) {
-      // Creating root company node
-      if (body.nodeType !== "company") {
+    if (isOrganizationRoot) {
+      // Company node cannot have a parent location
+      if (body.parentNodeId && body.nodeType === "company") {
+        return reply.code(400).send({
+          error: "invalid_hierarchy_relationship",
+          message: "Company node cannot have a parent location",
+        });
+      }
+
+      // Creating root company node without parent
+      if (!body.parentNodeId && body.nodeType !== "company") {
         return reply.code(400).send({ 
           error: "invalid_node_type",
           message: "Only company nodes can be created without a parent" 
@@ -243,32 +288,12 @@ export async function registerOrganizationRoutes(
       }
 
       // Check if user has permission to create root organization
-      // Allow super_admin and company_admin to create the root organization
-      if (
-        request.currentUser.role !== "super_admin" &&
-        request.currentUser.role !== "company_admin"
-      ) {
+      // Only super administrators mgdhanyamohan and krypton can create an organization
+      if (!isSuperAdminOrgCreator(request.currentUser)) {
         return reply.code(403).send({ 
           error: "forbidden",
-          message: "Only super_admin or company_admin can create organization" 
+          message: "Only super administrators mgdhanyamohan and krypton can create an organization" 
         });
-      }
-
-      // Allow super_admin to create multiple client/organization roots
-      if (request.currentUser.role !== "super_admin") {
-        const existingNodes = await store.listOrganizationNodes(
-          request.currentUser.tenantId,
-          "company",
-          undefined,
-          false,
-        );
-
-        if (existingNodes.length > 0) {
-          return reply.code(409).send({
-            error: "organization_already_exists",
-            message: "An organization already exists for this tenant. Only one company node is allowed per tenant.",
-          });
-        }
       }
     } else if (
       !(await requireTenantNodeAccess(
@@ -276,7 +301,7 @@ export async function registerOrganizationRoutes(
         reply,
         store,
         "org:manage",
-        body.parentNodeId,
+        body.parentNodeId!,
       ))
     ) {
       return;

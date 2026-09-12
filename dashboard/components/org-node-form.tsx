@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Building2, MapPin, Layers, Globe, Shield } from "lucide-react";
 import { organizationApi } from "@/lib/api-client";
+import { isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
 interface OrgNodeFormProps {
   parentNode?: { id: string; name: string; type: string };
@@ -74,7 +75,12 @@ export function OrgNodeForm({
     if (parentNode && !editNode) {
       validateHierarchy();
     } else if (!parentNode && !editNode) {
-      setValidNodeTypes(["company"]);
+      if (isSuperAdminOrgCreator()) {
+        setValidNodeTypes(["company"]);
+      } else {
+        setValidNodeTypes([]);
+        setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+      }
     }
   }, [parentNode, editNode]);
 
@@ -175,6 +181,11 @@ export function OrgNodeForm({
       if (editNode) {
         await organizationApi.updateNode(editNode.id, payload);
       } else {
+        if (!parentNode && !isSuperAdminOrgCreator()) {
+          setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+          setLoading(false);
+          return;
+        }
         await organizationApi.createNode(payload);
       }
 

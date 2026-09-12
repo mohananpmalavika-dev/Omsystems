@@ -2621,6 +2621,24 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register person re-identification routes');
   }
 
+  // Register Crowd Density & Queue Length Detection routes
+  try {
+    const { registerCrowdAnalyticsRoutes } = await import("./routes/crowd-analytics.routes.js");
+    await registerCrowdAnalyticsRoutes(app, store);
+    app.log.info('Crowd Density & Queue Length Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register crowd analytics routes');
+  }
+
+  // Register Camera Tamper & Defocus Detection routes
+  try {
+    const { registerCameraTamperRoutes } = await import("./routes/camera-tamper.routes.js");
+    await registerCameraTamperRoutes(app, store);
+    app.log.info('Camera Tamper & Defocus Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register camera tamper detection routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");

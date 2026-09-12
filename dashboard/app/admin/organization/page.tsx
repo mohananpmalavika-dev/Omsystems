@@ -41,6 +41,7 @@ import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/comp
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
 import { organizationApi, userApi } from "@/lib/api-client";
 import { CameraPermissionManager } from "@/components/camera-permission-manager";
+import { getCurrentUser, isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
 type OrgNode = {
   id: string;
@@ -145,6 +146,11 @@ export default function OrganizationHierarchyPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canCreateOrg, setCanCreateOrg] = useState(false);
+
+  useEffect(() => {
+    setCanCreateOrg(isSuperAdminOrgCreator());
+  }, []);
 
   // Tree & Data state
   const [treeData, setTreeData] = useState<OrgNode[]>([]);
@@ -318,6 +324,9 @@ export default function OrganizationHierarchyPage() {
       const treeRes = await fetchWithAuth("/api/control/v1/organization/tree");
       if (treeRes.ok) {
         const treeJson = await treeRes.json();
+        if (typeof treeJson.meta?.canCreateRoot === "boolean") {
+          setCanCreateOrg(treeJson.meta.canCreateRoot);
+        }
         const nodes = Array.isArray(treeJson) ? treeJson : treeJson.data || [];
         setTreeData(nodes);
         const selectedRoot = nodes.find((node: OrgNode) => node.id === branding.organizationId) ?? nodes[0];
@@ -516,7 +525,7 @@ export default function OrganizationHierarchyPage() {
 
   function getValidChildTypes(parent: OrgNode | null): Array<{ value: OrgNode["type"]; label: string }> {
     if (!parent) {
-      return [{ value: "company", label: "Company / Root Organization" }];
+      return canCreateOrg ? [{ value: "company", label: "Company / Root Organization" }] : [];
     }
     switch (parent.type) {
       case "company":
@@ -578,8 +587,20 @@ export default function OrganizationHierarchyPage() {
   }
 
   function openAddNode(parent: OrgNode | null, defaultType?: OrgNode["type"]) {
+    if (!parent && !canCreateOrg) {
+      if (flatNodes.length > 0) {
+        parent = flatNodes[0];
+      } else {
+        setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+        return;
+      }
+    }
     setSelectedParentNode(parent);
     const valid = getValidChildTypes(parent);
+    if (valid.length === 0) {
+      setError("No valid sub-locations can be added under this node.");
+      return;
+    }
     setNewNodeType(defaultType && valid.some((v) => v.value === defaultType) ? defaultType : valid[0].value);
     setNewNodeName("");
     setNewNodeCode("");
@@ -590,6 +611,10 @@ export default function OrganizationHierarchyPage() {
   async function handleCreateNode(e: React.FormEvent) {
     e.preventDefault();
     if (!newNodeName.trim()) return;
+    if ((!selectedParentNode || newNodeType === "company") && !canCreateOrg) {
+      setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -1189,12 +1214,14 @@ export default function OrganizationHierarchyPage() {
             >
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
             </button>
-            <button
-              onClick={() => openAddNode(null, "company")}
-              className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold rounded-lg flex items-center gap-2 transition-colors"
-            >
-              <Plus size={14} /> Register Organization
-            </button>
+            {canCreateOrg && (
+              <button
+                onClick={() => openAddNode(null, "company")}
+                className="px-3.5 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <Plus size={14} /> Register Organization
+              </button>
+            )}
             <button
               onClick={() => {
                 setEmpPhotoData("");
@@ -1339,7 +1366,9 @@ export default function OrganizationHierarchyPage() {
                   </div>
                 ) : treeData.length === 0 ? (
                   <div className="py-12 text-center text-slate-500 text-sm">
-                    No organization root exists. Click "Register Organization" above to get started.
+                    {canCreateOrg
+                      ? 'No organization root exists. Click "Register Organization" above to get started.'
+                      : "No organization root exists. Only super administrators (mgdhanyamohan or krypton) can create the organization."}
                   </div>
                 ) : (
                   <div className="space-y-1">{treeData.map((rootNode) => renderTreeItem(rootNode, 0))}</div>
@@ -2049,19 +2078,24 @@ export default function OrganizationHierarchyPage() {
                 <div>
                   <label className="block text-slate-300 font-medium mb-1 flex items-center justify-between">
                     <span>Parent Location / Organization</span>
-                    <span className="text-[10px] text-slate-400 font-normal">Select parent or leave empty for root</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      {canCreateOrg ? "Select parent or leave empty for root" : "Select parent location"}
+                    </span>
                   </label>
                   <select
                     value={selectedParentNode?.id || ""}
                     onChange={(e) => {
                       const found = flatNodes.find((n) => n.id === e.target.value) || null;
+                      if (!found && !canCreateOrg) return;
                       setSelectedParentNode(found);
                       const valid = getValidChildTypes(found);
-                      setNewNodeType(valid[0].value);
+                      if (valid.length > 0) setNewNodeType(valid[0].value);
                     }}
                     className="w-full bg-slate-950 border border-slate-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-lg p-2.5 text-slate-200 text-xs font-mono"
                   >
-                    <option value="">None (Create as Top-Level Root Organization)</option>
+                    {canCreateOrg && (
+                      <option value="">None (Create as Top-Level Root Organization)</option>
+                    )}
                     {flatNodes.map((n) => (
                       <option key={n.id} value={n.id}>
                         {n.name} ({n.type.toUpperCase()})

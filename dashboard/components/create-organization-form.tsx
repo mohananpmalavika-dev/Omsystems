@@ -1,9 +1,10 @@
 "use client";
 
 import { Building2, CheckCircle, Upload, Image as ImageIcon, X } from "lucide-react";
-import { useState, FormEvent, useRef } from "react";
+import { useState, useEffect, FormEvent, useRef } from "react";
 import { organizationApi } from "@/lib/api-client";
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
+import { isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
 interface CreateOrganizationFormProps {
   onSuccess: () => void;
@@ -13,6 +14,15 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
   const { updateBranding } = useOrgBranding();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isPermitted, setIsPermitted] = useState(true);
+
+  useEffect(() => {
+    const permitted = isSuperAdminOrgCreator();
+    setIsPermitted(permitted);
+    if (!permitted) {
+      setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+    }
+  }, []);
   const [formData, setFormData] = useState({
     name: "",
     code: "",
@@ -87,6 +97,10 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!isSuperAdminOrgCreator()) {
+      setError("Only super administrators mgdhanyamohan and krypton can create an organization.");
+      return;
+    }
     setError(null);
     setIsSubmitting(true);
 

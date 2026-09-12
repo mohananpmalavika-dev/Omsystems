@@ -70,7 +70,7 @@ export class ReidFeatureExtractor {
 
     let sumSquares = 0;
     for (let i = 0; i < vector.length; i++) {
-      const val = vector[i];
+      const val = vector[i]!;
       if (!Number.isFinite(val)) {
         throw new Error(`Embedding component at index ${i} is non-finite: ${val}`);
       }
@@ -84,7 +84,7 @@ export class ReidFeatureExtractor {
 
     const result = new Array<number>(vector.length);
     for (let i = 0; i < vector.length; i++) {
-      result[i] = vector[i] / norm;
+      result[i] = vector[i]! / norm;
     }
     return result;
   }
@@ -102,7 +102,7 @@ export class ReidFeatureExtractor {
 
     let dot = 0;
     for (let i = 0; i < vectorA.length; i++) {
-      dot += vectorA[i] * vectorB[i];
+      dot += vectorA[i]! * vectorB[i]!;
     }
 
     // Clamp for IEEE-754 precision tolerance
@@ -224,7 +224,7 @@ export class ReidFeatureExtractor {
       sumQuality += s.quality.overallQuality;
 
       for (let i = 0; i < REID_EMBEDDING_DIMENSION; i++) {
-        aggregated[i] += s.embedding[i] * weight;
+        aggregated[i] = (aggregated[i] ?? 0) + s.embedding[i]! * weight;
       }
     }
 
@@ -256,7 +256,7 @@ export class ReidFeatureExtractor {
     const updated = new Array<number>(REID_EMBEDDING_DIMENSION);
 
     for (let i = 0; i < REID_EMBEDDING_DIMENSION; i++) {
-      updated[i] = safeAlpha * galleryEmbedding[i] + (1 - safeAlpha) * newTrackletEmbedding[i];
+      updated[i] = safeAlpha * galleryEmbedding[i]! + (1 - safeAlpha) * newTrackletEmbedding[i]!;
     }
 
     return ReidFeatureExtractor.normalizeL2(updated);
@@ -296,9 +296,9 @@ export class ReidFeatureExtractor {
 
       for (let x = 0; x < width; x++) {
         const idx = (y * width + x) * channels;
-        const r = rgb[idx];
-        const g = rgb[idx + 1];
-        const b = rgb[idx + 2];
+        const r = rgb[idx] ?? 0;
+        const g = rgb[idx + 1] ?? 0;
+        const b = rgb[idx + 2] ?? 0;
 
         // RGB to HSV
         const max = Math.max(r, g, b);
@@ -325,9 +325,9 @@ export class ReidFeatureExtractor {
         const isRightHalf = x >= Math.floor(width / 2);
         const halfOffset = isRightHalf ? 40 : 0;
 
-        embedding[partOffset + halfOffset + hBin] += 1.0;
-        embedding[partOffset + halfOffset + 16 + sBin] += 1.0;
-        embedding[partOffset + halfOffset + 24 + vBin] += 1.0;
+        embedding[partOffset + halfOffset + hBin] = (embedding[partOffset + halfOffset + hBin] ?? 0) + 1.0;
+        embedding[partOffset + halfOffset + 16 + sBin] = (embedding[partOffset + halfOffset + 16 + sBin] ?? 0) + 1.0;
+        embedding[partOffset + halfOffset + 24 + vBin] = (embedding[partOffset + halfOffset + 24 + vBin] ?? 0) + 1.0;
       }
     }
 
@@ -339,11 +339,13 @@ export class ReidFeatureExtractor {
         const idxRight = (y * width + (x + 1)) * channels;
         const idxDown = ((y + 1) * width + x) * channels;
 
-        const gx = Math.abs(rgb[idxRight] - rgb[idxCurr]);
-        const gy = Math.abs(rgb[idxDown] - rgb[idxCurr]);
+        const gx = Math.abs((rgb[idxRight] ?? 0) - (rgb[idxCurr] ?? 0));
+        const gy = Math.abs((rgb[idxDown] ?? 0) - (rgb[idxCurr] ?? 0));
 
-        embedding[textureOffset++] += gx / 255;
-        embedding[textureOffset++] += gy / 255;
+        embedding[textureOffset] = (embedding[textureOffset] ?? 0) + gx / 255;
+        textureOffset++;
+        embedding[textureOffset] = (embedding[textureOffset] ?? 0) + gy / 255;
+        textureOffset++;
       }
     }
 

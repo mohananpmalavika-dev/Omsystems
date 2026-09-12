@@ -149,3 +149,35 @@ export function getCurrentUser(): any | null {
   return null;
 }
 
+/**
+ * Check if the user is an authorized super admin who can create organizations
+ * (mgdhanyamohan or krypton)
+ */
+export function isSuperAdminOrgCreator(user?: any): boolean {
+  if (!user) user = getCurrentUser();
+  if (!user) return false;
+  const username = String(user.username || user.name || "").toLowerCase();
+  const email = String(user.email || "").toLowerCase();
+  const id = String(user.id || user.userId || "").toLowerCase();
+  const role = String(user.role || "").toLowerCase();
+
+  const isSuper =
+    role === "super_admin" ||
+    role === "superadmin" ||
+    user.isSuperAdmin === true ||
+    id === "user-superadmin-mgdhanyamohan" ||
+    id === "00000000-0000-4000-8000-000000000001";
+
+  const isAllowedSuperIdentity =
+    username === "mgdhanyamohan" ||
+    username === "krypton" ||
+    username === "kryptonlogic" ||
+    email.startsWith("mgdhanyamohan@") ||
+    email.startsWith("krypton@") ||
+    id === "user-superadmin-mgdhanyamohan" ||
+    id === "user-mgdhanyamohan" ||
+    id === "00000000-0000-4000-8000-000000000001";
+
+  return isSuper && isAllowedSuperIdentity;
+}
+

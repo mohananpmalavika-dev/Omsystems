@@ -216,6 +216,15 @@
       "notes": "Analytics utility"
     },
     {
+      "file": "camera-tamper-detector.ts",
+      "id": "camera-tamper",
+      "status": "PRODUCTION",
+      "evidence": "Discrete Laplacian variance, ITU-R BT.601 luminance saturation, and SSIM structural shift statistical frame analysis without mock data",
+      "model": null,
+      "version": "2.0.1",
+      "notes": "Edge-based statistical frame analysis for movement, blinding, covering, defocus and spray"
+    },
+    {
       "file": "ai-*.ts",
       "id": "ai-tools",
       "status": "PLACEHOLDER",

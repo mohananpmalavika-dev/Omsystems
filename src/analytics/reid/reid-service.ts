@@ -213,7 +213,7 @@ export class ReidService {
       let priorCameraId: string | undefined;
 
       if (priorSightings.length > 0) {
-        const lastSighting = priorSightings[priorSightings.length - 1];
+        const lastSighting = priorSightings[priorSightings.length - 1]!;
         priorCameraId = lastSighting.camera_id;
 
         validation = this.topologyValidator.validateTransition(
@@ -445,8 +445,8 @@ export class ReidService {
     const transitions: CameraTransitionSegment[] = [];
 
     for (let i = 0; i < sightings.length - 1; i++) {
-      const from = sightings[i];
-      const to = sightings[i + 1];
+      const from = sightings[i]!;
+      const to = sightings[i + 1]!;
 
       const transitMs = to.entered_at.getTime() - from.exited_at.getTime();
       const transitDurationSeconds = transitMs / 1000.0;
@@ -475,8 +475,8 @@ export class ReidService {
       });
     }
 
-    const firstSeen = sightings[0].entered_at;
-    const lastSeen = sightings[sightings.length - 1].exited_at;
+    const firstSeen = sightings[0]!.entered_at;
+    const lastSeen = sightings[sightings.length - 1]!.exited_at;
     const journeySpanSeconds = Math.max(0, (lastSeen.getTime() - firstSeen.getTime()) / 1000);
     const totalDwellSeconds = sightings.reduce((acc, s) => acc + s.dwell_seconds, 0);
     const uniqueCameras = new Set(sightings.map((s) => s.camera_id));

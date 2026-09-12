@@ -215,7 +215,7 @@ export default function AdminPage() {
                 <Building2 size={46} style={{ color: "#d97706", marginBottom: "1rem" }} />
                 <h2>No organization has been configured</h2>
                 <p style={{ color: "#667286", lineHeight: 1.6 }}>
-                  A super administrator or company administrator must create the organization before employees can be assigned.
+                  Only super administrators (mgdhanyamohan or krypton) can create the organization before employees and branches can be assigned.
                 </p>
                 <a className="btn btn-primary" href="/">Return to security operations</a>
               </div>

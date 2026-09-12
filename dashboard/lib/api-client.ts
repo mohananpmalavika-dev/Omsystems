@@ -2113,6 +2113,322 @@ export const reidApi = {
     fetchApi<{ success: boolean; data: ReidStats }>('/v1/analytics/reid/stats'),
 };
 
+export interface CrowdZone {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  camera_id: string | null;
+  zone_name: string;
+  zone_type: 'branch_hall' | 'waiting_lounge' | 'atm_vestibule' | 'teller_area' | 'kiosk_zone' | 'entrance_foyer' | 'corridor';
+  polygon: Array<{ x: number; y: number }>;
+  area_sqm: number;
+  nominal_capacity: number;
+  warning_capacity: number;
+  max_capacity: number;
+  enabled: boolean;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CounterQueue {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  camera_id: string | null;
+  counter_number: string;
+  counter_name: string;
+  counter_type: 'cash_deposit' | 'cash_withdrawal' | 'general_teller' | 'forex_remittance' | 'loan_desk' | 'account_services' | 'customer_support';
+  queue_polygon: Array<{ x: number; y: number }>;
+  service_station_polygon: Array<{ x: number; y: number }>;
+  max_queue_length_threshold: number;
+  max_wait_time_seconds_threshold: number;
+  alert_severity: 'P1' | 'P2' | 'P3';
+  enabled: boolean;
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ZoneDensityResult {
+  zoneId: string;
+  zoneName: string;
+  zoneType: string;
+  personCount: number;
+  densityLevel: 'empty' | 'sparse' | 'normal' | 'crowded' | 'overcrowded' | 'dangerous';
+  occupancyPercentage: number;
+  densityPerSqm: number;
+  averageSpeed: number;
+  isBottleneck: boolean;
+  heatIntensity: number;
+  trend: 'increasing' | 'decreasing' | 'stable';
+  participantTrackIds: string[];
+  centroid: { x: number; y: number };
+  requiresAlert: boolean;
+  alertSeverity?: 'P1' | 'P2' | 'P3';
+}
+
+export interface QueueMetricResult {
+  queueId: string;
+  counterNumber: string;
+  counterName: string;
+  counterType: string;
+  currentQueueLength: number;
+  servedPersonCount: number;
+  avgWaitTimeSeconds: number;
+  maxWaitTimeSeconds: number;
+  isCounterAttended: boolean;
+  thresholdExceeded: boolean;
+  bottleneckDetected: boolean;
+  participantTrackIds: string[];
+  waitingPersons: Array<{
+    trackId: string;
+    waitSeconds: number;
+    distanceToCounter: number;
+  }>;
+  requiresAlert: boolean;
+  incidentType?: string;
+  alertSeverity?: 'P1' | 'P2' | 'P3';
+}
+
+export interface CrowdDensitySnapshot {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  zone_id: string;
+  camera_id: string | null;
+  person_count: number;
+  density_level: string;
+  occupancy_percentage: number;
+  density_per_sqm: number;
+  average_speed: number;
+  is_bottleneck: boolean;
+  heat_intensity: number;
+  trend: string;
+  snapshot_metadata: Record<string, any>;
+  timestamp: string;
+  created_at: string;
+}
+
+export interface CounterQueueSnapshot {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  queue_id: string;
+  camera_id: string | null;
+  current_queue_length: number;
+  served_person_count: number;
+  avg_wait_time_seconds: number;
+  max_wait_time_seconds: number;
+  is_counter_attended: boolean;
+  threshold_exceeded: boolean;
+  bottleneck_detected: boolean;
+  participant_track_ids: string[];
+  snapshot_metadata: Record<string, any>;
+  timestamp: string;
+  created_at: string;
+}
+
+export interface CrowdQueueIncident {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  camera_id: string | null;
+  incident_type: 'crowd_density_exceeded' | 'queue_length_exceeded' | 'wait_time_sla_breach' | 'unattended_counter_with_queue' | 'stampede_risk_bottleneck';
+  severity: 'P1' | 'P2' | 'P3';
+  entity_type: 'zone' | 'counter_queue';
+  entity_id: string;
+  entity_name: string;
+  trigger_value: number;
+  threshold_value: number;
+  confidence: number;
+  explanation: string;
+  snapshot_url: string | null;
+  review_status: 'pending' | 'acknowledged' | 'resolved' | 'false_positive';
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  resolution_notes: string | null;
+  metadata: Record<string, any>;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface CounterRecommendation {
+  id: string;
+  type: 'open_counter' | 'rebalance_queue' | 'staff_alert';
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  message: string;
+  recommendedCounterNumber?: string;
+  sourceQueueId?: string;
+  triggeredAt: string;
+}
+
+export interface CrowdKPIStats {
+  activeZonesCount: number;
+  activeQueuesCount: number;
+  totalHallOccupancy: number;
+  peakOccupancyToday: number;
+  averageWaitTimeSeconds: number;
+  maxWaitTimeSecondsToday: number;
+  overallDensityLevel: 'empty' | 'sparse' | 'normal' | 'crowded' | 'overcrowded' | 'dangerous';
+  slaComplianceRate: number;
+  openIncidentsCount: {
+    total: number;
+    p1: number;
+    p2: number;
+    p3: number;
+  };
+}
+
+export interface CrowdLiveStatus {
+  timestamp: string;
+  zones: ZoneDensityResult[];
+  queues: QueueMetricResult[];
+  recommendations: CounterRecommendation[];
+  kpis: CrowdKPIStats;
+}
+
+export interface CrowdQueueConfig {
+  tenant_id: string;
+  branch_id: string | null;
+  default_queue_threshold: number;
+  default_wait_time_threshold_seconds: number;
+  density_warning_percentage: number;
+  density_critical_percentage: number;
+  bottleneck_speed_threshold: number;
+  sla_target_compliance_percentage: number;
+  alert_cooldown_seconds: number;
+  auto_recommend_extra_counters: boolean;
+  isDefault?: boolean;
+}
+
+export const crowdApi = {
+  listZones: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: CrowdZone[] }>(`/v1/analytics/crowd/zones${q}`);
+  },
+  createZone: (data: Partial<CrowdZone> & { zoneName: string; zoneType: string; polygon: Array<{ x: number; y: number }> }) =>
+    fetchApi<{ success: boolean; data: CrowdZone }>('/v1/analytics/crowd/zones', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateZone: (data: Partial<CrowdZone> & { id: string; zoneName: string; zoneType: string; polygon: Array<{ x: number; y: number }> }) =>
+    fetchApi<{ success: boolean; data: CrowdZone }>('/v1/analytics/crowd/zones', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteZone: (id: string) =>
+    fetchApi<{ success: boolean; data: { deleted: boolean } }>(`/v1/analytics/crowd/zones/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  listQueues: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: CounterQueue[] }>(`/v1/analytics/crowd/queues${q}`);
+  },
+  createQueue: (data: Partial<CounterQueue> & { counterNumber: string; counterName: string; counterType: string; queuePolygon: Array<{ x: number; y: number }>; serviceStationPolygon: Array<{ x: number; y: number }> }) =>
+    fetchApi<{ success: boolean; data: CounterQueue }>('/v1/analytics/crowd/queues', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateQueue: (data: Partial<CounterQueue> & { id: string; counterNumber: string; counterName: string; counterType: string; queuePolygon: Array<{ x: number; y: number }>; serviceStationPolygon: Array<{ x: number; y: number }> }) =>
+    fetchApi<{ success: boolean; data: CounterQueue }>('/v1/analytics/crowd/queues', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  deleteQueue: (id: string) =>
+    fetchApi<{ success: boolean; data: { deleted: boolean } }>(`/v1/analytics/crowd/queues/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  analyzeFrame: (data: {
+    branchId?: string;
+    cameraId?: string;
+    timestamp?: number | string;
+    persons: Array<{
+      trackId: string;
+      boundingBox: { x: number; y: number; width: number; height: number };
+      confidence?: number;
+      velocity?: { x: number; y: number };
+    }>;
+    snapshotUrl?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/analytics/crowd/analyze-frame', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getLiveStatus: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: CrowdLiveStatus }>(`/v1/analytics/crowd/live${q}`);
+  },
+  getDensityHistory: (params?: { branchId?: string; zoneId?: string; fromDate?: string; toDate?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.branchId) sp.set('branchId', params.branchId);
+    if (params?.zoneId) sp.set('zoneId', params.zoneId);
+    if (params?.fromDate) sp.set('fromDate', params.fromDate);
+    if (params?.toDate) sp.set('toDate', params.toDate);
+    if (params?.limit) sp.set('limit', String(params.limit));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ success: boolean; data: CrowdDensitySnapshot[] }>(`/v1/analytics/crowd/density-history${qs}`);
+  },
+  getQueueMetrics: (params?: { branchId?: string; queueId?: string; fromDate?: string; toDate?: string; limit?: number }) => {
+    const sp = new URLSearchParams();
+    if (params?.branchId) sp.set('branchId', params.branchId);
+    if (params?.queueId) sp.set('queueId', params.queueId);
+    if (params?.fromDate) sp.set('fromDate', params.fromDate);
+    if (params?.toDate) sp.set('toDate', params.toDate);
+    if (params?.limit) sp.set('limit', String(params.limit));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ success: boolean; data: CounterQueueSnapshot[] }>(`/v1/analytics/crowd/queue-metrics${qs}`);
+  },
+  listIncidents: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    incidentType?: string;
+    severity?: 'P1' | 'P2' | 'P3';
+    reviewStatus?: 'pending' | 'acknowledged' | 'resolved' | 'false_positive';
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const sp = new URLSearchParams();
+    if (params?.branchId) sp.set('branchId', params.branchId);
+    if (params?.cameraId) sp.set('cameraId', params.cameraId);
+    if (params?.incidentType) sp.set('incidentType', params.incidentType);
+    if (params?.severity) sp.set('severity', params.severity);
+    if (params?.reviewStatus) sp.set('reviewStatus', params.reviewStatus);
+    if (params?.fromDate) sp.set('fromDate', params.fromDate);
+    if (params?.toDate) sp.set('toDate', params.toDate);
+    if (params?.limit) sp.set('limit', String(params.limit));
+    if (params?.offset) sp.set('offset', String(params.offset));
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return fetchApi<{ success: boolean; data: CrowdQueueIncident[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/crowd/incidents${qs}`
+    );
+  },
+  getIncident: (id: string) =>
+    fetchApi<{ success: boolean; data: CrowdQueueIncident }>(`/v1/analytics/crowd/incidents/${encodeURIComponent(id)}`),
+  reviewIncident: (id: string, data: { reviewStatus: 'acknowledged' | 'resolved' | 'false_positive'; resolutionNotes?: string }) =>
+    fetchApi<{ success: boolean; data: CrowdQueueIncident }>(`/v1/analytics/crowd/incidents/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getStats: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: CrowdKPIStats }>(`/v1/analytics/crowd/stats${q}`);
+  },
+  getRecommendations: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: CounterRecommendation[] }>(`/v1/analytics/crowd/recommendations${q}`);
+  },
+  getConfig: () => fetchApi<{ success: boolean; data: CrowdQueueConfig }>('/v1/analytics/crowd/config'),
+  updateConfig: (data: Partial<CrowdQueueConfig>) =>
+    fetchApi<{ success: boolean; data: CrowdQueueConfig }>('/v1/analytics/crowd/config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+};
+
 export const bankingAnalyticsApi = {
   listSessions: (filters: { tenantId: string; branchId?: string }) => {
     const params = new URLSearchParams({ tenantId: filters.tenantId });
@@ -2736,6 +3052,200 @@ export const signedConfigApi = {
     fetchApi<{ success: boolean; data: any[] }>(
       `/v1/config/golden-templates/history${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ''}`
     ),
+};
+
+export interface CameraTamperMetrics {
+  luminance: number;
+  variance: number;
+  laplacianVariance: number;
+  edgeDensity: number;
+  entropy: number;
+  structuralSimilarity: number;
+  sceneChangeScore: number;
+  highlightFraction: number;
+  shadowFraction: number;
+  colorShift?: number;
+}
+
+export interface CameraTamperEvent {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  camera_name?: string;
+  branch_id?: string | null;
+  tamper_type: 'blinding' | 'covering' | 'movement' | 'defocus' | 'spray';
+  severity: 'P1' | 'P2' | 'P3' | 'P4';
+  confidence: number;
+  metrics: CameraTamperMetrics;
+  status: 'detected' | 'acknowledged' | 'resolved' | 'false_positive';
+  snapshot_url?: string | null;
+  baseline_snapshot_url?: string | null;
+  notes?: string | null;
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  detected_at: string;
+  created_at: string;
+}
+
+export interface CameraTamperBaseline {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  baseline_luminance: number;
+  baseline_variance: number;
+  baseline_edge_density: number;
+  baseline_entropy: number;
+  baseline_laplacian_variance: number;
+  reference_frame_hash?: string | null;
+  reference_histogram: number[];
+  calibrated_at: string;
+  sample_frames_count: number;
+  updated_at: string;
+}
+
+export interface CameraTamperConfig {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  sensitivity: number;
+  defocus_threshold: number;
+  blinding_threshold: number;
+  covering_threshold: number;
+  movement_threshold: number;
+  spray_threshold: number;
+  debounce_frames: number;
+  auto_recalibrate_hours: number;
+  alert_on_defocus: boolean;
+  alert_on_blinding: boolean;
+  alert_on_covering: boolean;
+  alert_on_movement: boolean;
+  alert_on_spray: boolean;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CameraTamperStats {
+  totalEvents: number;
+  activeEvents: number;
+  byType: Record<'blinding' | 'covering' | 'movement' | 'defocus' | 'spray', number>;
+  bySeverity: Record<'P1' | 'P2' | 'P3' | 'P4', number>;
+  byStatus: Record<'detected' | 'acknowledged' | 'resolved' | 'false_positive', number>;
+  camerasMonitored: number;
+  camerasWithActiveTamper: number;
+  lastEventAt?: string | null;
+}
+
+export const cameraTamperApi = {
+  listEvents: (params?: {
+    cameraId?: string;
+    branchId?: string;
+    tamperType?: string;
+    severity?: string;
+    status?: string;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.cameraId) q.set('cameraId', params.cameraId);
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.tamperType) q.set('tamperType', params.tamperType);
+    if (params?.severity) q.set('severity', params.severity);
+    if (params?.status) q.set('status', params.status);
+    if (params?.fromDate) q.set('fromDate', params.fromDate);
+    if (params?.toDate) q.set('toDate', params.toDate);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    return fetchApi<{
+      success: boolean;
+      data: CameraTamperEvent[];
+      pagination: { total: number; limit: number; offset: number };
+    }>(`/v1/analytics/tamper/events?${q}`);
+  },
+
+  getEvent: (id: string) =>
+    fetchApi<{ success: boolean; data: CameraTamperEvent }>(`/v1/analytics/tamper/events/${encodeURIComponent(id)}`),
+
+  updateEventStatus: (id: string, status: 'acknowledged' | 'resolved' | 'false_positive', notes?: string) =>
+    fetchApi<{ success: boolean; data: CameraTamperEvent }>(
+      `/v1/analytics/tamper/events/${encodeURIComponent(id)}/status`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      }
+    ),
+
+  ingestEvent: (data: Partial<CameraTamperEvent> & { cameraId: string; tamperType: string; confidence: number; metrics: any }) =>
+    fetchApi<{ success: boolean; data: CameraTamperEvent }>('/v1/analytics/tamper/events', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  analyzeFrame: (payload: {
+    cameraId: string;
+    branchId?: string;
+    frameBase64?: string;
+    width?: number;
+    height?: number;
+    channels?: number;
+    bypassDebounce?: boolean;
+    snapshotUrl?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        evaluation: {
+          isTampered: boolean;
+          tamperType: string | null;
+          severity: string | null;
+          confidence: number;
+          metrics: CameraTamperMetrics;
+          reasons: string[];
+          requiresAlert: boolean;
+        };
+        confirmed: boolean;
+        consecutiveFrames: number;
+        savedEvent: CameraTamperEvent | null;
+      };
+    }>('/v1/analytics/tamper/analyze-frame', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getBaseline: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: CameraTamperBaseline }>(
+      `/v1/analytics/tamper/baselines/${encodeURIComponent(cameraId)}`
+    ),
+
+  recalibrateBaseline: (cameraId: string, payload?: { frameBase64?: string; width?: number; height?: number; channels?: number }) =>
+    fetchApi<{ success: boolean; data: CameraTamperBaseline }>(
+      `/v1/analytics/tamper/baselines/${encodeURIComponent(cameraId)}/recalibrate`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }
+    ),
+
+  getConfig: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: CameraTamperConfig }>(
+      `/v1/analytics/tamper/config/${encodeURIComponent(cameraId)}`
+    ),
+
+  updateConfig: (cameraId: string, updates: Partial<CameraTamperConfig>) =>
+    fetchApi<{ success: boolean; data: CameraTamperConfig }>(
+      `/v1/analytics/tamper/config/${encodeURIComponent(cameraId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      }
+    ),
+
+  getStats: (cameraId?: string) => {
+    const q = cameraId ? `?cameraId=${encodeURIComponent(cameraId)}` : '';
+    return fetchApi<{ success: boolean; data: CameraTamperStats }>(`/v1/analytics/tamper/stats${q}`);
+  },
 };
 
 export { ApiError };

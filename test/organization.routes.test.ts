@@ -64,33 +64,58 @@ describe("organization routes", () => {
     expect(response.body).not.toContain(companyNode.name);
   }, 15_000);
 
-  it("only offers root creation to an administrator of an empty tenant", async () => {
-    const user: User = {
+  it("only offers root creation to super administrators mgdhanyamohan and krypton", async () => {
+    const mgdhanyamohanUser: User = {
+      id: "user-superadmin-mgdhanyamohan",
+      tenantId: "tenant-1",
+      displayName: "Dhanya Mohan (Superadmin)",
+      username: "mgdhanyamohan",
+      role: "super_admin",
+    };
+    const kryptonUser: User = {
+      id: "user-krypton",
+      tenantId: "tenant-1",
+      displayName: "Krypton Admin",
+      username: "krypton",
+      role: "super_admin",
+    };
+    const otherAdminUser: User = {
       id: "admin-1",
       tenantId: "tenant-1",
       displayName: "Company Administrator",
+      username: "otheradmin",
       role: "company_admin",
     };
-    const app = await createApp(user, {
+
+    const appMg = await createApp(mgdhanyamohanUser, {
       getOrganizationTree: vi.fn().mockResolvedValue([]),
       listAccessibleNodes: vi.fn().mockResolvedValue([]),
     });
+    const resMg = await appMg.inject({ method: "GET", url: "/v1/organization/tree" });
+    expect(resMg.json().meta.canCreateRoot).toBe(true);
 
-    const response = await app.inject({ method: "GET", url: "/v1/organization/tree" });
-
-    expect(response.json().meta).toEqual({
-      organizationExists: false,
-      accessRestricted: false,
-      canCreateRoot: true,
+    const appKrypton = await createApp(kryptonUser, {
+      getOrganizationTree: vi.fn().mockResolvedValue([]),
+      listAccessibleNodes: vi.fn().mockResolvedValue([]),
     });
+    const resKrypton = await appKrypton.inject({ method: "GET", url: "/v1/organization/tree" });
+    expect(resKrypton.json().meta.canCreateRoot).toBe(true);
+
+    const appOther = await createApp(otherAdminUser, {
+      getOrganizationTree: vi.fn().mockResolvedValue([]),
+      listAccessibleNodes: vi.fn().mockResolvedValue([]),
+    });
+    const resOther = await appOther.inject({ method: "GET", url: "/v1/organization/tree" });
+    expect(resOther.json().meta.canCreateRoot).toBe(false);
   });
 
-  it("assigns the root creator so the new organization remains visible", async () => {
+  it("allows mgdhanyamohan and krypton to create root organization and assigns the creator", async () => {
     const user: User = {
-      id: "admin-1",
+      id: "user-superadmin-mgdhanyamohan",
       tenantId: "tenant-1",
-      displayName: "Company Administrator",
-      role: "company_admin",
+      displayName: "Dhanya Mohan (Superadmin)",
+      username: "mgdhanyamohan",
+      role: "super_admin",
     };
     const assignUserToOrganization = vi.fn().mockResolvedValue({});
     const writeAudit = vi.fn().mockResolvedValue(undefined);
@@ -115,6 +140,46 @@ describe("organization routes", () => {
       user.id,
     );
     expect(writeAudit).toHaveBeenCalledOnce();
+  });
+
+  it("denies organization creation to non-superadmin users but allows zone/region/area/branch creation", async () => {
+    const user: User = {
+      id: "admin-1",
+      tenantId: "tenant-1",
+      displayName: "Company Administrator",
+      username: "normal_admin",
+      role: "company_admin",
+    };
+    const createOrganizationNode = vi.fn().mockImplementation((_tenantId, body) => ({
+      id: "node-new",
+      ...body,
+    }));
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue(companyNode),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      validateHierarchyRelationship: vi.fn().mockResolvedValue(true),
+      createOrganizationNode,
+      writeAudit: vi.fn().mockResolvedValue(undefined),
+    });
+
+    // Attempting to create company node must fail with 403
+    const companyRes = await app.inject({
+      method: "POST",
+      url: "/v1/organization/nodes",
+      payload: { nodeType: "company", name: "Illegal Org" },
+    });
+    expect(companyRes.statusCode).toBe(403);
+    expect(companyRes.json().message).toContain("Only super administrators mgdhanyamohan and krypton can create an organization");
+
+    // Attempting to create Zone, Region, Area, Branch under parent node succeeds
+    for (const type of ["zone", "region", "area", "branch"]) {
+      const subNodeRes = await app.inject({
+        method: "POST",
+        url: "/v1/organization/nodes",
+        payload: { parentNodeId: companyNode.id, nodeType: type, name: `Test ${type}` },
+      });
+      expect(subNodeRes.statusCode).toBe(201);
+    }
   });
 
   it("rejects an invalid location relationship before creating a node", async () => {

