@@ -398,6 +398,16 @@ export async function registerAuthRoutes(
 
         // Run 1-to-N biometric matching against enrolled profiles
         const match = await identifyUserByFace(body.faceScan, candidateUsers);
+        request.log.info(
+          {
+            candidateCount: candidateUsers.length,
+            candidateNames: candidateUsers.map((u: any) => u.username),
+            matchedUser: match?.user?.username,
+            score: match?.score,
+          },
+          `[FaceLogin] Evaluation complete: ${match ? `Matched ${match.user.username} (score: ${match.score})` : "No match found"}`
+        );
+
         if (!match) {
           return reply.code(401).send({
             error: "face_not_recognized",
