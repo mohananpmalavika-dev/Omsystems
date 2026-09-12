@@ -76,8 +76,9 @@ function redirectToLogin() {
   }
 }
 
-function isPublicAuthEndpoint(endpoint: string) {
+function isPublicAuthEndpoint(endpoint: string): boolean {
   return endpoint.includes('/auth/login') ||
+    endpoint.includes('/auth/face-login') ||
     endpoint.includes('/auth/refresh') ||
     endpoint.includes('/auth/forgot-password') ||
     endpoint.includes('/auth/request-password-reset') ||
@@ -324,6 +325,40 @@ export const authApi = {
 
     if (typeof window !== 'undefined') {
       // Browser sessions are cookie-backed and session-scoped.
+      sessionStorage.clear();
+      sessionStorage.setItem('sentinel_browser_session', 'active');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+      loginRedirectInProgress = false;
+      if (response.accessToken) {
+        sessionStorage.setItem('accessToken', response.accessToken);
+      }
+      if (response.refreshToken) {
+        sessionStorage.setItem('refreshToken', response.refreshToken);
+      }
+      if (response.user) {
+        sessionStorage.setItem('user', JSON.stringify(response.user));
+        sessionStorage.setItem('sentinel_login_time', Date.now().toString());
+      }
+    }
+
+    return response;
+  },
+
+  faceLogin: async (faceScan: string, tenantSlug?: string) => {
+    const response = await fetchApi<{
+      accessToken?: string;
+      refreshToken?: string;
+      expiresIn: number;
+      user: any;
+    }>('/v1/auth/face-login', {
+      method: 'POST',
+      body: JSON.stringify({ faceScan, tenantSlug }),
+    });
+
+    if (typeof window !== 'undefined') {
       sessionStorage.clear();
       sessionStorage.setItem('sentinel_browser_session', 'active');
       localStorage.removeItem('accessToken');

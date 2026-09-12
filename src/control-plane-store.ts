@@ -1945,6 +1945,7 @@ export interface UserManagementStore {
   getUserWithPassword(id: string): Promise<any>;
   findUserByUsername(username: string, tenantSlug?: string): Promise<any>;
   findUserByEmail(email: string, tenantSlug?: string): Promise<any>;
+  findUsersWithFaceTemplates?(tenantSlug?: string): Promise<any[]>;
   listUsers(tenantId: string, filters: any): Promise<any>;
   createUser(tenantId: string, input: any): Promise<any>;
   updateUser(id: string, input: any): Promise<any>;
