@@ -2594,6 +2594,15 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register TPM 2.0 attestation routes');
   }
 
+  // Register Physical Violence & Fight Detection routes
+  try {
+    const { registerViolenceDetectionRoutes } = await import("./routes/violence-detection.routes.js");
+    await registerViolenceDetectionRoutes(app, store);
+    app.log.info('Physical Violence & Fight Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register violence detection routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");

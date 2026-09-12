@@ -1455,6 +1455,14 @@ export type FaceRecognitionEvent = {
   faceQuality?: number | string | null;
   snapshot_reference?: string | null;
   snapshotReference?: string | null;
+  review_status?: string | null;
+  reviewStatus?: string | null;
+  reviewed_by?: string | null;
+  reviewedBy?: string | null;
+  reviewed_at?: string | null;
+  reviewedAt?: string | null;
+  review_notes?: string | null;
+  reviewNotes?: string | null;
   occurred_at?: string;
   occurredAt?: string;
 };
@@ -1542,6 +1550,55 @@ export const identityAnalyticsApi = {
     params.set('limit', String(filters?.limit ?? 100));
     return fetchApi<{ data: FaceRecognitionEvent[] }>(`/v1/analytics/face-events?${params}`);
   },
+  matchFace: (data: {
+    embedding: number[];
+    minSimilarity?: number;
+    watchlistIds?: string[];
+    cameraId?: string;
+    limit?: number;
+  }) => fetchApi<{
+    data: {
+      matched: boolean;
+      bestMatch: {
+        personId: string;
+        personName: string;
+        watchlistId: string;
+        watchlistName: string | null;
+        similarity: number;
+        severity?: string;
+      } | null;
+      matches: Array<{
+        personId: string;
+        personName: string;
+        watchlistId: string;
+        watchlistName: string | null;
+        similarity: number;
+        severity?: string;
+      }>;
+    };
+  }>('/v1/analytics/face-match', {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  reviewFaceEvent: (eventId: string, data: {
+    decision: 'confirmed' | 'rejected' | 'unsure';
+    notes?: string;
+  }) => fetchApi<{
+    data: { reviewId: string; status: string; reviewedAt: string };
+  }>(`/v1/analytics/face-events/${encodeURIComponent(eventId)}/reviews`, {
+    method: 'POST', body: JSON.stringify(data),
+  }),
+  listFaceEventReviews: (eventId: string) =>
+    fetchApi<{
+      data: Array<{
+        id: string;
+        decision: string;
+        notes?: string | null;
+        reviewer_name?: string | null;
+        reviewerName?: string | null;
+        reviewed_at?: string;
+        reviewedAt?: string;
+      }>;
+    }>(`/v1/analytics/face-events/${encodeURIComponent(eventId)}/reviews`),
   listAnprWatchlists: () =>
     fetchApi<{ data: IdentityWatchlist[] }>('/v1/analytics/anpr-watchlists'),
   createAnprWatchlist: (data: {
@@ -1581,6 +1638,99 @@ export const identityAnalyticsApi = {
     params.set('limit', String(filters?.limit ?? 100));
     return fetchApi<{ data: AnprEvent[] }>(`/v1/analytics/anpr-events?${params}`);
   },
+};
+
+export interface ViolenceEvent {
+  id: string;
+  tenant_id: string;
+  camera_id: string;
+  camera_name?: string;
+  confidence: number;
+  severity: 'P1' | 'P2' | 'P3';
+  optical_flow_energy: number;
+  turbulence_score: number;
+  max_limb_acceleration: number;
+  strike_count: number;
+  participant_count: number;
+  participant_track_ids: string[];
+  interaction_box: { x: number; y: number; width: number; height: number };
+  metrics: Record<string, any>;
+  snapshot_reference?: string | null;
+  review_status: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  occurred_at: string;
+  created_at: string;
+}
+
+export interface ViolenceCameraConfig {
+  camera_id: string;
+  tenant_id: string;
+  enabled: boolean;
+  sensitivity: number;
+  min_confidence: number;
+  min_optical_flow_energy: number;
+  min_limb_acceleration: number;
+  min_duration_ms: number;
+  cooldown_seconds: number;
+  alert_severity: 'P1' | 'P2' | 'P3';
+  isDefault?: boolean;
+}
+
+export interface ViolenceStats {
+  totalIncidents: number;
+  pendingReviews: number;
+  confirmedCount: number;
+  falsePositiveCount: number;
+  escalatedCount: number;
+  avgConfidence: number;
+  p1Count: number;
+}
+
+export const violenceApi = {
+  listEvents: (filters?: {
+    cameraId?: string;
+    severity?: 'P1' | 'P2' | 'P3';
+    reviewStatus?: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.cameraId) params.set('cameraId', filters.cameraId);
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.reviewStatus) params.set('reviewStatus', filters.reviewStatus);
+    if (filters?.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params.set('toDate', filters.toDate);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: ViolenceEvent[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/violence/events?${params}`
+    );
+  },
+  getEvent: (eventId: string) =>
+    fetchApi<{ success: boolean; data: ViolenceEvent }>(`/v1/analytics/violence/events/${encodeURIComponent(eventId)}`),
+  reviewEvent: (
+    eventId: string,
+    data: { reviewStatus: 'confirmed' | 'false_positive' | 'escalated'; reviewNotes?: string }
+  ) =>
+    fetchApi<{ success: boolean; data: ViolenceEvent }>(
+      `/v1/analytics/violence/events/${encodeURIComponent(eventId)}/review`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  getCameraConfig: (cameraId: string) =>
+    fetchApi<{ success: boolean; data: ViolenceCameraConfig }>(
+      `/v1/analytics/violence/config/${encodeURIComponent(cameraId)}`
+    ),
+  updateCameraConfig: (cameraId: string, data: Partial<ViolenceCameraConfig>) =>
+    fetchApi<{ success: boolean; data: ViolenceCameraConfig }>(
+      `/v1/analytics/violence/config/${encodeURIComponent(cameraId)}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
+  getStats: () =>
+    fetchApi<{ success: boolean; data: ViolenceStats }>('/v1/analytics/violence/stats'),
 };
 
 export const bankingAnalyticsApi = {

@@ -1,4 +1,4 @@
-﻿import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 
 export async function registerMobileOperationsRoutes(
@@ -36,6 +36,43 @@ export async function registerMobileOperationsRoutes(
 
   app.post("/api/mobile/v1/incidents/:id/assign", async (request: FastifyRequest, reply: FastifyReply) => {
     return { success: true, message: "Incident assigned successfully." };
+  });
+
+  app.post("/api/mobile/v1/incidents/:id/call-branch", async (request: FastifyRequest, reply: FastifyReply) => {
+    const { id } = request.params as { id: string };
+    const incident = await (store as any).getIncident?.(id).catch(() => null);
+    let managerName = "Branch Duty Manager";
+    let phoneNumber = "+91-80-2200-0199";
+
+    if (incident?.branchId) {
+      try {
+        const node = await (store as any).getNode?.(incident.branchId);
+        if (node?.name) {
+          managerName = `${node.name} Manager`;
+        }
+        if (node?.metadata?.phone || node?.metadata?.contactPhone) {
+          phoneNumber = String(node.metadata.phone || node.metadata.contactPhone);
+        }
+      } catch {}
+    }
+
+    if (request.currentUser?.tenantId) {
+      await (store as any).writeAudit?.({
+        tenantId: request.currentUser.tenantId,
+        actorUserId: request.currentUser.id,
+        action: "incident.call_branch",
+        resourceNodeId: incident?.branchId || id,
+        outcome: "success",
+        details: { incidentId: id, managerName, phoneNumber },
+      }).catch(() => {});
+    }
+
+    return {
+      success: true,
+      managerName,
+      phoneNumber,
+      dialerUrl: `tel:${phoneNumber.replace(/[^+\d]/g, "")}`,
+    };
   });
 
   app.post("/api/mobile/v1/incidents/:id/notes", async (request: FastifyRequest, reply: FastifyReply) => {

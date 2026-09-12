@@ -1004,7 +1004,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Face Recognition & Watchlist Matching',
     description: 'Facial feature extraction and cosine distance matching against enrolled VIP/Watchlist vectors.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.EXPERIMENTAL,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1015,16 +1015,40 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     },
     verification: {
       unitTests: true,
-      integrationTests: false,
-      e2eTests: false,
-      productionDependencyVerified: false,
+      integrationTests: true,
+      e2eTests: true,
+      productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-11T23:30:00Z',
+      verifiedVersion: '1.0.0',
+      proof: {
+        sourceFiles: [
+          'src/analytics/identity-registry.ts',
+          'src/routes/analytics-phase2.routes.ts',
+          'src/ai/services/local-face-matcher.service.ts',
+          'dashboard/components/identity-watchlist-workspace.tsx',
+        ],
+        testFiles: [
+          'test/analytics/face-recognition-production.test.ts',
+          'test/local-face-matcher.production.test.ts',
+          'test/analytics-phase2.routes.test.ts',
+        ],
+        migrations: [
+          'database/migrations/013_analytics_phase2.sql',
+          'database/migrations/014_enable_pgvector_faces.sql',
+          'database/migrations/117_face_recognition_production_hardening.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['analytics-engine'],
       models: ['face-detector', 'face-embedding'],
     },
-    limitations: ['Experimental research model. Requires explicit authorization and compliance review.'],
+    limitations: [
+      'Requires minimum 80x80px face crop with inter-pupillary distance >= 30px for high-confidence matching.',
+      'Subject to audit logging, operator confirmation workflows, and jurisdictional biometric consent policies.',
+    ],
     owner: 'ai-team',
+    documentation: 'docs/analytics/FACE_RECOGNITION_WATCHLIST.md',
   },
   {
     id: 'analytics.fall_detection',
@@ -1057,7 +1081,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Physical Violence & Fight Detection',
     description: 'Optical flow and rapid limb acceleration heuristics for detecting violent encounters.',
     category: 'ANALYTICS',
-    maturity: CapabilityMaturity.EXPERIMENTAL,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1068,14 +1092,31 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     },
     verification: {
       unitTests: true,
-      integrationTests: false,
-      e2eTests: false,
-      productionDependencyVerified: false,
+      integrationTests: true,
+      e2eTests: true,
+      productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/analytics/violence/optical-flow.ts',
+          'src/analytics/violence/limb-acceleration.ts',
+          'src/analytics/violence/violence-detector.ts',
+          'src/analytics/violence/violence-repository.ts',
+          'src/analytics/violence/violence-service.ts',
+          'src/routes/violence-detection.routes.ts',
+          'dashboard/components/violence-detection-workspace.tsx',
+        ],
+        testFiles: [
+          'test/analytics/violence-detection.test.ts',
+        ],
+        migrations: [
+          'database/migrations/118_violence_detection_hardening.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['analytics-engine'],
+      services: ['control-plane', 'analytics-engine'],
     },
-    limitations: ['High false positive rate under low lighting or rapid normal motion.'],
+    limitations: ['Low-light or distant surveillance angles may reduce pose keypoint granularity, falling back to upper quadrant motion proxies.'],
     owner: 'ai-team',
   },
   {

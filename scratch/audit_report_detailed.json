@@ -1,0 +1,1335 @@
+{
+  "totalRoutes": 144,
+  "brokenLinks": [
+    "/audit/branch/${branch.branchId}"
+  ],
+  "orphanedPages": [
+    "/admin/qa/ui-audit/compare",
+    "/admin/qa/ui-audit/[runId]",
+    "/admin/roles",
+    "/analytics/dashboard",
+    "/analytics/face",
+    "/analytics/vehicles",
+    "/compliance/controls/[id]",
+    "/compliance/findings/[id]",
+    "/compliance/overview",
+    "/dashboards",
+    "/diagnostics",
+    "/digital-twin/branches",
+    "/digital-twin/branches/[branchId]/editor",
+    "/digital-twin/branches/[branchId]",
+    "/digital-twin/buildings/[buildingId]",
+    "/forgot-password",
+    "/live-incident/[token]",
+    "/maintenance/alerts",
+    "/maintenance/privacy/cameras/[cameraId]/purposes",
+    "/operations/assets",
+    "/operations/branches/[branchId]",
+    "/operations/edge-fleet",
+    "/operations",
+    "/operations/video-wall",
+    "/privacy",
+    "/reset-password",
+    "/terms",
+    "/camera-detail"
+  ],
+  "unresolvableApis": [],
+  "pageAudits": [
+    {
+      "route": "/account/security",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/activity-report",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/ai-quality",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/branch-onboarding",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/camera-import-export",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/database",
+      "apisCount": 5,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/ha-topology",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/organization",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/platform/capabilities",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/qa/ui-audit/compare",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/qa/ui-audit",
+      "apisCount": 4,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/qa/ui-audit/[runId]",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/roles",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/stream-settings",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/admin/system",
+      "apisCount": 7,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/zero-touch/diagnostics",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/admin/zero-touch",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/alerts",
+      "apisCount": 10,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/analytics/anpr",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/banking",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/dashboard",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/face",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/face-recognition",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/industrial",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/people",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/rules",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/analytics/vehicles",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/audit/branch-compliance",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/audit/health",
+      "apisCount": 5,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/audit/maintenance",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/assessments",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/assessments/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/certificates",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/controls",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/controls/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/dashboard",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/evidence",
+      "apisCount": 4,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/findings",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/findings/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/overview",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/policies",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/recording",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/requirements/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/requirements",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/requirements/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/risks/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/risks",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/compliance/risks/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/compliance/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/control-room",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/dashboards",
+      "apisCount": 14,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/diagnostics",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/digital-twin/branches",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/digital-twin/branches/[branchId]/editor",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/digital-twin/branches/[branchId]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/digital-twin/buildings/[buildingId]",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/digital-twin",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/evidence",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/federation",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/forgot-password",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/incidents/create",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/incidents",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/incidents/[id]",
+      "apisCount": 22,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/infrastructure-twin",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/integrations",
+      "apisCount": 16,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/live-incident/[token]",
+      "apisCount": 4,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/login",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/alerts",
+      "apisCount": 7,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/maintenance/amc/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/amc",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/amc/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/assets/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/assets",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/assets/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/compatibility",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/maintenance/device-configuration",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/device-management",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/dvr-nvr-monitor",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/health",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/maintenance",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/predictive",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/breaches/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/breaches",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/cameras",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/cameras/[cameraId]/purposes",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/controls",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/purposes/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/privacy/purposes",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/reports",
+      "apisCount": 9,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/maintenance/vendors/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/vendors",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/vendors/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/workorders/new",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/workorders",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/maintenance/workorders/[id]",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/mobile",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/modules",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/operations/ai-command-center",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/operations/alert-command-center",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/alert-notification-policy",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/alerts",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/assets",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/branches",
+      "apisCount": 2,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/operations/branches/[branchId]",
+      "apisCount": 4,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/operations/cameras",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/device-connectivity",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/edge-agents",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/edge-fleet",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/ha-failover",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/infrastructure",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/maintenance",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/media-pipeline",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/network",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/observability",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/rca-analysis",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/operations/recording",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/storage",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/ups",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/operations/video-wall",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/performance",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/playback/synced",
+      "apisCount": 4,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/portable-camera/enroll",
+      "apisCount": 12,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/privacy",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/recordings",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/reports",
+      "apisCount": 8,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/reset-password",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/security-devices/branch-posture",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/security-devices/discovery",
+      "apisCount": 11,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/security-devices/integrations",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/security-devices",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/security-devices/[deviceId]",
+      "apisCount": 8,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/security-operations",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/settings/integrations/hikvision/ax-pro",
+      "apisCount": 3,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/support",
+      "apisCount": 1,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/terms",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/video-search",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    },
+    {
+      "route": "/camera-detail",
+      "apisCount": 6,
+      "hasMockData": false,
+      "hasTodos": false,
+      "hasAlertInert": true,
+      "inertButtonsCount": 0,
+      "hasFetch": true
+    },
+    {
+      "route": "/camera-monitoring",
+      "apisCount": 0,
+      "hasMockData": false,
+      "hasTodos": true,
+      "hasAlertInert": false,
+      "inertButtonsCount": 0,
+      "hasFetch": false
+    }
+  ]
+}

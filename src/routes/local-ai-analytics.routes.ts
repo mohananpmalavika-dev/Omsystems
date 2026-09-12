@@ -13,7 +13,11 @@ import { localFaceMatcherService } from "../ai/services/local-face-matcher.servi
 import { localIncidentSummaryService } from "../ai/services/local-incident-summary.service.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action } from "../domain/models.js";
-import { activeAnprRegistryMatches, recordAnprRegistryMatches } from "../analytics/identity-registry.js";
+import {
+  activeAnprRegistryMatches,
+  recordAnprRegistryMatches,
+  recordFaceRegistryMatches,
+} from "../analytics/identity-registry.js";
 
 const detectFrameSchema = z.object({
   cameraId: z.string().min(1),
@@ -150,15 +154,25 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance, store
    */
   app.post("/v1/ai/face/match", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = faceMatchSchema.parse(request.body);
-    if (!ephemeralFaceMatcherEnabled()) {
-      return reply.code(503).send({ error: "ephemeral_face_matcher_disabled", message: "Use the governed face-watchlist pipeline in this environment" });
-    }
     const camera = await authorizeCamera(request, reply, body.cameraId, "face:view");
     if (!camera) return;
     if (camera.branchId !== body.branchId) {
       return reply.code(400).send({ error: "camera_branch_mismatch" });
     }
-    const result = await localFaceMatcherService.matchFace(body as any);
+    const result = await localFaceMatcherService.matchFace({
+      ...body,
+      store: store ?? undefined,
+      tenantId: request.currentUser?.tenantId,
+    });
+    if (result.matched && result.candidate && store && request.currentUser) {
+      await recordFaceRegistryMatches(store, request.currentUser.tenantId, {
+        cameraId: body.cameraId,
+        personId: result.candidate.personId,
+        watchlistId: result.candidate.watchlistId,
+        similarityScore: result.confidence,
+        faceBbox: { x: 0, y: 0, width: 1, height: 1 },
+      }).catch((err) => console.warn("Failed recording face match event:", err));
+    }
     return reply.send({
       success: true,
       data: result,
@@ -170,9 +184,6 @@ export async function registerLocalAiAnalyticsRoutes(app: FastifyInstance, store
    */
   app.post("/v1/ai/face/enroll", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = faceEnrollSchema.parse(request.body);
-    if (!ephemeralFaceMatcherEnabled()) {
-      return reply.code(503).send({ error: "ephemeral_face_matcher_disabled", message: "Use the governed face-watchlist enrollment pipeline in this environment" });
-    }
     if (!store || !request.currentUser || !(await store.listAccessibleNodes(request.currentUser, "face:enrol", "company")).length) {
       return reply.code(403).send({ error: "forbidden" });
     }

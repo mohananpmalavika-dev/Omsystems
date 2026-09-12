@@ -1,0 +1,2220 @@
+{
+  "brokenLinks": [],
+  "todoCount": 316,
+  "todos": [
+    {
+      "file": "app/admin/database/page.tsx",
+      "line": 476,
+      "text": "placeholder={`Search in ${currentTable?.name || \"table\"}...`}"
+    },
+    {
+      "file": "app/admin/database/page.tsx",
+      "line": 477,
+      "text": "className=\"w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500\""
+    },
+    {
+      "file": "app/admin/database/page.tsx",
+      "line": 939,
+      "text": "placeholder={isPk && !isEditing ? \"(Auto-generated if empty)\" : \"\"}"
+    },
+    {
+      "file": "app/admin/database/page.tsx",
+      "line": 942,
+      "text": "className=\"w-full px-3 py-2 text-xs rounded-lg border border-slate-700 bg-slate-950 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:opacity-50 font-mono\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 1498,
+      "text": "placeholder=\"Search by name, email, department, designation...\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 1877,
+      "text": "placeholder=\"Role name (e.g. SOC Watcher, Cash Officer)\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 1903,
+      "text": "placeholder=\"Role description (optional)\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 1915,
+      "text": "placeholder=\"Search menus (e.g. live wall, branch, report)...\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2099,
+      "text": "placeholder=\"e.g. Branch A014 - Calicut Commercial or Cash Counter 1\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2110,
+      "text": "placeholder=\"e.g. A014 or CC-01\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2121,
+      "text": "placeholder=\"Optional details, address, or security zone classification\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2371,
+      "text": "placeholder=\"e.g. Rajesh Kumar\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2383,
+      "text": "placeholder=\"e.g. rajesh.kumar@omsystems.bank\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2399,
+      "text": "placeholder=\"e.g. rajesh.kumar\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2412,
+      "text": "placeholder=\"At least 8 characters\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2460,
+      "text": "placeholder=\"e.g. Security Officer\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2470,
+      "text": "placeholder=\"e.g. Surveillance SOC, Branch Operations\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2727,
+      "text": "placeholder=\"e.g. SOC Supervisor\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2737,
+      "text": "placeholder=\"e.g. Surveillance SOC\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2875,
+      "text": "placeholder=\"Enter new password...\""
+    },
+    {
+      "file": "app/admin/organization/page.tsx",
+      "line": 2888,
+      "text": "placeholder=\"Re-enter new password...\""
+    },
+    {
+      "file": "app/admin/platform/capabilities/page.tsx",
+      "line": 160,
+      "text": "title=\"Not Implemented\""
+    },
+    {
+      "file": "app/admin/platform/capabilities/page.tsx",
+      "line": 197,
+      "text": "placeholder=\"Search capability name, ID, description, owner...\""
+    },
+    {
+      "file": "app/admin/platform/capabilities/page.tsx",
+      "line": 200,
+      "text": "className=\"w-full pl-10 pr-4 py-2 bg-slate-900/80 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30\""
+    },
+    {
+      "file": "app/admin/platform/capabilities/page.tsx",
+      "line": 229,
+      "text": "<option value={CapabilityMaturity.NOT_IMPLEMENTED}>Not Implemented</option>"
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 326,
+      "text": "placeholder=\"https://demo.kryptonlogic.com\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 327,
+      "text": "className=\"mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 337,
+      "text": "placeholder=\"admin@kryptonlogic.com\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 338,
+      "text": "className=\"mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 349,
+      "text": "placeholder=\"••••••••••••\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 350,
+      "text": "className=\"w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 pr-10 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 385,
+      "text": "placeholder=\"/\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 386,
+      "text": "className=\"mt-1.5 w-full rounded-lg border border-slate-700 bg-slate-950 px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 548,
+      "text": "placeholder=\"demo.kryptonlogic.com, sslip.io\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 559,
+      "text": "placeholder=\"/logout, /admin/billing\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 570,
+      "text": "placeholder=\"delete test camera\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 581,
+      "text": "placeholder=\"#email or input[name='username']\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 592,
+      "text": "placeholder=\"#password\""
+    },
+    {
+      "file": "app/admin/qa/ui-audit/page.tsx",
+      "line": 603,
+      "text": "placeholder=\"button[type='submit']\""
+    },
+    {
+      "file": "app/admin/system/page.tsx",
+      "line": 306,
+      "text": "placeholder=\"Search name or model\""
+    },
+    {
+      "file": "app/analytics/alerts/page.tsx",
+      "line": 479,
+      "text": "placeholder=\"Search Zone, Branch, Camera, Alert title, Incident #...\""
+    },
+    {
+      "file": "app/analytics/alerts/page.tsx",
+      "line": 480,
+      "text": "className=\"w-full pl-10 pr-4 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500\""
+    },
+    {
+      "file": "app/analytics/alerts/page.tsx",
+      "line": 887,
+      "text": "placeholder=\"Add context on why this alert is considered a false alarm...\""
+    },
+    {
+      "file": "app/analytics/alerts/page.tsx",
+      "line": 888,
+      "text": "className=\"w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none\""
+    },
+    {
+      "file": "app/audit/maintenance/maintenance-client.tsx",
+      "line": 382,
+      "text": "placeholder=\"Search WO#, issue, asset, or technician...\""
+    },
+    {
+      "file": "app/compliance/assessments/page.tsx",
+      "line": 144,
+      "text": "<input required value={frameworkId} onChange={(event) => setFrameworkId(event.target.value)} placeholder=\"UUID\" className=\"mt-1 w-full rounded-md border border-gray-300 px-3 py-2\" />"
+    },
+    {
+      "file": "app/compliance/certificates/page.tsx",
+      "line": 20,
+      "text": "return <div className=\"mx-auto max-w-7xl p-6\"><div className=\"mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between\"><div><h1 className=\"text-3xl font-bold text-gray-900\">Compliance certificates</h1><p className=\"mt-1 text-gray-600\">Issued certificates are linked to their assessment and scoped to your organization.</p></div><button onClick={() => void load(true)} disabled={refreshing} className=\"inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50\"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button></div>{error && <div className=\"mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800\" role=\"alert\">{error}</div>}<div className=\"mb-6 grid gap-4 sm:grid-cols-3\"><Stat label=\"Issued certificates\" value={certificates.length} icon={<FileCheck2 className=\"h-5 w-5\" />} /><Stat label=\"Current\" value={active} icon={<ShieldCheck className=\"h-5 w-5\" />} /><Stat label=\"Require attention\" value={certificates.filter((item) => expired(item) || expiringSoon(item)).length} icon={<AlertTriangle className=\"h-5 w-5\" />} /></div><div className=\"mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-[1fr_240px]\"><label className=\"relative\"><span className=\"sr-only\">Search certificates</span><Search className=\"absolute left-3 top-3 h-5 w-5 text-gray-400\" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder=\"Search number, title, or assessment ID\" className=\"w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3\" /></label><select value={status} onChange={(event) => setStatus(event.target.value as Status | 'all')} className=\"rounded-lg border border-gray-300 px-3 py-2\"><option value=\"all\">All statuses</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>{loading ? <div className=\"flex min-h-64 items-center justify-center\"><Loader2 className=\"h-8 w-8 animate-spin text-blue-600\" /></div> : visible.length === 0 ? <div className=\"rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center\"><FileCheck2 className=\"mx-auto h-10 w-10 text-gray-400\" /><p className=\"mt-3 font-medium text-gray-900\">No certificates found</p><p className=\"mt-1 text-sm text-gray-600\">Certificates are issued from a completed compliance assessment.</p></div> : <div className=\"overflow-hidden rounded-xl border border-gray-200 bg-white\"><div className=\"divide-y divide-gray-100\">{visible.map((item) => <CertificateRow key={item.id} certificate={item} />)}</div><div className=\"border-t border-gray-100 px-5 py-3 text-sm text-gray-500\">Showing {visible.length} of {certificates.length} certificates</div></div>}</div>;"
+    },
+    {
+      "file": "app/compliance/controls/page.tsx",
+      "line": 76,
+      "text": "not_implemented: { color: 'bg-gray-100 text-gray-800', icon: XCircle, label: 'Not Implemented' },"
+    },
+    {
+      "file": "app/compliance/controls/page.tsx",
+      "line": 145,
+      "text": "<p className=\"text-gray-600 text-sm\">Not Implemented</p>"
+    },
+    {
+      "file": "app/compliance/controls/page.tsx",
+      "line": 164,
+      "text": "placeholder=\"Search controls...\""
+    },
+    {
+      "file": "app/compliance/controls/page.tsx",
+      "line": 195,
+      "text": "<option value=\"not_implemented\">Not Implemented</option>"
+    },
+    {
+      "file": "app/compliance/evidence/page.tsx",
+      "line": 24,
+      "text": "return <div className=\"mx-auto max-w-7xl p-6\"><div className=\"mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between\"><div><h1 className=\"text-3xl font-bold text-gray-900\">Compliance evidence</h1><p className=\"mt-1 text-gray-600\">Register artifacts, review their validity, and verify audit-ready evidence.</p></div><div className=\"flex gap-3\"><button onClick={() => void load(true)} disabled={refreshing} className=\"inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50\"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button><button onClick={() => setOpen(true)} className=\"inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700\"><Plus className=\"h-4 w-4\" />Register evidence</button></div></div>{error && <div className=\"mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800\" role=\"alert\">{error}</div>}<div className=\"mb-6 grid gap-4 sm:grid-cols-3\"><Stat label=\"Total artifacts\" value={items.length} icon={<FileText className=\"h-5 w-5\" />} /><Stat label=\"Verified and current\" value={verified} icon={<ShieldCheck className=\"h-5 w-5\" />} /><Stat label=\"Expired\" value={stale} icon={<XCircle className=\"h-5 w-5\" />} /></div><div className=\"mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 md:grid-cols-[1fr_200px_200px]\"><label className=\"relative\"><span className=\"sr-only\">Search evidence</span><Search className=\"absolute left-3 top-3 h-5 w-5 text-gray-400\" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder=\"Search title, description, or linked ID\" className=\"w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3\" /></label><select value={type} onChange={(e) => setType(e.target.value as EvidenceType | 'all')} className=\"rounded-lg border border-gray-300 px-3 py-2\"><option value=\"all\">All evidence types</option>{types.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select><select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className=\"rounded-lg border border-gray-300 px-3 py-2\"><option value=\"all\">All statuses</option><option value=\"verified\">Verified</option><option value=\"pending\">Pending verification</option><option value=\"expired\">Expired</option></select></div>{loading ? <div className=\"flex min-h-64 items-center justify-center\"><Loader2 className=\"h-8 w-8 animate-spin text-blue-600\" /></div> : filtered.length === 0 ? <div className=\"rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center\"><FileText className=\"mx-auto h-10 w-10 text-gray-400\" /><p className=\"mt-3 font-medium text-gray-900\">No evidence matches these filters</p><p className=\"mt-1 text-sm text-gray-600\">Register a reference to an approved evidence artifact to begin the review workflow.</p></div> : <div className=\"overflow-hidden rounded-xl border border-gray-200 bg-white\"><div className=\"divide-y divide-gray-100\">{filtered.map((item) => { const isExpired = expired(item); const state = isExpired ? 'Expired' : item.validated ? 'Verified' : 'Pending verification'; return <article key={item.id} className=\"flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between\"><div className=\"min-w-0\"><div className=\"flex flex-wrap items-center gap-2\"><span className=\"rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium capitalize text-blue-800\">{item.evidenceType.replaceAll('_', ' ')}</span><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${isExpired ? 'bg-red-50 text-red-800' : item.validated ? 'bg-green-50 text-green-800' : 'bg-amber-50 text-amber-800'}`}>{state}</span></div><h2 className=\"mt-2 font-semibold text-gray-900\">{item.title}</h2>{item.description && <p className=\"mt-1 text-sm text-gray-600\">{item.description}</p>}<div className=\"mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500\"><span>Collected: {date(item.collectionDate)}</span>{item.expiryDate && <span>Expires: {date(item.expiryDate)}</span>}<span>Sensitivity: {item.sensitivity ?? 'internal'}</span></div></div><div className=\"flex shrink-0 gap-2\">{item.fileUrl && <a href={item.fileUrl} target=\"_blank\" rel=\"noopener noreferrer\" className=\"inline-flex items-center gap-1 rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50\"><ExternalLink className=\"h-4 w-4\" />Open</a>}{!item.validated && !isExpired && <button onClick={() => void verify(item)} className=\"inline-flex items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700\"><CheckCircle2 className=\"h-4 w-4\" />Verify</button>}</div></article>; })}</div><div className=\"border-t border-gray-100 px-5 py-3 text-sm text-gray-500\">Showing {filtered.length} of {items.length} artifacts</div></div>}{open && <div className=\"fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4\" role=\"dialog\" aria-modal=\"true\" aria-labelledby=\"register-evidence-title\"><form onSubmit={submit} className=\"max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl\"><h2 id=\"register-evidence-title\" className=\"text-xl font-semibold text-gray-900\">Register evidence</h2><p className=\"mt-1 text-sm text-gray-600\">This registers a governed reference. It does not upload a local file.</p><div className=\"mt-5 grid gap-4 sm:grid-cols-2\"><Field label=\"Title\" wide><input required minLength={2} maxLength={300} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className=\"input\" /></Field><Field label=\"Evidence type\"><select value={form.evidenceType} onChange={(e) => setForm({ ...form, evidenceType: e.target.value as EvidenceType })} className=\"input\">{types.map((value) => <option key={value} value={value}>{value.replaceAll('_', ' ')}</option>)}</select></Field><Field label=\"Sensitivity\"><select value={form.sensitivity} onChange={(e) => setForm({ ...form, sensitivity: e.target.value as Form['sensitivity'] })} className=\"input\">{['public', 'internal', 'confidential', 'restricted'].map((value) => <option key={value}>{value}</option>)}</select></Field><Field label=\"Evidence URL\" wide><input type=\"url\" value={form.fileUrl} onChange={(e) => setForm({ ...form, fileUrl: e.target.value })} placeholder=\"https://…\" className=\"input\" /></Field><Field label=\"Requirement ID\"><input value={form.requirementId} onChange={(e) => setForm({ ...form, requirementId: e.target.value })} placeholder=\"Optional UUID\" className=\"input\" /></Field><Field label=\"Control ID\"><input value={form.controlId} onChange={(e) => setForm({ ...form, controlId: e.target.value })} placeholder=\"Optional UUID\" className=\"input\" /></Field><Field label=\"Expiry date\"><input type=\"date\" value={form.expiryDate} onChange={(e) => setForm({ ...form, expiryDate: e.target.value })} className=\"input\" /></Field><Field label=\"Description\" wide><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} className=\"input\" /></Field></div><div className=\"mt-6 flex justify-end gap-3\"><button type=\"button\" disabled={saving} onClick={() => setOpen(false)} className=\"rounded-lg px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100\">Cancel</button><button disabled={saving} className=\"inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50\">{saving && <Loader2 className=\"h-4 w-4 animate-spin\" />}Register</button></div></form></div>}</div>;"
+    },
+    {
+      "file": "app/compliance/findings/page.tsx",
+      "line": 182,
+      "text": "placeholder=\"Search findings...\""
+    },
+    {
+      "file": "app/compliance/page.tsx",
+      "line": 120,
+      "text": "placeholder=\"e.g., ISO 27001 Information Security\""
+    },
+    {
+      "file": "app/compliance/page.tsx",
+      "line": 135,
+      "text": "placeholder=\"e.g., ISO 27001:2013\""
+    },
+    {
+      "file": "app/compliance/page.tsx",
+      "line": 148,
+      "text": "placeholder=\"Describe the framework and its purpose...\""
+    },
+    {
+      "file": "app/compliance/page.tsx",
+      "line": 192,
+      "text": "placeholder=\"Search frameworks...\""
+    },
+    {
+      "file": "app/compliance/requirements/page.tsx",
+      "line": 154,
+      "text": "placeholder=\"Search requirements...\""
+    },
+    {
+      "file": "app/compliance/risks/page.tsx",
+      "line": 200,
+      "text": "placeholder=\"Search risks...\""
+    },
+    {
+      "file": "app/control-room/page.tsx",
+      "line": 841,
+      "text": "placeholder=\"Search camera, IP, channel...\""
+    },
+    {
+      "file": "app/control-room/page.tsx",
+      "line": 1201,
+      "text": ".filter-search-box input::placeholder { color: var(--muted); }"
+    },
+    {
+      "file": "app/forgot-password/page.tsx",
+      "line": 290,
+      "text": "placeholder=\"name@company.com\""
+    },
+    {
+      "file": "app/forgot-password/page.tsx",
+      "line": 309,
+      "text": "placeholder=\"Leave blank if not applicable\""
+    },
+    {
+      "file": "app/forgot-password/page.tsx",
+      "line": 480,
+      "text": "placeholder=\"Enter new password\""
+    },
+    {
+      "file": "app/forgot-password/page.tsx",
+      "line": 507,
+      "text": "placeholder=\"Confirm new password\""
+    },
+    {
+      "file": "app/incidents/create/page.tsx",
+      "line": 111,
+      "text": "<input className=\"input\" value={form.title} onChange={(event) => update(\"title\", event.target.value)} minLength={3} maxLength={200} placeholder=\"Briefly describe what happened\" required />"
+    },
+    {
+      "file": "app/incidents/create/page.tsx",
+      "line": 148,
+      "text": "<textarea className=\"input\" rows={6} value={form.description} onChange={(event) => update(\"description\", event.target.value)} maxLength={5000} placeholder=\"Add observations, immediate actions and relevant context\" />"
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1355,
+      "text": "placeholder=\"Record an investigation note or update...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1484,
+      "text": "placeholder=\"e.g. operator-john\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1579,
+      "text": "placeholder=\"Add context or notes for this status transition...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1624,
+      "text": "placeholder=\"Summarize findings, root cause, and resolving actions...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1670,
+      "text": "placeholder=\"Explain why this incident is being reopened (min 10 characters)...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1737,
+      "text": "placeholder=\"Describe why this alert is confirmed false...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1792,
+      "text": "placeholder=\"Record observations, actions taken, or results...\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1836,
+      "text": "placeholder=\"e.g. Verify entry logbook with security guard\""
+    },
+    {
+      "file": "app/incidents/[id]/page.tsx",
+      "line": 1849,
+      "text": "placeholder=\"Detailed task instructions or context...\""
+    },
+    {
+      "file": "app/integrations/page.tsx",
+      "line": 500,
+      "text": "placeholder=\"Search connectors...\""
+    },
+    {
+      "file": "app/integrations/page.tsx",
+      "line": 1320,
+      "text": "placeholder=\"e.g. 126 Branches · 2,847 Cameras\""
+    },
+    {
+      "file": "app/live-incident/[token]/page.tsx",
+      "line": 203,
+      "text": "placeholder=\"Enter responder name or unit ID\""
+    },
+    {
+      "file": "app/maintenance/assets/new/page.tsx",
+      "line": 103,
+      "text": "placeholder=\"e.g. 4K dome camera\""
+    },
+    {
+      "file": "app/maintenance/assets/new/page.tsx",
+      "line": 169,
+      "text": "placeholder=\"e.g. Main entrance, north wall\""
+    },
+    {
+      "file": "app/maintenance/assets/page.tsx",
+      "line": 178,
+      "text": "placeholder=\"Search assets, make, serial, vendor, branch…\""
+    },
+    {
+      "file": "app/maintenance/compatibility/page.tsx",
+      "line": 130,
+      "text": "placeholder=\"Search by recorder name, model, branch...\""
+    },
+    {
+      "file": "app/maintenance/device-management/page.tsx",
+      "line": 366,
+      "text": "placeholder=\"e.g. 192.168.1.105\""
+    },
+    {
+      "file": "app/maintenance/device-management/page.tsx",
+      "line": 378,
+      "text": "placeholder=\"255.255.255.0 or 192.168.1.0/24\""
+    },
+    {
+      "file": "app/maintenance/page.tsx",
+      "line": 311,
+      "text": "placeholder=\"Select a registered firmware version\""
+    },
+    {
+      "file": "app/maintenance/page.tsx",
+      "line": 321,
+      "text": "placeholder=\"cam-001, cam-002\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/new/page.tsx",
+      "line": 66,
+      "text": "placeholder=\"Branch node UUID\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/new/page.tsx",
+      "line": 76,
+      "text": "placeholder=\"Camera UUID\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/new/page.tsx",
+      "line": 88,
+      "text": "placeholder=\"Example: unauthorized_recording\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/new/page.tsx",
+      "line": 124,
+      "text": "placeholder=\"Describe what happened, the affected data or systems, and the immediate impact.\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/new/page.tsx",
+      "line": 137,
+      "text": "placeholder=\"Outline next steps for containment and prevention.\""
+    },
+    {
+      "file": "app/maintenance/privacy/breaches/page.tsx",
+      "line": 21,
+      "text": "return <div className=\"mx-auto max-w-7xl p-6\"><div className=\"mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between\"><div><div className=\"flex items-center gap-3\"><ShieldAlert className=\"h-8 w-8 text-red-600\" /><h1 className=\"text-3xl font-bold text-gray-900\">Privacy breach incident log</h1></div><p className=\"mt-2 text-gray-600\">Record, investigate, contain, and close privacy incidents with an auditable state transition history.</p></div><div className=\"flex gap-3\"><button onClick={() => void load(true)} disabled={refreshing} className=\"inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50\"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />Refresh</button><Link href=\"/maintenance/privacy/breaches/new\" className=\"inline-flex items-center rounded-lg bg-red-600 px-4 py-2 font-medium text-white hover:bg-red-700\">Report breach</Link></div></div>{error && <div className=\"mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800\" role=\"alert\">{error}</div>}<div className=\"mb-6 grid gap-4 sm:grid-cols-3\"><Stat label=\"Incidents in view\" value={breaches.length} icon={<ShieldAlert className=\"h-5 w-5\" />} /><Stat label=\"Open incidents\" value={openCount} icon={<AlertTriangle className=\"h-5 w-5\" />} /><Stat label=\"Critical\" value={breaches.filter((item) => item.severity === 'critical').length} icon={<AlertTriangle className=\"h-5 w-5\" />} /></div><div className=\"mb-6 grid gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-[1fr_220px]\"><label className=\"relative\"><span className=\"sr-only\">Search incidents</span><Search className=\"absolute left-3 top-3 h-5 w-5 text-gray-400\" /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder=\"Search incident type, description, or linked ID\" className=\"w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3\" /></label><select value={status} onChange={(event) => setStatus(event.target.value as BreachStatus | 'all')} className=\"rounded-lg border border-gray-300 px-3 py-2\"><option value=\"all\">All statuses</option>{(['reported', 'investigating', 'contained', 'resolved', 'closed'] as BreachStatus[]).map((value) => <option key={value} value={value}>{value}</option>)}</select></div>{loading ? <div className=\"flex min-h-64 items-center justify-center\"><Loader2 className=\"h-8 w-8 animate-spin text-red-600\" /></div> : visible.length === 0 ? <div className=\"rounded-xl border border-dashed border-gray-300 bg-white p-12 text-center\"><CheckCircle2 className=\"mx-auto h-10 w-10 text-gray-400\" /><p className=\"mt-3 font-medium text-gray-900\">No privacy incidents found</p><p className=\"mt-1 text-sm text-gray-600\">Reported privacy events will appear here for controlled triage and resolution.</p></div> : <div className=\"overflow-hidden rounded-xl border border-gray-200 bg-white\"><div className=\"divide-y divide-gray-100\">{visible.map((item) => <BreachRow key={item.id} breach={item} progressing={updating === item.id} onProgress={() => void progress(item)} />)}</div><div className=\"border-t border-gray-100 px-5 py-3 text-sm text-gray-500\">Showing {visible.length} of {breaches.length} incidents</div></div>}</div>;"
+    },
+    {
+      "file": "app/maintenance/privacy/cameras/[cameraId]/purposes/page.tsx",
+      "line": 131,
+      "text": "placeholder=\"Optional assignment details or justification\""
+    },
+    {
+      "file": "app/maintenance/privacy/controls/page.tsx",
+      "line": 16,
+      "text": "return <div className=\"privacy-controls-page\"><PageHero eyebrow=\"Privacy enforcement\" title=\"Camera privacy controls\" description=\"Load a camera, review its processing safeguards, and save governed control changes.\" icon={LockKeyhole} /><form onSubmit={load} className=\"privacy-control-selector\"><span className=\"privacy-camera-icon\"><Camera size={17} /></span><label>Camera ID<input value={cameraId} onChange={(event) => setCameraId(event.target.value)} placeholder=\"Camera UUID\" autoComplete=\"off\" /></label><button type=\"submit\" className=\"btn-secondary\" disabled={loading}>{loading ? <Loader2 className=\"h-4 w-4 animate-spin\" /> : <RefreshCw className=\"h-4 w-4\" />}Load controls</button></form>{error && <div className=\"page-alert error\" role=\"alert\">{error}</div>}{notice && <div className=\"page-alert success\" role=\"status\">{notice}</div>}{!activeCameraId ? <div className=\"privacy-controls-state\">Load a camera to review and manage its privacy posture.</div> : loading ? <div className=\"privacy-controls-state\">Loading privacy controls...</div> : <form onSubmit={save} className=\"privacy-controls-panel\"><header><div><span>Control posture</span><h2>Protection settings</h2></div><ShieldCheck size={20} /></header><div className=\"privacy-control-grid\"><Toggle label=\"Audio recording approved\" description=\"Requires an assigned data protection officer.\" checked={controls.audioRecordingApproved} onChange={(value) => setControls({ ...controls, audioRecordingApproved: value })} /><Toggle label=\"Encryption enabled\" description=\"Protect recorded data in transit and at rest.\" checked={controls.encryptionEnabled} onChange={(value) => setControls({ ...controls, encryptionEnabled: value })} /><label><span>Data protection officer</span><input value={controls.dataProtectionOfficer ?? ''} onChange={(event) => setControls({ ...controls, dataProtectionOfficer: event.target.value })} placeholder=\"Assigned owner\" /></label><label><span>Disposal plan</span><textarea value={controls.disposalPlan ?? ''} onChange={(event) => setControls({ ...controls, disposalPlan: event.target.value })} placeholder=\"Retention and disposal procedure\" rows={3} /></label><div><span>Last reviewed</span><strong>{displayDate(controls.lastReviewedAt)}</strong></div><div><span>Last updated</span><strong>{displayDate(controls.updatedAt)}</strong></div></div><footer><p>Saving records the current review time and writes an audit event for this camera.</p><button type=\"submit\" className=\"btn-primary\" disabled={saving}>{saving ? <Loader2 className=\"h-4 w-4 animate-spin\" /> : <Save className=\"h-4 w-4\" />}Save controls</button></footer></form>}</div>;"
+    },
+    {
+      "file": "app/maintenance/privacy/purposes/new/page.tsx",
+      "line": 64,
+      "text": "placeholder=\"Example: Loss prevention\""
+    },
+    {
+      "file": "app/maintenance/privacy/purposes/new/page.tsx",
+      "line": 75,
+      "text": "placeholder=\"Example: legitimate_interest\""
+    },
+    {
+      "file": "app/maintenance/privacy/purposes/new/page.tsx",
+      "line": 109,
+      "text": "placeholder=\"video, audio, metadata\""
+    },
+    {
+      "file": "app/maintenance/workorders/new/page.tsx",
+      "line": 115,
+      "text": "placeholder=\"Describe the observed issue, required work, and any access notes.\""
+    },
+    {
+      "file": "app/maintenance/workorders/[id]/page.tsx",
+      "line": 234,
+      "text": "placeholder=\"Assigned technician or service team\""
+    },
+    {
+      "file": "app/maintenance/workorders/[id]/page.tsx",
+      "line": 294,
+      "text": "placeholder=\"Record the post-service test result or reviewer evidence.\""
+    },
+    {
+      "file": "app/modules/page.tsx",
+      "line": 97,
+      "text": "<div className=\"directory-search\"><Search size={18} /><input aria-label=\"Search available modules\" disabled={loading} value={query} onChange={(event) => setQuery(event.target.value)} placeholder=\"Search all modules and workflows\" /></div>"
+    },
+    {
+      "file": "app/operations/ai-command-center/page.tsx",
+      "line": 118,
+      "text": "<form onSubmit={submit} className=\"flex gap-2\"><input value={question} onChange={(event) => setQuestion(event.target.value)} placeholder=\"Ask about branch health…\" className=\"min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-cyan-500\"/><button disabled={busy || !question.trim()} className=\"rounded-lg bg-cyan-600 p-2.5 hover:bg-cyan-500 disabled:opacity-40\" aria-label=\"Send\"><Send size={16}/></button></form>"
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 241,
+      "text": "placeholder=\"one@example.com&#10;other@example.com\""
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 251,
+      "text": "placeholder=\"+919100000001&#10;+919100000002\""
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 261,
+      "text": "placeholder=\"+918888888888&#10;+918888888889\""
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 463,
+      "text": "<label className=\"field\">Days<textarea value={schedule.days.join(\",\")} onChange={(event) => updateSchedule(index, { ...schedule, days: event.target.value.split(/[,\\s]+/).map((token) => Number(token)).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6) })} className=\"field-input\" placeholder=\"0,1,2,3,4,5,6\" /></label>"
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 464,
+      "text": "<label className=\"field\">Email recipients<textarea value={displayList(schedule.recipients.email)} onChange={(event) => updateSchedule(index, { ...schedule, recipients: { ...schedule.recipients, email: normalizeList(event.target.value) } })} className=\"field-input\" placeholder=\"night@example.com\" /></label>"
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 467,
+      "text": "<label className=\"field\">SMS recipients<textarea value={displayList(schedule.recipients.sms)} onChange={(event) => updateSchedule(index, { ...schedule, recipients: { ...schedule.recipients, sms: normalizeList(event.target.value) } })} className=\"field-input\" placeholder=\"+919100000001\" /></label>"
+    },
+    {
+      "file": "app/operations/alert-notification-policy/page.tsx",
+      "line": 468,
+      "text": "<label className=\"field\">Voice recipients<textarea value={displayList(schedule.recipients.voice)} onChange={(event) => updateSchedule(index, { ...schedule, recipients: { ...schedule.recipients, voice: normalizeList(event.target.value) } })} className=\"field-input\" placeholder=\"+918888888888\" /></label>"
+    },
+    {
+      "file": "app/playback/synced/page.tsx",
+      "line": 267,
+      "text": "placeholder=\"Search branch name or code...\""
+    },
+    {
+      "file": "app/playback/synced/page.tsx",
+      "line": 270,
+      "text": "className=\"w-full pl-8 pr-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono\""
+    },
+    {
+      "file": "app/portable-camera/enroll/page.tsx",
+      "line": 664,
+      "text": "placeholder=\"e.g. Engineer Phone 07\""
+    },
+    {
+      "file": "app/reports/page.tsx",
+      "line": 182,
+      "text": "placeholder=\"soc@example.com, manager@example.com\""
+    },
+    {
+      "file": "app/security-devices/branch-posture/page.tsx",
+      "line": 312,
+      "text": "placeholder=\"Search branches...\""
+    },
+    {
+      "file": "app/security-devices/discovery/page.tsx",
+      "line": 604,
+      "text": "placeholder=\"e.g., 192.168.1.0/24, 10.0.0.0/16\""
+    },
+    {
+      "file": "app/security-devices/page.tsx",
+      "line": 233,
+      "text": "placeholder=\"Search device types...\""
+    },
+    {
+      "file": "app/security-devices/[deviceId]/page.tsx",
+      "line": 591,
+      "text": "placeholder=\"Explain why this command is needed...\""
+    },
+    {
+      "file": "app/security-devices/[deviceId]/page.tsx",
+      "line": 608,
+      "text": "placeholder=\"Enter 6-digit MFA code\""
+    },
+    {
+      "file": "app/settings/integrations/hikvision/ax-pro/page.tsx",
+      "line": 75,
+      "text": "<Field label=\"Integration name\" value={form.name} onChange={(v) => update('name', v)} required placeholder=\"Branch AX PRO\" />"
+    },
+    {
+      "file": "app/settings/integrations/hikvision/ax-pro/page.tsx",
+      "line": 76,
+      "text": "<div className=\"grid gap-4 md:grid-cols-2\"><Field label=\"Branch ID\" value={form.branchId} onChange={(v) => update('branchId', v)} required /><Field label=\"Credential secret reference\" value={form.credentialSecretId} onChange={(v) => update('credentialSecretId', v)} required placeholder=\"secret://branches/<id>#axpro\" /></div>"
+    },
+    {
+      "file": "app/settings/integrations/hikvision/ax-pro/page.tsx",
+      "line": 87,
+      "text": "function Field({ label, value, onChange, required, placeholder, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; required?: boolean; placeholder?: string; type?: string }) {"
+    },
+    {
+      "file": "app/settings/integrations/hikvision/ax-pro/page.tsx",
+      "line": 88,
+      "text": "return <label className=\"text-sm text-slate-300\"><span className=\"mb-2 block\">{label}</span><input required={required} type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className=\"w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 placeholder:text-slate-600\" /></label>;"
+    },
+    {
+      "file": "components/adaptive-layout-engine.tsx",
+      "line": 346,
+      "text": "placeholder=\"Rule name\""
+    },
+    {
+      "file": "components/adaptive-layout-engine.tsx",
+      "line": 366,
+      "text": "placeholder=\"Value\""
+    },
+    {
+      "file": "components/ai-chat-with-video.tsx",
+      "line": 401,
+      "text": "placeholder=\"Ask me to find something... (e.g., 'Show person with red shirt')\""
+    },
+    {
+      "file": "components/ai-chat-with-video.tsx",
+      "line": 425,
+      "text": "{/* Video Player Placeholder */}"
+    },
+    {
+      "file": "components/ai-evidence-builder.tsx",
+      "line": 296,
+      "text": "placeholder=\"Enter package title...\""
+    },
+    {
+      "file": "components/ai-incident-summary-dashboard.tsx",
+      "line": 222,
+      "text": "<SelectValue placeholder=\"Select period\" />"
+    },
+    {
+      "file": "components/ai-sop-workflow-interface.tsx",
+      "line": 517,
+      "text": "placeholder=\"Add any notes or observations...\""
+    },
+    {
+      "file": "components/ai-sop-workflow-interface.tsx",
+      "line": 530,
+      "text": "placeholder=\"Skip reason...\""
+    },
+    {
+      "file": "components/analytics-console.tsx",
+      "line": 341,
+      "text": "<input value={assistantQuery} onChange={(event) => setAssistantQuery(event.target.value)} placeholder=\"Show cameras not recording, smoke alerts, or find black SUVs\" />"
+    },
+    {
+      "file": "components/analytics-console.tsx",
+      "line": 606,
+      "text": "<label className=\"wide\">Object classes (comma separated)<input value={classes} onChange={(event) => setClasses(event.target.value)} placeholder=\"person, vehicle\" /></label>"
+    },
+    {
+      "file": "components/analytics-console.tsx",
+      "line": 607,
+      "text": "<label className=\"wide\">Recipients (comma separated)<input value={recipients} onChange={(event) => setRecipients(event.target.value)} placeholder=\"soc@example.com, branch-manager\" /></label>"
+    },
+    {
+      "file": "components/analytics-zone-editor.tsx",
+      "line": 279,
+      "text": "<div className=\"zone-placeholder\">"
+    },
+    {
+      "file": "components/app-layout.tsx",
+      "line": 1255,
+      "text": "placeholder=\"Search cameras, incidents, reports, maintenance...\""
+    },
+    {
+      "file": "components/banking-analytics-dashboard.tsx",
+      "line": 188,
+      "text": "return <section className=\"overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80\"><header className=\"flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5\"><div><p className=\"text-[10px] font-bold tracking-[.18em] text-blue-300\">VISIT SCHEDULE</p><h2 className=\"mt-1 text-lg font-semibold\">Expected cash movements</h2></div><button onClick={() => setOpen(!open)} className=\"flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold\"><Plus size={14} /> Schedule visit</button></header>{open && <form onSubmit={submit} className=\"grid gap-3 border-b border-slate-800 bg-slate-950/40 p-5 md:grid-cols-2 xl:grid-cols-5\"><Field label=\"Vehicle plate\" value={plate} setValue={setPlate} placeholder=\"KA 01 AB 1234\" /><Field label=\"Provider\" value={provider} setValue={setProvider} placeholder=\"Cash logistics partner\" /><Field label=\"Arrival start\" type=\"datetime-local\" value={start} setValue={setStart} required /><Field label=\"Arrival end\" type=\"datetime-local\" value={end} setValue={setEnd} required /><button disabled={saving || !branchId} className=\"mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold disabled:opacity-40\">{saving ? \"Saving…\" : \"Save visit\"}</button></form>}{visits.length === 0 ? <Empty icon={<CalendarClock />} text=\"No expected visits in the next seven days.\" /> : <div className=\"divide-y divide-slate-800\">{visits.map((visit) => <article key={visit.id} className=\"grid gap-3 p-4 sm:grid-cols-[1fr_1fr_1.2fr_auto]\"><div><span className=\"text-[10px] uppercase text-slate-600\">Vehicle</span><strong className=\"mt-1 block text-sm\">{visit.expectedPlate || \"Any approved vehicle\"}</strong></div><div><span className=\"text-[10px] uppercase text-slate-600\">Provider</span><strong className=\"mt-1 block text-sm\">{visit.providerName || \"Not specified\"}</strong></div><div><span className=\"text-[10px] uppercase text-slate-600\">Arrival window</span><strong className=\"mt-1 block text-sm\">{formatDate(visit.expectedArrivalStart)} – {formatTime(visit.expectedArrivalEnd)}</strong></div><span className=\"self-center rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold capitalize text-blue-300\">{visit.status || \"expected\"}</span></article>)}</div>}</section>;"
+    },
+    {
+      "file": "components/banking-analytics-dashboard.tsx",
+      "line": 194,
+      "text": "return <section className=\"overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80\"><header className=\"flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5\"><div><p className=\"text-[10px] font-bold tracking-[.18em] text-blue-300\">MONITOR POLICY</p><h2 className=\"mt-1 text-lg font-semibold\">Branch cash-van monitors</h2></div><div className=\"flex gap-2\"><Link href=\"/analytics\" className=\"flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300\">Camera rules <ArrowUpRight size={13} /></Link><button onClick={() => setOpen(!open)} className=\"flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold\"><Plus size={14} /> New monitor</button></div></header>{open && <form onSubmit={submit} className=\"grid gap-3 border-b border-slate-800 bg-slate-950/40 p-5 md:grid-cols-4\"><Field label=\"Monitor name\" value={name} setValue={setName} placeholder=\"Main branch cash entrance\" required /><Field label=\"Arrival zone ID\" value={arrival} setValue={setArrival} placeholder=\"cash-van-arrival\" required /><Field label=\"Unloading zone ID\" value={unloading} setValue={setUnloading} placeholder=\"secure-unloading\" required /><button disabled={saving || !branchId} className=\"mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold disabled:opacity-40\">{saving ? \"Saving…\" : \"Create monitor\"}</button></form>}{monitors.length === 0 ? <Empty icon={<Settings2 />} text=\"No cash-van monitors are configured for this branch.\" /> : <div className=\"grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3\">{monitors.map((monitor) => <article key={monitor.id} className=\"rounded-xl border border-slate-800 bg-slate-950/50 p-4\"><div className=\"flex items-start justify-between gap-3\"><span className=\"grid h-9 w-9 place-items-center rounded-xl bg-blue-500/10 text-blue-300\"><MapPin size={17} /></span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${monitor.enabled === false ? \"bg-slate-800 text-slate-500\" : \"bg-emerald-500/10 text-emerald-300\"}`}>{monitor.enabled === false ? \"PAUSED\" : \"ACTIVE\"}</span></div><h3 className=\"mt-4 font-semibold\">{monitor.name}</h3><p className=\"mt-1 min-h-8 text-xs text-slate-500\">{monitor.description || \"Cash movement workflow monitor\"}</p><dl className=\"mt-4 grid grid-cols-2 gap-2 text-[10px]\"><Detail label=\"Arrival zone\" value={monitor.arrivalZoneId || \"—\"} /><Detail label=\"Unloading zone\" value={monitor.unloadingZoneId || \"—\"} /></dl></article>)}</div>}</section>;"
+    },
+    {
+      "file": "components/banking-analytics-dashboard.tsx",
+      "line": 202,
+      "text": "function Field({ label, value, setValue, placeholder, type = \"text\", required = false }: { label: string; value: string; setValue: (value: string) => void; placeholder?: string; type?: string; required?: boolean }) { return <label className=\"text-xs font-semibold text-slate-400\">{label}<input type={type} required={required} value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className=\"mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500\" /></label>; }"
+    },
+    {
+      "file": "components/branch-connectivity-panel.tsx",
+      "line": 168,
+      "text": "<input value={form.vpnNetworks} onChange={(event) => setForm((current) => ({ ...current, vpnNetworks: event.target.value }))} placeholder=\"10.42.0.0/16, 192.168.50.0/24\" required />"
+    },
+    {
+      "file": "components/branch-gateway-fleet.tsx",
+      "line": 145,
+      "text": "<input aria-label=\"Search gateway branches\" className=\"input w-full pl-9\" value={search} onChange={(event) => setSearch(event.target.value)} placeholder=\"Search branch or code\"/>"
+    },
+    {
+      "file": "components/branches/BranchLifecycleDialog.tsx",
+      "line": 269,
+      "text": "placeholder={`Explain why you are ${action === 'disable' ? 'disabling' : action === 'reactivate' ? 'reactivating' : 'archiving'} this branch...`}"
+    },
+    {
+      "file": "components/camera-credential-manager.tsx",
+      "line": 111,
+      "text": "<input required inputMode=\"url\" value={cameraIp} onChange={(event) => setCameraIp(event.target.value)} placeholder=\"192.168.1.20 or rtsp://192.168.1.20:554\" className=\"mt-2 w-full rounded-lg border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100\" />"
+    },
+    {
+      "file": "components/camera-grid.tsx",
+      "line": 471,
+      "text": "placeholder=\"Layout name (e.g., 'Main Entrance View')\""
+    },
+    {
+      "file": "components/camera-import-export-modal.tsx",
+      "line": 468,
+      "text": "placeholder={`camera_name,ip_address,username,password,vendor,model,rtsp_port\\nFront Entrance Cam,192.168.1.101,admin,Pass@123,hikvision,DS-2CD2043G2,554\\nCash Counter 1,192.168.1.102,admin,Pass@123,dahua,IPC-HDBW2431E,554`}"
+    },
+    {
+      "file": "components/camera-import-export-modal.tsx",
+      "line": 469,
+      "text": "className=\"w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500\""
+    },
+    {
+      "file": "components/camera-permission-manager.tsx",
+      "line": 264,
+      "text": "placeholder=\"Example: Locker camera restricted\""
+    },
+    {
+      "file": "components/camera-tile.tsx",
+      "line": 277,
+      "text": "<div className={`camera-feed-placeholder ${liveError ? \"has-error\" : \"\"}`}>"
+    },
+    {
+      "file": "components/camera-tile.tsx",
+      "line": 554,
+      "text": "placeholder=\"motion, tamper\""
+    },
+    {
+      "file": "components/capability/CapabilityBadge.tsx",
+      "line": 200,
+      "text": "return 'Not Implemented';"
+    },
+    {
+      "file": "components/capability/PlatformCapabilityGate.tsx",
+      "line": 9,
+      "text": "* - NOT_IMPLEMENTED: Do NOT render actionable control; render non-actionable placeholder if requested"
+    },
+    {
+      "file": "components/capability/PlatformCapabilityGate.tsx",
+      "line": 24,
+      "text": "/** Optional custom fallback content when capability is not usable or not implemented */"
+    },
+    {
+      "file": "components/capability/PlatformCapabilityGate.tsx",
+      "line": 27,
+      "text": "/** Whether to render a disabled \"Not Available in This Release\" placeholder for admin/demo views */"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 89,
+      "text": "<label><span>{isRequirement ? \"Requirement code\" : \"Risk number\"}</span><input name=\"recordNumber\" required maxLength={100} placeholder={isRequirement ? \"ISO-A.8.1\" : \"RISK-2026-001\"} /></label>"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 90,
+      "text": "<label className=\"wide\"><span>Title</span><input name=\"title\" required minLength={2} maxLength={500} placeholder={`Enter ${kind} title`} /></label>"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 91,
+      "text": "<label className=\"wide\"><span>Description</span><textarea name=\"description\" required rows={5} placeholder={`Describe the ${kind}, scope, and operational context`} /></label>"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 92,
+      "text": "<label><span>Category</span>{isRequirement ? <input name=\"category\" maxLength={200} placeholder=\"Access control\" /> : <select name=\"category\" defaultValue=\"compliance\"><option value=\"operational\">Operational</option><option value=\"compliance\">Compliance</option><option value=\"financial\">Financial</option><option value=\"reputational\">Reputational</option><option value=\"strategic\">Strategic</option><option value=\"technology\">Technology</option><option value=\"third_party\">Third party</option><option value=\"legal\">Legal</option></select>}</label>"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 93,
+      "text": "{isRequirement ? <label><span>Control type</span><select name=\"controlType\" defaultValue=\"preventive\"><option value=\"preventive\">Preventive</option><option value=\"detective\">Detective</option><option value=\"corrective\">Corrective</option><option value=\"compensating\">Compensating</option><option value=\"directive\">Directive</option></select></label> : <><label><span>Likelihood</span><RiskScale name=\"likelihood\" /></label><label><span>Impact</span><RiskScale name=\"impact\" /></label><label><span>Treatment</span><select name=\"riskTreatment\" defaultValue=\"mitigate\"><option value=\"mitigate\">Mitigate</option><option value=\"accept\">Accept</option><option value=\"transfer\">Transfer</option><option value=\"avoid\">Avoid</option></select></label><label className=\"wide\"><span>Treatment plan</span><textarea name=\"treatmentPlan\" rows={3} placeholder=\"Describe planned controls and accountable actions\" /></label></>}"
+    },
+    {
+      "file": "components/compliance/compliance-create-form.tsx",
+      "line": 94,
+      "text": "{isRequirement && <label><span>Owner role</span><input name=\"owner\" maxLength={200} placeholder=\"Compliance manager\" /></label>}"
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 275,
+      "text": "placeholder=\"Enter company name\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 291,
+      "text": "placeholder=\"e.g., COMP001\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 306,
+      "text": "placeholder=\"Brief description of your company\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 326,
+      "text": "placeholder=\"Street address\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 342,
+      "text": "placeholder=\"City\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 357,
+      "text": "placeholder=\"State\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 374,
+      "text": "placeholder=\"Postal code\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 389,
+      "text": "placeholder=\"Country\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 409,
+      "text": "placeholder=\"Contact person name\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 424,
+      "text": "placeholder=\"contact@company.com\""
+    },
+    {
+      "file": "components/create-organization-form.tsx",
+      "line": 439,
+      "text": "placeholder=\"+1 (555) 123-4567\""
+    },
+    {
+      "file": "components/device-configuration/camera-configuration-view.tsx",
+      "line": 764,
+      "text": "placeholder=\"Level\""
+    },
+    {
+      "file": "components/device-configuration/device-configuration-center.tsx",
+      "line": 328,
+      "text": "placeholder={`Search ${deviceType === \"camera\" ? \"cameras\" : \"recorders\"} by name or IP...`}"
+    },
+    {
+      "file": "components/device-configuration/device-configuration-center.tsx",
+      "line": 331,
+      "text": "className=\"w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 520,
+      "text": "placeholder=\"Search templates or parameters...\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 523,
+      "text": "className=\"w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 915,
+      "text": "placeholder=\"e.g. cam-entrance-01 or 192.168.1.10\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 918,
+      "text": "className=\"w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 1081,
+      "text": "placeholder=\"e.g. BR-118\""
+    },
+    {
+      "file": "components/device-configuration/golden-templates-panel.tsx",
+      "line": 1084,
+      "text": "className=\"w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 font-mono\""
+    },
+    {
+      "file": "components/device-configuration/network-config-panel.tsx",
+      "line": 266,
+      "text": "placeholder=\"192.168.1.100\""
+    },
+    {
+      "file": "components/device-configuration/network-config-panel.tsx",
+      "line": 278,
+      "text": "placeholder=\"255.255.255.0\""
+    },
+    {
+      "file": "components/device-configuration/network-config-panel.tsx",
+      "line": 290,
+      "text": "placeholder=\"192.168.1.1\""
+    },
+    {
+      "file": "components/device-configuration/network-config-panel.tsx",
+      "line": 331,
+      "text": "placeholder=\"8.8.8.8\""
+    },
+    {
+      "file": "components/device-configuration/network-config-panel.tsx",
+      "line": 343,
+      "text": "placeholder=\"1.1.1.1\""
+    },
+    {
+      "file": "components/device-configuration/time-sync-panel.tsx",
+      "line": 336,
+      "text": "placeholder=\"pool.ntp.org\""
+    },
+    {
+      "file": "components/device-management/credential-rotation-form.tsx",
+      "line": 107,
+      "text": "placeholder=\"e.g., Scheduled quarterly rotation, technician deboarding, security compliance review\""
+    },
+    {
+      "file": "components/device-management/device-selector.tsx",
+      "line": 94,
+      "text": "placeholder=\"Search devices by ID, IP, manufacturer, or model...\""
+    },
+    {
+      "file": "components/device-management/device-selector.tsx",
+      "line": 97,
+      "text": "className=\"w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-500\""
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2262,
+      "text": "{discoveryEditMode === \"rename\" ? <><input aria-label=\"Camera display name\" value={renameDraft} onChange={(event) => setRenameDraft(event.target.value)} placeholder=\"Display name\" /><button type=\"button\" className=\"primary-button\" onClick={() => void renameDiscoveredCamera(item.id, renameDraft)} disabled={saving || !renameDraft.trim()}>Save name</button></> : null}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2263,
+      "text": "{discoveryEditMode === \"reject\" ? <><input aria-label=\"Device rejection reason\" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder=\"Reason for rejection\" /><button type=\"button\" className=\"secondary-button\" onClick={() => void rejectDiscoveredCamera(item.id, rejectReason)} disabled={saving || !rejectReason.trim()}>Reject device</button></> : null}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2300,
+      "text": "<div className=\"form-group\"><label htmlFor=\"inventoryCapabilities\">Capabilities</label><input id=\"inventoryCapabilities\" value={inventoryForm.capabilities} onChange={(event) => setInventoryForm((form) => ({ ...form, capabilities: event.target.value }))} placeholder=\"ptz,audio,motion\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2322,
+      "text": "<input id=\"inventorySearch\" value={inventorySearch} onChange={(event) => setInventorySearch(event.target.value)} placeholder=\"Search by ID, model, IP, serial, or tag\" />"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2664,
+      "text": "{previewEditMode === \"rename\" ? <><input aria-label=\"Camera display name\" value={previewNameDraft} onChange={(event) => setPreviewNameDraft(event.target.value)} placeholder=\"Display name\" /><button type=\"button\" className=\"primary-button\" onClick={() => void renameDiscoveredCamera(camera.id, previewNameDraft)} disabled={saving || !previewNameDraft.trim()}>Save name</button></> : null}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2665,
+      "text": "{previewEditMode === \"reject\" ? <><input aria-label=\"Device rejection reason\" value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} placeholder=\"Reason for rejection\" /><button type=\"button\" className=\"secondary-button\" onClick={() => void rejectDiscoveredCamera(camera.id, rejectReason)} disabled={saving || !rejectReason.trim()}>Reject device</button></> : null}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2715,
+      "text": "<div className=\"form-section\"><h3>Bulk CSV import</h3><div className=\"form-group\"><label htmlFor=\"bulkCsv\">CSV rows</label><textarea id=\"bulkCsv\" rows={8} value={bulkCsv} onChange={(event) => setBulkCsv(event.target.value)} placeholder=\"branchCode,cameraName,ip,port,manufacturer,model,serial,streamProfile,secretReference\" required /></div></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2724,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraName\">Camera name <span className=\"required\">*</span></label><input id=\"cameraName\" value={cameraForm.name} onChange={(event) => setCameraForm((form) => ({ ...form, name: event.target.value }))} minLength={2} required placeholder=\"Main entrance\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2725,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraModel\">Model</label><input id=\"cameraModel\" value={cameraForm.model} onChange={(event) => setCameraForm((form) => ({ ...form, model: event.target.value }))} placeholder=\"Optional — auto / unknown is supported\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2726,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraVendor\">Brand</label><input id=\"cameraVendor\" value={cameraForm.vendor} onChange={(event) => setCameraForm((form) => ({ ...form, vendor: event.target.value }))} placeholder=\"Optional — e.g. Hikvision, CP Plus, Dahua\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2728,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraSerialNumber\">Serial number</label><input id=\"cameraSerialNumber\" value={discoverySerialNumber} onChange={(event) => setDiscoverySerialNumber(event.target.value)} placeholder=\"Optional\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2729,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraMacAddress\">MAC address</label><input id=\"cameraMacAddress\" value={discoveryMacAddress} onChange={(event) => setDiscoveryMacAddress(event.target.value)} placeholder=\"Optional\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2749,
+      "text": "<div className=\"form-group\"><label htmlFor=\"cameraIp\">Private IP address <span className=\"required\">*</span></label><input id=\"cameraIp\" value={cameraForm.ipAddress} onChange={(event) => setCameraForm((form) => ({ ...form, ipAddress: event.target.value }))} required placeholder=\"192.168.1.20\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2754,
+      "text": "{(cameraForm.sourceType === \"analog-dvr-channel\" || cameraForm.sourceType === \"nvr-channel\") ? <div className=\"form-row\"><div className=\"form-group\"><label htmlFor=\"recorderId\">DVR / NVR ID <span className=\"required\">*</span></label><input id=\"recorderId\" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder=\"DVR-BLR-01\" /></div><div className=\"form-group\"><label htmlFor=\"recorderChannel\">Recorder channel <span className=\"required\">*</span></label><input id=\"recorderChannel\" type=\"number\" min=\"1\" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className=\"form-group\"><label htmlFor=\"recorderSerial\">Recorder serial</label><input id=\"recorderSerial\" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder=\"Optional\" /></div></div> : null}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2755,
+      "text": "<div className=\"form-group\"><label htmlFor=\"secretRef\">Stream secret reference {registrationMode === \"manual\" && cameraForm.connectionTransport !== \"vpn\" ? <span className=\"required\">*</span> : null}</label><input id=\"secretRef\" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === \"manual\" && cameraForm.connectionTransport !== \"vpn\"} placeholder={cameraForm.connectionTransport === \"vpn\" ? \"Generated automatically for VPN when left blank\" : \"edge://gateway/device or gateway secret reference\"} /><small className=\"field-help\">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2760,
+      "text": "<div className=\"form-group\"><label htmlFor=\"streamWidth\">Width <span className=\"optional\">(optional)</span></label><input id=\"streamWidth\" type=\"number\" min=\"1\" value={cameraForm.width} onChange={(event) => setCameraForm((form) => ({ ...form, width: event.target.value }))} placeholder=\"Auto-detect\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2761,
+      "text": "<div className=\"form-group\"><label htmlFor=\"streamHeight\">Height <span className=\"optional\">(optional)</span></label><input id=\"streamHeight\" type=\"number\" min=\"1\" value={cameraForm.height} onChange={(event) => setCameraForm((form) => ({ ...form, height: event.target.value }))} placeholder=\"Auto-detect\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2762,
+      "text": "<div className=\"form-group\"><label htmlFor=\"streamFrameRate\">FPS <span className=\"optional\">(optional)</span></label><input id=\"streamFrameRate\" type=\"number\" min=\"0.1\" max=\"120\" step=\"0.1\" value={cameraForm.frameRate} onChange={(event) => setCameraForm((form) => ({ ...form, frameRate: event.target.value }))} placeholder=\"Auto-detect\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2763,
+      "text": "<div className=\"form-group\"><label htmlFor=\"streamBitrate\">Bitrate (Kbps) <span className=\"optional\">(optional)</span></label><input id=\"streamBitrate\" type=\"number\" min=\"1\" max=\"100000\" value={cameraForm.bitrateKbps} onChange={(event) => setCameraForm((form) => ({ ...form, bitrateKbps: event.target.value }))} placeholder=\"Auto-detect\" /></div>"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2813,
+      "text": "placeholder={probeTargetMode === \"range\" ? \"192.168.1.20-192.168.1.40 or 192.168.1.0/24\" : \"Camera IP address\"}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2829,
+      "text": "placeholder=\"RTSP port\""
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2839,
+      "text": "placeholder={probeCredentialMode === \"different\" && probeTargetMode === \"range\" ? \"Entered per device in discovery\" : \"Camera username\"}"
+    },
+    {
+      "file": "components/device-manager.tsx",
+      "line": 2852,
+      "text": "placeholder=\"Enter password (or TrueCloud login password)\""
+    },
+    {
+      "file": "components/digital-twin/device-placement-panel.tsx",
+      "line": 146,
+      "text": "placeholder=\"e.g., Main Entrance Camera\""
+    },
+    {
+      "file": "components/digital-twin/device-status-overlay.tsx",
+      "line": 174,
+      "text": "<p className=\"text-gray-400 ml-3\">Live stream placeholder</p>"
+    },
+    {
+      "file": "components/digital-twin/DigitalTwinAssistant.tsx",
+      "line": 321,
+      "text": "placeholder=\"Ask about your infrastructure...\""
+    },
+    {
+      "file": "components/digital-twin/floor-plan-upload-modal.tsx",
+      "line": 151,
+      "text": "placeholder=\"0.01\""
+    },
+    {
+      "file": "components/digital-twin/operational-twin.tsx",
+      "line": 71,
+      "text": "{editor&&<div className=\"mb-4 rounded-xl border border-slate-800 p-2\"><input value={newFloorName} onChange={(event)=>setNewFloorName(event.target.value)} placeholder=\"New floor name\" className=\"w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs\"/><div className=\"mt-2 flex gap-2\"><input type=\"number\" value={newFloorNumber} onChange={(event)=>setNewFloorNumber(Number(event.target.value))} min={-10} max={300} aria-label=\"Floor number\" className=\"w-16 rounded border border-slate-700 bg-slate-950 px-2 text-xs\"/><button disabled={busy||!newFloorName.trim()} onClick={()=>void addFloor()} className=\"flex flex-1 items-center justify-center gap-1 rounded bg-cyan-600 px-2 py-1.5 text-xs disabled:opacity-40\"><Plus size={12}/>Add floor</button></div></div>}"
+    },
+    {
+      "file": "components/digital-twin/zone-editor.tsx",
+      "line": 335,
+      "text": "placeholder=\"e.g., Vault Area\""
+    },
+    {
+      "file": "components/edge-fleet-manager.tsx",
+      "line": 289,
+      "text": "placeholder=\"Search branch code, name, gateway ID...\""
+    },
+    {
+      "file": "components/enhanced-camera-grid.tsx",
+      "line": 711,
+      "text": "// metadata placeholder."
+    },
+    {
+      "file": "components/enhanced-camera-grid.tsx",
+      "line": 971,
+      "text": "placeholder=\"For example, Main entrances\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 145,
+      "text": "placeholder=\"Find a case or reference\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 613,
+      "text": "placeholder=\"e.g., CASE-2024-001\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 624,
+      "text": "placeholder=\"Brief title for the case\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 634,
+      "text": "placeholder=\"Detailed description of the case\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 888,
+      "text": "placeholder=\"Watermark text overlay\""
+    },
+    {
+      "file": "components/evidence-manager.tsx",
+      "line": 901,
+      "text": "placeholder=\"e.g., GDPR Subject Access Request disclosure to outside counsel\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 328,
+      "text": "placeholder=\"e.g., CONFIDENTIAL - Case #12345\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 375,
+      "text": "placeholder=\"Leave empty for no password\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 398,
+      "text": "placeholder=\"e.g., Det. John Smith\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 418,
+      "text": "placeholder=\"e.g., City Police Department\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 438,
+      "text": "placeholder=\"e.g., john.smith@police.gov\""
+    },
+    {
+      "file": "components/export-wizard.tsx",
+      "line": 463,
+      "text": "placeholder=\"Enter any additional notes about this export...\""
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 394,
+      "text": "<span className=\"relative block\"><Search className=\"absolute left-3 top-[18px] text-slate-600\" size={14} /><input value={plateQuery} onChange={(event) => setPlateQuery(event.target.value.toUpperCase())} placeholder=\"KA01AB1234\" className={`${inputClass} pl-9 uppercase`} /></span>"
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 623,
+      "text": "placeholder=\"1.0\""
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 702,
+      "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Watchlist name<input required minLength={2} value={form.name} onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder=\"Restricted persons\" /></label><label className={labelClass}>List type<select value={form.listType} onChange={(event) => setValue((current) => ({ ...current, listType: event.target.value as typeof current.listType }))} className={inputClass}><option value=\"security\">Security</option><option value=\"vip\">VIP</option><option value=\"staff\">Staff</option><option value=\"blacklist\">Blacklist</option><option value=\"missing-person\">Missing person</option></select></label></div><label className={labelClass}>Description<textarea rows={3} value={form.description} onChange={(event) => setValue((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder=\"Document the approved operational purpose.\" /></label><PolicyFields severity={form.alertSeverity} enabled={form.alertOnMatch} setSeverity={(alertSeverity) => setValue((current) => ({ ...current, alertSeverity }))} setEnabled={(alertOnMatch) => setValue((current) => ({ ...current, alertOnMatch }))} /><SubmitButton saving={saving} label=\"Create face watchlist\" /></form>;"
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 706,
+      "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100\">This creates an identity record only. Face imagery and embeddings must come from an approved, consent-aware capture pipeline.</div><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Full name<input required value={form.fullName} onChange={(event) => setValue((current) => ({ ...current, fullName: event.target.value }))} className={inputClass} /></label><label className={labelClass}>External ID<input value={form.externalId} onChange={(event) => setValue((current) => ({ ...current, externalId: event.target.value }))} className={inputClass} placeholder=\"Employee or case ID\" /></label><label className={labelClass}>Date of birth<input type=\"date\" value={form.dateOfBirth} onChange={(event) => setValue((current) => ({ ...current, dateOfBirth: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Gender<select value={form.gender} onChange={(event) => setValue((current) => ({ ...current, gender: event.target.value as typeof current.gender }))} className={inputClass}><option value=\"unknown\">Not recorded</option><option value=\"female\">Female</option><option value=\"male\">Male</option><option value=\"other\">Other</option></select></label></div><label className={labelClass}>Notes<textarea rows={3} value={form.notes} onChange={(event) => setValue((current) => ({ ...current, notes: event.target.value }))} className={inputClass} /></label><SubmitButton saving={saving} label=\"Enrol identity record\" /></form>;"
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 710,
+      "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Watchlist name<input required minLength={2} value={form.name} onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder=\"Vehicles of interest\" /></label><label className={labelClass}>List type<select value={form.listType} onChange={(event) => setValue((current) => ({ ...current, listType: event.target.value as typeof current.listType }))} className={inputClass}><option value=\"alert\">Alert</option><option value=\"stolen\">Stolen</option><option value=\"wanted\">Wanted</option><option value=\"vip\">VIP</option><option value=\"staff\">Staff</option><option value=\"blacklist\">Blacklist</option></select></label></div><label className={labelClass}>Description<textarea rows={3} value={form.description} onChange={(event) => setValue((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder=\"Document the operational reason for this list.\" /></label><PolicyFields severity={form.alertSeverity} enabled={form.alertOnMatch} setSeverity={(alertSeverity) => setValue((current) => ({ ...current, alertSeverity }))} setEnabled={(alertOnMatch) => setValue((current) => ({ ...current, alertOnMatch }))} /><label className=\"flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400\"><input type=\"checkbox\" checked={form.alertAuthorities} onChange={(event) => setValue((current) => ({ ...current, alertAuthorities: event.target.checked }))} className=\"mt-0.5 accent-cyan-500\" /><span><strong className=\"block text-slate-200\">Mark for authority-notification workflow</strong><small className=\"mt-1 block leading-5 text-slate-500\">This records policy intent; external notification still requires its configured approval workflow.</small></span></label><SubmitButton saving={saving} label=\"Create ANPR watchlist\" /></form>;"
+    },
+    {
+      "file": "components/identity-watchlist-workspace.tsx",
+      "line": 714,
+      "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Plate number<input required minLength={2} value={form.plateNumber} onChange={(event) => setValue((current) => ({ ...current, plateNumber: event.target.value.toUpperCase() }))} className={`${inputClass} uppercase`} placeholder=\"KA01AB1234\" /></label><label className={labelClass}>Country code<input required minLength={2} maxLength={2} value={form.countryCode} onChange={(event) => setValue((current) => ({ ...current, countryCode: event.target.value.toUpperCase() }))} className={`${inputClass} uppercase`} /></label><label className={labelClass}>Region code<input value={form.regionCode} onChange={(event) => setValue((current) => ({ ...current, regionCode: event.target.value }))} className={inputClass} placeholder=\"KA\" /></label><label className={labelClass}>Vehicle type<select value={form.vehicleType} onChange={(event) => setValue((current) => ({ ...current, vehicleType: event.target.value as typeof current.vehicleType }))} className={inputClass}><option value=\"car\">Car</option><option value=\"motorcycle\">Motorcycle</option><option value=\"bus\">Bus</option><option value=\"truck\">Truck</option><option value=\"other\">Other</option></select></label><label className={labelClass}>Make<input value={form.vehicleMake} onChange={(event) => setValue((current) => ({ ...current, vehicleMake: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Model<input value={form.vehicleModel} onChange={(event) => setValue((current) => ({ ...current, vehicleModel: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Colour<input value={form.vehicleColor} onChange={(event) => setValue((current) => ({ ...current, vehicleColor: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Owner / reference<input value={form.ownerName} onChange={(event) => setValue((current) => ({ ...current, ownerName: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Expiry<input type=\"datetime-local\" value={form.expiresAt} onChange={(event) => setValue((current) => ({ ...current, expiresAt: event.target.value }))} className={inputClass} /></label></div><label className={labelClass}>Reason<input required value={form.reason} onChange={(event) => setValue((current) => ({ ...current, reason: event.target.value }))} className={inputClass} placeholder=\"Operational justification\" /></label><label className={labelClass}>Notes<textarea rows={3} value={form.notes} onChange={(event) => setValue((current) => ({ ...current, notes: event.target.value }))} className={inputClass} /></label><SubmitButton saving={saving} label=\"Register plate\" /></form>;"
+    },
+    {
+      "file": "components/incident-media-modal.tsx",
+      "line": 504,
+      "text": "placeholder=\"Enter observation details, reason for dismissal, or environmental context...\""
+    },
+    {
+      "file": "components/incident-media-modal.tsx",
+      "line": 505,
+      "text": "className=\"w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none\""
+    },
+    {
+      "file": "components/incidents/incident-filters.tsx",
+      "line": 125,
+      "text": "placeholder=\"Search title, description...\""
+    },
+    {
+      "file": "components/incidents/incident-filters.tsx",
+      "line": 126,
+      "text": "className=\"w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500\""
+    },
+    {
+      "file": "components/live-ai-wall-panel.tsx",
+      "line": 167,
+      "text": "placeholder=\"Ask: show smoke alerts or cameras not recording\""
+    },
+    {
+      "file": "components/live-event-form.tsx",
+      "line": 92,
+      "text": "<input id=\"incidentTitle\" value={title} onChange={(event) => setTitle(event.target.value)} minLength={3} maxLength={160} required placeholder=\"Suspicious activity at rear entrance\" />"
+    },
+    {
+      "file": "components/live-event-form.tsx",
+      "line": 105,
+      "text": "<textarea id=\"liveEventNotes\" rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} maxLength={2000} placeholder=\"Describe what you observed…\" />"
+    },
+    {
+      "file": "components/login-form.tsx",
+      "line": 301,
+      "text": "placeholder=\"Enter new password\""
+    },
+    {
+      "file": "components/login-form.tsx",
+      "line": 318,
+      "text": "placeholder=\"Confirm new password\""
+    },
+    {
+      "file": "components/login-form.tsx",
+      "line": 387,
+      "text": "placeholder=\"Enter your username\""
+    },
+    {
+      "file": "components/login-form.tsx",
+      "line": 406,
+      "text": "placeholder=\"Enter your password\""
+    },
+    {
+      "file": "components/login-form.tsx",
+      "line": 434,
+      "text": "placeholder=\"Leave blank if not required\""
+    },
+    {
+      "file": "components/maintenance/CompatibilityCatalogViewer.tsx",
+      "line": 87,
+      "text": "placeholder=\"Filter model, vendor...\""
+    },
+    {
+      "file": "components/maintenance/report-components.tsx",
+      "line": 100,
+      "text": "placeholder=\"e.g., Monthly Cost Analysis - December 2024\""
+    },
+    {
+      "file": "components/maintenance/report-components.tsx",
+      "line": 143,
+      "text": "placeholder=\"Enter branch ID to filter\""
+    },
+    {
+      "file": "components/maintenance-command-center.tsx",
+      "line": 243,
+      "text": "placeholder=\"Search ticket #, branch, camera, fault...\""
+    },
+    {
+      "file": "components/maintenance-command-center.tsx",
+      "line": 471,
+      "text": "placeholder=\"e.g. Lens sensor failed, replaced unit and re-focused.\""
+    },
+    {
+      "file": "components/media-pipeline-scheduler-view.tsx",
+      "line": 77,
+      "text": "<div className=\"grid grid-cols-1 lg:grid-cols-12 gap-6\"><div className=\"lg:col-span-7\"><div className=\"p-5 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-4 shadow-xl\"><div className=\"flex flex-wrap items-center justify-between gap-3\"><div className=\"flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono\"><Video className=\"w-4 h-4 text-indigo-400\" /> Capacity-planning preview</div><div className=\"flex flex-wrap items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs font-mono\">{GRID_OPTIONS.map((count) => <button key={count} onClick={() => setGridSize(count)} className={`px-2.5 py-1 rounded ${gridSize === count ? \"bg-indigo-600 text-white font-bold\" : \"text-slate-400 hover:text-slate-200\"}`}>{Math.sqrt(count) % 1 === 0 ? `${Math.sqrt(count)}×${Math.sqrt(count)}` : `${count} tiles`}</button>)}</div></div><p className=\"text-xs text-slate-400\">This preview uses placeholder camera slots only. Live-wall camera priority, alarms, and visibility are supplied by the live wall when it requests a plan.</p><div className=\"p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono\"><div className=\"flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-400\"><span>{schedule?.activeLiveDecodes ?? 0} live decodes</span><span>{schedule?.activeKeyframeStreams ?? 0} keyframe streams</span><span>{schedule?.pausedStreams ?? 0} paused</span><span>{schedule ? `${(schedule.totalAllocatedBandwidthKbps / 1000).toFixed(1)} Mbps allocated` : \"Awaiting plan\"}</span></div><div className=\"grid gap-1.5 p-2 rounded-lg bg-slate-900/50 border border-slate-800/80 max-h-72 overflow-y-auto\" style={{ gridTemplateColumns: `repeat(${gridDimensions(gridSize).columns}, minmax(0, 1fr))` }}>{cameras.map((camera, index) => { const decision = schedule?.schedules[camera.id]; return <div key={camera.id} className={`p-2 rounded border text-center text-[9px] font-bold ${decisionAppearance(decision)}`}><div className=\"truncate\">Slot {index + 1}</div><div className=\"text-[8px] opacity-80 mt-0.5\">{decision ? `${decision.targetResolution.width}p · ${decision.targetFps} fps` : \"Calculating\"}</div></div>; })}</div></div></div></div>"
+    },
+    {
+      "file": "components/mobile-command-center.tsx",
+      "line": 501,
+      "text": "placeholder=\"Add custom note...\""
+    },
+    {
+      "file": "components/mobile-command-center.tsx",
+      "line": 588,
+      "text": "placeholder=\"Search branch, camera, incident...\""
+    },
+    {
+      "file": "components/mobile-soc-operator-view.tsx",
+      "line": 362,
+      "text": "placeholder=\"Type additional note...\""
+    },
+    {
+      "file": "components/nbfc-rules/nbfc-rules-workspace.tsx",
+      "line": 907,
+      "text": "placeholder=\"Search rule name or description...\""
+    },
+    {
+      "file": "components/nbfc-rules/nbfc-rules-workspace.tsx",
+      "line": 910,
+      "text": "className=\"w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-500\""
+    },
+    {
+      "file": "components/nbfc-rules/nbfc-rules-workspace.tsx",
+      "line": 1548,
+      "text": "placeholder=\"e.g. Locker Maximum Occupancy\""
+    },
+    {
+      "file": "components/nbfc-rules/nbfc-rules-workspace.tsx",
+      "line": 1918,
+      "text": "placeholder=\"Describe what occurred and suggested tuning...\""
+    },
+    {
+      "file": "components/notifications/NotificationPolicyEditor.tsx",
+      "line": 372,
+      "text": "placeholder=\"e.g., Default Notification Policy\""
+    },
+    {
+      "file": "components/notifications/NotificationPolicyEditor.tsx",
+      "line": 385,
+      "text": "placeholder=\"Optional description of this policy\""
+    },
+    {
+      "file": "components/notifications/RecipientGroupManager.tsx",
+      "line": 237,
+      "text": "placeholder=\"e.g., SOC Team\""
+    },
+    {
+      "file": "components/notifications/RecipientGroupManager.tsx",
+      "line": 250,
+      "text": "placeholder=\"Optional description\""
+    },
+    {
+      "file": "components/notifications/RecipientGroupManager.tsx",
+      "line": 281,
+      "text": "placeholder=\"John Doe\""
+    },
+    {
+      "file": "components/notifications/RecipientGroupManager.tsx",
+      "line": 296,
+      "text": "placeholder=\"email@example.com\""
+    },
+    {
+      "file": "components/notifications/RecipientGroupManager.tsx",
+      "line": 316,
+      "text": "placeholder=\"+919876543210\""
+    },
+    {
+      "file": "components/operational-health/alert-action-modal.tsx",
+      "line": 252,
+      "text": "placeholder=\"Optional context for the assignee\""
+    },
+    {
+      "file": "components/operational-health/alert-action-modal.tsx",
+      "line": 294,
+      "text": "placeholder=\"Describe what was done to resolve this alert...\""
+    },
+    {
+      "file": "components/operational-health/alert-action-modal.tsx",
+      "line": 346,
+      "text": "placeholder=\"Add any additional notes or instructions for the technician...\""
+    },
+    {
+      "file": "components/operational-health/branch-health-mosaic.tsx",
+      "line": 217,
+      "text": "placeholder=\"Search branch name / code\""
+    },
+    {
+      "file": "components/operational-health/branch-health-mosaic.tsx",
+      "line": 347,
+      "text": "key={branch?.id ?? `branch-placeholder-${index}`}"
+    },
+    {
+      "file": "components/operational-health/mosaic/branch-health-mosaic.tsx",
+      "line": 85,
+      "text": "placeholder=\"Search branches...\""
+    },
+    {
+      "file": "components/operations/command-center-view.tsx",
+      "line": 421,
+      "text": "placeholder='Ask Sentinel: \"Show me branches likely to fail recording within 72 hours\" or \"Are all cameras recording?\"'"
+    },
+    {
+      "file": "components/operations/command-center-view.tsx",
+      "line": 422,
+      "text": "className=\"flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 283,
+      "text": "placeholder={"
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 306,
+      "text": "placeholder=\"e.g., BR-MUM-01, ZN-S01\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 322,
+      "text": "placeholder=\"Optional operational details, facilities, or notes...\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 339,
+      "text": "placeholder=\"Street / Building / Landmark\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 349,
+      "text": "placeholder=\"City (e.g. Kochi, Mumbai)\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 359,
+      "text": "placeholder=\"State (e.g. Kerala, Maharashtra)\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 369,
+      "text": "placeholder=\"Postal / PIN Code\""
+    },
+    {
+      "file": "components/org-node-form.tsx",
+      "line": 379,
+      "text": "placeholder=\"Branch Contact Phone\""
+    },
+    {
+      "file": "components/organization-tree.tsx",
+      "line": 610,
+      "text": "placeholder=\"Filter zones, regions, branches...\""
+    },
+    {
+      "file": "components/qr-credential-scanner.tsx",
+      "line": 483,
+      "text": "placeholder=\"e.g. MyHome_WiFi_2.4G\""
+    },
+    {
+      "file": "components/qr-credential-scanner.tsx",
+      "line": 494,
+      "text": "placeholder=\"Enter Wi-Fi password\""
+    },
+    {
+      "file": "components/recording-settings-panel.tsx",
+      "line": 351,
+      "text": "placeholder=\"motion, tamper\""
+    },
+    {
+      "file": "components/retention/branch-retention-table.tsx",
+      "line": 71,
+      "text": "placeholder=\"Search branches by name or ID...\""
+    },
+    {
+      "file": "components/retention/branch-retention-table.tsx",
+      "line": 72,
+      "text": "className=\"w-full pl-9 pr-4 py-2 text-xs rounded-lg border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-sky-500\""
+    },
+    {
+      "file": "components/shell/omnibox-search-modal.tsx",
+      "line": 119,
+      "text": "placeholder=\"Search branches, cameras, NVRs, P1 alerts, or incidents...\""
+    },
+    {
+      "file": "components/shell/omnibox-search-modal.tsx",
+      "line": 120,
+      "text": "className=\"flex-1 bg-transparent text-slate-100 placeholder-slate-500 text-sm focus:outline-none\""
+    },
+    {
+      "file": "components/ui/fleet-filter-bar.tsx",
+      "line": 60,
+      "text": "placeholder={searchPlaceholder}"
+    },
+    {
+      "file": "components/ui/fleet-filter-bar.tsx",
+      "line": 61,
+      "text": "className=\"w-full pl-9 pr-3.5 py-2 bg-slate-950/70 border border-slate-800 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/80 transition-colors\""
+    },
+    {
+      "file": "components/ui/select.tsx",
+      "line": 14,
+      "text": "placeholder?: string;"
+    },
+    {
+      "file": "components/unified-incident-workflow.tsx",
+      "line": 703,
+      "text": "placeholder=\"Detail observations, camera IDs, ingress points, and reasons for classification...\""
+    },
+    {
+      "file": "components/unified-incident-workflow.tsx",
+      "line": 753,
+      "text": "placeholder=\"Provide detailed justification for compliance audit logs...\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 210,
+      "text": "placeholder=\"username\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 225,
+      "text": "placeholder=\"user@example.com\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 245,
+      "text": "placeholder=\"Minimum 8 characters\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 271,
+      "text": "placeholder=\"Re-enter password\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 288,
+      "text": "placeholder=\"Full Name\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 393,
+      "text": "placeholder=\"EMP001\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 405,
+      "text": "placeholder=\"+1234567890\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 419,
+      "text": "placeholder=\"Security\""
+    },
+    {
+      "file": "components/user-form.tsx",
+      "line": 431,
+      "text": "placeholder=\"Security Manager\""
+    },
+    {
+      "file": "components/user-list.tsx",
+      "line": 168,
+      "text": "placeholder=\"Search by name, email, or department...\""
+    },
+    {
+      "file": "components/video-search-interface.tsx",
+      "line": 338,
+      "text": "placeholder=\"Any duration\""
+    },
+    {
+      "file": "components/video-wall-controller.tsx",
+      "line": 343,
+      "text": "placeholder=\"Seconds\""
+    },
+    {
+      "file": "components/violence-detection-workspace.tsx",
+      "line": 450,
+      "text": "placeholder=\"Optional review notes or dispatch details...\""
+    },
+    {
+      "file": "components/zero-touch-onboarding-view.tsx",
+      "line": 1096,
+      "text": "placeholder=\"Search branch ID (e.g. A005), name, or zone...\""
+    },
+    {
+      "file": "components/zero-touch-onboarding-view.tsx",
+      "line": 1102,
+      "text": "className=\"w-full bg-slate-950 border border-slate-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50\""
+    },
+    {
+      "file": "components/zero-touch-onboarding-view.tsx",
+      "line": 1725,
+      "text": "placeholder=\"e.g. A010, BR-PUN-04\""
+    },
+    {
+      "file": "components/zero-touch-onboarding-view.tsx",
+      "line": 1764,
+      "text": "placeholder=\"e.g. Pune Shivaji Nagar Commercial\""
+    }
+  ],
+  "dummyActionsCount": 0,
+  "dummyActions": [],
+  "mockDataCount": 1,
+  "mockData": [
+    {
+      "file": "app/api/cameras/import/template/route.ts",
+      "line": 24,
+      "text": "const sampleRows = ["
+    }
+  ],
+  "unresolvedApisCount": 77,
+  "unresolvedApis": [
+    {
+      "endpoint": "/api/admin/system/${pluralType}/${id}",
+      "clean": "/api/admin/system/${pluralType}/${id}",
+      "simulatedBackend": "/api/admin/system/dummy/dummy",
+      "callers": [
+        "app/admin/system/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/organization/nodes?type=branch",
+      "clean": "${controlPlaneUrl}/v1/organization/nodes",
+      "simulatedBackend": "dummy/v1/organization/nodes",
+      "callers": [
+        "app/api/admin/system/branches/route.ts",
+        "app/api/admin/system/stats/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/edge-agents",
+      "clean": "${controlPlaneUrl}/v1/edge-agents",
+      "simulatedBackend": "dummy/v1/edge-agents",
+      "callers": [
+        "app/api/admin/system/branches/route.ts",
+        "app/api/admin/system/cameras/route.ts",
+        "app/api/admin/system/gateways/route.ts",
+        "app/api/admin/system/stats/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/archive",
+      "clean": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/archive",
+      "simulatedBackend": "dummy/v1/organization/nodes/dummy/archive",
+      "callers": [
+        "app/api/admin/system/branches/[id]/archive/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/disable",
+      "clean": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/disable",
+      "simulatedBackend": "dummy/v1/organization/nodes/dummy/disable",
+      "callers": [
+        "app/api/admin/system/branches/[id]/disable/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/lifecycle-impact?targetStatus=${encodeURIComponent(targetStatus)}",
+      "clean": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/lifecycle-impact",
+      "simulatedBackend": "dummy/v1/organization/nodes/dummy/lifecycle-impact",
+      "callers": [
+        "app/api/admin/system/branches/[id]/lifecycle-impact/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/reactivate",
+      "clean": "${controlPlaneUrl}/v1/organization/nodes/${encodeURIComponent(id)}/reactivate",
+      "simulatedBackend": "dummy/v1/organization/nodes/dummy/reactivate",
+      "callers": [
+        "app/api/admin/system/branches/[id]/reactivate/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/cameras?${cameraQuery}",
+      "clean": "${controlPlaneUrl}/v1/cameras",
+      "simulatedBackend": "dummy/v1/cameras",
+      "callers": [
+        "app/api/admin/system/cameras/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${controlPlaneUrl}/v1/cameras?action=device%3Aconfigure&limit=1&offset=0",
+      "clean": "${controlPlaneUrl}/v1/cameras",
+      "simulatedBackend": "dummy/v1/cameras",
+      "callers": [
+        "app/api/admin/system/stats/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/auth/login",
+      "clean": "${CONTROL_PLANE_URL}/v1/auth/login",
+      "simulatedBackend": "dummy/v1/auth/login",
+      "callers": [
+        "app/api/cameras/export/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/branches",
+      "clean": "${CONTROL_PLANE_URL}/v1/branches",
+      "simulatedBackend": "dummy/v1/branches",
+      "callers": [
+        "app/api/cameras/export/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/cameras?action=device:configure&limit=1000",
+      "clean": "${CONTROL_PLANE_URL}/v1/cameras",
+      "simulatedBackend": "dummy/v1/cameras",
+      "callers": [
+        "app/api/cameras/export/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/admin/cameras/list?limit=1000",
+      "clean": "${CONTROL_PLANE_URL}/v1/admin/cameras/list",
+      "simulatedBackend": "dummy/v1/admin/cameras/list",
+      "callers": [
+        "app/api/cameras/export/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/branches/${encodeURIComponent(bId)}/cameras?action=device:configure",
+      "clean": "${CONTROL_PLANE_URL}/v1/branches/${encodeURIComponent(bId)}/cameras",
+      "simulatedBackend": "dummy/v1/branches/dummy/cameras",
+      "callers": [
+        "app/api/cameras/export/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/branches/${encodeURIComponent(branchId)}/cameras",
+      "clean": "${CONTROL_PLANE_URL}/v1/branches/${encodeURIComponent(branchId)}/cameras",
+      "simulatedBackend": "dummy/v1/branches/dummy/cameras",
+      "callers": [
+        "app/api/cameras/import/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${upstreamBase}/v1/cameras/${encodeURIComponent(id)}",
+      "clean": "${upstreamBase}/v1/cameras/${encodeURIComponent(id)}",
+      "simulatedBackend": "dummy/v1/cameras/dummy",
+      "callers": [
+        "app/api/cameras/[id]/status/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE_URL}/v1/compliance/evidence/${encodeURIComponent(id)}/validate",
+      "clean": "${API_BASE_URL}/v1/compliance/evidence/${encodeURIComponent(id)}/validate",
+      "simulatedBackend": "dummy/v1/compliance/evidence/dummy/validate",
+      "callers": [
+        "app/api/compliance/evidence/[id]/validate/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${backendUrl}/api/recording-compliance/v2/${cameraId}",
+      "clean": "${backendUrl}/api/recording-compliance/v2/${cameraId}",
+      "simulatedBackend": "dummy/api/recording-compliance/v2/dummy",
+      "callers": [
+        "app/api/recording-compliance/[cameraId]/route.ts"
+      ]
+    },
+    {
+      "endpoint": "${CONTROL_PLANE_URL}/v1/security/posture",
+      "clean": "${CONTROL_PLANE_URL}/v1/security/posture",
+      "simulatedBackend": "dummy/v1/security/posture",
+      "callers": [
+        "app/api/security/posture/route.ts"
+      ]
+    },
+    {
+      "endpoint": "/api/compliance/certificates${params.size ? ",
+      "clean": "/api/compliance/certificates${params.size ",
+      "simulatedBackend": "/api/compliance/certificates${params.size ",
+      "callers": [
+        "app/compliance/certificates/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/summary",
+      "clean": "${API_BASE}/v1/dashboard/summary",
+      "simulatedBackend": "dummy/v1/dashboard/summary",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/camera-health",
+      "clean": "${API_BASE}/v1/dashboard/camera-health",
+      "simulatedBackend": "dummy/v1/dashboard/camera-health",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/recording-status",
+      "clean": "${API_BASE}/v1/dashboard/recording-status",
+      "simulatedBackend": "dummy/v1/dashboard/recording-status",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/storage",
+      "clean": "${API_BASE}/v1/dashboard/storage",
+      "simulatedBackend": "dummy/v1/dashboard/storage",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/alerts",
+      "clean": "${API_BASE}/v1/dashboard/alerts",
+      "simulatedBackend": "dummy/v1/dashboard/alerts",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/dashboard/incidents?limit=5",
+      "clean": "${API_BASE}/v1/dashboard/incidents",
+      "simulatedBackend": "dummy/v1/dashboard/incidents",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/v1/capacity/assessment",
+      "clean": "${API_BASE}/v1/capacity/assessment",
+      "simulatedBackend": "dummy/v1/capacity/assessment",
+      "callers": [
+        "app/dashboards/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/connectors",
+      "clean": "${API_BASE}/connectors",
+      "simulatedBackend": "dummy/connectors",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/deliveries",
+      "clean": "${API_BASE}/deliveries",
+      "simulatedBackend": "dummy/deliveries",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/queues",
+      "clean": "${API_BASE}/queues",
+      "simulatedBackend": "dummy/queues",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/${encodeURIComponent(integration.id)}/test",
+      "clean": "${API_BASE}/${encodeURIComponent(integration.id)}/test",
+      "simulatedBackend": "dummy/dummy/test",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/${encodeURIComponent(integration.id)}/${nextAction}",
+      "clean": "${API_BASE}/${encodeURIComponent(integration.id)}/${nextAction}",
+      "simulatedBackend": "dummy/dummy/dummy",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/${encodeURIComponent(integration.id)}/restart",
+      "clean": "${API_BASE}/${encodeURIComponent(integration.id)}/restart",
+      "simulatedBackend": "dummy/dummy/restart",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/${encodeURIComponent(delivery.integrationId)}/retry/${encodeURIComponent(delivery.id)}",
+      "clean": "${API_BASE}/${encodeURIComponent(delivery.integrationId)}/retry/${encodeURIComponent(delivery.id)}",
+      "simulatedBackend": "dummy/dummy/retry/dummy",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/${encodeURIComponent(dlq.connectorId)}/retry/${encodeURIComponent(dlq.id)}",
+      "clean": "${API_BASE}/${encodeURIComponent(dlq.connectorId)}/retry/${encodeURIComponent(dlq.id)}",
+      "simulatedBackend": "dummy/dummy/retry/dummy",
+      "callers": [
+        "app/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API_BASE}/health/check/run",
+      "clean": "${API_BASE}/health/check/run",
+      "simulatedBackend": "dummy/health/check/run",
+      "callers": [
+        "app/maintenance/health/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/security-devices/integrations/${id}/${action}",
+      "clean": "/api/security-devices/integrations/${id}/${action}",
+      "simulatedBackend": "/api/security-devices/integrations/dummy/dummy",
+      "callers": [
+        "app/security-devices/integrations/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/security-devices/integrations/${integrationId}/${action}",
+      "clean": "/api/security-devices/integrations/${integrationId}/${action}",
+      "simulatedBackend": "/api/security-devices/integrations/dummy/dummy",
+      "callers": [
+        "app/settings/integrations/hikvision/ax-pro/page.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/sessions/start",
+      "clean": "${getApiBase()}/v1/activity/sessions/start",
+      "simulatedBackend": "dummy/v1/activity/sessions/start",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/sessions/${currentSessionId}/end",
+      "clean": "${getApiBase()}/v1/activity/sessions/${currentSessionId}/end",
+      "simulatedBackend": "dummy/v1/activity/sessions/dummy/end",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/heartbeat",
+      "clean": "${getApiBase()}/v1/activity/heartbeat",
+      "simulatedBackend": "dummy/v1/activity/heartbeat",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/page-visits",
+      "clean": "${getApiBase()}/v1/activity/page-visits",
+      "simulatedBackend": "dummy/v1/activity/page-visits",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/page-visits/${currentPageVisitId}/end",
+      "clean": "${getApiBase()}/v1/activity/page-visits/${currentPageVisitId}/end",
+      "simulatedBackend": "dummy/v1/activity/page-visits/dummy/end",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/actions",
+      "clean": "${getApiBase()}/v1/activity/actions",
+      "simulatedBackend": "dummy/v1/activity/actions",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${getApiBase()}/v1/activity/sessions/${sessionId}/end",
+      "clean": "${getApiBase()}/v1/activity/sessions/${sessionId}/end",
+      "simulatedBackend": "dummy/v1/activity/sessions/dummy/end",
+      "callers": [
+        "components/activity-monitor.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/incidents?status=OPEN&limit=100",
+      "clean": "/api/incidents",
+      "simulatedBackend": "/api/incidents",
+      "callers": [
+        "components/adaptive-layout-engine.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/assets/${assetId}/blast-radius",
+      "clean": "/api/digital-twin/assets/${assetId}/blast-radius",
+      "simulatedBackend": "/api/digital-twin/assets/dummy/blast-radius",
+      "callers": [
+        "components/digital-twin/BlastRadiusVisualization.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/objects",
+      "clean": "/api/digital-twin/objects",
+      "simulatedBackend": "/api/digital-twin/objects",
+      "callers": [
+        "components/digital-twin/device-placement-panel.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin",
+      "clean": "/api/digital-twin",
+      "simulatedBackend": "/api/digital-twin",
+      "callers": [
+        "components/digital-twin/DigitalTwinAssistant.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/security-posture/${enterprise.id}",
+      "clean": "/api/digital-twin/security-posture/${enterprise.id}",
+      "simulatedBackend": "/api/digital-twin/security-posture/dummy",
+      "callers": [
+        "components/digital-twin/DigitalTwinAssistant.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/floor-plans",
+      "clean": "/api/digital-twin/floor-plans",
+      "simulatedBackend": "/api/digital-twin/floor-plans",
+      "callers": [
+        "components/digital-twin/floor-plan-upload-modal.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/floors/${floorId}/state",
+      "clean": "/api/digital-twin/floors/${floorId}/state",
+      "simulatedBackend": "/api/digital-twin/floors/dummy/state",
+      "callers": [
+        "components/digital-twin/floor-plan-viewer.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/objects/${obj.id}/position",
+      "clean": "/api/digital-twin/objects/${obj.id}/position",
+      "simulatedBackend": "/api/digital-twin/objects/dummy/position",
+      "callers": [
+        "components/digital-twin/floor-plan-viewer.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API}/branches/${branchId}/live",
+      "clean": "${API}/branches/${branchId}/live",
+      "simulatedBackend": "dummy/branches/dummy/live",
+      "callers": [
+        "components/digital-twin/operational-twin.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API}/floors/${idValue}/state${query}",
+      "clean": "${API}/floors/${idValue}/state${query}",
+      "simulatedBackend": "dummy/floors/dummy/statedummy",
+      "callers": [
+        "components/digital-twin/operational-twin.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API}/floors/${idValue}/inventory",
+      "clean": "${API}/floors/${idValue}/inventory",
+      "simulatedBackend": "dummy/floors/dummy/inventory",
+      "callers": [
+        "components/digital-twin/operational-twin.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API}/floors/${floorId}/playback?at=${encodeURIComponent(timeline[playbackIndex]!.occurredAt)}",
+      "clean": "${API}/floors/${floorId}/playback",
+      "simulatedBackend": "dummy/floors/dummy/playback",
+      "callers": [
+        "components/digital-twin/operational-twin.tsx"
+      ]
+    },
+    {
+      "endpoint": "${API}/floors/${floorId}/timeline?limit=500",
+      "clean": "${API}/floors/${floorId}/timeline",
+      "simulatedBackend": "dummy/floors/dummy/timeline",
+      "callers": [
+        "components/digital-twin/operational-twin.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/security-posture/${assetId}",
+      "clean": "/api/digital-twin/security-posture/${assetId}",
+      "simulatedBackend": "/api/digital-twin/security-posture/dummy",
+      "callers": [
+        "components/digital-twin/SecurityPostureDashboard.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/security-posture/${assetId}/trend?days=30",
+      "clean": "/api/digital-twin/security-posture/${assetId}/trend",
+      "simulatedBackend": "/api/digital-twin/security-posture/dummy/trend",
+      "callers": [
+        "components/digital-twin/SecurityPostureDashboard.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/digital-twin/zones",
+      "clean": "/api/digital-twin/zones",
+      "simulatedBackend": "/api/digital-twin/zones",
+      "callers": [
+        "components/digital-twin/zone-editor.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/users?limit=100",
+      "clean": "${apiBaseUrl}/v1/users",
+      "simulatedBackend": "dummy/v1/users",
+      "callers": [
+        "components/EmployeeActivityReport.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/activity/report/comprehensive?${params}",
+      "clean": "${apiBaseUrl}/v1/activity/report/comprehensive",
+      "simulatedBackend": "dummy/v1/activity/report/comprehensive",
+      "callers": [
+        "components/EmployeeActivityReport.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/activity/timeline?${timelineParams}",
+      "clean": "${apiBaseUrl}/v1/activity/timeline",
+      "simulatedBackend": "dummy/v1/activity/timeline",
+      "callers": [
+        "components/EmployeeActivityReport.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/audit/access-logs?${accessParams}",
+      "clean": "${apiBaseUrl}/v1/audit/access-logs",
+      "simulatedBackend": "dummy/v1/audit/access-logs",
+      "callers": [
+        "components/EmployeeActivityReport.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/activity/timeline?${params}",
+      "clean": "${apiBaseUrl}/v1/activity/timeline",
+      "simulatedBackend": "dummy/v1/activity/timeline",
+      "callers": [
+        "components/EmployeeActivityReport.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/analytics/alerts/${alert.id}/${action}",
+      "clean": "/v1/analytics/alerts/${alert.id}/${action}",
+      "simulatedBackend": "/v1/analytics/alerts/dummy/dummy",
+      "callers": [
+        "components/global-alert-center.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/incidents?${params.toString()}",
+      "clean": "/api/incidents",
+      "simulatedBackend": "/api/incidents",
+      "callers": [
+        "components/incidents/incident-list.tsx"
+      ]
+    },
+    {
+      "endpoint": "${apiBaseUrl}/v1/activity/current",
+      "clean": "${apiBaseUrl}/v1/activity/current",
+      "simulatedBackend": "dummy/v1/activity/current",
+      "callers": [
+        "components/live-activity-status.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/recorders/${encodeURIComponent(recorderId)}/profile",
+      "clean": "/v1/recorders/${encodeURIComponent(recorderId)}/profile",
+      "simulatedBackend": "/v1/recorders/dummy/profile",
+      "callers": [
+        "components/maintenance/RecorderProfileInspector.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/recorders/${encodeURIComponent(recorderId)}/refingerprint",
+      "clean": "/v1/recorders/${encodeURIComponent(recorderId)}/refingerprint",
+      "simulatedBackend": "/v1/recorders/dummy/refingerprint",
+      "callers": [
+        "components/maintenance/RecorderProfileInspector.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/incidents/${incidentId}/notifications",
+      "clean": "/v1/incidents/${incidentId}/notifications",
+      "simulatedBackend": "/v1/incidents/dummy/notifications",
+      "callers": [
+        "components/notifications/NotificationDeliveryHistory.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/incidents/${incidentId}/escalation",
+      "clean": "/v1/incidents/${incidentId}/escalation",
+      "simulatedBackend": "/v1/incidents/dummy/escalation",
+      "callers": [
+        "components/notifications/NotificationDeliveryHistory.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/notification-recipient-groups",
+      "clean": "/v1/notification-recipient-groups",
+      "simulatedBackend": "/v1/notification-recipient-groups",
+      "callers": [
+        "components/notifications/NotificationPolicyEditor.tsx",
+        "components/notifications/RecipientGroupManager.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/notification-policies/test",
+      "clean": "/v1/notification-policies/test",
+      "simulatedBackend": "/v1/notification-policies/test",
+      "callers": [
+        "components/notifications/NotificationPolicyEditor.tsx"
+      ]
+    },
+    {
+      "endpoint": "/v1/notification-policies/${policy.id}/publish",
+      "clean": "/v1/notification-policies/${policy.id}/publish",
+      "simulatedBackend": "/v1/notification-policies/dummy/publish",
+      "callers": [
+        "components/notifications/NotificationPolicyEditor.tsx"
+      ]
+    },
+    {
+      "endpoint": "/api/vms/observability/summary",
+      "clean": "/api/vms/observability/summary",
+      "simulatedBackend": "/api/vms/observability/summary",
+      "callers": [
+        "components/vms-observability-view.tsx"
+      ]
+    }
+  ]
+}

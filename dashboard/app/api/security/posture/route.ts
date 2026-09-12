@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const response = await fetch(`${CONTROL_PLANE_URL}/api/security/posture`, {
+    const response = await fetch(`${CONTROL_PLANE_URL}/v1/security/posture`, {
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${sessionToken}`,
