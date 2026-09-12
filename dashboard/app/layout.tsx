@@ -6,6 +6,8 @@ import { ApplicationShell } from "@/components/application-shell";
 import { ThemeProvider } from "@/components/ui/theme-provider";
 import { OrgBrandingProvider } from "@/components/ui/org-branding-provider";
 import { PerformanceMonitorProvider } from "@/components/performance-monitor-provider";
+import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
+import { ApiErrorNotifier } from "@/components/api-error-notifier";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -71,14 +73,17 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ThemeProvider>
           <OrgBrandingProvider>
-            <SessionProvider>
-              <ActivityMonitor>
-                 <PerformanceMonitorProvider>
-                <ApplicationShell>{children}</ApplicationShell>
-                <GlobalAlertCenter />
-                 </PerformanceMonitorProvider>
-              </ActivityMonitor>
-            </SessionProvider>
+            <NotificationsProvider>
+              <ApiErrorNotifier />
+              <SessionProvider>
+                <ActivityMonitor>
+                   <PerformanceMonitorProvider>
+                  <ApplicationShell>{children}</ApplicationShell>
+                  <GlobalAlertCenter />
+                   </PerformanceMonitorProvider>
+                </ActivityMonitor>
+              </SessionProvider>
+            </NotificationsProvider>
           </OrgBrandingProvider>
         </ThemeProvider>
       </body>
