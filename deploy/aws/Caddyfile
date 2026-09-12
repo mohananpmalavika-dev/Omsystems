@@ -15,6 +15,7 @@ http://3-7-216-169.sslip.io, http://3.7.216.169.sslip.io, http://3.7.216.169, :8
     header {
         -X-Frame-Options
         Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
+        Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
     }
 
     handle_path /stream/* {
@@ -84,6 +85,7 @@ https://3-7-216-169.sslip.io, https://3.7.216.169.sslip.io {
     header {
         -X-Frame-Options
         Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
+        Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
     }
 
     handle_path /stream/* {

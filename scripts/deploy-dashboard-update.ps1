@@ -9,7 +9,7 @@ $commands = @(
     "git reset --hard origin/main",
     "cd /opt/sentinel-grid/deploy/aws",
     "docker compose -f docker-compose.aws.yml build dashboard",
-    "docker compose -f docker-compose.aws.yml up -d --force-recreate dashboard",
+    "docker compose -f docker-compose.aws.yml up -d --force-recreate caddy dashboard",
     "sleep 5",
     "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'",
     "curl -sI http://localhost:10000 || true"

@@ -18,7 +18,10 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{
       source: "/(.*)",
-      headers: [{ key: "Permissions-Policy", value: "microphone=(self), camera=(self), geolocation=(self)" }],
+      headers: [
+        { key: "Permissions-Policy", value: "camera=*, microphone=*, geolocation=*, display-capture=*" },
+        { key: "Content-Security-Policy", value: "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic.com https://*.kryptonlogic.com https://kryptonlogic-ebe5a.web.app;" },
+      ],
     }];
   },
   async rewrites() {

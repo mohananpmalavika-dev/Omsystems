@@ -188,6 +188,7 @@ export default function OrganizationHierarchyPage() {
   const [newEmpCustomRoleId, setNewEmpCustomRoleId] = useState("");
   const [empPhotoData, setEmpPhotoData] = useState<string>("");
   const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -394,20 +395,49 @@ export default function OrganizationHierarchyPage() {
     setExpandedNodes((prev) => ({ ...prev, [nodeId]: !prev[nodeId] }));
   }
 
-  // --- Webcam Photo Capture Logic ---
+  // --- Webcam Photo Capture Logic with Iframe & Cross-Origin Support ---
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!isCameraActive || !streamRef.current || !video) {
+      setCameraReady(false);
+      return;
+    }
+
+    if (video.srcObject !== streamRef.current) {
+      video.srcObject = streamRef.current;
+    }
+
+    let isSubscribed = true;
+    const handleLoaded = () => {
+      if (isSubscribed) {
+        setCameraReady(true);
+        video.play().catch((err) => console.warn("Webcam play error:", err));
+      }
+    };
+
+    video.addEventListener("loadedmetadata", handleLoaded);
+    video.play().catch(() => {});
+
+    return () => {
+      isSubscribed = false;
+      video.removeEventListener("loadedmetadata", handleLoaded);
+    };
+  }, [isCameraActive]);
+
   async function startWebcam() {
     setCameraError(null);
+    setCameraReady(false);
+    setEmpPhotoData("");
     try {
-      // Check if mediaDevices API is available
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setCameraError("Camera access is not supported in your browser. Please use a modern browser like Chrome, Firefox, or Edge.");
+        setCameraError(
+          "Camera access is not supported by your browser in this context. If opening inside an iframe, the enclosing iframe tag requires allow=\"camera; microphone\"."
+        );
         return;
       }
 
-      // Check if page is served over HTTPS or localhost
-      const isSecureContext = window.isSecureContext;
-      if (!isSecureContext) {
-        setCameraError("Camera access requires HTTPS or localhost. Please access this page through https:// or http://localhost");
+      if (!window.isSecureContext) {
+        setCameraError("Camera access requires HTTPS or localhost. Please access through https://");
         return;
       }
 
@@ -415,35 +445,43 @@ export default function OrganizationHierarchyPage() {
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: false,
       });
-      
+
       streamRef.current = stream;
+      setIsCameraActive(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+        try {
+          await videoRef.current.play();
+          setCameraReady(true);
+        } catch {}
       }
-      setIsCameraActive(true);
     } catch (err: any) {
       console.error("Camera access error:", err);
-      
-      // Provide user-friendly error messages
+      const isIframe = typeof window !== "undefined" && window.self !== window.top;
       let errorMessage = "Could not access camera. ";
-      
+
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        errorMessage += "Permission denied. Please allow camera access in your browser settings and try again.";
+        if (isIframe) {
+          errorMessage =
+            "Camera permission was denied in this iframe. Please ensure the parent <iframe> tag on kryptonlogic.com includes: allow=\"camera; microphone; display-capture\" and allow camera access in your browser prompt.";
+        } else {
+          errorMessage += "Permission denied. Please allow camera access in your browser settings and try again.";
+        }
       } else if (err.name === "NotFoundError" || err.name === "DevicesNotFoundError") {
-        errorMessage += "No camera found. Please connect a camera and try again.";
+        errorMessage += "No camera found. Please connect a webcam or upload a photo below.";
       } else if (err.name === "NotReadableError" || err.name === "TrackStartError") {
-        errorMessage += "Camera is already in use by another application. Please close other apps using the camera.";
-      } else if (err.name === "OverconstrainedError") {
-        errorMessage += "Camera does not meet the required specifications.";
+        errorMessage += "Camera is already in use by another application. Please close other applications using the camera.";
       } else if (err.name === "SecurityError") {
-        errorMessage += "Camera access blocked for security reasons. Please check your browser settings.";
+        errorMessage =
+          "Camera access blocked by security policy. In an iframe, the parent <iframe> tag on kryptonlogic.com must include allow=\"camera; microphone; display-capture\".";
       } else {
         errorMessage += err.message || "Unknown error occurred.";
       }
-      
+
       setCameraError(errorMessage);
       setIsCameraActive(false);
+      stopWebcam();
     }
   }
 
@@ -452,13 +490,21 @@ export default function OrganizationHierarchyPage() {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
     setIsCameraActive(false);
+    setCameraReady(false);
   }
 
   function capturePhotoFromWebcam() {
     if (!videoRef.current || !canvasRef.current) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
+    if (video.videoWidth === 0 || video.readyState < 2) {
+      setCameraError("Camera is still warming up. Please wait 1 second and click Snap Photo again.");
+      return;
+    }
     const sourceWidth = video.videoWidth || 640;
     const sourceHeight = video.videoHeight || 480;
     const scale = Math.min(1, 640 / sourceWidth, 640 / sourceHeight);
@@ -2400,12 +2446,24 @@ export default function OrganizationHierarchyPage() {
                 <div className="relative w-full aspect-video bg-slate-900 rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
                   {isCameraActive ? (
                     <>
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                      <video
+                        ref={(el) => {
+                          videoRef.current = el;
+                          if (el && streamRef.current && el.srcObject !== streamRef.current) {
+                            el.srcObject = streamRef.current;
+                            el.play().catch(() => {});
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full h-full object-cover"
+                      />
                       {/* Face Framing Reticle */}
                       <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                         <div className="w-36 h-48 border-2 border-dashed border-emerald-400 rounded-[50%] opacity-80 shadow-[0_0_15px_rgba(16,185,129,0.3)] flex items-center justify-center">
                           <span className="text-[10px] text-emerald-300 font-mono bg-slate-950/80 px-2 py-0.5 rounded">
-                            Align Face
+                            {cameraReady ? "Align Face" : "Starting camera..."}
                           </span>
                         </div>
                       </div>
@@ -2427,9 +2485,9 @@ export default function OrganizationHierarchyPage() {
                       <div className="text-[10px] text-slate-600 bg-slate-950/50 p-2 rounded border border-slate-800 text-left max-w-xs mx-auto">
                         <p className="font-semibold text-slate-500 mb-1">📋 Camera Access Tips:</p>
                         <ul className="list-disc ml-4 space-y-0.5">
-                          <li>Your browser will ask for camera permission</li>
-                          <li>Click "Allow" when prompted</li>
-                          <li>Ensure page is on HTTPS or localhost</li>
+                          <li>Click "Allow" when prompted by your browser</li>
+                          <li>If embedded in an iframe, the host page requires iframe camera permissions</li>
+                          <li>Ensure page is on HTTPS</li>
                         </ul>
                       </div>
                     </div>
@@ -2443,6 +2501,15 @@ export default function OrganizationHierarchyPage() {
                   <div className="text-[11px] text-red-400 bg-red-950/30 p-3 rounded border border-red-500/20 space-y-2">
                     <p className="font-semibold">⚠️ Camera Access Issue</p>
                     <p>{cameraError}</p>
+                    {typeof window !== "undefined" && window.self !== window.top && (
+                      <div className="text-[10px] text-amber-300 bg-amber-950/40 p-2.5 rounded border border-amber-500/30 mt-2 space-y-1 font-mono">
+                        <p className="font-bold text-amber-200">💡 Embedding in kryptonlogic.com?</p>
+                        <p className="text-[9px]">Ensure the parent &lt;iframe&gt; includes camera permission:</p>
+                        <code className="block bg-black/60 p-1.5 rounded text-[9px] text-amber-100 select-all overflow-x-auto">
+                          {'<iframe src="..." allow="camera; microphone; display-capture"></iframe>'}
+                        </code>
+                      </div>
+                    )}
                     {cameraError.includes("Permission denied") && (
                       <div className="text-[10px] text-slate-400 mt-2 space-y-1">
                         <p className="font-semibold">How to fix:</p>
@@ -2469,13 +2536,24 @@ export default function OrganizationHierarchyPage() {
                 {/* Camera & Upload Controls */}
                 <div className="flex items-center gap-2">
                   {isCameraActive ? (
-                    <button
-                      type="button"
-                      onClick={capturePhotoFromWebcam}
-                      className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow"
-                    >
-                      <Camera size={14} /> Snap Photo
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={capturePhotoFromWebcam}
+                        disabled={!cameraReady}
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow"
+                      >
+                        <Camera size={14} /> {cameraReady ? "Snap Photo" : "Starting camera..."}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopWebcam}
+                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-red-400 font-medium rounded-lg text-xs transition-colors border border-slate-700"
+                        title="Close Camera"
+                      >
+                        Stop
+                      </button>
+                    </>
                   ) : (
                     <button
                       type="button"
