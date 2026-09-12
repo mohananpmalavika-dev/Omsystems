@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, cameraInventoryApi } from "@/lib/api-client";
 import type { AnalyticsAlert, AnalyticsRule, Branch, Camera as CameraType } from "@/lib/types";
 import { ViolenceDetectionWorkspace } from "./violence-detection-workspace";
+import { TailgatingDetectionWorkspace } from "./tailgating-detection-workspace";
 
 type DomainId = "human" | "vehicle" | "industrial" | "face";
 type Capability = {
@@ -264,8 +265,9 @@ export function AnalyticsDomainWorkspace({ domainId }: { domainId: DomainId }) {
       </div>
 
       {domainId === "human" && (
-        <section className="mt-8">
+        <section className="mt-8 space-y-8">
           <ViolenceDetectionWorkspace cameraId={cameraId || undefined} />
+          <TailgatingDetectionWorkspace />
         </section>
       )}
     </main>

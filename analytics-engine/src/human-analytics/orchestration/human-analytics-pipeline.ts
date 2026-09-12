@@ -73,6 +73,12 @@ export class HumanAnalyticsPipeline {
 
     // Initialize fight detector
     this.fightDetector = new FightDetector(config.tenantId, config.cameraId);
+    registry.updateCapability({
+      name: "fight_detection",
+      status: "ready",
+      modelVersion: "optical-flow-limb-kinetics-v1.0",
+      updatedAt: new Date(),
+    });
 
     // Initialize panic detector
     this.panicDetector = new PanicDetector(

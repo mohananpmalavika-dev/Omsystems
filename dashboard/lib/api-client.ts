@@ -1733,6 +1733,386 @@ export const violenceApi = {
     fetchApi<{ success: boolean; data: ViolenceStats }>('/v1/analytics/violence/stats'),
 };
 
+export type TailgatingViolationType =
+  | 'piggyback_tailgating'
+  | 'unbadged_entry'
+  | 'denied_entry_breach'
+  | 'multi_occupancy_violation'
+  | 'door_held_breach';
+
+export interface SequenceTimelineItem {
+  timestamp: number;
+  relativeOffsetMs: number;
+  type: 'badge_swipe' | 'door_state' | 'camera_person_count' | 'violation_detected' | 'interlock_lockdown';
+  label: string;
+  details: Record<string, any>;
+}
+
+export interface TailgatingEvent {
+  id: string;
+  tenant_id: string;
+  portal_id?: string | null;
+  camera_id?: string | null;
+  door_id: string;
+  badge_id?: string | null;
+  badge_holder_name?: string | null;
+  detected_person_count: number;
+  authorized_count: number;
+  tailgater_count: number;
+  violation_type: TailgatingViolationType;
+  severity: 'P1' | 'P2' | 'P3';
+  confidence: number;
+  time_gap_ms: number;
+  participant_track_ids: string[];
+  bounding_boxes: Array<{ x: number; y: number; width: number; height: number }>;
+  sequence_timeline: SequenceTimelineItem[];
+  interlock_lockdown_engaged: boolean;
+  snapshot_reference?: string | null;
+  review_status: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  review_notes?: string | null;
+  occurred_at: string;
+  created_at: string;
+  portal_name?: string;
+  camera_name?: string;
+}
+
+export interface AirlockPortal {
+  id: string;
+  tenant_id: string;
+  name: string;
+  branch_id?: string | null;
+  camera_id?: string | null;
+  outer_door_id: string;
+  inner_door_id: string;
+  chamber_zone: Array<{ x: number; y: number }>;
+  max_allowed_occupancy: number;
+  correlation_window_seconds: number;
+  interlock_mode: 'strict_interlock' | 'manual_release' | 'warning_only';
+  auto_lock_inner_door: boolean;
+  enabled: boolean;
+  metadata?: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TailgatingPortalConfig {
+  portal_id: string;
+  tenant_id: string;
+  enabled: boolean;
+  sensitivity: number;
+  min_confidence: number;
+  max_time_gap_ms: number;
+  correlation_window_seconds: number;
+  max_allowed_occupancy: number;
+  auto_lock_inner_door: boolean;
+  alert_severity: 'P1' | 'P2' | 'P3';
+  cooldown_seconds: number;
+  isDefault?: boolean;
+}
+
+export interface TailgatingStats {
+  totalIncidents: number;
+  pendingReviews: number;
+  confirmedCount: number;
+  falsePositiveCount: number;
+  escalatedCount: number;
+  interlockLockdowns: number;
+  avgConfidence: number;
+  p1Count: number;
+  byViolationType: Record<string, number>;
+}
+
+export const tailgatingApi = {
+  listEvents: (filters?: {
+    portalId?: string;
+    cameraId?: string;
+    severity?: 'P1' | 'P2' | 'P3';
+    reviewStatus?: 'pending' | 'confirmed' | 'false_positive' | 'escalated';
+    violationType?: TailgatingViolationType;
+    fromDate?: string;
+    toDate?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (filters?.portalId) params.set('portalId', filters.portalId);
+    if (filters?.cameraId) params.set('cameraId', filters.cameraId);
+    if (filters?.severity) params.set('severity', filters.severity);
+    if (filters?.reviewStatus) params.set('reviewStatus', filters.reviewStatus);
+    if (filters?.violationType) params.set('violationType', filters.violationType);
+    if (filters?.fromDate) params.set('fromDate', filters.fromDate);
+    if (filters?.toDate) params.set('toDate', filters.toDate);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.offset) params.set('offset', String(filters.offset));
+    return fetchApi<{ success: boolean; data: TailgatingEvent[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/tailgating/events?${params}`
+    );
+  },
+  getEvent: (eventId: string) =>
+    fetchApi<{ success: boolean; data: TailgatingEvent }>(`/v1/analytics/tailgating/events/${encodeURIComponent(eventId)}`),
+  reviewEvent: (
+    eventId: string,
+    data: { reviewStatus: 'confirmed' | 'false_positive' | 'escalated'; reviewNotes?: string }
+  ) =>
+    fetchApi<{ success: boolean; data: TailgatingEvent }>(
+      `/v1/analytics/tailgating/events/${encodeURIComponent(eventId)}/review`,
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+  correlatePassage: (data: {
+    portalId: string;
+    badgeSwipes?: Array<{
+      doorId: string;
+      badgeId: string;
+      personName?: string;
+      eventType: 'granted' | 'denied' | 'forced' | 'held_open' | 'tailgating';
+      authorizedCount: number;
+      timestamp: number;
+    }>;
+    doorEvents?: Array<{
+      doorId: string;
+      state: 'opened' | 'closed' | 'held_open' | 'forced';
+      timestamp: number;
+    }>;
+    cameraObservations?: Array<{
+      trackId: string;
+      timestamp: number;
+      confidence: number;
+      boundingBox: { x: number; y: number; width: number; height: number };
+    }>;
+    snapshotReference?: string;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        result: any;
+        savedEventId: string | null;
+        interlockLockdownEngaged: boolean;
+      };
+    }>('/v1/analytics/tailgating/correlate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  ingestBadgeSwipe: (data: {
+    portalId?: string;
+    doorId: string;
+    badgeId: string;
+    personName?: string;
+    eventType: 'granted' | 'denied' | 'forced' | 'held_open' | 'tailgating';
+    authorizedCount?: number;
+    direction?: 'entry' | 'exit';
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/analytics/tailgating/badge-swipe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  listPortals: () =>
+    fetchApi<{ success: boolean; data: AirlockPortal[] }>('/v1/analytics/tailgating/portals'),
+  upsertPortal: (data: Partial<AirlockPortal> & { name: string; outerDoorId: string; innerDoorId: string }) =>
+    fetchApi<{ success: boolean; data: AirlockPortal }>('/v1/analytics/tailgating/portals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getPortalConfig: (portalId: string) =>
+    fetchApi<{ success: boolean; data: TailgatingPortalConfig }>(
+      `/v1/analytics/tailgating/config/${encodeURIComponent(portalId)}`
+    ),
+  updatePortalConfig: (portalId: string, data: Partial<TailgatingPortalConfig>) =>
+    fetchApi<{ success: boolean; data: TailgatingPortalConfig }>(
+      `/v1/analytics/tailgating/config/${encodeURIComponent(portalId)}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    ),
+  getStats: () =>
+    fetchApi<{ success: boolean; data: TailgatingStats }>('/v1/analytics/tailgating/stats'),
+};
+
+export interface ReidGlobalIdentity {
+  id: string;
+  tenant_id: string;
+  global_id: string;
+  representative_embedding: number[];
+  first_seen: string;
+  last_seen: string;
+  appearances: number;
+  cameras_visited: string[];
+  primary_branch_id: string | null;
+  status: 'active' | 'archived' | 'merged';
+  metadata: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReidCameraSighting {
+  id: string;
+  tenant_id: string;
+  branch_id: string | null;
+  camera_id: string;
+  camera_name?: string;
+  global_id: string;
+  local_track_id: string;
+  entered_at: string;
+  exited_at: string;
+  dwell_seconds: number;
+  confidence: number;
+  quality_score: number;
+  bounding_box: { x: number; y: number; width: number; height: number };
+  snapshot_url: string | null;
+  embedding: number[];
+  metrics: Record<string, any>;
+  created_at: string;
+}
+
+export interface ReidPersonJourneyStep {
+  stepIndex: number;
+  cameraId: string;
+  cameraName?: string;
+  enteredAt: string;
+  exitedAt: string;
+  dwellSeconds: number;
+  confidence: number;
+  qualityScore: number;
+  snapshotUrl: string | null;
+  boundingBox: { x: number; y: number; width: number; height: number };
+}
+
+export interface ReidCameraTransition {
+  fromCameraId: string;
+  fromCameraName?: string;
+  toCameraId: string;
+  toCameraName?: string;
+  departedAt: string;
+  arrivedAt: string;
+  transitDurationSeconds: number;
+  isPlausible: boolean;
+  reason?: string;
+}
+
+export interface ReidPersonJourney {
+  globalId: string;
+  identity: ReidGlobalIdentity;
+  totalSightings: number;
+  uniqueCamerasCount: number;
+  totalDwellSeconds: number;
+  firstSeen: string;
+  lastSeen: string;
+  journeySpanSeconds: number;
+  steps: ReidPersonJourneyStep[];
+  transitions: ReidCameraTransition[];
+}
+
+export interface ReidTopologyRule {
+  id: string;
+  tenant_id: string;
+  branch_id: string;
+  from_camera_id: string;
+  to_camera_id: string;
+  min_transit_seconds: number;
+  max_transit_seconds: number;
+  distance_meters: number | null;
+  transition_probability: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReidStats {
+  totalIdentities: number;
+  totalSightings: number;
+  crossCameraTransitions: number;
+  activeCameras: number;
+  averageConfidence: number;
+}
+
+export const reidApi = {
+  listIdentities: (params?: { branchId?: string; status?: 'active' | 'archived'; limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.status) q.set('status', params.status);
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    return fetchApi<{ success: boolean; data: ReidGlobalIdentity[]; pagination: { total: number; limit: number; offset: number } }>(
+      `/v1/analytics/reid/identities?${q}`
+    );
+  },
+  getIdentity: (globalId: string) =>
+    fetchApi<{ success: boolean; data: ReidGlobalIdentity }>(`/v1/analytics/reid/identities/${encodeURIComponent(globalId)}`),
+  getJourney: (globalId: string) =>
+    fetchApi<{ success: boolean; data: ReidPersonJourney }>(`/v1/analytics/reid/journey/${encodeURIComponent(globalId)}`),
+  ingestSighting: (data: {
+    branchId?: string | null;
+    cameraId: string;
+    localTrackId: string;
+    enteredAt: string;
+    exitedAt: string;
+    embedding?: number[];
+    rawCropBase64?: string;
+    confidence: number;
+    boundingBox: { x: number; y: number; width: number; height: number };
+    snapshotUrl?: string | null;
+    metrics?: Record<string, any>;
+    similarityThreshold?: number;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        matched: boolean;
+        globalId: string;
+        similarity: number;
+        integratedScore: number;
+        isNewIdentity: boolean;
+        isCrossCameraTransition: boolean;
+        previousCameraId?: string;
+        transitDurationSeconds?: number;
+        sighting: ReidCameraSighting;
+        spatioTemporalValid: boolean;
+      };
+    }>('/v1/analytics/reid/sightings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  probeSearch: (data: {
+    probeEmbedding?: number[];
+    probeCropBase64?: string;
+    cropWidth?: number;
+    cropHeight?: number;
+    similarityThreshold?: number;
+    branchId?: string | null;
+    fromTime?: string;
+    toTime?: string;
+    limit?: number;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      data: Array<{ sighting: ReidCameraSighting; similarity: number; globalId: string }>;
+      total: number;
+      probeId: string;
+    }>('/v1/analytics/reid/probe', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getTopology: (branchId?: string) => {
+    const q = branchId ? `?branchId=${encodeURIComponent(branchId)}` : '';
+    return fetchApi<{ success: boolean; data: ReidTopologyRule[] }>(`/v1/analytics/reid/topology${q}`);
+  },
+  updateTopology: (data: {
+    branchId: string;
+    fromCameraId: string;
+    toCameraId: string;
+    minTransitSeconds?: number;
+    maxTransitSeconds?: number;
+    distanceMeters?: number | null;
+    transitionProbability?: number;
+    enabled?: boolean;
+  }) =>
+    fetchApi<{ success: boolean; data: ReidTopologyRule }>('/v1/analytics/reid/topology', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getStats: () =>
+    fetchApi<{ success: boolean; data: ReidStats }>('/v1/analytics/reid/stats'),
+};
+
 export const bankingAnalyticsApi = {
   listSessions: (filters: { tenantId: string; branchId?: string }) => {
     const params = new URLSearchParams({ tenantId: filters.tenantId });

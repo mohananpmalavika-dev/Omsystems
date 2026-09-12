@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
+import { BaseDetector, calculateIoU, type DetectionFrame, type DetectionResult } from "./base-detector.js";
 import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
 
 // ============================================================================
@@ -529,9 +529,31 @@ export class HumanAnalyticsDetector extends BaseDetector {
   }
 
   private async detectFighting(track: PersonTrack, frame: DetectionFrame): Promise<{ confidence: number } | null> {
-    // This per-person pipeline deliberately does not claim fight detection:
-    // the required multi-person interaction evidence belongs to
-    // BehaviorDetector, which has the complete tracked crowd context.
+    if (this.tracks.size < 2) return null;
+    const lastPos = track.positions[track.positions.length - 1];
+    if (!lastPos || !lastPos.boundingBox) return null;
+
+    for (const otherTrack of this.tracks.values()) {
+      if (otherTrack.trackId === track.trackId) continue;
+      const otherLastPos = otherTrack.positions[otherTrack.positions.length - 1];
+      if (!otherLastPos || !otherLastPos.boundingBox) continue;
+
+      const iou = calculateIoU(lastPos.boundingBox, otherLastPos.boundingBox);
+      const dx = lastPos.x - otherLastPos.x;
+      const dy = lastPos.y - otherLastPos.y;
+      const dist = Math.hypot(dx, dy);
+      const avgH = (lastPos.boundingBox.height + otherLastPos.boundingBox.height) / 2;
+      const normDist = avgH > 0 ? dist / avgH : 999;
+
+      if (iou > 0.08 || normDist < 1.5) {
+        const speed1 = track.speed || 0;
+        const speed2 = otherTrack.speed || 0;
+        if (speed1 > 1.8 && speed2 > 1.8) {
+          const confidence = Math.min(0.92, 0.55 + Math.min(speed1 + speed2, 4) * 0.09);
+          return { confidence: Math.round(confidence * 100) / 100 };
+        }
+      }
+    }
     return null;
   }
 

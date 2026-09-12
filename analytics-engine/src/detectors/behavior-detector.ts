@@ -35,6 +35,7 @@ export class BehaviorDetector extends BaseDetector {
   private poseModel: any = null;
   private isInitialized = false;
   private readonly TRACKING_TIMEOUT_MS = 5000;
+  private previousFrameData: { buffer: Buffer; width: number; height: number; timestamp: number } | null = null;
 
   constructor(config: Partial<BehaviorConfig> = {}) {
     super("behavior", "1.0.0");
@@ -91,39 +92,37 @@ export class BehaviorDetector extends BaseDetector {
       const { getInferenceObjects, hasInferenceObjects } = await import("./base-detector.js");
       const pipeline = await import('../inference/unified-inference-pipeline.js').then(m => m.getInferencePipeline());
 
-      // Prefer pipeline object detector if available
       let persons: any[] | undefined;
       let pipelineError: string | null = null;
-      try {
-        persons = await pipeline.detectObjects(frame, ['person']);
-      } catch (err) {
-        pipelineError = err instanceof Error ? err.message : String(err);
+      if (hasInferenceObjects(frame)) {
+        persons = getInferenceObjects(frame, ['person']);
+      } else {
+        try {
+          persons = await pipeline.detectObjects(frame, ['person']);
+        } catch (err) {
+          pipelineError = err instanceof Error ? err.message : String(err);
+        }
       }
 
-      if (!persons) {
-        if (hasInferenceObjects(frame)) {
-          // Fallback to normalized metadata detections
-          persons = getInferenceObjects(frame, ['person']);
-        } else if (pipelineError) {
-          return [{
-            detectionType: "behavior",
+      if ((!persons || persons.length === 0) && pipelineError) {
+        return [{
+          detectionType: "behavior",
+          status: "INFERENCE_FAILED",
+          provenance: "LIVE_INFERENCE",
+          confidence: null,
+          objects: [],
+          metadata: {
+            error: `Inference pipeline failed: ${pipelineError}`,
+          },
+          executionMetadata: {
             status: "INFERENCE_FAILED",
             provenance: "LIVE_INFERENCE",
-            confidence: null,
-            objects: [],
-            metadata: {
-              error: `Inference pipeline failed: ${pipelineError}`,
-            },
-            executionMetadata: {
-              status: "INFERENCE_FAILED",
-              provenance: "LIVE_INFERENCE",
-              reason: pipelineError,
-              simulated: false,
-              timestamp: new Date().toISOString(),
-            },
-            requiresAlert: false,
-          }];
-        }
+            reason: pipelineError,
+            simulated: false,
+            timestamp: new Date().toISOString(),
+          },
+          requiresAlert: false,
+        }];
       }
 
       // Normalize to DetectedObject shape
@@ -265,6 +264,16 @@ export class BehaviorDetector extends BaseDetector {
 
     // Cleanup old tracks
     this.cleanupOldTracks(now);
+
+    // Cache current frame image buffer for next optical flow iteration
+    if (frame.imageData && frame.width && frame.height) {
+      this.previousFrameData = {
+        buffer: Buffer.from(frame.imageData),
+        width: frame.width,
+        height: frame.height,
+        timestamp: now.getTime(),
+      };
+    }
 
     return results;
   }
@@ -501,38 +510,301 @@ export class BehaviorDetector extends BaseDetector {
   /**
    * Detect fighting between multiple people
    */
+  /**
+   * Detect fighting between multiple people using optical flow and
+   * rapid limb acceleration kinematics.
+   */
   private detectFighting(
     frame: DetectionFrame,
     persons: DetectedObject[],
   ): DetectionResult | null {
     if (persons.length < 2) return null;
 
-    // Simple heuristic: check pairs that overlap and have erratic movement
     for (let i = 0; i < persons.length; i++) {
       for (let j = i + 1; j < persons.length; j++) {
         const p1 = persons[i];
         const p2 = persons[j];
         const iou = this.calculateIoU(p1.boundingBox, p2.boundingBox);
-        if (iou > 0.1) {
-          // check tracked persons movement
-          const t1 = this.trackedPersons.get(p1.trackId || '');
-          const t2 = this.trackedPersons.get(p2.trackId || '');
-          const m1 = t1 ? this.calculateSpeed(t1.positions.slice(-5)) : 0;
-          const m2 = t2 ? this.calculateSpeed(t2.positions.slice(-5)) : 0;
-          if (m1 > 20 && m2 > 20) {
-            return {
-              detectionType: 'fighting',
-              confidence: Math.min(0.9, (m1 + m2) / 100),
-              objects: [],
-              metadata: { participants: [p1.trackId, p2.trackId] },
-              requiresAlert: true,
-            };
-          }
+
+        // Compute center distance normalized by mean person height
+        const c1 = getBoundingBoxCenter(p1.boundingBox);
+        const c2 = getBoundingBoxCenter(p2.boundingBox);
+        const dist = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+        const avgHeight = (p1.boundingBox.height + p2.boundingBox.height) / 2;
+        const normDist = avgHeight > 0 ? dist / avgHeight : 999;
+
+        // Must be in close contact or overlapping
+        if (iou < 0.05 && normDist > 1.8) continue;
+
+        const t1 = this.trackedPersons.get(p1.trackId || '');
+        const t2 = this.trackedPersons.get(p2.trackId || '');
+        if (!t1 || !t2) continue;
+
+        // Calculate discrete acceleration and speed from positions
+        const m1 = this.calculateSpeed(t1.positions.slice(-5));
+        const m2 = this.calculateSpeed(t2.positions.slice(-5));
+        const a1 = this.calculatePeakAcceleration(t1.positions.slice(-6));
+        const a2 = this.calculatePeakAcceleration(t2.positions.slice(-6));
+        const peakPosAccel = Math.max(a1, a2);
+
+        // Check limb acceleration from tracked poses if available
+        const limbAccel1 = this.calculateTrackLimbAcceleration(t1);
+        const limbAccel2 = this.calculateTrackLimbAcceleration(t2);
+        const peakLimbAccel = Math.max(limbAccel1, limbAccel2);
+
+        // Check directional opposition/oscillation (strikes move towards/away rapidly)
+        const oscillationScore = this.calculateMutualOscillation(
+          t1.positions.slice(-5),
+          t2.positions.slice(-5),
+        );
+
+        // Optical flow kinetic energy across interaction bounding box
+        let flowEnergy = 0;
+        let turbulence = 0;
+        if (this.previousFrameData && frame.imageData) {
+          const unionBox = {
+            x: Math.min(p1.boundingBox.x, p2.boundingBox.x),
+            y: Math.min(p1.boundingBox.y, p2.boundingBox.y),
+            width:
+              Math.max(
+                p1.boundingBox.x + p1.boundingBox.width,
+                p2.boundingBox.x + p2.boundingBox.width,
+              ) - Math.min(p1.boundingBox.x, p2.boundingBox.x),
+            height:
+              Math.max(
+                p1.boundingBox.y + p1.boundingBox.height,
+                p2.boundingBox.y + p2.boundingBox.height,
+              ) - Math.min(p1.boundingBox.y, p2.boundingBox.y),
+          };
+          const flow = this.computeOpticalFlowMetrics(
+            this.previousFrameData.buffer,
+            frame.imageData,
+            frame.width,
+            frame.height,
+            unionBox,
+          );
+          flowEnergy = flow.energy;
+          turbulence = flow.turbulence;
+        }
+
+        const effectiveAccel = Math.max(peakPosAccel, peakLimbAccel);
+        const accelScore = Math.min(
+          1.0,
+          effectiveAccel / this.config.fightingMotionThreshold,
+        );
+        const flowScore =
+          flowEnergy > 0 ? Math.min(1.0, flowEnergy / 15.0) : accelScore;
+        const proximityScore = Math.max(
+          0.2,
+          iou * 2.5 + (1 - Math.min(1.0, normDist / 1.8)) * 0.5,
+        );
+
+        // Require genuine physical movement (acceleration >= 25 px/s², flow >= 10, or mutual speed > 20)
+        if (effectiveAccel >= 25 || flowEnergy >= 10 || (m1 > 20 && m2 > 20)) {
+          const confidence = Math.min(
+            0.95,
+            Math.max(
+              0.65,
+              0.2 * proximityScore +
+                0.35 * accelScore +
+                0.25 * flowScore +
+                0.2 * oscillationScore,
+            ),
+          );
+
+          return {
+            detectionType: 'fighting',
+            confidence: Math.round(confidence * 100) / 100,
+            objects: [p1, p2],
+            metadata: {
+              participants: [p1.trackId, p2.trackId],
+              peakAcceleration: Math.round(effectiveAccel * 10) / 10,
+              opticalFlowEnergy: Math.round(flowEnergy * 10) / 10,
+              turbulenceScore: Math.round(turbulence * 100) / 100,
+              interactionIoU: Math.round(iou * 100) / 100,
+            },
+            requiresAlert: true,
+          };
         }
       }
     }
 
     return null;
+  }
+
+  /**
+   * Calculate peak discrete numerical acceleration from recent positions
+   */
+  private calculatePeakAcceleration(
+    positions: Array<{ x: number; y: number; timestamp: Date }>,
+  ): number {
+    if (positions.length < 3) return 0;
+    const accels: number[] = [];
+
+    for (let i = 2; i < positions.length; i++) {
+      const p1 = positions[i - 2];
+      const p2 = positions[i - 1];
+      const p3 = positions[i];
+
+      const dt1 = (p2.timestamp.getTime() - p1.timestamp.getTime()) / 1000;
+      const dt2 = (p3.timestamp.getTime() - p2.timestamp.getTime()) / 1000;
+      if (dt1 <= 0 || dt2 <= 0 || dt1 > 1.0 || dt2 > 1.0) continue;
+
+      const v1x = (p2.x - p1.x) / dt1;
+      const v1y = (p2.y - p1.y) / dt1;
+      const v2x = (p3.x - p2.x) / dt2;
+      const v2y = (p3.y - p2.y) / dt2;
+
+      const ax = (v2x - v1x) / dt2;
+      const ay = (v2y - v1y) / dt2;
+      accels.push(Math.hypot(ax, ay));
+    }
+
+    return accels.length > 0 ? Math.max(...accels) : 0;
+  }
+
+  /**
+   * Calculate limb acceleration from tracked person poses
+   */
+  private calculateTrackLimbAcceleration(track: TrackedPerson): number {
+    const poses = track.poses;
+    if (poses.length < 2) return 0;
+
+    const accels: number[] = [];
+    for (let i = Math.max(1, poses.length - 4); i < poses.length; i++) {
+      const prev = poses[i - 1];
+      const curr = poses[i];
+      const dt = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+      if (dt <= 0 || dt > 1.0) continue;
+
+      const prevKp = prev.keypoints;
+      const currKp = curr.keypoints;
+      if (!prevKp || !currKp) continue;
+
+      const limbs = [
+        { c: currKp.leftWrist, p: prevKp.leftWrist },
+        { c: currKp.rightWrist, p: prevKp.rightWrist },
+        { c: currKp.leftAnkle, p: prevKp.leftAnkle },
+        { c: currKp.rightAnkle, p: prevKp.rightAnkle },
+      ];
+
+      for (const { c, p } of limbs) {
+        if (c && p && (c.confidence ?? 1) > 0.25 && (p.confidence ?? 1) > 0.25) {
+          const vx = (c.x - p.x) / dt;
+          const vy = (c.y - p.y) / dt;
+          const speed = Math.hypot(vx, vy);
+          accels.push(speed / dt);
+        }
+      }
+    }
+
+    return accels.length > 0 ? Math.max(...accels) : 0;
+  }
+
+  /**
+   * Calculate mutual distance oscillation (alternating approach/recoil)
+   */
+  private calculateMutualOscillation(
+    pos1: Array<{ x: number; y: number; timestamp: Date }>,
+    pos2: Array<{ x: number; y: number; timestamp: Date }>,
+  ): number {
+    const len = Math.min(pos1.length, pos2.length);
+    if (len < 3) return 0.5;
+
+    const distances: number[] = [];
+    for (let i = 0; i < len; i++) {
+      distances.push(Math.hypot(pos1[i].x - pos2[i].x, pos1[i].y - pos2[i].y));
+    }
+
+    let reversals = 0;
+    for (let i = 2; i < distances.length; i++) {
+      const d1 = distances[i - 1] - distances[i - 2];
+      const d2 = distances[i] - distances[i - 1];
+      if (d1 * d2 < 0) reversals++;
+    }
+
+    return Math.min(1.0, 0.4 + reversals * 0.3);
+  }
+
+  /**
+   * Regularized Lucas-Kanade optical flow kinetic energy and directional turbulence
+   */
+  private computeOpticalFlowMetrics(
+    prevBuf: Buffer,
+    currBuf: Buffer,
+    width: number,
+    height: number,
+    roi: { x: number; y: number; width: number; height: number },
+  ): { energy: number; turbulence: number } {
+    const minX = Math.max(1, Math.floor(roi.x));
+    const maxX = Math.min(width - 2, Math.ceil(roi.x + roi.width));
+    const minY = Math.max(1, Math.floor(roi.y));
+    const maxY = Math.min(height - 2, Math.ceil(roi.y + roi.height));
+
+    if (maxX <= minX + 4 || maxY <= minY + 4) {
+      return { energy: 0, turbulence: 0 };
+    }
+
+    const step = 4; // Subsampled grid for real-time inference
+    const getLum = (buf: Buffer, x: number, y: number): number => {
+      const idx = (y * width + x) * 3;
+      if (idx + 2 >= buf.length) return 0;
+      return 0.299 * buf[idx] + 0.587 * buf[idx + 1] + 0.114 * buf[idx + 2];
+    };
+
+    let totalEnergy = 0;
+    let validVectors = 0;
+    const octants = new Array(8).fill(0);
+    const lambda = 0.5; // Tikhonov regularization
+
+    for (let y = minY; y < maxY; y += step) {
+      for (let x = minX; x < maxX; x += step) {
+        const currY = getLum(currBuf, x, y);
+        const prevY = getLum(prevBuf, x, y);
+        const it = currY - prevY;
+
+        const ix = (getLum(currBuf, x + 1, y) - getLum(currBuf, x - 1, y)) / 2;
+        const iy = (getLum(currBuf, x, y + 1) - getLum(currBuf, x, y - 1)) / 2;
+
+        const gxx = ix * ix + lambda;
+        const gyy = iy * iy + lambda;
+        const gxy = ix * iy;
+        const det = gxx * gyy - gxy * gxy;
+
+        if (Math.abs(det) > 1e-4) {
+          const u = (-gyy * (ix * it) + gxy * (iy * it)) / det;
+          const v = (gxy * (ix * it) - gxx * (iy * it)) / det;
+          const magSq = u * u + v * v;
+
+          if (magSq > 0.25) {
+            totalEnergy += magSq;
+            validVectors++;
+
+            let angle = Math.atan2(v, u);
+            if (angle < 0) angle += 2 * Math.PI;
+            const octant = Math.min(7, Math.floor((angle / (2 * Math.PI)) * 8));
+            octants[octant]++;
+          }
+        }
+      }
+    }
+
+    const meanEnergy = validVectors > 0 ? (0.5 * totalEnergy) / validVectors : 0;
+
+    // Shannon directional entropy
+    let entropy = 0;
+    if (validVectors > 0) {
+      for (const count of octants) {
+        if (count > 0) {
+          const p = count / validVectors;
+          entropy -= p * Math.log2(p);
+        }
+      }
+    }
+    const maxEntropy = Math.log2(8); // 3.0
+    const normalizedTurbulence = Math.min(1.0, entropy / maxEntropy);
+
+    return { energy: meanEnergy, turbulence: normalizedTurbulence };
   }
 
   /**

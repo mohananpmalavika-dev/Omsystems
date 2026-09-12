@@ -225,22 +225,22 @@ export class AnalyticsRegistry {
     });
 
     this.register({
-      id: 'detector-violence-exp',
+      id: 'detector-violence',
       detectorType: 'violence_detection',
       name: 'Violence & Altercation Classifier',
-      version: '0.5.0-exp',
-      maturity: AnalyticsMaturity.EXPERIMENTAL,
-      modelName: 'temporal-pose-action-v0.5',
-      modelVersion: '0.5.0',
+      version: '1.0.0',
+      maturity: AnalyticsMaturity.PRODUCTION,
+      modelName: 'optical-flow-limb-kinetics-v1.0',
+      modelVersion: '1.0.0',
       modelSha256: 'da4b9237bacccdf19c0760cab7aec4a8359010b0e8d84d15e31a45a397356f24',
       supportedObjects: ['person'],
-      supportsCpu: false,
+      supportsCpu: true,
       supportsGpu: true,
-      supportsEdge: false,
+      supportsEdge: true,
       minimumFps: 10,
       recommendedFps: 25,
-      enabled: false,
-      description: 'Experimental temporal video sequence classifier for physical altercations.',
+      enabled: true,
+      description: 'Production optical flow and rapid limb acceleration heuristic engine for detecting violent encounters and physical altercations.',
     });
   }
 

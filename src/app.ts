@@ -2603,6 +2603,24 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register violence detection routes');
   }
 
+  // Register Access Control Tailgating & Airlock Detection routes
+  try {
+    const { registerTailgatingDetectionRoutes } = await import("./routes/tailgating-detection.routes.js");
+    await registerTailgatingDetectionRoutes(app, store);
+    app.log.info('Access Control Tailgating Detection routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register tailgating detection routes');
+  }
+
+  // Register Multi-Camera Person Re-Identification (Re-ID) routes
+  try {
+    const { registerReIdRoutes } = await import("./routes/reid.routes.js");
+    await registerReIdRoutes(app, store);
+    app.log.info('Multi-Camera Person Re-Identification routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register person re-identification routes');
+  }
+
   // Register capabilities routes
   try {
     const capabilitiesModule = await import("./routes/capabilities.routes.js");
