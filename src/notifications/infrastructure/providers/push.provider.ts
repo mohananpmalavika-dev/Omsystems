@@ -1,13 +1,15 @@
 /**
- * Push Notification Provider
+ * Authoritative Unified Push Notification Provider
  * 
- * Supports FCM HTTP v1, Apple APNs, and Web Push.
+ * Supports FCM HTTP v1 with Google Service Account OAuth token generation,
+ * Apple APNs, and VAPID-compliant Web Push.
  * Invariants:
  * - Never returns synthetic delivery success.
  * - If unconfigured, returns accepted: false with PROVIDER_NOT_CONFIGURED.
  * - In production, missing credentials fail closed.
  */
 
+import { createSign } from "node:crypto";
 import type {
   NotificationJob,
   ProviderSendResult,
@@ -26,9 +28,17 @@ export interface PushProviderConfig {
   vapidSubject?: string;
 }
 
+interface ServiceAccountCredentials {
+  client_email: string;
+  private_key: string;
+  token_uri?: string;
+  project_id?: string;
+}
+
 export class PushNotificationProvider implements NotificationProvider {
   readonly channel = "push" as const;
   private readonly config: PushProviderConfig;
+  private cachedFcmToken?: { token: string; expiresAt: number };
 
   constructor(config?: PushProviderConfig) {
     this.config = config || {
@@ -44,7 +54,10 @@ export class PushNotificationProvider implements NotificationProvider {
   }
 
   private isConfigured(): boolean {
-    const hasFcm = Boolean(this.config.fcmProjectId && this.config.fcmServiceAccountJson);
+    const hasFcm = Boolean(
+      (this.config.fcmProjectId || process.env.FCM_PROJECT_ID) &&
+      (this.config.fcmServiceAccountJson || process.env.FCM_SERVICE_ACCOUNT_JSON || process.env.FCM_BEARER_TOKEN)
+    );
     const hasApns = Boolean(this.config.apnsKeyId && this.config.apnsTeamId && this.config.apnsBundleId);
     const hasVapid = Boolean(this.config.vapidPublicKey && this.config.vapidPrivateKey);
     return hasFcm || hasApns || hasVapid;
@@ -65,7 +78,6 @@ export class PushNotificationProvider implements NotificationProvider {
     }
 
     const destination = job.destination || "";
-    // Detect push provider from destination token prefix/format or metadata
     if (destination.startsWith("fcm:") || (this.config.fcmProjectId && !destination.startsWith("apns:"))) {
       return this.sendFcm(job);
     } else if (destination.startsWith("apns:") || this.config.apnsKeyId) {
@@ -84,7 +96,8 @@ export class PushNotificationProvider implements NotificationProvider {
   }
 
   private async sendFcm(job: NotificationJob): Promise<ProviderSendResult> {
-    if (!this.config.fcmProjectId || !this.config.fcmServiceAccountJson) {
+    const projectId = this.config.fcmProjectId || process.env.FCM_PROJECT_ID;
+    if (!projectId) {
       return {
         accepted: false,
         provider: "fcm-http-v1",
@@ -94,16 +107,15 @@ export class PushNotificationProvider implements NotificationProvider {
     }
 
     try {
-      // In production, invoke FCM HTTP v1 REST endpoint:
-      // POST https://fcm.googleapis.com/v1/projects/{projectId}/messages:send
+      const accessToken = await this.getFcmAccessToken();
       const token = job.destination.replace(/^fcm:/, "");
       const res = await fetch(
-        `https://fcm.googleapis.com/v1/projects/${this.config.fcmProjectId}/messages:send`,
+        `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${this.getAccessToken()}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           body: JSON.stringify({
             message: {
@@ -160,7 +172,6 @@ export class PushNotificationProvider implements NotificationProvider {
       };
     }
 
-    // Direct APNs HTTP/2 communication
     return {
       accepted: false,
       provider: "apple-apns",
@@ -197,6 +208,7 @@ export class PushNotificationProvider implements NotificationProvider {
         headers: {
           "Content-Type": "application/json",
           TTL: "3600",
+          CryptoKey: `p256ecdsa=${this.config.vapidPublicKey}`,
         },
         body: JSON.stringify({
           title: job.payload.subject || "Alert",
@@ -230,9 +242,66 @@ export class PushNotificationProvider implements NotificationProvider {
     }
   }
 
-  private getAccessToken(): string {
-    // Return OAuth2 token from service account
-    return process.env.FCM_BEARER_TOKEN || "";
+  /**
+   * Generates or refreshes OAuth2 access token from Google Service Account
+   */
+  private async getFcmAccessToken(): Promise<string> {
+    if (this.cachedFcmToken && this.cachedFcmToken.expiresAt > Date.now() + 60000) {
+      return this.cachedFcmToken.token;
+    }
+
+    const saRaw = this.config.fcmServiceAccountJson || process.env.FCM_SERVICE_ACCOUNT_JSON;
+    if (!saRaw) {
+      if (process.env.FCM_BEARER_TOKEN) {
+        return process.env.FCM_BEARER_TOKEN;
+      }
+      throw new Error("FCM service account credentials not configured");
+    }
+
+    let sa: ServiceAccountCredentials;
+    try {
+      sa = JSON.parse(saRaw);
+    } catch {
+      throw new Error("Invalid FCM service account JSON");
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+    const payload = Buffer.from(
+      JSON.stringify({
+        iss: sa.client_email,
+        scope: "https://www.googleapis.com/auth/firebase.messaging",
+        aud: sa.token_uri || "https://oauth2.googleapis.com/token",
+        exp: now + 3600,
+        iat: now,
+      })
+    ).toString("base64url");
+
+    const signer = createSign("RSA-SHA256");
+    signer.update(`${header}.${payload}`);
+    const signature = signer.sign(sa.private_key, "base64url");
+    const assertion = `${header}.${payload}.${signature}`;
+
+    const tokenUrl = sa.token_uri || "https://oauth2.googleapis.com/token";
+    const res = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`Google OAuth token exchange failed: HTTP ${res.status}`);
+    }
+
+    const data = (await res.json()) as { access_token: string; expires_in: number };
+    this.cachedFcmToken = {
+      token: data.access_token,
+      expiresAt: Date.now() + (data.expires_in || 3600) * 1000,
+    };
+    return data.access_token;
   }
 
   async healthCheck(): Promise<ProviderHealth> {
@@ -247,3 +316,5 @@ export class PushNotificationProvider implements NotificationProvider {
     };
   }
 }
+
+export const pushNotificationProvider = new PushNotificationProvider();

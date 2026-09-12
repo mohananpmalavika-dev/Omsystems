@@ -324,7 +324,7 @@ export class HsmEvidenceSignerService {
           saltLength: 32,
         });
       } else {
-        signatureBuffer = cryptoSign('sha256', digestBuffer, this.privateKeyPem);
+        signatureBuffer = cryptoSign(null, digestBuffer, this.privateKeyPem);
       }
     } finally {
       this.activeSessions = Math.max(0, this.activeSessions - 1);
@@ -411,14 +411,26 @@ export class HsmEvidenceSignerService {
           signature
         );
       } else {
-        // Try SHA-256 verification
-        isValid = cryptoVerify('sha256', digestBuffer, keyToUse, signature);
-        if (!isValid && digest.length === 32) {
-          // In some cases null algorithm is required if pre-hashed
+        // Try direct null verify on 32-byte digest first
+        if (digest.length === 32) {
           try {
             isValid = cryptoVerify(null, digest, keyToUse, signature);
           } catch {
-            // retain false
+            // Ignore
+          }
+        }
+        if (!isValid) {
+          try {
+            isValid = cryptoVerify('sha256', digest, keyToUse, signature);
+          } catch {
+            // Ignore
+          }
+        }
+        if (!isValid && digest.length !== 32) {
+          try {
+            isValid = cryptoVerify(null, digestBuffer, keyToUse, signature);
+          } catch {
+            // Ignore
           }
         }
       }
@@ -567,5 +579,9 @@ export class HsmEvidenceSignerService {
 
   isInitialized(): boolean {
     return this.initialized;
+  }
+
+  getRepository(): HsmEvidenceRepository {
+    return this.repository;
   }
 }

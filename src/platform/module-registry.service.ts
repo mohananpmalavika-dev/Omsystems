@@ -3,6 +3,8 @@
  * 
  * Tracks authoritative readiness across critical subsystems.
  * In production, any CRITICAL or REQUIRED module failure marks the node UNREADY (HTTP 503).
+ * Never infers readiness from generic SELECT 1 database pings.
+ * Capabilities are derived dynamically from actual verified subsystem health.
  */
 
 export type ModuleImportance = "CRITICAL" | "REQUIRED" | "OPTIONAL";
@@ -14,6 +16,31 @@ export interface ModuleStatus {
   state: ModuleState;
   reason?: string;
   since: Date;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReadinessResult {
+  state: ModuleState;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReadinessContributor {
+  name: string;
+  importance: ModuleImportance;
+  check(): Promise<ReadinessResult>;
+}
+
+export type CapabilityState =
+  | "AVAILABLE"
+  | "PARTIAL"
+  | "UNAVAILABLE"
+  | "MISCONFIGURED"
+  | "UNKNOWN";
+
+export interface CapabilityDetail {
+  state: CapabilityState;
+  reason?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -29,6 +56,7 @@ export interface ReadinessEvaluation {
 
 export class ModuleRegistry {
   private readonly modules = new Map<string, ModuleStatus>();
+  private readonly contributors = new Map<string, ReadinessContributor>();
 
   constructor() {
     // Register baseline critical and required modules in STARTING state
@@ -40,6 +68,16 @@ export class ModuleRegistry {
     this.register("evidenceService", "REQUIRED", "STARTING", "Initializing durable forensic evidence pipeline");
     this.register("identity", "CRITICAL", "STARTING", "Verifying OIDC/SAML enterprise identity providers");
     this.register("audit", "CRITICAL", "STARTING", "Checking immutable audit event pipeline");
+    this.register("aiQuality", "REQUIRED", "STARTING", "Verifying AI models and camera detector pipelines");
+    this.register("privacy", "REQUIRED", "STARTING", "Verifying privacy unmasking audit store");
+    this.register("notifications", "REQUIRED", "STARTING", "Verifying push and email notification dispatchers");
+  }
+
+  registerContributor(contributor: ReadinessContributor): void {
+    this.contributors.set(contributor.name, contributor);
+    if (!this.modules.has(contributor.name)) {
+      this.register(contributor.name, contributor.importance, "STARTING", "Registered contributor initializing");
+    }
   }
 
   register(
@@ -94,6 +132,25 @@ export class ModuleRegistry {
     metadata?: Record<string, unknown>
   ): void {
     this.updateStatus(module, state, reason, metadata);
+  }
+
+  async evaluateReadinessAsync(): Promise<ReadinessEvaluation> {
+    // Run all registered contributors independently
+    const checks = Array.from(this.contributors.values()).map(async (contributor) => {
+      try {
+        const result = await contributor.check();
+        this.updateStatus(contributor.name, result.state, result.reason, result.metadata);
+      } catch (err) {
+        this.updateStatus(
+          contributor.name,
+          "UNAVAILABLE",
+          `Readiness check failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    });
+
+    await Promise.allSettled(checks);
+    return this.evaluateReadiness();
   }
 
   getReadiness(): ReadinessEvaluation {
@@ -163,17 +220,34 @@ export class ModuleRegistry {
     };
   }
 
-  getCapabilities(): Record<string, boolean | string> {
+  /**
+   * Returns dynamically calculated capability states.
+   * Never hardcodes true without subsystem verification.
+   */
+  getCapabilities(): Record<string, CapabilityDetail> {
+    const mapState = (moduleName: string, okReason?: string, failReason?: string): CapabilityDetail => {
+      const mod = this.modules.get(moduleName);
+      if (!mod) return { state: "UNKNOWN", reason: `Module ${moduleName} not registered` };
+      if (mod.state === "READY") return { state: "AVAILABLE", reason: okReason || mod.reason };
+      if (mod.state === "DEGRADED") return { state: "PARTIAL", reason: mod.reason };
+      if (mod.state === "MISCONFIGURED") return { state: "MISCONFIGURED", reason: mod.reason };
+      return { state: "UNAVAILABLE", reason: failReason || mod.reason };
+    };
+
     return {
-      recording: this.modules.get("recordingIndex")?.state === "READY",
-      playback: this.modules.get("mediaOrchestration")?.state === "READY",
-      ptz: true,
-      evidenceSigning: this.modules.get("evidenceService")?.state === "READY",
-      aiQuality: true,
-      privacyOverride: true,
-      durableEscalations: true,
-      distributedFencing: this.modules.get("redis")?.state === "READY",
-      identitySAML: this.modules.get("identity")?.state === "READY",
+      recording: mapState("recordingIndex", "Recording index and storage verified"),
+      playback: mapState("mediaOrchestration", "Media streaming gateway active"),
+      ptz: {
+        state: this.modules.get("mediaOrchestration")?.state === "READY" ? "AVAILABLE" : "UNKNOWN",
+        reason: "Derived from media gateway & camera adapter connectivity",
+      },
+      evidenceSigning: mapState("evidenceService", "Cryptographic signing provider initialized"),
+      aiQuality: mapState("aiQuality", "Evaluation, detector and model repositories operational"),
+      privacyOverride: mapState("privacy", "Durable privacy audit store connected"),
+      durableEscalations: mapState("database", "Durable PostgreSQL playbook escalation store verified"),
+      distributedFencing: mapState("redis", "Redis stream lease repository online"),
+      identitySAML: mapState("identity", "Enterprise SAML authentication provider verified"),
+      pushNotifications: mapState("notifications", "Push and FCM/APNs providers verified"),
     };
   }
 }

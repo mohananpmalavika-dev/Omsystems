@@ -5,6 +5,11 @@
  */
 
 import { createHash } from "node:crypto";
+import {
+  evaluateClearanceAccess,
+  evaluateSubnetAccess,
+  type ClearanceLevel,
+} from "../abac/index.js";
 
 // ───────────────────────── Roles ─────────────────────────
 
@@ -63,6 +68,10 @@ export interface AbacRequestContext {
     shiftStart?: string;   // HH:MM
     shiftEnd?: string;     // HH:MM
     networkCidr?: string;  // Allowed source CIDR (e.g. "10.0.0.0/8")
+    allowedSubnets?: string[];
+    deniedSubnets?: string[];
+    clearanceLevel?: string;
+    clearanceTags?: string[];
   };
   /** Resource attributes */
   resource: {
@@ -70,6 +79,8 @@ export interface AbacRequestContext {
     branchId: string;
     cameraId?: string;
     classification?: CameraClassification;
+    requiredClearanceLevel?: string;
+    requiredClearanceTags?: string[];
   };
   /** Requested action */
   action: Action;
@@ -77,6 +88,7 @@ export interface AbacRequestContext {
   environment: {
     sourceIp?: string;
     requestTimeUtc: string; // ISO timestamp
+    clientTimezone?: string;
   };
 }
 
@@ -226,6 +238,40 @@ export class AbacPolicyEngine {
         };
       }
       appliedPolicies.push("P5:NetworkCidr:PASS");
+    } else if (ctx.subject.allowedSubnets && ctx.subject.allowedSubnets.length > 0 && ctx.environment.sourceIp) {
+      const subnetRes = evaluateSubnetAccess(ctx.environment.sourceIp, ctx.subject.allowedSubnets, ctx.subject.deniedSubnets);
+      if (!subnetRes.allowed) {
+        return {
+          allowed: false,
+          reason: subnetRes.reason || `Source IP ${ctx.environment.sourceIp} not within allowed subnets`,
+          appliedPolicies: [...appliedPolicies, "P5:NetworkSubnets:DENY"],
+        };
+      }
+      appliedPolicies.push("P5:NetworkSubnets:PASS");
+    }
+
+    // P6: User Clearance Level & Tags Restriction (if resource requires clearance)
+    if (ctx.resource.requiredClearanceLevel || ctx.resource.requiredClearanceTags) {
+      const clearanceRes = evaluateClearanceAccess(
+        {
+          clearanceLevel: (ctx.subject.clearanceLevel as ClearanceLevel) || "UNCLASSIFIED",
+          clearanceTags: ctx.subject.clearanceTags || [],
+        },
+        {
+          minClearanceLevel: ctx.resource.requiredClearanceLevel as ClearanceLevel | undefined,
+          requiredClearanceTags: ctx.resource.requiredClearanceTags,
+        },
+        new Date(ctx.environment.requestTimeUtc),
+      );
+
+      if (!clearanceRes.passed) {
+        return {
+          allowed: false,
+          reason: clearanceRes.reason || "Insufficient user clearance tags or clearance level",
+          appliedPolicies: [...appliedPolicies, "P6:Clearance:DENY"],
+        };
+      }
+      appliedPolicies.push("P6:Clearance:PASS");
     }
 
     return {

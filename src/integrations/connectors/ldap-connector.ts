@@ -38,6 +38,8 @@ interface LDAPConfig {
   verifyCertificate?: boolean;
 }
 
+import { Client } from 'ldapts';
+
 export class LDAPConnector extends BaseConnector {
   readonly type = 'ldap' as const;
   readonly category = 'identity' as const;
@@ -45,26 +47,29 @@ export class LDAPConnector extends BaseConnector {
   readonly description = 'Connect to LDAP directories and Active Directory for user authentication and synchronization';
   readonly version = '1.0.0';
 
-  private client: any; // ldapjs client
+  private client: Client | null = null;
 
   constructor(private pool?: any) {
     super();
   }
 
   protected async onInitialize(): Promise<void> {
-    // In production, use ldapjs library
-    // const ldap = require('ldapjs');
-    // this.client = ldap.createClient({
-    //   url: this.getConfig<string>('url'),
-    //   tlsOptions: {
-    //     rejectUnauthorized: this.getConfig('verifyCertificate', true)
-    //   }
-    // });
+    const config = this.config?.config as LDAPConfig | undefined;
+    if (config?.url) {
+      this.client = new Client({
+        url: config.url,
+        timeout: 10000,
+        connectTimeout: 10000,
+        tlsOptions: {
+          rejectUnauthorized: config.verifyCertificate !== false,
+        },
+      });
+    }
   }
 
   protected async onDestroy(): Promise<void> {
     if (this.client) {
-      // this.client.unbind();
+      await this.client.unbind().catch(() => {});
       this.client = null;
     }
   }
@@ -357,63 +362,75 @@ export class LDAPConnector extends BaseConnector {
    * Bind to LDAP server
    */
   private async bind(dn: string, password: string): Promise<boolean> {
-    // Placeholder - implement with ldapjs
-    // return new Promise((resolve, reject) => {
-    //   this.client.bind(dn, password, (err) => {
-    //     if (err) {
-    //       reject(err);
-    //     } else {
-    //       resolve(true);
-    //     }
-    //   });
-    // });
-    
-    // Mock for now
-    return true;
+    try {
+      const config = this.config?.config as LDAPConfig;
+      if (!this.client && config?.url) {
+        this.client = new Client({
+          url: config.url,
+          timeout: 10000,
+          connectTimeout: 10000,
+          tlsOptions: { rejectUnauthorized: config.verifyCertificate !== false },
+        });
+      }
+      if (!this.client) return false;
+      await this.client.bind(dn, password);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
    * Search for users
    */
   private async searchUsers(filter: string, sizeLimit?: number): Promise<any[]> {
-    // Placeholder - implement with ldapjs
-    // const config = this.config!.config as LDAPConfig;
-    // const searchBase = config.userSearchBase || config.baseDN;
-    // 
-    // return new Promise((resolve, reject) => {
-    //   const users: any[] = [];
-    //   this.client.search(searchBase, { filter, scope: 'sub', sizeLimit }, (err, res) => {
-    //     if (err) return reject(err);
-    //     
-    //     res.on('searchEntry', (entry) => {
-    //       users.push(entry.object);
-    //     });
-    //     
-    //     res.on('end', () => {
-    //       resolve(users);
-    //     });
-    //     
-    //     res.on('error', reject);
-    //   });
-    // });
-    
-    // Mock for now
-    return [];
+    const config = this.config?.config as LDAPConfig;
+    const searchBase = config.userSearchBase || config.baseDN;
+    if (!this.client) return [];
+    try {
+      const result = await this.client.search(searchBase, {
+        scope: 'sub',
+        filter,
+        sizeLimit: sizeLimit || 500,
+        attributes: config.userAttributes || ['*'],
+      });
+      return result.searchEntries.map((e: any) => ({
+        ...e,
+        dn: e.dn || '',
+      }));
+    } catch {
+      return [];
+    }
   }
 
   /**
    * Get groups for a user
    */
   private async getUserGroups(userDN: string): Promise<string[]> {
-    // Placeholder - implement with ldapjs
-    // const config = this.config!.config as LDAPConfig;
-    // const searchBase = config.groupSearchBase || config.baseDN;
-    // const filter = `(&(objectClass=group)(member=${userDN}))`;
-    // 
-    // const groups = await this.searchGroups(filter);
-    // return groups.map(g => g.cn);
-    
-    // Mock for now
-    return [];
+    const config = this.config?.config as LDAPConfig;
+    const searchBase = config.groupSearchBase || config.baseDN;
+    const escapedDn = userDN
+      .replace(/\\/g, '\\5c')
+      .replace(/\*/g, '\\2a')
+      .replace(/\(/g, '\\28')
+      .replace(/\)/g, '\\29')
+      .replace(/\0/g, '\\00');
+    const filter = (config.groupSearchFilter || '(&(objectClass=group)(member={dn}))').replace('{dn}', escapedDn);
+    if (!this.client) return [];
+    try {
+      const result = await this.client.search(searchBase, {
+        scope: 'sub',
+        filter,
+        attributes: ['cn', 'dn'],
+      });
+      return result.searchEntries
+        .map((e: any) => {
+          if (Array.isArray(e.cn)) return e.cn[0];
+          return e.cn || e.dn || '';
+        })
+        .filter(Boolean);
+    } catch {
+      return [];
+    }
   }
 }

@@ -254,7 +254,7 @@ export class HsmSigningProvider implements EvidenceSigningProvider {
       throw new Error(`HSM private key handle unavailable for signing on keyId: ${this.keyId}`);
     }
     const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
-    const signature = sign("sha256", digestBuffer, this.privateKeyPem);
+    const signature = sign(null, digestBuffer, this.privateKeyPem);
     return {
       algorithm: this.algorithm,
       keyId: this.keyId,
@@ -273,11 +273,15 @@ export class HsmSigningProvider implements EvidenceSigningProvider {
       const keyToUse = certificatePem || this.publicKeyPem;
       const digestBuffer = digest.length === 32 ? digest : createHash("sha256").update(digest).digest();
 
-      // First try standard SHA-256
-      let valid = verify("sha256", digestBuffer, keyToUse, signature);
-      if (!valid && digest.length === 32) {
+      let valid = false;
+      try {
+        valid = verify(null, digestBuffer, keyToUse, signature);
+      } catch {
+        // Ignore
+      }
+      if (!valid) {
         try {
-          valid = verify(null, digest, keyToUse, signature);
+          valid = verify("sha256", digest, keyToUse, signature);
         } catch {
           // Ignore
         }

@@ -58,7 +58,34 @@ export class EvidenceVerifierService {
       } else {
         try {
           const sigBuffer = Buffer.from(pkg.signature.signature, 'base64');
-          const isSigValid = verify(null, Buffer.from(canonicalJson, 'utf8'), pkg.signature.publicKey, sigBuffer);
+          const canonicalBuffer = Buffer.from(canonicalJson, 'utf8');
+          const canonicalDigest = createHash('sha256').update(canonicalBuffer).digest();
+          let isSigValid = false;
+
+          // 1. Try null verify on digest (ECDSA P-256 / RSA-PSS from HSM / precomputed digest)
+          try {
+            isSigValid = verify(null, canonicalDigest, pkg.signature.publicKey, sigBuffer);
+          } catch {
+            // fallback
+          }
+
+          // 2. Try null verify on raw canonical bytes (Ed25519 default file provider)
+          if (!isSigValid) {
+            try {
+              isSigValid = verify(null, canonicalBuffer, pkg.signature.publicKey, sigBuffer);
+            } catch {
+              // fallback
+            }
+          }
+
+          // 3. Try sha256 verify on raw canonical bytes
+          if (!isSigValid) {
+            try {
+              isSigValid = verify('sha256', canonicalBuffer, pkg.signature.publicKey, sigBuffer);
+            } catch {
+              // fallback
+            }
+          }
 
           if (!isSigValid) {
             errors.push('Digital signature validation failed for manifest.sig');

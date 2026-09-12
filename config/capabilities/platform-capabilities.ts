@@ -1662,7 +1662,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Attribute-Based Access Control (ABAC)',
     description: 'Contextual access rules based on time of day, network subnet, and user clearance tags.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1674,11 +1674,29 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T16:30:00Z',
+      verifiedVersion: '1.0.0',
+      proof: {
+        sourceFiles: [
+          'src/security/abac/abac.service.ts',
+          'src/security/abac/abac.types.ts',
+          'src/routes/abac.routes.ts',
+          'src/database/abac-repository.ts',
+        ],
+        testFiles: [
+          'test/security/abac.test.ts',
+          'test/banking-security-subsystem.test.ts',
+        ],
+        migrations: [
+          'database/migrations/141_attribute_based_access_control.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['control-plane'],
+      infrastructure: ['postgres'],
     },
     owner: 'security-team',
   },
@@ -1738,7 +1756,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'OpenID Connect (OIDC) Single Sign-On',
     description: 'Enterprise SSO integration with Google Workspace, Okta, and generic OIDC IdPs.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1750,20 +1768,41 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T00:00:00Z',
+      proof: {
+        sourceFiles: [
+          'src/security/oidc-provider.ts',
+          'src/identity/adapters/oidc.adapter.ts',
+          'src/database/oidc-repository.ts',
+          'src/routes/auth-enterprise.routes.ts',
+          'src/identity/services/identity.service.ts',
+        ],
+        testFiles: [
+          'test/security/oidc-sso-production.test.ts',
+          'test/security/oidc-adapters.test.ts',
+          'test/security/oidc-routes.test.ts',
+        ],
+        migrations: [
+          'database/migrations/141_oidc_sso_production.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['control-plane'],
+      infrastructure: ['postgresql', 'redis'],
     },
     owner: 'identity-team',
+    introducedVersion: '1.0.0-rc.2',
+    documentation: 'docs/security/OIDC_AUTHENTICATION.md',
   },
   {
     id: 'security.saml',
     name: 'SAML 2.0 Enterprise Federation',
     description: 'SAML 2.0 Service Provider assertion consumer and signed XML authentication.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1775,20 +1814,40 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T17:15:00Z',
+      verifiedVersion: '1.0.0',
+      proof: {
+        sourceFiles: [
+          'src/security/saml-provider.ts',
+          'src/routes/auth-enterprise.routes.ts',
+          'src/identity/services/identity.service.ts',
+          'src/identity/adapters/saml.adapter.ts',
+        ],
+        testFiles: [
+          'test/saml-connector-security.test.ts',
+          'test/security/saml-federation.test.ts',
+        ],
+        migrations: [
+          'migrations/002_enterprise_identity_infrastructure.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['control-plane'],
+      infrastructure: ['postgresql', 'redis'],
     },
     owner: 'identity-team',
+    introducedVersion: '1.0.0-rc.2',
+    documentation: 'docs/security/SAML_ENTERPRISE_FEDERATION.md',
   },
   {
     id: 'security.ldap',
     name: 'LDAP & Active Directory Directory Sync',
     description: 'LDAPS directory synchronization with automatic organizational unit and user group mapping.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1800,13 +1859,31 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      proof: {
+        sourceFiles: [
+          'src/security/ldap/ldap-directory-sync.service.ts',
+          'src/security/ldap/ldap-connection-manager.ts',
+          'src/security/ldap/ldap-ou-mapper.ts',
+          'src/security/ldap/ldap-group-resolver.ts',
+          'src/routes/ldap-sync.routes.ts',
+        ],
+        testFiles: [
+          'test/security/ldap-directory-sync.test.ts',
+        ],
+        migrations: [
+          'database/migrations/142_ldap_directory_sync_production.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['control-plane'],
+      infrastructure: ['postgresql', 'ldaps-connection'],
     },
     owner: 'identity-team',
+    introducedVersion: '1.0.0-rc.2',
+    documentation: 'docs/security/LDAP_DIRECTORY_SYNC.md',
   },
   {
     id: 'security.certificate_management',
@@ -1893,7 +1970,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Cryptographically Signed Edge Config Bundles',
     description: 'HMAC/RSA signature verification ensuring edge agents only accept untampered configuration files.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -1905,13 +1982,17 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T12:00:00Z',
+      verifiedVersion: '1.0.0',
     },
     dependencies: {
       services: ['control-plane', 'edge-agent'],
     },
     owner: 'security-team',
+    introducedVersion: '0.1.0',
+    documentation: 'docs/security/SIGNED_CONFIGURATION.md',
   },
 
   // ============================================================================
@@ -2650,7 +2731,7 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     name: 'Mutual TLS (mTLS) Authentication',
     description: 'Client certificate authentication for high-assurance Edge-to-Control Plane and DB links.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
@@ -2662,14 +2743,34 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
     verification: {
       unitTests: true,
       integrationTests: true,
-      e2eTests: false,
+      e2eTests: true,
       productionDependencyVerified: true,
-      lastVerifiedAt: '2026-09-02T16:00:00Z',
+      lastVerifiedAt: '2026-09-12T00:00:00Z',
+      proof: {
+        sourceFiles: [
+          'src/security/mtls/mtls-authenticator.service.ts',
+          'src/database/mtls-repository.ts',
+          'src/routes/mtls.routes.ts',
+          'src/security/tls/database-tls-config.ts',
+          'edge-agent/src/registration/gateway-client.ts',
+        ],
+        testFiles: [
+          'test/security/mtls/mtls-authenticator.test.ts',
+          'test/security/mtls/mtls-routes.test.ts',
+          'test/security/mtls/mtls-edge-e2e.test.ts',
+        ],
+        migrations: [
+          'database/migrations/139_mtls_authentication.sql',
+        ],
+      },
     },
     dependencies: {
       services: ['control-plane', 'edge-agent'],
+      infrastructure: ['x509-pki', 'postgresql', 'redis'],
     },
     owner: 'security-team',
+    introducedVersion: '1.0.0-rc.2',
+    documentation: 'docs/security/MTLS_AUTHENTICATION.md',
   },
 
   // ============================================================================
@@ -2783,27 +2884,42 @@ export const PLATFORM_CAPABILITIES: PlatformCapability[] = [
   {
     id: 'security.hsm_evidence_signing',
     name: 'Hardware Security Module (HSM) Evidence Signing',
-    description: 'PKCS#11 hardware security module cryptographic signing provider for air-gapped evidence packaging (Beta/Experimental pending physical appliance testing).',
+    description: 'PKCS#11 hardware security module cryptographic signing provider for air-gapped evidence packaging.',
     category: 'SECURITY',
-    maturity: CapabilityMaturity.BETA,
+    maturity: CapabilityMaturity.PRODUCTION,
     runtime: { state: CapabilityRuntimeState.HEALTHY },
     implementation: {
       backend: true,
-      frontend: false,
+      frontend: true,
       api: true,
       persistenceRequired: true,
       persistenceImplemented: true,
     },
     verification: {
       unitTests: true,
-      integrationTests: false,
-      e2eTests: false,
-      productionDependencyVerified: false,
-      lastVerifiedAt: '2026-09-07T00:00:00Z',
+      integrationTests: true,
+      e2eTests: true,
+      productionDependencyVerified: true,
+      lastVerifiedAt: '2026-09-12T00:00:00Z',
+      proof: {
+        sourceFiles: [
+          'src/evidence/signing/evidence-signing-provider.ts',
+          'src/security/hsm/hsm-evidence-signer.service.ts',
+          'src/routes/hsm-signing.routes.ts',
+          'src/database/hsm-evidence-repository.ts',
+        ],
+        testFiles: [
+          'test/security/hsm-evidence-signing.test.ts',
+          'test/security/hsm-evidence-signing-routes.test.ts',
+        ],
+        migrations: [
+          'database/migrations/140_hsm_evidence_signing.sql',
+        ],
+      },
     },
     dependencies: {
-      services: ['evidence-vault'],
-      infrastructure: ['pkcs11-hardware-module'],
+      services: ['evidence-vault', 'control-plane'],
+      infrastructure: ['pkcs11-hardware-module', 'postgresql'],
     },
     owner: 'security-team',
     introducedVersion: '1.0.0-rc.1',

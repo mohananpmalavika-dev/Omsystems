@@ -2,9 +2,9 @@
  * Production-Grade Real-Time Alert Operations System - Verification Test Runner
  */
 
-import { AlertOperationsService } from "../../backend/src/alerts/services/alert-operations.service.js";
-import { AlertNormalizerService } from "../../backend/src/alerts/services/alert-normalizer.service.js";
-import { AlertDeduplicationService } from "../../backend/src/alerts/services/alert-deduplication.service.js";
+import { AlertOperationsService } from "../../src/alerts/services/alert-operations.service.js";
+import { AlertNormalizerService } from "../../src/alerts/services/alert-normalizer.service.js";
+import { AlertDeduplicationService } from "../../src/alerts/services/alert-deduplication.service.js";
 import { registerAlertOperationsRoutes } from "../../src/routes/alert-operations.routes.js";
 import Fastify from "fastify";
 

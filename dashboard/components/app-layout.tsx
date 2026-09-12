@@ -272,6 +272,7 @@ export const navigation: NavGroup[] = [
       { label: "Media Gateway Failover", href: "/admin/media-gateway-failover", icon: Radio },
       { label: "Storage Failover Console", href: "/admin/storage-failover", icon: HardDrive },
       { label: "Recording N+1 Failover", href: "/admin/recording-failover", icon: Server },
+      { label: "Signed Edge Config Bundles", href: "/admin/signed-configuration", icon: ShieldCheck },
       { label: "Automated UI Audit", href: "/admin/qa/ui-audit", icon: Sparkles },
       { label: "Database Tables & Data", href: "/admin/database", icon: Database },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },

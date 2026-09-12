@@ -34,9 +34,8 @@ export async function registerHsmSigningRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore
 ) {
-  const pool = (store as any)?.pool || (store as any)?.db;
-  const repository = new HsmEvidenceRepository(pool);
   const signerService = getHsmSignerService(store);
+  const repository = signerService.getRepository();
 
   // Helper for tenant identification
   const getTenantId = (req: FastifyRequest): string => {
@@ -59,14 +58,10 @@ export async function registerHsmSigningRoutes(
       // Allow service calls if user not required in current environment
       return true;
     }
-    const decision = await store.checkAccess(user, 'security:admin', 'global');
+    const decision = await store.checkAccess(user, 'evidence:export', 'global');
     if (!decision || !decision.allowed) {
-      // Check evidence:export fallback
-      const fallback = await store.checkAccess(user, 'evidence:export', 'global');
-      if (!fallback || !fallback.allowed) {
-        await reply.code(403).send({ success: false, error: 'access_denied', message: 'Insufficient security privileges for HSM evidence signing' });
-        return false;
-      }
+      await reply.code(403).send({ success: false, error: 'access_denied', message: 'Insufficient security privileges for HSM evidence signing' });
+      return false;
     }
     return true;
   };

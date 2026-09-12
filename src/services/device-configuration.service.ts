@@ -32,7 +32,7 @@ import type {
   ConfigurationVerificationResult,
   ConfigurationDriftItem,
 } from "../types/device-configuration.types.js";
-import type { RecorderAdapter } from "../../backend/src/recorders/recorder-adapter.interface.js";
+import type { RecorderAdapter } from "../recorders/recorder-adapter.interface.js";
 
 export interface RecorderAdapterProvider {
   create(recorder: {
@@ -1560,7 +1560,9 @@ export class DeviceConfigurationService {
     const adapter = await this.getRecorderAdapter(recorderId);
     const channelsResult = await adapter.getChannels();
 
-    const channels = channelsResult.status === "healthy" ? channelsResult.value || [] : [];
+    const channels = Array.isArray(channelsResult)
+      ? channelsResult
+      : ((channelsResult as any)?.status === "healthy" ? (channelsResult as any).value || [] : []);
     return {
       channels,
       total: channels.length,
@@ -1582,11 +1584,13 @@ export class DeviceConfigurationService {
     const adapter = await this.getRecorderAdapter(recorderId);
     const targetChannel = channelId || "1";
 
-    const statusResult = await adapter.getRecordingStatus(targetChannel);
+    const statusResult = adapter.getRecordingStatus
+      ? await adapter.getRecordingStatus!(targetChannel)
+      : { status: "healthy", channelId: targetChannel };
     let schedule: RecordingSchedule | undefined;
 
     if (adapter.getRecordingSchedule) {
-      const scheduleResult = await adapter.getRecordingSchedule(targetChannel);
+      const scheduleResult = await adapter.getRecordingSchedule!(targetChannel);
       if (scheduleResult.status === "healthy") {
         schedule = scheduleResult.value;
       }

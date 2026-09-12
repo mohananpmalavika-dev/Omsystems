@@ -17,40 +17,72 @@ import { EvaluationRepository } from "../repositories/evaluation.repository.js";
 import { CameraTuningRepository } from "../repositories/camera-tuning.repository.js";
 import { AIQualityAuditRepository } from "../repositories/ai-quality-audit.repository.js";
 import { EvaluationEngineService, type BenchmarkRunner } from "./evaluation-engine.service.js";
+import type { Pool } from "pg";
 import { ModelCertificationService } from "./model-certification.service.js";
 import { CameraTuningService } from "./camera-tuning.service.js";
+import { PostgresDetectorRegistryRepository } from "../repositories/postgres-detector-registry.repository.js";
+import { PostgresEvaluationRepository } from "../repositories/postgres-evaluation.repository.js";
+import { PostgresCameraTuningRepository } from "../repositories/postgres-camera-tuning.repository.js";
+import { PostgresAIQualityAuditRepository } from "../repositories/postgres-ai-quality-audit.repository.js";
+
+export type DetectorRepo = DetectorRegistryRepository | PostgresDetectorRegistryRepository;
+export type EvalRepo = EvaluationRepository | PostgresEvaluationRepository;
+export type CamTuningRepo = CameraTuningRepository | PostgresCameraTuningRepository;
+export type AuditRepo = AIQualityAuditRepository | PostgresAIQualityAuditRepository;
+
+export interface AIQualityPlatformFacadeOptions {
+  detectorRepo?: DetectorRepo;
+  evaluationRepo?: EvalRepo;
+  cameraTuningRepo?: CamTuningRepo;
+  auditRepo?: AuditRepo;
+  benchmarkRunner?: BenchmarkRunner;
+  pool?: Pool;
+}
 
 export class AIQualityPlatformFacade {
-  readonly detectorRepo: DetectorRegistryRepository;
-  readonly evaluationRepo: EvaluationRepository;
-  readonly cameraTuningRepo: CameraTuningRepository;
-  readonly auditRepo: AIQualityAuditRepository;
+  readonly detectorRepo: DetectorRepo;
+  readonly evaluationRepo: EvalRepo;
+  readonly cameraTuningRepo: CamTuningRepo;
+  readonly auditRepo: AuditRepo;
 
   readonly evaluationEngine: EvaluationEngineService;
   readonly certificationService: ModelCertificationService;
   readonly cameraTuning: CameraTuningService;
+  readonly pool?: Pool;
 
-  constructor(benchmarkRunner?: BenchmarkRunner) {
-    // Process-local repositories would lose certification evidence and camera
-    // tuning after a restart, so they are strictly a non-production adapter.
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("AI quality control-plane requires durable repositories in production; in-memory registry is disabled");
+  constructor(options?: AIQualityPlatformFacadeOptions | BenchmarkRunner) {
+    const opts: AIQualityPlatformFacadeOptions =
+      options && "runBenchmark" in options
+        ? { benchmarkRunner: options as BenchmarkRunner }
+        : ((options as AIQualityPlatformFacadeOptions) || {});
+
+    this.pool = opts.pool;
+
+    if (this.pool) {
+      this.detectorRepo = opts.detectorRepo || new PostgresDetectorRegistryRepository(this.pool);
+      this.evaluationRepo = opts.evaluationRepo || new PostgresEvaluationRepository(this.pool);
+      this.cameraTuningRepo = opts.cameraTuningRepo || new PostgresCameraTuningRepository(this.pool);
+      this.auditRepo = opts.auditRepo || new PostgresAIQualityAuditRepository(this.pool);
+    } else {
+      if (process.env.NODE_ENV === "production" && (!opts.detectorRepo || !opts.evaluationRepo)) {
+        throw new Error("AI quality control-plane requires durable repositories in production; in-memory registry is disabled");
+      }
+      this.detectorRepo = opts.detectorRepo || new DetectorRegistryRepository();
+      this.evaluationRepo = opts.evaluationRepo || new EvaluationRepository();
+      this.cameraTuningRepo = opts.cameraTuningRepo || new CameraTuningRepository();
+      this.auditRepo = opts.auditRepo || new AIQualityAuditRepository();
     }
-    this.detectorRepo = new DetectorRegistryRepository();
-    this.evaluationRepo = new EvaluationRepository();
-    this.cameraTuningRepo = new CameraTuningRepository();
-    this.auditRepo = new AIQualityAuditRepository();
 
-    this.evaluationEngine = new EvaluationEngineService(this.evaluationRepo, benchmarkRunner);
+    this.evaluationEngine = new EvaluationEngineService(this.evaluationRepo as any, opts.benchmarkRunner);
     this.certificationService = new ModelCertificationService(
-      this.evaluationRepo,
-      this.detectorRepo,
-      this.auditRepo,
+      this.evaluationRepo as any,
+      this.detectorRepo as any,
+      this.auditRepo as any,
     );
     this.cameraTuning = new CameraTuningService(
-      this.cameraTuningRepo,
-      this.detectorRepo,
-      this.auditRepo,
+      this.cameraTuningRepo as any,
+      this.detectorRepo as any,
+      this.auditRepo as any,
     );
   }
 

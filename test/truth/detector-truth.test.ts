@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HelmetDetector } from "../../analytics-engine/src/detectors/helmet-detector.js";
-import { CrowdDensityDetector } from "../../analytics-engine/src/detectors/crowd-density-detector.js";
-import { TamperDetectionService } from "../../backend/src/services/tamper-detection.service.js";
+import { TamperDetectionService } from "../../src/security/services/tamper-detection.service.js";
 import { ArcFlashDetector } from "../../analytics-engine/src/detectors/safety/arc-flash-detector.js";
 import { ZoneEngine } from "../../analytics-engine/src/detectors/safety/zone-engine.js";
 import type { DetectionFrame } from "../../analytics-engine/src/detectors/base-detector.js";

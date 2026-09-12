@@ -5974,8 +5974,218 @@ export const hsmSigningApi = {
     );
   },
 
-  getHealth: () =>
-    fetchApi<{ success: boolean; data: HsmStatusReportItem }>('/v1/security/hsm/health'),
+// ============================================================================
+// Cryptographically Signed Edge Config Bundles API Client (security.signed_configuration)
+// ============================================================================
+
+export interface SignedConfigKeyItem {
+  keyId: string;
+  algorithm: 'RSA-PSS-SHA256' | 'RSA-PKCS1-SHA256' | 'HMAC-SHA256' | 'ED25519';
+  keySize: number;
+  publicKeyPem: string | null;
+  keyFingerprint: string;
+  status: 'ACTIVE' | 'RETIRED' | 'REVOKED';
+  validFrom: string;
+  validUntil?: string | null;
+  signCount: number;
+  verifyCount: number;
+  lastUsedAt?: string | null;
+  revokedAt?: string | null;
+  revocationReason?: string | null;
+}
+
+export interface SignedConfigBundleItem {
+  bundleId: string;
+  edgeId: string;
+  branchId?: string | null;
+  version: number;
+  previousVersion?: number | null;
+  payload: Record<string, unknown>;
+  payloadHash: string;
+  canonicalPayloadHash: string;
+  headerPayload: Record<string, unknown>;
+  nonce: string;
+  signature: string;
+  algorithm: string;
+  keyId: string;
+  signerIdentity: string;
+  signerRole: string;
+  status: 'DESIRED' | 'APPLIED' | 'DRIFTED' | 'ROLLED_BACK' | 'REVOKED';
+  verificationStatus: 'VERIFIED' | 'FAILED' | 'TAMPERED' | 'UNCHECKED';
+  verificationError?: string | null;
+  expiresAt?: string | null;
+  appliedVersion?: number | null;
+  appliedAt?: string | null;
+  appliedHash?: string | null;
+  driftDetails?: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SignedConfigDriftItem {
+  edgeId: string;
+  desiredVersion: number;
+  appliedVersion: number | null;
+  desiredHash: string;
+  appliedHash: string | null;
+  verificationStatus: string;
+  status: 'IN_SYNC' | 'DRIFTED' | 'PENDING_APPLY' | 'ROLLED_BACK' | 'TAMPERED';
+  isDrifted: boolean;
+  driftReason?: string;
+  details?: Record<string, unknown>;
+  lastAppliedAt?: string | null;
+}
+
+export interface SignedConfigAuditItem {
+  id: string;
+  eventType: string;
+  keyId?: string | null;
+  bundleId?: string | null;
+  edgeId?: string | null;
+  version?: number | null;
+  actorId: string;
+  actorType: string;
+  status: 'SUCCESS' | 'FAILURE';
+  details: Record<string, unknown>;
+  ipAddress?: string | null;
+  createdAt: string;
+}
+
+export const signedConfigApi = {
+  getKeys: () =>
+    fetchApi<{ success: boolean; data: SignedConfigKeyItem[] }>('/v1/edge/config/keys'),
+
+  getPublicKeys: () =>
+    fetchApi<{
+      success: boolean;
+      data: Array<{
+        keyId: string;
+        algorithm: string;
+        publicKeyPem: string | null;
+        keyFingerprint: string;
+        status: string;
+        validFrom: string;
+        validUntil?: string | null;
+      }>;
+    }>('/v1/edge/config/keys/public'),
+
+  generateKey: (body: {
+    keyId?: string;
+    algorithm?: 'RSA-PSS-SHA256' | 'RSA-PKCS1-SHA256' | 'HMAC-SHA256' | 'ED25519';
+    keySize?: number;
+    validDays?: number;
+  }) =>
+    fetchApi<{ success: boolean; data: SignedConfigKeyItem }>('/v1/edge/config/keys/generate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  rotateKey: (keyId: string, body?: { newAlgorithm?: string; keySize?: number }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        retiredKeyId: string;
+        newKeyId: string;
+        newAlgorithm: string;
+        newPublicKeyPem: string | null;
+      };
+    }>(`/v1/edge/config/keys/${encodeURIComponent(keyId)}/rotate`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
+
+  revokeKey: (keyId: string, body: { reason: string }) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        keyId: string;
+        status: string;
+        revokedAt: string;
+        revocationReason: string;
+      };
+    }>(`/v1/edge/config/keys/${encodeURIComponent(keyId)}/revoke`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  signBundle: (body: {
+    edgeId: string;
+    branchId?: string;
+    version: number;
+    previousVersion?: number;
+    payload: Record<string, unknown>;
+    signerIdentity?: string;
+    signerRole?: string;
+    algorithm?: string;
+    keyId?: string;
+    expiresInSeconds?: number;
+  }) =>
+    fetchApi<{ success: boolean; data: SignedConfigBundleItem }>('/v1/edge/config/bundles/sign', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  verifyBundle: (body: Record<string, unknown>) =>
+    fetchApi<{
+      success: boolean;
+      data: {
+        isValid: boolean;
+        algorithm: string;
+        keyId: string;
+        error?: string;
+        canonicalPayloadHash: string;
+        verifiedAt: string;
+      };
+    }>('/v1/edge/config/bundles/verify', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  getDesiredBundle: (edgeId: string) =>
+    fetchApi<{ success: boolean; data: SignedConfigBundleItem }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/desired`
+    ),
+
+  getBundleHistory: (edgeId: string, limit?: number) => {
+    const qs = limit ? `?limit=${limit}` : '';
+    return fetchApi<{ success: boolean; data: SignedConfigBundleItem[] }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/history${qs}`
+    );
+  },
+
+  reportApplied: (
+    edgeId: string,
+    body: {
+      bundleId: string;
+      version: number;
+      appliedHash: string;
+      verificationResult: 'VERIFIED' | 'FAILED' | 'TAMPERED';
+      rejectionReason?: string;
+      edgeAgentVersion?: string;
+    }
+  ) =>
+    fetchApi<{ success: boolean; data: { status: string; isDrifted: boolean } }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/report-applied`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    ),
+
+  getDrift: (edgeId: string) =>
+    fetchApi<{ success: boolean; data: SignedConfigDriftItem }>(
+      `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/drift`
+    ),
+
+  getAuditLogs: (params?: { edgeId?: string; keyId?: string; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.edgeId) qs.append('edgeId', params.edgeId);
+    if (params?.keyId) qs.append('keyId', params.keyId);
+    if (params?.limit) qs.append('limit', String(params.limit));
+    return fetchApi<{ success: boolean; data: SignedConfigAuditItem[] }>(
+      `/v1/edge/config/audit-logs?${qs.toString()}`
+    );
+  },
 };
 
 export { ApiError };

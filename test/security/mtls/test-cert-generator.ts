@@ -77,7 +77,7 @@ IP.1 = 127.0.0.1
   const expiredCsrPath = join(workDir, "expired.csr");
   const expiredCertPath = join(workDir, "expired.crt");
   execSync(`${openssl} req -newkey rsa:2048 -nodes -keyout "${expiredKeyPath}" -out "${expiredCsrPath}" -subj "/CN=expired-agent.internal"`, { stdio: "ignore" });
-  execSync(`${openssl} x509 -req -in "${expiredCsrPath}" -CA "${caCertPath}" -CAkey "${caKeyPath}" -CAcreateserial -out "${expiredCertPath}" -days -30`, { stdio: "ignore" });
+  execSync(`${openssl} x509 -req -in "${expiredCsrPath}" -CA "${caCertPath}" -CAkey "${caKeyPath}" -CAcreateserial -out "${expiredCertPath}" -not_before 20200101000000Z -not_after 20210101000000Z`, { stdio: "ignore" });
 
   // 4. Generate Media Node (different role) Client Cert (SAN: media-node-01.internal)
   const wrongKeyPath = join(workDir, "wrong.key");

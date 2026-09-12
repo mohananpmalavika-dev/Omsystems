@@ -1,8 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { getCapabilityRegistry } from '../../src/capabilities/capability-registry.js';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { getCapabilityRegistry, resetCapabilityRegistry } from '../../src/capabilities/capability-registry.js';
 import { CapabilityMaturity, CapabilityRuntimeState } from '../../packages/contracts/src/capabilities/capability-types.js';
 
 describe('UI Gating & Usability Logic Tests', () => {
+  beforeEach(() => {
+    resetCapabilityRegistry();
+  });
   it('disallows usage when capability is NOT_IMPLEMENTED', () => {
     const registry = getCapabilityRegistry();
     const result = registry.canUse('security.tpm_attestation');
@@ -28,10 +31,15 @@ describe('UI Gating & Usability Logic Tests', () => {
     const registry = getCapabilityRegistry();
     registry.setDeploymentPolicy({ allowBeta: false, allowExperimental: false });
 
-    // security.abac is BETA, so it must be disabled when allowBeta is false
-    const betaResult = registry.canUse('security.abac');
+    // security.saml is BETA and HEALTHY, so it must be disabled when allowBeta is false
+    const betaResult = registry.canUse('security.saml');
     expect(betaResult.usable).toBe(false);
     expect(betaResult.reason).toBe('beta_features_disabled');
+
+    // security.abac is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
+    registry.updateRuntimeState('security.abac', CapabilityRuntimeState.HEALTHY);
+    const abacResult = registry.canUse('security.abac');
+    expect(abacResult.usable).toBe(true);
 
     // ha.recording_failover is PRODUCTION, so when HEALTHY it remains usable even when allowBeta is false
     registry.updateRuntimeState('ha.recording_failover', CapabilityRuntimeState.HEALTHY);

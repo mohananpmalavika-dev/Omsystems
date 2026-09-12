@@ -32,6 +32,7 @@ export interface AuthenticationRequest {
   username?: string;
   password?: string;
   samlResponse?: string;
+  relayState?: string;
   oidcCallback?: {
     code?: string;
     state: string;
@@ -313,33 +314,47 @@ export class IdentityService {
           throw new Error('OIDC callback payload missing');
         }
         const oidcResult = await oidcProvider.handleCallback(req.oidcCallback);
+        const resolvedGroups = (oidcResult.profile.roles && oidcResult.profile.roles.length > 0)
+          ? oidcResult.profile.roles
+          : (oidcResult.profile.groups && oidcResult.profile.groups.length > 0)
+            ? oidcResult.profile.groups
+            : ['BANK_OPERATOR'];
         return {
           providerType: 'OIDC',
-          providerId: 'oidc-provider',
+          providerId: `oidc-${oidcResult.profile.provider || 'provider'}`,
           externalSubject: oidcResult.profile.userId,
           username: oidcResult.profile.email.split('@')[0] || oidcResult.profile.userId,
           email: oidcResult.profile.email,
           displayName: oidcResult.profile.displayName,
           givenName: oidcResult.profile.firstName,
           familyName: oidcResult.profile.lastName,
-          groups: oidcResult.profile.groups || ['BANK_OPERATOR'],
-          attributes: oidcResult.profile.rawClaims || {},
+          groups: resolvedGroups,
+          attributes: {
+            ...oidcResult.profile.rawClaims,
+            tenantId: oidcResult.tenantId,
+            provider: oidcResult.profile.provider,
+            hostedDomain: oidcResult.profile.hostedDomain,
+          },
         };
       }
       case 'SAML': {
         if (!req.samlResponse) {
           throw new Error('SAMLResponse assertion missing');
         }
-        const samlResult = await samlProvider.validateResponse(req.samlResponse);
+        const samlResult = await samlProvider.validateResponse(req.samlResponse, req.relayState, req.tenantId);
         return {
           providerType: 'SAML',
-          providerId: 'saml-provider',
+          providerId: `saml-${samlResult.tenantId || req.tenantId || 'provider'}`,
           externalSubject: samlResult.nameId,
           username: (samlResult.email || samlResult.nameId).split('@')[0] || samlResult.nameId,
           email: samlResult.email || `${samlResult.nameId}@bank.sso`,
           displayName: samlResult.displayName || samlResult.nameId,
-          groups: samlResult.groups || ['BANK_OPERATOR'],
-          attributes: samlResult.attributes || {},
+          groups: samlResult.groups && samlResult.groups.length > 0 ? samlResult.groups : ['BANK_OPERATOR'],
+          attributes: {
+            ...samlResult.attributes,
+            tenantId: samlResult.tenantId,
+            sessionIndex: samlResult.sessionIndex,
+          },
         };
       }
       case 'LDAP': {

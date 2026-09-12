@@ -44,6 +44,7 @@ import { registerCentralMonitoringRoutes } from "./routes/central-monitoring.rou
 import { registerOnDemandMediaRoutes } from "./routes/on-demand-media.routes.js";
 import { registerEdgeTelemetryRoutes } from "./routes/edge-telemetry.routes.js";
 import { moduleRegistry } from "./platform/module-registry.service.js";
+import type { ApplicationDependencies } from "./bootstrap/index.js";
 import { registerMaintenanceWindowsRoutes } from "./routes/maintenance-windows.routes.js";
 import { registerUnifiedOperationsRoutes } from "./routes/unified-operations.routes.js";
 import { registerCctvInfrastructureRoutes } from "./routes/cctv-infrastructure.js";
@@ -143,6 +144,9 @@ import { registerEnterpriseStorageRoutes } from "./routes/enterprise-storage.rou
 import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.js";
 import { registerMediaGatewayFailoverRoutes } from "./routes/media-gateway-failover.routes.js";
 import { registerMtlsRoutes } from "./routes/mtls.routes.js";
+import { registerAbacRoutes } from "./routes/abac.routes.js";
+import { registerSignedConfigurationRoutes } from "./routes/signed-configuration.routes.js";
+import { registerLdapSyncRoutes } from "./routes/ldap-sync.routes.js";
 import { mtlsAuthenticator } from "./security/mtls/index.js";
 import { registerOnvifRoutes } from "./routes/onvif.routes.js";
 import { registerSloRoutes } from "./routes/slo.routes.js";
@@ -151,7 +155,7 @@ import { registerClientMediaSchedulerRoutes } from "./routes/client-media-schedu
 import { registerAiQualityRoutes } from "./routes/ai-quality.routes.js";
 import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-operations.routes.js";
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
-import { initializeRedisService } from "../backend/src/services/redis.service.js";
+import { redisModule } from "./bootstrap/redis.module.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
@@ -498,6 +502,8 @@ export async function buildApp(options?: {
   recorderProviderResolver?: RecorderProviderResolver;
   /** Optional device configuration service orchestrator. */
   deviceConfigurationService?: DeviceConfigurationService;
+  /** Authoritative bootstrap dependencies */
+  dependencies?: Partial<ApplicationDependencies>;
 }): Promise<FastifyInstance> {
   // PRODUCTION SECRET VALIDATION
   // In production mode, validate all critical secrets before proceeding
@@ -509,7 +515,7 @@ export async function buildApp(options?: {
   
   if (shouldValidateSecrets) {
     try {
-      const { validateProductionSecrets } = await import('../backend/src/services/production-secret-validator.service.js');
+      const { validateProductionSecrets } = await import('./security/production-secret-validator.service.js');
       validateProductionSecrets();
       console.log('✅ Production secret validation passed');
     } catch (error) {
@@ -595,7 +601,7 @@ export async function buildApp(options?: {
   // be served by any control-plane replica.
   let analyticsFrameRedis: any;
   try {
-    analyticsFrameRedis = (await initializeRedisService()).getClient();
+    analyticsFrameRedis = redisModule.getClient();
   } catch (error) {
     if (process.env.NODE_ENV === "production") throw error;
     app.log.warn({ error }, "Redis unavailable; recent analytics frames are local to this development instance");
@@ -707,8 +713,15 @@ export async function buildApp(options?: {
         endpoint: request.url,
       });
       if (mtlsValidationResult.valid) {
+        const ingressAgentId = edgeAgentIngressRoute ? edgeAgentIdFromIngress(request) : undefined;
+        if (ingressAgentId && mtlsValidationResult.nodeId && mtlsValidationResult.nodeId !== ingressAgentId) {
+          return reply.code(401).send({
+            error: "invalid_client_certificate",
+            reason: `Certificate pinned for node '${mtlsValidationResult.nodeId}' cannot access endpoint for '${ingressAgentId}'`,
+          });
+        }
         edgeMtlsAuthenticated = true;
-      } else if (process.env.EDGE_MTLS_ENFORCED === "true") {
+      } else {
         return reply.code(401).send({
           error: "invalid_client_certificate",
           reason: mtlsValidationResult.rejectionReason,
@@ -849,19 +862,8 @@ export async function buildApp(options?: {
       moduleRegistry.updateStatus("redis", "DEGRADED", "Operating in standalone / local mode without Redis");
     }
 
-    // Mark other core components as READY if base connections are intact
-    if (moduleRegistry.getStatus("database")?.state === "READY") {
-      moduleRegistry.updateStatus("recordingIndex", "READY", "Recording index durable tables verified");
-      moduleRegistry.updateStatus("evidenceService", "READY", "Forensic evidence pipeline active");
-      moduleRegistry.updateStatus("audit", "READY", "Audit ledger operational");
-      moduleRegistry.updateStatus("identity", "READY", "Identity provider active");
-    }
-    if (moduleRegistry.getStatus("redis")?.state === "READY" || process.env.MEDIA_STATE_MODE === "standalone") {
-      moduleRegistry.updateStatus("mediaOrchestration", "READY", "Media lease fencing coordinator active");
-      moduleRegistry.updateStatus("eventBus", "READY", "Distributed event bus connected");
-    }
-
-    const readiness = moduleRegistry.evaluateReadiness();
+    // Authoritatively evaluate registered module readiness contributors
+    const readiness = await moduleRegistry.evaluateReadinessAsync();
     if (!readiness.isReady) {
       return reply.code(503).send(readiness);
     }
@@ -2647,7 +2649,7 @@ export async function buildApp(options?: {
       }
     }
   }
-  await registerPrivacyRoutes(app, store);
+  await registerPrivacyRoutes(app, store, options?.dependencies?.privacyService ?? undefined);
   await registerReportsRoutes(app, store);
   await registerOperationalReportRoutes(app, store, operationalReportWorker, {
     downloadSecret: reportDownloadSecret, exportRoot: reportExportRoot,
@@ -2655,6 +2657,7 @@ export async function buildApp(options?: {
   });
   await registerEvidenceRoutes(app, store, exportWorker);
   await registerHsmSigningRoutes(app, store);
+  await registerSignedConfigurationRoutes(app, store);
   await registerLiveOperationsRoutes(app, store);
   registerMediaSessionRoutes(app, store);
   
@@ -3087,47 +3090,65 @@ export async function buildApp(options?: {
 
   // Register Distributed Media Orchestrator & Stream Scheduler routes
   try {
-    let redis: unknown;
-    try {
-      redis = (await initializeRedisService()).getClient();
-    } catch (error) {
-      if (process.env.NODE_ENV === "production") throw error;
-      app.log.warn({ error }, "Redis unavailable; media orchestration is using development-only in-memory state");
+    let mediaOrchestrator = options?.dependencies?.mediaOrchestrator;
+    if (!mediaOrchestrator) {
+      let redis: unknown;
+      try {
+        redis = redisModule.getClient();
+      } catch (error) {
+        if (process.env.NODE_ENV === "production") throw error;
+        app.log.warn({ error }, "Redis unavailable; media orchestration is using development-only in-memory state");
+      }
+      const streamLeaseRepo = new RedisStreamLeaseRepository(redis);
+      const gatewayRegistry = new RedisMediaGatewayRegistry(redis);
+      const sessionRepo = new RedisViewerSessionRepository(redis);
+      const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
+      mediaOrchestrator = new MediaOrchestrator(
+        streamLeaseRepo,
+        gatewayRegistry,
+        sessionRepo,
+        capabilityRepo,
+      );
     }
-    const streamLeaseRepo = new RedisStreamLeaseRepository(redis);
-    const gatewayRegistry = new RedisMediaGatewayRegistry(redis);
-    const sessionRepo = new RedisViewerSessionRepository(redis);
-    const capabilityRepo = new PostgresCameraCapabilityRepository(pool);
-    const mediaOrchestrator = new MediaOrchestrator(
-      streamLeaseRepo,
-      gatewayRegistry,
-      sessionRepo,
-      capabilityRepo,
-    );
     await registerMediaOrchestratorRoutes(app, mediaOrchestrator, store);
     await registerClientMediaSchedulerRoutes(app, store);
     app.log.info("Distributed Media Orchestration & Client Scheduler routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register media orchestration routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register Stateful Incident Playbook Engine & Dynamic Operator SOP routes
   try {
-    const playbookEngine = new PlaybookEngineService();
+    let playbookEngine = options?.dependencies?.playbookEngine;
+    if (!playbookEngine) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("INCIDENT_STORE_UNAVAILABLE: PlaybookEngineService requires PostgreSQL pool in production");
+      }
+      playbookEngine = new PlaybookEngineService();
+    }
     await registerPlaybookEngineRoutes(app, playbookEngine, store);
     await registerInvestigationWorkspaceRoutes(app, store, playbookEngine);
     app.log.info("Stateful Incident Playbook Engine & Dynamic Operator SOP routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register incident playbook engine routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register AI Quality, Model Registry, Benchmarks & Certification routes
   try {
-    const aiQualityPlatform = new AIQualityPlatformFacade();
+    let aiQualityPlatform = options?.dependencies?.aiQuality;
+    if (!aiQualityPlatform) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("AI_QUALITY_STORE_UNAVAILABLE: AIQualityPlatformFacade requires PostgreSQL pool in production");
+      }
+      aiQualityPlatform = new AIQualityPlatformFacade();
+    }
     await registerAiQualityRoutes(app, aiQualityPlatform);
     app.log.info("AI Model Quality, Evaluation & Certification Platform routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register AI quality platform routes");
+    if (process.env.NODE_ENV === "production") throw err;
   }
 
   // Register Enterprise SOC Operations (Signed Config, Edge Lifecycle, Clock Drift, Maps, SOC Analytics, Maintenance, Deterministic RCA)
@@ -3223,10 +3244,14 @@ export async function buildApp(options?: {
     await registerStorageFailoverRoutes(app);
     await registerMediaGatewayFailoverRoutes(app);
     await registerMtlsRoutes(app, store);
+    await registerAbacRoutes(app, store);
+    if (pool) {
+      await registerLdapSyncRoutes(app, pool);
+    }
     await registerOnvifRoutes(app);
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, and CEO Screen routes registered");
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, and LDAP Sync routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }

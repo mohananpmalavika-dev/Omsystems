@@ -256,6 +256,144 @@ export class PostgresDetectorRegistryRepository {
     return this.memoryModels.get(id) || null;
   }
 
+  async listModelVersions(detectorId?: string): Promise<ModelVersion[]> {
+    if (this.pool) {
+      try {
+        const query = detectorId
+          ? `SELECT mv.id, m.detector_id, mv.version, m.name as model_name, m.framework,
+                    mv.weights_uri, mv.sha256, mv.input_resolution_width, mv.input_resolution_height,
+                    mv.default_threshold, mv.certification_state, mv.created_at
+             FROM ai_model_versions mv
+             JOIN ai_models m ON m.id = mv.model_id
+             WHERE m.detector_id = $1 ORDER BY mv.created_at DESC`
+          : `SELECT mv.id, m.detector_id, mv.version, m.name as model_name, m.framework,
+                    mv.weights_uri, mv.sha256, mv.input_resolution_width, mv.input_resolution_height,
+                    mv.default_threshold, mv.certification_state, mv.created_at
+             FROM ai_model_versions mv
+             JOIN ai_models m ON m.id = mv.model_id
+             ORDER BY mv.created_at DESC`;
+        const params = detectorId ? [detectorId] : [];
+        const res = await this.pool.query(query, params);
+        return res.rows.map((r) => ({
+          id: r.id,
+          detectorId: r.detector_id,
+          version: r.version,
+          modelName: r.model_name,
+          framework: r.framework,
+          artifactUri: r.weights_uri,
+          artifactSha256: r.sha256,
+          inputWidth: r.input_resolution_width,
+          inputHeight: r.input_resolution_height,
+          defaultThreshold: Number(r.default_threshold),
+          lifecycle: r.certification_state === "CERTIFIED" ? "production" : "candidate",
+          createdAt: new Date(r.created_at).toISOString(),
+          createdBy: "system",
+        }));
+      } catch (err) {
+        console.warn("[PostgresDetectorRegistryRepo] listModelVersions DB error:", err);
+      }
+    }
+    const list = Array.from(this.memoryModels.values());
+    return detectorId ? list.filter((m) => m.detectorId === detectorId) : list;
+  }
+
+  async saveModelVersion(model: ModelVersion): Promise<void> {
+    if (this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO ai_model_versions (
+             id, model_id, version, weights_uri, sha256, input_resolution_width, input_resolution_height, default_threshold, certification_state, created_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (id) DO UPDATE SET
+             certification_state = EXCLUDED.certification_state,
+             default_threshold = EXCLUDED.default_threshold`,
+          [
+            model.id,
+            model.detectorId,
+            model.version,
+            model.artifactUri,
+            model.artifactSha256,
+            model.inputWidth,
+            model.inputHeight,
+            model.defaultThreshold,
+            model.lifecycle === "production" ? "CERTIFIED" : "CANDIDATE",
+            new Date(model.createdAt),
+          ],
+        );
+      } catch (err) {
+        console.warn("[PostgresDetectorRegistryRepo] saveModelVersion DB error:", err);
+      }
+    }
+    this.memoryModels.set(model.id, model);
+  }
+
+  async saveDetector(detector: Detector): Promise<void> {
+    if (this.pool) {
+      try {
+        await this.pool.query(
+          `INSERT INTO ai_detectors (
+             id, name, code, description, category, current_production_model_id, is_active, created_at, updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             current_production_model_id = EXCLUDED.current_production_model_id,
+             updated_at = EXCLUDED.updated_at`,
+          [
+            detector.id,
+            detector.name,
+            detector.code,
+            detector.description,
+            detector.category,
+            detector.currentProductionModelId || null,
+            detector.status === "certified",
+            new Date(detector.createdAt),
+            new Date(detector.updatedAt),
+          ],
+        );
+      } catch (err) {
+        console.warn("[PostgresDetectorRegistryRepo] saveDetector DB error:", err);
+      }
+    }
+    this.memoryDetectors.set(detector.id, detector);
+  }
+
+  async getDatasetVersion(id: string): Promise<DatasetVersion | null> {
+    return {
+      id: id || "ds-default",
+      name: "Default Dataset",
+      version: "1.0",
+      purpose: "validation",
+      videoCount: 100,
+      durationHours: 50,
+      positiveSamples: 1000,
+      negativeSamples: 4000,
+      manifestUri: `datasets/${id}/manifest.json`,
+      manifestSha256: "0000000000000000000000000000000000000000000000000000000000000000",
+      branchesRepresentedCount: 10,
+      distribution: {
+        dayPercent: 50,
+        nightPercent: 50,
+        indoorPercent: 80,
+        outdoorPercent: 20,
+        rainPercent: 0,
+        lowLightPercent: 30,
+      },
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async getHardwareProfile(id: string): Promise<HardwareProfile | null> {
+    return this.memoryHardware.get(id) || {
+      id: id || "hw-default",
+      name: "Default GPU",
+      chipset: "NVIDIA",
+      gpuModel: "RTX A4000",
+      gpuMemoryGb: 16,
+      ramGb: 64,
+      os: "Ubuntu 22.04 LTS",
+      isEdgeDevice: false,
+    };
+  }
+
   /**
    * Commissioning: Evaluates camera physical specs before allowing detector activation.
    * Prevents administrators from blindly enabling unsuitable detectors.

@@ -6,12 +6,37 @@ export class PostgresPlaybookDefinitionRepository {
 
   constructor(private readonly pool?: Pool) {
     if (!this.pool) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("INCIDENT_STORE_UNAVAILABLE: PostgresPlaybookDefinitionRepository requires a PostgreSQL pool in production");
+      }
       this.seedDefaultPlaybooksInMemory();
     }
   }
 
-  private seedDefaultPlaybooksInMemory(): void {
-    const vaultIntrusionP1: PlaybookDefinition = {
+  async ensureDefaultPlaybooksSeeded(): Promise<void> {
+    if (!this.pool) return;
+    const defaults = [
+      this.getVaultIntrusionDefinition(),
+      this.getAtmTamperDefinition(),
+      this.getCashierDuressDefinition(),
+    ];
+    for (const pb of defaults) {
+      try {
+        const existing = await this.getById(pb.id);
+        if (!existing) {
+          await this.registerPlaybook(pb);
+        }
+      } catch (err) {
+        if (process.env.NODE_ENV === "production") {
+          throw new Error(`INCIDENT_STORE_UNAVAILABLE: Failed to seed required banking playbooks: ${(err as Error).message}`);
+        }
+        console.warn("[PostgresPlaybookDefinitionRepo] Failed to seed default playbook:", pb.id, err);
+      }
+    }
+  }
+
+  private getVaultIntrusionDefinition(): PlaybookDefinition {
+    return {
       id: "vault-intrusion-p1",
       name: "P1 Vault Intrusion & Breach Response",
       version: 1,
@@ -58,87 +83,106 @@ export class PostgresPlaybookDefinitionRepository {
           order: 3,
           type: "AUTOMATED_CHECK",
           title: "Verify Branch Operational Status",
-          description: "System verifies branch opening status and holiday schedule.",
+          description: "Check if branch is operating within authorized hours or arming schedule.",
           mandatory: true,
+          dependsOn: ["step-1-live-verification"],
+          estimatedDurationSeconds: 15,
         },
         {
-          id: "step-4-access-control",
+          id: "step-4-audio-listen",
           order: 4,
-          type: "AUTOMATED_CHECK",
-          title: "Query Access Control & Door Sensors",
-          description: "System queries badge entries in last 15 minutes.",
-          mandatory: true,
+          type: "OPERATOR_ACTION",
+          title: "Listen to Vault Audio Level & Talkback Probe",
+          description: "Check for drilling noise, glass-break, or human speech in vault zone.",
+          mandatory: false,
+          estimatedDurationSeconds: 30,
         },
         {
-          id: "step-5-call-manager",
+          id: "step-5-assess-threat",
           order: 5,
-          type: "EXTERNAL_CALL",
-          title: "Call Branch Manager / Key Holder",
-          description: "Initiate emergency contact call to registered branch manager.",
+          type: "DECISION",
+          title: "Assess Threat Classification",
+          description: "Determine if alarm is Confirmed Breach, Suspicious Activity, False Alarm, or Equipment Fault.",
           mandatory: true,
-          escalationTimeoutSeconds: 60,
+          dependsOn: ["step-2-review-evidence"],
+          decisionOutputs: [
+            { choice: "confirmed_breach", label: "Confirmed Physical Breach", nextStepId: "step-6-talkback-challenge" },
+            { choice: "suspicious_activity", label: "Suspicious Activity", nextStepId: "step-6-talkback-challenge" },
+            { choice: "false_alarm", label: "False Alarm (Insects/Lighting)", nextStepId: "step-10-incident-report" },
+            { choice: "equipment_fault", label: "Sensor / Camera Malfunction", nextStepId: "step-10-incident-report" },
+          ],
+          estimatedDurationSeconds: 45,
         },
         {
-          id: "step-6-notify-security",
+          id: "step-6-talkback-challenge",
           order: 6,
-          type: "NOTIFICATION",
-          title: "Notify Regional Security Control Room",
-          description: "Send priority push notification to Regional Security Officer.",
-          mandatory: true,
+          type: "OPERATOR_ACTION",
+          title: "Voice Challenge via Two-Way Audio",
+          description: "Issue loud verbal warning over vault/branch IP speaker: 'Attention, security has identified unauthorized entry. Police and armed response are dispatched.'",
+          mandatory: false,
+          dependsOn: ["step-5-assess-threat"],
+          estimatedDurationSeconds: 30,
         },
         {
-          id: "step-7-escalate-sla",
+          id: "step-7-law-enforcement",
           order: 7,
           type: "ESCALATION",
-          title: "Escalate if Not Acknowledged Within SLA",
-          description: "Automatic escalation to Head Office SOC.",
+          title: "Notify Local Police & Armed Response (PCR)",
+          description: "Dispatch local police station and bank emergency reaction force. Log dispatch time.",
           mandatory: true,
+          dependsOn: ["step-5-assess-threat"],
+          escalationTimeoutSeconds: 300,
+          estimatedDurationSeconds: 60,
         },
         {
-          id: "step-8-decision-classification",
+          id: "step-8-branch-officials",
           order: 8,
-          type: "DECISION",
-          title: "Record Operator Classification & Threat Level",
-          description: "Classify incident based on camera footage.",
+          type: "NOTIFICATION",
+          title: "Contact Branch Manager & Circle Security Officer",
+          description: "Call primary Branch Manager, Secondary Key Holder, and Circle Security Lead.",
           mandatory: true,
-          decisionOutputs: [
-            { choice: "CONFIRMED_INTRUSION", label: "🚨 Confirmed Intrusion" },
-            { choice: "AUTHORIZED_ACTIVITY", label: "✅ Authorized Keyholder" },
-            { choice: "FALSE_POSITIVE", label: "⚠️ False Alarm" },
-          ],
+          dependsOn: ["step-5-assess-threat"],
+          estimatedDurationSeconds: 120,
         },
         {
-          id: "step-9-capture-evidence",
+          id: "step-9-evidence-hold",
           order: 9,
-          type: "EVIDENCE_REVIEW",
-          title: "Capture Evidence Package",
-          description: "Seal footage and snapshot into evidence vault.",
+          type: "AUTOMATED_CHECK",
+          title: "Place Legal Hold & Lock Continuous Video (T-1h to T+1h)",
+          description: "Tag recording segments with immutable forensic hold to block retention deletion.",
           mandatory: true,
+          dependsOn: ["step-5-assess-threat"],
+          automatedAction: { service: "evidenceService", method: "legalHold", params: { targetScope: "BRANCH_WIDE" } },
+          estimatedDurationSeconds: 30,
         },
         {
-          id: "step-10-mandatory-closure",
+          id: "step-10-incident-report",
           order: 10,
           type: "RESOLUTION_GATE",
-          title: "Mandatory Closure Reason",
-          description: "Enforce verified resolution reason and supervisor signoff.",
+          title: "Complete Banking Regulatory Resolution Dossier",
+          description: "Provide root cause, dispatch outcome, false alarm categorization, and signoff.",
           mandatory: true,
+          dependsOn: ["step-5-assess-threat"],
+          estimatedDurationSeconds: 180,
         },
       ],
     };
+  }
 
-    const panicAlarmP1: PlaybookDefinition = {
-      id: "panic-alarm-p1",
-      name: "P1 Panic Button & Robbery Response",
+  private getAtmTamperDefinition(): PlaybookDefinition {
+    return {
+      id: "atm-tamper-p1",
+      name: "P1 ATM Tamper & Skimmer Detection SOP",
       version: 1,
-      description: "Immediate emergency procedure triggered by teller counter panic switch.",
+      description: "Mandatory response procedure for ATM hood removal, vibration sensor breach, or skimmer installation.",
       category: "banking_security",
       trigger: {
-        incidentType: "PANIC_ALARM",
+        incidentType: "ATM_TAMPER",
         severity: "P1",
       },
       resolutionPolicy: {
         requireMandatorySteps: true,
-        allowOverride: true,
+        allowOverride: false,
         overridePermission: "incident.resolve.override",
         requireClassification: true,
         requireRootCause: true,
@@ -148,42 +192,132 @@ export class PostgresPlaybookDefinitionRepository {
       updatedAt: "2026-08-16T00:00:00Z",
       steps: [
         {
-          id: "step-1-live-teller-video",
+          id: "step-1-pinhole-stream",
           order: 1,
           type: "LIVE_VIDEO_REVIEW",
-          title: "Verify Live Teller Cameras",
-          description: "Open live audio/video wall for cashier desk.",
+          title: "Verify Pinhole & Fascia Camera",
+          description: "Check live feed from ATM chest, pinhole, and lobby cameras.",
           mandatory: true,
+          evidenceRequirements: { requireLiveVerification: true },
+          estimatedDurationSeconds: 30,
         },
         {
-          id: "step-2-virtual-guard-talkdown",
+          id: "step-2-evaluate-tamper",
           order: 2,
-          type: "OPERATOR_ACTION",
-          title: "Activate Two-Way Virtual Guard Talkdown",
-          description: "Broadcast warning over IP horn speakers.",
+          type: "DECISION",
+          title: "Evaluate Physical Tampering Evidence",
+          description: "Classify tampering: Skimmer attachment, physical vandalism, cash trap, or maintenance work.",
           mandatory: true,
+          dependsOn: ["step-1-pinhole-stream"],
+          decisionOutputs: [
+            { choice: "skimmer_detected", label: "Card Skimmer / Overlay Device Attached", nextStepId: "step-3-notify-switch" },
+            { choice: "physical_vandalism", label: "Physical Attack on Cash Dispenser", nextStepId: "step-3-notify-switch" },
+            { choice: "authorized_vendor", label: "Authorized ATM Engineer Maintenance", nextStepId: "step-4-atm-report" },
+            { choice: "sensor_glitch", label: "Vibration Sensor False Alarm", nextStepId: "step-4-atm-report" },
+          ],
+          estimatedDurationSeconds: 45,
         },
         {
-          id: "step-3-police-dispatch",
+          id: "step-3-notify-switch",
           order: 3,
           type: "ESCALATION",
-          title: "Dispatch Police & Mobile QRT",
-          description: "Trigger emergency dispatch.",
+          title: "Notify ATM Switch to Temporarily Disable Terminal",
+          description: "Issue command or call bank ATM switch operations to put terminal in out-of-service state.",
           mandatory: true,
+          dependsOn: ["step-2-evaluate-tamper"],
+          estimatedDurationSeconds: 60,
         },
         {
-          id: "step-4-panic-resolution",
+          id: "step-4-atm-report",
           order: 4,
           type: "RESOLUTION_GATE",
-          title: "Resolution Gate",
-          description: "Verify safety clearance prior to closure.",
+          title: "Log ATM Incident Dossier",
+          description: "Submit evidence clips and incident details to Banking Fraud Cell.",
           mandatory: true,
+          dependsOn: ["step-2-evaluate-tamper"],
+          estimatedDurationSeconds: 90,
         },
       ],
     };
+  }
 
-    this.memoryPlaybooks.set(vaultIntrusionP1.id, vaultIntrusionP1);
-    this.memoryPlaybooks.set(panicAlarmP1.id, panicAlarmP1);
+  private getCashierDuressDefinition(): PlaybookDefinition {
+    return {
+      id: "cashier-duress-p1",
+      name: "P1 Cashier Cabin Duress / Panic Alarm Response",
+      version: 1,
+      description: "Critical SOP for cashier silent panic button press, counter robbery, or teller threat.",
+      category: "banking_security",
+      trigger: {
+        incidentType: "CASHIER_DURESS",
+        severity: "P1",
+      },
+      resolutionPolicy: {
+        requireMandatorySteps: true,
+        allowOverride: false,
+        overridePermission: "incident.resolve.override",
+        requireClassification: true,
+        requireRootCause: true,
+      },
+      status: "ACTIVE",
+      createdAt: "2026-01-01T00:00:00Z",
+      updatedAt: "2026-08-16T00:00:00Z",
+      steps: [
+        {
+          id: "step-1-silent-counter-view",
+          order: 1,
+          type: "LIVE_VIDEO_REVIEW",
+          title: "Covert Live View of Cashier Counters",
+          description: "Review all counter cameras immediately. Do NOT emit audio into branch.",
+          mandatory: true,
+          evidenceRequirements: { requireLiveVerification: true },
+          estimatedDurationSeconds: 15,
+        },
+        {
+          id: "step-2-panic-assessment",
+          order: 2,
+          type: "DECISION",
+          title: "Confirm Active Robbery / Hostage Situation",
+          description: "Confirm whether panic button activation is active holdup or accidental foot-press.",
+          mandatory: true,
+          dependsOn: ["step-1-silent-counter-view"],
+          decisionOutputs: [
+            { choice: "active_robbery", label: "Active Armed Robbery / Hostage Threat", nextStepId: "step-3-silent-police-dispatch" },
+            { choice: "accidental_press", label: "Accidental Panic Button Press (Verified Safe)", nextStepId: "step-4-duress-report" },
+          ],
+          estimatedDurationSeconds: 30,
+        },
+        {
+          id: "step-3-silent-police-dispatch",
+          order: 3,
+          type: "ESCALATION",
+          title: "Immediate Silent Police & Armed Response Dispatch",
+          description: "Call City Police Control Room. Clearly state SILENT ALARM - Armed Robbery in Progress.",
+          mandatory: true,
+          dependsOn: ["step-2-panic-assessment"],
+          estimatedDurationSeconds: 30,
+        },
+        {
+          id: "step-4-duress-report",
+          order: 4,
+          type: "RESOLUTION_GATE",
+          title: "Complete Panic Alarm Audit & Regulatory Notice",
+          description: "Record teller statement, dispatch notes, and camera footage archive reference.",
+          mandatory: true,
+          dependsOn: ["step-2-panic-assessment"],
+          estimatedDurationSeconds: 90,
+        },
+      ],
+    };
+  }
+
+  private seedDefaultPlaybooksInMemory(): void {
+    const vault = this.getVaultIntrusionDefinition();
+    const atm = this.getAtmTamperDefinition();
+    const duress = this.getCashierDuressDefinition();
+    this.memoryPlaybooks.set(vault.id, vault);
+    this.memoryPlaybooks.set(atm.id, atm);
+    this.memoryPlaybooks.set(duress.id, duress);
   }
 
   async getById(playbookId: string): Promise<PlaybookDefinition | null> {

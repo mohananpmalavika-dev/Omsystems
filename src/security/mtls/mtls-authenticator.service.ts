@@ -115,7 +115,7 @@ export class MtlsAuthenticatorService implements IMtlsAuthenticatorService {
       role: pin.role,
       certFingerprint: fingerprint,
       allowedSans: pin.allowedSans,
-      notAfter: pin.notAfterMs,
+      notAfter: pin.notAfterMs ? new Date(pin.notAfterMs) : undefined,
     }).catch((err) => {
       console.error(`[mTLS] Error persisting certificate pin ${fingerprint}:`, err);
     });

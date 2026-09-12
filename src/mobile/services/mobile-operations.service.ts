@@ -12,7 +12,6 @@ import type {
 } from "../domain/mobile-operations.types.js";
 import { AlertOperationsService } from "../../alerts/services/alert-operations.service.js";
 import type { ControlPlaneStore } from "../../control-plane-store.js";
-import { branchHealthEvaluator } from "../../../backend/src/operational-health/services/branch-health-evaluator.service.js";
 
 /**
  * Production Mobile Operations Service
