@@ -29,6 +29,8 @@ import {
   type EvidenceSigningProvider,
 } from "../signing/evidence-signing-provider.js";
 
+import { pool as globalPool } from "../../database/pool.js";
+
 /** 
  * Durable Evidence Capture Pipeline Service
  * Enforces PostgreSQL backing store with idempotent 8-stage state machine.
@@ -43,13 +45,21 @@ export class EvidenceCapturePipelineService {
     private readonly policyService: EvidencePolicyService = evidencePolicyService,
     private readonly storageService: EvidenceStorageService = evidenceStorageService,
     private readonly recordingClient?: AlertEvidenceClient,
-    private readonly pool?: Pool,
+    private pool?: Pool,
     signingProvider?: EvidenceSigningProvider,
   ) {
     this.signingProvider = signingProvider || getEvidenceSigningProvider();
-    if (process.env.NODE_ENV === "production" && !this.pool) {
-      throw new Error("EVIDENCE_STORE_UNAVAILABLE: EvidenceCapturePipelineService requires a PostgreSQL pool in production");
+    if (!this.pool && globalPool) {
+      this.pool = globalPool;
     }
+  }
+
+  public setPool(databasePool: Pool): void {
+    this.pool = databasePool;
+  }
+
+  private getActivePool(): Pool | null {
+    return this.pool || globalPool;
   }
 
   async enqueueEvidenceCapture(request: EvidenceJobRequest): Promise<AlertEvidenceRecord> {
@@ -78,9 +88,10 @@ export class EvidenceCapturePipelineService {
       createdAt: new Date(),
     };
 
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        await this.pool.query(
+        await activePool.query(
           `INSERT INTO evidence_capture_jobs (
              id, tenant_id, branch_id, camera_id, alert_id, incident_id, alert_type, severity,
              status, requested_start_at, requested_end_at, detected_at, pre_event_seconds, post_event_seconds,
@@ -111,6 +122,8 @@ export class EvidenceCapturePipelineService {
         }
         console.warn("[EvidencePipeline] DB enqueue failed, fallback memory:", err);
       }
+    } else if (process.env.NODE_ENV === "production") {
+      throw new Error("EVIDENCE_STORE_UNAVAILABLE: EvidenceCapturePipelineService requires a PostgreSQL pool in production");
     }
 
     this.memoryRecords.set(request.alertId, record);
@@ -231,10 +244,11 @@ export class EvidenceCapturePipelineService {
       }
 
       // Persist to PostgreSQL if available
-      if (this.pool) {
+      const activePool = this.getActivePool();
+      if (activePool) {
         try {
           if (record.videoClip) {
-            await this.pool.query(
+            await activePool.query(
               `INSERT INTO evidence_assets (
                  id, job_id, asset_type, file_name, mime_type, byte_size, sha256, storage_node, storage_path, duration_seconds, created_at
                ) VALUES ($1, $2, 'clip', $3, $4, $5, $6, 'primary', $7, $8, NOW())
@@ -252,7 +266,7 @@ export class EvidenceCapturePipelineService {
             );
           }
           if (record.snapshot) {
-            await this.pool.query(
+            await activePool.query(
               `INSERT INTO evidence_assets (
                  id, job_id, asset_type, file_name, mime_type, byte_size, sha256, storage_node, storage_path, created_at
                ) VALUES ($1, $2, 'snapshot', $3, $4, $5, $6, 'primary', $7, NOW())
@@ -269,7 +283,7 @@ export class EvidenceCapturePipelineService {
             );
           }
 
-          await this.pool.query(
+          await activePool.query(
             `INSERT INTO evidence_manifests (
                id, job_id, tenant_id, alert_id, branch_id, camera_id, capture_start, capture_end,
                device_timestamp, server_timestamp, capture_reason, asset_sha256, manifest_sha256,
@@ -315,9 +329,10 @@ export class EvidenceCapturePipelineService {
   }
 
   async getEvidenceForAlert(alertId: string): Promise<AlertEvidenceRecord | null> {
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        const res = await this.pool.query(
+        const res = await activePool.query(
           `SELECT * FROM evidence_capture_jobs WHERE alert_id = $1 ORDER BY created_at DESC LIMIT 1`,
           [alertId],
         );
@@ -353,9 +368,10 @@ export class EvidenceCapturePipelineService {
   }
 
   async getManifest(evidenceId: string): Promise<EvidenceManifest | null> {
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        const res = await this.pool.query(
+        const res = await activePool.query(
           `SELECT * FROM evidence_manifests WHERE job_id = $1 OR id = $1 LIMIT 1`,
           [evidenceId],
         );
@@ -410,9 +426,10 @@ export class EvidenceCapturePipelineService {
   }
 
   private async updateJobStatus(jobId: string, status: string, latencyMs?: number): Promise<void> {
-    if (this.pool) {
+    const activePool = this.getActivePool();
+    if (activePool) {
       try {
-        await this.pool.query(
+        await activePool.query(
           `UPDATE evidence_capture_jobs SET status = $1, latency_ms = COALESCE($2, latency_ms), updated_at = NOW(), completed_at = CASE WHEN $1 IN ('COMPLETE', 'FAILED', 'PARTIAL') THEN NOW() ELSE completed_at END WHERE id = $3`,
           [status, latencyMs || null, jobId],
         );
