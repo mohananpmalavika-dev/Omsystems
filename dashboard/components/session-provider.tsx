@@ -73,27 +73,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [sessionReady, setSessionReady] = useState(isPublicRoute);
 
   useEffect(() => {
-    const logoutOnPageUnload = (event: PageTransitionEvent) => {
-      if (event.persisted || sessionStorage.getItem('sentinel_browser_session') !== 'active') return;
-
-      // sendBeacon is designed to finish while the document is closing and
-      // includes the current same-origin session cookie automatically.
-      navigator.sendBeacon(
-        '/api/control/v1/auth/logout',
-        new Blob(['{}'], { type: 'application/json' }),
-      );
-      sessionStorage.removeItem('sentinel_browser_session');
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('sentinel_login_time');
-    };
-
-    window.addEventListener('pagehide', logoutOnPageUnload);
-    return () => window.removeEventListener('pagehide', logoutOnPageUnload);
-  }, []);
-
-  useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     if (isPublicRoute) {
@@ -108,22 +87,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
     const validateSession = async () => {
       try {
-        const hasActiveSession = await syncSessionFromOpenTabs();
+        // Attempt to sync active session from open tabs if present
+        await syncSessionFromOpenTabs();
         if (cancelled) return;
 
-        // If no active session in this tab or any open tab, the browser was closed!
-        // Terminate any restored session and redirect to login.
-        if (!hasActiveSession) {
-          try { await authApi.logout(); } catch {}
-          redirectToLogin('expired');
-          return;
-        }
-
+        // Authoritatively validate the session with the server.
         const user = await authApi.getCurrentUser();
         if (cancelled) return;
         try {
           sessionStorage.setItem('sentinel_browser_session', 'active');
-          if (user?.id) sessionStorage.setItem('user', JSON.stringify(user));
+          if (user?.id) {
+            sessionStorage.setItem('user', JSON.stringify(user));
+            localStorage.setItem('user', JSON.stringify(user));
+          }
         } catch { /* Restricted browser storage does not invalidate a session. */ }
         setConnectionError(false);
         setSessionReady(true);

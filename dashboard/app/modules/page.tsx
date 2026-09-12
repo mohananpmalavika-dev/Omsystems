@@ -13,6 +13,7 @@ import {
 import { AppLayout, getVisibleNavigation, menuKey, quickActions, type MenuAccessUser } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { filterAuthorizedQuickActions } from "@/lib/module-directory-access";
+import { authApi } from "@/lib/api-client";
 
 const groupDescriptions: Record<string, string> = {
   OPERATIONS: "Live control room, branch fleet, alert dispatch, incident response, and media streaming pipeline.",
@@ -33,12 +34,8 @@ export default function ModulesPage() {
   const loadUser = useCallback(() => {
     setLoading(true);
     setSessionError(null);
-    fetch("/api/control/v1/auth/me", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(response.status === 401 ? "Sign in to view your available modules." : "Unable to load your module access.");
-        return response.json();
-      })
-      .then((data) => setUser(data?.user ?? data ?? null))
+    authApi.getCurrentUser()
+      .then((data) => setUser((data as any)?.user ?? data ?? null))
       .catch((error) => {
         setUser(null);
         setSessionError(error instanceof Error ? error.message : "Unable to load your module access.");

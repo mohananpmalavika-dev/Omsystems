@@ -152,7 +152,17 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         onSuccess();
       } else {
         const destination = safeReturnPath(searchParams?.get("next"));
-        window.location.href = destination === "/" ? "/operations" : destination;
+        if (destination !== "/") {
+          window.location.href = destination;
+        } else {
+          const userObj = (response as any)?.user;
+          const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
+          if (allowedMenus.length > 0 && !allowedMenus.includes("/") && !allowedMenus.includes("/operations")) {
+            window.location.href = allowedMenus[0];
+          } else {
+            window.location.href = "/operations";
+          }
+        }
       }
 
     } catch (err: any) {
