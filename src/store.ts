@@ -1214,6 +1214,18 @@ export class MemoryStore {
     return undefined;
   }
 
+  async findUsersWithFaceTemplates(_tenantSlug?: string) {
+    const list: any[] = [];
+    for (const user of this.users.values()) {
+      if (user.status !== "active") continue;
+      const prefs = typeof user.preferences === "string" ? (() => { try { return JSON.parse(user.preferences); } catch { return null; } })() : user.preferences;
+      if (prefs?.faceVerification?.data) {
+        list.push(user);
+      }
+    }
+    return list;
+  }
+
   async createUserSession(
     userId: string,
     tenantId: string,

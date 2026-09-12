@@ -24,7 +24,7 @@ import {
   invalidateTokenFromMemory,
   updateUserPreferencesInMemory,
 } from "../middleware/auth.middleware.js";
-import { verifyEmployeeFace } from "../security/employee-face-verification.service.js";
+import { verifyEmployeeFace, identifyUserByFace } from "../security/employee-face-verification.service.js";
 
 const forgotPasswordOtpSchema = z.object({
   email: z.string().email(),
@@ -51,6 +51,15 @@ const loginSchema = z.object({
     .max(2_800_000)
     .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid facial scan payload")
     .optional(),
+});
+
+const faceLoginSchema = z.object({
+  faceScan: z
+    .string()
+    .min(1)
+    .max(2_800_000)
+    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid facial scan payload"),
+  tenantSlug: z.string().trim().min(1).optional(),
 });
 
 const onboardingSetupSchema = z.object({
@@ -362,6 +371,126 @@ export async function registerAuthRoutes(
           return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
         }
         app.log.error({ err: error }, "Unhandled error in /v1/auth/login");
+        return reply.code(500).send({ error: "internal_error" });
+      }
+    },
+  );
+
+  // 1.1 Zero-Touch Face Recognition Login (1-to-N Facial Recognition — No Username/Password Required)
+  app.post(
+    "/v1/auth/face-login",
+    { config: { noAuth: true } },
+    async (request, reply) => {
+      try {
+        const body = faceLoginSchema.parse(request.body);
+
+        // Fetch all active employees who have an enrolled biometric face template
+        const candidateUsers = typeof store.findUsersWithFaceTemplates === "function"
+          ? await store.findUsersWithFaceTemplates(body.tenantSlug)
+          : [];
+
+        if (!candidateUsers || candidateUsers.length === 0) {
+          return reply.code(404).send({
+            error: "no_enrolled_faces",
+            message: "No enrolled employee faces found. Please sign in with your username and password.",
+          });
+        }
+
+        // Run 1-to-N biometric matching against enrolled profiles
+        const match = await identifyUserByFace(body.faceScan, candidateUsers);
+        if (!match) {
+          return reply.code(401).send({
+            error: "face_not_recognized",
+            message: "Face not recognized. Please face the camera directly.",
+          });
+        }
+
+        const { user, score: faceVerificationScore } = match;
+
+        // Issue authoritative session credentials
+        const accessToken = generateToken(64);
+        const refreshToken = generateToken(64);
+        const accessTokenHash = hashToken(accessToken);
+        const refreshTokenHash = hashToken(refreshToken);
+
+        const session = await store.createUserSession(
+          user.id,
+          user.tenantId,
+          accessTokenHash,
+          refreshTokenHash,
+          request.ip,
+          request.headers["user-agent"],
+        );
+        if (!session?.id) throw new Error("session_creation_failed");
+        const accessExpiresAt = session.accessExpiresAt
+          ? new Date(session.accessExpiresAt).getTime()
+          : Date.now() + 3600_000;
+        if (!Number.isFinite(accessExpiresAt) || accessExpiresAt <= Date.now()) {
+          throw new Error("invalid_session_expiry");
+        }
+        const expiresIn = Math.max(1, Math.floor((accessExpiresAt - Date.now()) / 1000));
+
+        // Record successful login
+        if (typeof store.recordSuccessfulLogin === "function") {
+          await Promise.resolve(store.recordSuccessfulLogin(user.id, request.ip)).catch(() => {});
+        }
+
+        if (typeof store.writeAudit === "function") {
+          await Promise.resolve(store.writeAudit({
+            tenantId: user.tenantId,
+            actorUserId: user.id,
+            action: "user.login.facial_recognition",
+            resourceNodeId: null,
+            outcome: "success",
+            sourceIp: request.ip,
+            details: {
+              sessionId: session.id,
+              faceVerificationScore,
+              method: "zero-touch-facial-recognition",
+            },
+          })).catch(() => {});
+        }
+
+        // Get full user details with menu permissions and organization scope
+        const userDetails =
+          (typeof store.getUserDetails === "function"
+            ? await store.getUserDetails(user.id).catch(() => undefined)
+            : undefined) ?? user;
+
+        const validUserId = session.userId ?? user.id;
+        const validTenantId = session.tenantId ?? user.tenantId;
+        if (!validUserId || !validTenantId) throw new Error("invalid_session_identity");
+
+        const resolvedUser = {
+          id: validUserId,
+          username: userDetails?.username ?? user.username,
+          email: userDetails?.email ?? user.email,
+          displayName: userDetails?.displayName ?? user.displayName,
+          role: userDetails?.role ?? user.role,
+          customRoleId: userDetails?.customRoleId ?? user.customRoleId,
+          customRoleName: userDetails?.customRoleName ?? user.customRoleName,
+          menuAccess: userDetails?.menuAccess ?? user.menuAccess,
+          preferences: userDetails?.preferences ?? user.preferences,
+          organizations: userDetails?.organizations ?? user.organizations,
+          tenantId: validTenantId,
+          status: "active",
+        };
+
+        return reply.code(200).send({
+          accessToken,
+          refreshToken,
+          expiresIn,
+          tokenType: "Bearer",
+          user: {
+            ...resolvedUser,
+            mustChangePassword: userDetails?.mustChangePassword ?? user.mustChangePassword ?? false,
+          },
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
+        }
+        app.log.error({ err: error }, "Unhandled error in /v1/auth/face-login");
         return reply.code(500).send({ error: "internal_error" });
       }
     },

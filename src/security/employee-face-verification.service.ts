@@ -359,3 +359,55 @@ export const employeeFaceVerificationConfig = {
   strictMatchScore: STRICT_FACE_MATCH_THRESHOLD,
 };
 
+export async function identifyUserByFace(
+  imageDataUrl: string,
+  candidateUsers: any[],
+  options?: { threshold?: number },
+): Promise<{ user: any; score: number } | null> {
+  if (!Array.isArray(candidateUsers) || candidateUsers.length === 0) {
+    return null;
+  }
+
+  let candidateTemplate: Buffer;
+  try {
+    candidateTemplate = await normalizeImage(imageDataUrl);
+  } catch {
+    return null;
+  }
+
+  const threshold = options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD;
+  let bestMatch: { user: any; score: number } | null = null;
+
+  for (const user of candidateUsers) {
+    const preferencesObject = typeof user.preferences === "string"
+      ? (() => {
+          try {
+            return JSON.parse(user.preferences) as Record<string, unknown>;
+          } catch {
+            return null;
+          }
+        })()
+      : user.preferences;
+
+    const enrolledTemplate = parseTemplate(
+      preferencesObject && typeof preferencesObject === "object"
+        ? (preferencesObject as Record<string, unknown>).faceVerification
+        : undefined,
+    );
+
+    if (!enrolledTemplate) continue;
+
+    try {
+      const enrolledData = Buffer.from(enrolledTemplate.data, "base64");
+      const score = calculateSimilarity(enrolledData, candidateTemplate);
+      if (score >= threshold && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { user, score };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return bestMatch;
+}
+

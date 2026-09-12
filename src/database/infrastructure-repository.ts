@@ -796,6 +796,18 @@ export class InfrastructureRepository {
     return result.rows.length === 1 ? camelRow(result.rows[0]!) : undefined;
   }
 
+  async findUsersWithFaceTemplates(tenantSlug?: string) {
+    const result = await this.pool.query(
+      `${this.userSelect(true)}
+       LEFT JOIN tenants t ON t.id=u.tenant_id
+       WHERE u.status = 'active'
+         AND (u.preferences->'faceVerification'->>'data') IS NOT NULL
+         AND ($1::text IS NULL OR t.slug=$1 OR t.id::text=$1)`,
+      [tenantSlug ?? null],
+    );
+    return result.rows.map((row) => camelRow(row));
+  }
+
   async listUsers(tenantId: string, filters: any) {
     const values: unknown[] = [tenantId];
     const clauses = ["u.tenant_id=$1"];

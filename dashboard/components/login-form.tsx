@@ -1,9 +1,26 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw, Upload, CheckCircle2, Download, Laptop, Smartphone, Check } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Eye,
+  EyeOff,
+  ShieldCheck,
+  AlertCircle,
+  Info,
+  QrCode,
+  RotateCcw,
+  CheckCircle2,
+  Download,
+  Laptop,
+  Smartphone,
+  Check,
+  ScanFace,
+  KeyRound,
+  ExternalLink,
+  Sparkles,
+} from "lucide-react";
 import QRCode from "qrcode";
-import { authApi, organizationApi } from "@/lib/api-client";
+import { authApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/session-navigation";
 
@@ -18,29 +35,70 @@ export function LoginForm(props: LoginFormProps) {
   return <LoginFormInner {...props} />;
 }
 
+/**
+ * Downloads a Windows Desktop Internet Shortcut (.url) so users can install /
+ * launch KryptonVision directly from their desktop in 1 click.
+ */
+function downloadDesktopShortcut(appName = "KryptonVision", targetUrl?: string) {
+  if (typeof window === "undefined") return;
+  const currentOrigin = window.location.origin;
+  const url = targetUrl || `${currentOrigin}/login?source=desktop-shortcut`;
+  const iconUrl = `${currentOrigin}/favicon.ico`;
+  const fileContent = `[InternetShortcut]\r\nURL=${url}\r\nIconIndex=0\r\nIconFile=${iconUrl}\r\nHotKey=0\r\nIDList=\r\n[{000214A0-0000-0000-C000-000000000046}]\r\nProp3=19,0\r\n[ViewState]\r\nMode=\r\nVid=\r\nFolderType=Generic\r\n`;
+  const blob = new Blob([fileContent], { type: "application/internet-shortcut;charset=utf-8" });
+  const blobUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = blobUrl;
+  anchor.download = `${appName}.url`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(blobUrl);
+}
+
 function LoginFormInner({ onSuccess }: LoginFormProps) {
   const { branding } = useOrgBranding();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Authentication mode: zero-touch face recognition or traditional username & password
+  const [authMode, setAuthMode] = useState<"face" | "credentials">("face");
+
+  // Zero-touch Face Recognition state
   const faceVideoRef = useRef<HTMLVideoElement>(null);
   const faceCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
-  const faceFileInputRef = useRef<HTMLInputElement>(null);
-  const [showQR, setShowQR] = useState(false);
-  const [showFaceScan, setShowFaceScan] = useState(false);
-  const [faceScan, setFaceScan] = useState<string | null>(null);
   const [faceStream, setFaceStream] = useState<MediaStream | null>(null);
   const [faceCameraActive, setFaceCameraActive] = useState(false);
   const [faceCameraReady, setFaceCameraReady] = useState(false);
   const [faceCameraError, setFaceCameraError] = useState<string | null>(null);
+  const [faceScanState, setFaceScanState] = useState<
+    "idle" | "starting" | "scanning" | "matched" | "not_found" | "camera_error"
+  >("idle");
+  const [scanAttempts, setScanAttempts] = useState(0);
+  const [matchedUser, setMatchedUser] = useState<any>(null);
+  const [faceErrorMessage, setFaceErrorMessage] = useState<string | null>(null);
+
+  const scanLockRef = useRef(false);
+  const attemptsRef = useRef(0);
+  const autoScanActiveRef = useRef(false);
+  const autoScanTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // QR Code state
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [showQR, setShowQR] = useState(false);
+  const [loginUrl, setLoginUrl] = useState("");
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  // Application Installation state
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [activeInstallTab, setActiveInstallTab] = useState<"desktop" | "ios" | "android">("desktop");
-  const [loginUrl, setLoginUrl] = useState("");
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [isInIframe, setIsInIframe] = useState(false);
+
+  // Traditional credentials state
   const [formData, setFormData] = useState({
     username: "",
     password: "",
@@ -54,41 +112,45 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
+  // Detect iframe environment
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsInIframe(window.self !== window.top);
+    }
+  }, []);
+
+  // Cleanup active camera streams on unmount
   useEffect(() => {
     return () => {
-      if (faceStreamRef.current) {
-        faceStreamRef.current.getTracks().forEach((track) => track.stop());
-        faceStreamRef.current = null;
-      }
+      stopFaceCamera();
     };
   }, []);
 
-  // Check for session expiry or error messages
+  // Check for session expiry or error query parameters
   useEffect(() => {
     if (!searchParams) return;
-    
-    const reason = searchParams.get('reason') || searchParams.get('expired');
-    
-    if (reason === 'expired' || reason === 'true') {
-      setInfo('Your session has expired. Please sign in again.');
-    } else if (reason === 'invalid') {
-      setInfo('Please sign in to continue.');
-    } else if (reason === 'network') {
-      setError('Cannot connect to server. Please check your connection and try again.');
-    } else if (searchParams.get('logout') === 'true') {
-      setInfo('You have been signed out successfully.');
+
+    const reason = searchParams.get("reason") || searchParams.get("expired");
+
+    if (reason === "expired" || reason === "true") {
+      setInfo("Your session has expired. Please sign in again.");
+    } else if (reason === "invalid") {
+      setInfo("Please sign in to continue.");
+    } else if (reason === "network") {
+      setError("Cannot connect to server. Please check your connection and try again.");
+    } else if (searchParams.get("logout") === "true") {
+      setInfo("You have been signed out successfully.");
     }
   }, [searchParams]);
 
-  // Generate QR code with current login URL
+  // Generate QR code for mobile login
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       const currentUrl = window.location.origin + window.location.pathname;
       setLoginUrl(currentUrl);
     }
   }, []);
 
-  // Generate QR code data URL directly using bundled library
   useEffect(() => {
     if (!loginUrl) return;
 
@@ -96,40 +158,19 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       width: 200,
       margin: 2,
       color: {
-        dark: '#1e293b',
-        light: '#ffffff',
+        dark: "#1e293b",
+        light: "#ffffff",
       },
     })
       .then((dataUrl) => {
         setQrDataUrl(dataUrl);
       })
       .catch((err) => {
-        console.error('Failed to generate QR data URL:', err);
+        console.error("Failed to generate QR data URL:", err);
       });
   }, [loginUrl]);
 
-  // Also draw to canvas as a fallback when shown
-  useEffect(() => {
-    if (showQR && loginUrl && qrCanvasRef.current) {
-      QRCode.toCanvas(
-        qrCanvasRef.current,
-        loginUrl,
-        {
-          width: 200,
-          margin: 2,
-          color: {
-            dark: '#1e293b',
-            light: '#ffffff',
-          },
-        },
-        (err) => {
-          if (err) console.error('Failed to render canvas QR:', err);
-        }
-      );
-    }
-  }, [showQR, loginUrl]);
-
-  // Listen for PWA installation events and detect standalone application mode
+  // Detect PWA installation and standalone mode
   useEffect(() => {
     if (typeof window !== "undefined") {
       const checkStandalone = () => {
@@ -173,6 +214,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     }
   }, []);
 
+  /**
+   * Install App button handler:
+   * 1. If native PWA install prompt is ready, trigger it.
+   * 2. Otherwise open the comprehensive installer modal with 1-click Windows desktop shortcut.
+   */
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       try {
@@ -182,22 +228,277 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           setIsInstalled(true);
           setDeferredPrompt(null);
           setShowInstallModal(false);
+          return;
         }
       } catch (err) {
         console.warn("PWA prompt error:", err);
-        setShowInstallModal(true);
       }
-    } else {
-      setShowInstallModal(true);
     }
+    setShowInstallModal(true);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (showFaceScan && !faceScan) {
-      setError("Complete the facial scan or upload a photo before signing in.");
+  /**
+   * Stop camera tracks cleanly
+   */
+  const stopFaceCamera = useCallback(() => {
+    autoScanActiveRef.current = false;
+    if (autoScanTimerRef.current) {
+      clearInterval(autoScanTimerRef.current);
+      autoScanTimerRef.current = null;
+    }
+    if (faceStreamRef.current) {
+      faceStreamRef.current.getTracks().forEach((track) => track.stop());
+      faceStreamRef.current = null;
+    }
+    setFaceStream(null);
+    setFaceCameraActive(false);
+    setFaceCameraReady(false);
+  }, []);
+
+  /**
+   * Request webcam access and initialize live video stream
+   */
+  const startFaceCamera = useCallback(async () => {
+    stopFaceCamera();
+    setFaceCameraError(null);
+    setFaceCameraReady(false);
+    setFaceErrorMessage(null);
+    setFaceScanState("starting");
+    attemptsRef.current = 0;
+    setScanAttempts(0);
+    autoScanActiveRef.current = true;
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          "Camera access is not supported or blocked by browser security (requires HTTPS). Please sign in with username and password."
+        );
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 640 },
+          height: { ideal: 480 },
+          facingMode: "user",
+        },
+        audio: false,
+      });
+      faceStreamRef.current = stream;
+      setFaceStream(stream);
+      setFaceCameraActive(true);
+    } catch (err: any) {
+      console.warn("Face camera start failed:", err);
+      autoScanActiveRef.current = false;
+      const isDenied = err.name === "NotAllowedError" || err.name === "PermissionDeniedError";
+      const msg = isDenied
+        ? "Camera access permission was denied. Please allow camera access in browser settings or sign in with username and password."
+        : err.message || "Unable to access the camera. Check camera permissions and try again.";
+      setFaceCameraError(msg);
+      setFaceScanState("camera_error");
+      stopFaceCamera();
+    }
+  }, [stopFaceCamera]);
+
+  // Manage camera lifecycle based on authMode
+  useEffect(() => {
+    if (authMode === "face" && faceScanState !== "matched" && faceScanState !== "not_found") {
+      startFaceCamera();
+    } else {
+      stopFaceCamera();
+    }
+    return () => {
+      stopFaceCamera();
+    };
+  }, [authMode, startFaceCamera, stopFaceCamera]);
+
+  // Bind video element to camera stream
+  useEffect(() => {
+    const video = faceVideoRef.current;
+    if (!faceCameraActive || !faceStreamRef.current || !video) {
+      setFaceCameraReady(false);
       return;
     }
+
+    video.srcObject = faceStreamRef.current;
+
+    let isSubscribed = true;
+    const handleCanPlay = () => {
+      if (isSubscribed) {
+        setFaceCameraReady(true);
+        setFaceScanState("scanning");
+      }
+    };
+
+    video.addEventListener("canplay", handleCanPlay);
+    video.play().catch((err) => {
+      console.warn("Face video play interrupted:", err);
+      if (isSubscribed) {
+        setFaceCameraError("Unable to start video preview. Check camera permissions.");
+        setFaceScanState("camera_error");
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+      video.removeEventListener("canplay", handleCanPlay);
+    };
+  }, [faceCameraActive, faceScanState]);
+
+  /**
+   * Automated Zero-Touch Face Recognition Scanning Loop:
+   * Captures frames every 1.2s and runs 1-to-N biometric matching against enrolled faces.
+   * If recognized: logs in automatically and redirects.
+   * If not recognized after 3 attempts: stops camera and reverts with "Face not found".
+   */
+  useEffect(() => {
+    if (
+      authMode !== "face" ||
+      !faceCameraActive ||
+      !faceCameraReady ||
+      faceScanState !== "scanning"
+    ) {
+      if (autoScanTimerRef.current) {
+        clearInterval(autoScanTimerRef.current);
+        autoScanTimerRef.current = null;
+      }
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      if (!autoScanActiveRef.current) return;
+      if (scanLockRef.current) return;
+      if (attemptsRef.current >= 3) return;
+
+      const video = faceVideoRef.current;
+      const canvas = faceCanvasRef.current;
+      if (!video || !canvas || video.videoWidth === 0 || video.readyState < 2) {
+        return;
+      }
+
+      scanLockRef.current = true;
+
+      try {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const cropSize = Math.min(vw, vh);
+        const startX = (vw - cropSize) / 2;
+        const startY = (vh - cropSize) / 2;
+        const targetSize = Math.min(cropSize, 480);
+
+        canvas.width = targetSize;
+        canvas.height = targetSize;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          scanLockRef.current = false;
+          return;
+        }
+
+        ctx.drawImage(video, startX, startY, cropSize, cropSize, 0, 0, targetSize, targetSize);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
+
+        const response = await authApi.faceLogin(
+          dataUrl,
+          formData.tenantSlug.trim() || undefined
+        );
+
+        // Biometric Face Match Verified!
+        autoScanActiveRef.current = false;
+        if (autoScanTimerRef.current) {
+          clearInterval(autoScanTimerRef.current);
+          autoScanTimerRef.current = null;
+        }
+        stopFaceCamera();
+        setMatchedUser(response.user);
+        setFaceScanState("matched");
+
+        // Complete login and navigate
+        setTimeout(() => {
+          if (onSuccess) {
+            onSuccess();
+          } else {
+            const destination = safeReturnPath(searchParams?.get("next"));
+            if (destination !== "/") {
+              window.location.href = destination;
+            } else {
+              const userObj = response.user;
+              const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
+              if (
+                allowedMenus.length > 0 &&
+                !allowedMenus.includes("/") &&
+                !allowedMenus.includes("/operations")
+              ) {
+                window.location.href = allowedMenus[0];
+              } else {
+                window.location.href = "/operations";
+              }
+            }
+          }
+        }, 850);
+      } catch (err: any) {
+        attemptsRef.current += 1;
+        const currentCount = attemptsRef.current;
+        setScanAttempts(currentCount);
+
+        if (currentCount >= 3) {
+          // Revert after 3 failed tries
+          autoScanActiveRef.current = false;
+          if (autoScanTimerRef.current) {
+            clearInterval(autoScanTimerRef.current);
+            autoScanTimerRef.current = null;
+          }
+          stopFaceCamera();
+          setFaceScanState("not_found");
+          setFaceErrorMessage(
+            "Face not found. We could not recognize your face after 3 attempts. Please try again or sign in with your username and password."
+          );
+        }
+      } finally {
+        scanLockRef.current = false;
+      }
+    }, 1250);
+
+    autoScanTimerRef.current = interval;
+
+    return () => {
+      clearInterval(interval);
+      autoScanTimerRef.current = null;
+    };
+  }, [
+    authMode,
+    faceCameraActive,
+    faceCameraReady,
+    faceScanState,
+    formData.tenantSlug,
+    onSuccess,
+    searchParams,
+    stopFaceCamera,
+  ]);
+
+  /**
+   * Retry Face Recognition from "not_found" or error state
+   */
+  const handleRetryFaceRecognition = () => {
+    attemptsRef.current = 0;
+    setScanAttempts(0);
+    setFaceErrorMessage(null);
+    setFaceScanState("idle");
+    startFaceCamera();
+  };
+
+  /**
+   * Switch to traditional password mode
+   */
+  const handleSwitchToCredentials = () => {
+    stopFaceCamera();
+    setAuthMode("credentials");
+    setFaceErrorMessage(null);
+    setError(null);
+  };
+
+  /**
+   * Traditional Username & Password submission
+   */
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setLoading(true);
     setError(null);
 
@@ -205,8 +506,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       const response = await authApi.login(
         formData.username.trim(),
         formData.password,
-        formData.tenantSlug.trim() || undefined,
-        faceScan || undefined,
+        formData.tenantSlug.trim() || undefined
       );
 
       if ((response as any)?.user?.mustChangePassword) {
@@ -225,158 +525,39 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         } else {
           const userObj = (response as any)?.user;
           const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-          if (allowedMenus.length > 0 && !allowedMenus.includes("/") && !allowedMenus.includes("/operations")) {
+          if (
+            allowedMenus.length > 0 &&
+            !allowedMenus.includes("/") &&
+            !allowedMenus.includes("/operations")
+          ) {
             window.location.href = allowedMenus[0];
           } else {
             window.location.href = "/operations";
           }
         }
       }
-
     } catch (err: any) {
       console.error("Login failed:", err);
-      const serverErr = err.response?.data?.error;
+      const serverErr = err.response?.data?.error || err.details?.error;
       if (serverErr === "facial_verification_required") {
-        setShowFaceScan(true);
+        setAuthMode("face");
+        setInfo("Facial biometric verification required. Please face the camera.");
+        return;
       }
       setError(
         err.response?.data?.message ||
-        err.message ||
-        "Invalid username or password"
+          err.details?.message ||
+          err.message ||
+          "Invalid username or password"
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // Attach active camera stream to video element when mounted
-  useEffect(() => {
-    const video = faceVideoRef.current;
-    if (!faceCameraActive || !faceStream || !video) {
-      setFaceCameraReady(false);
-      return;
-    }
-
-    video.srcObject = faceStream;
-
-    let isSubscribed = true;
-    const handleCanPlay = () => {
-      if (isSubscribed) {
-        setFaceCameraReady(true);
-      }
-    };
-
-    video.addEventListener("canplay", handleCanPlay);
-    video.play().catch((err) => {
-      console.warn("Camera video play interrupted:", err);
-      if (isSubscribed) {
-        setFaceCameraError("Unable to start video preview. You can upload a photo instead.");
-      }
-    });
-
-    return () => {
-      isSubscribed = false;
-      video.removeEventListener("canplay", handleCanPlay);
-    };
-  }, [faceCameraActive, faceStream]);
-
-  async function startFaceCamera() {
-    setFaceCameraError(null);
-    setFaceCameraReady(false);
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Camera access is not supported or blocked (requires HTTPS or localhost). You can upload a photo below.");
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
-        audio: false,
-      });
-      faceStreamRef.current = stream;
-      setFaceStream(stream);
-      setFaceCameraActive(true);
-    } catch (err: any) {
-      const msg = err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
-        ? "Camera access permission was denied. Please allow camera access in browser settings or upload a photo."
-        : (err.message || "Unable to access the camera. Check browser permissions and try again.");
-      setFaceCameraError(msg);
-      stopFaceCamera();
-    }
-  }
-
-  function stopFaceCamera() {
-    if (faceStreamRef.current) {
-      faceStreamRef.current.getTracks().forEach((track) => track.stop());
-      faceStreamRef.current = null;
-    }
-    setFaceStream(null);
-    setFaceCameraActive(false);
-    setFaceCameraReady(false);
-  }
-
-  function captureFaceScan() {
-    const video = faceVideoRef.current;
-    const canvas = faceCanvasRef.current;
-    if (!video || !canvas || video.videoWidth === 0) {
-      setFaceCameraError("The camera is still starting. Please wait a moment and try again.");
-      return;
-    }
-
-    const vw = video.videoWidth;
-    const vh = video.videoHeight;
-    // Center crop square matching the facial reticle
-    const cropSize = Math.min(vw, vh);
-    const startX = (vw - cropSize) / 2;
-    const startY = (vh - cropSize) / 2;
-
-    const targetSize = Math.min(cropSize, 480);
-    canvas.width = targetSize;
-    canvas.height = targetSize;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
-      setFaceCameraError("Unable to capture image from camera.");
-      return;
-    }
-
-    ctx.drawImage(video, startX, startY, cropSize, cropSize, 0, 0, targetSize, targetSize);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
-    setFaceScan(dataUrl);
-    setFaceCameraError(null);
-    stopFaceCamera();
-  }
-
-  function handlePhotoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
-      setFaceCameraError("Please select a valid JPEG, PNG, or WEBP photo.");
-      return;
-    }
-
-    if (file.size > 2_000_000) {
-      setFaceCameraError("Photo file size must be less than 2MB.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        setFaceScan(reader.result);
-        setFaceCameraError(null);
-        stopFaceCamera();
-      }
-    };
-    reader.onerror = () => {
-      setFaceCameraError("Failed to read the selected photo file.");
-    };
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  }
-
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match");
       return;
@@ -391,20 +572,13 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     setError(null);
 
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
-      await authApi.changePassword(
-        user.id || 'me',
-        formData.password,
-        newPassword
-      );
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      await authApi.changePassword(user.id || "me", formData.password, newPassword);
 
-      // A password change revokes every old session, including the limited
-      // session used to perform this forced update. Establish a fresh session
-      // before navigating so the user does not land in an immediate login loop.
       await authApi.login(
         formData.username.trim(),
         newPassword,
-        formData.tenantSlug.trim() || undefined,
+        formData.tenantSlug.trim() || undefined
       );
 
       setMustChangePassword(false);
@@ -417,8 +591,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       console.error("Password change failed:", err);
       setError(
         err.response?.data?.message ||
-        err.message ||
-        "Failed to change password"
+          err.details?.message ||
+          err.message ||
+          "Failed to change password"
       );
     } finally {
       setLoading(false);
@@ -441,9 +616,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               <ShieldCheck size={32} className="brand-icon" />
               <h1>Change Password</h1>
             </div>
-            <p className="login-subtitle">
-              Please set a new password for your account
-            </p>
+            <p className="login-subtitle">Please set a new password for your account</p>
           </div>
 
           {error && (
@@ -494,11 +667,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               />
             </div>
 
-            <button
-              type="submit"
-              className="login-button"
-              disabled={loading}
-            >
+            <button type="submit" className="login-button" disabled={loading}>
               {loading ? "Updating..." : "Update Password & Continue"}
             </button>
           </form>
@@ -515,9 +684,20 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     <div className="login-container">
       <div className="login-card">
         <div className="login-header">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", marginBottom: "6px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              width: "100%",
+              marginBottom: "6px",
+            }}
+          >
             {isStandalone ? (
-              <span className="pwa-status-badge standalone" title="Running in standalone desktop/mobile app mode">
+              <span
+                className="pwa-status-badge standalone"
+                title="Running in standalone desktop/mobile app mode"
+              >
                 <Check size={12} /> App Mode
               </span>
             ) : (
@@ -525,7 +705,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 type="button"
                 onClick={handleInstallClick}
                 className="pwa-quick-install-btn"
-                title="Install as Desktop or Mobile Application"
+                title="Install as Desktop Application"
               >
                 <Download size={13} />
                 <span>Install App</span>
@@ -535,15 +715,47 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </div>
           <div className="login-brand">
             {branding.logoUrl ? (
-              <img src={branding.logoUrl} alt={branding.orgName || "Organization Logo"} className="login-org-logo" />
+              <img
+                src={branding.logoUrl}
+                alt={branding.orgName || "Organization Logo"}
+                className="login-org-logo"
+              />
             ) : (
               <ShieldCheck size={32} className="brand-icon" />
             )}
             <h1>{branding.orgName || "KryptonVision"}</h1>
           </div>
           <p className="login-subtitle">
-            {branding.tagline || "Sign in to access your security dashboard"}
+            {branding.tagline || "Enterprise Video Surveillance & Operations"}
           </p>
+        </div>
+
+        {/* Authentication Mode Switcher */}
+        <div className="auth-mode-selector">
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode("face");
+              setError(null);
+              setFaceErrorMessage(null);
+              setScanAttempts(0);
+              setFaceScanState("idle");
+            }}
+            className={`auth-mode-btn ${authMode === "face" ? "active" : ""}`}
+            title="Zero-Touch Facial Recognition (No Username or Password needed)"
+          >
+            <ScanFace size={16} />
+            <span>Face Recognition</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSwitchToCredentials}
+            className={`auth-mode-btn ${authMode === "credentials" ? "active" : ""}`}
+            title="Sign in with Username and Password"
+          >
+            <KeyRound size={16} />
+            <span>Password</span>
+          </button>
         </div>
 
         {error && (
@@ -560,206 +772,239 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="username">Username</label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              className="login-input"
-              style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
-              value={formData.username}
-              onChange={handleChange}
-              required
-              autoComplete="username"
-              placeholder="Enter your username"
-              disabled={loading}
-              autoFocus
-            />
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="password-input-wrapper">
-              <input
-                type={showPassword ? "text" : "password"}
-                id="password"
-                name="password"
-                className="login-input"
-                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
-                value={formData.password}
-                onChange={handleChange}
-                required
-                autoComplete="current-password"
-                placeholder="Enter your password"
-                disabled={loading}
-              />
-              <button
-                type="button"
-                className="password-toggle-btn"
-                onClick={() => setShowPassword(!showPassword)}
-                tabIndex={-1}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label htmlFor="tenantSlug">
-              Organization Code{" "}
-              <span className="optional-label">(optional)</span>
-            </label>
-            <input
-              type="text"
-              id="tenantSlug"
-              name="tenantSlug"
-              className="login-input"
-              style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
-              value={formData.tenantSlug}
-              onChange={handleChange}
-              placeholder="Leave blank if not required"
-              disabled={loading}
-            />
-          </div>
-
-          <div className="face-login-section">
-            <div className="face-login-heading">
-              <div>
-                 <label htmlFor="face-scan-toggle">Facial scan verification</label>
-                 <p>Compare a live camera scan with the employee profile captured during enrollment.</p>
-              </div>
-              <input
-                id="face-scan-toggle"
-                type="checkbox"
-                checked={showFaceScan}
-                onChange={(event) => {
-                  setShowFaceScan(event.target.checked);
-                  if (!event.target.checked) {
-                    stopFaceCamera();
-                    setFaceScan(null);
-                    setFaceCameraError(null);
-                  }
-                }}
-                disabled={loading}
-              />
-            </div>
-            {showFaceScan && (
-              <div className="face-login-panel">
-                <div className="face-login-preview">
-                  {faceCameraActive ? (
-                    <div className="face-viewfinder-container">
-                      <video
-                        ref={faceVideoRef}
-                        autoPlay
-                        playsInline
-                        muted
-                        aria-label="Facial scan camera preview"
-                      />
-                      <div className="face-alignment-reticle">
-                        <div className="face-oval-guide" />
-                        <span className="face-reticle-label">
-                          {faceCameraReady ? "Align face inside oval" : "Starting camera..."}
-                        </span>
-                      </div>
-                    </div>
-                  ) : faceScan ? (
-                    <div className="face-captured-preview">
-                      <img src={faceScan} alt="Facial scan preview" />
-                      <div className="face-captured-badge">
-                        <CheckCircle2 size={12} />
-                        <span>Scan Captured</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="face-placeholder">
-                      <Camera size={24} />
-                      <span>No scan captured</span>
-                    </div>
-                  )}
+        {/* MODE 1: ZERO-TOUCH BIOMETRIC FACE RECOGNITION */}
+        {authMode === "face" && (
+          <div className="zero-touch-face-section">
+            {faceScanState === "matched" ? (
+              <div className="face-success-panel">
+                <div className="face-success-icon-wrap">
+                  <CheckCircle2 size={44} className="text-emerald-500" />
                 </div>
-                <canvas ref={faceCanvasRef} className="hidden" style={{ display: "none" }} />
-                {faceCameraError && <p className="face-login-error">{faceCameraError}</p>}
-                <div className="face-login-actions">
-                  {faceCameraActive ? (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-capture-face"
-                        onClick={captureFaceScan}
-                        disabled={!faceCameraReady}
-                      >
-                        <Camera size={14} /> Capture face
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-cancel-face"
-                        onClick={stopFaceCamera}
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        className="btn-open-camera"
-                        onClick={startFaceCamera}
-                      >
-                        <Camera size={14} /> {faceScan ? "Retake scan" : "Open camera"}
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-upload-face"
-                        onClick={() => faceFileInputRef.current?.click()}
-                      >
-                        <Upload size={14} /> Upload photo
-                      </button>
-                      <input
-                        ref={faceFileInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        style={{ display: "none" }}
-                        onChange={handlePhotoFileUpload}
+                <h3>Face Recognized!</h3>
+                <p className="face-user-name">
+                  Welcome back, <strong>{matchedUser?.displayName || matchedUser?.username}</strong>
+                </p>
+                <div className="face-logging-in-badge">
+                  <span className="pulse-dot-green" />
+                  <span>Access Granted &bull; Launching Operations...</span>
+                </div>
+              </div>
+            ) : faceScanState === "not_found" ? (
+              <div className="face-not-found-panel">
+                <div className="face-not-found-icon-wrap">
+                  <AlertCircle size={36} className="text-amber-500" />
+                </div>
+                <h3>Face Not Found</h3>
+                <p className="face-not-found-msg">
+                  {faceErrorMessage ||
+                    "Face not found. We could not recognize your face after 3 attempts. Please try again or sign in with your username and password."}
+                </p>
+                <div className="face-fallback-actions">
+                  <button
+                    type="button"
+                    onClick={handleRetryFaceRecognition}
+                    className="btn-retry-face"
+                  >
+                    <RotateCcw size={14} /> Try Face Recognition Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchToCredentials}
+                    className="btn-switch-credentials"
+                  >
+                    <KeyRound size={14} /> Sign In with Password
+                  </button>
+                </div>
+              </div>
+            ) : faceScanState === "camera_error" ? (
+              <div className="face-camera-error-panel">
+                <AlertCircle size={32} className="text-red-500" />
+                <h3>Camera Unavailable</h3>
+                <p>
+                  {faceCameraError ||
+                    "Camera access was denied or is unavailable. Please allow camera permissions in your browser or sign in with your username and password."}
+                </p>
+                <div className="face-fallback-actions">
+                  <button
+                    type="button"
+                    onClick={() => startFaceCamera()}
+                    className="btn-retry-face"
+                  >
+                    <RotateCcw size={14} /> Retry Camera
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchToCredentials}
+                    className="btn-switch-credentials"
+                  >
+                    <KeyRound size={14} /> Sign In with Password
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="face-scanner-view">
+                <div className="face-viewfinder-container">
+                  <video
+                    ref={faceVideoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    aria-label="Facial biometric scan camera preview"
+                  />
+                  <div className="face-biometric-overlay">
+                    <div className="biometric-corner top-left" />
+                    <div className="biometric-corner top-right" />
+                    <div className="biometric-corner bottom-left" />
+                    <div className="biometric-corner bottom-right" />
+                    <div className="face-oval-guide">
+                      <div className="biometric-laser-line" />
+                    </div>
+                    <div className="biometric-scan-status">
+                      <span className="pulse-dot" />
+                      <span>
+                        {faceCameraReady
+                          ? `Scanning automatically... (Attempt ${Math.min(
+                              scanAttempts + 1,
+                              3
+                            )} of 3)`
+                          : "Initializing biometric camera..."}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <canvas ref={faceCanvasRef} style={{ display: "none" }} />
+
+                <div className="face-scan-guidance">
+                  <p>
+                    {faceCameraReady
+                      ? "Stand directly in front of the camera. Verification happens automatically without clicking."
+                      : "Connecting to secure biometric sensor..."}
+                  </p>
+                  <div className="attempt-progress-dots">
+                    {[1, 2, 3].map((num) => (
+                      <span
+                        key={num}
+                        className={`dot-step ${
+                          scanAttempts >= num
+                            ? "tried"
+                            : scanAttempts + 1 === num
+                            ? "active"
+                            : "pending"
+                        }`}
+                        title={`Attempt ${num} of 3`}
                       />
-                      {faceScan && (
-                        <button
-                          type="button"
-                          className="btn-clear-face"
-                          aria-label="Clear facial scan"
-                          onClick={() => setFaceScan(null)}
-                          title="Clear scan"
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                      )}
-                    </>
-                  )}
+                    ))}
+                  </div>
+                </div>
+
+                <div className="face-quick-switch-link">
+                  <button type="button" onClick={handleSwitchToCredentials}>
+                    Sign in with username &amp; password instead &rarr;
+                  </button>
                 </div>
               </div>
             )}
           </div>
+        )}
 
-          <div className="form-actions">
-            <label className="remember-me">
-              <input type="checkbox" disabled={loading} />
-              <span>Remember me</span>
-            </label>
-            <a href="/forgot-password" className="forgot-password-link">
-              Forgot password?
-            </a>
-          </div>
+        {/* MODE 2: TRADITIONAL USERNAME & PASSWORD */}
+        {authMode === "credentials" && (
+          <form onSubmit={handleSubmit} className="login-form">
+            <div className="form-group">
+              <label htmlFor="username">Username</label>
+              <input
+                type="text"
+                id="username"
+                name="username"
+                className="login-input"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
+                value={formData.username}
+                onChange={handleChange}
+                required
+                autoComplete="username"
+                placeholder="Enter your username"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
 
-          <button
-            type="submit"
-            className="login-button"
-            disabled={loading}
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-        </form>
+            <div className="form-group">
+              <label htmlFor="password">Password</label>
+              <div className="password-input-wrapper">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  name="password"
+                  className="login-input"
+                  style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowPassword(!showPassword)}
+                  tabIndex={-1}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="tenantSlug">
+                Organization Code <span className="optional-label">(optional)</span>
+              </label>
+              <input
+                type="text"
+                id="tenantSlug"
+                name="tenantSlug"
+                className="login-input"
+                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
+                value={formData.tenantSlug}
+                onChange={handleChange}
+                placeholder="Leave blank if not required"
+                disabled={loading}
+              />
+            </div>
+
+            <div className="form-actions">
+              <label className="remember-me">
+                <input type="checkbox" disabled={loading} />
+                <span>Remember me</span>
+              </label>
+              <a href="/forgot-password" className="forgot-password-link">
+                Forgot password?
+              </a>
+            </div>
+
+            <button type="submit" className="login-button" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
+            </button>
+
+            <div className="face-quick-switch-link" style={{ marginTop: "14px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode("face");
+                  setError(null);
+                  setFaceErrorMessage(null);
+                  setScanAttempts(0);
+                  setFaceScanState("idle");
+                }}
+              >
+                <ScanFace size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
+                Or sign in automatically with Face Recognition &rarr;
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="login-help">
           <p>
@@ -777,25 +1022,33 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               <img src="/icon-192.png" alt="KryptonVision App" className="install-app-icon" />
             </div>
             <div className="install-banner-text">
-              <h4>{isStandalone ? "KryptonVision App Active" : "Install KryptonVision Application"}</h4>
+              <h4>{isStandalone ? "KryptonVision App Active" : "Install KryptonVision Desktop App"}</h4>
               <p>
                 {isStandalone
                   ? "You are currently running in standalone application mode."
-                  : "Install on Windows, Mac, Android, or iOS as a native standalone app."}
+                  : "Install on Windows Desktop, Mac, or Mobile in 1 click."}
               </p>
             </div>
             {!isStandalone && (
               <button
                 type="button"
-                onClick={handleInstallClick}
+                onClick={() => {
+                  if (deferredPrompt) {
+                    handleInstallClick();
+                  } else {
+                    downloadDesktopShortcut("KryptonVision");
+                  }
+                }}
                 className="btn-install-pwa"
+                title="Download 1-click Windows Desktop Shortcut or install as standalone app"
               >
-                <Download size={13} /> Install Now
+                <Download size={13} /> {deferredPrompt ? "Install Now" : "Get Desktop App"}
               </button>
             )}
           </div>
         </div>
 
+        {/* QR Code Section */}
         <div className="login-qr-section">
           <button
             type="button"
@@ -805,11 +1058,20 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             <QrCode size={18} />
             {showQR ? "Hide Login QR Code" : "Show Login QR Code"}
           </button>
-          
+
           {showQR && (
             <div className="qr-display">
               <p className="qr-label">Scan to access login page</p>
-              <div className="qr-canvas-wrapper" style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "200px", padding: "8px" }}>
+              <div
+                className="qr-canvas-wrapper"
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  minHeight: "200px",
+                  padding: "8px",
+                }}
+              >
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
@@ -847,13 +1109,17 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           <div className="pwa-modal" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80">
               <div className="flex items-center gap-3">
-                <img src="/icon-192.png" alt="KryptonVision" className="w-8 h-8 rounded-lg shadow-sm" />
+                <img
+                  src="/icon-192.png"
+                  alt="KryptonVision"
+                  className="w-8 h-8 rounded-lg shadow-sm"
+                />
                 <div>
                   <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                     Install KryptonVision Application
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Enterprise Security Command Center
+                    Enterprise Security Operations Center
                   </p>
                 </div>
               </div>
@@ -907,11 +1173,37 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             <div className="p-5 space-y-4 text-xs">
               {activeInstallTab === "desktop" && (
                 <div className="space-y-3">
-                  {deferredPrompt && (
-                    <div className="p-3 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl flex items-center justify-between gap-3">
+                  {/* 1-Click Desktop Shortcut Downloader */}
+                  <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/40 dark:to-indigo-950/40 border border-blue-200 dark:border-blue-800/60 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-blue-900 dark:text-blue-200 text-xs">Browser Ready</p>
-                        <p className="text-[11px] text-blue-700 dark:text-blue-300">Click to launch the 1-click installer</p>
+                        <p className="font-bold text-blue-900 dark:text-blue-200 text-xs flex items-center gap-1.5">
+                          <Laptop size={14} /> 1-Click Windows Desktop Launcher
+                        </p>
+                        <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                          Place a permanent KryptonVision application icon directly on your Windows desktop.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => downloadDesktopShortcut("KryptonVision")}
+                        className="py-1.5 px-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <Download size={13} /> Download Shortcut (.url)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Browser PWA 1-Click Prompt if ready */}
+                  {deferredPrompt && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-emerald-900 dark:text-emerald-200 text-xs">
+                          Native Browser App Ready
+                        </p>
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                          Click to install directly as a Chrome/Edge application window.
+                        </p>
                       </div>
                       <button
                         type="button"
@@ -926,29 +1218,60 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                             }
                           }
                         }}
-                        className="py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1.5 flex-shrink-0"
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1.5 flex-shrink-0"
                       >
-                        <Download size={13} /> Install Now
+                        <Download size={13} /> Install PWA
+                      </button>
+                    </div>
+                  )}
+
+                  {/* If embedded in iframe, provide breakout */}
+                  {isInIframe && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-amber-900 dark:text-amber-200 text-xs">
+                          Embedded View Detected
+                        </p>
+                        <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                          Open in a full browser window to enable native browser app installation and camera permissions.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.open(window.location.origin + "/login", "_blank")}
+                        className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <ExternalLink size={13} /> Open Standalone
                       </button>
                     </div>
                   )}
 
                   <div className="space-y-2.5 text-slate-700 dark:text-slate-300">
-                    <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on Chrome, Edge, or Brave:</p>
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      How to install via Chrome, Edge, or Brave:
+                    </p>
                     <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                        1
+                      </span>
                       <p className="text-[11px] leading-relaxed">
                         Look at the right side of your <strong>browser address bar</strong> at the top.
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                        2
+                      </span>
                       <p className="text-[11px] leading-relaxed">
-                        Click the <strong>Install icon (⤓ or ⊕)</strong>, or open the browser menu (<strong>⋮</strong> or <strong>⋯</strong>) and select <strong>&quot;Install KryptonVision&quot;</strong>.
+                        Click the <strong>Install icon (⤓ or ⊕)</strong>, or open the browser menu (
+                        <strong>⋮</strong> or <strong>⋯</strong>) and select{" "}
+                        <strong>&quot;Install KryptonVision&quot;</strong>.
                       </p>
                     </div>
                     <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                      <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                        3
+                      </span>
                       <p className="text-[11px] leading-relaxed">
                         Click <strong>Install</strong>. KryptonVision will launch in its own standalone window and add a desktop/start menu shortcut!
                       </p>
@@ -959,27 +1282,37 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
               {activeInstallTab === "ios" && (
                 <div className="space-y-3 text-slate-700 dark:text-slate-300">
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on iPhone or iPad:</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">
+                    How to install on iPhone or iPad:
+                  </p>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      1
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Make sure you are opening this page in <strong>Apple Safari</strong>.
                     </p>
                   </div>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      2
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Tap the <strong>Share</strong> button (the square icon with an upward arrow ⎋ at the bottom toolbar).
                     </p>
                   </div>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      3
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong> (➕).
                     </p>
                   </div>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">4</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      4
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Tap <strong>Add</strong> in the top-right corner. KryptonVision will now appear on your iPhone home screen!
                     </p>
@@ -989,21 +1322,29 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
               {activeInstallTab === "android" && (
                 <div className="space-y-3 text-slate-700 dark:text-slate-300">
-                  <p className="font-semibold text-slate-900 dark:text-slate-100">How to install on Android:</p>
+                  <p className="font-semibold text-slate-900 dark:text-slate-100">
+                    How to install on Android:
+                  </p>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">1</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      1
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Tap the <strong>three dots (⋮)</strong> in the top-right corner of Google Chrome.
                     </p>
                   </div>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">2</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      2
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Tap <strong>&quot;Install App&quot;</strong> or <strong>&quot;Add to Home screen&quot;</strong>.
                     </p>
                   </div>
                   <div className="flex items-start gap-2.5 p-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800">
-                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">3</span>
+                    <span className="w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-300 font-bold flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                      3
+                    </span>
                     <p className="text-[11px] leading-relaxed">
                       Tap <strong>Install</strong> to add the native app shortcut to your home screen and app drawer.
                     </p>
@@ -1013,7 +1354,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
               {/* Native App Benefits */}
               <div className="p-3 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 rounded-xl space-y-1.5">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Installed Application Benefits:</p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                  Desktop Application Benefits:
+                </p>
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-400">
                   <div className="flex items-center gap-1.5">
                     <Check size={12} className="text-emerald-500 flex-shrink-0" />
@@ -1021,15 +1364,15 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Check size={12} className="text-emerald-500 flex-shrink-0" />
-                    <span>Fast Desktop / App Launch</span>
+                    <span>Instant Desktop Launch</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Check size={12} className="text-emerald-500 flex-shrink-0" />
-                    <span>No Browser Address Bar</span>
+                    <span>No Browser URL Bar</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Check size={12} className="text-emerald-500 flex-shrink-0" />
-                    <span>Direct Camera Access</span>
+                    <span>Direct Camera &amp; AI Access</span>
                   </div>
                 </div>
               </div>
