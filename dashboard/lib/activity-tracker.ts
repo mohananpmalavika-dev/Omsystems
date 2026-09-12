@@ -18,6 +18,7 @@ interface PageVisit {
   isActive: boolean;
 }
 
+
 interface ActivityTrackerConfig {
   apiBaseUrl: string;
   heartbeatInterval?: number; // milliseconds
@@ -77,7 +78,7 @@ class ActivityTracker {
   async startSession(userId: string, accessToken: string) {
     try {
       const deviceInfo = this.getDeviceInfo();
-      
+
       const response = await fetch(`${this.config.apiBaseUrl}/v1/activity/sessions/start`, {
         method: 'POST',
         headers: {
@@ -101,7 +102,7 @@ class ActivityTracker {
       this.startHeartbeat(accessToken);
 
       this.log('Session started:', this.session.sessionId);
-      
+
       // Store in sessionStorage for recovery
       sessionStorage.setItem('activitySessionId', this.session.sessionId);
       sessionStorage.setItem('activityAccessToken', accessToken);
@@ -185,7 +186,7 @@ class ActivityTracker {
       }
 
       const data = await response.json();
-      
+
       this.currentPageVisit = {
         pageVisitId: data.pageVisitId,
         pagePath,
@@ -226,7 +227,7 @@ class ActivityTracker {
       if (!token) return;
 
       const durationSeconds = Math.floor((new Date().getTime() - this.currentPageVisit.startTime.getTime()) / 1000);
-      
+
       // Update active/idle time
       if (!this.isIdle) {
         this.totalActiveTime += Math.floor((new Date().getTime() - this.activeTimeStart.getTime()) / 1000);
@@ -348,10 +349,10 @@ class ActivityTracker {
     // Track form interactions
     document.addEventListener('input', (e) => {
       this.handleActivity();
-      if (this.currentPageVisit && 
-          ((e.target as HTMLElement).tagName === 'INPUT' ||
-           (e.target as HTMLElement).tagName === 'TEXTAREA' ||
-           (e.target as HTMLElement).tagName === 'SELECT')) {
+      if (this.currentPageVisit &&
+        ((e.target as HTMLElement).tagName === 'INPUT' ||
+          (e.target as HTMLElement).tagName === 'TEXTAREA' ||
+          (e.target as HTMLElement).tagName === 'SELECT')) {
         this.currentPageVisit.formInteractions++;
       }
     });
@@ -359,7 +360,7 @@ class ActivityTracker {
 
   private handleActivity() {
     this.lastActivityTime = new Date();
-    
+
     // If was idle, mark as active now
     if (this.isIdle) {
       const idleEnd = new Date();
@@ -450,7 +451,7 @@ class ActivityTracker {
       const accessToken = sessionStorage.getItem('activityAccessToken');
       if (accessToken) {
         const durationSeconds = Math.floor((new Date().getTime() - this.currentPageVisit.startTime.getTime()) / 1000);
-        
+
         // Update active/idle time
         if (!this.isIdle) {
           this.totalActiveTime += Math.floor((new Date().getTime() - this.activeTimeStart.getTime()) / 1000);
@@ -523,7 +524,7 @@ class ActivityTracker {
 
   private getQueryParameters(): Record<string, any> {
     if (typeof window === 'undefined') return {};
-    
+
     const params: Record<string, any> = {};
     const searchParams = new URLSearchParams(window.location.search);
     searchParams.forEach((value, key) => {
