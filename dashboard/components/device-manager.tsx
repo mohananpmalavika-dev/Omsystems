@@ -3300,7 +3300,7 @@ export function DeviceManager() {
 
                   <div style={{ marginTop: "10px", display: "flex", gap: "8px" }}>
                     <Link
-                      href="/live"
+                      href="/control-room"
                       className="primary-button"
                       style={{ fontSize: "11px", padding: "4px 10px", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "4px" }}
                     >

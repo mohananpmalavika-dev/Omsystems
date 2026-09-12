@@ -62,6 +62,7 @@ export function RecorderConfigurationView({
 
   // Modal
   const [isRollbackOpen, setIsRollbackOpen] = useState(false);
+  const [rebooting, setRebooting] = useState(false);
 
   // Recorder Data
   const [channels, setChannels] = useState<any[]>([]);
@@ -178,6 +179,33 @@ export function RecorderConfigurationView({
     { id: "time", label: "Time & NTP", icon: Clock },
     { id: "maintenance", label: "Maintenance & Rollback", icon: History },
   ];
+
+  const handleReboot = async () => {
+    if (!recorderId) return;
+    if (!confirm("Are you sure you want to initiate a graceful hardware reboot of this recorder? Streaming and recording will pause for ~60 seconds.")) return;
+    setRebooting(true);
+    setFeedback(null);
+    try {
+      const res = await fetch(`/v1/device-configuration/recorders/${encodeURIComponent(recorderId)}/reboot`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "Reboot command failed");
+      setFeedback({
+        type: "success",
+        message: data.message || "Orderly reboot command successfully dispatched to recorder daemon.",
+      });
+    } catch (err: any) {
+      setFeedback({
+        type: "error",
+        message: err.message || "Failed to dispatch reboot command.",
+      });
+    } finally {
+      setRebooting(false);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -660,11 +688,12 @@ export function RecorderConfigurationView({
               </p>
               <button
                 type="button"
-                onClick={() => alert("Reboot command sent to recorder daemon")}
-                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+                disabled={rebooting}
+                onClick={handleReboot}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition disabled:opacity-50"
               >
-                <Power className="w-3.5 h-3.5 text-amber-400" />
-                Reboot Recorder
+                <Power className={`w-3.5 h-3.5 ${rebooting ? "animate-spin text-amber-300" : "text-amber-400"}`} />
+                {rebooting ? "Dispatching Reboot..." : "Reboot Recorder"}
               </button>
             </div>
 

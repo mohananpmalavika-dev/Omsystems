@@ -124,6 +124,7 @@ export const navigation: NavGroup[] = [
     icon: LayoutDashboard,
     items: [
       { label: "Command Center", href: "/", icon: LayoutDashboard },
+      { label: "Executive Dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Fleet Branches", href: "/operations/branches", icon: Building2 },
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
       { label: "AI Alerts & Incidents", href: "/analytics/alerts", icon: BellRing },
@@ -133,6 +134,7 @@ export const navigation: NavGroup[] = [
       { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Media Pipeline & Scheduler", href: "/operations/media-pipeline", icon: Layers },
       { label: "HA Failover Cluster", href: "/operations/ha-failover", icon: Server },
+      { label: "Edge Fleet Lifecycle", href: "/operations/edge-fleet", icon: Server },
       { label: "Infrastructure Operations", href: "/operations/infrastructure", icon: Network },
       { label: "Fleet Maintenance Command", href: "/operations/maintenance", icon: Wrench },
       { label: "Fleet Observability & SLO", href: "/operations/observability", icon: BarChart3 },
@@ -154,6 +156,7 @@ export const navigation: NavGroup[] = [
       { label: "Edge Gateways", href: "/operations/edge-agents", icon: Cpu },
       { label: "Device Connectivity", href: "/operations/device-connectivity", icon: Network },
       { label: "Diagnostic Scans & Health", href: "/maintenance/health", icon: Gauge },
+      { label: "Diagnostics & Connectivity", href: "/diagnostics", icon: Gauge },
       { label: "Security Device Inventory", href: "/security-devices", icon: Server },
       { label: "Network Device Discovery", href: "/security-devices/discovery", icon: Radar },
       { label: "Branch Security Posture", href: "/security-devices/branch-posture", icon: ShieldCheck },
@@ -196,6 +199,7 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
+      { label: "Asset Replacement & Lineage", href: "/operations/assets", icon: Boxes },
       { label: "Maintenance Work Orders", href: "/maintenance/workorders", icon: ClipboardCheck },
       { label: "Vendor & Service Directory", href: "/maintenance/vendors", icon: Handshake },
       { label: "AMC & Warranty Contracts", href: "/maintenance/amc", icon: FileClock },
@@ -206,6 +210,7 @@ export const navigation: NavGroup[] = [
     label: "ASSURANCE & GOVERNANCE",
     icon: ShieldCheck,
     items: [
+      { label: "Assurance Hub", href: "/compliance/overview", icon: ShieldCheck },
       { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },
       { label: "Compliance Dashboard", href: "/compliance/dashboard", icon: LayoutDashboard },
       { label: "Assessments & Audits", href: "/compliance/assessments", icon: ClipboardCheck },

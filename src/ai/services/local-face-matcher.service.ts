@@ -7,6 +7,8 @@
 
 import { randomUUID } from "node:crypto";
 import type { FaceMatchResult, FaceMatchCandidate } from "../domain/local-ai.types.js";
+import { activeFaceRegistryMatches } from "../../analytics/identity-registry.js";
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 
 export interface WatchlistFaceRecord {
   personId: string;
@@ -46,6 +48,8 @@ export class LocalFaceMatcherService {
     branchId: string;
     embeddingVector: number[];
     minThreshold?: number;
+    store?: ControlPlaneStore;
+    tenantId?: string;
   }): Promise<FaceMatchResult> {
     const threshold = options.minThreshold ?? 0.82;
     if (!Number.isFinite(threshold) || threshold < 0.5 || threshold > 0.99) {
@@ -57,19 +61,46 @@ export class LocalFaceMatcherService {
     let bestMatch: FaceMatchCandidate | undefined;
     let highestSimilarity = 0;
 
-    for (const record of this.watchlist.values()) {
-      const sim = this.calculateCosineSimilarity(inputVec, record.embeddingVector);
-      if (sim > highestSimilarity) {
-        highestSimilarity = sim;
-        if (sim >= threshold) {
+    // First check persistent governed registry if store and tenantId provided
+    if (options.store && options.tenantId) {
+      try {
+        const matches = await activeFaceRegistryMatches(options.store, options.tenantId, inputVec, {
+          minSimilarity: threshold,
+          limit: 1,
+        });
+        if (matches.length > 0) {
+          const top = matches[0]!;
           bestMatch = {
-            personId: record.personId,
-            name: record.name,
-            watchlistType: record.watchlistType,
-            similarity: Number(sim.toFixed(4)),
-            watchlistId: `wl-${record.watchlistType.toLowerCase()}`,
-            notes: record.notes,
+            personId: top.personId,
+            name: top.personName,
+            watchlistType: (top.listType?.toUpperCase() as any) ?? "SUSPECT",
+            similarity: top.similarity,
+            watchlistId: top.watchlistId,
+            notes: top.metadata ? JSON.stringify(top.metadata) : undefined,
           };
+          highestSimilarity = top.similarity;
+        }
+      } catch (err) {
+        console.warn("Face registry search encountered error, checking in-memory records:", err);
+      }
+    }
+
+    // Also check in-memory records
+    if (!bestMatch) {
+      for (const record of this.watchlist.values()) {
+        const sim = this.calculateCosineSimilarity(inputVec, record.embeddingVector);
+        if (sim > highestSimilarity) {
+          highestSimilarity = sim;
+          if (sim >= threshold) {
+            bestMatch = {
+              personId: record.personId,
+              name: record.name,
+              watchlistType: record.watchlistType,
+              similarity: Number(sim.toFixed(4)),
+              watchlistId: `wl-${record.watchlistType.toLowerCase()}`,
+              notes: record.notes,
+            };
+          }
         }
       }
     }

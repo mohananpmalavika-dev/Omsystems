@@ -8,7 +8,12 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import type { Action, User } from "../domain/models.js";
-import { localIdentityState } from "../analytics/identity-registry.js";
+import {
+  localIdentityState,
+  activeFaceRegistryMatches,
+  recordFaceRegistryMatches,
+  recordFaceMatchReview,
+} from "../analytics/identity-registry.js";
 
 // Type guard to check if store has pool access
 function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
@@ -404,6 +409,10 @@ function normalizedFaceRow(row: UnknownRecord) {
     genderEstimate: firstString(row, "genderEstimate", "gender_estimate") ?? null,
     wearingMask: firstBoolean(row, "wearingMask", "wearing_mask") ?? null,
     snapshotReference: firstString(row, "snapshotReference", "snapshot_reference") ?? null,
+    reviewStatus: firstString(row, "reviewStatus", "review_status") ?? "pending",
+    reviewedBy: firstString(row, "reviewedBy", "reviewed_by") ?? null,
+    reviewedAt: firstString(row, "reviewedAt", "reviewed_at") ?? null,
+    reviewNotes: firstString(row, "reviewNotes", "review_notes") ?? null,
     occurredAt: isoValue(row.occurredAt ?? row.occurred_at),
   };
 }
@@ -776,6 +785,8 @@ export async function registerAnalyticsPhase2Routes(
           externalId: body.externalId, fullName: body.fullName,
           dateOfBirth: body.dateOfBirth, gender: body.gender,
           notes: body.notes, metadata: body.metadata,
+          embedding: body.embedding ?? null,
+          embeddings: body.embedding ? [body.embedding] : [],
           enrolledBy: request.currentUser.id, enrolledAt: new Date().toISOString(),
           lastSeenAt: null, matchCount: 0, embeddingCount: embCount,
         };
@@ -954,6 +965,7 @@ export async function registerAnalyticsPhase2Routes(
         `SELECT fe.id, fe.analytics_event_id, fe.camera_id, fe.watchlist_id, fe.person_id,
                 fe.similarity_score, fe.face_quality, fe.age_estimate,
                 fe.gender_estimate, fe.wearing_mask, fe.snapshot_reference,
+                fe.review_status, fe.reviewed_by, fe.reviewed_at, fe.review_notes,
                 fe.occurred_at, p.full_name as person_name,
                 w.name as watchlist_name, rn.name as camera_name
          FROM face_recognition_events fe
@@ -986,6 +998,210 @@ export async function registerAnalyticsPhase2Routes(
     });
 
     return { data };
+  });
+
+  /**
+   * POST /v1/analytics/face-match
+   * Probe search against enrolled watchlists using 512-dim vector
+   */
+  app.post("/v1/analytics/face-match", async (request, reply) => {
+    const parsed = z
+      .object({
+        cameraId: z.string().trim().min(1).max(200).optional(),
+        embedding: z.array(z.number().finite()).length(512),
+        minSimilarity: z.coerce.number().min(0.5).max(1).default(0.80),
+        watchlistIds: z.array(z.string().uuid()).optional(),
+        limit: z.coerce.number().int().min(1).max(50).default(10),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const body = parsed.data;
+
+    if (!await hasAnyAccess(store, request.currentUser, "face:view")) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (body.cameraId) {
+      const permittedCameraIds = await accessibleCameraIds(store, request.currentUser, "face:view");
+      if (!permittedCameraIds.has(body.cameraId)) {
+        return reply.code(404).send({ error: "camera_not_found_or_forbidden" });
+      }
+    }
+
+    const matches = await activeFaceRegistryMatches(
+      store,
+      request.currentUser.tenantId,
+      body.embedding,
+      {
+        minSimilarity: body.minSimilarity,
+        watchlistIds: body.watchlistIds,
+        limit: body.limit,
+      },
+    );
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "face.match_searched",
+      resourceNodeId: null,
+      outcome: "success",
+      details: {
+        cameraId: body.cameraId ?? null,
+        minSimilarity: body.minSimilarity,
+        matchCount: matches.length,
+        topCandidate: matches[0]?.personName ?? null,
+      },
+    });
+
+    return reply.send({
+      data: {
+        matched: matches.length > 0,
+        bestMatch: matches[0] ?? null,
+        matches,
+      },
+    });
+  });
+
+  /**
+   * POST /v1/analytics/face-events
+   * Record a face recognition event from camera or analytics pipeline
+   */
+  app.post("/v1/analytics/face-events", async (request, reply) => {
+    const parsed = z
+      .object({
+        cameraId: z.string().trim().min(1).max(200),
+        watchlistId: z.string().uuid().optional(),
+        personId: z.string().uuid().optional(),
+        similarityScore: z.number().min(0).max(1),
+        faceBbox: z.object({
+          x: z.number().min(0).max(1),
+          y: z.number().min(0).max(1),
+          width: z.number().positive().max(1),
+          height: z.number().positive().max(1),
+        }),
+        faceQuality: z.number().min(0).max(1).optional(),
+        ageEstimate: z.number().int().min(0).max(150).optional(),
+        genderEstimate: z.enum(["male", "female"]).optional(),
+        wearingMask: z.boolean().optional(),
+        snapshotReference: z.string().optional(),
+        occurredAt: z.string().datetime().optional(),
+        analyticsEventId: z.string().uuid().optional(),
+      })
+      .safeParse(request.body);
+    if (!parsed.success) return invalidInput(reply, parsed.error);
+    const body = parsed.data;
+
+    const permittedCameraIds = await accessibleCameraIds(store, request.currentUser, "face:view");
+    if (!permittedCameraIds.has(body.cameraId)) {
+      return reply.code(404).send({ error: "camera_not_found_or_forbidden" });
+    }
+
+    const result = await recordFaceRegistryMatches(store, request.currentUser.tenantId, body);
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "face.event_recorded",
+      resourceNodeId: null,
+      outcome: "success",
+      details: {
+        eventId: result.id,
+        cameraId: body.cameraId,
+        personId: body.personId ?? null,
+        similarityScore: body.similarityScore,
+      },
+    });
+
+    return reply.code(201).send({ data: result });
+  });
+
+  /**
+   * POST /v1/analytics/face-events/:id/reviews
+   * Human-in-the-loop review confirmation
+   */
+  app.post("/v1/analytics/face-events/:id/reviews", async (request, reply) => {
+    const paramsParsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    if (!paramsParsed.success) return invalidInput(reply, paramsParsed.error);
+    const { id: eventId } = paramsParsed.data;
+
+    const bodyParsed = z
+      .object({
+        decision: z.enum(["confirmed", "rejected", "unsure"]),
+        notes: z.string().max(2000).optional(),
+      })
+      .safeParse(request.body);
+    if (!bodyParsed.success) return invalidInput(reply, bodyParsed.error);
+    const body = bodyParsed.data;
+
+    if (!await hasAnyAccess(store, request.currentUser, "face:view")) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    const review = await recordFaceMatchReview(store, request.currentUser.tenantId, {
+      eventId,
+      reviewerId: request.currentUser.id,
+      decision: body.decision,
+      notes: body.notes,
+    });
+
+    await store.writeAudit({
+      tenantId: request.currentUser.tenantId,
+      actorUserId: request.currentUser.id,
+      action: "face.event_reviewed",
+      resourceNodeId: null,
+      outcome: "success",
+      details: {
+        eventId,
+        decision: body.decision,
+        reviewId: review.reviewId,
+      },
+    });
+
+    return reply.code(201).send({ data: review });
+  });
+
+  /**
+   * GET /v1/analytics/face-events/:id/reviews
+   * List review audit history for a face event
+   */
+  app.get("/v1/analytics/face-events/:id/reviews", async (request, reply) => {
+    const paramsParsed = z.object({ id: z.string().uuid() }).safeParse(request.params);
+    if (!paramsParsed.success) return invalidInput(reply, paramsParsed.error);
+    const { id: eventId } = paramsParsed.data;
+
+    if (!await hasAnyAccess(store, request.currentUser, "face:view")) {
+      return reply.code(403).send({ error: "forbidden" });
+    }
+
+    if (!hasPool(store)) {
+      const state = localState(store);
+      const event = state.faceEvents.find((e) => String(e.id) === eventId && e.tenantId === request.currentUser.tenantId);
+      if (!event) return { data: [] };
+      return {
+        data: event.reviewedBy ? [{
+          id: randomUUID(),
+          tenantId: request.currentUser.tenantId,
+          recognitionEventId: eventId,
+          reviewerId: event.reviewedBy,
+          reviewerName: "Security Operator",
+          decision: event.reviewStatus,
+          notes: event.reviewNotes ?? null,
+          reviewedAt: event.reviewedAt ?? event.occurredAt,
+        }] : [],
+      };
+    }
+
+    const reviews = await store.db.query(
+      `SELECT r.id, r.recognition_event_id, r.reviewer_id, r.decision,
+              r.notes, r.reviewed_at, u.display_name as reviewer_name
+       FROM face_match_reviews r
+       LEFT JOIN users u ON u.id = r.reviewer_id
+       WHERE r.tenant_id = $1 AND r.recognition_event_id = $2
+       ORDER BY r.reviewed_at DESC`,
+      [request.currentUser.tenantId, eventId],
+    );
+
+    return { data: reviews.rows };
   });
 
   // ==================== ANPR ====================

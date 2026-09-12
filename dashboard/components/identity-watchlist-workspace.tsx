@@ -33,7 +33,7 @@ import {
 import { AiLiveCameraInspector } from "./ai-live-camera-inspector";
 
 type WorkspaceMode = "face" | "anpr";
-type DialogKind = "face-watchlist" | "face-person" | "anpr-watchlist" | "anpr-plate";
+type DialogKind = "face-watchlist" | "face-person" | "anpr-watchlist" | "anpr-plate" | "face-probe";
 type Severity = "P1" | "P2" | "P3" | "P4" | "P5";
 type FaceWatchlistFormValue = {
   name: string;
@@ -254,6 +254,25 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
     }
   };
 
+  const handleReviewFaceEvent = async (eventId: string, decision: "confirmed" | "rejected") => {
+    try {
+      await identityAnalyticsApi.reviewFaceEvent(eventId, { decision });
+      setFaceEvents((current) =>
+        current.map((e) =>
+          e.id === eventId
+            ? { ...e, reviewStatus: decision, review_status: decision, reviewedAt: new Date().toISOString() }
+            : e
+        )
+      );
+      setMessage({
+        kind: "success",
+        text: `Face recognition event ${decision === "confirmed" ? "confirmed" : "rejected"} by operator.`,
+      });
+    } catch (error) {
+      setMessage({ kind: "error", text: readable(error) });
+    }
+  };
+
   const createAnprWatchlist = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -402,7 +421,20 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
         <div className="space-y-5">
           {mode === "face" ? (
             <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
-              <header className="flex items-center justify-between gap-3 border-b border-slate-800 p-5"><div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">IDENTITY ROSTER</p><h2 className="mt-1 text-lg font-semibold">{selectedFace?.name ?? "Select a face watchlist"}</h2></div><button type="button" disabled={!selectedFaceList} onClick={() => setDialog("face-person")} className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40"><UserPlus size={14} />Enrol identity</button></header>
+              <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5">
+                <div>
+                  <p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">IDENTITY ROSTER</p>
+                  <h2 className="mt-1 text-lg font-semibold">{selectedFace?.name ?? "Select a face watchlist"}</h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setDialog("face-probe")} className="inline-flex items-center gap-2 rounded-lg bg-cyan-600/20 px-3 py-2 text-xs font-semibold text-cyan-300 hover:bg-cyan-600/30">
+                    <ScanFace size={14} />Test Vector Match
+                  </button>
+                  <button type="button" disabled={!selectedFaceList} onClick={() => setDialog("face-person")} className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-40">
+                    <UserPlus size={14} />Enrol identity
+                  </button>
+                </div>
+              </header>
               {persons.length === 0 ? <EmptyState icon={<UsersRound />} title="No enrolled identities" text={selectedFaceList ? "Add an approved identity record to this watchlist." : "Select or create a watchlist first."} /> : <div className="divide-y divide-slate-800">{persons.map((person) => {
                 const embeddings = numberValue(value(person, "embeddingCount", "embedding_count"));
                 return <article key={person.id} className="flex items-center gap-3 p-4"><span className="grid h-9 w-9 place-items-center rounded-full bg-slate-800 text-slate-400"><ScanFace size={16} /></span><div className="min-w-0 flex-1"><strong className="block truncate text-sm">{stringValue(value(person, "fullName", "full_name"), "Unnamed identity")}</strong><span className="text-xs text-slate-500">{stringValue(value(person, "externalId", "external_id"), "No external ID")} · {numberValue(value(person, "matchCount", "match_count"))} matches</span></div><span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase ${embeddings > 0 ? "bg-emerald-500/15 text-emerald-300" : "bg-amber-500/15 text-amber-300"}`}>{embeddings > 0 ? `${embeddings} embeddings` : "Capture required"}</span></article>;
@@ -420,7 +452,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
 
           <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
             <header className="flex items-center justify-between border-b border-slate-800 p-5"><div><p className="text-[10px] font-bold tracking-[.18em] text-cyan-400">RECENT MATCHES</p><h2 className="mt-1 text-lg font-semibold">Review queue</h2></div><Camera size={19} className="text-slate-600" /></header>
-            {loading ? <LoadingState text="Loading recognition events" /> : currentEvents.length === 0 ? <EmptyState icon={<Eye />} title="No matching events" text="No authorized recognition events match the current filters." /> : mode === "face" ? <FaceEventList events={faceEvents} /> : <AnprEventList events={anprEvents} />}
+            {loading ? <LoadingState text="Loading recognition events" /> : currentEvents.length === 0 ? <EmptyState icon={<Eye />} title="No matching events" text="No authorized recognition events match the current filters." /> : mode === "face" ? <FaceEventList events={faceEvents} onReview={handleReviewFaceEvent} /> : <AnprEventList events={anprEvents} />}
           </section>
         </div>
       </div>
@@ -439,6 +471,7 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
             {dialog === "face-person" && <FacePersonForm value={facePersonForm} setValue={setFacePersonForm} saving={saving} onSubmit={enrollFacePerson} />}
             {dialog === "anpr-watchlist" && <AnprWatchlistForm value={anprWatchlistForm} setValue={setAnprWatchlistForm} saving={saving} onSubmit={createAnprWatchlist} />}
             {dialog === "anpr-plate" && <PlateForm value={plateForm} setValue={setPlateForm} saving={saving} onSubmit={addPlate} />}
+            {dialog === "face-probe" && <FaceProbeForm watchlistId={selectedFaceList} />}
           </section>
         </div>
       )}
@@ -446,13 +479,214 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
   );
 }
 
-function FaceEventList({ events }: { events: FaceRecognitionEvent[] }) {
-  return <div className="divide-y divide-slate-800">{events.map((event) => {
-    const similarity = percent(value(event, "similarityScore", "similarity_score"));
-    const occurredAt = stringValue(value(event, "occurredAt", "occurred_at"));
-    const snapshot = stringValue(value(event, "snapshotReference", "snapshot_reference"));
-    return <article key={event.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><span className="rounded bg-violet-500/15 px-2 py-1 text-[9px] font-bold text-violet-300">{similarity} MATCH</span><strong className="truncate text-sm">{stringValue(value(event, "personName", "person_name"), "Unknown identity")}</strong></div><p className="mt-2 text-xs text-slate-500">{stringValue(value(event, "watchlistName", "watchlist_name"), "Unassigned watchlist")} · {stringValue(value(event, "cameraName", "camera_name"), "Unknown camera")}</p><p className="mt-1 flex items-center gap-1 text-[10px] text-slate-600"><Clock3 size={11} />{date(occurredAt)}</p></div>{snapshot ? <a href={snapshot} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-300">Open evidence <ArrowUpRight size={12} /></a> : <span className="text-[10px] text-slate-600">No snapshot reference</span>}</article>;
-  })}</div>;
+function FaceEventList({
+  events,
+  onReview,
+}: {
+  events: FaceRecognitionEvent[];
+  onReview?: (eventId: string, decision: "confirmed" | "rejected") => void;
+}) {
+  return (
+    <div className="divide-y divide-slate-800">
+      {events.map((event) => {
+        const similarity = percent(value(event, "similarityScore", "similarity_score"));
+        const occurredAt = stringValue(value(event, "occurredAt", "occurred_at"));
+        const snapshot = stringValue(value(event, "snapshotReference", "snapshot_reference"));
+        const reviewStatus = stringValue(value(event, "reviewStatus", "review_status"), "pending");
+        return (
+          <article key={event.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded bg-violet-500/15 px-2 py-1 text-[9px] font-bold text-violet-300">
+                  {similarity} MATCH
+                </span>
+                <strong className="truncate text-sm">
+                  {stringValue(value(event, "personName", "person_name"), "Unknown identity")}
+                </strong>
+                <span
+                  className={`rounded px-2 py-0.5 text-[9px] font-bold uppercase ${
+                    reviewStatus === "confirmed"
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : reviewStatus === "rejected"
+                      ? "bg-red-500/15 text-red-300"
+                      : reviewStatus === "dismissed"
+                      ? "bg-slate-800 text-slate-400"
+                      : "bg-amber-500/15 text-amber-300"
+                  }`}
+                >
+                  {reviewStatus === "pending" ? "Pending Review" : reviewStatus}
+                </span>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                {stringValue(value(event, "watchlistName", "watchlist_name"), "Unassigned watchlist")} ·{" "}
+                {stringValue(value(event, "cameraName", "camera_name"), "Unknown camera")}
+              </p>
+              <p className="mt-1 flex items-center gap-1 text-[10px] text-slate-600">
+                <Clock3 size={11} />
+                {date(occurredAt)}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              {reviewStatus === "pending" && onReview && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onReview(event.id, "confirmed")}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-600/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30"
+                    title="Confirm this match"
+                  >
+                    <CheckCircle2 size={12} /> Confirm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onReview(event.id, "rejected")}
+                    className="inline-flex items-center gap-1 rounded-lg bg-red-600/20 px-2.5 py-1 text-xs font-semibold text-red-300 hover:bg-red-600/30"
+                    title="Reject false positive match"
+                  >
+                    <X size={12} /> Reject
+                  </button>
+                </div>
+              )}
+              {snapshot ? (
+                <a
+                  href={snapshot}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-cyan-300"
+                >
+                  Open evidence <ArrowUpRight size={12} />
+                </a>
+              ) : (
+                <span className="text-[10px] text-slate-600">No snapshot reference</span>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function FaceProbeForm({
+  watchlistId,
+}: {
+  watchlistId?: string;
+}) {
+  const [similarityThreshold, setSimilarityThreshold] = useState(0.80);
+  const [seed, setSeed] = useState("1.0");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const runTest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
+    try {
+      const seedVal = parseFloat(seed) || 1.0;
+      const vec: number[] = [];
+      for (let i = 0; i < 512; i++) {
+        vec.push(Math.sin(seedVal * (i + 1)));
+      }
+      const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0)) || 1;
+      const embedding = vec.map((v) => v / norm);
+
+      const res = await identityAnalyticsApi.matchFace({
+        embedding,
+        minSimilarity: similarityThreshold,
+        watchlistIds: watchlistId ? [watchlistId] : undefined,
+      });
+      setResult(res.data);
+    } catch (err: any) {
+      setError(readable(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form className="space-y-4 p-5" onSubmit={runTest}>
+      <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs leading-5 text-cyan-200">
+        Perform an authentic 512-dimension vector cosine distance probe against enrolled watchlist vectors stored in the pgvector database.
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className={labelClass}>
+          Vector Test Seed
+          <input
+            type="number"
+            step="0.1"
+            value={seed}
+            onChange={(e) => setSeed(e.target.value)}
+            className={inputClass}
+            placeholder="1.0"
+          />
+        </label>
+        <label className={labelClass}>
+          Minimum Match Threshold
+          <select
+            value={similarityThreshold}
+            onChange={(e) => setSimilarityThreshold(parseFloat(e.target.value))}
+            className={inputClass}
+          >
+            <option value={0.75}>0.75 · Lenient</option>
+            <option value={0.80}>0.80 · Standard VIP</option>
+            <option value={0.82}>0.82 · Standard Staff</option>
+            <option value={0.85}>0.85 · Strict Blacklist</option>
+            <option value={0.90}>0.90 · High Security</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="flex justify-end border-t border-slate-800 pt-4">
+        <button
+          type="submit"
+          disabled={loading}
+          className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-cyan-500 disabled:opacity-50"
+        >
+          {loading ? <LoaderCircle className="animate-spin" size={15} /> : <ScanFace size={15} />}
+          {loading ? "Calculating Cosine Distances…" : "Run Vector Search"}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/70 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-300">Search Result</span>
+            <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${result.matched ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+              {result.matched ? `${result.matches?.length ?? 1} MATCHES FOUND` : "NO MATCH"}
+            </span>
+          </div>
+          {result.matched && result.matches?.length > 0 ? (
+            <div className="mt-3 divide-y divide-slate-800">
+              {result.matches.map((m: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between py-2 text-xs">
+                  <div>
+                    <strong className="text-slate-100">{m.personName}</strong>
+                    <span className="ml-2 text-slate-500">({m.watchlistName || "Watchlist"})</span>
+                  </div>
+                  <span className="rounded bg-violet-500/15 px-2 py-0.5 font-mono text-[10px] font-bold text-violet-300">
+                    {(m.similarity * 100).toFixed(1)}% match
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">
+              No enrolled vectors met the {(similarityThreshold * 100).toFixed(0)}% similarity threshold.
+            </p>
+          )}
+        </div>
+      )}
+    </form>
+  );
 }
 
 function AnprEventList({ events }: { events: AnprEvent[] }) {
@@ -504,6 +738,7 @@ function dialogTitle(kind: DialogKind) {
   if (kind === "face-watchlist") return "Create face-recognition watchlist";
   if (kind === "face-person") return "Enrol identity record";
   if (kind === "anpr-watchlist") return "Create ANPR watchlist";
+  if (kind === "face-probe") return "Test Face Recognition Vector Probe";
   return "Register a plate";
 }
 

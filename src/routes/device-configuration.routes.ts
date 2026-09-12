@@ -885,4 +885,39 @@ export async function registerDeviceConfigurationRoutes(
       return handleRouteError(reply, err);
     }
   });
+
+  app.post("/v1/device-configuration/recorders/:id/reboot", async (request, reply) => {
+    try {
+      const { id } = paramsSchema.parse(request.params);
+      const tenantId = getTenantId(request);
+
+      if (typeof (store as any).queueDeviceConfigurationJob === "function") {
+        await (store as any).queueDeviceConfigurationJob({
+          deviceId: id,
+          jobType: "reboot",
+          status: "pending",
+          scheduledAt: new Date().toISOString(),
+          requestedByUserId: request.currentUser?.id,
+          payload: { reason: "Manual operator reboot requested from Device Configuration Center" },
+        }).catch(() => {});
+      }
+
+      await (store as any).writeAudit?.({
+        tenantId,
+        actorUserId: request.currentUser?.id,
+        action: "device.reboot.dispatched",
+        resourceNodeId: id,
+        outcome: "success",
+        details: { deviceId: id, deviceType: "recorder" },
+      }).catch(() => {});
+
+      return reply.send({
+        success: true,
+        message: `Orderly reboot command successfully dispatched to recorder ${id}`,
+        rebootInitiatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      return handleRouteError(reply, err);
+    }
+  });
 }

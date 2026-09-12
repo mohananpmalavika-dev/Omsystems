@@ -44,6 +44,38 @@ const nextConfig: NextConfig = {
         destination: `${apiBase}/api/edge-product/:path*`,
       },
       {
+        source: "/api/vms/:path*",
+        destination: `${apiBase}/api/vms/:path*`,
+      },
+      {
+        source: "/metrics",
+        destination: `${apiBase}/metrics`,
+      },
+      {
+        source: "/api/incidents/:path*",
+        destination: `${apiBase}/v1/incidents/:path*`,
+      },
+      {
+        source: "/api/incidents",
+        destination: `${apiBase}/v1/incidents`,
+      },
+      {
+        source: "/api/attestation/:path*",
+        destination: `${apiBase}/api/attestation/:path*`,
+      },
+      {
+        source: "/api/ha/:path*",
+        destination: `${apiBase}/api/ha/:path*`,
+      },
+      {
+        source: "/api/credentials/:path*",
+        destination: `${apiBase}/api/credentials/:path*`,
+      },
+      {
+        source: "/api/bulk/:path*",
+        destination: `${apiBase}/api/bulk/:path*`,
+      },
+      {
         source: "/v1/:path*",
         destination: `${apiBase}/v1/:path*`,
       },
