@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { organizationApi } from "@/lib/api-client";
 import { isPublicDashboardRoute } from "@/lib/session-navigation";
 import { usePathname } from "next/navigation";
@@ -44,6 +44,7 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const [branding, setBranding] = useState<OrgBranding>(DEFAULT_BRANDING);
   const [organizations, setOrganizations] = useState<Array<{ id: string; name: string; code?: string; logoUrl?: string | null }>>([]);
+  const hasLoadedOrganizations = useRef(false);
 
   const applyOrganization = (organization: { id: string; name: string; code?: string; logoUrl?: string | null }) => {
     const next: OrgBranding = {
@@ -72,7 +73,11 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
     }
 
     // Public pages do not need organization data to render.
-    if (isPublicDashboardRoute(pathname)) return;
+    if (isPublicDashboardRoute(pathname)) {
+      hasLoadedOrganizations.current = false;
+      return;
+    }
+    if (hasLoadedOrganizations.current) return;
 
     // Refresh in the background without allowing an unavailable API to hold
     // the page open during startup.
@@ -88,6 +93,7 @@ export function OrgBrandingProvider({ children }: { children: React.ReactNode })
         const roots = Array.isArray(res?.data) ? res.data : Array.isArray(res?.tree) ? res.tree : [];
         const organizations = roots.map((root: any) => ({ id: root.id, name: root.name, code: root.code, logoUrl: root.logoUrl ?? root.metadata?.logoUrl ?? null }));
         setOrganizations(organizations);
+        hasLoadedOrganizations.current = true;
         const savedId = localStorage.getItem(ORGANIZATION_ID_STORAGE_KEY);
         const selected = organizations.find((organization: any) => organization.id === savedId) ?? organizations[0];
         if (selected) applyOrganization(selected);

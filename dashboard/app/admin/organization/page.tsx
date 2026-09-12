@@ -300,6 +300,7 @@ export default function OrganizationHierarchyPage() {
     setError(null);
     try {
       await organizationApi.updateNode(root.id, { logoUrl: brandingLogo });
+      organizationApi.invalidateTree();
       updateBranding({ logoUrl: brandingLogo, orgName: root.name, orgCode: root.code || branding.orgCode });
       setNotice("Organization logo updated across the application.");
     } catch (err) {
@@ -515,6 +516,7 @@ export default function OrganizationHierarchyPage() {
 
       setNotice(`Successfully updated ${editingNode.type} "${editNodeName}"!`);
       setShowEditNodeModal(false);
+      organizationApi.invalidateTree();
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to update node");
@@ -640,6 +642,7 @@ export default function OrganizationHierarchyPage() {
 
       setNotice(`Successfully created ${newNodeType} "${newNodeName}"!`);
       setShowAddNodeModal(false);
+      organizationApi.invalidateTree();
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to create node");
@@ -661,6 +664,7 @@ export default function OrganizationHierarchyPage() {
         throw new Error(errJson.message || "Failed to delete node");
       }
       setNotice(`Deleted ${node.name}`);
+      organizationApi.invalidateTree();
       await loadAllData();
     } catch (err: any) {
       setError(err.message || "Failed to delete node");

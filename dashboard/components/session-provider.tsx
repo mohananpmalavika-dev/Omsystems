@@ -73,6 +73,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [sessionReady, setSessionReady] = useState(isPublicRoute);
 
   useEffect(() => {
+    const logoutOnPageUnload = (event: PageTransitionEvent) => {
+      if (event.persisted || sessionStorage.getItem('sentinel_browser_session') !== 'active') return;
+
+      // sendBeacon is designed to finish while the document is closing and
+      // includes the current same-origin session cookie automatically.
+      navigator.sendBeacon(
+        '/api/control/v1/auth/logout',
+        new Blob(['{}'], { type: 'application/json' }),
+      );
+      sessionStorage.removeItem('sentinel_browser_session');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+    };
+
+    window.addEventListener('pagehide', logoutOnPageUnload);
+    return () => window.removeEventListener('pagehide', logoutOnPageUnload);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     if (isPublicRoute) {

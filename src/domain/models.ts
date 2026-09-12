@@ -67,6 +67,7 @@ export interface ResourceNode {
   tenantId: string;
   type: NodeType;
   name: string;
+  logoUrl?: string | null;
   isSensitive?: boolean;
   sensitivityLevel?: "normal" | "restricted" | "highly_restricted";
   /** Ordered ancestor IDs, including this node. */

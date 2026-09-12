@@ -1478,14 +1478,15 @@ export class MemoryStore {
   // --- OrganizationStore implementation ---
   async listOrganizationNodes(tenantId: string, type?: string, parentId?: string, includeInactive = false) {
     return [...this.nodes.values()].filter((node) => {
+      if (node.tenantId !== tenantId) return false;
       if (type && node.type !== type) return false;
       if (parentId !== undefined && node.parentId !== parentId) return false;
-      return true;
+      return includeInactive || (node as any).isActive !== false;
     });
   }
 
   async getOrganizationTree(tenantId: string) {
-    const all = [...this.nodes.values()];
+    const all = await this.listOrganizationNodes(tenantId);
     const byId = new Map<string, any>();
     for (const n of all) {
       byId.set(n.id, { ...n, children: [] });
@@ -1503,7 +1504,7 @@ export class MemoryStore {
   }
 
   async getOrganizationStatistics(tenantId: string) {
-    const all = [...this.nodes.values()];
+    const all = await this.listOrganizationNodes(tenantId);
     const counts: Record<string, number> = {};
     for (const node of all) {
       counts[node.type] = (counts[node.type] ?? 0) + 1;
@@ -1551,6 +1552,7 @@ export class MemoryStore {
     };
     if (input.code) (node as any).code = input.code;
     if (input.description) (node as any).description = input.description;
+    if (input.logoUrl !== undefined) node.logoUrl = input.logoUrl;
     this.nodes.set(id, node);
     return node;
   }
@@ -1561,6 +1563,7 @@ export class MemoryStore {
     if (input.name) node.name = input.name;
     if (input.code) (node as any).code = input.code;
     if (input.description) (node as any).description = input.description;
+    if (input.logoUrl !== undefined) node.logoUrl = input.logoUrl;
     return node;
   }
 

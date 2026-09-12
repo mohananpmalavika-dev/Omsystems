@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ControlPlaneStore } from "../src/control-plane-store.js";
 import type { User } from "../src/domain/models.js";
 import { registerOrganizationRoutes } from "../src/routes/organization.routes.js";
+import { MemoryStore } from "../src/store.js";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -25,6 +26,23 @@ describe("organization routes", () => {
 
   afterEach(async () => {
     await Promise.all(apps.splice(0).map((app) => app.close()));
+  });
+
+  it("persists organization logos through the in-memory organization store", async () => {
+    const store = new MemoryStore();
+    const logoUrl = "data:image/png;base64,ZmFrZS1sb2dv";
+    const organization = await store.createOrganizationNode("omsystems", {
+      nodeType: "company",
+      name: "Logo Test Organization",
+      code: "LOGO-TEST",
+      logoUrl,
+    });
+
+    expect(organization.logoUrl).toBe(logoUrl);
+    await store.updateOrganizationNode(organization.id, { logoUrl: null });
+
+    const tree = await store.getOrganizationTree("omsystems");
+    expect(tree.find((node) => node.id === organization.id)?.logoUrl).toBeNull();
   });
 
   async function createApp(user: User, store: Record<string, unknown>) {
