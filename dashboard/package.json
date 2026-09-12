@@ -8,7 +8,7 @@
     "build": "next build --webpack",
     "build:sites": "cross-env SITES_BUILD=true vinext build && node scripts/patch-sites-runtime.mjs",
     "start": "next start --hostname 0.0.0.0 --port 3000",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
