@@ -98,7 +98,7 @@ export class DailySurveillanceCollectorService {
           if (!snapshot) continue;
 
           // 1. Branch Health Row
-          const isOffline = (snapshot.network.state === "OFFLINE" && (snapshot.recorders.state === "OFFLINE" || snapshot.recorders.total === 0 || snapshot.recorders.online === 0)) || snapshot.network.state === "OFFLINE";
+          const isOffline = (snapshot.network.state === "OFFLINE" && ((snapshot.recorders.state as string) === "OFFLINE" || snapshot.recorders.total === 0 || snapshot.recorders.online === 0)) || snapshot.network.state === "OFFLINE";
           const branchStatus: BranchHealthReportRow["status"] = isOffline ? "OFFLINE" : snapshot.overallState;
 
           const bRow: BranchHealthReportRow = {

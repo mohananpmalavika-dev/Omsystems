@@ -221,6 +221,34 @@ export async function registerAuthRoutes(
         ).catch(() => {});
       }
 
+      // Determine if account mandates biometric facial login
+      const userPreferences = typeof user.preferences === "string"
+        ? (() => { try { return JSON.parse(user.preferences); } catch { return {}; } })()
+        : (user.preferences && typeof user.preferences === "object" ? user.preferences as Record<string, unknown> : {});
+      const faceVerificationMandatory = Boolean(
+        userPreferences?.faceVerificationRequired ||
+        userPreferences?.requireBiometricLogin ||
+        (userPreferences?.faceVerification as Record<string, unknown> | undefined)?.required
+      );
+
+      if (faceVerificationMandatory && !body.faceScan) {
+        if (typeof store.writeAudit === "function") {
+          await Promise.resolve(store.writeAudit({
+            tenantId: user.tenantId,
+            actorUserId: user.id,
+            action: "user.login.face_verification_missing",
+            resourceNodeId: null,
+            outcome: "failure",
+            sourceIp: request.ip,
+            details: { reason: "face_verification_required" },
+          })).catch(() => {});
+        }
+        return reply.code(403).send({
+          error: "facial_verification_required",
+          message: "Biometric face verification is required for this account. Please provide a facial scan.",
+        });
+      }
+
       let faceVerificationScore: number | undefined;
       if (body.faceScan) {
         const faceVerification = await verifyEmployeeFace(body.faceScan, user.preferences);

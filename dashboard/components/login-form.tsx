@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw } from "lucide-react";
+import { Eye, EyeOff, ShieldCheck, AlertCircle, Info, QrCode, Camera, RotateCcw, Upload, CheckCircle2 } from "lucide-react";
 import QRCode from "qrcode";
 import { authApi, organizationApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -26,10 +26,13 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const faceVideoRef = useRef<HTMLVideoElement>(null);
   const faceCanvasRef = useRef<HTMLCanvasElement>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
+  const faceFileInputRef = useRef<HTMLInputElement>(null);
   const [showQR, setShowQR] = useState(false);
   const [showFaceScan, setShowFaceScan] = useState(false);
   const [faceScan, setFaceScan] = useState<string | null>(null);
+  const [faceStream, setFaceStream] = useState<MediaStream | null>(null);
   const [faceCameraActive, setFaceCameraActive] = useState(false);
+  const [faceCameraReady, setFaceCameraReady] = useState(false);
   const [faceCameraError, setFaceCameraError] = useState<string | null>(null);
   const [loginUrl, setLoginUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -46,7 +49,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  useEffect(() => () => stopFaceCamera(), []);
+  useEffect(() => {
+    return () => {
+      if (faceStreamRef.current) {
+        faceStreamRef.current.getTracks().forEach((track) => track.stop());
+        faceStreamRef.current = null;
+      }
+    };
+  }, []);
 
   // Check for session expiry or error messages
   useEffect(() => {
@@ -117,7 +127,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (showFaceScan && !faceScan) {
-      setError("Complete the facial scan before signing in.");
+      setError("Complete the facial scan or upload a photo before signing in.");
       return;
     }
     setLoading(true);
@@ -147,6 +157,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
     } catch (err: any) {
       console.error("Login failed:", err);
+      const serverErr = err.response?.data?.error;
+      if (serverErr === "facial_verification_required") {
+        setShowFaceScan(true);
+      }
       setError(
         err.response?.data?.message ||
         err.message ||
@@ -157,48 +171,129 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     }
   };
 
+  // Attach active camera stream to video element when mounted
+  useEffect(() => {
+    const video = faceVideoRef.current;
+    if (!faceCameraActive || !faceStream || !video) {
+      setFaceCameraReady(false);
+      return;
+    }
+
+    video.srcObject = faceStream;
+
+    let isSubscribed = true;
+    const handleCanPlay = () => {
+      if (isSubscribed) {
+        setFaceCameraReady(true);
+      }
+    };
+
+    video.addEventListener("canplay", handleCanPlay);
+    video.play().catch((err) => {
+      console.warn("Camera video play interrupted:", err);
+      if (isSubscribed) {
+        setFaceCameraError("Unable to start video preview. You can upload a photo instead.");
+      }
+    });
+
+    return () => {
+      isSubscribed = false;
+      video.removeEventListener("canplay", handleCanPlay);
+    };
+  }, [faceCameraActive, faceStream]);
+
   async function startFaceCamera() {
     setFaceCameraError(null);
+    setFaceCameraReady(false);
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("Camera access is not supported in this browser.");
+        throw new Error("Camera access is not supported or blocked (requires HTTPS or localhost). You can upload a photo below.");
       }
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" },
         audio: false,
       });
       faceStreamRef.current = stream;
+      setFaceStream(stream);
       setFaceCameraActive(true);
-      if (faceVideoRef.current) {
-        faceVideoRef.current.srcObject = stream;
-        await faceVideoRef.current.play();
-      }
-    } catch {
-      setFaceCameraError("Unable to access the camera. Check browser permissions and try again.");
+    } catch (err: any) {
+      const msg = err.name === "NotAllowedError" || err.name === "PermissionDeniedError"
+        ? "Camera access permission was denied. Please allow camera access in browser settings or upload a photo."
+        : (err.message || "Unable to access the camera. Check browser permissions and try again.");
+      setFaceCameraError(msg);
+      stopFaceCamera();
     }
   }
 
   function stopFaceCamera() {
-    faceStreamRef.current?.getTracks().forEach((track) => track.stop());
-    faceStreamRef.current = null;
+    if (faceStreamRef.current) {
+      faceStreamRef.current.getTracks().forEach((track) => track.stop());
+      faceStreamRef.current = null;
+    }
+    setFaceStream(null);
     setFaceCameraActive(false);
+    setFaceCameraReady(false);
   }
 
   function captureFaceScan() {
     const video = faceVideoRef.current;
     const canvas = faceCanvasRef.current;
     if (!video || !canvas || video.videoWidth === 0) {
-      setFaceCameraError("The camera is still starting. Please try again.");
+      setFaceCameraError("The camera is still starting. Please wait a moment and try again.");
       return;
     }
-    const sourceWidth = video.videoWidth;
-    const sourceHeight = video.videoHeight;
-    const scale = Math.min(1, 640 / sourceWidth, 640 / sourceHeight);
-    canvas.width = Math.max(1, Math.round(sourceWidth * scale));
-    canvas.height = Math.max(1, Math.round(sourceHeight * scale));
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setFaceScan(canvas.toDataURL("image/jpeg", 0.88));
+
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    // Center crop square matching the facial reticle
+    const cropSize = Math.min(vw, vh);
+    const startX = (vw - cropSize) / 2;
+    const startY = (vh - cropSize) / 2;
+
+    const targetSize = Math.min(cropSize, 480);
+    canvas.width = targetSize;
+    canvas.height = targetSize;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      setFaceCameraError("Unable to capture image from camera.");
+      return;
+    }
+
+    ctx.drawImage(video, startX, startY, cropSize, cropSize, 0, 0, targetSize, targetSize);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
+    setFaceScan(dataUrl);
+    setFaceCameraError(null);
     stopFaceCamera();
+  }
+
+  function handlePhotoFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.match(/^image\/(jpeg|png|webp)$/)) {
+      setFaceCameraError("Please select a valid JPEG, PNG, or WEBP photo.");
+      return;
+    }
+
+    if (file.size > 2_000_000) {
+      setFaceCameraError("Photo file size must be less than 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setFaceScan(reader.result);
+        setFaceCameraError(null);
+        stopFaceCamera();
+      }
+    };
+    reader.onerror = () => {
+      setFaceCameraError("Failed to read the selected photo file.");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
   }
 
   const handlePasswordChange = async (e: React.FormEvent) => {
@@ -462,22 +557,93 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               <div className="face-login-panel">
                 <div className="face-login-preview">
                   {faceCameraActive ? (
-                    <video ref={faceVideoRef} autoPlay playsInline muted aria-label="Facial scan camera preview" />
+                    <div className="face-viewfinder-container">
+                      <video
+                        ref={faceVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        aria-label="Facial scan camera preview"
+                      />
+                      <div className="face-alignment-reticle">
+                        <div className="face-oval-guide" />
+                        <span className="face-reticle-label">
+                          {faceCameraReady ? "Align face inside oval" : "Starting camera..."}
+                        </span>
+                      </div>
+                    </div>
                   ) : faceScan ? (
-                    <img src={faceScan} alt="Facial scan preview" />
+                    <div className="face-captured-preview">
+                      <img src={faceScan} alt="Facial scan preview" />
+                      <div className="face-captured-badge">
+                        <CheckCircle2 size={12} />
+                        <span>Scan Captured</span>
+                      </div>
+                    </div>
                   ) : (
-                    <div><Camera size={24} /><span>No scan captured</span></div>
+                    <div className="face-placeholder">
+                      <Camera size={24} />
+                      <span>No scan captured</span>
+                    </div>
                   )}
                 </div>
-                <canvas ref={faceCanvasRef} className="hidden" />
+                <canvas ref={faceCanvasRef} className="hidden" style={{ display: "none" }} />
                 {faceCameraError && <p className="face-login-error">{faceCameraError}</p>}
                 <div className="face-login-actions">
                   {faceCameraActive ? (
-                    <button type="button" onClick={captureFaceScan}><Camera size={14} /> Capture face</button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn-capture-face"
+                        onClick={captureFaceScan}
+                        disabled={!faceCameraReady}
+                      >
+                        <Camera size={14} /> Capture face
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-cancel-face"
+                        onClick={stopFaceCamera}
+                      >
+                        Cancel
+                      </button>
+                    </>
                   ) : (
-                    <button type="button" onClick={startFaceCamera}><Camera size={14} /> {faceScan ? "Retake scan" : "Open camera"}</button>
+                    <>
+                      <button
+                        type="button"
+                        className="btn-open-camera"
+                        onClick={startFaceCamera}
+                      >
+                        <Camera size={14} /> {faceScan ? "Retake scan" : "Open camera"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-upload-face"
+                        onClick={() => faceFileInputRef.current?.click()}
+                      >
+                        <Upload size={14} /> Upload photo
+                      </button>
+                      <input
+                        ref={faceFileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        style={{ display: "none" }}
+                        onChange={handlePhotoFileUpload}
+                      />
+                      {faceScan && (
+                        <button
+                          type="button"
+                          className="btn-clear-face"
+                          aria-label="Clear facial scan"
+                          onClick={() => setFaceScan(null)}
+                          title="Clear scan"
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      )}
+                    </>
                   )}
-                  {faceScan && <button type="button" aria-label="Clear facial scan" onClick={() => setFaceScan(null)}><RotateCcw size={14} /></button>}
                 </div>
               </div>
             )}

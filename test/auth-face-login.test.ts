@@ -81,5 +81,19 @@ describe("employee facial login", () => {
     expect(mismatch.json().error).toBe("facial_verification_failed");
     expect(mismatchApp.createUserSession).not.toHaveBeenCalled();
     await mismatchApp.app.close();
+
+    const mandatoryApp = await buildApp({
+      ...faceTemplatePreferences(template),
+      faceVerificationRequired: true,
+    });
+    const missingFace = await mandatoryApp.app.inject({
+      method: "POST",
+      url: "/v1/auth/login",
+      payload: { username: "face-employee", password: "Correct Horse Battery" },
+    });
+    expect(missingFace.statusCode).toBe(403);
+    expect(missingFace.json().error).toBe("facial_verification_required");
+    expect(mandatoryApp.createUserSession).not.toHaveBeenCalled();
+    await mandatoryApp.app.close();
   });
 });
