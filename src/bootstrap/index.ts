@@ -218,6 +218,7 @@ export class ApplicationBootstrap {
   }
 
   async shutdown(): Promise<void> {
+    await redisModule.close();
     await databaseModule.close();
   }
 

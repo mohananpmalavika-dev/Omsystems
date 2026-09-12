@@ -5,9 +5,10 @@
  */
 
 import { moduleRegistry } from "../platform/module-registry.service.js";
+import { createClient, type RedisClientType } from "redis";
 
 export class RedisModule {
-  private client: any = null;
+  private client: RedisClientType | null = null;
 
   async initialize(redisUrl?: string): Promise<any> {
     const isProduction = process.env.NODE_ENV === "production";
@@ -26,9 +27,14 @@ export class RedisModule {
     }
 
     try {
-      // In production connect real Redis
+      const client = createClient({ url });
+      client.on("error", (error) => {
+        moduleRegistry.updateModuleState("redis", "UNAVAILABLE", `Redis client error: ${error.message}`);
+      });
+      await client.connect();
+      this.client = client;
       moduleRegistry.updateModuleState("redis", "READY", "Connected to Redis cluster");
-      return this.client;
+      return client;
     } catch (err: any) {
       moduleRegistry.updateModuleState("redis", "UNAVAILABLE", `Redis connection failed: ${err.message}`);
       if (isProduction) throw err;
@@ -36,8 +42,13 @@ export class RedisModule {
     }
   }
 
-  getClient(): any {
+  getClient(): RedisClientType | null {
     return this.client;
+  }
+
+  async close(): Promise<void> {
+    if (this.client?.isOpen) await this.client.quit();
+    this.client = null;
   }
 }
 

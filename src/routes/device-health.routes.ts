@@ -3,13 +3,33 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 import { deviceHealthService } from "../device-health/index.js";
 
-export async function registerDeviceHealthRoutes(app: FastifyInstance) {
+export async function registerDeviceHealthRoutes(app: FastifyInstance, store: ControlPlaneStore) {
+  const requireUser = (request: FastifyRequest, reply: FastifyReply) => {
+    if (!request.currentUser?.id || !request.currentUser.tenantId) {
+      void reply.code(401).send({ success: false, error: "unauthorized" });
+      return false;
+    }
+    return true;
+  };
+
+  const authorizeBranch = async (request: FastifyRequest, reply: FastifyReply, branchId: string) => {
+    if (!requireUser(request, reply)) return false;
+    const branch = await store.getNode(branchId);
+    const decision = await store.checkAccess(request.currentUser, "device:configure", branchId);
+    if (!branch || branch.type !== "branch" || branch.tenantId !== request.currentUser.tenantId || !decision?.allowed) {
+      await reply.code(404).send({ success: false, error: "branch_not_found" });
+      return false;
+    }
+    return true;
+  };
   /**
    * GET /api/v1/devices/:id/capabilities & /v1/devices/:id/capabilities
    */
   const handleGetCapabilities = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireUser(request, reply)) return;
     const params = request.params as any;
     const profile = deviceHealthService.getProfile(params.id);
     return reply.send({ success: true, data: profile });
@@ -22,6 +42,7 @@ export async function registerDeviceHealthRoutes(app: FastifyInstance) {
    * POST /api/v1/devices/:id/evidence & /v1/devices/:id/evidence
    */
   const handleIngestEvidence = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireUser(request, reply)) return;
     const params = request.params as any;
     const body = (request.body as any) || {};
 
@@ -46,7 +67,9 @@ export async function registerDeviceHealthRoutes(app: FastifyInstance) {
       });
     }
 
-    const snapshot = deviceHealthService.getHealthSnapshot(params.id, body.tenantId || "bank-corp");
+    const branchId = typeof body.branchId === "string" ? body.branchId : undefined;
+    if (branchId && !(await authorizeBranch(request, reply, branchId))) return;
+    const snapshot = deviceHealthService.getHealthSnapshot(params.id, request.currentUser.tenantId, { branchId });
     return reply.status(201).send({ success: true, data: snapshot });
   };
 
@@ -57,10 +80,13 @@ export async function registerDeviceHealthRoutes(app: FastifyInstance) {
    * GET /api/v1/devices/:id/health-snapshot & /v1/devices/:id/health-snapshot
    */
   const handleGetHealthSnapshot = async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!requireUser(request, reply)) return;
     const params = request.params as any;
     const query = (request.query as any) || {};
-    const snapshot = deviceHealthService.getHealthSnapshot(params.id, query.tenantId || "bank-corp", {
-      branchId: query.branchId,
+    const branchId = typeof query.branchId === "string" ? query.branchId : undefined;
+    if (branchId && !(await authorizeBranch(request, reply, branchId))) return;
+    const snapshot = deviceHealthService.getHealthSnapshot(params.id, request.currentUser.tenantId, {
+      branchId,
       branchName: query.branchName,
     });
     return reply.send({ success: true, data: snapshot });
@@ -75,12 +101,13 @@ export async function registerDeviceHealthRoutes(app: FastifyInstance) {
   const handleGetBranchDevicesHealth = async (request: FastifyRequest, reply: FastifyReply) => {
     const params = request.params as any;
     const query = (request.query as any) || {};
+    if (!(await authorizeBranch(request, reply, params.id))) return;
     const deviceIds = query.deviceIds ? String(query.deviceIds).split(",") : [`rec-${params.id}-01`];
 
     const summary = deviceHealthService.getBranchDeviceHealthSummary(
       params.id,
       deviceIds,
-      query.tenantId || "bank-corp"
+      request.currentUser.tenantId
     );
     return reply.send({ success: true, data: summary });
   };

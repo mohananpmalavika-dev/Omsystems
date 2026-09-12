@@ -36,7 +36,6 @@ import { registerRetentionRoutes } from "./retention/routes/retention.routes.js"
 import { registerAlertAudioRoutes } from "./routes/alert-audio.routes.js";
 import { registerNotificationRoutes } from "./routes/notification.routes.js";
 
-const latestAnalyticsFrames = new Map<string, { buffer: Buffer; capturedAt: string }>();
 import { registerDistributedStateRoutes } from "./distributed-state/routes/distributed-state.routes.js";
 import { registerReliablePtzRoutes } from "./ptz/routes/ptz.routes.js";
 import { registerMediaTokenRoutes } from "./media-auth/routes/media-token.routes.js";
@@ -93,6 +92,7 @@ import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js"
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDeviceConfigurationRoutes } from "./routes/device-configuration.routes.js";
+import { registerDeviceHealthRoutes } from "./routes/device-health.routes.js";
 import type { DeviceConfigurationService } from "./services/device-configuration.service.js";
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
@@ -505,6 +505,10 @@ export async function buildApp(options?: {
   /** Authoritative bootstrap dependencies */
   dependencies?: Partial<ApplicationDependencies>;
 }): Promise<FastifyInstance> {
+  if (process.env.NODE_ENV === "production" && !options?.store) {
+    throw new Error("PRODUCTION_STORE_REQUIRED: buildApp requires a durable PostgreSQL-backed store in production");
+  }
+
   // PRODUCTION SECRET VALIDATION
   // In production mode, validate all critical secrets before proceeding
   // This ensures we fail fast with clear error messages rather than
@@ -596,16 +600,10 @@ export async function buildApp(options?: {
 
   // Initialize video search and forensic services
   const pool = (store as any).pool; // Access pool from store
-  // Recent JPEG frames are media-plane state. Keep a short local fallback for
-  // development, but use Redis whenever available so a snapshot request can
-  // be served by any control-plane replica.
-  let analyticsFrameRedis: any;
-  try {
-    analyticsFrameRedis = redisModule.getClient();
-  } catch (error) {
-    if (process.env.NODE_ENV === "production") throw error;
-    app.log.warn({ error }, "Redis unavailable; recent analytics frames are local to this development instance");
-  }
+  // Recent JPEG frames are media-plane state and must be shared by replicas.
+  // A local fallback would make snapshots disappear after a restart or route
+  // to the wrong control-plane instance.
+  const analyticsFrameRedis = redisModule.getClient();
   const recordingRoot = options?.recordingRoot ?? process.env.RECORDING_ROOT ?? "./recordings";
   
   let searchService: RecordingSearchService | undefined;
@@ -1319,17 +1317,14 @@ export async function buildApp(options?: {
     const camera = (await store.listCamerasByEdgeAgent(id))
       .find((candidate) => candidate.id === input.cameraId);
     if (!camera) return reply.code(404).send({ error: "camera_not_found_for_edge_agent" });
-    latestAnalyticsFrames.set(input.cameraId, {
-      buffer: Buffer.from(input.imageBase64, "base64"),
-      capturedAt: input.capturedAt,
-    });
-    if (analyticsFrameRedis) {
-      await analyticsFrameRedis.set(
-        `analytics:latest-frame:${input.cameraId}`,
-        JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt }),
-        { EX: 90 },
-      ).catch((error: unknown) => request.log.warn({ error, cameraId: input.cameraId }, "Unable to replicate analytics frame to Redis"));
+    if (!analyticsFrameRedis) {
+      return reply.code(503).send({ error: "shared_frame_store_unavailable" });
     }
+    await analyticsFrameRedis.set(
+      `analytics:latest-frame:${input.cameraId}`,
+      JSON.stringify({ imageBase64: input.imageBase64, capturedAt: input.capturedAt }),
+      { EX: 90 },
+    );
     const branch = await store.getNode(agent.branchId);
     if (!branch) return reply.code(404).send({ error: "branch_not_found" });
     const rules = (await store.listAnalyticsRules(camera.id)).filter((rule) => rule.enabled);
@@ -1376,15 +1371,15 @@ export async function buildApp(options?: {
     const camera = await store.getCamera(id);
     if (!camera) return reply.code(404).send({ error: "camera_not_found" });
     if (!(await requireCameraAccess(request, reply, store, camera))) return;
-    let frame = latestAnalyticsFrames.get(id);
-    if (!frame && analyticsFrameRedis) {
+    if (!analyticsFrameRedis) return reply.code(503).send({ error: "shared_frame_store_unavailable" });
+    let frame: { buffer: Buffer; capturedAt: string } | undefined;
+    {
       const raw = await analyticsFrameRedis.get(`analytics:latest-frame:${id}`).catch(() => null);
       if (raw) {
         try {
           const cached = JSON.parse(raw) as { imageBase64?: string; capturedAt?: string };
           if (cached.imageBase64 && cached.capturedAt) {
             frame = { buffer: Buffer.from(cached.imageBase64, "base64"), capturedAt: cached.capturedAt };
-            latestAnalyticsFrames.set(id, frame);
           }
         } catch {
           // Treat malformed cache data as unavailable rather than returning an unverified frame.
@@ -2365,6 +2360,7 @@ export async function buildApp(options?: {
   });
 
   await registerDeviceInventoryRoutes(app, store);
+  await registerDeviceHealthRoutes(app, store);
   await registerDeviceConfigurationRoutes(app, store, options?.deviceConfigurationService);
   await registerBranchConnectivityRoutes(app, store, {
     tunnelProvider: options?.edgeTunnelProvider,

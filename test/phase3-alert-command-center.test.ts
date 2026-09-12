@@ -94,9 +94,9 @@ describe("Phase 3 HO alert command center", () => {
       headers: { "x-alert-worker-key": workerKey },
     });
     await waitFor(() => store.analyticsNotifications.every((item) => item.status === "delivered"));
-    expect(store.analyticsNotifications).toHaveLength(9);
+    expect(store.analyticsNotifications).toHaveLength(8);
     expect(store.analyticsNotifications.every((item) => item.attempts === 1 && item.providerId)).toBe(true);
-    expect(sent).toHaveLength(9);
+    expect(sent).toHaveLength(8);
   });
  
   it("creates a synthetic P1 alert for the HO command center demo endpoint", async () => {
@@ -104,14 +104,8 @@ describe("Phase 3 HO alert command center", () => {
       method: "POST", url: "/v1/alerts/command-center/demo", headers: admin,
       payload: { detectionType: "camera-offline", severity: "P1" },
     });
-    expect(response.statusCode).toBe(201);
-    const body = response.json();
-    expect(Array.isArray(body.alerts)).toBe(true);
-    expect(body.alerts[0]?.severity).toBe("P1");
-    expect(body.alerts[0]?.title).toContain("offline");
-    const queue = await app.inject({ method: "GET", url: "/v1/alerts/command-center", headers: admin });
-    expect(queue.statusCode).toBe(200);
-    expect(queue.json().data.some((item: { id: string }) => item.id === body.alerts[0]?.id)).toBe(true);
+    expect(response.statusCode).toBe(410);
+    expect(response.json().error).toBe("synthetic_alert_generation_removed");
   });
 
   it("returns global HO command center severity counts even when the table is paginated or filtered", async () => {
@@ -176,7 +170,7 @@ describe("Phase 3 HO alert command center", () => {
     const queue = await app.inject({ method: "GET", url: "/v1/alerts/command-center", headers: admin });
     expect(queue.statusCode).toBe(200);
     expect(queue.json().data[0]).toMatchObject({
-      id: alert.id, branchName: "Bengaluru Branch 001", cameraName: "Main Entrance",
+      id: alert.id, branchName: "Branch A005 - Adithi Malavika Commercial Hub (Kochi Marine Drive)", cameraName: "Main Entrance Camera",
       version: 1, notificationChannels: ["dashboard", "sms", "email", "voice"],
     });
     expect(queue.json().data[0].slaDueAt).toBeTruthy();
@@ -230,6 +224,12 @@ describe("Phase 3 HO alert command center", () => {
     });
     expect(recovered.statusCode).toBe(202);
     expect(captures).toHaveLength(2);
+
+    const missing = await app.inject({
+      method: "GET", url: `/v1/alerts/00000000-0000-4000-8000-000000000000/evidence/snapshot`, headers: admin,
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers["content-type"]).toContain("application/json");
   });
 
   it("persists recipient groups and on-call schedules without changing the fixed matrix", async () => {

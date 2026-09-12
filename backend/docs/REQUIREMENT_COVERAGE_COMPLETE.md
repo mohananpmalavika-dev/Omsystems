@@ -1,7 +1,17 @@
-# Requirement Coverage Complete - 100% Achievement
+# Requirement Coverage Review
 
 ## Overview
-This document provides comprehensive evidence that all 13 requirements from the RequirementCoverageReview table have achieved 100% coverage.
+This document records the implemented product surface and the remaining production acceptance gates. Code coverage, synthetic tests, and live enterprise certification are separate claims; a feature is not production-ready until its live dependency and scale evidence is recorded.
+
+### Production-readiness rule
+
+The following are required before an enterprise deployment is marked certified:
+
+- PostgreSQL and Redis are reachable from every production replica.
+- Recorder and camera integrations are certified against the exact deployed vendor model and firmware.
+- AI rules have provisioned models, measured accuracy, and an explicit unavailable state when models are absent.
+- Alert evidence is real, durable, access-controlled, and never replaced by generated placeholder media.
+- 400-branch scale, failover, notification delivery, and 24-hour endurance tests have executed against production-like infrastructure.
 
 ---
 

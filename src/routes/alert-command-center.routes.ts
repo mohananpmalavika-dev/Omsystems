@@ -14,7 +14,6 @@ import {
   type AlertEvidenceCaptureStatus,
   type AlertEvidenceKind,
 } from "../alerts/evidence-capture.js";
-import { generateAlertEvidenceSvg } from "../alerts/alert-evidence-graphic.js";
 
 const alertIdParams = z.object({ alertId: z.string().uuid() });
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
@@ -222,20 +221,6 @@ export async function registerAlertCommandCenterRoutes(
     }).parse(request.params);
     const alert = await authorizedAlert(store, request.currentUser, alertId, "analytics:view");
     if (!alert) {
-      if (kind === "snapshot") {
-        const svg = generateAlertEvidenceSvg({
-          id: alertId,
-          title: "Surveillance Alert Evidence",
-          severity: "P2",
-          status: "new",
-          createdAt: new Date().toISOString(),
-          cameraId: "surveillance-stream",
-          cameraName: "Live Surveillance Feed",
-          branchName: "Krypton Branch",
-          confidence: 0.95,
-        } as any);
-        return reply.code(200).header("content-type", "image/svg+xml; charset=utf-8").header("cache-control", "public, max-age=300").send(svg);
-      }
       return reply.code(404).send({ error: "analytics_alert_not_found" });
     }
 
@@ -303,13 +288,7 @@ export async function registerAlertCommandCenterRoutes(
     }
 
     if (kind === "snapshot") {
-      const camera = await store.getCamera(alert.cameraId).catch(() => null);
-      const branch = camera ? await store.getNode(camera.branchId).catch(() => null) : null;
-      const svg = generateAlertEvidenceSvg(alert, {
-        cameraName: camera?.name,
-        branchName: branch?.name,
-      });
-      return reply.code(200).header("content-type", "image/svg+xml; charset=utf-8").header("cache-control", "public, max-age=300").send(svg);
+      return reply.code(404).send({ error: "alert_snapshot_not_available" });
     }
 
     if (!evidenceClient) {

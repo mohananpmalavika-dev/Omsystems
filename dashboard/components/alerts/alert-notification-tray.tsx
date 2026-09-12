@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, BellRing, BrainCircuit, X } from "lucide-react";
+import { AlertTriangle, BellRing, BrainCircuit, Check, X } from "lucide-react";
 import { analyticsApi } from "@/lib/api-client";
-import { fetchOperationalAlerts } from "@/lib/api/operational-health";
+import { acknowledgeAlert, fetchOperationalAlerts } from "@/lib/api/operational-health";
 import type { AnalyticsAlert } from "@/lib/types";
 import type { OperationalAlert } from "@/lib/types/operational-health";
 
@@ -14,6 +14,7 @@ const MAX_VISIBLE_NOTIFICATIONS = 4;
 
 export function AlertNotificationTray() {
   const [notifications, setNotifications] = useState<TrayAlert[]>([]);
+  const [acknowledging, setAcknowledging] = useState<string | null>(null);
   const initialized = useRef(false);
   const seen = useRef(new Set<string>());
   const remember = useCallback((keys: string[]) => {
@@ -45,8 +46,18 @@ export function AlertNotificationTray() {
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => { window.clearInterval(interval); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, [poll]);
+  const acknowledge = async (alert: TrayAlert) => {
+    setAcknowledging(notificationKey(alert));
+    try {
+      if (alert.source === "AI") await analyticsApi.acknowledge(alert.id, "Acknowledged from HO alert popup");
+      else await acknowledgeAlert(alert.id, { comment: "Acknowledged from HO alert popup" });
+      setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)));
+    } finally {
+      setAcknowledging(null);
+    }
+  };
   if (!notifications.length) return null;
-  return <aside className="alert-notification-tray" aria-live="polite" aria-label="New alerts">{notifications.map((alert) => <article className={`alert-notification-card severity-${alert.severity.toLowerCase()}`} key={notificationKey(alert)}><span className="alert-notification-icon" aria-hidden="true">{alert.source === "AI" ? <BrainCircuit size={17} /> : <AlertTriangle size={17} />}</span><div className="alert-notification-content"><div><b>{alert.source} alert</b><time dateTime={alert.occurredAt}>{formatTime(alert.occurredAt)}</time></div><strong>{alert.title}</strong>{alert.detail && <p>{alert.detail}</p>}<Link href={alert.href}><BellRing size={13} /> Open alert queue</Link></div><button type="button" aria-label={`Dismiss ${alert.title}`} onClick={() => setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)))}><X size={15} /></button></article>)}</aside>;
+  return <aside className="alert-notification-tray" aria-live="assertive" aria-label="New critical and operational alerts">{notifications.map((alert) => <article className={`alert-notification-card severity-${alert.severity.toLowerCase()}`} key={notificationKey(alert)}><span className="alert-notification-icon" aria-hidden="true">{alert.source === "AI" ? <BrainCircuit size={17} /> : <AlertTriangle size={17} />}</span><div className="alert-notification-content"><div><b>{alert.source} alert</b><time dateTime={alert.occurredAt}>{formatTime(alert.occurredAt)}</time></div><strong>{alert.title}</strong>{alert.detail && <p>{alert.detail}</p>}<div className="flex gap-2"><Link href={alert.href}><BellRing size={13} /> Open alert queue</Link><button type="button" disabled={acknowledging === notificationKey(alert)} onClick={() => void acknowledge(alert)}><Check size={13} />Acknowledge</button></div></div><button type="button" aria-label={`Dismiss ${alert.title}`} onClick={() => setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)))}><X size={15} /></button></article>)}</aside>;
 }
 
 function toAiNotification(alert: AnalyticsAlert): TrayAlert { return { id: alert.id, source: "AI", severity: alert.severity, status: alert.status, title: alert.title, detail: [alert.cameraName, alert.branchName].filter(Boolean).join(" · ") || alert.description, occurredAt: alert.lastDetectedAt || alert.createdAt, href: "/analytics/alerts" }; }
