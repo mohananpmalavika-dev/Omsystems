@@ -386,9 +386,24 @@ export async function registerOrganizationRoutes(
     try {
       ({ id } = nodeIdSchema.parse(request.params));
 
-      // Check permission
-      if (!(await requireTenantNodeAccess(request, reply, store, "org:manage", id))) {
-        return;
+      const targetNode = await store.getOrganizationNodeDetails(id);
+      if (!targetNode) {
+        return reply.code(404).send({ error: "resource_not_found" });
+      }
+
+      // Check permission:
+      // Root company nodes can only be dropped by authorized super administrators
+      if (targetNode.type === "company") {
+        if (!isSuperAdminOrgCreator(request.currentUser)) {
+          return reply.code(403).send({
+            error: "forbidden",
+            message: "Only super administrators mgdhanyamohan and krypton can drop an organization",
+          });
+        }
+      } else {
+        if (!(await requireTenantNodeAccess(request, reply, store, "org:manage", id))) {
+          return;
+        }
       }
 
       // Cascades are explicit. Never report a partial hierarchy deletion as a
@@ -452,16 +467,20 @@ export async function registerOrganizationRoutes(
       // Now deactivate the requested node
       await store.deactivateOrganizationNode(id);
 
+      const isCompanyDrop = targetNode.type === "company";
       await store.writeAudit({
         tenantId: request.currentUser.tenantId,
         actorUserId: request.currentUser.id,
-        action: "organization.node_deleted",
+        action: isCompanyDrop ? "organization.dropped" : "organization.node_deleted",
         resourceNodeId: id,
         outcome: "success",
         details: {
+          dropOrganization: isCompanyDrop,
+          nodeType: targetNode.type,
+          nodeName: targetNode.name,
           cascadeDelete: query.cascade,
-          descendantsDeleted: descendants.length
-        }
+          descendantsDeleted: descendants.length,
+        },
       });
 
       return reply.code(204).send();
@@ -592,7 +611,14 @@ async function requireTenantNodeAccess(
   resourceNodeId: string,
 ) {
   const node = await store.getOrganizationNodeDetails(resourceNodeId);
-  if (!node || node.tenantId !== request.currentUser.tenantId) {
+  if (!node) {
+    await reply.code(404).send({ error: "resource_not_found" });
+    return false;
+  }
+  if (isSuperAdminUser(request.currentUser)) {
+    return true;
+  }
+  if (node.tenantId !== request.currentUser.tenantId) {
     await reply.code(404).send({ error: "resource_not_found" });
     return false;
   }

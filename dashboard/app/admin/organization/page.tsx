@@ -223,6 +223,12 @@ export default function OrganizationHierarchyPage() {
   const [resetPasswordError, setResetPasswordError] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState(false);
 
+  // Drop Organization Modal state (Superadmin only)
+  const [dropOrgModalNode, setDropOrgModalNode] = useState<OrgNode | null>(null);
+  const [dropConfirmText, setDropConfirmText] = useState("");
+  const [droppingOrg, setDroppingOrg] = useState(false);
+  const [dropOrgError, setDropOrgError] = useState<string | null>(null);
+
   // Employee Directory Filters & Pagination
   const [empSearchQuery, setEmpSearchQuery] = useState("");
   const [empRoleFilter, setEmpRoleFilter] = useState("all");
@@ -674,6 +680,74 @@ export default function OrganizationHierarchyPage() {
       setError(err.message || "Failed to delete node");
     } finally {
       setSaving(false);
+    }
+  }
+
+  function openDropOrgModal(node: OrgNode) {
+    if (!canCreateOrg) {
+      setError("Only super administrators can drop an organization.");
+      return;
+    }
+    setDropOrgModalNode(node);
+    setDropConfirmText("");
+    setDropOrgError(null);
+  }
+
+  async function handleConfirmDropOrg(e: React.FormEvent) {
+    e.preventDefault();
+    if (!dropOrgModalNode) return;
+    if (!canCreateOrg) {
+      setDropOrgError("Only super administrators can drop an organization.");
+      return;
+    }
+
+    const expectedName = dropOrgModalNode.name.trim().toLowerCase();
+    const inputVal = dropConfirmText.trim().toLowerCase();
+    if (inputVal !== "drop" && inputVal !== expectedName) {
+      setDropOrgError(`Please type "DROP" or "${dropOrgModalNode.name}" exactly to confirm.`);
+      return;
+    }
+
+    setDroppingOrg(true);
+    setDropOrgError(null);
+    try {
+      const res = await fetchWithAuth(
+        `/api/control/v1/organization/nodes/${encodeURIComponent(dropOrgModalNode.id)}?cascade=true`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || "Failed to drop organization");
+      }
+
+      const droppedName = dropOrgModalNode.name;
+      const droppedId = dropOrgModalNode.id;
+
+      setNotice(`Successfully dropped organization "${droppedName}" and all its child hierarchies.`);
+      setDropOrgModalNode(null);
+      setDropConfirmText("");
+      organizationApi.invalidateTree();
+
+      // If dropped org was the active branding organization, switch to next or reset
+      if (branding.organizationId === droppedId) {
+        const remaining = organizations.filter((o) => o.id !== droppedId);
+        if (remaining.length > 0) {
+          selectOrganization(remaining[0].id);
+        } else {
+          updateBranding({
+            organizationId: null,
+            orgName: "KryptonVision",
+            orgCode: "SENTINEL-CORP",
+            logoUrl: null,
+          });
+        }
+      }
+
+      await loadAllData();
+    } catch (err: any) {
+      setDropOrgError(err.message || "Failed to drop organization");
+    } finally {
+      setDroppingOrg(false);
     }
   }
 
@@ -1172,7 +1246,18 @@ export default function OrganizationHierarchyPage() {
             >
               <Edit2 size={13} />
             </button>
-            {node.type !== "company" && (
+            {node.type === "company" ? (
+              canCreateOrg && (
+                <button
+                  onClick={() => openDropOrgModal(node)}
+                  className="px-2 py-1 text-xs bg-red-950/60 hover:bg-red-900/80 border border-red-500/50 hover:border-red-500 text-red-300 hover:text-red-100 font-semibold rounded flex items-center gap-1.5 transition-all shadow-sm"
+                  title="Drop entire organization and all child branches/zones (Superadmin Only)"
+                >
+                  <Trash2 size={12} className="text-red-400" />
+                  <span>Drop Org</span>
+                </button>
+              )
+            ) : (
               <button
                 onClick={() => handleDeleteNode(node)}
                 className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
@@ -1466,9 +1551,25 @@ export default function OrganizationHierarchyPage() {
               <span className="text-xs text-slate-300">{brandingLogo ? "Click to replace logo" : "Click to upload organization logo"}</span>
               <span className="text-[11px] text-slate-500">PNG, JPG, WebP, or SVG · maximum 10MB</span>
             </button>
-            <div className="flex justify-end gap-2">
-              {brandingLogo && <button type="button" onClick={() => setBrandingLogo(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">Remove logo</button>}
-              <button type="button" onClick={() => void saveBranding()} disabled={saving || !treeData[0]} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save branding"}</button>
+            <div className="flex flex-wrap justify-between items-center gap-3 pt-2 border-t border-slate-800">
+              {canCreateOrg && (() => {
+                const selectedOrgNode = treeData.find((node) => node.id === branding.organizationId) ?? treeData[0];
+                return selectedOrgNode ? (
+                  <button
+                    type="button"
+                    onClick={() => openDropOrgModal(selectedOrgNode)}
+                    className="rounded-lg border border-red-500/40 bg-red-950/40 hover:bg-red-900/60 px-3.5 py-2 text-xs font-semibold text-red-300 flex items-center gap-1.5 transition-colors"
+                    title="Drop this organization and all its child locations"
+                  >
+                    <Trash2 size={13} className="text-red-400" />
+                    <span>Drop Organization</span>
+                  </button>
+                ) : <div />;
+              })()}
+              <div className="flex justify-end gap-2 ml-auto">
+                {brandingLogo && <button type="button" onClick={() => setBrandingLogo(null)} className="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300">Remove logo</button>}
+                <button type="button" onClick={() => void saveBranding()} disabled={saving || !treeData[0]} className="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{saving ? "Saving…" : "Save branding"}</button>
+              </div>
             </div>
           </div>
         )}
@@ -2960,6 +3061,120 @@ export default function OrganizationHierarchyPage() {
             userName={cameraPermEmp.displayName || "Employee"}
             onClose={() => setCameraPermEmp(null)}
           />
+        )}
+
+        {/* MODAL 6: Drop Organization Confirmation (Superadmin Only) */}
+        {dropOrgModalNode && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-red-500/40 rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl shadow-red-950/50">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400">
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-100">Drop Organization</h3>
+                    <p className="text-xs text-red-400">Irreversible Action · Superadmin Authorization</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (!droppingOrg) {
+                      setDropOrgModalNode(null);
+                      setDropConfirmText("");
+                      setDropOrgError(null);
+                    }
+                  }}
+                  className="text-slate-400 hover:text-slate-200 text-sm font-bold"
+                >
+                  &times;
+                </button>
+              </div>
+
+              {dropOrgError && (
+                <div className="p-3 bg-red-950/80 border border-red-500/50 text-red-200 rounded-xl text-xs flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-400 shrink-0" />
+                  <span>{dropOrgError}</span>
+                </div>
+              )}
+
+              <div className="p-4 bg-red-950/30 border border-red-500/30 rounded-xl space-y-2 text-xs text-slate-300">
+                <p className="font-semibold text-red-300 flex items-center gap-1.5">
+                  <AlertTriangle size={14} /> WARNING: This will cascade-delete the entire organization
+                </p>
+                <p className="text-slate-300 leading-relaxed">
+                  Dropping <strong className="text-white font-semibold">"{dropOrgModalNode.name}"</strong> will deactivate and remove this organization root and all child divisions, zones, regions, branches, floors, and points from the active hierarchy.
+                </p>
+                <div className="mt-3 pt-3 border-t border-red-900/40 grid grid-cols-2 gap-2 font-mono text-[11px]">
+                  <div>
+                    <span className="text-slate-400">Organization:</span>{" "}
+                    <span className="text-slate-200 font-semibold">{dropOrgModalNode.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400">Code:</span>{" "}
+                    <span className="text-slate-200">{dropOrgModalNode.code || "None"}</span>
+                  </div>
+                  <div className="col-span-2 truncate">
+                    <span className="text-slate-400">ID:</span>{" "}
+                    <span className="text-slate-400">{dropOrgModalNode.id}</span>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleConfirmDropOrg} className="space-y-4 text-xs">
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1.5">
+                    To confirm deletion, type <strong className="text-red-400 font-bold">DROP</strong> or <strong className="text-white font-bold">{dropOrgModalNode.name}</strong> below:
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    disabled={droppingOrg}
+                    placeholder={`Type DROP or "${dropOrgModalNode.name}"`}
+                    value={dropConfirmText}
+                    onChange={(e) => setDropConfirmText(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-red-500 focus:ring-1 focus:ring-red-500 rounded-lg p-2.5 text-slate-100 text-xs font-mono outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-800">
+                  <button
+                    type="button"
+                    disabled={droppingOrg}
+                    onClick={() => {
+                      setDropOrgModalNode(null);
+                      setDropConfirmText("");
+                      setDropOrgError(null);
+                    }}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-semibold transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={
+                      droppingOrg ||
+                      (dropConfirmText.trim().toLowerCase() !== "drop" &&
+                        dropConfirmText.trim().toLowerCase() !== dropOrgModalNode.name.trim().toLowerCase())
+                    }
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-red-950"
+                  >
+                    {droppingOrg ? (
+                      <>
+                        <RefreshCw size={13} className="animate-spin" />
+                        <span>Dropping Organization...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={13} />
+                        <span>Drop Organization</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </main>
     </AppLayout>

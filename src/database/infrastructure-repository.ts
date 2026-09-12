@@ -643,7 +643,17 @@ export class InfrastructureRepository {
   }
 
   async deactivateOrganizationNode(id: string) {
-    await this.pool.query("UPDATE resource_nodes SET is_active=false WHERE id=$1", [id]);
+    await this.pool.query(
+      `UPDATE resource_nodes
+       SET is_active=false,
+           code = CASE
+             WHEN code IS NOT NULL AND code NOT LIKE '%_deleted_%'
+             THEN code || '_deleted_' || floor(extract(epoch from now()))
+             ELSE code
+           END
+       WHERE id=$1`,
+      [id],
+    );
   }
 
   async validateHierarchyRelationship(parentNodeId: string, childNodeType: string) {

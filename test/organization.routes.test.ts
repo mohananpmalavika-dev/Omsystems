@@ -297,4 +297,105 @@ describe("organization routes", () => {
     expect(body.data[0].id).toBe("company-1");
     expect(body.data[0].name).toBe("Sentinel Grid");
   });
+
+  it("denies dropping organization root to non-superadmin users", async () => {
+    const user: User = {
+      id: "admin-1",
+      tenantId: "tenant-1",
+      displayName: "Company Admin",
+      role: "company_admin",
+    };
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue(companyNode),
+      getDescendantNodes: vi.fn().mockResolvedValue([]),
+      deactivateOrganizationNode: vi.fn(),
+      writeAudit: vi.fn(),
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/organization/nodes/${companyNode.id}?cascade=true`,
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json().message).toContain("Only super administrators mgdhanyamohan and krypton can drop an organization");
+  });
+
+  it("allows superadmin to drop organization with cascade=true", async () => {
+    const user: User = {
+      id: "user-superadmin-mgdhanyamohan",
+      tenantId: "tenant-1",
+      displayName: "Dhanya Mohan (Superadmin)",
+      username: "mgdhanyamohan",
+      role: "super_admin",
+    };
+    const branchChildNode = {
+      id: "branch-1",
+      tenantId: "tenant-1",
+      parentId: companyNode.id,
+      type: "branch",
+      name: "Main Branch",
+      path: "company_1.branch_1",
+      depth: 1,
+    };
+    const deactivateOrganizationNode = vi.fn().mockResolvedValue(undefined);
+    const writeAudit = vi.fn().mockResolvedValue(undefined);
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue(companyNode),
+      getDescendantNodes: vi.fn().mockResolvedValue([branchChildNode]),
+      deactivateOrganizationNode,
+      writeAudit,
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/organization/nodes/${companyNode.id}?cascade=true`,
+    });
+
+    expect(response.statusCode).toBe(204);
+    // Deactivates child first, then company node
+    expect(deactivateOrganizationNode).toHaveBeenCalledWith(branchChildNode.id);
+    expect(deactivateOrganizationNode).toHaveBeenCalledWith(companyNode.id);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "organization.dropped",
+        resourceNodeId: companyNode.id,
+        outcome: "success",
+      })
+    );
+  });
+
+  it("rejects dropping organization when active children exist without cascade=true", async () => {
+    const user: User = {
+      id: "user-krypton",
+      tenantId: "tenant-1",
+      displayName: "Krypton Superadmin",
+      username: "krypton",
+      role: "super_admin",
+    };
+    const branchChildNode = {
+      id: "branch-1",
+      tenantId: "tenant-1",
+      parentId: companyNode.id,
+      type: "branch",
+      name: "Main Branch",
+      path: "company_1.branch_1",
+      depth: 1,
+    };
+    const app = await createApp(user, {
+      getOrganizationNodeDetails: vi.fn().mockResolvedValue(companyNode),
+      getDescendantNodes: vi.fn().mockResolvedValue([branchChildNode]),
+      deactivateOrganizationNode: vi.fn(),
+      writeAudit: vi.fn(),
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/organization/nodes/${companyNode.id}`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe("node_has_active_children");
+    expect(response.json().message).toContain("Use ?cascade=true to delete all descendants");
+  });
 });
