@@ -205,6 +205,13 @@ async function runRecipientResolutionTests() {
   console.log("\nSuite 7: REST Control-Plane Endpoints");
 
   const app = Fastify();
+  // The notification control-plane routes deliberately require an authenticated
+  // tenant context.  Install one in this isolated route test rather than
+  // weakening production route authorization for a convenience test.
+  app.decorateRequest("currentUser", null);
+  app.addHook("onRequest", async (request) => {
+    request.currentUser = { id: "test-notification-admin", tenantId } as any;
+  });
   await registerNotificationRoutes(app);
 
   // 1. POST /v1/notifications/test-resolution
