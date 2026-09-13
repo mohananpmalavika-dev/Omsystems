@@ -281,7 +281,6 @@ export const navigation: NavGroup[] = [
       { label: "Signed Edge Config Bundles", href: "/admin/signed-configuration", icon: ShieldCheck },
       { label: "Automated UI Audit", href: "/admin/qa/ui-audit", icon: Sparkles },
       { label: "Database Manager", href: "/admin/database", icon: Database },
-      { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Device Registry & ONVIF", href: "/maintenance/device-management", icon: Server },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Notification Policies", href: "/operations/alert-notification-policy", icon: Bell },
