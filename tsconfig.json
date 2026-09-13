@@ -58,6 +58,7 @@
     "src/media/audio",
     "src/media/audio/*",
     "src/media/audio/**/*",
+    "src/security-devices/**/*",
 
     // Example files (not needed for production)
     "**/*.example.ts",
