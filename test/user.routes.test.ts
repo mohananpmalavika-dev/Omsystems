@@ -219,4 +219,36 @@ describe("user directory route", () => {
       }),
     );
   });
+
+  it("returns 409 when creating a user with an already existing username or email", async () => {
+    const conflictError: any = new Error("An employee with this login username already exists in this organization.");
+    conflictError.statusCode = 409;
+    conflictError.code = "username_taken";
+
+    const app = await createApp({
+      getNode: vi.fn((id: string) => ({ id, tenantId: currentUser.tenantId })),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      createUser: vi.fn().mockRejectedValue(conflictError),
+      writeAudit: vi.fn(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/users",
+      payload: {
+        displayName: "Duplicate User",
+        email: "duplicate@example.test",
+        username: "duplicate-user",
+        password: "a-safe-password",
+        role: "operator",
+        primaryOrgNodeId: "00000000-0000-4000-8000-000000000201",
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      error: "username_taken",
+      message: "An employee with this login username already exists in this organization.",
+    });
+  });
 });
