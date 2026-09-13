@@ -4,7 +4,7 @@ import { defaultRoleWorkspace, roleWorkspacePaths } from "../lib/role-workspaces
 describe("role-focused workspaces", () => {
   it("gives operators a focused monitor-to-proof workspace", () => {
     const paths = defaultRoleWorkspace("operator");
-    expect(paths).toEqual(expect.arrayContaining(["/", "/control-room", "/operations/alerts", "/incidents", "/video-search", "/playback/synced"]));
+    expect(paths).toEqual(expect.arrayContaining(["/nbfc-operations", "/", "/control-room", "/operations/alerts", "/incidents", "/video-search", "/playback/synced"]));
     expect(paths).not.toContain("/admin/database");
     expect(paths).not.toContain("/compliance/controls");
   });

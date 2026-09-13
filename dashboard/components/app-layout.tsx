@@ -124,6 +124,7 @@ export const navigation: NavGroup[] = [
     label: "WORKSPACE",
     icon: LayoutGrid,
     items: [
+      { label: "NBFC Operations", href: "/nbfc-operations", icon: Landmark },
       { label: "Module Directory", href: "/modules", icon: LayoutGrid },
       { label: "Support Center", href: "/support", icon: HelpCircle },
     ],

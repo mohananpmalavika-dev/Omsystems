@@ -76,8 +76,8 @@ export default function SupportPage() {
     <main className="support-page">
       <PageHero
         eyebrow="Help center"
-        title="KryptonVision support"
-        description="Find clear instructions for every workspace available to you, troubleshoot common issues, and collect useful context for your administrator."
+        title="NBFC security operations support"
+        description="Resolve branch, camera, recording, cash-area, evidence, and audit issues with safe, role-specific guidance."
         icon={HelpCircle}
         actions={<div className="page-hero-status"><ShieldCheck size={17} /><div><span>Recommended first step</span><strong>{user ? "Check platform health" : sessionChecked ? "Sign in to run diagnostics" : "Checking session…"}</strong></div></div>}
       />

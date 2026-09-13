@@ -11,13 +11,13 @@ export default function Page() {
         <div className="overview-heading mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="eyebrow-label">
-              Operations workspace
+              NBFC security operations
             </p>
             <h2 className="overview-title mt-1 text-2xl font-bold text-slate-100 sm:text-3xl">
-              Command Center
+              Branch Security Command Center
             </h2>
             <p className="overview-subtitle mt-1 max-w-2xl text-sm text-slate-400">
-              See what needs attention, move from signal to evidence, and keep every branch operational.
+              Protect branches, ATM and cash-adjacent areas: verify alerts, preserve evidence, and keep every location operational.
             </p>
           </div>
           <div className="overview-status" aria-label="Live operations status">
