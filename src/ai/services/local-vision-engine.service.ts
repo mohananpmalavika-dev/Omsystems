@@ -72,26 +72,7 @@ export class LocalVisionEngineService {
         processingTime: latency,
         status: "SUCCESS",
       });
-    } else if (options.zone && options.zone !== "GENERAL") {
-      const latency = Date.now() - startTime;
-      const classification: DetectedObjectClass = options.zone === "PARKING" ? "VEHICLE" : "PERSON";
-      detections.push({
-        id: `det-${randomUUID()}`,
-        cameraId: options.cameraId,
-        branchId: options.branchId,
-        detectedAt,
-        classification,
-        confidence: null,
-        zone: options.zone,
-        modelUsed: "YOLO_V8_NANO",
-        model: "yolov8n",
-        modelVersion: "8.0.0",
-        inferenceEngine: "ONNX_RUNTIME_LOCAL",
-        timestamp: detectedAt.toISOString(),
-        processingTime: latency,
-        status: "SUCCESS",
-      });
-    } else if (options.rawImageData) {
+    } else if (options.rawImageData || (options.zone && options.zone !== "GENERAL")) {
       // Local model inference requested for raw frame
       const latency = Date.now() - startTime;
       detections.push({
@@ -217,8 +198,10 @@ export class LocalVisionEngineService {
     return {
       online: true,
       runtime: "LOCAL_NODEJS_ONNX",
+      // Do not advertise a model merely because the integration knows its
+      // name. Raw-frame inference is unavailable until an edge runtime and
+      // verified model artifact are installed.
       availableModels: [
-        "YOLO_V8_NANO",
         "CP_PLUS_IVS",
         "DAHUA_SMD",
         "HIKVISION_ACUSENSE",

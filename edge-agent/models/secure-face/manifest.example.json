@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "detector",
+      "file": "detector.onnx",
+      "sha256": "REPLACE_WITH_AUDITED_SHA256",
+      "modelName": "approved-face-detector",
+      "modelVersion": "approved-version",
+      "input": { "width": 320, "height": 320, "color": "rgb", "normalization": "zero-one" },
+      "output": "post-nms-xywh-score"
+    },
+    {
+      "id": "recognizer",
+      "file": "recognizer.onnx",
+      "sha256": "REPLACE_WITH_AUDITED_SHA256",
+      "modelName": "approved-512d-recognizer",
+      "modelVersion": "approved-version",
+      "input": { "width": 112, "height": 112, "color": "rgb", "normalization": "minus-one-one" },
+      "output": "embedding"
+    },
+    {
+      "id": "liveness",
+      "file": "liveness.onnx",
+      "sha256": "REPLACE_WITH_AUDITED_SHA256",
+      "modelName": "approved-anti-spoof-model",
+      "modelVersion": "approved-version",
+      "input": { "width": 128, "height": 128, "color": "rgb", "normalization": "zero-one" },
+      "output": "binary-live-logits"
+    }
+  ]
+}

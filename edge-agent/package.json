@@ -13,6 +13,7 @@
     "verify:windows-installer-assets": "node scripts/verify-windows-installer-assets.mjs",
     "verify:windows-package": "node scripts/verify-windows-package.mjs",
     "verify:windows-production-release": "node scripts/verify-windows-production-release.mjs",
+    "verify:secure-face-models": "node scripts/verify-secure-face-models.mjs",
     "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=build/edge-agent.cjs",
     "bundle:delta": "node scripts/build-delta-bundle.mjs",
     "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && release\\edge-agent.exe --verify-bundle",
@@ -23,7 +24,9 @@
   "dependencies": {
     "axios": "^1.19.0",
     "fast-xml-parser": "^5.2.5",
+    "onnxruntime-node": "^1.29.0",
     "pg": "^8.22.0",
+    "sharp": "^0.35.4",
     "zod": "^3.25.76"
   },
   "pkg": {

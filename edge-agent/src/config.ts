@@ -57,6 +57,12 @@ const schema = z.object({
   MEDIA_ACCESS_TTL_SECONDS: z.coerce.number().int().min(30).max(86400).default(3600),
   CAMERA_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(30_000),
   CAMERA_ANALYTICS_INTERVAL_MS: z.coerce.number().int().min(1_000).max(60_000).default(2_000),
+  SECURE_FACE_AI_ENABLED: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  SECURE_FACE_MODEL_MANIFEST: z.string().default("./models/secure-face/manifest.json"),
+  SECURE_FACE_MODELS_DIR: z.string().default("./models/secure-face"),
+  SECURE_FACE_INGEST_TOKEN: z.preprocess((value) => value === "" ? undefined : value, z.string().min(32).optional()),
+  SECURE_FACE_MIN_LIVENESS: z.coerce.number().min(0.9).max(0.99).default(0.95),
+  SECURE_FACE_MIN_OBSERVATIONS: z.coerce.number().int().min(3).max(20).default(3),
   CAMERA_CONFIG_REFRESH_MS: z.coerce.number().int().min(5_000).max(3_600_000).default(60_000),
   PUBLIC_MEDIA_GATEWAY_URL: z.preprocess(
     (value) => value === "" ? undefined : value,
@@ -180,6 +186,9 @@ const schema = z.object({
       path: ["PHYSICAL_SIREN_ON_URL"],
       message: "PHYSICAL_SIREN_ON_URL and PHYSICAL_SIREN_OFF_URL are required when the physical siren is enabled",
     });
+  }
+  if (value.SECURE_FACE_AI_ENABLED && !value.SECURE_FACE_INGEST_TOKEN) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["SECURE_FACE_INGEST_TOKEN"], message: "SECURE_FACE_INGEST_TOKEN is required when secure face AI is enabled" });
   }
   if (value.LIVE_MEDIA_ENABLED && value.MEDIA_TUNNEL_MODE === "disabled" && !value.PUBLIC_MEDIA_GATEWAY_URL) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ["PUBLIC_MEDIA_GATEWAY_URL"], message: "Live media without a tunnel requires a reachable PUBLIC_MEDIA_GATEWAY_URL" });

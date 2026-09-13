@@ -134,6 +134,7 @@ export class CameraHeartbeatService {
     private readonly telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
     private readonly onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
     private readonly analyticsFrameSender?: (payload: AnalyticsFramePayload) => Promise<unknown>,
+    private readonly onAnalyticsRgbFrame?: (frame: { cameraId: string; rgb: Buffer; width: number; height: number; capturedAt: string }) => Promise<void>,
   ) {}
 
   replaceCameras(cameras: CameraConfig[]): void {
@@ -215,6 +216,9 @@ export class CameraHeartbeatService {
       return;
     }
     await this.deliverAnalyticsFrame(camera.id, frame, width, height, "edge-rtsp-scheduled");
+    if (this.onAnalyticsRgbFrame) {
+      await this.onAnalyticsRgbFrame({ cameraId: camera.id, rgb: frame, width, height, capturedAt: new Date().toISOString() });
+    }
   }
 
   private async sendHeartbeat(camera: CameraConfig): Promise<void> {
@@ -494,11 +498,12 @@ export function initializeCameraHeartbeat(
   telemetrySender?: (payload: TelemetryPayload) => Promise<unknown>,
   onAutomaticRecovery?: (request: AutomaticCameraRecoveryRequest) => Promise<void>,
   analyticsFrameSender?: (payload: AnalyticsFramePayload) => Promise<unknown>,
+  onAnalyticsRgbFrame?: (frame: { cameraId: string; rgb: Buffer; width: number; height: number; capturedAt: string }) => Promise<void>,
 ): CameraHeartbeatService {
   if (!heartbeatService) {
     heartbeatService = new CameraHeartbeatService(
       apiEndpoint, branchId, edgeAgentId, developmentUserId, ffprobePath, ffmpegPath,
-      edgeAuthCredential, telemetrySender, onAutomaticRecovery, analyticsFrameSender,
+      edgeAuthCredential, telemetrySender, onAutomaticRecovery, analyticsFrameSender, onAnalyticsRgbFrame,
     );
   }
   return heartbeatService;

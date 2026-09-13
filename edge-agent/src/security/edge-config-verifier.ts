@@ -131,7 +131,7 @@ export class EdgeConfigVerifier {
       version: bundle.version,
       appliedHash: computedCanonicalHash,
       verificationResult: result,
-      rejectionReason: reason,
+      ...(reason ? { rejectionReason: reason } : {}),
       edgeAgentVersion: this.agentVersion,
       timestamp: nowIso,
     });

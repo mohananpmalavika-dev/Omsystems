@@ -22,15 +22,6 @@ export interface WatchlistFaceRecord {
 export class LocalFaceMatcherService {
   private watchlist = new Map<string, WatchlistFaceRecord>();
 
-  createSyntheticVector(seed: number): number[] {
-    const vec: number[] = [];
-    for (let i = 0; i < 512; i++) {
-      vec.push(Math.sin(seed * (i + 1)));
-    }
-    const norm = Math.sqrt(vec.reduce((sum, val) => sum + val * val, 0));
-    return vec.map((v) => v / (norm || 1));
-  }
-
   enrollFace(record: WatchlistFaceRecord) {
     this.assertEmbedding(record.embeddingVector);
     this.watchlist.set(record.personId, record);
