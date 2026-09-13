@@ -293,7 +293,10 @@ export class AlertDeduplicationService {
    */
   async checkDuplicate(
     candidate: NormalizedAlertCandidate,
-    activeAlerts: Map<string, OperationalAlert>,
+    alertLookup:
+      | Map<string, OperationalAlert>
+      | ((alertId: string) => Promise<OperationalAlert | null | undefined>)
+      | { get(id: string): OperationalAlert | null | undefined | Promise<OperationalAlert | null | undefined> },
     candidateAlertId?: string,
   ): Promise<{ isDuplicate: boolean; existingAlert?: OperationalAlert | undefined; dedupResult?: DeduplicationResult }> {
     const rawDetection = candidate.detection as any;
@@ -310,7 +313,14 @@ export class AlertDeduplicationService {
     const result = await this.checkAndRegister(identity, tempId);
 
     if (result.duplicate) {
-      const existing = activeAlerts.get(result.canonicalAlertId);
+      let existing: OperationalAlert | null | undefined;
+      if (typeof alertLookup === "function") {
+        existing = await alertLookup(result.canonicalAlertId);
+      } else if (alertLookup && "get" in alertLookup) {
+        const lookupResult = alertLookup.get(result.canonicalAlertId);
+        existing = lookupResult instanceof Promise ? await lookupResult : lookupResult;
+      }
+
       return {
         isDuplicate: true,
         existingAlert: existing && existing.status !== "RESOLVED" && existing.status !== "DISMISSED"

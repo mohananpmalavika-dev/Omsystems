@@ -179,12 +179,15 @@ export class DailySurveillanceCollectorService {
 
             if (diskItems.length > 0) {
               for (const item of diskItems) {
-                const smart = (item.metrics?.smartStatus || "healthy").toLowerCase();
+                const rawSmart = item.metrics?.smartStatus ? item.metrics.smartStatus.toLowerCase() : undefined;
                 const state: DiskHealthReportRow["state"] =
-                  smart === "failed" || smart === "failure_predicted" ? "FAILED"
-                  : smart === "warning" ? "WARNING"
-                  : smart === "healthy" ? "HEALTHY"
+                  rawSmart === "failed" || rawSmart === "failure_predicted" ? "FAILED"
+                  : rawSmart === "warning" ? "WARNING"
+                  : rawSmart === "healthy" ? "HEALTHY"
                   : "UNKNOWN";
+
+                const capGB = item.metrics?.capacityGB;
+                const usedGB = item.metrics?.usedGB;
 
                 disks.push({
                   branchId: snapshot.branchId,
@@ -192,28 +195,29 @@ export class DailySurveillanceCollectorService {
                   recorderId: snapshot.recorders.recorders?.[0]?.id || `rec-${snapshot.branchId}`,
                   diskId: item.deviceId,
                   serialNumber: item.metrics?.serialNumber,
-                  capacityBytes: (item.metrics?.capacityGB || 4000) * 1_000_000_000,
-                  usedBytes: (item.metrics?.usedGB || 3200) * 1_000_000_000,
-                  freeBytes: Math.max(0, ((item.metrics?.capacityGB || 4000) - (item.metrics?.usedGB || 3200)) * 1_000_000_000),
-                  utilizationPercent: item.metrics?.capacityGB ? Math.round(((item.metrics?.usedGB || 0) / item.metrics.capacityGB) * 100) : 80,
-                  temperatureC: item.metrics?.temperature || 38,
-                  smartStatus: smart.toUpperCase(),
+                  capacityBytes: capGB != null ? capGB * 1_000_000_000 : undefined,
+                  usedBytes: usedGB != null ? usedGB * 1_000_000_000 : undefined,
+                  freeBytes: capGB != null && usedGB != null ? Math.max(0, (capGB - usedGB) * 1_000_000_000) : undefined,
+                  utilizationPercent: capGB != null && usedGB != null && capGB > 0 ? Math.round((usedGB / capGB) * 100) : undefined,
+                  temperatureC: item.metrics?.temperature != null ? item.metrics.temperature : undefined,
+                  smartStatus: rawSmart ? rawSmart.toUpperCase() : "UNKNOWN",
                   reallocatedSectors: item.metrics?.reallocatedSectors || 0,
-                  predictedFailure: smart === "failure_predicted",
+                  predictedFailure: rawSmart === "failure_predicted",
                   state,
                   observedAt: item.observedAt ? new Date(item.observedAt) : undefined,
                 });
               }
             } else {
               for (const disk of snapshot.storage.criticalDisks || []) {
+                const rawSmart = disk.smartStatus ? disk.smartStatus.toLowerCase() : undefined;
                 const state: DiskHealthReportRow["state"] =
-                  disk.smartStatus === "failed" || disk.smartStatus === "failure_predicted"
-                    ? "FAILED"
-                    : disk.smartStatus === "warning"
-                      ? "WARNING"
-                      : disk.smartStatus === "healthy"
-                        ? "HEALTHY"
-                        : "UNKNOWN";
+                  rawSmart === "failed" || rawSmart === "failure_predicted" ? "FAILED"
+                  : rawSmart === "warning" ? "WARNING"
+                  : rawSmart === "healthy" ? "HEALTHY"
+                  : "UNKNOWN";
+
+                const capGB = disk.capacityGB;
+                const usedGB = disk.usedGB;
 
                 disks.push({
                   branchId: snapshot.branchId,
@@ -221,14 +225,14 @@ export class DailySurveillanceCollectorService {
                   recorderId: snapshot.recorders.recorders?.[0]?.id || `rec-${snapshot.branchId}`,
                   diskId: disk.id,
                   serialNumber: disk.serialNumber,
-                  capacityBytes: (disk.capacityGB || 4000) * 1_000_000_000,
-                  usedBytes: (disk.usedGB || 3200) * 1_000_000_000,
-                  freeBytes: Math.max(0, ((disk.capacityGB || 4000) - (disk.usedGB || 3200)) * 1_000_000_000),
-                  utilizationPercent: disk.capacityGB ? Math.round(((disk.usedGB || 0) / disk.capacityGB) * 100) : 80,
-                  temperatureC: disk.temperature || 38,
-                  smartStatus: disk.smartStatus.toUpperCase(),
+                  capacityBytes: capGB != null ? capGB * 1_000_000_000 : undefined,
+                  usedBytes: usedGB != null ? usedGB * 1_000_000_000 : undefined,
+                  freeBytes: capGB != null && usedGB != null ? Math.max(0, (capGB - usedGB) * 1_000_000_000) : undefined,
+                  utilizationPercent: capGB != null && usedGB != null && capGB > 0 ? Math.round((usedGB / capGB) * 100) : undefined,
+                  temperatureC: disk.temperature != null ? disk.temperature : undefined,
+                  smartStatus: rawSmart ? rawSmart.toUpperCase() : "UNKNOWN",
                   reallocatedSectors: disk.reallocatedSectors || 0,
-                  predictedFailure: disk.smartStatus === "failure_predicted",
+                  predictedFailure: rawSmart === "failure_predicted",
                   state,
                   observedAt: disk.lastCheck ? new Date(disk.lastCheck) : undefined,
                 });

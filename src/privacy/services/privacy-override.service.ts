@@ -145,6 +145,7 @@ export class PrivacyOverrideService {
     operation: 'LIVE' | 'PLAYBACK',
     tenantId?: string,
   ): Promise<PrivacyOverrideGrant | undefined> {
+    const isProduction = process.env.NODE_ENV === "production";
     const now = new Date();
     const activePool = this.getActivePool();
 
@@ -175,16 +176,27 @@ export class PrivacyOverrideService {
             status: row.status,
           };
         }
+        return undefined;
       } catch (err) {
         console.warn('[PrivacyOverrideService] DB getActiveGrant query error:', err);
+        if (isProduction) {
+          // P0-8: Fail-Closed. DB query failed -> unmasked access unconditionally denied
+          throw new Error(`PRIVACY_STORE_UNAVAILABLE: Fail-closed unmasked access denied due to database failure: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+    } else if (isProduction) {
+      // P0-8: Production requires durable PostgreSQL for privacy grants. Zero in-memory authority.
+      throw new Error("PRIVACY_STORE_UNAVAILABLE: Fail-closed unmasked access denied: database pool required in production");
     }
 
-    // In-memory fallback
+    // In-memory fallback allowed ONLY in non-production/test environments
     return this.getActiveGrant(userId, cameraId, operation);
   }
 
   getActiveGrant(userId: string, cameraId: string, operation: 'LIVE' | 'PLAYBACK'): PrivacyOverrideGrant | undefined {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("PRIVACY_POLICY_VIOLATION: Synchronous in-memory privacy grant evaluation is prohibited in production. Use getActiveGrantAsync().");
+    }
     const now = Date.now();
     for (const grant of this.grants.values()) {
       if (grant.userId === userId && grant.cameraId === cameraId && grant.operation === operation && grant.status === 'ACTIVE') {
@@ -202,11 +214,12 @@ export class PrivacyOverrideService {
    * Explicitly revokes a grant
    */
   async revokeGrant(grantId: string, revokedBy: string): Promise<void> {
+    const isProduction = process.env.NODE_ENV === "production";
     const activePool = this.getActivePool();
     if (activePool) {
       try {
-        await activePool.query(
-          `UPDATE privacy_override_grants SET status = 'REVOKED', revoked_at = NOW() WHERE id = $1`,
+        const updateRes = await activePool.query(
+          `UPDATE privacy_override_grants SET status = 'REVOKED', revoked_at = NOW() WHERE id = $1 RETURNING tenant_id, camera_id`,
           [grantId],
         );
         await activePool.query(
@@ -214,24 +227,45 @@ export class PrivacyOverrideService {
            VALUES ($1, $2, $3, $4, NOW())`,
           [`rev-${randomUUID()}`, grantId, revokedBy, 'Explicit operator or admin revocation'],
         );
+
+        if (updateRes.rows.length > 0) {
+          const row = updateRes.rows[0];
+          await this.recordAudit({
+            id: randomUUID(),
+            tenantId: row.tenant_id,
+            userId: revokedBy,
+            username: revokedBy,
+            event: 'PRIVACY_UNMASK_DENIED',
+            cameraId: row.camera_id,
+            reason: `Grant ${grantId} explicitly revoked in database`,
+            timestamp: new Date().toISOString(),
+          });
+        }
       } catch (err) {
         console.warn('[PrivacyOverrideService] DB revoke grant error:', err);
+        if (isProduction) {
+          throw new Error(`PRIVACY_STORE_UNAVAILABLE: Failed to persist grant revocation to PostgreSQL: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+    } else if (isProduction) {
+      throw new Error("PRIVACY_STORE_UNAVAILABLE: Grant revocation requires database pool in production");
     }
 
     const grant = this.grants.get(grantId);
     if (grant) {
       grant.status = 'REVOKED';
-      await this.recordAudit({
-        id: randomUUID(),
-        tenantId: grant.tenantId,
-        userId: revokedBy,
-        username: revokedBy,
-        event: 'PRIVACY_UNMASK_DENIED',
-        cameraId: grant.cameraId,
-        reason: `Grant ${grantId} explicitly revoked`,
-        timestamp: new Date().toISOString(),
-      });
+      if (!activePool) {
+        await this.recordAudit({
+          id: randomUUID(),
+          tenantId: grant.tenantId,
+          userId: revokedBy,
+          username: revokedBy,
+          event: 'PRIVACY_UNMASK_DENIED',
+          cameraId: grant.cameraId,
+          reason: `Grant ${grantId} explicitly revoked`,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
   }
 

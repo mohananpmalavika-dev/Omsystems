@@ -130,16 +130,29 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
     const channels: RecorderChannel[] = [];
     try {
       const res = await this.cgiFetch("/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle");
+      let recordKv: Record<string, string> = {};
+      try {
+        const recRes = await this.cgiFetch("/cgi-bin/configManager.cgi?action=getConfig&name=Record");
+        if (recRes.ok) {
+          recordKv = parseCgiKeyValue(await recRes.text());
+        }
+      } catch {}
+
       if (res.ok) {
         const text = await res.text();
         const kv = parseCgiKeyValue(text);
         for (let i = 0; i < total; i++) {
           const name = kv[`table.ChannelTitle[${i}].Name`] || `CAM-${(i + 1).toString().padStart(2, "0")}`;
+          // Independent recording verification: check record config and stream enablement
+          const isRecordingEnabled =
+            recordKv[`table.Record[${i}].Enable`] !== "false" &&
+            recordKv[`table.Record[${i}].Mode`] !== "0";
+
           channels.push({
             channelNumber: i + 1,
             name,
             online: true,
-            recording: true,
+            recording: isRecordingEnabled,
             codec: "H264",
             resolution: this.config.isAnalogDvr ? "1080N" : "1080P",
             streamUrl: `rtsp://${this.config.username}:${this.config.password || ""}@${this.config.ipAddress}:${this.config.rtspPort}/cam/realmonitor?channel=${i + 1}&subtype=0`,
@@ -235,23 +248,30 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
         const text = await res.text();
         const kv = parseCgiKeyValue(text);
         const timeStr = kv.result || kv.time;
-        return {
-          deviceTime: timeStr ? new Date(timeStr) : new Date(),
-          timezone: "Asia/Kolkata",
-          ntpEnabled: true,
-          ntpServer: "pool.ntp.org",
-          offsetSeconds: 0,
-        };
+        if (timeStr) {
+          const parsedTime = new Date(timeStr);
+          if (!isNaN(parsedTime.getTime())) {
+            const offsetSeconds = Math.round((parsedTime.getTime() - Date.now()) / 1000);
+            return {
+              deviceTime: parsedTime,
+              timezone: "Asia/Kolkata",
+              ntpEnabled: true,
+              ntpServer: "pool.ntp.org",
+              offsetSeconds,
+            };
+          }
+        }
       }
     } catch {
       // Unreachable
     }
 
+    // P0-7: Never return server current time and 0s offset when recorder query fails
     return {
-      deviceTime: new Date(),
+      deviceTime: undefined,
       timezone: "UNKNOWN",
       ntpEnabled: false,
-      offsetSeconds: 0,
+      offsetSeconds: undefined,
     };
   }
 
@@ -281,9 +301,37 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
 
           const totalBytes = parseInt(totalKey || kv["Storage.TotalBytes"] || "0", 10);
           const freeBytes = parseInt(kv[`table.DriveInfo[${diskIdx}].FreeBytes`] || kv[`Storage.Drive[${diskIdx}].FreeBytes`] || kv["Storage.FreeBytes"] || "0", 10);
-          const rawStatus = (kv[`table.DriveInfo[${diskIdx}].Status`] || kv[`Storage.Drive[${diskIdx}].Status`] || "NORMAL").toUpperCase();
-          const rawSmart = (kv[`table.DriveInfo[${diskIdx}].SmartStatus`] || kv[`Storage.Drive[${diskIdx}].SmartStatus`] || kv["Storage.SmartStatus"] || "PASS").toUpperCase();
-          const temp = parseInt(kv[`table.DriveInfo[${diskIdx}].Temperature`] || kv[`Storage.Drive[${diskIdx}].Temperature`] || "38", 10);
+          const rawStatus = (kv[`table.DriveInfo[${diskIdx}].Status`] || kv[`Storage.Drive[${diskIdx}].Status`] || "UNKNOWN").toUpperCase();
+
+          const rawSmartKey = kv[`table.DriveInfo[${diskIdx}].SmartStatus`] || kv[`Storage.Drive[${diskIdx}].SmartStatus`] || kv["Storage.SmartStatus"];
+          const rawTempKey = kv[`table.DriveInfo[${diskIdx}].Temperature`] || kv[`Storage.Drive[${diskIdx}].Temperature`];
+
+          // P0-4: CP PLUS SMART status truthfulness
+          let smartStatus: StorageStatusInfo["smartStatus"] = "UNKNOWN";
+          if (rawSmartKey) {
+            const upper = rawSmartKey.toUpperCase();
+            if (upper.includes("FAIL") || upper.includes("ERROR") || upper.includes("BAD")) {
+              smartStatus = "FAIL";
+            } else if (upper.includes("WARN") || upper.includes("THRESHOLD")) {
+              smartStatus = "WARN";
+            } else if (upper.includes("PASS") || upper.includes("OK") || upper.includes("GOOD")) {
+              smartStatus = "PASS";
+            } else {
+              smartStatus = "UNKNOWN";
+            }
+          } else {
+            smartStatus = "UNSUPPORTED";
+          }
+
+          // P0-5: CP PLUS Temperature truthfulness - null/undefined if unavailable, never default to 38
+          let temperatureC: number | undefined = undefined;
+          if (rawTempKey) {
+            const parsed = parseInt(rawTempKey, 10);
+            if (!isNaN(parsed) && parsed > 0 && parsed < 120) {
+              temperatureC = parsed;
+            }
+          }
+
           const isReadOnly = kv[`table.DriveInfo[${diskIdx}].ReadOnly`] === "true" || rawStatus.includes("READONLY");
 
           const status: StorageStatusInfo["status"] = rawStatus.includes("ERROR") || rawStatus.includes("FAIL")
@@ -294,19 +342,16 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
                 ? "REBUILDING"
                 : totalBytes > 0 ? "NORMAL" : "UNKNOWN";
 
-          const smartStatus: StorageStatusInfo["smartStatus"] = rawSmart.includes("FAIL")
-            ? "FAIL"
-            : rawSmart.includes("WARN")
-              ? "WARN"
-              : "PASS";
-
-          const overallHddState: StorageStatusInfo["overallHddState"] = status === "ERROR" || smartStatus === "FAIL"
-            ? "FAILED"
-            : isReadOnly || smartStatus === "WARN" || status === "FULL"
-              ? "WARNING"
-              : status === "NORMAL"
-                ? "HEALTHY"
-                : "UNKNOWN";
+          const overallHddState: StorageStatusInfo["overallHddState"] =
+            status === "ERROR" || smartStatus === "FAIL"
+              ? "FAILED"
+              : isReadOnly || smartStatus === "WARN" || status === "FULL"
+                ? "WARNING"
+                : status === "NORMAL" && smartStatus === "PASS"
+                  ? "HEALTHY"
+                  : status === "NORMAL"
+                    ? "UNKNOWN"
+                    : "UNKNOWN";
 
           disks.push({
             diskIndex: diskIdx + 1,
@@ -315,7 +360,7 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
             usedBytes: Math.max(0, totalBytes - freeBytes),
             status,
             smartStatus,
-            temperatureC: isNaN(temp) ? undefined : temp,
+            temperatureC,
             isReadOnly,
             serialNumber: kv[`table.DriveInfo[${diskIdx}].Serial`] || kv[`Storage.Drive[${diskIdx}].Serial`],
             model: kv[`table.DriveInfo[${diskIdx}].Model`] || kv[`Storage.Drive[${diskIdx}].Model`],
@@ -433,28 +478,38 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
       components.push({ name: "SMART", status: "UNKNOWN" });
     }
 
-    // 4. Component: Time & NTP Drift
-    let clockDriftSeconds = 0;
+    // 4. Component: Time & NTP Drift (P0-7)
+    let clockDriftSeconds: number | undefined = undefined;
     try {
       const timeInfo = await this.getTime();
-      clockDriftSeconds = Math.round((timeInfo.deviceTime.getTime() - Date.now()) / 1000);
-      if (Math.abs(clockDriftSeconds) > 60) {
-        components.push({ name: "NTP", status: "DEGRADED", details: `Clock drift exceeds threshold: ${clockDriftSeconds}s` });
+      if (!timeInfo.deviceTime || timeInfo.offsetSeconds == null) {
+        components.push({ name: "NTP", status: "UNKNOWN", details: "Clock query failed or returned no timestamp" });
       } else {
-        components.push({ name: "NTP", status: "HEALTHY", details: `NTP synced (drift: ${clockDriftSeconds}s)` });
+        clockDriftSeconds = timeInfo.offsetSeconds;
+        if (Math.abs(clockDriftSeconds) > 60) {
+          components.push({ name: "NTP", status: "DEGRADED", details: `Clock drift exceeds threshold: ${clockDriftSeconds}s` });
+        } else {
+          components.push({ name: "NTP", status: "HEALTHY", details: `NTP synced (drift: ${clockDriftSeconds}s)` });
+        }
       }
     } catch {
       components.push({ name: "NTP", status: "UNKNOWN", details: "Time query failed" });
     }
 
-    // 5. Component: Recording Verification
-    const recordingChannels = activeChannels; // evaluated against active channels
-    if (recordingChannels === totalChannels) {
-      components.push({ name: "RECORDING", status: "HEALTHY", details: "Continuous recording active across channels" });
-    } else if (recordingChannels > 0) {
-      components.push({ name: "RECORDING", status: "DEGRADED", details: `Recording gaps on ${totalChannels - recordingChannels} channels` });
-    } else {
-      components.push({ name: "RECORDING", status: "CRITICAL", details: "No active recordings verified" });
+    // 5. Component: Recording Verification (P0-6: independently verified)
+    let recordingChannels = 0;
+    try {
+      const channels = await this.getChannels();
+      recordingChannels = channels.filter((c) => c.online && c.recording).length;
+      if (recordingChannels === totalChannels && totalChannels > 0) {
+        components.push({ name: "RECORDING", status: "HEALTHY", details: `${recordingChannels}/${totalChannels} channels actively recording` });
+      } else if (recordingChannels > 0) {
+        components.push({ name: "RECORDING", status: "DEGRADED", details: `Recording gaps on ${totalChannels - recordingChannels} channels (${recordingChannels}/${totalChannels} recording)` });
+      } else {
+        components.push({ name: "RECORDING", status: "CRITICAL", details: "No active recordings verified across channels" });
+      }
+    } catch {
+      components.push({ name: "RECORDING", status: "UNKNOWN", details: "Failed to verify channel recording status" });
     }
 
     // 6. Overall Multi-Component Status Scoring
@@ -496,6 +551,28 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
   }
 
   async getEvents(startTime?: Date): Promise<RecorderEvent[]> {
+    try {
+      const res = await this.cgiFetch("/cgi-bin/eventManager.cgi?action=attach&codes=[All]");
+      if (res.ok) {
+        const text = await res.text();
+        const events: RecorderEvent[] = [];
+        for (const line of text.split("\n")) {
+          if (line.includes("Code=")) {
+            const kv = parseCgiKeyValue(line);
+            events.push({
+              eventId: `cpplus-ev-${Date.now()}-${events.length + 1}`,
+              channelNumber: parseInt(kv.index || "1", 10),
+              eventType: kv.Code || "MotionDetect",
+              timestamp: startTime || new Date(),
+              details: kv,
+            });
+          }
+        }
+        return events;
+      }
+    } catch {
+      // Unreachable
+    }
     return [];
   }
 }

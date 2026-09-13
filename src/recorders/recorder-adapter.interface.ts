@@ -63,11 +63,11 @@ export interface PtzCommand {
 }
 
 export interface DeviceTimeInfo {
-  deviceTime: Date;
+  deviceTime?: Date;
   timezone: string;
   ntpEnabled: boolean;
   ntpServer?: string;
-  offsetSeconds: number;
+  offsetSeconds?: number;
 }
 
 export interface StorageStatusInfo {
@@ -76,7 +76,7 @@ export interface StorageStatusInfo {
   freeBytes: number;
   usedBytes?: number;
   status: "NORMAL" | "FULL" | "ERROR" | "REBUILDING" | "UNKNOWN";
-  smartStatus?: "PASS" | "WARN" | "FAIL";
+  smartStatus?: "PASS" | "WARN" | "FAIL" | "UNSUPPORTED" | "UNKNOWN";
   temperatureC?: number;
   serialNumber?: string;
   model?: string;

@@ -479,6 +479,108 @@ export class EvidenceCapturePipelineService {
     this.updateJobStatus(record.id, "FAILED", record.latencyMs);
     return record;
   }
+
+  async checkReadiness(): Promise<{
+    state: "READY" | "DEGRADED" | "UNAVAILABLE" | "MISCONFIGURED";
+    reason: string;
+    details: {
+      database: "READY" | "DEGRADED" | "UNAVAILABLE";
+      storage: "READY" | "UNAVAILABLE";
+      recordingClient: "READY" | "MISCONFIGURED" | "UNAVAILABLE";
+      signingProvider: "READY" | "UNAVAILABLE";
+      requiredTables: "READY" | "UNAVAILABLE";
+    };
+  }> {
+    const isProduction = process.env.NODE_ENV === "production";
+    const details = {
+      database: "UNAVAILABLE" as "READY" | "DEGRADED" | "UNAVAILABLE",
+      storage: "UNAVAILABLE" as "READY" | "UNAVAILABLE",
+      recordingClient: "UNAVAILABLE" as "READY" | "MISCONFIGURED" | "UNAVAILABLE",
+      signingProvider: "UNAVAILABLE" as "READY" | "UNAVAILABLE",
+      requiredTables: "UNAVAILABLE" as "READY" | "UNAVAILABLE",
+    };
+
+    // 1. Check PostgreSQL & required tables
+    const pool = this.getActivePool();
+    if (pool) {
+      try {
+        const client = await pool.connect();
+        try {
+          await client.query("SELECT 1 FROM evidence_capture_jobs LIMIT 0");
+          details.database = "READY";
+          details.requiredTables = "READY";
+        } catch {
+          details.database = "READY";
+          details.requiredTables = "UNAVAILABLE";
+        } finally {
+          client.release();
+        }
+      } catch {
+        details.database = "UNAVAILABLE";
+      }
+    } else {
+      details.database = isProduction ? "UNAVAILABLE" : "DEGRADED";
+      details.requiredTables = isProduction ? "UNAVAILABLE" : "READY";
+    }
+
+    // 2. Check Evidence Storage
+    try {
+      if (this.storageService) {
+        details.storage = "READY";
+      }
+    } catch {
+      details.storage = "UNAVAILABLE";
+    }
+
+    // 3. Check Recording Client
+    if (this.recordingClient) {
+      details.recordingClient = "READY";
+    } else {
+      details.recordingClient = isProduction ? "MISCONFIGURED" : "UNAVAILABLE";
+    }
+
+    // 4. Check Signing Provider
+    if (this.signingProvider) {
+      details.signingProvider = "READY";
+    }
+
+    const allReady =
+      details.database === "READY" &&
+      details.requiredTables === "READY" &&
+      details.storage === "READY" &&
+      details.recordingClient === "READY" &&
+      details.signingProvider === "READY";
+
+    if (allReady) {
+      return {
+        state: "READY",
+        reason: "Evidence capture pipeline, recording client, storage, and signing provider verified",
+        details,
+      };
+    }
+
+    if (details.recordingClient === "MISCONFIGURED") {
+      return {
+        state: "MISCONFIGURED",
+        reason: "Recording-engine evidence client is missing configuration (RECORDING_ENGINE_URL / RECORDING_ENGINE_SHARED_KEY)",
+        details,
+      };
+    }
+
+    if (details.database === "UNAVAILABLE" || details.storage === "UNAVAILABLE") {
+      return {
+        state: "UNAVAILABLE",
+        reason: "Critical evidence persistence or storage dependency is unavailable",
+        details,
+      };
+    }
+
+    return {
+      state: "DEGRADED",
+      reason: "Evidence capture pipeline running in non-production or degraded mode",
+      details,
+    };
+  }
 }
 
 function percentile(values: number[], fraction: number): number {
@@ -486,7 +588,7 @@ function percentile(values: number[], fraction: number): number {
   return values[Math.min(values.length - 1, Math.floor(values.length * fraction))] ?? 0;
 }
 
-class InProcessTestAlertEvidenceClient implements AlertEvidenceClient {
+export class InProcessTestAlertEvidenceClient implements AlertEvidenceClient {
   async capture(input: {
     alertId: string;
     cameraId: string;
