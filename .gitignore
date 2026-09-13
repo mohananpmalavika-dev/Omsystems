@@ -5,6 +5,7 @@ edge-agent/vendor/
 .env
 coverage/
 .next/
+.next-build-verify/
 test-results/
 test-scratch/
 playwright-report/
