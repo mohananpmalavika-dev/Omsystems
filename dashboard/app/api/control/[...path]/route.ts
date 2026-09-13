@@ -16,10 +16,12 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
     return Response.json({ error: "invalid_control_path" }, { status: 400 });
   }
 
-  const upstreamBase = runtimeEnv(
-    ["CONTROL_PLANE_INTERNAL_URL"],
-    "http://127.0.0.1:8080",
-  );
+  const upstreamBase = process.env.CONTROL_PLANE_INTERNAL_URL ||
+    process.env.CONTROL_PLANE_URL ||
+    runtimeEnv(
+      ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_URL"],
+      "http://control-plane:8080",
+    );
   const upstream = new URL(`/${path.join("/")}`, normalizeHttpOrigin(upstreamBase));
   upstream.search = request.nextUrl.search;
 

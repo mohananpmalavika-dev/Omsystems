@@ -1,5 +1,5 @@
-import { SoapClient } from "../soap/soap-client";
-import type { WsSecurityCredentials } from "../security/ws-security";
+import { SoapClient } from "../soap/soap-client.js";
+import type { WsSecurityCredentials } from "../security/ws-security.js";
 
 export interface PtzVector {
   x: number; // Pan: -1.0 (full left) to +1.0 (full right)
@@ -229,7 +229,7 @@ export class PtzService {
     });
 
     const presetTags = SoapClient.extractAllTags(response, "Preset");
-    return presetTags.map((p) => ({
+    return presetTags.map((p: any) => ({
       token: SoapClient.extractAttribute(p, "token") || SoapClient.extractTag(p, "token") || "preset",
       name: SoapClient.extractTag(p, "Name") || "Preset",
     }));

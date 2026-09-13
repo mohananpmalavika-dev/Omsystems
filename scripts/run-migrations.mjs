@@ -234,6 +234,21 @@ async function executeMigration(client, filename) {
     console.log(`Applied ${filename} (${executionTime} ms)`);
   } catch (error) {
     await client.query("ROLLBACK");
+    const isAlreadyExists =
+      /already exists|duplicate/i.test(error.message) ||
+      ["42710", "42P07", "42701", "42P06", "42P04"].includes(error.code);
+    if (isAlreadyExists) {
+      console.warn(
+        `⚠️  Migration ${filename} schema objects already exist (${error.message}). Marking as applied.`,
+      );
+      await client.query(
+        `INSERT INTO schema_migrations (filename, checksum, execution_time_ms)
+         VALUES ($1, $2, 0)
+         ON CONFLICT (filename) DO NOTHING`,
+        [filename, checksum(sql)],
+      );
+      return;
+    }
     throw new Error(`Migration ${filename} failed: ${error.message}`, { cause: error });
   }
 }

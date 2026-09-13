@@ -1,5 +1,5 @@
-import { SoapClient } from "../soap/soap-client";
-import type { WsSecurityCredentials } from "../security/ws-security";
+import { SoapClient } from "../soap/soap-client.js";
+import type { WsSecurityCredentials } from "../security/ws-security.js";
 
 export interface DeviceInformation {
   manufacturer: string;
@@ -214,21 +214,21 @@ export class DeviceService {
 
     const manualServers = manualTags
       .map(
-        (t) =>
+        (t: string) =>
           SoapClient.extractTag(t, "DNSname") ||
           SoapClient.extractTag(t, "IPv4Address") ||
           SoapClient.extractTag(t, "IPv6Address")
       )
-      .filter((s): s is string => Boolean(s));
+      .filter((s: any): s is string => Boolean(s));
 
     const dhcpServers = dhcpTags
       .map(
-        (t) =>
+        (t: string) =>
           SoapClient.extractTag(t, "DNSname") ||
           SoapClient.extractTag(t, "IPv4Address") ||
           SoapClient.extractTag(t, "IPv6Address")
       )
-      .filter((s): s is string => Boolean(s));
+      .filter((s: any): s is string => Boolean(s));
 
     return {
       fromDHCP,
@@ -317,7 +317,7 @@ export class DeviceService {
     });
 
     const userTags = SoapClient.extractAllTags(response, "User");
-    return userTags.map((u) => ({
+    return userTags.map((u: any) => ({
       username: SoapClient.extractTag(u, "Username") || "unknown",
       userLevel: (SoapClient.extractTag(u, "UserLevel") as any) || "User",
     }));
@@ -366,7 +366,7 @@ export class DeviceService {
     });
 
     const ifaceTags = SoapClient.extractAllTags(response, "NetworkInterfaces");
-    return ifaceTags.map((tag) => {
+    return ifaceTags.map((tag: any) => {
       const token = SoapClient.extractAttribute(tag, "token") || "eth0";
       const enabled = SoapClient.extractTag(tag, "Enabled") === "true";
       const macAddress = SoapClient.extractTag(tag, "HwAddress") || undefined;
@@ -381,10 +381,10 @@ export class DeviceService {
         const dhcp = SoapClient.extractTag(ipv4Tag, "DHCP") === "true";
         const manualTags = SoapClient.extractAllTags(ipv4Tag, "Manual");
 
-        const manual = manualTags.map((m) => ({
+        const manual = manualTags.map((m: any) => ({
           address: SoapClient.extractTag(m, "Address") || "",
           prefixLength: parseInt(SoapClient.extractTag(m, "PrefixLength") || "24", 10),
-        })).filter((m) => Boolean(m.address));
+        })).filter((m: any) => Boolean(m.address));
 
         ipv4 = {
           enabled: ipEnabled,
@@ -449,8 +449,8 @@ export class DeviceService {
     });
 
     return SoapClient.extractAllTags(response, "IPv4Address")
-      .map((t) => t.replace(/<\/?.*?>/g, "").trim())
-      .filter((s): s is string => Boolean(s));
+      .map((t: string) => t.replace(/<\/?.*?>/g, "").trim())
+      .filter((s: any): s is string => Boolean(s));
   }
 
   /**
@@ -490,13 +490,13 @@ export class DeviceService {
     const fromDHCP = SoapClient.extractTag(response, "FromDHCP") === "true";
     const manualTags = SoapClient.extractAllTags(response, "DNSManual");
     const manualServers = manualTags
-      .map((t) => SoapClient.extractTag(t, "IPv4Address") || SoapClient.extractTag(t, "DNSname"))
-      .filter((s): s is string => Boolean(s));
+      .map((t: string) => SoapClient.extractTag(t, "IPv4Address") || SoapClient.extractTag(t, "DNSname"))
+      .filter((s: any): s is string => Boolean(s));
 
     const domainTags = SoapClient.extractAllTags(response, "SearchDomain");
     const searchDomain = domainTags
-      .map((t) => t.replace(/<\/?.*?>/g, "").trim())
-      .filter((s): s is string => Boolean(s));
+      .map((t: string) => t.replace(/<\/?.*?>/g, "").trim())
+      .filter((s: any): s is string => Boolean(s));
 
     return {
       fromDHCP,

@@ -58,8 +58,20 @@ sleep 10
 
 # Run migrations
 echo "=== Executing database migrations ==="
+docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  filename text NOT NULL UNIQUE,
+  executed_at timestamptz NOT NULL DEFAULT now(),
+  checksum text NOT NULL DEFAULT '',
+  execution_time_ms integer NOT NULL DEFAULT 0
+);
+" > /dev/null 2>&1 || true
+
 for migration in $(ls -1v /opt/sentinel-grid/database/migrations/*.sql 2>/dev/null); do
     docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid < "$migration" > /dev/null 2>&1 || true
+    m_name=$(basename "$migration")
+    docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "INSERT INTO schema_migrations (filename, checksum) VALUES ('$m_name', 'startup') ON CONFLICT (filename) DO NOTHING;" > /dev/null 2>&1 || true
 done
 
 # Build and start remaining services
