@@ -6,9 +6,9 @@ echo "🚀 Sentinel Grid (KryptoVision) - Google Cloud 1-Click Deploy"
 echo "========================================================"
 
 ZONE="asia-south1-a"
-MACHINE_TYPE="e2-standard-4"
+MACHINE_TYPE="e2-standard-8"
 INSTANCE_NAME="kryptovision-server"
-DISK_SIZE="50GB"
+DISK_SIZE="80GB"
 
 # 1. Check GCP Project
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)

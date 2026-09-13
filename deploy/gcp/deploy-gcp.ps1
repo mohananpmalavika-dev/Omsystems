@@ -3,9 +3,9 @@
 # =================================================================
 param (
     [string]$Zone = "asia-south1-a",
-    [string]$MachineType = "e2-standard-4",
+    [string]$MachineType = "e2-standard-8",
     [string]$InstanceName = "kryptovision-server",
-    [int]$DiskSizeGb = 50
+    [int]$DiskSizeGb = 80
 )
 
 $ErrorActionPreference = "Stop"
