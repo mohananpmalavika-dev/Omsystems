@@ -5,9 +5,6 @@ import {
   Camera,
   ShieldCheck,
   AlertTriangle,
-  UserCheck,
-  UserX,
-  Clock,
   ScanFace,
   UploadCloud,
   CheckCircle2,
@@ -49,7 +46,6 @@ export function CctvFaceIdentificationPanel({
   const [selectedCameraId, setSelectedCameraId] = useState<string>("");
   const [alertsOnly, setAlertsOnly] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [identifying, setIdentifying] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Live HUD State
@@ -114,87 +110,13 @@ export function CctvFaceIdentificationPanel({
     );
   }, [activeMapping, assignments]);
 
-  // Execute CCTV Identification
-  const handleIdentify = async (scenario: "assigned" | "unauthorized_staff" | "unknown" | "after_hours") => {
-    if (!activeMapping) {
-      setStatusMessage({ type: "error", text: "Please map and select a CCTV camera first." });
-      return;
-    }
-    setIdentifying(true);
-    setHudActive(true);
-    try {
-      let facePersonId: string | undefined = undefined;
-      let detectedAt: string | undefined = undefined;
-      let simScore = 0.95;
-
-      if (scenario === "assigned") {
-        if (!assignedPerson) {
-          throw new Error(`No staff member is currently assigned to ${activeMapping.areaName}. Assign a teller/custodian first.`);
-        }
-        const personRecord = persons.find((p) => p.id === assignedPerson.personId || p.fullName === assignedPerson.fullName);
-        facePersonId = personRecord?.facePersonId || personRecord?.id;
-        simScore = 0.98;
-      } else if (scenario === "unauthorized_staff") {
-        // Find another person from the roster who is NOT assigned here
-        const otherStaff = persons.find((p) => p.id !== assignedPerson?.personId);
-        if (!otherStaff) {
-          throw new Error("Please register at least two staff members to test unauthorized staff detection.");
-        }
-        facePersonId = otherStaff.facePersonId || otherStaff.id;
-        simScore = 0.94;
-      } else if (scenario === "unknown") {
-        facePersonId = undefined; // Unrecognized outsider
-        simScore = 0.42;
-      } else if (scenario === "after_hours") {
-        facePersonId = persons[0]?.facePersonId || persons[0]?.id;
-        detectedAt = "2026-09-15T23:30:00+05:30"; // Night time breach
-        simScore = 0.92;
-      }
-
-      const res = await secureAreaAuthorizationApi.cctvIdentify({
-        cameraId: activeMapping.cameraId,
-        facePersonId,
-        similarityScore: simScore,
-        detectedAt,
-        faceBbox: { x: 180, y: 120, width: 160, height: 190 },
-      });
-
-      setLastVerdict(res.data);
-      setStatusMessage({
-        type: res.data.alertTriggered ? "error" : "success",
-        text: res.data.notes,
-      });
-
-      // Reload event feed
-      const eventsRes = await secureAreaAuthorizationApi.listCctvEvents({ branchId, alertsOnly, limit: 25 });
-      setCctvEvents(eventsRes.data ?? []);
-    } catch (err: any) {
-      setStatusMessage({ type: "error", text: err.message || "Identification failed" });
-    } finally {
-      setIdentifying(false);
-    }
-  };
-
   // Face Enrollment Handler
   const handleEnrollFace = async () => {
     if (!enrollingPerson) return;
-    setEnrollingBusy(true);
-    try {
-      await secureAreaAuthorizationApi.enrollFace(enrollingPerson.id, {
-        photoBase64: enrollPhotoPreview || "sample_face_biometric_data",
-      });
-      setStatusMessage({
-        type: "success",
-        text: `Face biometrics enrolled successfully for ${enrollingPerson.fullName}.`,
-      });
-      setEnrollingPerson(null);
-      setEnrollPhotoPreview("");
-      await onRefreshNeeded();
-    } catch (err: any) {
-      setStatusMessage({ type: "error", text: err.message || "Face enrollment failed" });
-    } finally {
-      setEnrollingBusy(false);
-    }
+    setStatusMessage({
+      type: "error",
+      text: "Browser photo enrollment is disabled. Enroll this person from the trusted edge agent after its face and liveness models are configured.",
+    });
   };
 
   // Create Camera Mapping
@@ -412,7 +334,7 @@ export function CctvFaceIdentificationPanel({
               <div className="relative z-10 m-auto text-center">
                 <Video size={42} className="mx-auto text-slate-600" />
                 <p className="mt-2 text-sm font-medium text-slate-400">CCTV Camera Ready</p>
-                <p className="text-xs text-slate-600">Select a scenario below to test identification</p>
+                <p className="text-xs text-slate-600">Waiting for a signed observation from the edge AI agent</p>
               </div>
             )}
 
@@ -433,98 +355,17 @@ export function CctvFaceIdentificationPanel({
             </div>
           </div>
 
-          {/* Identification Simulator Controls */}
+          {/* Edge inference status */}
           <div className="flex flex-col justify-between space-y-4 rounded-2xl border border-slate-800 bg-slate-950/60 p-5 lg:col-span-4">
             <div>
               <h3 className="flex items-center gap-2 text-sm font-bold text-slate-200">
-                <Radio size={16} className="text-cyan-400" /> Live Verification Triggers
+                <Radio size={16} className="text-cyan-400" /> Edge Verification Required
               </h3>
               <p className="mt-1 text-xs text-slate-400">
-                Simulate facial recognition inference directly on this CCTV channel:
+                This screen records only signed observations produced by the configured edge face model. It cannot simulate a face match or authorize a person from the browser.
               </p>
-
-              <div className="mt-4 space-y-2.5">
-                {/* 1. Assigned Teller / Custodian */}
-                <button
-                  onClick={() => void handleIdentify("assigned")}
-                  disabled={identifying || !activeMapping}
-                  className="flex w-full items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3 text-left transition hover:bg-emerald-900/40 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-500/20 text-emerald-400">
-                      <UserCheck size={18} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-emerald-300">Verify Assigned Staff</p>
-                      <p className="text-[11px] text-slate-400">
-                        {assignedPerson ? assignedPerson.fullName : "Needs assignment"}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
-                    PASS
-                  </span>
-                </button>
-
-                {/* 2. Unauthorized Staff Member */}
-                <button
-                  onClick={() => void handleIdentify("unauthorized_staff")}
-                  disabled={identifying || !activeMapping}
-                  className="flex w-full items-center justify-between rounded-xl border border-amber-500/30 bg-amber-950/30 p-3 text-left transition hover:bg-amber-900/40 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/20 text-amber-400">
-                      <UserX size={18} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-amber-300">Detect Unassigned Staff</p>
-                      <p className="text-[11px] text-slate-400">Employee at wrong counter/vault</p>
-                    </div>
-                  </div>
-                  <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                    ALERT P2
-                  </span>
-                </button>
-
-                {/* 3. Unrecognized Intruder */}
-                <button
-                  onClick={() => void handleIdentify("unknown")}
-                  disabled={identifying || !activeMapping}
-                  className="flex w-full items-center justify-between rounded-xl border border-rose-500/30 bg-rose-950/30 p-3 text-left transition hover:bg-rose-900/40 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-rose-500/20 text-rose-400">
-                      <AlertTriangle size={18} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-rose-300">Detect Unknown Intruder</p>
-                      <p className="text-[11px] text-slate-400">Stranger behind counter/locker</p>
-                    </div>
-                  </div>
-                  <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300">
-                    BREACH
-                  </span>
-                </button>
-
-                {/* 4. After-Hours Breach */}
-                <button
-                  onClick={() => void handleIdentify("after_hours")}
-                  disabled={identifying || !activeMapping}
-                  className="flex w-full items-center justify-between rounded-xl border border-purple-500/30 bg-purple-950/30 p-3 text-left transition hover:bg-purple-900/40 disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-purple-500/20 text-purple-400">
-                      <Clock size={18} />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold text-purple-300">After-Hours Vault Breach</p>
-                      <p className="text-[11px] text-slate-400">Detection outside operating hours</p>
-                    </div>
-                  </div>
-                  <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-300">
-                    P1 CRITICAL
-                  </span>
-                </button>
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-950/20 p-3 text-xs text-amber-100">
+                Configure a local face detector, embedding model, liveness model, and <code>SECURE_AREA_EDGE_INGEST_TOKEN</code> on the edge agent before enabling CCTV identity alerts.
               </div>
             </div>
 

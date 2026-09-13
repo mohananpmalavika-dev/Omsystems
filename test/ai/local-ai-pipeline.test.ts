@@ -1,9 +1,8 @@
 /**
  * Local Open-Source AI Pipeline & Zero-Cloud Cost Test Runner
  * 
- * Verifies that all AI capabilities (YOLO Computer Vision, Native Onboard AI,
- * Local ANPR, Local Face Matching, Camera Tamper AI, and Incident Summarization)
- * function 100% locally with zero external paid APIs.
+ * Verifies local integrations and, crucially, that raw-frame inference fails
+ * closed until a verified edge model runtime is installed.
  */
 
 import { localVisionEngineService } from "../../src/ai/services/local-vision-engine.service.js";
@@ -14,6 +13,12 @@ import { buildApp } from "../../src/app.js";
 
 let passedCount = 0;
 let failedCount = 0;
+
+function createTestEmbedding(seed: number): number[] {
+  const vector = Array.from({ length: 512 }, (_, index) => Math.sin(seed * (index + 1)));
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+  return vector.map((value) => value / magnitude);
+}
 
 function assert(condition: boolean, message: string) {
   if (condition) {
@@ -28,30 +33,29 @@ function assert(condition: boolean, message: string) {
 async function runLocalAiTests() {
   process.env.ENABLE_EPHEMERAL_FACE_MATCHER = "true";
   console.log("================================================================================");
-  console.log("  100% FREE LOCAL OPEN-SOURCE AI PIPELINE - VERIFICATION TEST RUNNER");
+  console.log("  LOCAL AI INTEGRATION & FAIL-CLOSED VERIFICATION TEST RUNNER");
   console.log("================================================================================\n");
 
   // Suite 1: Local Vision Engine & Native Hardware AI Ingestion
-  console.log("Suite 1: Local Vision Engine (YOLO & Native Hardware AI)");
+  console.log("Suite 1: Local Vision Engine (Native Hardware AI & Model Readiness)");
   {
     const status = localVisionEngineService.getStatus();
     assert(status.online === true, "Local AI Engine is online");
     assert(status.monthlyCloudCost === 0, "Monthly cloud AI cost is 0 (100% Free)");
     assert(status.externalApiDependencies.length === 0, "Zero external paid API dependencies");
-    assert(status.availableModels.includes("YOLO_V8_NANO"), "Supports local YOLOv8 ONNX model");
+    assert(!status.availableModels.includes("YOLO_V8_NANO"), "Does not claim an unloaded YOLO model is available");
     assert(status.availableModels.includes("CP_PLUS_IVS"), "Supports native CP PLUS onboard IVS");
     assert(status.availableModels.includes("DAHUA_SMD"), "Supports native Dahua SMD");
     assert(status.availableModels.includes("HIKVISION_ACUSENSE"), "Supports native Hikvision AcuSense");
 
-    // Local YOLO inference
+    // A zone label is context, not an inference result.
     const yoloDetections = await localVisionEngineService.processFrame({
       cameraId: "cam-vault-01",
       branchId: "branch-aluva-178",
       zone: "VAULT",
     });
-    assert(yoloDetections.length > 0, "YOLO detector returns detections");
-    assert(yoloDetections[0]?.classification === "PERSON", "YOLO classifies person in vault zone");
-    assert(yoloDetections[0]?.modelUsed === "YOLO_V8_NANO", "Model used is local YOLO_V8_NANO");
+    assert(yoloDetections.length > 0, "Vision engine returns model-readiness result");
+    assert(yoloDetections[0]?.status === "MODEL_UNAVAILABLE", "Zone alone never fabricates a person detection");
 
     // Native CP PLUS hardware AI event
     const cpPlusDetections = await localVisionEngineService.processFrame({
@@ -140,12 +144,12 @@ async function runLocalAiTests() {
       personId: "person-suspect-001",
       name: "Suspect Person A",
       watchlistType: "WANTED",
-      embeddingVector: localFaceMatcherService.createSyntheticVector(0.5),
+      embeddingVector: createTestEmbedding(0.5),
       notes: "Test fixture only",
       enrolledAt: new Date("2026-01-01"),
     });
     // Match exact wanted suspect vector
-    const suspectVector = localFaceMatcherService.createSyntheticVector(0.5);
+    const suspectVector = createTestEmbedding(0.5);
     const matchResult = await localFaceMatcherService.matchFace({
       cameraId: "cam-lobby-01",
       branchId: "branch-178",
@@ -158,7 +162,7 @@ async function runLocalAiTests() {
     assert(matchResult.confidence > 0.99, "Similarity confidence > 99%");
 
     // Non-match test with dissimilar vector
-    const unknownVector = localFaceMatcherService.createSyntheticVector(9.9);
+    const unknownVector = createTestEmbedding(9.9);
     const nonMatch = await localFaceMatcherService.matchFace({
       cameraId: "cam-lobby-01",
       branchId: "branch-178",
@@ -216,7 +220,7 @@ async function runLocalAiTests() {
     });
     assert(visionRes.statusCode === 200, "POST /v1/ai/vision/detect returns 200 OK");
     const visionPayload = JSON.parse(visionRes.payload);
-    assert(visionPayload.data?.[0]?.classification === "PERSON", "API returns local detection");
+    assert(visionPayload.data?.[0]?.status === "MODEL_UNAVAILABLE", "API fails closed until an edge model is installed");
 
     const anprRes = await app.inject({
       method: "POST",
@@ -239,7 +243,7 @@ async function runLocalAiTests() {
       payload: {
         cameraId: "cam-001",
         branchId: "A005",
-        embeddingVector: localFaceMatcherService.createSyntheticVector(0.5),
+        embeddingVector: createTestEmbedding(0.5),
       },
     });
     assert(faceRes.statusCode === 200, "POST /v1/ai/face/match returns 200 OK");

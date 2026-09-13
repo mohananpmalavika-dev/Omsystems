@@ -65,10 +65,10 @@ const cameraMappingSchema = z.object({
 
 const cctvIdentifySchema = z.object({
   cameraId: z.string().trim().min(1),
-  branchId: idSchema.optional(),
-  locationId: idSchema.optional(),
-  embedding: z.array(z.number()).optional(),
-  facePersonId: idSchema.optional(),
+  embedding: z.array(z.number().finite()).length(512),
+  livenessScore: z.number().min(0.9).max(1),
+  observationCount: z.number().int().min(3).max(100),
+  edgeEventId: z.string().uuid(),
   faceBbox: z
     .object({
       x: z.number(),
@@ -78,14 +78,18 @@ const cctvIdentifySchema = z.object({
     })
     .optional(),
   snapshotReference: z.string().optional(),
-  detectedAt: z.string().optional(),
-  similarityScore: z.number().min(0).max(1).optional(),
+  detectedAt: z.string().datetime().optional(),
 });
 
 const enrollFaceSchema = z.object({
-  photoBase64: z.string().optional(),
-  embedding: z.array(z.number()).optional(),
+  // Face images must be processed at the trusted edge. The control plane
+  // stores only an embedding produced by an approved model, never a fake
+  // vector derived from a browser upload.
+  embedding: z.array(z.number().finite()).length(512),
   snapshotReference: z.string().optional(),
+  qualityScore: z.number().min(0.5).max(1).default(0.8),
+  modelName: z.string().trim().min(1).max(120),
+  modelVersion: z.string().trim().min(1).max(120),
 });
 
 export type LocalSecureAreaState = {
@@ -154,21 +158,6 @@ async function scopeExists(db: Queryable | undefined, tenantId: string, branchId
   } catch {
     return true;
   }
-}
-
-function generateMockEmbedding(seed: string): number[] {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) {
-    hash = (hash << 5) - hash + seed.charCodeAt(i);
-    hash |= 0;
-  }
-  const vec: number[] = [];
-  for (let i = 0; i < 128; i++) {
-    const val = Math.sin(hash + i * 17.38);
-    vec.push(val);
-  }
-  const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0)) || 1;
-  return vec.map((v) => Number((v / norm).toFixed(6)));
 }
 
 export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, store: any) {
@@ -284,8 +273,11 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
     const body = enrollFaceSchema.parse(request.body);
     const db = getDatabase(store);
 
-    const facePersonId = randomUUID();
-    const embedding = body.embedding ?? generateMockEmbedding(body.photoBase64 || params.id);
+    let facePersonId = randomUUID();
+    const magnitude = Math.sqrt(body.embedding.reduce((sum, value) => sum + value * value, 0));
+    if (magnitude < 0.9 || magnitude > 1.1) {
+      return reply.code(422).send({ error: "face_embedding_not_normalized" });
+    }
 
     if (db) {
       const personRes = await db.query(
@@ -296,20 +288,43 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         return reply.code(404).send({ error: "person_not_found" });
       }
 
+      try {
+        const watchlistResult = await db.query(
+          `INSERT INTO face_watchlists (tenant_id, name, description, list_type, enabled, alert_on_match, alert_severity, created_by)
+           VALUES ($1, 'Authorized Bank Staff', 'Consent-based staff identity registry for secure-area verification', 'staff', true, false, 'P2', $2)
+           ON CONFLICT (tenant_id, name) WHERE archived_at IS NULL DO UPDATE SET updated_at = now()
+           RETURNING id`,
+          [current.tenantId, current.id],
+        );
+        const watchlistId = watchlistResult.rows[0]?.id;
+        if (!watchlistId) throw new Error("staff_watchlist_unavailable");
+        const facePersonResult = await db.query(
+          `INSERT INTO face_watchlist_persons (id, tenant_id, watchlist_id, external_id, full_name, notes, metadata, enrolled_by)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           ON CONFLICT (tenant_id, watchlist_id, external_id) DO UPDATE SET
+             full_name = EXCLUDED.full_name,
+             notes = EXCLUDED.notes,
+             metadata = EXCLUDED.metadata,
+             archived_at = NULL
+           RETURNING id`,
+          [facePersonId, current.tenantId, watchlistId, params.id, personRes.rows[0].full_name,
+            `Employee ${personRes.rows[0].employee_code}`, JSON.stringify({ modelName: body.modelName, modelVersion: body.modelVersion }), current.id],
+        );
+        facePersonId = facePersonResult.rows[0]?.id ?? facePersonId;
+        await db.query(
+          `INSERT INTO face_embeddings (tenant_id, person_id, embedding, quality_score, source_image_reference, metadata)
+           VALUES ($1, $2, $3::vector, $4, $5, $6)`,
+          [current.tenantId, facePersonId, `[${body.embedding.join(",")}]`, body.qualityScore, body.snapshotReference ?? null,
+            JSON.stringify({ modelName: body.modelName, modelVersion: body.modelVersion, source: "edge-agent" })],
+        );
+      } catch (error) {
+        return reply.code(503).send({ error: "face_registry_unavailable", message: "A pgvector-backed face registry is required before secure-area enrollment can complete." });
+      }
+
       await db.query(
         `UPDATE secure_area_authorized_persons SET face_person_id = $1, updated_at = now() WHERE id = $2`,
         [facePersonId, params.id],
       );
-
-      // Register face in registry if table exists
-      try {
-        await db.query(
-          `INSERT INTO face_watchlist_persons (id, tenant_id, full_name, notes, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, now(), now())
-           ON CONFLICT (id) DO UPDATE SET full_name = EXCLUDED.full_name, updated_at = now()`,
-          [facePersonId, current.tenantId, personRes.rows[0].full_name, `Employee ${personRes.rows[0].employee_code}`],
-        );
-      } catch {}
 
       return reply.code(200).send({
         data: {
@@ -337,7 +352,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         id: facePersonId,
         tenantId: current.tenantId,
         fullName: person.fullName,
-        embedding,
+        embedding: body.embedding,
         watchlistId: "bank-staff-authorized",
       });
       if (!idState.faceWatchlists.some((w) => w.id === "bank-staff-authorized")) {
@@ -493,27 +508,36 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
   // ─── 4. CCTV IDENTIFICATION & VERIFICATION ─────────────────────────────────
 
   app.post("/v1/secure-area-authorizations/cctv-identify", async (request, reply) => {
-    const current = user(request, reply);
-    if (!current) return;
     const db = getDatabase(store);
     const body = cctvIdentifySchema.parse(request.body);
     const occurredAt = body.detectedAt ?? new Date().toISOString();
+
+    const configuredIngestToken = process.env.SECURE_AREA_EDGE_INGEST_TOKEN;
+    if (!configuredIngestToken) {
+      return reply.code(503).send({ error: "edge_face_ingest_not_configured" });
+    }
+    const isEdgeIngest = request.headers["x-edge-ingest-token"] === configuredIngestToken;
+    const current = isEdgeIngest ? undefined : user(request, reply);
+    if (!isEdgeIngest && !current) return;
+    if (!isEdgeIngest && request.headers["x-edge-ingest-token"]) {
+      return reply.code(403).send({ error: "untrusted_face_observation" });
+    }
 
     // 1. Resolve camera mapping to high-security zone
     let mapping: any;
     if (db) {
       const res = await db.query(
-        `SELECT id, branch_id AS "branchId", location_id AS "locationId", camera_id AS "cameraId",
+        `SELECT id, tenant_id AS "tenantId", branch_id AS "branchId", location_id AS "locationId", camera_id AS "cameraId",
                 area_type AS "areaType", area_name AS "areaName"
          FROM secure_area_camera_mappings
-         WHERE tenant_id = $1 AND camera_id = $2`,
-        [current.tenantId, body.cameraId],
+         WHERE camera_id = $1 AND ($2::uuid IS NULL OR tenant_id = $2)`,
+        [body.cameraId, current?.tenantId ?? null],
       );
       mapping = res.rows[0];
     } else {
       const state = getLocalSecureAreaState(store);
       mapping = state.cameraMappings.find(
-        (m) => m.tenantId === current.tenantId && m.cameraId === body.cameraId,
+        (m) => (!current || m.tenantId === current.tenantId) && m.cameraId === body.cameraId,
       );
     }
 
@@ -523,17 +547,37 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         message: `Camera ${body.cameraId} is not mapped to any secure area (locker or cash counter).`,
       });
     }
+    const tenantId = current?.tenantId ?? mapping.tenantId;
+    if (!tenantId) return reply.code(503).send({ error: "secure_area_tenant_resolution_failed" });
+
+    // Edge events are idempotent. A replayed signed payload must never create
+    // a second authorization decision or notification.
+    if (db) {
+      const duplicate = await db.query(
+        `SELECT id FROM secure_area_cctv_events
+         WHERE tenant_id = $1 AND metadata->>'edgeEventId' = $2 LIMIT 1`,
+        [tenantId, body.edgeEventId],
+      );
+      if (duplicate.rows[0]) {
+        return reply.code(409).send({ error: "duplicate_edge_observation" });
+      }
+    } else {
+      const state = getLocalSecureAreaState(store);
+      if (state.cctvEvents.some((event) => event.edgeEventId === body.edgeEventId)) {
+        return reply.code(409).send({ error: "duplicate_edge_observation" });
+      }
+    }
 
     // 2. Resolve face identity if embedding provided
-    let resolvedFacePersonId = body.facePersonId;
-    let matchSimilarity = body.similarityScore ?? 0;
+    let resolvedFacePersonId: string | undefined;
+    let matchSimilarity = 0;
     let personName: string | null = null;
     let isWatchlistAlert = false;
 
-    if (!resolvedFacePersonId && body.embedding && store) {
+    if (store) {
       try {
-        const matches = await activeFaceRegistryMatches(store, current.tenantId, body.embedding, {
-          minSimilarity: 0.7,
+        const matches = await activeFaceRegistryMatches(store, tenantId, body.embedding, {
+          minSimilarity: 0.82,
         });
         if (matches.length > 0) {
           const topMatch = matches[0];
@@ -555,7 +599,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
           `SELECT id, full_name AS "fullName", employee_code AS "employeeCode", designation, face_person_id AS "facePersonId"
            FROM secure_area_authorized_persons
            WHERE tenant_id = $1 AND branch_id = $2 AND (face_person_id = $3 OR id = $3) AND active = true`,
-          [current.tenantId, mapping.branchId, resolvedFacePersonId],
+          [tenantId, mapping.branchId, resolvedFacePersonId],
         );
         staffPerson = pRes.rows[0] ?? null;
       } else {
@@ -563,7 +607,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         staffPerson =
           state.persons.find(
             (p) =>
-              p.tenantId === current.tenantId &&
+              p.tenantId === tenantId &&
               p.branchId === mapping.branchId &&
               (p.facePersonId === resolvedFacePersonId || p.id === resolvedFacePersonId) &&
               p.active !== false,
@@ -582,7 +626,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         const hours = await db.query(
           `SELECT opens_at, closes_at, timezone FROM secure_area_office_hours
            WHERE tenant_id = $1 AND branch_id = $2 AND location_id IS NOT DISTINCT FROM $3 AND enabled = true`,
-          [current.tenantId, mapping.branchId, mapping.locationId ?? null],
+          [tenantId, mapping.branchId, mapping.locationId ?? null],
         );
         if (hours.rows[0]) schedule = hours.rows[0];
       } catch {}
@@ -617,7 +661,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
 
       if (db) {
         await createAfterHoursAuthorizationAlert(db, {
-          tenantId: current.tenantId,
+          tenantId,
           branchId: mapping.branchId,
           locationId: mapping.locationId,
           cameraId: mapping.cameraId,
@@ -638,14 +682,14 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
              AND a.area_type = $4 AND a.area_name = $5 AND a.authorized_person_id = $6
              AND a.effective_from <= $7::timestamptz AND (a.effective_until IS NULL OR a.effective_until >= $7::timestamptz)
            LIMIT 1`,
-          [current.tenantId, mapping.branchId, mapping.locationId ?? null, mapping.areaType, mapping.areaName, staffPerson.id, occurredAt],
+          [tenantId, mapping.branchId, mapping.locationId ?? null, mapping.areaType, mapping.areaName, staffPerson.id, occurredAt],
         );
         isAuthorizedForArea = Boolean(authRes.rows[0]);
       } else {
         const state = getLocalSecureAreaState(store);
         isAuthorizedForArea = state.authorizations.some(
           (a) =>
-            a.tenantId === current.tenantId &&
+            a.tenantId === tenantId &&
             a.branchId === mapping.branchId &&
             a.areaType === mapping.areaType &&
             a.areaName === mapping.areaName &&
@@ -684,7 +728,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
           [
             eventId,
-            current.tenantId,
+            tenantId,
             mapping.branchId,
             mapping.locationId ?? null,
             mapping.cameraId,
@@ -699,7 +743,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
             body.faceBbox ? JSON.stringify(body.faceBbox) : null,
             body.snapshotReference ?? null,
             occurredAt,
-            JSON.stringify({ notes, alertTriggered }),
+            JSON.stringify({ notes, alertTriggered, edgeEventId: body.edgeEventId, livenessScore: body.livenessScore, observationCount: body.observationCount }),
           ],
         );
       } catch {}
@@ -707,7 +751,7 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
       const state = getLocalSecureAreaState(store);
       state.cctvEvents.unshift({
         id: eventId,
-        tenantId: current.tenantId,
+        tenantId,
         branchId: mapping.branchId,
         locationId: mapping.locationId ?? null,
         cameraId: mapping.cameraId,
@@ -724,6 +768,9 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         occurredAt,
         notes,
         alertTriggered,
+        edgeEventId: body.edgeEventId,
+        livenessScore: body.livenessScore,
+        observationCount: body.observationCount,
         createdAt: new Date().toISOString(),
       });
     }

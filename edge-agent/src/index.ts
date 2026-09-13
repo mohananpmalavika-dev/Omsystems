@@ -51,6 +51,8 @@ import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
 import { PhysicalSirenController, physicalSirenTriggerFromPayload } from "./alerts/physical-siren.js";
+import { SecureFaceRuntime } from "./ai/secure-face-runtime.js";
+import { SecureFaceObservationBuffer } from "./ai/secure-face-observation-buffer.js";
 
 const MEDIA_RUNTIME_RETRY_INTERVAL_MS = 30_000;
 
@@ -132,6 +134,8 @@ if (hasArgument(argv, "--check-config")) {
     branchId: config.BRANCH_ID,
     edgeAgentId: config.EDGE_AGENT_ID ?? null,
     edgeAgentName: config.EDGE_AGENT_NAME,
+    secureFaceAiEnabled: config.SECURE_FACE_AI_ENABLED,
+    secureFaceModelManifest: config.SECURE_FACE_MODEL_MANIFEST,
     physicalSirenEnabled: config.PHYSICAL_SIREN_ENABLED,
     onvifEndpointCount: config.ONVIF_ENDPOINTS.split(",").filter(Boolean).length,
     recorderCount: config.RECORDERS_JSON.length,
@@ -159,9 +163,9 @@ const gateway = new GatewayClient(
   undefined,
   config.EDGE_MTLS_ENABLED ? {
     enabled: true,
-    clientCert: edgeClientCert,
-    clientKey: edgeClientKey,
-    caCert: edgeCaCert,
+    ...(edgeClientCert ? { clientCert: edgeClientCert } : {}),
+    ...(edgeClientKey ? { clientKey: edgeClientKey } : {}),
+    ...(edgeCaCert ? { caCert: edgeCaCert } : {}),
     rejectUnauthorized: config.EDGE_MTLS_REJECT_UNAUTHORIZED,
   } : undefined,
 );
@@ -238,6 +242,22 @@ const credentialVault = new CameraCredentialVault(
 await credentialVault.load();
 
 const dbCredentialProvider = new DatabaseCredentialProvider(control, agentId);
+let secureFaceRuntime: SecureFaceRuntime | null = null;
+const secureFaceBuffer = new SecureFaceObservationBuffer(config.SECURE_FACE_MIN_OBSERVATIONS);
+if (config.SECURE_FACE_AI_ENABLED) {
+  try {
+    secureFaceRuntime = new SecureFaceRuntime({
+      manifestPath: config.SECURE_FACE_MODEL_MANIFEST,
+      minLivenessScore: config.SECURE_FACE_MIN_LIVENESS,
+    });
+    await secureFaceRuntime.initialize();
+    logger.info("Secure face ONNX runtime is ready", secureFaceRuntime.status());
+  } catch (error) {
+    // Never silently downgrade biometric enforcement. Secure-area identity
+    // alerts remain unavailable until all verified local artifacts load.
+    logger.error("Secure face ONNX runtime unavailable", { error: error instanceof Error ? error.message : String(error) });
+  }
+}
 if (hasArgument(argv, "--diagnose")) {
   const advertisedMediaUrl = config.LIVE_MEDIA_ENABLED
     ? resolvePrivateMediaGatewayUrl(config.PUBLIC_MEDIA_GATEWAY_URL, config.EDGE_LIVE_GATEWAY_PORT)
@@ -339,6 +359,22 @@ const cameraHeartbeat = initializeCameraHeartbeat(
     });
   },
   (payload) => control.submitAnalyticsFrame(agentId, payload),
+  async ({ cameraId, rgb, width, height, capturedAt }) => {
+    if (!secureFaceRuntime || !config.SECURE_FACE_INGEST_TOKEN) return;
+    const observation = await secureFaceRuntime.observeRgbFrame(rgb, width, height);
+    if (!observation) return;
+    const confirmed = secureFaceBuffer.accept(cameraId, observation);
+    if (!confirmed) return;
+    await control.submitSecureAreaFaceObservation({
+      cameraId,
+      embedding: confirmed.embedding,
+      livenessScore: confirmed.livenessScore,
+      observationCount: confirmed.observationCount,
+      edgeEventId: confirmed.edgeEventId,
+      detectedAt: capturedAt,
+      faceBbox: confirmed.faceBbox,
+    }, config.SECURE_FACE_INGEST_TOKEN);
+  },
 );
 let lastCameraConfigSyncAt = 0;
 // Defer the scheduled full-LAN scan until the agent has had a chance to claim

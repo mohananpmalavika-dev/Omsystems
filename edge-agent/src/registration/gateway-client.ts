@@ -104,6 +104,17 @@ export interface AnalyticsFramePayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface SecureAreaFaceObservationPayload {
+  cameraId: string;
+  embedding: number[];
+  livenessScore: number;
+  observationCount: number;
+  edgeEventId: string;
+  detectedAt: string;
+  faceBbox: { x: number; y: number; width: number; height: number };
+  snapshotReference?: string;
+}
+
 export interface MonitoringCamera {
   id: string;
   name: string;
@@ -271,6 +282,17 @@ export class GatewayClient {
     );
   }
 
+  async submitSecureAreaFaceObservation(payload: SecureAreaFaceObservationPayload, ingestToken: string) {
+    return this.request<{ data: { id: string; verdict: string; alertTriggered: boolean } }>(
+      "/v1/secure-area-authorizations/cctv-identify",
+      {
+        method: "POST",
+        headers: { "x-edge-ingest-token": ingestToken },
+        body: JSON.stringify(payload),
+      },
+    );
+  }
+
   async submitRecorderHdd(agentId: string, payload: {
     branchId: string; recorderId: string; observedAt: string;
     source: "onvif" | "cp-plus-adapter" | "system";
@@ -399,7 +421,8 @@ export class GatewayClient {
 
     if (this.mtlsOptions?.enabled && (this.mtlsOptions.clientCert || this.mtlsOptions.clientKey)) {
       try {
-        const { Agent } = await import("undici");
+        const undiciModule = "undici";
+        const { Agent } = await import(undiciModule);
         dispatcher = new Agent({
           connect: {
             cert: this.mtlsOptions.clientCert,
