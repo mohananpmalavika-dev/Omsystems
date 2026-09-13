@@ -27,6 +27,7 @@ WORKDIR /app/edge-agent
 RUN npm install --legacy-peer-deps
 RUN npm run verify:windows-production-release || true
 RUN npm run bundle:delta || true
+RUN mkdir -p /app/edge-agent/build /app/edge-agent/release /app/edge-agent/installer
 WORKDIR /app
 
 # Stage 2: Production
@@ -46,7 +47,6 @@ RUN npm install --omit=dev --legacy-peer-deps
 # Copy built application
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/config ./config
-COPY --from=builder /app/backend ./backend
 
 COPY --from=builder /app/database/migrations ./database/migrations
 COPY --from=builder /app/scripts/run-migrations.mjs ./scripts/run-migrations.mjs
