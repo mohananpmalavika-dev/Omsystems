@@ -9,7 +9,7 @@
     auto_https disable_redirects
 }
 
-:80 {
+http://34-14-220-41.sslip.io, http://34.14.220.41, :80 {
     encode zstd gzip
 
     header {
@@ -69,6 +69,76 @@
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto http
+        }
+    }
+}
+
+https://34-14-220-41.sslip.io {
+    encode zstd gzip
+
+    tls {
+        issuer acme {
+            email mohanpmalavika@gmail.com
+        }
+    }
+
+    header {
+        -X-Frame-Options
+        Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
+        Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
+    }
+
+    handle_path /stream/* {
+        reverse_proxy media-gateway:8888 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+        }
+    }
+
+    handle /hls/* {
+        reverse_proxy media-gateway:8090
+    }
+
+    handle /ready {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /health {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /webrtc/* {
+        reverse_proxy media-gateway:8090
+    }
+
+    handle /api/portable-camera/* {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /api/ai/* {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /ws/* {
+        reverse_proxy control-plane:8080 {
+            header_up Upgrade {>Upgrade}
+            header_up Connection {>Connection}
+        }
+    }
+
+    handle /v1/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    handle {
+        reverse_proxy dashboard:10000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
         }
     }
 }
