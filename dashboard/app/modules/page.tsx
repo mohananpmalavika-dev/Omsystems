@@ -17,11 +17,11 @@ import { authApi } from "@/lib/api-client";
 
 const groupDescriptions: Record<string, string> = {
   OPERATIONS: "Live control room, branch fleet, alert dispatch, incident response, and media streaming pipeline.",
-  "HEALTH & HARDWARE LAB": "Deep 7-layer camera health, NVR/DVR monitors, hardware compatibility lab, SATA HDDs, and network telemetry.",
+  "DEVICE HEALTH & MAINTENANCE": "Camera, recorder, storage, gateway, power, and network health with diagnostics and recovery tools.",
   "INVESTIGATE & PLAYBACK": "AI semantic video search, synchronized multi-camera playback, recording archives, and chain of custody evidence.",
   "INTELLIGENCE & AI": "Real-time AI command center, facial recognition, ANPR, crowd density, banking/industrial safety, and 3D digital twins.",
   "FLEET MAINTENANCE": "Hardware asset tracking, field work orders, vendor directory, AMC contracts, and predictive failure care.",
-  "ASSURANCE & GOVERNANCE": "Regulatory compliance frameworks, control assessments, risk register, and DPIA privacy governance.",
+  "COMPLIANCE & GOVERNANCE": "Compliance frameworks, control assessments, risk management, evidence, and privacy governance.",
   "AUDIT & REPORTING": "Executive morning digest, branch CCTV audits, camera health compliance, and immutable operator access logs.",
   ADMINISTRATION: "Tenants, RBAC permissions, zero-touch branch onboarding, AI quality registry, HA topology, and system management.",
 };

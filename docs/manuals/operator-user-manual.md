@@ -1,6 +1,6 @@
-# Sentinel Grid — Operator User Manual
+# KryptonVision — Operator User Manual
 
-**Product Version:** Sentinel Grid 0.1.0  
+**Product Version:** KryptonVision 0.1.0  
 **Dashboard Version:** @sentinel/dashboard 0.1.0  
 **Document Version:** 1.0.0  
 **Last Updated:** September 5, 2026  
@@ -22,6 +22,7 @@
 10. [AI Analytics & Visual Rules Monitoring](#10-ai-analytics--visual-rules-monitoring)
 11. [Device Health & Hardware Diagnostics](#11-device-health--hardware-diagnostics)
 12. [Screenshot Map & UI Reference](#12-screenshot-map--ui-reference)
+13. [Page Guide, Banking Workflows & Safe Use](#13-page-guide-banking-workflows--safe-use)
 
 ---
 
@@ -96,7 +97,7 @@ All authorized operators, investigators, branch supervisors, and administrators.
 
 ### Single Sign-On (SSO) & MFA Status
 * **Local Authentication:** **Production Ready**.
-* **Facial Verification (Camera Capture):** **Production Ready**.
+* **Facial Verification (Camera Capture):** Available only where the approved camera, local model, liveness check, and organization policy have all been configured. It must not be the sole basis for a security or employment decision.
 * **SAML 2.0 / OpenID Connect (Azure AD / Okta):** **Configuration Required** (Supported by the backend identity provider, requires enterprise IdP setup by the Administrator).
 * **MFA / Biometric Challenge:** **Partially Implemented** (Enforced through Zero-Trust context policies and security posture compliance tracking).
 
@@ -328,3 +329,40 @@ The following table catalogs all primary operator screens captured from the live
 | **SS-010** | AI Rules & Automation | `/analytics/rules` | `screenshots/SS-010-ai-rules-automation.png` | Visual rule engine, zone designer, and 36 NBFC templates. |
 | **SS-011** | Camera Health | `/operations/cameras` | `screenshots/SS-011-camera-health.png` | 7-layer diagnostic telemetry for all connected cameras. |
 | **SS-012** | Storage Management | `/operations/storage` | `screenshots/SS-012-storage-management.png` | Hard drive capacity, tiering, and retention health. |
+
+---
+
+## 13. Page Guide, Banking Workflows & Safe Use
+
+### In-product page guide
+
+Open **Help & Support** from the navigation sidebar and use **What each page is for**. The guide lists every page available to your account and, for each page, provides:
+
+* its business purpose;
+* when an operator should use it;
+* a short safe workflow; and
+* a direct link to the page.
+
+The guide is role-aware. If a page is not listed, the account does not currently have permission to use it. Ask an administrator to review the role and location access rather than sharing credentials.
+
+### Banking and restricted-area workflow
+
+Use **Banking & Cash Counters** to review configured cash counter and locker controls. The recommended operational sequence is:
+
+1. Confirm that the branch, cash counter, locker, and camera are correctly mapped by an administrator.
+2. Register authorized persons with their approved role, location scope, effective date, and expiry/review date.
+3. Review the daily counter assignment before opening and record any authorized handover.
+4. Treat an unknown-person, after-hours, or authorized-person-change alert as a prompt for video verification—not an automatic conclusion.
+5. Acknowledge the alert, document the verification, and create an incident when the branch SOP requires escalation.
+6. Run the date-wise authorization report for reconciliation and audit. Review the separate locker authorization-change report after every change.
+
+### Face recognition and CCTV identification
+
+Face recognition can help an operator find a possible match, but CCTV quality, lighting, camera angle, occlusion, time since enrollment, and liveness confidence all affect performance. Before restricting access, raising a disciplinary outcome, or reporting a crime:
+
+* verify the match with the relevant video and another approved identity signal;
+* follow the organization’s dual-control and escalation policy;
+* record the human reviewer, evidence, and final decision; and
+* use the least intrusive workflow required by the purpose.
+
+Do not use face recognition as the only authentication factor for vault, locker, or cash-counter access. Configure controlled enrollment, periodic quality review, threshold validation, and an appeal or exception process with the organization’s privacy and security teams.
