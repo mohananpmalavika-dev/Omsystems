@@ -250,4 +250,54 @@ describe("Production-Ready Automatic Media Gateway Failover Integration Suite", 
     expect(probeRes.json().data.metrics).toBeDefined();
     expect(probeRes.json().data.nodes).toBeDefined();
   });
+
+  it("serves dashboard BFF requests via /v1/ha/media-gateways path aliases", async () => {
+    // 1. GET /v1/ha/media-gateways
+    const gwRes = await app.inject({
+      method: "GET",
+      url: "/v1/ha/media-gateways",
+    });
+    expect(gwRes.statusCode).toBe(200);
+    expect(gwRes.json().success).toBe(true);
+
+    // 2. GET /v1/ha/media-gateways/streams
+    const streamsRes = await app.inject({
+      method: "GET",
+      url: "/v1/ha/media-gateways/streams",
+    });
+    expect(streamsRes.statusCode).toBe(200);
+    expect(streamsRes.json().success).toBe(true);
+
+    // 3. GET /v1/ha/media-gateways/policy
+    const policyRes = await app.inject({
+      method: "GET",
+      url: "/v1/ha/media-gateways/policy",
+    });
+    expect(policyRes.statusCode).toBe(200);
+    expect(policyRes.json().success).toBe(true);
+
+    // 4. GET /v1/ha/media-gateways/metrics
+    const metricsRes = await app.inject({
+      method: "GET",
+      url: "/v1/ha/media-gateways/metrics",
+    });
+    expect(metricsRes.statusCode).toBe(200);
+    expect(metricsRes.json().success).toBe(true);
+
+    // 5. GET /v1/ha/media-gateways/events
+    const eventsRes = await app.inject({
+      method: "GET",
+      url: "/v1/ha/media-gateways/events?limit=25",
+    });
+    expect(eventsRes.statusCode).toBe(200);
+    expect(eventsRes.json().success).toBe(true);
+
+    // 6. POST /v1/ha/media-gateways/probe
+    const probeRes = await app.inject({
+      method: "POST",
+      url: "/v1/ha/media-gateways/probe",
+    });
+    expect(probeRes.statusCode).toBe(200);
+    expect(probeRes.json().success).toBe(true);
+  });
 });

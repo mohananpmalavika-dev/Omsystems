@@ -1,5 +1,5 @@
 // KryptonVision PWA Service Worker
-const CACHE_NAME = "kryptonvision-pwa-v2";
+const CACHE_NAME = "kryptonvision-pwa-v3";
 const STATIC_ASSETS = [
   "/manifest.json",
   "/icon-192.png",
@@ -33,14 +33,14 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  if (request.method !== "GET" || request.mode === "navigate") {
+    return;
+  }
+
   const url = new URL(request.url);
 
-  // Exclude non-GET, navigations, API calls, streams, WebRTC, and media chunks
+  // Exclude all APIs, streams, media chunks, and websockets
   if (
-    request.method !== "GET" ||
-    request.mode === "navigate" ||
-    url.pathname === "/" ||
-    url.pathname.startsWith("/login") ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/v1/") ||
     url.pathname.startsWith("/stream/") ||
@@ -50,8 +50,17 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Stale-while-revalidate for static icons and shell assets
-  if (STATIC_ASSETS.includes(url.pathname)) {
+  // Only handle static assets and Next.js static files
+  const isPrecachedAsset = STATIC_ASSETS.includes(url.pathname);
+  const isNextStatic = url.pathname.startsWith("/_next/static/");
+
+  if (!isPrecachedAsset && !isNextStatic) {
+    // Let the browser handle dynamic pages, RSC navigation, and data fetches natively
+    return;
+  }
+
+  if (isPrecachedAsset) {
+    // Stale-while-revalidate for static icons and manifest
     event.respondWith(
       caches.match(request).then((cachedResponse) => {
         const fetchPromise = fetch(request).then((networkResponse) => {
@@ -67,12 +76,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network first with cache fallback for static resources
+  // Cache first for immutable next static chunks
   event.respondWith(
-    fetch(request).catch(async () => {
-      const cached = await caches.match(request);
+    caches.match(request).then(async (cached) => {
       if (cached) return cached;
-      return new Response("", { status: 408, statusText: "Request Timed Out" });
+      try {
+        const response = await fetch(request);
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        }
+        return response;
+      } catch {
+        return new Response("Asset unavailable offline", { status: 503, statusText: "Service Unavailable" });
+      }
     })
   );
 });

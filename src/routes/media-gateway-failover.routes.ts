@@ -99,244 +99,250 @@ export async function registerMediaGatewayFailoverRoutes(
   // Initialize service state
   await service.initialize();
 
-  /**
-   * GET /api/v1/ha/media-gateways
-   * List all registered media gateway nodes, statuses, and capacity
-   */
-  app.get("/api/v1/ha/media-gateways", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const nodes = service.getNodes();
-    return reply.code(200).send({
-      success: true,
-      data: nodes,
-    });
-  });
-
-  /**
-   * POST /api/v1/ha/media-gateways/register
-   * Register or update a media gateway node
-   */
-  app.post("/api/v1/ha/media-gateways/register", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = parseRequest(registerGatewaySchema, request.body, reply);
-    if (!input) return reply;
-
-    const node = await service.registerGateway(input);
-    return reply.code(201).send({
-      success: true,
-      data: node,
-    });
-  });
-
-  /**
-   * POST /api/v1/ha/media-gateways/heartbeat
-   * Ingest real-time heartbeat and telemetry from a media gateway instance
-   */
-  app.post("/api/v1/ha/media-gateways/heartbeat", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = parseRequest(heartbeatSchema, request.body, reply);
-    if (!input) return reply;
-
-    try {
-      const result = await service.processHeartbeat(input as any);
+  const registerEndpoints = (prefix: string) => {
+    /**
+     * GET <prefix>
+     * List all registered media gateway nodes, statuses, and capacity
+     */
+    app.get(`${prefix}`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const nodes = service.getNodes();
       return reply.code(200).send({
         success: true,
-        data: result.node,
+        data: nodes,
       });
-    } catch (err: any) {
-      return reply.code(500).send({
-        success: false,
-        error: "heartbeat_processing_failed",
-        message: err?.message || "Unknown error",
+    });
+
+    /**
+     * POST <prefix>/register
+     * Register or update a media gateway node
+     */
+    app.post(`${prefix}/register`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const input = parseRequest(registerGatewaySchema, request.body, reply);
+      if (!input) return reply;
+
+      const node = await service.registerGateway(input);
+      return reply.code(201).send({
+        success: true,
+        data: node,
       });
-    }
-  });
-
-  /**
-   * GET /api/v1/ha/media-gateways/streams
-   * List active stream allocations, assigned gateway, and failover status
-   */
-  app.get("/api/v1/ha/media-gateways/streams", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const routes = service.getRoutes();
-    return reply.code(200).send({
-      success: true,
-      data: routes,
     });
-  });
 
-  /**
-   * POST /api/v1/ha/media-gateways/streams/route
-   * Route or provision a camera stream to the optimal media gateway
-   */
-  app.post("/api/v1/ha/media-gateways/streams/route", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = parseRequest(routeStreamSchema, request.body, reply);
-    if (!input) return reply;
+    /**
+     * POST <prefix>/heartbeat
+     * Ingest real-time heartbeat and telemetry from a media gateway instance
+     */
+    app.post(`${prefix}/heartbeat`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const input = parseRequest(heartbeatSchema, request.body, reply);
+      if (!input) return reply;
 
-    const route = await service.routeStream(input);
-    return reply.code(201).send({
-      success: true,
-      data: route,
+      try {
+        const result = await service.processHeartbeat(input as any);
+        return reply.code(200).send({
+          success: true,
+          data: result.node,
+        });
+      } catch (err: any) {
+        return reply.code(500).send({
+          success: false,
+          error: "heartbeat_processing_failed",
+          message: err?.message || "Unknown error",
+        });
+      }
     });
-  });
 
-  /**
-   * POST /api/v1/ha/media-gateways/streams/:cameraId/redirect
-   * Force manual redirection of an individual camera stream to a target gateway
-   */
-  app.post("/api/v1/ha/media-gateways/streams/:cameraId/redirect", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = parseRequest(z.object({ cameraId: z.string().min(1) }), request.params, reply);
-    if (!params) return reply;
+    /**
+     * GET <prefix>/streams
+     * List active stream allocations, assigned gateway, and failover status
+     */
+    app.get(`${prefix}/streams`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const routes = service.getRoutes();
+      return reply.code(200).send({
+        success: true,
+        data: routes,
+      });
+    });
 
-    const body = parseRequest(redirectStreamSchema, request.body, reply);
-    if (!body) return reply;
+    /**
+     * POST <prefix>/streams/route
+     * Route or provision a camera stream to the optimal media gateway
+     */
+    app.post(`${prefix}/streams/route`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const input = parseRequest(routeStreamSchema, request.body, reply);
+      if (!input) return reply;
 
-    try {
-      const updatedRoute = await service.redirectStream(
-        params.cameraId,
-        body.targetGatewayId,
-        body.streamProfile,
+      const route = await service.routeStream(input);
+      return reply.code(201).send({
+        success: true,
+        data: route,
+      });
+    });
+
+    /**
+     * POST <prefix>/streams/:cameraId/redirect
+     * Force manual redirection of an individual camera stream to a target gateway
+     */
+    app.post(`${prefix}/streams/:cameraId/redirect`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = parseRequest(z.object({ cameraId: z.string().min(1) }), request.params, reply);
+      if (!params) return reply;
+
+      const body = parseRequest(redirectStreamSchema, request.body, reply);
+      if (!body) return reply;
+
+      try {
+        const updatedRoute = await service.redirectStream(
+          params.cameraId,
+          body.targetGatewayId,
+          body.streamProfile,
+        );
+        return reply.code(200).send({
+          success: true,
+          data: updatedRoute,
+        });
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          error: "stream_redirect_failed",
+          message: err?.message || "Failed to redirect stream",
+        });
+      }
+    });
+
+    /**
+     * POST <prefix>/:gatewayId/failover
+     * Operator trigger for immediate node failover (chaos drill or emergency evacuation)
+     */
+    app.post(`${prefix}/:gatewayId/failover`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = parseRequest(z.object({ gatewayId: z.string().min(1) }), request.params, reply);
+      if (!params) return reply;
+
+      const body = parseRequest(failoverTriggerSchema, request.body || {}, reply);
+      if (!body) return reply;
+
+      const result = await service.executeFailover(
+        params.gatewayId,
+        body.reason,
+        body.triggeredBy,
       );
-      return reply.code(200).send({
-        success: true,
-        data: updatedRoute,
-      });
-    } catch (err: any) {
-      return reply.code(400).send({
-        success: false,
-        error: "stream_redirect_failed",
-        message: err?.message || "Failed to redirect stream",
-      });
-    }
-  });
 
-  /**
-   * POST /api/v1/ha/media-gateways/:gatewayId/failover
-   * Operator trigger for immediate node failover (chaos drill or emergency evacuation)
-   */
-  app.post("/api/v1/ha/media-gateways/:gatewayId/failover", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = parseRequest(z.object({ gatewayId: z.string().min(1) }), request.params, reply);
-    if (!params) return reply;
-
-    const body = parseRequest(failoverTriggerSchema, request.body || {}, reply);
-    if (!body) return reply;
-
-    const result = await service.executeFailover(
-      params.gatewayId,
-      body.reason,
-      body.triggeredBy,
-    );
-
-    return reply.code(200).send({
-      success: result.success,
-      data: result,
-    });
-  });
-
-  /**
-   * POST /api/v1/ha/media-gateways/:gatewayId/drain
-   * Gracefully drain a gateway instance before planned maintenance
-   */
-  app.post("/api/v1/ha/media-gateways/:gatewayId/drain", async (request: FastifyRequest, reply: FastifyReply) => {
-    const params = parseRequest(z.object({ gatewayId: z.string().min(1) }), request.params, reply);
-    if (!params) return reply;
-
-    const body = parseRequest(drainGatewaySchema, request.body || {}, reply);
-    if (!body) return reply;
-
-    try {
-      const result = await service.drainGateway(params.gatewayId, body.reason);
       return reply.code(200).send({
         success: result.success,
         data: result,
       });
-    } catch (err: any) {
-      return reply.code(400).send({
-        success: false,
-        error: "drain_failed",
-        message: err?.message || "Failed to drain gateway",
+    });
+
+    /**
+     * POST <prefix>/:gatewayId/drain
+     * Gracefully drain a gateway instance before planned maintenance
+     */
+    app.post(`${prefix}/:gatewayId/drain`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const params = parseRequest(z.object({ gatewayId: z.string().min(1) }), request.params, reply);
+      if (!params) return reply;
+
+      const body = parseRequest(drainGatewaySchema, request.body || {}, reply);
+      if (!body) return reply;
+
+      try {
+        const result = await service.drainGateway(params.gatewayId, body.reason);
+        return reply.code(200).send({
+          success: result.success,
+          data: result,
+        });
+      } catch (err: any) {
+        return reply.code(400).send({
+          success: false,
+          error: "drain_failed",
+          message: err?.message || "Failed to drain gateway",
+        });
+      }
+    });
+
+    /**
+     * POST <prefix>/rebalance
+     * Rebalance stream allocation across healthy cluster nodes
+     */
+    app.post(`${prefix}/rebalance`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const result = await service.rebalanceStreams();
+      return reply.code(200).send({
+        success: true,
+        data: result,
       });
-    }
-  });
-
-  /**
-   * POST /api/v1/ha/media-gateways/rebalance
-   * Rebalance stream allocation across healthy cluster nodes
-   */
-  app.post("/api/v1/ha/media-gateways/rebalance", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const result = await service.rebalanceStreams();
-    return reply.code(200).send({
-      success: true,
-      data: result,
     });
-  });
 
-  /**
-   * GET /api/v1/ha/media-gateways/events
-   * Retrieve failover history and audit logs
-   */
-  app.get("/api/v1/ha/media-gateways/events", async (request: FastifyRequest, reply: FastifyReply) => {
-    const query = parseRequest(z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }), request.query || {}, reply);
-    const limit = query?.limit ?? 50;
+    /**
+     * GET <prefix>/events
+     * Retrieve failover history and audit logs
+     */
+    app.get(`${prefix}/events`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const query = parseRequest(z.object({ limit: z.coerce.number().int().min(1).max(500).default(50) }), request.query || {}, reply);
+      const limit = query?.limit ?? 50;
 
-    const events = service.getEvents(limit);
-    return reply.code(200).send({
-      success: true,
-      data: events,
+      const events = service.getEvents(limit);
+      return reply.code(200).send({
+        success: true,
+        data: events,
+      });
     });
-  });
 
-  /**
-   * GET /api/v1/ha/media-gateways/metrics
-   * Real-time failover SLA metrics
-   */
-  app.get("/api/v1/ha/media-gateways/metrics", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const metrics = service.getMetrics();
-    return reply.code(200).send({
-      success: true,
-      data: metrics,
+    /**
+     * GET <prefix>/metrics
+     * Real-time failover SLA metrics
+     */
+    app.get(`${prefix}/metrics`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const metrics = service.getMetrics();
+      return reply.code(200).send({
+        success: true,
+        data: metrics,
+      });
     });
-  });
 
-  /**
-   * GET /api/v1/ha/media-gateways/policy
-   * Get failover policies
-   */
-  app.get("/api/v1/ha/media-gateways/policy", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const policy = service.getPolicy();
-    return reply.code(200).send({
-      success: true,
-      data: policy,
+    /**
+     * GET <prefix>/policy
+     * Get failover policies
+     */
+    app.get(`${prefix}/policy`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const policy = service.getPolicy();
+      return reply.code(200).send({
+        success: true,
+        data: policy,
+      });
     });
-  });
 
-  /**
-   * PUT /api/v1/ha/media-gateways/policy
-   * Update failover policies
-   */
-  app.put("/api/v1/ha/media-gateways/policy", async (request: FastifyRequest, reply: FastifyReply) => {
-    const input = parseRequest(policyUpdateSchema, request.body, reply);
-    if (!input) return reply;
+    /**
+     * PUT <prefix>/policy
+     * Update failover policies
+     */
+    app.put(`${prefix}/policy`, async (request: FastifyRequest, reply: FastifyReply) => {
+      const input = parseRequest(policyUpdateSchema, request.body, reply);
+      if (!input) return reply;
 
-    const updated = await service.updatePolicy(input);
-    return reply.code(200).send({
-      success: true,
-      data: updated,
+      const updated = await service.updatePolicy(input);
+      return reply.code(200).send({
+        success: true,
+        data: updated,
+      });
     });
-  });
 
-  /**
-   * POST /api/v1/ha/media-gateways/probe
-   * Instantaneous cluster probe running watchdog check cycle on demand
-   */
-  app.post("/api/v1/ha/media-gateways/probe", async (_request: FastifyRequest, reply: FastifyReply) => {
-    const cycle = await service.runWatchdogCycle();
-    const metrics = service.getMetrics();
-    const nodes = service.getNodes();
+    /**
+     * POST <prefix>/probe
+     * Instantaneous cluster probe running watchdog check cycle on demand
+     */
+    app.post(`${prefix}/probe`, async (_request: FastifyRequest, reply: FastifyReply) => {
+      const cycle = await service.runWatchdogCycle();
+      const metrics = service.getMetrics();
+      const nodes = service.getNodes();
 
-    return reply.code(200).send({
-      success: true,
-      data: {
-        cycle,
-        metrics,
-        nodes,
-      },
+      return reply.code(200).send({
+        success: true,
+        data: {
+          cycle,
+          metrics,
+          nodes,
+        },
+      });
     });
-  });
+  };
+
+  registerEndpoints("/v1/ha/media-gateways");
+  registerEndpoints("/api/v1/ha/media-gateways");
+  registerEndpoints("/api/ha/media-gateways");
 }
