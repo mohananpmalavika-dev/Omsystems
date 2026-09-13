@@ -32,7 +32,11 @@ function decodeImageDataUrl(value: string): Buffer {
     throw new Error("Facial scan must be a JPEG, PNG, or WEBP image");
   }
 
-  const encodedImage = match[2].replace(/\s+/g, "");
+  const rawData = match[2];
+  if (!rawData) {
+    throw new Error("Facial scan is empty");
+  }
+  const encodedImage = rawData.replace(/\s+/g, "");
   if (!encodedImage) {
     throw new Error("Facial scan is empty");
   }
