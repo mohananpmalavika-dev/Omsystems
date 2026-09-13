@@ -74,11 +74,15 @@ export async function GET(request: NextRequest) {
         model: stringValue(camera.model) || 'Model not reported',
         vendor: stringValue(camera.vendor),
         ip_address: stringValue(camera.ipAddress),
+        ipAddress: stringValue(camera.ipAddress),
         status: stringValue(camera.status) || 'unknown',
         edge_agent_id: stringValue(camera.edgeAgentId),
+        edgeAgentId: stringValue(camera.edgeAgentId),
         gateway_name: typeof camera.edgeAgentId === 'string' ? gatewayNames.get(camera.edgeAgentId) ?? null : null,
         branch_id: stringValue(camera.branchId),
+        branchId: stringValue(camera.branchId),
         branch_name: stringValue(camera.branchName),
+        branchName: stringValue(camera.branchName),
       }));
 
     return NextResponse.json({ data, total, limit, offset });

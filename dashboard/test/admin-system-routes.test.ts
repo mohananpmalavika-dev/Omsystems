@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as getBranches } from "../app/api/admin/system/branches/route";
+import { GET as getBranchesAll } from "../app/api/admin/system/branches/all/route";
 import { GET as getCameras } from "../app/api/admin/system/cameras/route";
+import { GET as getCamerasAll } from "../app/api/admin/system/cameras/all/route";
 import { GET as getGateways } from "../app/api/admin/system/gateways/route";
+import { GET as getGatewaysAll } from "../app/api/admin/system/gateways/all/route";
 import { GET as getStats } from "../app/api/admin/system/stats/route";
 
 const originalControlUrl = process.env.CONTROL_PLANE_INTERNAL_URL;
@@ -148,6 +151,53 @@ describe("admin system routes", () => {
     ]);
     await expect(branches.json()).resolves.toEqual([expect.objectContaining({ id: "branch-1", gateway_count: 1 })]);
     await expect(stats.json()).resolves.toEqual(expect.objectContaining({ gateways: 1 }));
+  });
+
+  it("supports GET on /api/admin/system/cameras/all, branches/all, and gateways/all without 405 Method Not Allowed", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/v1/cameras")) {
+        return Response.json({
+          data: [{ id: "cam-1", name: "Gate 1", ipAddress: "192.168.1.50", status: "online" }],
+          total: 1,
+        });
+      }
+      if (url.includes("/v1/edge-agents")) {
+        return Response.json({
+          data: [{ id: "gw-1", name: "Main Gateway", status: "online", branchId: "b-1" }],
+        });
+      }
+      if (url.includes("organization/nodes")) {
+        return Response.json({
+          data: [{ id: "b-1", name: "Main Office" }],
+        });
+      }
+      return Response.json({ data: [] });
+    }));
+
+    // Test GET /api/admin/system/cameras/all
+    const camRes = await getCamerasAll(authenticatedRequest("/api/admin/system/cameras/all"));
+    expect(camRes.status).toBe(200);
+    const camJson = await camRes.json();
+    expect(camJson.data).toHaveLength(1);
+    expect(camJson.data[0].id).toBe("cam-1");
+    expect(camJson.data[0].ip_address).toBe("192.168.1.50");
+    expect(camJson.data[0].ipAddress).toBe("192.168.1.50");
+
+    // Test GET /api/admin/system/branches/all
+    const branchRes = await getBranchesAll(authenticatedRequest("/api/admin/system/branches/all"));
+    expect(branchRes.status).toBe(200);
+    const branchJson = await branchRes.json();
+    expect(branchJson).toHaveLength(1);
+    expect(branchJson[0].id).toBe("b-1");
+
+    // Test GET /api/admin/system/gateways/all
+    const gwRes = await getGatewaysAll(authenticatedRequest("/api/admin/system/gateways/all"));
+    expect(gwRes.status).toBe(200);
+    const gwJson = await gwRes.json();
+    expect(gwJson).toHaveLength(1);
+    expect(gwJson[0].id).toBe("gw-1");
   });
 });
 
