@@ -1,0 +1,5 @@
+{
+  "/modules/page": "app/modules/page.js",
+  "/support/page": "app/support/page.js",
+  "/maintenance/vendors/page": "app/maintenance/vendors/page.js"
+}
