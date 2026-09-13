@@ -7,7 +7,7 @@
  */
 
 import { Pool } from 'pg';
-import { SecurityDeviceService as BackendSecurityDeviceService } from '../../../backend/src/services/security-device.service';
+import { SecurityDeviceService as BackendSecurityDeviceService } from '../../../src/security-devices/services/security-device.service';
 
 export class SecurityDeviceService extends BackendSecurityDeviceService {
 	private static instance: SecurityDeviceService | null = null;

@@ -7,7 +7,6 @@ ENV ONNXRUNTIME_NODE_INSTALL=skip
 ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN npm install --legacy-peer-deps
 COPY src ./src
-COPY backend ./backend
 COPY analytics-engine ./analytics-engine
 RUN mkdir -p /app/analytics-engine/models
 RUN npm run build --workspace @sentinel/analytics-engine

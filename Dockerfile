@@ -8,7 +8,6 @@ ENV ONNXRUNTIME_NODE_INSTALL_CUDA=skip
 RUN npm install --legacy-peer-deps
 
 COPY src/ ./src/
-COPY backend/ ./backend/
 COPY database/migrations/ ./database/migrations/
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
 COPY packages/ ./packages/

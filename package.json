@@ -58,7 +58,7 @@
     "test:hdd:smart": "tsx test/hdd-health/smart-hdd-health-runner.ts",
     "test:recorder:compatibility": "tsx test/recorder-compatibility/test-runner.ts",
     "test:recorder:formal": "tsx test/recorder-compatibility/formal-compatibility-test-runner.ts",
-    "test:recorder:adapters": "vitest run backend/src/recorders/__tests__/",
+    "test:recorder:adapters": "tsx test/recorder-sdk/canonical-driver-runner.ts",
     "test:recorder:canonical": "tsx test/recorder-sdk/canonical-driver-runner.ts",
     "test:camera:health": "tsx test/camera-health/camera-health-runner.ts",
     "test:retention": "tsx test/retention/retention-runner.ts",

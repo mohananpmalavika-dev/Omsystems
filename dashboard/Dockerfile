@@ -5,7 +5,6 @@ COPY dashboard/package*.json ./dashboard/
 RUN npm install --legacy-peer-deps && cd dashboard && npm install --legacy-peer-deps
 COPY packages/ ./packages/
 COPY src/ ./src/
-COPY backend/ ./backend/
 COPY qa-engine/ ./qa-engine/
 COPY dashboard/ ./dashboard/
 WORKDIR /app/dashboard

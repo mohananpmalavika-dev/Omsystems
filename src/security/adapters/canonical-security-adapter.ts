@@ -1,11 +1,9 @@
-// FIXME: packages/security does not exist - this adapter needs to be refactored
-// import { createCanonicalSecurityServices, type SecurityServiceRegistry } from '../../../packages/security/src/index.js';
+import { type SecurityServiceRegistry } from '../../../packages/security/src/index.js';
 
-export function createRootSecurityAdapter(registry?: any) {
-  // Placeholder implementation until packages/security is created
+export function createRootSecurityAdapter(registry: SecurityServiceRegistry) {
   return {
-    identityService: null,
-    authorizationService: null,
+    identityService: registry.identity,
+    authorizationService: registry.authorization,
     cryptoService: registry.crypto,
     observabilityService: registry.observability,
   };

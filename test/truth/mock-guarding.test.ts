@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { MockProvider } from "../../backend/src/notifications/providers/mock.provider.js";
-import { ProviderRegistry } from "../../backend/src/notifications/provider-registry.js";
+import { MockProvider, ProviderRegistry } from "../fixtures/mock-notification-provider.js";
 import { MockPlateRecognizer } from "../../analytics-engine/src/vehicle/anpr/paddle-ocr-adapter.js";
 import { ProductionMockForbiddenError } from "../../packages/contracts/src/execution/index.js";
 

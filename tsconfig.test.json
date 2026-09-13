@@ -34,7 +34,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "backend/**/*",
     "dashboard/**/*",
     "edge-agent/**/*",
     "media-gateway/**/*",

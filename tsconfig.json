@@ -37,7 +37,6 @@
     "test/**/*",
 
     // Workspace projects have their own tsconfig
-    "backend/**/*",
     "dashboard/**/*",
     "edge-agent/**/*",
     "media-gateway/**/*",

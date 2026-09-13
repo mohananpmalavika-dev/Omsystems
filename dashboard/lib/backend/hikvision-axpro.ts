@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import { HikvisionAxProIntegrationService } from '../../../backend/src/integrations/hikvision/axpro';
+import { HikvisionAxProIntegrationService } from '../../../src/security-devices/integrations/hikvision/axpro';
 
 let pool: Pool | undefined;
 let service: HikvisionAxProIntegrationService | undefined;

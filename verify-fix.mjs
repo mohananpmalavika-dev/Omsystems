@@ -7,10 +7,13 @@ import { createHash } from 'node:crypto';
 const { Pool } = pg;
 
 const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL is required');
+const sslConfig = process.env.DATABASE_SSL === 'true' || (process.env.NODE_ENV === 'production' && !databaseUrl.includes('localhost') && !databaseUrl.includes('127.0.0.1'))
+  ? { rejectUnauthorized: process.env.DATABASE_SSL_REJECT_UNAUTHORIZED !== 'false' }
+  : (process.env.DATABASE_SSL === 'false' || databaseUrl.includes('localhost') ? false : undefined);
+
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: { rejectUnauthorized: false }
+  ssl: sslConfig,
 });
 
 async function verifyFix() {

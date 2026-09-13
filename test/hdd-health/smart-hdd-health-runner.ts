@@ -2,15 +2,15 @@
  * First-Class SMART & Enterprise HDD Health Monitoring - Verification Test Runner
  */
 
-import { DiskHealthEvaluator } from "../../backend/src/storage/evaluation/disk-health.evaluator.js";
-import { EvidenceFusionService } from "../../backend/src/storage/evaluation/evidence-fusion.service.js";
-import { DiskFailurePredictor } from "../../backend/src/storage/prediction/disk-failure-predictor.js";
-import { DiskHealthService } from "../../backend/src/storage/services/disk-health.service.js";
-import { SmartctlDiskCollector } from "../../backend/src/storage/collectors/smartctl-disk.collector.js";
+import { DiskHealthEvaluator } from "../../src/storage/evaluation/disk-health.evaluator.js";
+import { EvidenceFusionService } from "../../src/storage/evaluation/evidence-fusion.service.js";
+import { DiskFailurePredictor } from "../../src/storage/prediction/disk-failure-predictor.js";
+import { DiskHealthService } from "../../src/storage/services/disk-health.service.js";
+import { SmartctlDiskCollector } from "../../src/storage/collectors/smartctl-disk.collector.js";
 import { registerStorageHealthRoutes } from "../../src/routes/storage-health.routes.js";
 import { parseSmartctlJson } from "../../edge-agent/src/monitoring/storage/smartctl-parser.js";
 import Fastify from "fastify";
-import type { DiskEvidence } from "../../backend/src/storage/domain/disk-evidence.js";
+import type { DiskEvidence } from "../../src/storage/domain/disk-evidence.js";
 
 let passed = 0;
 let failed = 0;

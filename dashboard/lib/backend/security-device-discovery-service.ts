@@ -7,7 +7,7 @@
  */
 
 import { Pool } from 'pg';
-import { SecurityDeviceDiscoveryService as BackendSecurityDeviceDiscoveryService } from '../../../backend/src/services/security-device-discovery.service';
+import { SecurityDeviceDiscoveryService as BackendSecurityDeviceDiscoveryService } from '../../../src/security-devices/services/security-device-discovery.service';
 
 export class SecurityDeviceDiscoveryService extends BackendSecurityDeviceDiscoveryService {
 	private static instance: SecurityDeviceDiscoveryService | null = null;

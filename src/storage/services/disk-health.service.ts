@@ -32,6 +32,7 @@ export class DiskHealthService {
     this.fusionService = new EvidenceFusionService();
     this.evaluator = new DiskHealthEvaluator();
     this.predictor = new DiskFailurePredictor();
+    this.seedDefaultStorage();
   }
 
   async ingestEvidence(evidenceList: DiskEvidence[]): Promise<DiskHealthSnapshot[]> {
