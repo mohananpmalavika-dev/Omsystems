@@ -1,86 +1,21 @@
 # =================================================================
-# Sentinel Grid (KryptoVision) - GCP Caddy Dynamic Automated SSL Reverse Proxy
+# Sentinel Grid (KryptoVision) - GCP Caddy Automated SSL Reverse Proxy
 # =================================================================
 
 {
-    # Global options
     admin off
     email mohanpmalavika@gmail.com
-    auto_https disable_redirects
 }
 
-http://34-14-220-41.sslip.io, http://34.14.220.41, :80 {
-    encode zstd gzip
-
-    header {
-        -X-Frame-Options
-        Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
-        Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
-    }
-
-    handle_path /stream/* {
-        reverse_proxy media-gateway:8888 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-        }
-    }
-
-    handle /hls/* {
-        reverse_proxy media-gateway:8090
-    }
-
-    handle /ready {
-        reverse_proxy control-plane:8080
-    }
-
-    handle /health {
-        reverse_proxy control-plane:8080
-    }
-
-    handle /webrtc/* {
-        reverse_proxy media-gateway:8090
-    }
-
-    handle /api/portable-camera/* {
-        reverse_proxy control-plane:8080
-    }
-
-    handle /api/ai/* {
-        reverse_proxy control-plane:8080
-    }
-
-    handle /ws/* {
-        reverse_proxy control-plane:8080 {
-            header_up Upgrade {>Upgrade}
-            header_up Connection {>Connection}
-        }
-    }
-
-    handle /v1/* {
-        reverse_proxy control-plane:8080 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto http
-        }
-    }
-
-    handle {
-        reverse_proxy dashboard:10000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-Proto http
-        }
-    }
+# Redirect all plain IP HTTP traffic to the HTTPS domain
+http://34.14.220.41, :80 {
+    # Let Caddy handle ACME HTTP-01 challenges automatically
+    redir https://34-14-220-41.sslip.io{uri} permanent
 }
 
-https://34-14-220-41.sslip.io {
+# Authoritative Secure HTTPS Production Domain
+34-14-220-41.sslip.io {
     encode zstd gzip
-
-    tls {
-        issuer acme {
-            email mohanpmalavika@gmail.com
-        }
-    }
 
     header {
         -X-Frame-Options
