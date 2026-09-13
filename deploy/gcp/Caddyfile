@@ -13,25 +13,30 @@ http://34.14.220.41, :80 {
     redir https://34-14-220-41.sslip.io{uri} permanent
 }
 
-# Authoritative Secure HTTPS Production Domain
 34-14-220-41.sslip.io {
-    encode zstd gzip
-
     header {
         -X-Frame-Options
         Content-Security-Policy "frame-ancestors 'self' https://* http://localhost:* https://kryptonlogic-ebe5a.web.app https://kryptonlogic.com https://*.kryptonlogic.com;"
         Permissions-Policy "camera=*, microphone=*, display-capture=*, geolocation=*"
     }
 
+    @static path /_next/static/*
+    header @static {
+        Cache-Control "public, max-age=31536000, immutable"
+    }
+
     handle_path /stream/* {
         reverse_proxy media-gateway:8888 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
+            flush_interval -1
         }
     }
 
     handle /hls/* {
-        reverse_proxy media-gateway:8090
+        reverse_proxy media-gateway:8090 {
+            flush_interval -1
+        }
     }
 
     handle /ready {
@@ -43,7 +48,9 @@ http://34.14.220.41, :80 {
     }
 
     handle /webrtc/* {
-        reverse_proxy media-gateway:8090
+        reverse_proxy media-gateway:8090 {
+            flush_interval -1
+        }
     }
 
     handle /api/portable-camera/* {
@@ -66,6 +73,7 @@ http://34.14.220.41, :80 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
+            flush_interval -1
         }
     }
 
@@ -74,6 +82,7 @@ http://34.14.220.41, :80 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto https
+            flush_interval -1
         }
     }
 }
