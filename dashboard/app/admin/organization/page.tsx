@@ -246,6 +246,8 @@ export default function OrganizationHierarchyPage() {
   const [roleBaseRole, setRoleBaseRole] = useState("operator");
   const [roleMenuAccess, setRoleMenuAccess] = useState<string[]>([]);
   const [menuSearchQuery, setMenuSearchQuery] = useState("");
+  const [roleModalError, setRoleModalError] = useState<string | null>(null);
+  const [roleSaving, setRoleSaving] = useState(false);
   const [brandingLogo, setBrandingLogo] = useState<string | null>(null);
   const brandingFileRef = useRef<HTMLInputElement | null>(null);
   const allowedRoleMenuKeys = new Set(
@@ -887,7 +889,8 @@ export default function OrganizationHierarchyPage() {
   async function handleCreateRole(e: React.FormEvent) {
     e.preventDefault();
     if (!roleName.trim() || !roleMenuAccess.length) return;
-    setSaving(true);
+    setRoleSaving(true);
+    setRoleModalError(null);
     setError(null);
     try {
       const res = await fetchWithAuth(editingRole
@@ -896,19 +899,26 @@ export default function OrganizationHierarchyPage() {
         method: editingRole ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: roleName.trim(), description: roleDescription.trim() || undefined, baseRole: roleBaseRole, menuAccess: roleMenuAccess }),
+        signal: AbortSignal.timeout(20_000),
       });
-      if (!res.ok) throw new Error((await res.json()).message || "Failed to create role");
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || errJson.error || `Failed to ${editingRole ? "update" : "create"} role (status ${res.status})`);
+      }
       setNotice(editingRole ? `Menus updated for ${roleName.trim()}.` : `Role ${roleName.trim()} created.`);
       setShowRoleModal(false);
       setEditingRole(null);
       setRoleName("");
       setRoleDescription("");
       setRoleMenuAccess([]);
+      setRoleModalError(null);
       await loadAllData({ tree: false, users: false, cameras: false });
     } catch (err: any) {
-      setError(err.message || "Failed to create role");
+      const msg = err?.message || "Failed to save role. Please check your connection and try again.";
+      setRoleModalError(msg);
+      setError(msg);
     } finally {
-      setSaving(false);
+      setRoleSaving(false);
     }
   }
 
@@ -918,6 +928,8 @@ export default function OrganizationHierarchyPage() {
     setRoleDescription(role.description ?? "");
     setRoleBaseRole(role.baseRole);
     setRoleMenuAccess(role.menuAccess);
+    setRoleModalError(null);
+    setRoleSaving(false);
     setShowRoleModal(true);
   }
 
@@ -1971,6 +1983,8 @@ export default function OrganizationHierarchyPage() {
                   setRoleBaseRole("operator");
                   setRoleMenuAccess([]);
                   setMenuSearchQuery("");
+                  setRoleModalError(null);
+                  setRoleSaving(false);
                   setShowRoleModal(true);
                 }}
                 className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1.5 transition self-start sm:self-auto"
@@ -2063,12 +2077,29 @@ export default function OrganizationHierarchyPage() {
                   {editingRole ? `Configure Menus: ${editingRole.name}` : "Create Role & Assign Menus"}
                 </h3>
                 <button
-                  onClick={() => { setShowRoleModal(false); setEditingRole(null); }}
+                  onClick={() => { setShowRoleModal(false); setEditingRole(null); setRoleModalError(null); }}
                   className="text-slate-400 hover:text-slate-200 text-sm font-bold"
                 >
                   &times;
                 </button>
               </div>
+
+              {roleModalError && (
+                <div className="p-3 bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs rounded-xl flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <XCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                    <span className="font-medium leading-relaxed">{roleModalError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRoleModalError(null)}
+                    className="text-rose-400 hover:text-rose-200 text-sm font-bold ml-1"
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+
               <form onSubmit={handleCreateRole} className="space-y-3 text-xs">
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -2076,6 +2107,7 @@ export default function OrganizationHierarchyPage() {
                     disabled={Boolean(editingRole)}
                     value={roleName}
                     onChange={(e) => setRoleName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                     placeholder="Role name (e.g. SOC Watcher, Cash Officer)"
                     className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 disabled:opacity-60"
                   />
@@ -2102,6 +2134,7 @@ export default function OrganizationHierarchyPage() {
                 <input
                   value={roleDescription}
                   onChange={(e) => setRoleDescription(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                   placeholder="Role description (optional)"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200"
                 />
@@ -2114,6 +2147,7 @@ export default function OrganizationHierarchyPage() {
                       type="text"
                       value={menuSearchQuery}
                       onChange={(e) => setMenuSearchQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault(); }}
                       placeholder="Search menus (e.g. live wall, branch, report)..."
                       className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-8 pr-3 py-2 text-slate-200 text-xs"
                     />
@@ -2211,17 +2245,17 @@ export default function OrganizationHierarchyPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => { setShowRoleModal(false); setEditingRole(null); }}
+                      onClick={() => { setShowRoleModal(false); setEditingRole(null); setRoleModalError(null); }}
                       className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-semibold"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={saving || !roleMenuAccess.length}
+                      disabled={roleSaving || !roleMenuAccess.length}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-slate-950 rounded-lg font-bold transition"
                     >
-                      {saving ? "Saving..." : editingRole ? "Save Menus" : "Create Role"}
+                      {roleSaving ? "Saving..." : editingRole ? "Save Menus" : "Create Role"}
                     </button>
                   </div>
                 </div>
