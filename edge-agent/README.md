@@ -64,6 +64,33 @@ in `edge-agent\release`. The container verifies that manifest and refuses to
 build if they are absent or do not match. This prevents Linux cross-compilation
 from being mistaken for a signed production release.
 
+### Restore missing installer downloads
+
+`edge_agent_executable_not_built: /app/edge-agent/release/edge-agent.exe`
+means the running control-plane container is missing the Windows release.
+The TypeScript build does not create this executable, and Git excludes `.exe`
+files, so a fresh server checkout does not include it.
+
+Build a signed production release on the Windows release machine using the
+command above. Transfer both `edge-agent/release/edge-agent.exe` and
+`edge-agent/release/windows-release.json` from that same release into the
+server checkout **before** building the Docker image. Do not run the agent's
+`clean`, `build`, or `build:exe` commands after staging these files: they remove
+the release directory.
+
+From the repository root, verify the staged artifacts and rebuild the service:
+
+```sh
+node edge-agent/scripts/verify-windows-production-release.mjs
+docker compose -f docker-compose.production.yml up -d --build control-plane
+```
+
+For `compose.yaml`, use `docker compose up -d --build api` instead. For other
+deployments, rebuild and redeploy the control-plane image through that
+deployment's normal workflow. Copying files into the host checkout alone does
+not update an existing container. Linux builds verify the manifest and hash;
+Authenticode signing and signature verification happen on the Windows runner.
+
 ## Recommended branch installation
 
 1. Configure the control plane with a branch-reachable

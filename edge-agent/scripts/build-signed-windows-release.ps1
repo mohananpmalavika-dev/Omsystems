@@ -87,7 +87,11 @@ $releaseManifest = [ordered]@{
   signerThumbprint = $CertificateThumbprint
   installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
 }
-$releaseManifest | ConvertTo-Json | Set-Content -LiteralPath $releaseManifestPath -Encoding utf8
+[System.IO.File]::WriteAllText(
+  $releaseManifestPath,
+  ($releaseManifest | ConvertTo-Json),
+  [System.Text.UTF8Encoding]::new($false)
+)
 
 Write-Host "Signed release is ready:" -ForegroundColor Green
 $artifacts | ForEach-Object { Write-Host "  $_" }

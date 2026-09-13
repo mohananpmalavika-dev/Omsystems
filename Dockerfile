@@ -16,6 +16,10 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 
+# Check release inputs before compiling the server. Do not publish an image
+# whose Windows installer downloads can only return a missing-artifact error.
+RUN node edge-agent/scripts/verify-windows-production-release.mjs
+
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
@@ -25,7 +29,6 @@ RUN npm run build
 # cannot establish its publisher trust.
 WORKDIR /app/edge-agent
 RUN npm install --legacy-peer-deps
-RUN npm run verify:windows-production-release || true
 RUN npm run bundle:delta || true
 RUN mkdir -p /app/edge-agent/build /app/edge-agent/release /app/edge-agent/installer
 WORKDIR /app

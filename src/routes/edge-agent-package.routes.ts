@@ -321,7 +321,7 @@ async function verifyProductionWindowsRelease(releaseDirectory: string, executab
   const manifestPath = join(releaseDirectory, "windows-release.json");
   let manifest: { sha256?: unknown; signedAt?: unknown };
   try {
-    manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { sha256?: unknown; signedAt?: unknown };
+    manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, "")) as { sha256?: unknown; signedAt?: unknown };
   } catch {
     throw Object.assign(new Error("A signed Windows release manifest is required before production installers can be downloaded."), {
       code: "edge_agent_windows_release_not_signed",
