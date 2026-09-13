@@ -80,12 +80,18 @@ export function ModulePage({
         </div>
       )}
 
-      <section className="module-panel">
+      <section className="module-panel" aria-busy={loading}>
         {loading ? (
-          <div className="module-state">
+          <div className="module-state" role="status">
             <LoaderCircle className="module-spinner" size={25} />
-            <strong>Loading operational data</strong>
-            <span>Connecting to the control plane&hellip;</span>
+            <strong>Loading {title.toLowerCase()}</strong>
+            <span>This may take a moment.</span>
+          </div>
+        ) : error && empty ? (
+          <div className="module-state" role="status">
+            <AlertTriangle size={25} />
+            <strong>Unable to load {title.toLowerCase()}</strong>
+            <span>Try again to check for records.</span>
           </div>
         ) : empty ? (
           <div className="module-state module-empty-state">

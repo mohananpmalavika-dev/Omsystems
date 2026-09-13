@@ -62,7 +62,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const searchParams = useSearchParams();
 
   // Authentication mode: zero-touch face recognition or traditional username & password
-  const [authMode, setAuthMode] = useState<"face" | "credentials">("face");
+  const [authMode, setAuthMode] = useState<"face" | "credentials">("credentials");
 
   // Zero-touch Face Recognition state
   const faceVideoRef = useRef<HTMLVideoElement>(null);
@@ -674,14 +674,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </div>
 
           {error && (
-            <div className="login-error">
+            <div className="login-error" role="alert">
               <AlertCircle size={16} />
               <span>{error}</span>
             </div>
           )}
 
           {info && (
-            <div className="login-info">
+            <div className="login-info" role="status">
               <Info size={16} />
               <span>{info}</span>
             </div>
@@ -695,7 +695,6 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 id="newPassword"
                 name="newPassword"
                 className="login-input"
-                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -712,7 +711,6 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 id="confirmPassword"
                 name="confirmPassword"
                 className="login-input"
-                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -735,7 +733,21 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   }
 
   return (
-    <div className="login-container">
+    <div className="login-container login-workspace">
+      <aside className="login-introduction" aria-label="About your workspace">
+        <div className="login-introduction-brand"><ShieldCheck size={24} /><span>{branding.orgName || "KryptonVision"}</span></div>
+        <div className="login-introduction-copy">
+          <p className="login-kicker">SECURITY OPERATIONS</p>
+          <h2>Every location.<br />One clear view.</h2>
+          <p>A connected workspace for the people who keep your branches safe.</p>
+          <ul>
+            <li><CheckCircle2 size={18} /><span>Monitor cameras and branch health</span></li>
+            <li><CheckCircle2 size={18} /><span>Investigate alerts and coordinate response</span></li>
+            <li><CheckCircle2 size={18} /><span>Manage evidence and operational reports</span></li>
+          </ul>
+        </div>
+        <p className="login-introduction-footer">Built for everyday operational clarity.</p>
+      </aside>
       <div className="login-card">
         <div className="login-header">
           <div
@@ -784,8 +796,19 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </p>
         </div>
 
+        <div className="login-welcome"><h2>Welcome back</h2><p>Sign in to your security workspace.</p></div>
         {/* Authentication Mode Switcher */}
-        <div className="auth-mode-selector">
+        <div className="auth-mode-selector" role="group" aria-label="Sign-in method">
+          <button
+            type="button"
+            onClick={handleSwitchToCredentials}
+            className={`auth-mode-btn ${authMode === "credentials" ? "active" : ""}`}
+            aria-pressed={authMode === "credentials"}
+            title="Sign in with Username and Password"
+          >
+            <KeyRound size={16} />
+            <span>Password</span>
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -796,31 +819,23 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               setFaceScanState("idle");
             }}
             className={`auth-mode-btn ${authMode === "face" ? "active" : ""}`}
-            title="Zero-Touch Facial Recognition (No Username or Password needed)"
+            aria-pressed={authMode === "face"}
+            title="Zero-Touch Facial Recognition (For enrolled users)"
           >
             <ScanFace size={16} />
             <span>Face Recognition</span>
           </button>
-          <button
-            type="button"
-            onClick={handleSwitchToCredentials}
-            className={`auth-mode-btn ${authMode === "credentials" ? "active" : ""}`}
-            title="Sign in with Username and Password"
-          >
-            <KeyRound size={16} />
-            <span>Password</span>
-          </button>
         </div>
 
         {error && (
-          <div className="login-error">
+          <div className="login-error" role="alert">
             <AlertCircle size={16} />
             <span>{error}</span>
           </div>
         )}
 
         {info && (
-          <div className="login-info">
+          <div className="login-info" role="status">
             <Info size={16} />
             <span>{info}</span>
           </div>
@@ -974,7 +989,6 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 id="username"
                 name="username"
                 className="login-input"
-                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={formData.username}
                 onChange={handleChange}
                 required
@@ -993,8 +1007,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                   id="password"
                   name="password"
                   className="login-input"
-                  style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
-                  value={formData.password}
+                    value={formData.password}
                   onChange={handleChange}
                   required
                   autoComplete="current-password"
@@ -1005,7 +1018,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                   type="button"
                   className="password-toggle-btn"
                   onClick={() => setShowPassword(!showPassword)}
-                  tabIndex={-1}
+                  aria-pressed={showPassword}
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -1013,7 +1026,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               </div>
             </div>
 
-            <div className="form-group">
+            <details className="login-organization">
+              <summary>Use an organization code</summary>
+              <div className="form-group">
               <label htmlFor="tenantSlug">
                 Organization Code <span className="optional-label">(optional)</span>
               </label>
@@ -1022,19 +1037,15 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 id="tenantSlug"
                 name="tenantSlug"
                 className="login-input"
-                style={{ color: "#0f172a", backgroundColor: "#ffffff", caretColor: "#0f172a" }}
                 value={formData.tenantSlug}
                 onChange={handleChange}
-                placeholder="Leave blank if not required"
+                placeholder="Provided by your administrator"
                 disabled={loading}
               />
-            </div>
+              </div>
+            </details>
 
             <div className="form-actions">
-              <label className="remember-me">
-                <input type="checkbox" disabled={loading} />
-                <span>Remember me</span>
-              </label>
               <a href="/forgot-password" className="forgot-password-link">
                 Forgot password?
               </a>
@@ -1056,7 +1067,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 }}
               >
                 <ScanFace size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
-                Or sign in automatically with Face Recognition &rarr;
+                Use face recognition instead &rarr;
               </button>
             </div>
           </form>
@@ -1071,7 +1082,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           </p>
         </div>
 
-        {/* PWA Application Installation Banner */}
+        <details className="login-other-options">
+        <summary><Laptop size={15} /> Desktop and mobile access</summary>
         <div className="login-install-section">
           <div className="install-banner">
             <div className="install-banner-icon">
@@ -1148,6 +1160,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             </div>
           )}
         </div>
+        </details>
       </div>
 
       <footer className="login-footer">

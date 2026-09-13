@@ -1,12 +1,16 @@
 import Link from "next/link";
-
+import { Search } from "lucide-react";
 export default function NotFound() {
   return (
-    <section className="mx-auto my-12 max-w-lg rounded-2xl border border-slate-300 bg-white p-8 text-center text-slate-900">
-      <p className="text-sm font-semibold text-slate-500">404</p>
-      <h1 className="mt-2 text-xl font-semibold">Page not found</h1>
-      <p className="mt-3 text-sm text-slate-600">This link may have moved. Use the module search or return to the Command Center.</p>
-      <Link href="/" className="mt-6 inline-block rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Open Command Center</Link>
+    <section className="workspace-state">
+      <span className="workspace-state-icon"><Search size={26} /></span>
+      <p className="eyebrow-label">Page not found</p>
+      <h1>Let's get you back to work</h1>
+      <p>This page may have moved, or the address may be incorrect. Find the feature you need in the workspace directory.</p>
+      <div className="workspace-state-actions">
+        <Link href="/modules" className="ui-button ui-button-primary">Browse workspace</Link>
+        <Link href="/" className="ui-button ui-button-outline">Go to overview</Link>
+      </div>
     </section>
   );
 }

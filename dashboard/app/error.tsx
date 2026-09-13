@@ -1,15 +1,8 @@
 "use client";
-
-import { useEffect } from "react";
 import Link from "next/link";
-
-export default function WorkspaceError({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+import { useEffect } from "react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const isChunkError =
     error?.name === "ChunkLoadError" ||
     /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(
@@ -30,32 +23,13 @@ export default function WorkspaceError({
   }, [isChunkError]);
 
   return (
-    <section
-      role="alert"
-      className="mx-auto my-12 max-w-lg rounded-2xl border border-slate-300 bg-white p-8 text-center text-slate-900 shadow-sm"
-    >
-      <h1 className="text-xl font-semibold">
-        {isChunkError ? "Application Updated" : "This page could not be loaded"}
-      </h1>
-      <p className="mt-3 text-sm text-slate-600">
-        {isChunkError
-          ? "A new version of the system is available. Reloading to get the latest update..."
-          : "Try again, or return to the Command Center to continue working."}
-      </p>
-      <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button
-          type="button"
-          onClick={() => (isChunkError ? window.location.reload() : reset())}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
-        >
-          {isChunkError ? "Reload Now" : "Try again"}
-        </button>
-        <Link
-          href="/"
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold hover:bg-slate-50 transition"
-        >
-          Command Center
-        </Link>
+    <section className="workspace-state" role="alert">
+      <span className="workspace-state-icon"><AlertTriangle size={26} /></span>
+      <h1>We couldn't load this page</h1>
+      <p>Try again, or return to your overview to continue working.</p>
+      <div className="workspace-state-actions">
+        <button type="button" className="ui-button ui-button-primary" onClick={() => isChunkError ? window.location.reload() : reset()}><RefreshCw size={16} /> Try again</button>
+        <Link href="/" className="ui-button ui-button-outline">Go to overview</Link>
       </div>
     </section>
   );

@@ -13,22 +13,17 @@ export default function Page() {
             <p className="eyebrow-label">
               NBFC security operations
             </p>
-            <h2 className="overview-title mt-1 text-2xl font-bold text-slate-100 sm:text-3xl">
-              Branch Security Command Center
-            </h2>
+            <h1 className="overview-title mt-1 text-2xl font-bold text-slate-100 sm:text-3xl">
+              Security overview
+            </h1>
             <p className="overview-subtitle mt-1 max-w-2xl text-sm text-slate-400">
-              Protect branches, ATM and cash-adjacent areas: verify alerts, preserve evidence, and keep every location operational.
+              Review branch health, prioritize alerts, and coordinate your response.
             </p>
           </div>
-          <div className="overview-status" aria-label="Live operations status">
-            <span className="overview-status-dot" />
-            <span>Operational telemetry</span>
-            <span className="overview-status-divider" />
-            <span className="overview-status-muted">Truth state shown below</span>
-          </div>
+
         </div>
 
-        <ErrorBoundary fallback={<div className="p-6 bg-slate-900 border border-slate-800 rounded-xl text-rose-300">Surveillance Command Center is temporarily unavailable.</div>}>
+        <ErrorBoundary>
           <CommandCenterView />
         </ErrorBoundary>
       </div>

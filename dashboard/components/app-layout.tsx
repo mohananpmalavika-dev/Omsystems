@@ -83,6 +83,7 @@ import {
   X,
 } from "lucide-react";
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { logout } from "@/lib/auth-manager";
 import { authApi } from "@/lib/api-client";
 import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
@@ -118,6 +119,17 @@ export type NavGroup = {
   icon: LucideIcon;
   items: NavItem[];
 };
+
+function sectionLabel(label: string) {
+  const labels: Record<string, string> = {
+    "WORKSPACE": "Workspace",
+    "OPERATIONS": "Operations",
+    "DEVICE HEALTH & MAINTENANCE": "Devices & health",
+    "INVESTIGATE & PLAYBACK": "Investigations",
+    "INTELLIGENCE & AI": "Analytics & intelligence",
+  };
+  return labels[label] || label.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export const navigation: NavGroup[] = [
   {
@@ -569,12 +581,24 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const searchParams = useSearchParams();
   const { branding } = useOrgBranding();
   const mainNavRef = useRef<HTMLElement>(null);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const commandDialogRef = useRef<HTMLElement>(null);
+  const [compactViewport, setCompactViewport] = useState(false);
   const NAV_SCROLL_KEY = "sentinel-grid-nav-scroll-top";
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  useDialogFocus(commandDialogRef, commandOpen);
+  useDialogFocus(sidebarRef, compactViewport && sidebarOpen && !commandOpen);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 991px)");
+    const update = () => { setCompactViewport(query.matches); if (!query.matches) setSidebarOpen(false); };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const [commandQuery, setCommandQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
   const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
@@ -668,7 +692,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const isActive = (href: string) => href === activeRoute;
   const activeGroup = visibleNavigation.find((group) => group.items.some((item) => isActive(item.href)));
   const moduleCount = visibleNavigation.reduce((total, group) => total + group.items.length, 0);
-  const allGroupsOpen = openGroups.size === visibleNavigation.length;
+  const allGroupsOpen = visibleNavigation.every((group) => openGroups.has(group.label));
 
   const searchableModules = useMemo(() => visibleNavigation.flatMap((group) =>
     group.items.map((item) => ({ ...item, section: group.label }))), [visibleNavigation]);
@@ -677,9 +701,9 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     const query = commandQuery.trim().toLowerCase();
     const searchAliases: Record<string, string[]> = {
       "/maintenance/device-configuration": ["golden", "templates", "hardware", "onvif", "ptz", "ntp", "imaging", "profiles", "standard"],
-      "/video-wall": ["wall", "tour", "grid", "presentation", "matrix", "cctv", "auto-rotation"],
+      "/control-room": ["wall", "tour", "grid", "presentation", "matrix", "cctv", "auto-rotation"],
       "/evidence": ["redaction", "blur", "custody", "forensic", "court", "export", "hash", "tamper"],
-      "/operations/incidents": ["sop", "checklist", "false alarm", "intrusion", "alerts", "workflow", "review"],
+      "/incidents": ["sop", "checklist", "false alarm", "intrusion", "alerts", "workflow", "review"],
       "/admin/organization?tab=hierarchy": ["branches", "kochi", "mumbai", "delhi", "bkc", "zones", "facility"],
     };
 
@@ -701,6 +725,10 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return `${item.label} ${item.section} ${item.href} ${extra}`.toLowerCase().includes(query);
     }).slice(0, 12).map((item) => ({ ...item, recent: false }));
   }, [commandQuery, recentHrefs, searchableModules]);
+
+  useEffect(() => {
+    if (commandOpen) document.getElementById(`command-result-${activeCommandIndex}`)?.scrollIntoView({ block: "nearest" });
+  }, [activeCommandIndex, commandOpen]);
 
   // Hiding a link is not access control. Keep custom-role users out of a
   // managed page when they paste or restore a URL that is not on their menu.
@@ -830,7 +858,11 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         event.preventDefault();
         toggleSidebarCollapse();
       }
-      if (event.key === "Escape") setCommandOpen(false);
+      if (event.key === "Escape") {
+        setCommandOpen(false);
+        setSidebarOpen(false);
+        setCreateMenuOpen(false);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -864,12 +896,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return;
     }
 
-    // High-reliability watchdog: only force full reload if client router genuinely stalls (> 4000ms)
-    setTimeout(() => {
-      if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
-        window.location.assign(href);
-      }
-    }, 4000);
+
   };
 
   const createMenuRef = useRef<HTMLDivElement>(null);
@@ -886,52 +913,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     }
   }, [createMenuOpen]);
 
-  useEffect(() => {
-    const handleGlobalLinkClick = (event: MouseEvent) => {
-      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      const anchor = target?.closest<HTMLAnchorElement>("a[href]");
-      if (!anchor) return;
-
-      const rawHref = anchor.getAttribute("href");
-      if (
-        !rawHref ||
-        rawHref.startsWith("#") ||
-        rawHref.startsWith("javascript:") ||
-        rawHref.startsWith("mailto:") ||
-        rawHref.startsWith("tel:") ||
-        rawHref.startsWith("blob:") ||
-        rawHref.startsWith("data:")
-      ) {
-        return;
-      }
-
-      try {
-        const targetUrl = new URL(anchor.href, window.location.origin);
-        if (targetUrl.origin !== window.location.origin) return;
-
-        const targetPath = targetUrl.pathname;
-        const currentPath = window.location.pathname;
-        if (targetPath === currentPath && targetUrl.search === window.location.search) {
-          return;
-        }
-
-        const timer = window.setTimeout(() => {
-          if (window.location.pathname !== targetPath) {
-            window.location.assign(anchor.href);
-          }
-        }, 4000);
-
-        const clearTimer = () => window.clearTimeout(timer);
-        window.addEventListener("beforeunload", clearTimer, { once: true });
-      } catch {}
-    };
-
-    document.addEventListener("click", handleGlobalLinkClick, true);
-    return () => document.removeEventListener("click", handleGlobalLinkClick, true);
-  }, []);
 
   const persistOpenGroups = (next: Set<string>) => {
     setOpenGroups(next);
@@ -956,7 +937,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const toggleAllGroups = () => {
     setOpenGroups((prev) => {
       const allLabels = visibleNavigation.map((group) => group.label);
-      const next = prev.size > 0 ? new Set<string>() : new Set<string>(allLabels);
+      const next = allLabels.every((label) => prev.has(label)) ? new Set<string>() : new Set<string>(allLabels);
       persistOpenGroups(next);
       return next;
     });
@@ -980,11 +961,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       window.location.assign(href);
       return;
     }
-    setTimeout(() => {
-      if (typeof window !== "undefined" && routePath(window.location.pathname) !== targetPath) {
-        window.location.assign(href);
-      }
-    }, 4000);
+
   };
 
   return (
@@ -995,7 +972,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         aria-label="Close navigation"
         onClick={closeSidebar}
       />
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
+      <aside ref={sidebarRef} id="workspace-navigation" className={`sidebar ${sidebarOpen ? "open" : ""}`} aria-label="Workspace navigation" inert={commandOpen || (compactViewport && !sidebarOpen) || (!compactViewport && sidebarCollapsed)} role={compactViewport && sidebarOpen ? "dialog" : undefined} aria-modal={compactViewport && sidebarOpen ? true : undefined}>
         <div className="brand">
           {branding.logoUrl ? (
             <div className="brand-mark custom-logo">
@@ -1024,7 +1001,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
         <button type="button" className="command-search" onClick={() => setCommandOpen(true)}>
           <Search size={15} />
-          <span>Find any module or workflow</span>
+          <span>Search workspace</span>
           <kbd><Command size={11} /> K</kbd>
         </button>
 
@@ -1043,7 +1020,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         <div className="nav-utility">
           <Link href="/modules" prefetch={false} className={isActive("/modules") ? "active" : ""} onClick={handleNavClick("/modules")}>
             <LayoutGrid size={14} />
-            <span>All modules</span>
+            <span>Workspace directory</span>
             <small>{moduleCount}</small>
           </Link>
           <button
@@ -1075,7 +1052,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                   toggleGroup(group.label);
                 }}
               >
-                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{group.label}</span></span>
+                <span className="nav-group-label">{GroupIcon ? <GroupIcon size={14} /> : null}<span>{sectionLabel(group.label)}</span></span>
                 <span className="nav-group-meta"><small>{items.length}</small><ChevronRight size={13} /></span>
               </summary>
               <div className="nav-items">
@@ -1146,7 +1123,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
         </div>
       </aside>
 
-      <main id="workspace-content" tabIndex={-1} className="workspace">
+      <main id="workspace-content" tabIndex={-1} className="workspace" inert={commandOpen || (compactViewport && sidebarOpen)}>
         <header className="topbar">
           <button
             type="button"
@@ -1158,10 +1135,12 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 setSidebarOpen(true);
               }
             }}
-            aria-label={sidebarCollapsed ? "Show sidebar menu (Ctrl+B)" : "Hide sidebar menu (Ctrl+B)"}
+            aria-label={compactViewport ? "Open navigation" : sidebarCollapsed ? "Show navigation" : "Hide navigation"}
+            aria-controls="workspace-navigation"
+            aria-expanded={compactViewport ? sidebarOpen : !sidebarCollapsed}
             title={sidebarCollapsed ? "Show sidebar menu (Ctrl+B)" : "Hide sidebar menu (Ctrl+B)"}
           >
-            {sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
+            {compactViewport ? <Menu size={19} /> : sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}
           </button>
           <div className="topbar-context">
             <div className="breadcrumbs">
@@ -1174,7 +1153,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <p className="topbar-title">{currentPage.title}</p>
           </div>
           <div className="topbar-actions">
-            <div className="live-state"><i /> Live operations <span>IST</span></div>
+            <div className="workspace-context-label"><ShieldCheck size={14} /> Security workspace</div>
             <ThemeSwitcher />
             <AlertAudioIndicator />
             <div className={`create-menu relative ${createMenuOpen ? "open" : ""}`} ref={createMenuRef}>
@@ -1265,7 +1244,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
 
       {commandOpen && (
         <div className="command-overlay" role="presentation" onMouseDown={() => setCommandOpen(false)}>
-          <section className="command-dialog" role="dialog" aria-modal="true" aria-label="Module search" onMouseDown={(event) => event.stopPropagation()}>
+          <section ref={commandDialogRef} className="command-dialog" role="dialog" aria-modal="true" aria-label="Module search" onMouseDown={(event) => event.stopPropagation()}>
             <div className="command-input-row">
               <Search size={19} />
               <input
@@ -1286,6 +1265,9 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                 }}
                 placeholder="Search cameras, incidents, reports, maintenance..."
                 aria-label="Search all modules"
+                role="combobox"
+                aria-expanded="true"
+                aria-autocomplete="list"
                 aria-controls="command-results-list"
                 aria-activedescendant={commandResults[activeCommandIndex] ? `command-result-${activeCommandIndex}` : undefined}
               />
@@ -1313,7 +1295,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
                     }}
                   >
                     <span className="command-result-icon"><Icon size={17} /></span>
-                    <span><strong>{item.label}</strong><small>{item.section}{item.recent ? " · Recently opened" : ""}</small></span>
+                    <span><strong>{item.label}</strong><small>{sectionLabel(item.section)}{item.recent ? " · Recently opened" : ""}</small></span>
                     <ChevronRight size={15} />
                   </Link>
                 );

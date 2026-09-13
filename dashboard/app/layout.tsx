@@ -9,6 +9,7 @@ import { PerformanceMonitorProvider } from "@/components/performance-monitor-pro
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
 import { ApiErrorNotifier } from "@/components/api-error-notifier";
 import "./globals.css";
+import "./workspace.css";
 
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",

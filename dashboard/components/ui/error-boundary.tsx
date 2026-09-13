@@ -28,8 +28,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render() {
     if (this.state.hasError) {
       return this.props.fallback ?? (
-        <div role="alert" className="p-4 bg-rose-100 border border-rose-200 rounded">
-          <p className="text-rose-800 font-medium">Something went wrong.</p>
+        <div role="alert" className="workspace-state">
+          <p className="font-semibold">This section could not be displayed</p>
+          <p>Please try again. If the problem continues, contact your administrator.</p>
+          <button type="button" className="ui-button ui-button-outline" onClick={() => this.setState({ hasError: false })}>Try again</button>
         </div>
       );
     }
