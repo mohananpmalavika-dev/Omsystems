@@ -75,7 +75,7 @@ export class TelemetryIngestionService {
       agentId: envelope.agentId,
       overallState,
       internetState: envelope.internet.state,
-      recorderState: envelope.recorders[0]?.state || "HEALTHY",
+      recorderState: envelope.recorders[0]?.state || "UNKNOWN",
       totalCameras,
       onlineCameras,
       recordingCameras,

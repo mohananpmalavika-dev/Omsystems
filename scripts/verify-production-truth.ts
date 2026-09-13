@@ -183,6 +183,12 @@ async function verifyFile(relPath: string, baseDir: string): Promise<Violation[]
       { pattern: /fixed\s+compliance\s+figures/i, rule: "NO_FIXED_COMPLIANCE_FIGURES", message: "Production code must not use fixed compliance figures." },
       { pattern: /Buffer\.from\(['"]REDACTED_PRIVACY_BLUR_V1['"]\)/, rule: "NO_FAKE_REDACTION_HASHING", message: "Synthetic redaction hashes are strictly forbidden in forensic evidence services (P0-07)." },
       { pattern: /authority.*=\s*new\s+Map/i, rule: "NO_IN_MEMORY_MAP_AUTHORITY", message: "In-memory Map must never be used as authority for legal holds, custody, or retention." },
+      { pattern: /(?:capacity|used|total|storage|disk).*\|\|\s*4000\b|\|\|\s*4000\b.*(?:capacity|storage|gb)/i, rule: "NO_FALLBACK_CAPACITY_4000", message: "Production code must not use synthetic fallback 4000 GB capacity." },
+      { pattern: /(?:capacity|used|total|storage|disk).*\|\|\s*3200\b|\|\|\s*3200\b.*(?:capacity|storage|gb)/i, rule: "NO_FALLBACK_USED_3200", message: "Production code must not use synthetic fallback 3200 GB capacity." },
+      { pattern: /\|\|\s*38\b|\|\|\s*"38"/, rule: "NO_FALLBACK_TEMPERATURE_38", message: "Production code must not use synthetic fallback 38C temperature." },
+      { pattern: /\|\|\s*"PASS"|\|\|\s*"healthy"/i, rule: "NO_FALLBACK_HEALTH_PASS", message: "Production code must not default SMART health or device health to PASS or healthy." },
+      { pattern: /\|\|\s*["']region-thrissur["']/, rule: "NO_FALLBACK_REGION_THRISSUR", message: "Production code must not fall back to arbitrary hardcoded regions." },
+      { pattern: /passedCount\s*>=\s*3\b/, rule: "NO_FAKE_CERTIFICATION_THRESHOLD", message: "Hardware certification must not use arbitrary passedCount >= 3 threshold." },
     ];
 
     for (const fp of forbiddenPatterns) {

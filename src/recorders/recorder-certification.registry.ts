@@ -14,9 +14,11 @@ import type {
 } from "./recorder-adapter.interface.js";
 
 export type DeviceCertificationStatus =
+  | "UNTESTED"
   | "UNVERIFIED"
   | "PROVISIONAL"
   | "TEST_REQUIRED"
+  | "PARTIALLY_SUPPORTED"
   | "CERTIFIED"
   | "FAILED"
   | "DEPRECATED";

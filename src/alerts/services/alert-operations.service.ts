@@ -5,6 +5,7 @@ import {
   type AlertAuditEvent,
   type AlertComment,
   type AlertDisposition,
+  type AlertResolution,
   type AlertSeverity,
   type AlertStatus,
   InvalidAlertTransitionError,
@@ -163,8 +164,15 @@ export class AlertOperationsService {
 
     // 2. Build Authoritative Operational Alert
     const now = candidate.occurredAt;
-    const responseDeadline = new Date(now.getTime() + candidate.slaSeconds * 1000);
-    const resolutionDeadline = new Date(now.getTime() + candidate.slaSeconds * 10 * 1000);
+    const slaSecondsMap: Record<AlertSeverity, number> = {
+      P1: 300,
+      P2: 900,
+      P3: 3600,
+      P4: 86400,
+    };
+    const responseSlaSeconds = slaSecondsMap[candidate.severity] ?? 900;
+    const responseDeadline = new Date(now.getTime() + responseSlaSeconds * 1000);
+    const resolutionDeadline = new Date(now.getTime() + responseSlaSeconds * 10 * 1000);
 
     const alert: OperationalAlert = {
       id: alertId,

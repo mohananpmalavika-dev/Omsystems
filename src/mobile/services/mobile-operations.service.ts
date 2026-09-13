@@ -227,7 +227,7 @@ export class MobileOperationsService {
             id: alert.camera.id,
             name: alert.camera.name,
             status: alert.camera.status || "ONLINE",
-            recordingStatus: alert.camera.recordingStatus || "HEALTHY",
+            recordingStatus: alert.camera.recordingStatus || "UNKNOWN",
           }
         : undefined,
       occurredAt: alert.occurredAt.toISOString(),
@@ -812,7 +812,7 @@ export class MobileOperationsService {
         phone: branch.contactPhone || "+91XXXXXXXXXX",
         role: "Branch Manager",
       },
-      overallStatus: (branch as any).healthState || "HEALTHY",
+      overallStatus: (branch as any).healthState || "UNKNOWN",
       internet: {
         primary: "HEALTHY",
         backup5G: "STANDBY",

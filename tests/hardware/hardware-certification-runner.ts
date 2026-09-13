@@ -2,9 +2,11 @@
  * Hardware-in-the-Loop Certification Test Runner (KV-CERT-1.0)
  * 
  * Executes real protocol and hardware validation against physical/bench VMS recorders.
- * Complies with P1-6 & P1-7:
- * - Never grants CERTIFIED status without actual verified hardware test execution.
- * - Skips gracefully when hardware test credentials are absent in CI.
+ * Complies with P0-11, P0-12, P0-13, P0-14:
+ * - Eliminates 3/12 pass threshold. Requires all mandatory capabilities for claimed level.
+ * - Enforces real PTZ movement verification.
+ * - Enforces real event reception (empty array = SKIP/NOT_TESTED, not PASS).
+ * - Enforces actual disk storage verification with capacity > 0 (empty array = FAIL).
  * - Emits structured DeviceCertificationResult into RecorderCertificationRegistry.
  */
 
@@ -13,6 +15,7 @@ import {
   recorderCertificationRegistry,
   type DeviceCertificationResult,
   type DeviceCertificationRecord,
+  type DeviceCertificationStatus,
 } from "../../src/recorders/recorder-certification.registry.js";
 
 export interface HardwareTestTarget {
@@ -23,11 +26,12 @@ export interface HardwareTestTarget {
   serialNumber?: string;
   testOperator?: string;
   testEnvironment?: string;
+  claimedLevel?: CompatibilityLevel;
 }
 
 export class HardwareCertificationRunner {
   async executeCertificationSuite(
-    adapter: IRecorderAdapter,
+    adapter: IRecorderAdapter | any,
     target: HardwareTestTarget,
   ): Promise<{ result: DeviceCertificationResult; record: DeviceCertificationRecord }> {
     const capabilities: Record<CompatibilityLevel, "PASS" | "FAIL" | "SKIP"> = {
@@ -49,7 +53,7 @@ export class HardwareCertificationRunner {
     try {
       const info = await adapter.getDeviceInfo();
       const channels = await adapter.getChannels();
-      if (info && info.model && channels.length > 0) {
+      if (info && info.model && Array.isArray(channels) && channels.length > 0) {
         capabilities["KV-C1"] = "PASS";
       }
     } catch {
@@ -58,20 +62,27 @@ export class HardwareCertificationRunner {
 
     // KV-C2: RTSP Stream Generation
     try {
-      const stream = await adapter.getLiveStreamUri(1, "main");
-      if (stream?.rtspUri && stream.rtspUri.startsWith("rtsp://")) {
+      const stream = typeof adapter.getLiveStreamUri === "function"
+        ? await adapter.getLiveStreamUri(1, "main")
+        : await adapter.getLiveStream?.(1);
+      const uri = stream?.rtspUri || stream?.streamUrl;
+      if (uri && (uri.startsWith("rtsp://") || uri.startsWith("rtsps://"))) {
         capabilities["KV-C2"] = "PASS";
       }
     } catch {
       capabilities["KV-C2"] = "FAIL";
     }
 
-    // KV-C3: Storage Health & Disks
+    // KV-C3: Storage Health & Disks (P0-14: Requires actual disk with capacity > 0)
     try {
-      const health = await adapter.getSystemHealth();
-      const storage = await adapter.getStorageInfo();
-      if (health.storageHealthy && storage.disks.length > 0) {
+      const disks = typeof adapter.getStorageStatus === "function"
+        ? await adapter.getStorageStatus()
+        : (await adapter.getStorageInfo?.())?.disks || [];
+      const hasValidStorage = Array.isArray(disks) && disks.length > 0 && disks.some((d: any) => (d.totalBytes > 0 || d.capacityGB > 0) && d.status);
+      if (hasValidStorage) {
         capabilities["KV-C3"] = "PASS";
+      } else {
+        capabilities["KV-C3"] = "FAIL";
       }
     } catch {
       capabilities["KV-C3"] = "FAIL";
@@ -87,11 +98,16 @@ export class HardwareCertificationRunner {
       capabilities["KV-C4"] = "FAIL";
     }
 
-    // KV-C5: PTZ Verification
+    // KV-C5: PTZ Verification (P0-12: Must test real movement & command acknowledgment)
     try {
-      const ptzSupported = adapter.capabilities.ptz;
-      if (ptzSupported) {
-        capabilities["KV-C5"] = "PASS";
+      if (typeof adapter.ptz === "function") {
+        const moveOk = await adapter.ptz(1, { action: "pan", speed: 2 });
+        if (moveOk === true) {
+          await adapter.ptz(1, { action: "stop" }).catch(() => {});
+          capabilities["KV-C5"] = "PASS";
+        } else {
+          capabilities["KV-C5"] = "SKIP";
+        }
       } else {
         capabilities["KV-C5"] = "SKIP";
       }
@@ -99,18 +115,64 @@ export class HardwareCertificationRunner {
       capabilities["KV-C5"] = "FAIL";
     }
 
-    // KV-C7: NTP Time Sync
+    // KV-C7: NTP Time Sync (P0-7: Must verify authentic timestamp and offset)
     try {
       const time = await adapter.getTime();
-      if (time && time.deviceTime) {
+      if (time && time.deviceTime && time.offsetSeconds != null && !isNaN(time.deviceTime.getTime())) {
         capabilities["KV-C7"] = "PASS";
+      } else {
+        capabilities["KV-C7"] = "FAIL";
       }
     } catch {
       capabilities["KV-C7"] = "FAIL";
     }
 
-    const passedCount = Object.values(capabilities).filter((v) => v === "PASS").length;
-    const overall = passedCount >= 3 ? "CERTIFIED" : "FAILED";
+    // KV-C8: Event Verification (P0-13: Must receive real events, empty array cannot pass)
+    try {
+      if (typeof adapter.getEvents === "function") {
+        const events = await adapter.getEvents();
+        const hasRealEvent = Array.isArray(events) && events.length > 0 && events.some((e: any) => e.eventType && e.channelNumber);
+        if (hasRealEvent) {
+          capabilities["KV-C8"] = "PASS";
+        } else {
+          capabilities["KV-C8"] = "SKIP";
+        }
+      } else {
+        capabilities["KV-C8"] = "SKIP";
+      }
+    } catch {
+      capabilities["KV-C8"] = "FAIL";
+    }
+
+    // P0-11: Determine certification based on claimed level
+    const targetLevel: CompatibilityLevel = target.claimedLevel || "KV-C4";
+    const requiredForLevel: Record<CompatibilityLevel, CompatibilityLevel[]> = {
+      "KV-C1": ["KV-C1"],
+      "KV-C2": ["KV-C1", "KV-C2"],
+      "KV-C3": ["KV-C1", "KV-C2", "KV-C3"],
+      "KV-C4": ["KV-C1", "KV-C2", "KV-C3", "KV-C4"],
+      "KV-C5": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C5"],
+      "KV-C6": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C5"],
+      "KV-C7": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7"],
+      "KV-C8": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7", "KV-C8"],
+      "KV-C9": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7", "KV-C8"],
+      "KV-C10": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7", "KV-C8"],
+      "KV-C11": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7", "KV-C8"],
+      "KV-C12": ["KV-C1", "KV-C2", "KV-C3", "KV-C4", "KV-C7", "KV-C8"],
+    };
+
+    const required = requiredForLevel[targetLevel] ?? ["KV-C1", "KV-C2", "KV-C3", "KV-C4"];
+    const hasFail = required.some((req) => capabilities[req] === "FAIL");
+    const allPass = required.every((req) => capabilities[req] === "PASS");
+
+    let overall: DeviceCertificationStatus;
+    if (hasFail) {
+      overall = "FAILED";
+    } else if (allPass) {
+      overall = "CERTIFIED";
+    } else {
+      overall = "PARTIALLY_SUPPORTED";
+    }
 
     const result: DeviceCertificationResult = {
       manufacturer: target.manufacturer,

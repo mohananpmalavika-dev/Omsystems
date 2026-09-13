@@ -686,14 +686,6 @@ Just ask naturally - I'll understand!`;
   async processStream(streamUrl: string): Promise<void> {
     // Not applicable
   }
-
-  getHealth() {
-    return {
-      status: "healthy" as const,
-      details: "AI Security Copilot Assistant operational",
-      sessions: this.contexts.size,
-    };
-  }
 }
 
 /**

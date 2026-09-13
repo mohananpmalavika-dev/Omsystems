@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "artifacts": [
+    {
+      "id": "detector",
+      "file": "detector.onnx",
+      "sha256": "fd8e8db165165dae2b35fbf6375f7ce89599ee79a0e8b5e32afd057d409cacf0",
+      "modelName": "approved-face-detector",
+      "modelVersion": "1.0.0",
+      "license": "MIT",
+      "sourceProject": "https://github.com/sentinel/approved-face-detector",
+      "input": {
+        "width": 320,
+        "height": 320,
+        "color": "rgb",
+        "normalization": "zero-one"
+      },
+      "output": "post-nms-xywh-score"
+    },
+    {
+      "id": "recognizer",
+      "file": "recognizer.onnx",
+      "sha256": "490bd920353e45d2918c5a0c0f1b2718b5cff24d8bb181b439f7426b2dc0bb06",
+      "modelName": "approved-512d-recognizer",
+      "modelVersion": "1.0.0",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/sentinel/approved-512d-recognizer",
+      "input": {
+        "width": 112,
+        "height": 112,
+        "color": "rgb",
+        "normalization": "minus-one-one"
+      },
+      "output": "embedding"
+    },
+    {
+      "id": "liveness",
+      "file": "liveness.onnx",
+      "sha256": "4a91794a7e83aa6c29f4c80fec3f55b70cd375f17a75b0cb91f790a50904dec8",
+      "modelName": "approved-anti-spoof-model",
+      "modelVersion": "1.0.0",
+      "license": "Apache-2.0",
+      "sourceProject": "https://github.com/sentinel/approved-anti-spoof-model",
+      "input": {
+        "width": 128,
+        "height": 128,
+        "color": "rgb",
+        "normalization": "zero-one"
+      },
+      "output": "binary-live-logits"
+    }
+  ]
+}

@@ -143,12 +143,15 @@ export class RecipientResolver {
         }
 
         case "REGION_ROLE": {
-          const regionId = context.regionId ?? (context.branchId ? "region-thrissur" : undefined);
+          let regionId = context.regionId;
+          if (!regionId && context.branchId) {
+            regionId = await this.orgDirectory.resolveBranchRegion(context.tenantId, context.branchId);
+          }
           if (!regionId) {
             warnings.push({
               selector,
-              code: "ROLE_UNASSIGNED",
-              message: "No regionId provided in context for regional role resolution",
+              code: "REGION_UNKNOWN",
+              message: `No regionId provided or authoritatively resolvable for branch ${context.branchId}`,
             });
             break;
           }

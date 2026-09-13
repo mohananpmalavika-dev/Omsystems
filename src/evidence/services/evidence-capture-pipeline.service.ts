@@ -621,11 +621,35 @@ export class InProcessTestAlertEvidenceClient implements AlertEvidenceClient {
   }
 
   async asset(alertId: string, kind: AlertEvidenceKind, _range?: string) {
-    const data = Buffer.from(`test-${kind}-${alertId}-data`);
-    return new Response(data, {
-      status: 200,
-      headers: { "content-type": kind === "snapshot" ? "image/jpeg" : "video/mp4" },
-    });
+    if (kind === "snapshot") {
+      // Authentic JPEG magic bytes: 0xFF 0xD8 0xFF 0xE0 + JFIF header + alert payload + 0xFF 0xD9
+      const jpegHeader = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00]);
+      const body = Buffer.from(`snapshot-payload-${alertId}`);
+      const jpegFooter = Buffer.from([0xff, 0xd9]);
+      const data = Buffer.concat([jpegHeader, body, jpegFooter]);
+      return new Response(data, {
+        status: 200,
+        headers: { "content-type": "image/jpeg" },
+      });
+    } else {
+      // Authentic MP4 container: ftyp box (box size 28, 'ftyp', 'isom', minor version 0x0200, 'isom', 'iso2', 'avc1')
+      const ftypBox = Buffer.from([
+        0x00, 0x00, 0x00, 0x1c,
+        0x66, 0x74, 0x79, 0x70, // 'ftyp'
+        0x69, 0x73, 0x6f, 0x6d, // 'isom'
+        0x00, 0x00, 0x02, 0x00, // minor version
+        0x69, 0x73, 0x6f, 0x6d, // 'isom'
+        0x69, 0x73, 0x6f, 0x32, // 'iso2'
+        0x61, 0x76, 0x63, 0x31, // 'avc1'
+      ]);
+      const mdatHeader = Buffer.from([0x00, 0x00, 0x00, 0x20, 0x6d, 0x64, 0x61, 0x74]); // 'mdat'
+      const body = Buffer.from(`video-clip-payload-${alertId}`);
+      const data = Buffer.concat([ftypBox, mdatHeader, body]);
+      return new Response(data, {
+        status: 200,
+        headers: { "content-type": "video/mp4" },
+      });
+    }
   }
 }
 

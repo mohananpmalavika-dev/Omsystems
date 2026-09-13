@@ -61,7 +61,7 @@ export interface VerificationReceipt {
   version: number;
   appliedHash: string;
   verificationResult: "VERIFIED" | "FAILED" | "TAMPERED";
-  rejectionReason?: string;
+  rejectionReason?: string | undefined;
   edgeAgentVersion: string;
   timestamp: string;
 }

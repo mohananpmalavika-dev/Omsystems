@@ -18,6 +18,7 @@
 | **AI Quality Control Plane** | `src/ai-quality/` | AI Governance Team | Unpersisted AI quality facades, `backend/src/ai/` | All detectors, models, evaluations, certifications, and audits backed by PostgreSQL |
 | **Notification Engine** | `src/notifications/` | Operations & Alerting Team | Legacy FCM server key, simulated dispatch in `src/mobile/` | OAuth2 FCM HTTP v1, APNs HTTP/2 JWT, RFC 8291 Web Push, durable retry queues |
 | **Privacy Governance & Redaction** | `src/privacy/` | Compliance & Data Privacy Team | In-memory privacy stores, unpersisted override singletons | Fail-closed PostgreSQL audit store; zero unmasked video/export without immutable audit logging |
+| **Operational Alerts & Incident Triage** | `src/alerts/` (`repositories/postgres-operational-alert.repository.ts`) | Security Operations Team | In-memory Alert Maps, unpersisted alert caches | Authoritative PostgreSQL alerts (`operational_alerts` table), dual-write outbox, zero `Map` authority in production |
 | **Device Integration & Certification** | `src/recorders/` + `packages/recorder-sdk` | Edge & Hardware Team | Legacy mock scrapers in `src/devices/`, fake device certifications | Real protocol drivers (ISAPI, Dahua CGI, Uniview API, ONVIF); evidence-based hardware lab certifications |
 
 ---
@@ -33,5 +34,6 @@
 7. **Single Authoritative Composition Root**: All application services, repositories, and adapters must be instantiated via `src/bootstrap/index.ts` (`applicationBootstrap()`) and injected into `buildApp()`.
 8. **Transactional Outbox & Consumer Idempotency**: All critical domain events must be published via PostgreSQL transactional outbox and consumed through deduplicating inbox patterns (`consumer_name + event_id`).
 9. **Node.js 22 Runtime Standard**: All production containers, local scripts, and CI pipelines run exclusively on Node.js 22.x.
+10. **Durable Operational Alert Authority**: In production (`NODE_ENV=production`), all operational alert state, acknowledgements, escalations, resolutions, comments, and audit trails must be persisted to and queried from PostgreSQL (`operational_alerts`, `operational_alert_comments`). In-memory `Map` structures are strictly prohibited from serving as authoritative state.
 
 

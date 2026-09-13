@@ -144,7 +144,8 @@ export interface RecipientResolutionWarning {
     | "NO_PUSH_DEVICE"
     | "NO_ACTIVE_ON_CALL_MEMBER"
     | "NO_ACTIVE_SHIFT_OPERATOR"
-    | "ROLE_UNASSIGNED";
+    | "ROLE_UNASSIGNED"
+    | "REGION_UNKNOWN";
   message: string;
 }
 

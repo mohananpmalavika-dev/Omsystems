@@ -80,7 +80,7 @@ export class StaleDataEvaluatorService {
     overrideReason?: string
   ): FreshnessWrapper<T> {
     const observedAt = data.observedAt || new Date();
-    const originalState = data.state || data.status || "HEALTHY";
+    const originalState = data.state || data.status || "UNKNOWN";
     const metadata = this.evaluateMetadata(observedAt, originalState, ttlSeconds, currentTime, overrideReason);
 
     return {

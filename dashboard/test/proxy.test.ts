@@ -34,7 +34,10 @@ describe("dashboard proxy authentication", () => {
 
 function request(authorization?: string) {
   return new NextRequest("https://sentinel.example/", {
-    headers: authorization ? { authorization } : undefined,
+    headers: {
+      ...(authorization ? { authorization } : {}),
+      cookie: "sentinel_access=valid-session-token",
+    },
   });
 }
 

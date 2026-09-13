@@ -156,6 +156,28 @@ export class OrganizationalDirectoryService {
     return matches[0] ?? null;
   }
 
+  async resolveBranchRegion(tenantId: string, branchId: string): Promise<string | undefined> {
+    if (this.pool) {
+      try {
+        const res = await this.pool.query(
+          `SELECT parent_id as region_id FROM organizational_nodes WHERE id = $1 AND type = 'branch'`,
+          [branchId],
+        );
+        if (res.rows.length > 0 && res.rows[0].region_id) {
+          return res.rows[0].region_id;
+        }
+      } catch {
+        // DB lookup failure
+      }
+    }
+    // Check if any role assignments for this branch link to a known region
+    const branchRole = this.roleAssignments.find((a) => a.tenantId === tenantId && a.scopeType === "BRANCH" && a.scopeId === branchId);
+    if (branchRole && (branchRole as any).regionId) {
+      return (branchRole as any).regionId;
+    }
+    return undefined;
+  }
+
   addRoleAssignment(assignment: RoleAssignment) {
     this.roleAssignments.push(assignment);
   }

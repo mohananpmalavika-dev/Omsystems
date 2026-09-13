@@ -564,7 +564,7 @@ export class CpPlusRecorderAdapter implements RecorderAdapter {
               channelNumber: parseInt(kv.index || "1", 10),
               eventType: kv.Code || "MotionDetect",
               timestamp: startTime || new Date(),
-              details: kv,
+              data: kv,
             });
           }
         }

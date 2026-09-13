@@ -153,7 +153,12 @@ export class ApplicationBootstrap {
         if (!evidenceModule.pipeline) {
           return { state: "UNAVAILABLE", reason: "Evidence pipeline not initialized" };
         }
-        return { state: "READY", reason: "Evidence capture and signing pipeline active" };
+        const readiness = await evidenceModule.pipeline.checkReadiness();
+        return {
+          state: readiness.state,
+          reason: readiness.reason,
+          details: readiness.details,
+        };
       },
     });
 
@@ -216,7 +221,26 @@ export class ApplicationBootstrap {
       name: "eventBus",
       importance: "CRITICAL",
       async check() {
-        return { state: "READY", reason: "Transactional event bus operational" };
+        if (!pool) {
+          return {
+            state: isProduction ? "UNAVAILABLE" : "DEGRADED",
+            reason: isProduction ? "PostgreSQL connection pool missing for transactional outbox" : "Running in test memory mode",
+          };
+        }
+        try {
+          const client = await pool.connect();
+          try {
+            await client.query("SELECT 1 FROM event_outbox LIMIT 0");
+            return { state: "READY", reason: "Transactional event outbox operational and table verified" };
+          } finally {
+            client.release();
+          }
+        } catch (err: any) {
+          return {
+            state: isProduction ? "UNAVAILABLE" : "DEGRADED",
+            reason: `Outbox database check failed: ${err.message}`,
+          };
+        }
       },
     });
 
@@ -235,7 +259,31 @@ export class ApplicationBootstrap {
       name: "notifications",
       importance: "REQUIRED",
       async check() {
-        return { state: "READY", reason: "Notification dispatchers active" };
+        // Dynamically verify channel configuration: dashboard, sms, email, voice
+        const hasDashboard = true; // Always available via Fastify SSE / WebSocket stream
+        const hasSms = Boolean(process.env.TWILIO_ACCOUNT_SID || process.env.KARIX_API_KEY || process.env.GUPSHUP_API_KEY || process.env.SMPP_HOST);
+        const hasEmail = Boolean(process.env.SMTP_HOST && process.env.SMTP_HOST !== "mail.bank-corp.internal");
+        const hasVoice = Boolean(process.env.ASTERISK_HOST || process.env.TWILIO_ACCOUNT_SID || process.env.EXOTEL_SID);
+
+        const configured = [
+          hasDashboard && "dashboard",
+          hasSms && "sms",
+          hasEmail && "email",
+          hasVoice && "voice",
+        ].filter(Boolean) as string[];
+
+        if (isProduction && !hasSms && !hasEmail && !hasVoice) {
+          return {
+            state: "DEGRADED",
+            reason: "External notification transports (SMS, Email, Voice) not fully configured; dashboard active",
+            details: { configuredChannels: configured },
+          };
+        }
+        return {
+          state: "READY",
+          reason: `Notification channels active (${configured.join(", ")})`,
+          details: { configuredChannels: configured },
+        };
       },
     });
   }

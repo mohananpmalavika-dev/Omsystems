@@ -196,10 +196,10 @@ export interface GatewayMediaBootstrap {
 
 export interface GatewayMtlsOptions {
   enabled: boolean;
-  clientCert?: string;
-  clientKey?: string;
-  caCert?: string;
-  rejectUnauthorized?: boolean;
+  clientCert?: string | undefined;
+  clientKey?: string | undefined;
+  caCert?: string | undefined;
+  rejectUnauthorized?: boolean | undefined;
 }
 
 export class GatewayClient {
@@ -421,16 +421,18 @@ export class GatewayClient {
 
     if (this.mtlsOptions?.enabled && (this.mtlsOptions.clientCert || this.mtlsOptions.clientKey)) {
       try {
-        const undiciModule = "undici";
-        const { Agent } = await import(undiciModule);
-        dispatcher = new Agent({
-          connect: {
-            cert: this.mtlsOptions.clientCert,
-            key: this.mtlsOptions.clientKey,
-            ca: this.mtlsOptions.caCert,
-            rejectUnauthorized: this.mtlsOptions.rejectUnauthorized !== false,
-          },
-        });
+        const undiciPkg = "undici";
+        const undiciModule: any = await (Function("pkg", "return import(pkg)")(undiciPkg) as Promise<any>).catch(() => null);
+        if (undiciModule?.Agent) {
+          dispatcher = new undiciModule.Agent({
+            connect: {
+              cert: this.mtlsOptions.clientCert,
+              key: this.mtlsOptions.clientKey,
+              ca: this.mtlsOptions.caCert,
+              rejectUnauthorized: this.mtlsOptions.rejectUnauthorized !== false,
+            },
+          });
+        }
       } catch {
         // Fall back to standard fetch if undici Agent is not dynamically importable
       }

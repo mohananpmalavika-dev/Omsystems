@@ -338,7 +338,7 @@ export class RecordingIndexRepository {
         state: archiveState,
         restoreRequired: resolved.requiresRestore,
       },
-      health: row.health || "HEALTHY",
+      health: row.health || "UNKNOWN",
       keyframes,
     };
   }

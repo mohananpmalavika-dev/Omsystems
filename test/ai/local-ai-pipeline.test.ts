@@ -227,8 +227,8 @@ async function runLocalAiTests() {
       url: "/v1/ai/anpr/recognize",
       headers,
       payload: {
-        cameraId: "cam-entry-1",
-        branchId: "br-01",
+        cameraId: "cam-001",
+        branchId: "A005",
         rawText: "KL07CD1234",
       },
     });

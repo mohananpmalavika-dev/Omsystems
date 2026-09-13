@@ -51,6 +51,8 @@ export class LocalAnprService {
     const stateCode = this.extractStateCode(normalized);
 
     const match = this.watchlist.get(normalized);
+    const syntaxConfidence = this.calculateSyntaxConfidence(normalized);
+    const measuredConfidence = typeof options.confidence === "number" ? options.confidence : syntaxConfidence;
 
     return {
       id: `anpr-${randomUUID()}`,
@@ -59,7 +61,7 @@ export class LocalAnprService {
       recognizedAt: new Date(),
       plateNumber: this.formatPlate(normalized),
       normalizedPlate: normalized,
-      confidence: typeof options.confidence === "number" ? options.confidence : 0.95,
+      confidence: measuredConfidence,
       vehicleType: options.vehicleType ?? "UNKNOWN",
       stateCode,
       isWatchlistMatch: Boolean(match),
@@ -67,6 +69,21 @@ export class LocalAnprService {
       matchedListType: match?.listType,
       boundingBox: options.boundingBox,
     };
+  }
+
+  /**
+   * Calculate deterministic confidence based on Indian standard plate syntax validation
+   */
+  private calculateSyntaxConfidence(norm: string): number {
+    // Standard Indian pattern: 2 alpha (state) + 2 numeric (RTO) + 1-3 alpha (series) + 4 numeric
+    if (/^[A-Z]{2}\d{2}[A-Z]{1,3}\d{4}$/.test(norm)) {
+      return 0.92;
+    }
+    // Plausible Indian pattern with valid state prefix and 4 digit suffix
+    if (/^[A-Z]{2}/.test(norm) && /\d{4}$/.test(norm)) {
+      return 0.85;
+    }
+    return 0.75;
   }
 
   /**
