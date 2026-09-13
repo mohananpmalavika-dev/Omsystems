@@ -197,7 +197,7 @@ async function proxyControlRequest(request: NextRequest, context: RouteContext) 
 
     const isLogout = routePath === "/v1/auth/logout" || routePath === "/v1/auth/logout-all";
     const isCurrentRevoked = response.headers.get("x-sentinel-current-session-revoked") === "true";
-    if ((isLogout || isCurrentRevoked) && response.ok) {
+    if (isLogout || isCurrentRevoked) {
       const outgoing = new NextResponse(response.body, {
         status: response.status,
         headers: {

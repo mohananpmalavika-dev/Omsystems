@@ -86,10 +86,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setSessionReady(false);
 
     const validateSession = async () => {
-      try {
         // Attempt to sync active session from open tabs if present
-        await syncSessionFromOpenTabs();
+        const hasActiveBrowserSession = await syncSessionFromOpenTabs();
         if (cancelled) return;
+
+        if (!hasActiveBrowserSession) {
+          // No active browser session in this tab or other tabs (browser was closed or fresh launch).
+          // Terminate any leftover backend session cookies and redirect immediately to login.
+          setConnectionError(false);
+          try {
+            await authApi.logout();
+          } catch {}
+          redirectToLogin('auth_required');
+          return;
+        }
 
         // Authoritatively validate the session with the server.
         const user = await authApi.getCurrentUser();
