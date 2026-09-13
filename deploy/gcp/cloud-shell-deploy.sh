@@ -42,26 +42,56 @@ fi
 STARTUP_URL="https://raw.githubusercontent.com/mohananpmalavika-dev/Omsystems/main/deploy/gcp/startup-script.sh"
 curl -sSL "$STARTUP_URL" -o /tmp/startup-script.sh
 
-# 5. Create or Update VM Instance
-if ! gcloud compute instances describe "$INSTANCE_NAME" --zone="$ZONE" --project="$PROJECT_ID" &>/dev/null; then
-    echo "Creating High-Performance GCE Instance in Mumbai ($ZONE) - 4 vCPU / 16 GB RAM..."
-    gcloud compute instances create "$INSTANCE_NAME" \
-        --zone="$ZONE" \
-        --machine-type="$MACHINE_TYPE" \
-        --image-family="ubuntu-2204-lts" \
-        --image-project="ubuntu-os-cloud" \
-        --boot-disk-size="$DISK_SIZE" \
-        --boot-disk-type="pd-balanced" \
-        --tags="kryptovision-server" \
-        --metadata-from-file=startup-script=/tmp/startup-script.sh \
-        --project="$PROJECT_ID"
-else
-    echo "Instance $INSTANCE_NAME already exists. Updating startup script..."
-    gcloud compute instances add-metadata "$INSTANCE_NAME" \
-        --zone="$ZONE" \
-        --metadata-from-file=startup-script=/tmp/startup-script.sh \
-        --project="$PROJECT_ID"
+# 5. Create or Update VM Instance across available zones
+CANDIDATE_ZONES=("asia-south1-b" "asia-south1-c" "asia-south1-a" "asia-south2-a" "asia-south2-b")
+CANDIDATE_TYPES=("e2-standard-8" "e2-standard-4")
+
+VM_CREATED=0
+FINAL_ZONE=""
+
+for Z in "${CANDIDATE_ZONES[@]}"; do
+    if gcloud compute instances describe "$INSTANCE_NAME" --zone="$Z" --project="$PROJECT_ID" &>/dev/null; then
+        echo "Found existing instance $INSTANCE_NAME in $Z. Updating startup script..."
+        gcloud compute instances add-metadata "$INSTANCE_NAME" \
+            --zone="$Z" \
+            --metadata-from-file=startup-script=/tmp/startup-script.sh \
+            --project="$PROJECT_ID"
+        FINAL_ZONE="$Z"
+        VM_CREATED=1
+        break
+    fi
+done
+
+if [ "$VM_CREATED" -eq 0 ]; then
+    for MTYPE in "${CANDIDATE_TYPES[@]}"; do
+        for Z in "${CANDIDATE_ZONES[@]}"; do
+            echo "Attempting to create instance with $MTYPE in zone $Z..."
+            if gcloud compute instances create "$INSTANCE_NAME" \
+                --zone="$Z" \
+                --machine-type="$MTYPE" \
+                --image-family="ubuntu-2204-lts" \
+                --image-project="ubuntu-os-cloud" \
+                --boot-disk-size="$DISK_SIZE" \
+                --boot-disk-type="pd-balanced" \
+                --tags="kryptovision-server" \
+                --metadata-from-file=startup-script=/tmp/startup-script.sh \
+                --project="$PROJECT_ID"; then
+                echo "✅ Successfully created $INSTANCE_NAME ($MTYPE) in $Z!"
+                FINAL_ZONE="$Z"
+                VM_CREATED=1
+                break 2
+            else
+                echo "Zone $Z was full for $MTYPE, trying next candidate..."
+            fi
+        done
+    done
 fi
+
+if [ "$VM_CREATED" -eq 0 ]; then
+    echo "❌ Failed to create VM in tested zones. Please check quotas."
+    exit 1
+fi
+ZONE="$FINAL_ZONE"
 
 # 6. Fetch External IP
 EXTERNAL_IP=$(gcloud compute instances describe "$INSTANCE_NAME" --zone="$ZONE" --format="get(networkInterfaces[0].accessConfigs[0].natIP)" --project="$PROJECT_ID")
