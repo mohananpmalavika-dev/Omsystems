@@ -324,7 +324,7 @@ export function CameraDetailView() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <div className="text-3xl font-bold text-green-600">
-                  {uptimeStats.uptimePercentage.toFixed(2)}%
+                  {uptimeStats.uptimePercentage?.toFixed(2) ?? '--'}%
                 </div>
                 <div className="text-sm text-gray-600">Uptime</div>
               </div>

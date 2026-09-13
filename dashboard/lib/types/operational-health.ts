@@ -708,9 +708,10 @@ export function formatUptime(seconds: number | null): string {
 /**
  * Format bytes to human-readable size
  */
-export function formatBytes(bytes: number | string): string {
-  const numBytes = typeof bytes === 'string' ? parseInt(bytes) : bytes;
-  if (numBytes === 0) return '0 B';
+export function formatBytes(bytes: number | string | null | undefined): string {
+  if (bytes == null || bytes === '') return '0 B';
+  const numBytes = typeof bytes === 'string' ? parseFloat(bytes) : Number(bytes);
+  if (!numBytes || isNaN(numBytes) || numBytes <= 0) return '0 B';
   
   const k = 1024;
   const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];

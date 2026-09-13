@@ -12,8 +12,8 @@ import { AlertTriangle, BarChart3, Camera, CircleDot, Gauge, HardDrive, Zap } fr
 
 interface DashboardSummary {
   systemStatus: string;
-  systemHealthScore: number;
-  criticalAlerts: number;
+  systemHealthScore: number | null;
+  criticalAlerts: number | null;
   activeIncidents: number;
   lastUpdated: string;
 }
@@ -24,24 +24,24 @@ interface CameraMetrics {
   online: number;
   offline: number;
   degraded: number;
-  underMaintenance: number;
-  availabilityPercentage: number;
+  underMaintenance: number | null;
+  availabilityPercentage: number | null;
 }
 
 interface RecordingMetrics {
-  recordingNormally: number;
-  recordingWithGaps: number;
-  recordingStopped: number;
-  verificationPending: number;
-  availabilityPercentage: number;
+  recordingNormally: number | null;
+  recordingWithGaps: number | null;
+  recordingStopped: number | null;
+  verificationPending: number | null;
+  availabilityPercentage: number | null;
 }
 
 interface StorageMetrics {
-  totalCapacityBytes: string;
-  usedCapacityBytes: string;
-  availableCapacityBytes: string;
-  utilizationPercentage: number;
-  forecastFullDays: number;
+  totalCapacityBytes: string | null;
+  usedCapacityBytes: string | null;
+  availableCapacityBytes: string | null;
+  utilizationPercentage: number | null;
+  forecastFullDays: number | null;
   criticalNodes: number;
 }
 
@@ -49,8 +49,8 @@ interface AlertMetrics {
   totalActive: number;
   unacknowledged: number;
   critical: number;
-  escalated: number;
-  slaBreached: number;
+  escalated: number | null;
+  slaBreached: number | null;
 }
 
 interface CapacityAssessment {
@@ -177,13 +177,13 @@ export default function DashboardPage() {
           <div className="executive-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
             <MetricCard 
               label="System Health Score" 
-              value={summary?.systemHealthScore ? `${summary.systemHealthScore.toFixed(1)}%` : '—'}
+              value={typeof summary?.systemHealthScore === 'number' ? `${summary.systemHealthScore.toFixed(1)}%` : '—'}
               trend="stable"
               status={getHealthStatus(summary?.systemHealthScore)}
             />
             <MetricCard 
               label="Critical Alerts" 
-              value={alertMetrics?.critical || 0}
+              value={alertMetrics?.critical ?? 0}
               detail={`${alertMetrics?.unacknowledged || 0} unacknowledged`}
               status={alertMetrics && alertMetrics.critical > 0 ? 'critical' : 'good'}
             />
@@ -194,20 +194,20 @@ export default function DashboardPage() {
             />
             <MetricCard 
               label="Camera Availability" 
-              value={cameraMetrics?.availabilityPercentage ? `${cameraMetrics.availabilityPercentage.toFixed(2)}%` : '—'}
+              value={typeof cameraMetrics?.availabilityPercentage === 'number' ? `${cameraMetrics.availabilityPercentage.toFixed(2)}%` : '—'}
               detail={`${cameraMetrics?.offline || 0} offline`}
               status={getAvailabilityStatus(cameraMetrics?.availabilityPercentage)}
             />
             <MetricCard 
               label="Scale Readiness" 
-              value={capacityAssessment?.verifiedCompletion ? `${capacityAssessment.verifiedCompletion}%` : '—'}
+              value={typeof capacityAssessment?.verifiedCompletion === 'number' ? `${capacityAssessment.verifiedCompletion}%` : '—'}
               detail={capacityAssessment?.status || 'Pending assessment'}
               status={getVerificationStatus(capacityAssessment?.verifiedCompletion)}
             />
             <MetricCard 
               label="Storage Utilization" 
-              value={storageMetrics?.utilizationPercentage ? `${storageMetrics.utilizationPercentage.toFixed(1)}%` : '—'}
-              detail={`${storageMetrics?.forecastFullDays || 0} days remaining`}
+              value={typeof storageMetrics?.utilizationPercentage === 'number' ? `${storageMetrics.utilizationPercentage.toFixed(1)}%` : '—'}
+              detail={storageMetrics?.forecastFullDays != null ? `${storageMetrics.forecastFullDays} days remaining` : 'No forecast available'}
               status={getStorageStatus(storageMetrics?.utilizationPercentage)}
             />
           </div>
@@ -266,15 +266,15 @@ export default function DashboardPage() {
             {/* Recording Status */}
             <DashboardPanel title="Recording status" icon={<CircleDot size={17} />}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-                <StatBox label="Recording Normally" value={recordingMetrics?.recordingNormally || 0} color="#10b981" />
-                <StatBox label="With Gaps" value={recordingMetrics?.recordingWithGaps || 0} color="#f59e0b" />
-                <StatBox label="Recording Stopped" value={recordingMetrics?.recordingStopped || 0} color="#ef4444" />
-                <StatBox label="Verification Pending" value={recordingMetrics?.verificationPending || 0} color="#6366f1" />
+                <StatBox label="Recording Normally" value={recordingMetrics?.recordingNormally ?? '—'} color="#10b981" />
+                <StatBox label="With Gaps" value={recordingMetrics?.recordingWithGaps ?? '—'} color="#f59e0b" />
+                <StatBox label="Recording Stopped" value={recordingMetrics?.recordingStopped ?? '—'} color="#ef4444" />
+                <StatBox label="Verification Pending" value={recordingMetrics?.verificationPending ?? '—'} color="#6366f1" />
               </div>
               <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 14, color: '#666' }}>Average Availability</span>
-                  <strong>{recordingMetrics?.availabilityPercentage ? `${recordingMetrics.availabilityPercentage.toFixed(2)}%` : '—'}</strong>
+                  <strong>{typeof recordingMetrics?.availabilityPercentage === 'number' ? `${recordingMetrics.availabilityPercentage.toFixed(2)}%` : '—'}</strong>
                 </div>
               </div>
             </DashboardPanel>
@@ -283,20 +283,29 @@ export default function DashboardPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 24, marginBottom: 24 }}>
             {/* Storage Capacity */}
             <DashboardPanel title="Storage capacity" icon={<HardDrive size={17} />}>
-              {storageMetrics && (
+              {storageMetrics ? (
                 <>
                   <div style={{ marginBottom: 16 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span style={{ fontSize: 14, color: '#666' }}>Utilization</span>
-                      <strong>{storageMetrics.utilizationPercentage.toFixed(1)}%</strong>
+                      <strong>
+                        {typeof storageMetrics.utilizationPercentage === 'number'
+                          ? `${storageMetrics.utilizationPercentage.toFixed(1)}%`
+                          : '—'}
+                      </strong>
                     </div>
                     <div style={{ height: 24, background: '#e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
                       <div 
                         style={{ 
                           height: '100%', 
-                          background: storageMetrics.utilizationPercentage > 90 ? '#ef4444' : 
-                                     storageMetrics.utilizationPercentage > 80 ? '#f59e0b' : '#10b981',
-                          width: `${Math.min(storageMetrics.utilizationPercentage, 100)}%`,
+                          background: typeof storageMetrics.utilizationPercentage === 'number' && storageMetrics.utilizationPercentage > 90
+                            ? '#ef4444' 
+                            : typeof storageMetrics.utilizationPercentage === 'number' && storageMetrics.utilizationPercentage > 80 
+                            ? '#f59e0b' 
+                            : '#10b981',
+                          width: typeof storageMetrics.utilizationPercentage === 'number'
+                            ? `${Math.min(Math.max(storageMetrics.utilizationPercentage, 0), 100)}%`
+                            : '0%',
                           transition: 'width 0.5s ease'
                         }} 
                       />
@@ -306,7 +315,10 @@ export default function DashboardPage() {
                     <StatBox label="Total" value={formatBytes(storageMetrics.totalCapacityBytes)} />
                     <StatBox label="Used" value={formatBytes(storageMetrics.usedCapacityBytes)} />
                     <StatBox label="Available" value={formatBytes(storageMetrics.availableCapacityBytes)} />
-                    <StatBox label="Forecast Full" value={`${storageMetrics.forecastFullDays} days`} />
+                    <StatBox
+                      label="Forecast Full"
+                      value={storageMetrics.forecastFullDays != null ? `${storageMetrics.forecastFullDays} days` : '—'}
+                    />
                   </div>
                   {storageMetrics.criticalNodes > 0 && (
                     <div style={{ marginTop: 12, padding: 12, background: '#fee', border: '1px solid #fca', borderRadius: 8, color: '#dc2626' }}>
@@ -314,6 +326,8 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </>
+              ) : (
+                <p style={{ color: '#6b7280', margin: 0 }}>Loading storage metrics...</p>
               )}
             </DashboardPanel>
 
@@ -452,29 +466,29 @@ function StatBox({ label, value, color }: any) {
 }
 
 // Helper Functions
-function getHealthStatus(score?: number): 'good' | 'warning' | 'critical' {
-  if (!score) return 'warning';
+function getHealthStatus(score?: number | null): 'good' | 'warning' | 'critical' {
+  if (score == null) return 'warning';
   if (score >= 85) return 'good';
   if (score >= 70) return 'warning';
   return 'critical';
 }
 
-function getAvailabilityStatus(percentage?: number): 'good' | 'warning' | 'critical' {
-  if (!percentage) return 'warning';
+function getAvailabilityStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
+  if (percentage == null) return 'warning';
   if (percentage >= 98) return 'good';
   if (percentage >= 95) return 'warning';
   return 'critical';
 }
 
-function getStorageStatus(percentage?: number): 'good' | 'warning' | 'critical' {
-  if (!percentage) return 'good';
+function getStorageStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
+  if (percentage == null) return 'good';
   if (percentage < 80) return 'good';
   if (percentage < 90) return 'warning';
   return 'critical';
 }
 
-function getVerificationStatus(percentage?: number): 'good' | 'warning' | 'critical' {
-  if (!percentage) return 'warning';
+function getVerificationStatus(percentage?: number | null): 'good' | 'warning' | 'critical' {
+  if (percentage == null) return 'warning';
   if (percentage >= 80) return 'good';
   if (percentage >= 45) return 'warning';
   return 'critical';
@@ -490,9 +504,11 @@ function getSeverityColor(severity: string): string {
   return colors[severity?.toLowerCase()] || '#6b7280';
 }
 
-function formatBytes(bytes: string | number): string {
-  const num = typeof bytes === 'string' ? parseInt(bytes) : bytes;
-  if (isNaN(num)) return '0 B';
+function formatBytes(bytes: string | number | null | undefined): string {
+  if (bytes === null || bytes === undefined || bytes === '') return '—';
+  const num = typeof bytes === 'string' ? parseFloat(bytes) : Number(bytes);
+  if (isNaN(num) || !isFinite(num)) return '—';
+  if (num === 0) return '0 B';
   
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   let value = num;
