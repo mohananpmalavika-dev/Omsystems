@@ -532,6 +532,41 @@ describe("dashboard control-plane BFF", () => {
     }));
     consoleError.mockRestore();
   });
+
+  it("proxies api/ha/status routes to upstream control plane", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const upstream = vi.fn(async () =>
+      Response.json({ success: true, data: { nodes: [], recentEvents: [] } })
+    );
+    vi.stubGlobal("fetch", upstream);
+
+    const request = new NextRequest(
+      "https://sentinel.example/api/control/api/ha/status",
+      { headers: { "x-sentinel-session": "employee-token" } },
+    );
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["api", "ha", "status"] }),
+    });
+
+    expect(response.status).toBe(200);
+    const [url, init] = upstream.mock.calls[0]!;
+    expect(String(url)).toBe("http://control.internal:8080/api/ha/status");
+    const headers = new Headers(init?.headers);
+    expect(headers.get("authorization")).toBe("Bearer employee-token");
+  });
+
+  it("rejects non-whitelisted paths with 400 invalid_control_path", async () => {
+    const request = new NextRequest(
+      "https://sentinel.example/api/control/internal/admin",
+    );
+    const response = await GET(request, {
+      params: Promise.resolve({ path: ["internal", "admin"] }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe("invalid_control_path");
+  });
 });
 
 function restore(name: string, value: string | undefined) {

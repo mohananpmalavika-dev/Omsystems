@@ -153,7 +153,7 @@ export function CameraMonitoringDashboard() {
           </div>
           <div className="text-sm text-gray-600">Online</div>
           <div className="text-xs text-gray-500 mt-1">
-            {summary.uptimePercentage.toFixed(1)}% uptime
+            {summary.uptimePercentage?.toFixed(1) ?? '--'}% uptime
           </div>
         </div>
 

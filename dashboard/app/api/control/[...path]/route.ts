@@ -10,7 +10,7 @@ type RouteContext = {
 async function proxyControlRequest(request: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   if (
-    path[0] !== "v1" ||
+    (path[0] !== "v1" && path[0] !== "api") ||
     path.some((segment) => segment === "." || segment === "..")
   ) {
     return Response.json({ error: "invalid_control_path" }, { status: 400 });

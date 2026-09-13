@@ -146,8 +146,12 @@ class PerformanceMonitor {
       // FID / INP (First Input Delay / Interaction to Next Paint)
       try {
         const fidObserver = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
+          const entries = list.getEntries();
+          if (!entries || entries.length === 0) return;
+          for (const entry of entries) {
+            if (!entry) continue;
             const fid = (entry as any).processingDuration;
+            if (fid == null || !Number.isFinite(fid)) continue;
             if (this.pageMetrics) {
               this.pageMetrics.metrics.fid = fid;
             }
@@ -165,7 +169,12 @@ class PerformanceMonitor {
         try {
           const inpObserver = new PerformanceObserver((list) => {
             const entries = list.getEntries();
-            const maxINP = Math.max(...entries.map((e) => (e as any).duration));
+            if (!entries || entries.length === 0) return;
+            const durations = entries
+              .filter((e) => e && typeof (e as any).duration === 'number' && Number.isFinite((e as any).duration))
+              .map((e) => (e as any).duration);
+            if (durations.length === 0) return;
+            const maxINP = Math.max(...durations);
             if (this.pageMetrics) {
               this.pageMetrics.metrics.inp = maxINP;
             }
@@ -186,8 +195,10 @@ class PerformanceMonitor {
       try {
         let clsValue = 0;
         const clsObserver = new PerformanceObserver((list) => {
-          for (const entry of list.getEntries()) {
-            if (!(entry as any).hadRecentInput) {
+          const entries = list.getEntries();
+          if (!entries || entries.length === 0) return;
+          for (const entry of entries) {
+            if (entry && !(entry as any).hadRecentInput && typeof (entry as any).value === 'number') {
               clsValue += (entry as any).value;
             }
           }

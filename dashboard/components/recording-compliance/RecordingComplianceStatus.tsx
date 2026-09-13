@@ -139,7 +139,8 @@ function getStatusDisplay(status: ComplianceState) {
 /**
  * Format bytes to human-readable
  */
-function formatBytes(bytes: number): string {
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || isNaN(bytes) || bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let size = bytes;
   let unitIndex = 0;

@@ -113,7 +113,7 @@ export default function SecurityDashboard() {
         signal: AbortSignal.timeout(6_000),
       });
       const data = await response.json().catch(() => null) as SecurityOperationsPosture | { message?: string } | null;
-      if (!response.ok || !data || !('available' in data) || data.available !== true) {
+      if (!response.ok || !data || !('available' in data) || data.available !== true || !data.summary || !data.operations) {
         const message = data && 'message' in data && data.message
           ? data.message
           : `Unable to load live security operations data (${response.status || 'network error'}).`;
@@ -144,7 +144,7 @@ export default function SecurityDashboard() {
     );
   }
 
-  if (!posture) {
+  if (!posture || !posture.summary || !posture.operations) {
     return (
       <div className="space-y-6">
         <SecurityHero refreshing={refreshing} onRefresh={() => void fetchSecurityOperations()} />
@@ -163,8 +163,8 @@ export default function SecurityDashboard() {
   }
 
   const { operations, summary } = posture;
-  const coverageLabel = summary.operationalCoverage === null ? '—' : `${summary.operationalCoverage}%`;
-  const hasAttention = summary.state === 'attention';
+  const coverageLabel = summary?.operationalCoverage === null || summary?.operationalCoverage === undefined ? '—' : `${summary.operationalCoverage}%`;
+  const hasAttention = summary?.state === 'attention';
 
   return (
     <div className="space-y-6">
@@ -199,16 +199,16 @@ export default function SecurityDashboard() {
                   <span className="mb-1 text-sm text-slate-500">current control availability</span>
                 </div>
               </div>
-              <StateBadge state={summary.state} />
+              <StateBadge state={summary?.state ?? 'unknown'} />
             </div>
             <p className="mt-5 max-w-2xl text-sm leading-6 text-slate-600">This is a live operational coverage indicator from the control plane, not a synthetic certificate, TPM, or EDR score. External security controls remain explicitly unknown until their collector submits evidence.</p>
           </div>
           <div className="border-t border-slate-200 bg-slate-50 p-6 lg:border-l lg:border-t-0 sm:p-7">
             <div className="grid grid-cols-2 gap-x-5 gap-y-5">
-              <SummaryValue label="Branches" value={summary.branchCount} />
-              <SummaryValue label="Live signals" value={summary.liveSignalCount} />
-              <SummaryValue label="Telemetry" value={summary.telemetryConnected ? 'Connected' : 'Inventory only'} compact />
-              <SummaryValue label="Last observed" value={formatTimestamp(summary.latestObservation)} compact />
+              <SummaryValue label="Branches" value={summary?.branchCount ?? 0} />
+              <SummaryValue label="Live signals" value={summary?.liveSignalCount ?? 0} />
+              <SummaryValue label="Telemetry" value={summary?.telemetryConnected ? 'Connected' : 'Inventory only'} compact />
+              <SummaryValue label="Last observed" value={formatTimestamp(summary?.latestObservation ?? null)} compact />
             </div>
           </div>
         </div>
@@ -223,10 +223,10 @@ export default function SecurityDashboard() {
           <p className="text-sm text-slate-500">Refreshed every 30 seconds</p>
         </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <OperationalCard icon={<Video />} label="Camera availability" value={ratio(operations.cameras.online, operations.cameras.total)} percent={operations.cameras.availability} detail={`${operations.cameras.offline} offline · ${operations.cameras.degraded} degraded`} tone={operations.cameras.offline > 0 ? 'attention' : 'healthy'} />
-          <OperationalCard icon={<Wifi />} label="Edge connectivity" value={ratio(operations.edgeAgents.online, operations.edgeAgents.total)} percent={operations.edgeAgents.availability} detail={`${operations.edgeAgents.offline} offline · ${operations.edgeAgents.pending} pending`} tone={operations.edgeAgents.offline > 0 ? 'attention' : 'healthy'} />
-          <OperationalCard icon={<HardDrive />} label="Recording coverage" value={ratio(operations.recordings.enabled, operations.recordings.total)} percent={operations.recordings.coverage} detail={`${operations.recordings.configured} configured · ${operations.recordings.stopped} stopped`} tone={operations.recordings.stopped > 0 ? 'attention' : 'healthy'} />
-          <OperationalCard icon={<Database />} label="Storage health" value={ratio(operations.storage.healthy, operations.storage.total)} percent={operations.storage.health} detail={`${operations.storage.impaired} needs attention`} tone={operations.storage.impaired > 0 ? 'attention' : 'healthy'} />
+          <OperationalCard icon={<Video />} label="Camera availability" value={ratio(operations?.cameras?.online ?? 0, operations?.cameras?.total ?? 0)} percent={operations?.cameras?.availability ?? null} detail={`${operations?.cameras?.offline ?? 0} offline · ${operations?.cameras?.degraded ?? 0} degraded`} tone={(operations?.cameras?.offline ?? 0) > 0 ? 'attention' : 'healthy'} />
+          <OperationalCard icon={<Wifi />} label="Edge connectivity" value={ratio(operations?.edgeAgents?.online ?? 0, operations?.edgeAgents?.total ?? 0)} percent={operations?.edgeAgents?.availability ?? null} detail={`${operations?.edgeAgents?.offline ?? 0} offline · ${operations?.edgeAgents?.pending ?? 0} pending`} tone={(operations?.edgeAgents?.offline ?? 0) > 0 ? 'attention' : 'healthy'} />
+          <OperationalCard icon={<HardDrive />} label="Recording coverage" value={ratio(operations?.recordings?.enabled ?? 0, operations?.recordings?.total ?? 0)} percent={operations?.recordings?.coverage ?? null} detail={`${operations?.recordings?.configured ?? 0} configured · ${operations?.recordings?.stopped ?? 0} stopped`} tone={(operations?.recordings?.stopped ?? 0) > 0 ? 'attention' : 'healthy'} />
+          <OperationalCard icon={<Database />} label="Storage health" value={ratio(operations?.storage?.healthy ?? 0, operations?.storage?.total ?? 0)} percent={operations?.storage?.health ?? null} detail={`${operations?.storage?.impaired ?? 0} needs attention`} tone={(operations?.storage?.impaired ?? 0) > 0 ? 'attention' : 'healthy'} />
         </div>
       </section>
 
@@ -237,9 +237,9 @@ export default function SecurityDashboard() {
               <p className="text-xs font-bold uppercase tracking-[.16em] text-slate-500">Attention queue</p>
               <h2 className="mt-1 text-xl font-semibold text-slate-950">Live operational signals</h2>
             </div>
-            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${posture.alerts.length > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{posture.alerts.length} active</span>
+            <span className={`rounded-full px-3 py-1 text-sm font-semibold ${(posture?.alerts ?? []).length > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>{(posture?.alerts ?? []).length} active</span>
           </div>
-          {posture.alerts.length === 0 ? (
+          {(posture?.alerts ?? []).length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-emerald-200 bg-emerald-50/60 p-6 text-center">
               <CheckCircle className="mx-auto h-7 w-7 text-emerald-600" />
               <p className="mt-3 font-semibold text-slate-900">No active risk signals</p>
@@ -247,7 +247,7 @@ export default function SecurityDashboard() {
             </div>
           ) : (
             <div className="mt-5 divide-y divide-slate-100">
-              {posture.alerts.slice(0, 6).map((alert) => (
+              {(posture?.alerts ?? []).slice(0, 6).map((alert) => (
                 <div key={alert.id} className="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
                   <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg ${alert.severity === 'HIGH' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}><AlertTriangle size={18} /></span>
                   <div className="min-w-0 flex-1">
@@ -271,7 +271,7 @@ export default function SecurityDashboard() {
             <p className="mt-2 text-sm leading-5 text-slate-600">Every status is evidence-backed. Unknown means no current collector evidence, not healthy.</p>
           </div>
           <div className="mt-5 space-y-3">
-            {posture.evidence.map((control) => <EvidenceRow key={control.id} control={control} />)}
+            {(posture?.evidence ?? []).map((control) => <EvidenceRow key={control.id} control={control} />)}
           </div>
         </section>
       </div>
