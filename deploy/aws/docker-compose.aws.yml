@@ -245,11 +245,8 @@ services:
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       MODELS_DIR: /app/models
-      # t3.small has 2GB RAM. Loading yolov8n ONNX needs ~600-900MB which causes
-      # OOM on startup. Set to false so the pipeline initialises in AI_DEGRADED mode
-      # (can still receive edge-agent detections). Upgrade to t3.medium or larger
-      # to enable local ONNX inference on the control plane.
-      ANALYTICS_REQUIRE_MODELS: "false"
+      # t3.large (8GB RAM) — fully supports local ONNX inference (yolov8n ~600-900MB).
+      ANALYTICS_REQUIRE_MODELS: "true"
       FACE_RECOGNITION_ENABLED: "true"
     ports:
       - "8092:8092"
