@@ -466,14 +466,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             } else {
               const userObj = response.user;
               const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-              if (
-                allowedMenus.length > 0 &&
-                !allowedMenus.includes("/") &&
-                !allowedMenus.includes("/operations")
-              ) {
+              if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
                 window.location.href = allowedMenus[0];
               } else {
-                window.location.href = "/operations";
+                window.location.href = "/";
               }
             }
           }
@@ -572,14 +568,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         } else {
           const userObj = (response as any)?.user;
           const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-          if (
-            allowedMenus.length > 0 &&
-            !allowedMenus.includes("/") &&
-            !allowedMenus.includes("/operations")
-          ) {
+          if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
             window.location.href = allowedMenus[0];
           } else {
-            window.location.href = "/operations";
+            window.location.href = "/";
           }
         }
       }
