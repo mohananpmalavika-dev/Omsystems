@@ -56,6 +56,7 @@ export interface CorrelationRule {
   spatialProximity?: number; // meters
   action: 'correlate' | 'escalate' | 'suppress';
   targetSeverity?: AlertSeverity;
+  crossCamera?: boolean;
 }
 
 export interface AlertConfig {
@@ -277,7 +278,8 @@ export class AlertCorrelationEngine {
         alert,
         rule.detectionTypes,
         rule.timeWindowSeconds,
-        timestamp
+        timestamp,
+        rule
       );
 
       if (relatedAlerts.length >= rule.minimumOccurrences) {
@@ -314,7 +316,8 @@ export class AlertCorrelationEngine {
     alert: Alert,
     detectionTypes: string[],
     timeWindowSeconds: number,
-    timestamp: Date
+    timestamp: Date,
+    rule?: CorrelationRule
   ): Alert[] {
     const windowMs = timeWindowSeconds * 1000;
     const cutoff = new Date(timestamp.getTime() - windowMs);
@@ -324,14 +327,19 @@ export class AlertCorrelationEngine {
       // Skip self
       if (candidate.id === alert.id) continue;
 
+      // Verify tenant boundary
+      if (alert.tenantId && candidate.tenantId && alert.tenantId !== candidate.tenantId) {
+        continue;
+      }
+
       // Check detection type
       if (!detectionTypes.includes(candidate.detectionType)) continue;
 
       // Check time window
       if (candidate.timestamp < cutoff) continue;
 
-      // Check same camera (spatial proximity)
-      if (this.config.enableSpatialCorrelation && candidate.cameraId !== alert.cameraId) {
+      // Check camera proximity unless crossCamera correlation is enabled for this rule
+      if (!rule?.crossCamera && this.config.enableSpatialCorrelation && candidate.cameraId !== alert.cameraId) {
         continue;
       }
 
@@ -362,24 +370,30 @@ export class AlertCorrelationEngine {
 
     const allAlerts = [primaryAlert, ...relatedAlerts];
     const avgConfidence = allAlerts.reduce((sum, a) => sum + a.confidence, 0) / allAlerts.length;
+    const cameraIds = Array.from(new Set(allAlerts.map(a => a.cameraId)));
+    const isCrossCamera = cameraIds.length > 1;
 
     return {
       id: this.generateAlertId(),
-      detectionType: `correlated:${rule.name}`,
+      detectionType: `correlated:${rule.id}`,
       category: primaryAlert.category,
       severity: rule.targetSeverity || this.escalateSeverity(primaryAlert.severity),
       status: 'open',
-      title: `Multiple incidents detected: ${rule.name}`,
-      description: `Correlated ${allAlerts.length} related incidents within ${rule.timeWindowSeconds}s`,
+      title: isCrossCamera ? `Multi-Camera Alert: ${rule.name}` : `Multiple incidents detected: ${rule.name}`,
+      description: isCrossCamera
+        ? `Correlated ${allAlerts.length} incidents across ${cameraIds.length} cameras (${cameraIds.join(', ')}) within ${rule.timeWindowSeconds}s`
+        : `Correlated ${allAlerts.length} related incidents within ${rule.timeWindowSeconds}s`,
       cameraId: primaryAlert.cameraId,
       tenantId: primaryAlert.tenantId,
       timestamp,
-      firstSeen: Math.min(...allAlerts.map(a => a.firstSeen.getTime())) as unknown as Date,
+      firstSeen: new Date(Math.min(...allAlerts.map(a => a.firstSeen ? new Date(a.firstSeen).getTime() : new Date(a.timestamp).getTime()))),
       lastSeen: timestamp,
       occurrences: allAlerts.reduce((sum, a) => sum + a.occurrences, 0),
       confidence: avgConfidence,
       metadata: {
         correlationRule: rule.id,
+        crossCamera: isCrossCamera,
+        cameraIds,
         relatedDetectionTypes: Array.from(new Set(allAlerts.map(a => a.detectionType))),
         relatedAlertIds: allAlerts.map(a => a.id)
       },
@@ -409,6 +423,36 @@ export class AlertCorrelationEngine {
         minimumOccurrences: 2,
         action: 'correlate',
         targetSeverity: 'high'
+      },
+      {
+        id: 'cross-camera-suspect-tracking',
+        name: 'Multi-Camera Suspect Trajectory',
+        detectionTypes: ['intrusion', 'loitering', 'tailgating', 'after-hours-person', 'employee-only-zone'],
+        timeWindowSeconds: 300,
+        minimumOccurrences: 2,
+        action: 'correlate',
+        targetSeverity: 'high',
+        crossCamera: true
+      },
+      {
+        id: 'cross-camera-vehicle-tracking',
+        name: 'Multi-Camera Vehicle Movement',
+        detectionTypes: ['vehicle-overspeeding', 'vehicle-wrong-way', 'vehicle-watchlist-match', 'wrong_direction', 'vehicle'],
+        timeWindowSeconds: 240,
+        minimumOccurrences: 2,
+        action: 'correlate',
+        targetSeverity: 'high',
+        crossCamera: true
+      },
+      {
+        id: 'bank-breach-escalation',
+        name: 'Coordinated Bank Security Breach',
+        detectionTypes: ['door-forced', 'vault_intrusion', 'atm-tampering', 'after-hours-person', 'cash-counter-crowd'],
+        timeWindowSeconds: 360,
+        minimumOccurrences: 2,
+        action: 'escalate',
+        targetSeverity: 'critical',
+        crossCamera: true
       },
       {
         id: 'crowd-disturbance',

@@ -26,9 +26,9 @@ describe("video analytics and alert workflow", () => {
     });
     expect(first.statusCode).toBe(200);
     expect(first.json()).toMatchObject({
-      cameraCount: 9,
+      cameraCount: 10,
       capabilityCount: 35,
-      created: 315,
+      created: 350,
       enabled: 0,
       unchanged: 0,
     });
@@ -42,11 +42,11 @@ describe("video analytics and alert workflow", () => {
     });
     expect(second.statusCode).toBe(200);
     expect(second.json()).toMatchObject({
-      cameraCount: 9,
-      capabilityCount: 25,
+      cameraCount: 10,
+      capabilityCount: 35,
       created: 0,
       enabled: 0,
-      unchanged: 315,
+      unchanged: 350,
     });
     const rules = await store.listAnalyticsRules("cam-001");
     expect(rules.filter((rule) => rule.detectionType === "atm-skimming" || rule.detectionType === "person-in-vault-after-hours"))
@@ -61,7 +61,7 @@ describe("video analytics and alert workflow", () => {
         name: "Restricted entrance person", detectionType: "person",
         objectClasses: ["person"], minConfidence: 0.7,
         minDurationSeconds: 2, severity: "P1", cooldownSeconds: 60,
-        recipients: ["soc@example.com"], recordingPolicy: "protect-window",
+        recipients: ["soc@example.com", "sms:+919999999999", "voice:+918888888888"], recordingPolicy: "protect-window",
         preRollSeconds: 30, postRollSeconds: 120,
         zone: {
           name: "Entrance", shape: "polygon",

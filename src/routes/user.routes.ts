@@ -562,24 +562,25 @@ export async function registerUserRoutes(
   // Change password
   app.post("/v1/users/:id/change-password", async (request, reply) => {
     const { id } = userIdSchema.parse(request.params);
+    const targetUserId = id === "me" ? request.currentUser.id : id;
     const body = changePasswordSchema.parse(request.body);
 
     // Only self or super_admin can change password
     if (
-      id !== request.currentUser.id &&
+      targetUserId !== request.currentUser.id &&
       request.currentUser.role !== "super_admin"
     ) {
       return reply.code(403).send({ error: "forbidden" });
     }
 
-    const user = await store.getUserWithPassword(id);
+    const user = await store.getUserWithPassword(targetUserId);
 
     if (!user || user.tenantId !== request.currentUser.tenantId) {
       return reply.code(404).send({ error: "user_not_found" });
     }
 
     // Verify current password (unless super_admin changing other's password)
-    if (id === request.currentUser.id) {
+    if (targetUserId === request.currentUser.id) {
       const isValid = await verifyPassword(
         body.currentPassword,
         user.passwordHash,
@@ -592,8 +593,8 @@ export async function registerUserRoutes(
     // Hash new password
     const newPasswordHash = await hashPassword(body.newPassword);
 
-    await store.updateUserPassword(id, newPasswordHash);
-    await store.deleteAllUserSessions(id);
+    await store.updateUserPassword(targetUserId, newPasswordHash);
+    await store.deleteAllUserSessions(targetUserId);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,
@@ -601,7 +602,7 @@ export async function registerUserRoutes(
       action: "user.password_changed",
       resourceNodeId: null,
       outcome: "success",
-      details: { userId: id },
+      details: { userId: targetUserId },
     });
 
     return { success: true };

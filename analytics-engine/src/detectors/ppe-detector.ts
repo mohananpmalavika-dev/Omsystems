@@ -53,6 +53,25 @@ export class PPEDetector extends BaseDetector {
       violations.set(detectionType, entries);
     }
 
+    // Local chromatic inspection fallback for detected persons
+    if (violations.size === 0 && frame.imageData && frame.width > 0 && frame.height > 0) {
+      const persons = getInferenceObjects(frame, ["person"]);
+      for (const person of persons) {
+        if ((person.confidence ?? 0) < this.minimumConfidence) continue;
+        const analysis = this.analyzePersonPPE(frame, person);
+        if (analysis.missingVest) {
+          const list = violations.get("no-safety-vest") ?? [];
+          list.push({ ...person, label: "no-safety-vest" });
+          violations.set("no-safety-vest", list);
+        }
+        if (analysis.missingHelmet) {
+          const list = violations.get("no-helmet") ?? [];
+          list.push({ ...person, label: "no-helmet" });
+          violations.set("no-helmet", list);
+        }
+      }
+    }
+
     return [...violations].map(([detectionType, objects]) => ({
       detectionType,
       status: "SUCCESS",
@@ -73,6 +92,82 @@ export class PPEDetector extends BaseDetector {
     }));
   }
 
+  private analyzePersonPPE(
+    frame: DetectionFrame,
+    person: InferenceObject,
+  ): { missingVest: boolean; missingHelmet: boolean } {
+    const width = frame.width;
+    const height = frame.height;
+    const buffer = frame.imageData;
+    if (!buffer || buffer.length < width * height * 3) {
+      return { missingVest: false, missingHelmet: false };
+    }
+
+    const bbox = person.boundingBox;
+    const px = Math.max(0, Math.floor(bbox.x * width));
+    const py = Math.max(0, Math.floor(bbox.y * height));
+    const pw = Math.min(width - px, Math.floor(bbox.width * width));
+    const ph = Math.min(height - py, Math.floor(bbox.height * height));
+
+    if (pw < 10 || ph < 15) return { missingVest: false, missingHelmet: false };
+
+    // Torso region (20% to 65% of person height)
+    const torsoStartY = py + Math.floor(ph * 0.20);
+    const torsoEndY = py + Math.floor(ph * 0.65);
+    let torsoPixels = 0;
+    let highVisPixels = 0;
+
+    for (let y = torsoStartY; y < torsoEndY; y++) {
+      for (let x = px; x < px + pw; x++) {
+        const idx = (y * width + x) * 3;
+        const r = buffer[idx] ?? 0;
+        const g = buffer[idx + 1] ?? 0;
+        const b = buffer[idx + 2] ?? 0;
+        torsoPixels++;
+
+        // High-vis fluorescent yellow-green: R > 160, G > 170, B < 80
+        // High-vis safety orange: R > 200, 70 < G < 160, B < 50
+        const isFluorescentYellow = r > 150 && g > 160 && b < 90 && (r + g) > 340;
+        const isSafetyOrange = r > 190 && g > 65 && g < 165 && b < 60 && (r - g) > 50;
+        if (isFluorescentYellow || isSafetyOrange) {
+          highVisPixels++;
+        }
+      }
+    }
+
+    // Head region (top 20% of person height)
+    const headStartY = py;
+    const headEndY = py + Math.floor(ph * 0.20);
+    let headPixels = 0;
+    let helmetPixels = 0;
+
+    for (let y = headStartY; y < headEndY; y++) {
+      for (let x = px; x < px + pw; x++) {
+        const idx = (y * width + x) * 3;
+        const r = buffer[idx] ?? 0;
+        const g = buffer[idx + 1] ?? 0;
+        const b = buffer[idx + 2] ?? 0;
+        headPixels++;
+
+        // Hardhat: bright yellow, white hardhat (R,G,B > 220), or safety blue
+        const isYellowHelmet = r > 180 && g > 170 && b < 80;
+        const isWhiteHelmet = r > 220 && g > 220 && b > 220;
+        const isBlueHelmet = b > 160 && b > r + 40 && b > g + 20;
+        if (isYellowHelmet || isWhiteHelmet || isBlueHelmet) {
+          helmetPixels++;
+        }
+      }
+    }
+
+    const vestCoverage = torsoPixels > 0 ? highVisPixels / torsoPixels : 0;
+    const helmetCoverage = headPixels > 0 ? helmetPixels / headPixels : 0;
+
+    return {
+      missingVest: vestCoverage < 0.08,
+      missingHelmet: helmetCoverage < 0.12,
+    };
+  }
+
   async cleanup(): Promise<void> {
     // The detector has no model session of its own to dispose.
   }
@@ -80,7 +175,7 @@ export class PPEDetector extends BaseDetector {
   getHealth() {
     return {
       status: "healthy" as const,
-      details: "Accepts confirmed PPE observations from the inference worker",
+      details: "Accepts edge PPE observations with local chromatic inspection fallback",
     };
   }
 }
