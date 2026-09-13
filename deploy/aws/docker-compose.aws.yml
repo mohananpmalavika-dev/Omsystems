@@ -48,6 +48,8 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:5432:5432"
+    mem_limit: 256m
+    memswap_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sentinel_admin -d sentinel_grid"]
       interval: 5s
@@ -66,11 +68,13 @@ services:
     image: redis:7-alpine
     container_name: sentinel-aws-redis
     restart: always
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-SentinelGridRedisMaster2026}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-SentinelGridRedisMaster2026} --maxmemory 80mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
       - "127.0.0.1:6379:6379"
+    mem_limit: 128m
+    memswap_limit: 256m
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SentinelGridRedisMaster2026}", "ping"]
       interval: 5s
@@ -118,6 +122,8 @@ services:
       BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
     ports:
       - "8080:8080"
+    mem_limit: 384m
+    memswap_limit: 512m
     depends_on:
       postgres:
         condition: service_healthy
@@ -155,6 +161,8 @@ services:
       NEXT_PUBLIC_APP_NAME: Sentinel Grid
     ports:
       - "10000:10000"
+    mem_limit: 256m
+    memswap_limit: 384m
     depends_on:
       - control-plane
     logging:
@@ -188,6 +196,8 @@ services:
       - "8888:8888"
       - "8554:8554"
       - "8189:8189/udp"
+    mem_limit: 256m
+    memswap_limit: 384m
     depends_on:
       - control-plane
     logging:
@@ -217,6 +227,8 @@ services:
       - recordings_data:/recordings
     ports:
       - "8091:8091"
+    mem_limit: 192m
+    memswap_limit: 384m
     depends_on:
       - control-plane
     logging:
@@ -245,11 +257,14 @@ services:
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       MODELS_DIR: /app/models
-      # t3.large (8GB RAM) — fully supports local ONNX inference (yolov8n ~600-900MB).
+      # Memory-managed t3.small: all other services capped so analytics-engine
+      # gets ~900MB RAM headroom + 4GB swap for yolov8n ONNX model loading.
       ANALYTICS_REQUIRE_MODELS: "true"
       FACE_RECOGNITION_ENABLED: "true"
     ports:
       - "8092:8092"
+    # No mem_limit here — analytics-engine needs headroom for ONNX loading.
+    # Swap (4GB) will handle overflow during model initialisation.
     depends_on:
       - control-plane
     logging:
