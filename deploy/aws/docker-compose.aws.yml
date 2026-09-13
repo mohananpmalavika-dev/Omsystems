@@ -263,6 +263,8 @@ services:
       FACE_RECOGNITION_ENABLED: "true"
     ports:
       - "8092:8092"
+    volumes:
+      - ../../analytics-engine/models/manifest.json:/app/models/manifest.json:ro
     # No mem_limit here — analytics-engine needs headroom for ONNX loading.
     # Swap (4GB) will handle overflow during model initialisation.
     depends_on:
