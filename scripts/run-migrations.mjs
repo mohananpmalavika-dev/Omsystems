@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
@@ -21,6 +21,7 @@ const migrationLockId = 7_184_225_991;
 function migrationFiles() {
   const filenames = new Set();
   for (const directory of [migrationsDirectory, legacyMigrationsDirectory]) {
+    if (!existsSync(directory)) continue;
     for (const file of readdirSync(directory)) {
       if (file.endsWith(".sql")) filenames.add(file);
     }
@@ -32,6 +33,7 @@ function migrationFiles() {
 
 function migrationContents(filename) {
   for (const directory of [migrationsDirectory, legacyMigrationsDirectory]) {
+    if (!existsSync(directory)) continue;
     try {
       return readFileSync(join(directory, filename), "utf8");
     } catch (error) {
