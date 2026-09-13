@@ -16,6 +16,10 @@ import { AISOPEngineService } from "../services/ai-sop-engine.js";
 import { AIInvestigationReportService } from "../services/ai-investigation-report.js";
 import { AIEvidenceBuilderService } from "../services/ai-evidence-builder.js";
 import { AIVideoSearchService } from "../services/ai-video-search.js";
+import { AIAssistant } from "../../analytics-engine/src/detectors/ai-assistant.js";
+import { analyzeWithEngine } from "../services/command-center/rca.js";
+import { buildOperationalGraph } from "../services/command-center/operational-kg.js";
+import type { CommandTimelineEvent } from "../services/command-center/types.js";
 import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
 
 function handleFeatureResponse<T>(feature: string, fn: () => Promise<T>): Promise<T | { feature: string; status: string; reason: string }> {
@@ -41,6 +45,16 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
   const investigationService = new AIInvestigationReportService(store);
   const evidenceService = new AIEvidenceBuilderService(store);
   const videoSearchService = new AIVideoSearchService(pool);
+
+  const aiAssistant = new AIAssistant();
+  aiAssistant.setModules({
+    search: videoSearchService,
+    reporting: incidentSummaryService,
+    investigation: investigationService,
+  });
+  void aiAssistant.initialize().catch((err) => {
+    app.log.warn({ err }, "AIAssistant initialization warning");
+  });
 
   // ============ INCIDENT SUMMARY & CORRELATION ============
 
@@ -741,6 +755,183 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     return indexed;
   });
 
+  // ============ AI ASSISTANT / COPILOT ============
+
+  /**
+   * POST /v1/ai/assistant/chat
+   * Conversational security copilot
+   */
+  app.post("/v1/ai/assistant/chat", async (request, reply) => {
+    const auth = await authenticateRequest(request);
+    const { query, sessionId } = (request.body as any) || {};
+
+    if (!query || typeof query !== "string") {
+      return reply.code(400).send({
+        success: false,
+        error: "query_required",
+        message: "Query parameter is required for AI Copilot chat",
+      });
+    }
+
+    const sid = sessionId || auth.user.id || "default";
+    const response = await aiAssistant.processQuery(query, sid);
+    return response;
+  });
+
+  /**
+   * POST /v1/ai/copilot/chat
+   * Alias for conversational security copilot
+   */
+  app.post("/v1/ai/copilot/chat", async (request, reply) => {
+    const auth = await authenticateRequest(request);
+    const { query, sessionId } = (request.body as any) || {};
+
+    if (!query || typeof query !== "string") {
+      return reply.code(400).send({
+        success: false,
+        error: "query_required",
+        message: "Query parameter is required for AI Copilot chat",
+      });
+    }
+
+    const sid = sessionId || auth.user.id || "default";
+    const response = await aiAssistant.processQuery(query, sid);
+    return response;
+  });
+
+  // ============ BRANCH SECURITY / RISK SCORE ============
+
+  /**
+   * GET /v1/ai/branch/:branchId/risk-score
+   * Multi-factor branch security and risk assessment score (0-100)
+   */
+  app.get("/v1/ai/branch/:branchId/risk-score", async (request, reply) => {
+    const auth = await authenticateRequest(request);
+    const { branchId } = request.params as any;
+
+    if (!branchId) {
+      return reply.code(400).send({ error: "branch_id_required" });
+    }
+
+    const alerts = await store.listAnalyticsAlerts(auth.user.tenantId, {
+      branchId,
+      limit: 100,
+    });
+
+    const activeAlerts = (alerts || []).filter(
+      (a: any) => a.status !== "resolved" && a.status !== "suppressed"
+    );
+
+    let alertScore = 0;
+    let criticalAlerts = 0;
+    let highAlerts = 0;
+    let afterHoursViolations = 0;
+    let intrusionAlerts = 0;
+    let hardwareIssues = 0;
+
+    for (const a of activeAlerts) {
+      const sev = String(a.severity || "").toLowerCase();
+      const title = String(a.title || "").toLowerCase();
+      const type = String(a.detectionType || a.detection?.type || "").toLowerCase();
+
+      if (sev === "critical" || sev === "p1") {
+        alertScore += 25;
+        criticalAlerts++;
+      } else if (sev === "high" || sev === "p2") {
+        alertScore += 15;
+        highAlerts++;
+      } else if (sev === "medium" || sev === "p3") {
+        alertScore += 8;
+      } else {
+        alertScore += 3;
+      }
+
+      if (title.includes("after-hours") || type.includes("after-hours") || title.includes("after hours")) {
+        afterHoursViolations++;
+      }
+      if (title.includes("intrusion") || type.includes("intrusion") || title.includes("vault") || type.includes("vault")) {
+        intrusionAlerts++;
+      }
+      if (title.includes("offline") || title.includes("tamper") || type.includes("tamper") || type.includes("camera-tamper")) {
+        hardwareIssues++;
+      }
+    }
+
+    const riskScore = Math.min(100, alertScore);
+    const riskLevel: "low" | "medium" | "high" | "critical" =
+      riskScore >= 80 ? "critical" : riskScore >= 55 ? "high" : riskScore >= 25 ? "medium" : "low";
+
+    const recommendations: string[] = [];
+    if (criticalAlerts > 0) {
+      recommendations.push("Immediate dispatch required: Active critical alerts detected in branch.");
+    }
+    if (afterHoursViolations > 0) {
+      recommendations.push("Review perimeter and access logs: After-hours presence detected.");
+    }
+    if (intrusionAlerts > 0) {
+      recommendations.push("Verify restricted zones and cash counter perimeters.");
+    }
+    if (hardwareIssues > 0) {
+      recommendations.push("Inspect branch camera health, tampering debounce, and network connectivity.");
+    }
+    if (recommendations.length === 0) {
+      recommendations.push("Branch operating within normal security parameters.");
+    }
+
+    return {
+      branchId,
+      riskScore,
+      riskLevel,
+      factors: {
+        totalActiveAlerts: activeAlerts.length,
+        criticalAlerts,
+        highAlerts,
+        afterHoursViolations,
+        intrusionAlerts,
+        hardwareIssues,
+      },
+      recommendations,
+      assessedAt: new Date().toISOString(),
+    };
+  });
+
+  // ============ AUTOMATIC RCA ============
+
+  /**
+   * POST /v1/ai/rca/analyze
+   * Autonomous root cause analysis for branch incidents
+   */
+  app.post("/v1/ai/rca/analyze", async (request, reply) => {
+    const auth = await authenticateRequest(request);
+    const { branchId, timeline } = (request.body as any) || {};
+
+    if (!branchId) {
+      return reply.code(400).send({ error: "branch_id_required" });
+    }
+
+    try {
+      const graph = await buildOperationalGraph(store, auth.user, branchId);
+      const events: CommandTimelineEvent[] = Array.isArray(timeline) ? timeline : [];
+      const rcaResult = await analyzeWithEngine(graph, events, {
+        tenantId: auth.user.tenantId,
+        branchId,
+        includeHistorical: true,
+      });
+
+      return {
+        success: true,
+        branchId,
+        rca: rcaResult,
+      };
+    } catch (err: any) {
+      return reply.code(500).send({
+        success: false,
+        error: "rca_analysis_failed",
+        message: err.message || "Failed to execute root cause analysis",
+      });
+    }
+  });
+
   // ============ HEALTH & ANALYTICS ============
 
   /**
@@ -756,6 +947,10 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
         investigationReports: "operational",
         evidenceBuilder: "operational",
         videoSearch: "operational",
+        assistant: "operational",
+        copilot: "operational",
+        branchRiskScore: "operational",
+        rca: "operational",
       },
       timestamp: new Date().toISOString(),
     };

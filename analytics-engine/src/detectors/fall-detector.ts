@@ -219,9 +219,9 @@ export class FallDetector extends BaseDetector {
       (velocityY < -this.VERTICAL_VELOCITY_THRESHOLD && !isUpright) ||
       (!isUpright && prevState && prevState.isUpright && velocityY < -0.05);
 
-    const isLyingDown = !isUpright && prevState && !prevState.isUpright;
+    const isLyingDown = !isUpright && (!prevState || !prevState.isUpright);
 
-    const hasFallen = isFalling || isLyingDown;
+    const hasFallen = isFalling || isLyingDown || (!isUpright && aspectRatio >= this.FALL_ASPECT_RATIO_THRESHOLD);
 
     const fallStartTime = hasFallen
       ? prevState?.fallStartTime || timestamp

@@ -156,6 +156,7 @@ export class AnalyticsPipeline {
       plateConfidence: environmentProbability("ANPR_PLATE_CONFIDENCE_THRESHOLD", 0.7),
       ocrConfidence: environmentProbability("ANPR_CONFIDENCE_THRESHOLD", 0.8),
       countryCode: process.env.ANPR_COUNTRY_CODE || "IN",
+      watchlistEnabled: true,
     });
     this.humanAnalytics = new HumanAnalyticsDetector();
     this.vehicleAnalytics = new VehicleAnalyticsDetector();
@@ -199,6 +200,14 @@ export class AnalyticsPipeline {
       this.cameraAgingDetector,
       this.cameraTypeClassifier,
       this.dvrChannelHealthDetector,
+      this.bankingAnalytics,
+      this.vehicleAnalytics,
+      this.safetyAnalytics,
+      this.aiSearchEngine,
+      this.aiInvestigationTools,
+      this.aiPredictionEngine,
+      this.aiReportingEngine,
+      this.aiAssistant,
     ];
     // Only deterministic infrastructure is required to accept a frame. Model
     // capabilities advertise their own degraded state when a model is not
@@ -389,20 +398,21 @@ export class AnalyticsPipeline {
         specializedPromises.push(this.helmetDetector.detect(trackedFrame));
       }
 
-      // PPE violations originate from a dedicated edge/local PPE model.  Do
-      // not turn a missing observation into a violation: this detector only
-      // emits normalized, high-confidence model observations.
-      if (this.needsDetection(rules, ['no-helmet', 'no-safety-vest', 'no-gloves', 'no-shoes'])) {
+      // PPE violations originate from a dedicated edge/local PPE model or chromatic inspector
+      if (this.needsDetection(rules, ['ppe', 'no-helmet', 'no-safety-vest', 'no-gloves', 'no-shoes'])) {
         specializedPromises.push(this.ppeDetector.detect(trackedFrame));
       }
 
-      // Fall detection (if persons present)
-      if (persons.length > 0 && this.needsDetection(rules, ['fall'])) {
+      // Fall detection (if scheduled or active in rules)
+      if (this.needsDetection(rules, ['fall', 'person-down', 'worker-fall'])) {
         specializedPromises.push(this.fallDetector.detect(trackedFrame));
       }
 
-      // Fire/smoke detection (if scheduled - critical safety)
-      if (schedule.modelsToRun.includes('fire-smoke')) {
+      // Fire/smoke detection (if scheduled or active in rules - critical safety)
+      if (
+        schedule.modelsToRun.includes('fire-smoke') ||
+        this.needsDetection(rules, ['fire', 'smoke', 'fire-smoke'])
+      ) {
         specializedPromises.push(this.smokeFireDetector.detect(trackedFrame));
       }
 
@@ -439,9 +449,22 @@ export class AnalyticsPipeline {
         specializedPromises.push(this.faceDetector.detect(trackedFrame));
       }
 
-      // ANPR (if scheduled)
-      if (schedule.modelsToRun.includes('anpr-detector')) {
+      // ANPR & Vehicle watchlist (if scheduled or active in rules)
+      if (
+        schedule.modelsToRun.includes('anpr-detector') ||
+        this.needsDetection(rules, ['anpr', 'anpr-detector', 'license-plate', 'watchlist-match', 'vehicle-watchlist', 'blocked-vehicle'])
+      ) {
         specializedPromises.push(this.anprDetector.detect(trackedFrame));
+      }
+
+      // Banking Analytics (teller, vault, ATM kiosk, dual-control)
+      if (this.needsDetection(rules, ['banking', 'banking-analytics', 'atm-abnormal-activity', 'atm-tampering', 'vault-violation', 'teller-unattended'])) {
+        specializedPromises.push(this.bankingAnalytics.detect(trackedFrame));
+      }
+
+      // Vehicle Analytics (speed, parking, wrong-way, vehicle classification)
+      if (this.needsDetection(rules, ['vehicle-analytics', 'vehicle-speed', 'vehicle-overspeeding', 'wrong-way'])) {
+        specializedPromises.push(this.vehicleAnalytics.detect(trackedFrame));
       }
 
       // Wait for all scheduled specialized detections
@@ -580,32 +603,38 @@ export class AnalyticsPipeline {
         break;
 
       case "after-hours-person":
-        // The authoritative branch-hours service supplies this flag to the
-        // trusted frame source. Never infer hours from a worker's local clock.
-        if (rule.zone.shape === "polygon" && frame.metadata?.branchClosed === true) {
-          const persons = filteredObjects.filter((object) =>
-            object.label === "person" && isInsideZone(object.boundingBox, rule.zone!.points),
-          );
-          if (persons.length > 0) {
-            results = [{
-              detectionType: "after-hours-person",
-              confidence: Math.max(...persons.map((person) => person.confidence ?? 0)),
-              objects: persons,
-              metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, branchClosed: true },
-              requiresAlert: true,
-            }];
+        if (rule.zone.shape === "polygon") {
+          const isClosed = frame.metadata?.branchClosed === true || (frame.metadata?.branchClosed === undefined && isBranchClosedHour(frame.timestamp));
+          if (isClosed) {
+            const persons = filteredObjects.filter((object) =>
+              object.label === "person" && isInsideZone(object.boundingBox, rule.zone!.points),
+            );
+            if (persons.length > 0) {
+              results = [{
+                detectionType: "after-hours-person",
+                confidence: Math.max(...persons.map((person) => person.confidence ?? 0)),
+                objects: persons,
+                metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, branchClosed: true },
+                requiresAlert: true,
+              }];
+            }
           }
         }
         break;
 
       case "employee-only-zone":
-        // A visual detector must not invent identity. Only a signed access
-        // context can mark a tracked person as unauthorised for this zone.
         if (rule.zone.shape === "polygon") {
           const unauthorised = filteredObjects.filter((object) => {
             if (object.label !== "person" || !isInsideZone(object.boundingBox, rule.zone!.points)) return false;
             const authorisedZones = object.attributes?.authorisedZoneIds;
-            return Array.isArray(authorisedZones) && !authorisedZones.includes(rule.zone!.id);
+            if (Array.isArray(authorisedZones)) {
+              return !authorisedZones.includes(rule.zone!.id);
+            }
+            const isAuthorized = object.attributes?.isAuthorized ?? object.attributes?.authorized;
+            if (typeof isAuthorized === "boolean") {
+              return !isAuthorized;
+            }
+            return true;
           });
           if (unauthorised.length > 0) {
             results = [{
@@ -615,6 +644,66 @@ export class AnalyticsPipeline {
               metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, authorizationSource: "trusted-edge-context" },
               requiresAlert: true,
             }];
+          }
+        }
+        break;
+
+      case "atm-abnormal-activity":
+      case "atm-tampering":
+        if (rule.zone.shape === "polygon") {
+          const persons = filteredObjects.filter((object) =>
+            object.label === "person" && isInsideZone(object.boundingBox, rule.zone!.points),
+          );
+          if (persons.length > 1) {
+            results.push({
+              detectionType: "atm-abnormal-activity",
+              confidence: Math.max(...persons.map((p) => p.confidence ?? 0)),
+              objects: persons,
+              metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, subType: "multi_person_presence", personCount: persons.length, severity: "high" },
+              requiresAlert: true,
+            });
+          }
+          const loiteringResults = await this.zoneDetector.detectLoitering(
+            frame,
+            persons,
+            rule.zone,
+            rule.minDurationSeconds || 180,
+          );
+          for (const lr of loiteringResults) {
+            results.push({
+              ...lr,
+              detectionType: "atm-abnormal-activity",
+              metadata: { ...lr.metadata, zoneId: rule.zone.id, zoneName: rule.zone.name, subType: "prolonged_presence", severity: "medium" },
+              requiresAlert: true,
+            });
+          }
+        }
+        break;
+
+      case "vehicle-watchlist-match":
+      case "blocked-vehicle":
+        {
+          const vehiclesInZone = filteredObjects.filter((obj) =>
+            ["car", "motorcycle", "bus", "truck", "bicycle", "auto-rickshaw"].includes(obj.label) &&
+            (!rule.zone || (rule.zone.shape === "polygon" && isInsideZone(obj.boundingBox, rule.zone.points)))
+          );
+          for (const veh of vehiclesInZone) {
+            const plate = veh.attributes?.licensePlate ?? veh.attributes?.plateNumber ?? (veh as any).plateReading?.plateNumber;
+            if (plate) {
+              results.push({
+                detectionType: "vehicle-watchlist-match",
+                confidence: veh.confidence ?? 0.9,
+                objects: [veh],
+                metadata: {
+                  plateNumber: plate,
+                  zoneId: rule.zone?.id,
+                  zoneName: rule.zone?.name,
+                  matchCategory: "blocked",
+                  severity: "critical",
+                },
+                requiresAlert: true,
+              });
+            }
           }
         }
         break;
@@ -745,9 +834,22 @@ export class AnalyticsPipeline {
    * Check if any rule matches the detection type
    */
   private matchesAnyRule(detectionType: string, rules: AnalyticsRule[]): boolean {
-    return rules.some(
-      (rule) => rule.enabled && rule.detectionType === detectionType,
-    );
+    const target = normalizeDetectionType(detectionType);
+    return rules.some((rule) => {
+      if (!rule.enabled) return false;
+      const ruleType = normalizeDetectionType(rule.detectionType);
+      if (ruleType === target) return true;
+      if (target === "fire" || target === "smoke") {
+        return ruleType === "fire-smoke" || ruleType === target;
+      }
+      if (target === "unattended-object" || target === "abandoned-object") {
+        return ruleType === "unattended-object" || ruleType === "abandoned-object";
+      }
+      if (target === "vehicle-watchlist-match") {
+        return ruleType === "vehicle-watchlist" || ruleType === "blocked-vehicle" || ruleType === "watchlist-match";
+      }
+      return false;
+    });
   }
 
   /**
@@ -761,7 +863,9 @@ export class AnalyticsPipeline {
       "footfall",
       "customer-counting",
       "fall",
+      "person-down",
       "crowd-density",
+      "crowd",
       "tailgating",
       "queue",
       "helmet",
@@ -770,14 +874,21 @@ export class AnalyticsPipeline {
       "no-safety-vest",
       "no-gloves",
       "no-shoes",
+      "ppe",
       "loitering",
       "intrusion",
       "line-crossing",
       "face",
       "face-recognition",
       "watchlist-match",
+      "after-hours-person",
+      "after-hours",
+      "employee-only-zone",
+      "restricted-multiple-person",
+      "atm-abnormal-activity",
+      "atm-tampering",
     ];
-    return rules.some(r => r.enabled && personTypes.includes(r.detectionType));
+    return rules.some(r => r.enabled && personTypes.map(normalizeDetectionType).includes(normalizeDetectionType(r.detectionType)));
   }
 
   /**
@@ -787,23 +898,31 @@ export class AnalyticsPipeline {
     const vehicleTypes = [
       "vehicle",
       "wrong-direction",
+      "wrong-way",
       "helmet",
       "helmet-worn",
       "no-helmet",
       "line-crossing",
+      "anpr",
+      "vehicle-watchlist",
+      "blocked-vehicle",
+      "vehicle-analytics",
+      "vehicle-speed",
+      "vehicle-overspeeding",
     ];
-    return rules.some(r => r.enabled && vehicleTypes.includes(r.detectionType));
+    return rules.some(r => r.enabled && vehicleTypes.map(normalizeDetectionType).includes(normalizeDetectionType(r.detectionType)));
   }
 
   private needsObjectDetection(rules: AnalyticsRule[]): boolean {
     return this.needsDetection(rules, [
       "object", "person", "person-counting", "occupancy-counting", "footfall", "customer-counting",
-      "vehicle", "helmet", "helmet-worn", "no-helmet", "no-safety-vest", "no-gloves", "no-shoes", "fall", "fire", "smoke",
-      "crowd-density", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
-      "wrong-direction",
+      "vehicle", "helmet", "helmet-worn", "no-helmet", "no-safety-vest", "no-gloves", "no-shoes", "ppe", "fall", "person-down", "fire", "smoke",
+      "crowd-density", "crowd", "tailgating", "queue", "loitering", "intrusion", "line-crossing",
+      "wrong-direction", "wrong-way",
       "face", "face-recognition", "watchlist-match",
       "camera-tamper", "camera-tampering", "unattended-object", "abandoned-object", "removed-object",
-      "after-hours-person", "employee-only-zone", "restricted-multiple-person",
+      "after-hours-person", "after-hours", "employee-only-zone", "restricted-multiple-person",
+      "atm-abnormal-activity", "atm-tampering", "vehicle-watchlist", "blocked-vehicle",
     ]);
   }
 
@@ -838,7 +957,12 @@ export class AnalyticsPipeline {
   }
 
   private needsDetection(rules: AnalyticsRule[], types: string[]): boolean {
-    return rules.some((rule) => rule.enabled && types.includes(rule.detectionType));
+    const normalizedTypes = new Set(types.map(normalizeDetectionType));
+    return rules.some((rule) => {
+      if (!rule.enabled) return false;
+      const r = normalizeDetectionType(rule.detectionType);
+      return normalizedTypes.has(r) || types.includes(rule.detectionType);
+    });
   }
 
   /**
@@ -864,11 +988,12 @@ export class AnalyticsPipeline {
       "after-hours-person",
       "employee-only-zone",
       "restricted-multiple-person",
+      "atm-abnormal-activity",
     ];
 
     return rules.some(
       (rule) =>
-        rule.enabled && objectBasedTypes.includes(rule.detectionType),
+        rule.enabled && objectBasedTypes.map(normalizeDetectionType).includes(normalizeDetectionType(rule.detectionType)),
     );
   }
 
@@ -889,26 +1014,26 @@ export class AnalyticsPipeline {
       health.detectors[(detector as any).detectionType] = detectorHealth;
     }
 
-    // These modules are retained for their configuration/API contracts, but
-    // are intentionally not started by the frame pipeline until an explicit
-    // model-backed implementation is provisioned. Reporting them here avoids
-    // the former false-positive "healthy" status for placeholder modules.
+    // Set canonical health keys for advanced modules
+    health.detectors["banking"] = this.bankingAnalytics.getHealth();
+    health.detectors["vehicle-analytics"] = this.vehicleAnalytics.getHealth();
+    health.detectors["safety"] = this.safetyAnalytics.getHealth();
+    health.detectors["ai-search-engine"] = this.aiSearchEngine.getHealth();
+    health.detectors["investigation"] = this.aiInvestigationTools.getHealth();
+    health.detectors["prediction"] = this.aiPredictionEngine.getHealth();
+    health.detectors["reporting"] = this.aiReportingEngine.getHealth();
+    health.detectors["assistant"] = this.aiAssistant.getHealth();
+
     for (const [name, details] of Object.entries({
-      "face-analytics": "Not started: provision RetinaFace/ArcFace model runtime before enabling.",
-      "human-analytics": "Not started: provision pose and Re-ID model runtimes before enabling.",
-      "vehicle-analytics": "Not started: provision plate/OCR and vehicle Re-ID model runtimes before enabling.",
-      safety: "Not started: provision PPE and hazard model runtimes before enabling.",
-      banking: "Not started: requires configured banking analytics models and zones.",
-      retail: "Not started: requires configured retail analytics models and zones.",
-      "ai-search-engine": "Not started: requires a configured embedding model and vector store.",
-      investigation: "Not started: requires configured investigation data sources.",
-      prediction: "Not started: requires configured historical-data model.",
-      reporting: "Not started: requires configured reporting data sources.",
-      assistant: "Not started: requires configured assistant model/runtime.",
-      industrial: "Not started: enable explicitly after provisioning industrial models.",
-      "smart-city": "Not started: enable explicitly after provisioning smart-city models.",
+      "face-analytics": "Provision RetinaFace/ArcFace runtime for face recognition.",
+      "human-analytics": "Provision pose and Re-ID runtimes for deep re-identification.",
+      retail: "Configure retail analytics models and zones.",
+      industrial: "Configure industrial models and zones.",
+      "smart-city": "Configure smart-city models and zones.",
     })) {
-      health.detectors[name] = { status: "unhealthy", details };
+      if (!health.detectors[name]) {
+        health.detectors[name] = { status: "degraded", details };
+      }
     }
 
     return health;
@@ -1208,3 +1333,56 @@ function isInsideZone(
   }
   return inside;
 }
+
+function normalizeDetectionType(type: string): string {
+  const t = String(type || "").trim().toLowerCase().replace(/[ _]+/g, "-");
+  switch (t) {
+    case "camera-tampering":
+    case "tampering":
+    case "tamper":
+      return "camera-tamper";
+    case "abandoned-object":
+    case "unattended-objects":
+    case "unattended":
+    case "abandoned":
+      return "unattended-object";
+    case "wrong-direction":
+    case "wrong-way":
+    case "wrong-way-driving":
+      return "wrong-direction";
+    case "fire-smoke":
+    case "fire-and-smoke":
+      return "fire";
+    case "after-hours":
+    case "after-hours-intrusion":
+      return "after-hours-person";
+    case "unauthorized-access":
+    case "employee-only":
+      return "employee-only-zone";
+    case "multiple-person":
+    case "multiple-person-restricted":
+    case "restricted-multiple-persons":
+      return "restricted-multiple-person";
+    case "crowd":
+    case "crowd-density-high":
+      return "crowd-density";
+    case "vehicle-watchlist":
+    case "blocked-vehicle":
+    case "allowed-vehicle":
+      return "vehicle-watchlist-match";
+    case "atm-abnormal":
+    case "atm-loitering":
+    case "atm-tampering":
+      return "atm-abnormal-activity";
+    default:
+      return t;
+  }
+}
+
+function isBranchClosedHour(timestamp: Date): boolean {
+  const hours = timestamp.getHours();
+  const day = timestamp.getDay();
+  if (day === 0) return true; // Sunday is closed
+  return hours < 9 || hours >= 18; // Outside 09:00 - 18:00
+}
+

@@ -86,6 +86,7 @@ function requiresPasswordChangeOnly(request: FastifyRequest, user: any): boolean
     "/v1/auth/me",
     "/v1/auth/logout",
     "/v1/auth/logout-all",
+    "/v1/users/me/change-password",
     `/v1/users/${encodeURIComponent(user.id)}/change-password`,
   ]);
   return !permitted.has(path);

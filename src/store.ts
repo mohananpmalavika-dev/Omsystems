@@ -225,6 +225,9 @@ const seedGrants: AccessGrant[] = [
       "evidence:create", "evidence:view", "evidence:preserve", "evidence:export-package", "evidence:approve", "evidence:share",
       "evidence:legal-hold", "evidence:release-hold",
       "police:update", "insurance:update", "incident-report:approve",
+      "face:view", "face:enrol", "face:manage-watchlist",
+      "anpr:view", "anpr:search", "anpr:manage-watchlist",
+      "behavior:view",
     ], 
     effect: "allow" 
   },
