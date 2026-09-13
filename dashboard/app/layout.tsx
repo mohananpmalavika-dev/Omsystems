@@ -48,7 +48,9 @@ const THEME_SCRIPT = `
   // Register PWA Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js').catch(function(err) {
+      navigator.serviceWorker.register('/sw.js').then(function(reg) {
+        reg.update();
+      }).catch(function(err) {
         console.debug('ServiceWorker registration:', err);
       });
     });

@@ -1,5 +1,5 @@
 // KryptonVision PWA Service Worker
-const CACHE_NAME = "kryptonvision-pwa-v1";
+const CACHE_NAME = "kryptonvision-pwa-v2";
 const STATIC_ASSETS = [
   "/manifest.json",
   "/icon-192.png",
@@ -35,9 +35,12 @@ self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // Exclude non-GET, API calls, streams, WebRTC, and media chunks
+  // Exclude non-GET, navigations, API calls, streams, WebRTC, and media chunks
   if (
     request.method !== "GET" ||
+    request.mode === "navigate" ||
+    url.pathname === "/" ||
+    url.pathname.startsWith("/login") ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/v1/") ||
     url.pathname.startsWith("/stream/") ||
@@ -64,12 +67,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Network first with cache fallback for pages
+  // Network first with cache fallback for static resources
   event.respondWith(
     fetch(request).catch(async () => {
       const cached = await caches.match(request);
       if (cached) return cached;
-      return caches.match("/login");
+      return new Response("", { status: 408, statusText: "Request Timed Out" });
     })
   );
 });
