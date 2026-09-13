@@ -33,7 +33,10 @@ export function AiLiveCameraInspector({
     let active = true;
     async function loadCameras() {
       try {
-        const res = await fetch("/api/admin/system/cameras/all", { cache: "no-store" });
+        let res = await fetch("/api/admin/system/cameras/all", { cache: "no-store" });
+        if (!res.ok) {
+          res = await fetch("/api/admin/system/cameras?limit=250", { cache: "no-store" });
+        }
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data) ? data : data.data || [];
