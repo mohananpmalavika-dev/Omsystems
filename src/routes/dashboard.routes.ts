@@ -415,5 +415,87 @@ export async function registerDashboardRoutes(
     }
   });
 
+  /**
+   * GET /v1/dashboard/business-outcomes
+   *
+   * NBFC operating KPIs. Every value is derived from persisted platform
+   * records. A metric is explicitly marked unavailable when the authoritative
+   * source has not been instrumented; do not substitute a guessed number.
+   */
+  app.get("/v1/dashboard/business-outcomes", async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = request.currentUser?.tenantId;
+    if (!tenantId) return reply.code(401).send({ error: "unauthorized" });
+
+    const { windowDays } = z.object({
+      windowDays: z.coerce.number().int().min(1).max(90).default(30),
+    }).parse(request.query);
+    const from = new Date(Date.now() - windowDays * 86_400_000).toISOString();
+    const branches = await store.listAccessibleNodes(request.currentUser, "analytics:view", "branch");
+    const cameras = (await Promise.all(branches.map((branch) =>
+      store.listCamerasByBranch(request.currentUser, branch.id, "analytics:view"),
+    ))).flat();
+    const cameraIds = new Set(cameras.map((camera) => camera.id));
+    const [alerts, evidenceCases, assessments] = await Promise.all([
+      store.listAnalyticsAlerts(tenantId, { from, limit: 10_000 }),
+      store.listEvidenceCases(tenantId),
+      store.listComplianceAssessments(tenantId),
+    ]);
+    const visibleAlerts = alerts.filter((alert) => cameraIds.has(alert.cameraId));
+    const acknowledgedDurations = visibleAlerts.flatMap((alert) => {
+      if (!alert.acknowledgedAt) return [];
+      const duration = Date.parse(alert.acknowledgedAt) - Date.parse(alert.firstDetectedAt);
+      return Number.isFinite(duration) && duration >= 0 ? [duration] : [];
+    });
+    const evidenceDurations = evidenceCases.flatMap((evidenceCase: any) => {
+      if (!evidenceCase.closedAt) return [];
+      const duration = Date.parse(evidenceCase.closedAt) - Date.parse(evidenceCase.createdAt);
+      return Number.isFinite(duration) && duration >= 0 ? [duration] : [];
+    });
+    const average = (durations: number[]) => durations.length
+      ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length)
+      : null;
+    const observableCameras = cameras.filter((camera) => ["online", "offline", "degraded"].includes(camera.status));
+    const branchIds = new Set(branches.map((branch) => branch.id));
+    const auditExceptions = assessments.filter((assessment) =>
+      (!assessment.branchNodeId || branchIds.has(assessment.branchNodeId)) &&
+      ["exception", "non-compliant", "incomplete"].includes(assessment.status),
+    );
+
+    return {
+      success: true,
+      data: {
+        window: { from, to: new Date().toISOString(), days: windowDays },
+        cameraAvailability: {
+          value: observableCameras.length ? Math.round((observableCameras.filter((camera) => camera.status === "online").length / observableCameras.length) * 10_000) / 100 : null,
+          unit: "percent",
+          denominator: observableCameras.length,
+          label: "Current camera availability",
+          status: observableCameras.length ? "AVAILABLE" : "UNAVAILABLE",
+        },
+        alertToVerification: {
+          value: average(acknowledgedDurations),
+          unit: "milliseconds",
+          sampleSize: acknowledgedDurations.length,
+          label: "Alert to operator acknowledgement",
+          status: acknowledgedDurations.length ? "AVAILABLE" : "UNAVAILABLE",
+        },
+        evidenceTurnaround: {
+          value: average(evidenceDurations),
+          unit: "milliseconds",
+          sampleSize: evidenceDurations.length,
+          label: "Evidence case opened to closed",
+          status: evidenceDurations.length ? "AVAILABLE" : "UNAVAILABLE",
+        },
+        auditExceptions: {
+          value: auditExceptions.length,
+          unit: "count",
+          label: "Audit exceptions requiring action",
+          sampleSize: assessments.length,
+          status: "AVAILABLE",
+        },
+      },
+    };
+  });
+
   app.log.info("Dashboard routes registered");
 }

@@ -21,6 +21,12 @@ describe("role-focused workspaces", () => {
     expect(paths).not.toContain("/admin/system");
   });
 
+  it("gives compliance officers an evidence-led assurance workspace", () => {
+    const paths = defaultRoleWorkspace("compliance_officer");
+    expect(paths).toEqual(expect.arrayContaining(["/role-dashboard", "/compliance/controls", "/compliance/evidence", "/audit/branch-compliance"]));
+    expect(paths).not.toContain("/admin/system");
+  });
+
   it("keeps role workspaces materially smaller than the full policy surface", () => {
     const focusedCount = defaultRoleWorkspace("operator").length;
     const fullPolicyCount = Object.values(roleWorkspacePaths).flat().length;
