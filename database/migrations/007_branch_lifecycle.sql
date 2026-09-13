@@ -5,60 +5,72 @@
 -- Preserves historical data while controlling operational availability
 
 -- Step 1: Add lifecycle status enum
-CREATE TYPE branch_lifecycle_status AS ENUM ('ACTIVE', 'DISABLED', 'ARCHIVED');
+DO $$ BEGIN
+  CREATE TYPE branch_lifecycle_status AS ENUM ('ACTIVE', 'DISABLED', 'ARCHIVED');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Step 2: Add lifecycle metadata columns to resource_nodes table
 -- These columns track the current lifecycle state and transition history
 ALTER TABLE resource_nodes
-  ADD COLUMN lifecycle_status branch_lifecycle_status NOT NULL DEFAULT 'ACTIVE',
-  ADD COLUMN lifecycle_version INTEGER NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS lifecycle_status branch_lifecycle_status NOT NULL DEFAULT 'ACTIVE',
+  ADD COLUMN IF NOT EXISTS lifecycle_version INTEGER NOT NULL DEFAULT 1,
   
   -- Disabled state metadata
-  ADD COLUMN disabled_at TIMESTAMPTZ NULL,
-  ADD COLUMN disabled_by UUID NULL REFERENCES users(id),
-  ADD COLUMN disable_reason TEXT NULL,
+  ADD COLUMN IF NOT EXISTS disabled_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS disabled_by UUID NULL REFERENCES users(id),
+  ADD COLUMN IF NOT EXISTS disable_reason TEXT NULL,
   
   -- Reactivated state metadata
-  ADD COLUMN reactivated_at TIMESTAMPTZ NULL,
-  ADD COLUMN reactivated_by UUID NULL REFERENCES users(id),
-  ADD COLUMN reactivate_reason TEXT NULL,
+  ADD COLUMN IF NOT EXISTS reactivated_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS reactivated_by UUID NULL REFERENCES users(id),
+  ADD COLUMN IF NOT EXISTS reactivate_reason TEXT NULL,
   
   -- Archived state metadata
-  ADD COLUMN archived_at TIMESTAMPTZ NULL,
-  ADD COLUMN archived_by UUID NULL REFERENCES users(id),
-  ADD COLUMN archive_reason TEXT NULL;
+  ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL,
+  ADD COLUMN IF NOT EXISTS archived_by UUID NULL REFERENCES users(id),
+  ADD COLUMN IF NOT EXISTS archive_reason TEXT NULL;
 
 -- Step 3: Add constraints to ensure lifecycle metadata consistency
 -- Disabled metadata should only exist when status is DISABLED or was previously DISABLED
-ALTER TABLE resource_nodes
-  ADD CONSTRAINT lifecycle_disabled_metadata_check
-  CHECK (
-    (lifecycle_status = 'DISABLED' AND disabled_at IS NOT NULL AND disabled_by IS NOT NULL AND disable_reason IS NOT NULL)
-    OR (lifecycle_status != 'DISABLED' AND (disabled_at IS NULL OR disabled_at IS NOT NULL))
-    OR lifecycle_status = 'ACTIVE'
-  );
+DO $$ BEGIN
+  ALTER TABLE resource_nodes
+    ADD CONSTRAINT lifecycle_disabled_metadata_check
+    CHECK (
+      (lifecycle_status = 'DISABLED' AND disabled_at IS NOT NULL AND disabled_by IS NOT NULL AND disable_reason IS NOT NULL)
+      OR (lifecycle_status != 'DISABLED' AND (disabled_at IS NULL OR disabled_at IS NOT NULL))
+      OR lifecycle_status = 'ACTIVE'
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Archived metadata must exist when status is ARCHIVED
-ALTER TABLE resource_nodes
-  ADD CONSTRAINT lifecycle_archived_metadata_check
-  CHECK (
-    (lifecycle_status = 'ARCHIVED' AND archived_at IS NOT NULL AND archived_by IS NOT NULL AND archive_reason IS NOT NULL)
-    OR lifecycle_status != 'ARCHIVED'
-  );
+DO $$ BEGIN
+  ALTER TABLE resource_nodes
+    ADD CONSTRAINT lifecycle_archived_metadata_check
+    CHECK (
+      (lifecycle_status = 'ARCHIVED' AND archived_at IS NOT NULL AND archived_by IS NOT NULL AND archive_reason IS NOT NULL)
+      OR lifecycle_status != 'ARCHIVED'
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Step 4: Create index for efficient lifecycle-based queries
 -- This index is critical for filtering active branches in operational queries
-CREATE INDEX idx_resource_nodes_tenant_lifecycle
+CREATE INDEX IF NOT EXISTS idx_resource_nodes_tenant_lifecycle
   ON resource_nodes (tenant_id, lifecycle_status)
   WHERE node_type = 'branch';
 
 -- Additional index for lifecycle queries across all node types
-CREATE INDEX idx_resource_nodes_lifecycle_status
+CREATE INDEX IF NOT EXISTS idx_resource_nodes_lifecycle_status
   ON resource_nodes (lifecycle_status, node_type);
 
 -- Step 5: Create lifecycle history table
 -- Tracks all lifecycle transitions for audit and analysis
-CREATE TABLE resource_node_lifecycle_events (
+CREATE TABLE IF NOT EXISTS resource_node_lifecycle_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   node_id UUID NOT NULL REFERENCES resource_nodes(id),
@@ -79,15 +91,15 @@ CREATE TABLE resource_node_lifecycle_events (
 );
 
 -- Index for querying lifecycle history by node
-CREATE INDEX idx_lifecycle_events_node
+CREATE INDEX IF NOT EXISTS idx_lifecycle_events_node
   ON resource_node_lifecycle_events (node_id, created_at DESC);
 
 -- Index for querying lifecycle history by tenant
-CREATE INDEX idx_lifecycle_events_tenant_time
+CREATE INDEX IF NOT EXISTS idx_lifecycle_events_tenant_time
   ON resource_node_lifecycle_events (tenant_id, created_at DESC);
 
 -- Index for querying specific transition types
-CREATE INDEX idx_lifecycle_events_transition
+CREATE INDEX IF NOT EXISTS idx_lifecycle_events_transition
   ON resource_node_lifecycle_events (to_status, created_at DESC);
 
 -- Step 6: Create function to automatically record lifecycle transitions
@@ -139,6 +151,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Step 7: Create trigger to automatically record lifecycle transitions
+DROP TRIGGER IF EXISTS resource_node_lifecycle_transition_trigger ON resource_nodes;
 CREATE TRIGGER resource_node_lifecycle_transition_trigger
   AFTER UPDATE ON resource_nodes
   FOR EACH ROW
@@ -235,14 +248,18 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 COMMENT ON FUNCTION is_lifecycle_transition_valid IS 'Validates if a lifecycle state transition is allowed: ACTIVE→DISABLED, DISABLED→ACTIVE, DISABLED→ARCHIVED';
 
 -- Step 16: Create check constraint using the validation function
-ALTER TABLE resource_nodes
-  ADD CONSTRAINT lifecycle_transition_valid_check
-  CHECK (
-    -- Allow initial creation (no previous state)
-    lifecycle_status = 'ACTIVE'
-    -- For updates, the application layer will validate transitions
-    -- This constraint is more for documentation and future enforcement
-  );
+DO $$ BEGIN
+  ALTER TABLE resource_nodes
+    ADD CONSTRAINT lifecycle_transition_valid_check
+    CHECK (
+      -- Allow initial creation (no previous state)
+      lifecycle_status = 'ACTIVE'
+      -- For updates, the application layer will validate transitions
+      -- This constraint is more for documentation and future enforcement
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Migration complete
 -- 
