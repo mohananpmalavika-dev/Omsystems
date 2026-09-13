@@ -1,0 +1,11 @@
+{
+  "purpose": "Approved optional BFSI model artifacts. Copy each reviewed entry into manifest.json only after license, SHA-256, validation-set and false-positive approval are recorded.",
+  "models": [
+    { "id": "atm-face-concealment", "task": "object-detection", "labels": ["helmet", "face_cover", "mask", "cap"], "requiredSignals": ["face_concealment"], "sha256Environment": "ATM_FACE_CONCEALMENT_MODEL_SHA256", "sourceUrlEnvironment": "ATM_FACE_CONCEALMENT_MODEL_URL" },
+    { "id": "weapon-detector", "task": "object-detection", "labels": ["handgun", "rifle", "knife", "bat"], "requiredSignals": ["weapon"], "sha256Environment": "WEAPON_MODEL_SHA256", "sourceUrlEnvironment": "WEAPON_MODEL_URL" },
+    { "id": "atm-tamper-detector", "task": "object-detection", "labels": ["skimmer", "tamper", "gas_cutter", "flame"], "requiredSignals": ["atm_tamper", "atm_skimming", "fire"], "sha256Environment": "ATM_TAMPER_MODEL_SHA256", "sourceUrlEnvironment": "ATM_TAMPER_MODEL_URL" },
+    { "id": "pose-estimator", "task": "pose-estimation", "labels": ["hands_up", "sleeping"], "requiredSignals": ["hands_up", "sleeping"], "sha256Environment": "POSE_MODEL_SHA256", "sourceUrlEnvironment": "POSE_MODEL_URL" },
+    { "id": "acoustic-security", "task": "audio-classification", "labels": ["glass_break", "gunshot", "scream"], "requiredSignals": ["glass_break", "gunshot", "scream"], "sha256Environment": "ACOUSTIC_SECURITY_MODEL_SHA256", "sourceUrlEnvironment": "ACOUSTIC_SECURITY_MODEL_URL" }
+  ],
+  "deploymentGates": ["verified ONNX artifact SHA-256", "camera/audio calibration", "branch zone policy", "false-positive validation", "SOC escalation test", "privacy and retention approval"]
+}
