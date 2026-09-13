@@ -345,8 +345,8 @@ describe('Storage Failover - P0 #4 Critical', () => {
       
       const queue = failoverManager.getRetryQueue();
       expect(queue.length).toBe(1);
-      expect(queue[0].recordingId).toBe('rec-001');
-      expect(queue[0].attempts).toBe(0);
+      expect(queue[0]!.recordingId).toBe('rec-001');
+      expect(queue[0]!.attempts).toBe(0);
     });
     
     test('should preserve recordings during S3 outage', async () => {

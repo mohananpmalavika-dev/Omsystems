@@ -15,7 +15,7 @@ describe('SecurityPostureService - secrets collector', () => {
     // Ensure no secretVault is present
     delete (factory as any).secretVault;
 
-    const category = await postureService['scoreSecrets']();
+    const category = await (postureService as any)['scoreSecrets']();
     expect(category.name).toBe('Secret Vault');
     expect(category.metrics[0].value).toBeNull();
     expect(category.metrics[1].value).toBeNull();
@@ -44,10 +44,10 @@ describe('SecurityPostureService - secrets collector', () => {
       })
     };
 
-    const category = await postureService['scoreSecrets']();
+    const category = await (postureService as any)['scoreSecrets']();
     expect(category.name).toBe('Secret Vault');
-    const rotationMetric = category.metrics.find(m => m.name === 'Rotation Compliance');
-    const expiringMetric = category.metrics.find(m => m.name === 'Secrets Expiring Soon');
+    const rotationMetric = category.metrics.find((m: any) => m.name === 'Rotation Compliance');
+    const expiringMetric = category.metrics.find((m: any) => m.name === 'Secrets Expiring Soon');
     expect(rotationMetric).toBeDefined();
     expect(expiringMetric).toBeDefined();
     // rotationCandidates length = 2 (s1, s2) -> compliantCount = 1 => 50%

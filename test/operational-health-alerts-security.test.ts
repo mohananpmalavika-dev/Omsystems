@@ -343,8 +343,8 @@ describe('Alert Action Security - Authentication Boundary', () => {
 
       // Audit trail is append-only and chronological
       expect(events).toHaveLength(5);
-      expect(events[0].type).toBe('ALERT_CREATED');
-      expect(events[4].type).toBe('ALERT_RESOLVED');
+      expect(events[0]!.type).toBe('ALERT_CREATED');
+      expect(events[4]!.type).toBe('ALERT_RESOLVED');
 
       // Each action has authenticated actor
       events.slice(1).forEach(event => {

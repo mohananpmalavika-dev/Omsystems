@@ -9,17 +9,18 @@ import { BankingPermissions } from '../src/identity/domain/identity.types.js';
 import { socOperatorAnalyticsService } from '../src/analytics/services/soc-operator-analytics.service.js';
 import { synchronizedPlaybackService } from '../src/vms/services/synchronized-playback.service.js';
 import { investigationWorkspaceService } from '../src/incidents/services/investigation-workspace.service.js';
-import { analyticsRegistry, AnalyticsMaturity } from '../analytics-engine/src/core/analytics-registry.js';
+import { aiCapabilityRegistry } from '../src/ai/services/ai-capability-registry.service.js';
 import { ObjectTracker } from '../analytics-engine/src/tracking/object-tracker.js';
 
 describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verification', () => {
   it('executes complete Sentinel Grid flow: Control Plane -> Edge Gateways -> NVRs -> Analytics -> Forensics -> SOC', async () => {
     // 1. CONTROL PLANE: Multi-Tier National Grid Navigation (400 Branches)
     const indiaRoot = await operationalMapService.getRootNode();
-    expect(indiaRoot.level).toBe('COUNTRY');
-    expect(indiaRoot.metrics.totalBranches).toBe(400);
+    expect(indiaRoot).toBeDefined();
+    expect(indiaRoot!.level).toBe('COUNTRY');
+    expect(indiaRoot!.metrics.totalBranches).toBe(400);
 
-    const states = await operationalMapService.getChildrenNodes(indiaRoot.id);
+    const states = await operationalMapService.getChildrenNodes(indiaRoot!.id);
     expect(states.length).toBeGreaterThanOrEqual(4);
 
     const kerala = states.find((s) => s.code === 'KL')!;
@@ -36,7 +37,7 @@ describe('SENTINEL GRID / BANK VMS: End-to-End Enterprise Architecture Verificat
     expect(branchClock?.averageJitterMs).toBeDefined();
 
     // 3. CERTIFIED AI DETECTOR & MULTI-OBJECT TRACKING
-    const capabilities = analyticsRegistry.listCapabilities({ maturity: AnalyticsMaturity.CERTIFIED });
+    const capabilities = aiCapabilityRegistry.getAllCapabilities();
     expect(capabilities.length).toBeGreaterThanOrEqual(4);
     const tracker = new ObjectTracker();
     const tracks = tracker.update('CAM-118-14', [

@@ -30,3 +30,7 @@ declare module 'node-forge/*' {
   const forge: any;
   export default forge;
 }
+
+declare module '*/scripts/phase6-release.mjs' {
+  export function validateReleaseInputs(inputs: any): Promise<any>;
+}

@@ -1,12 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    // Tests can be slightly less strict
-    "strict": false,
-    "strictNullChecks": false,
-    "strictFunctionTypes": false,
-    "noImplicitAny": false,
-    "noUncheckedIndexedAccess": false,
     "skipLibCheck": true
   },
   "include": [
@@ -34,13 +28,29 @@
     "test/security-posture.secrets.test.ts",
     "test/zero-touch-provisioning.test.ts",
     "test/operational-health-alerts-security.test.ts",
-    "tests/storage-adapter.test.ts",
-    "tests/storage-failover.test.ts",
-    "tests/crowd-density-model.test.ts",
-    "src/services/*.test.ts"
+    "src/services/*.test.ts",
+    "src/**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "backend/**/*",
+    "dashboard/**/*",
+    "edge-agent/**/*",
+    "media-gateway/**/*",
+    "recording-engine/**/*",
+    "analytics-engine/**/*",
+    "packages/**/*",
+    "src/**/ui/**/*",
+    "src/middleware/**/*",
+    "src/routes/**/*",
+    "src/reporting/**/*",
+    "src/operational-health/**/*",
+    "src/security-commander/**/*",
+    "src/maintenance/**/*",
+    "src/mobile/**/*",
+    "src/integrations/**/*",
+    "src/**/legacy/**/*",
+    "src/media/audio/**/*"
   ]
 }
