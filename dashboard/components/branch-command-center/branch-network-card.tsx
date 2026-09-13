@@ -15,7 +15,7 @@ import {
   RefreshCw,
   Zap,
 } from "lucide-react";
-import type { BranchConnectivityHealth } from "../../../backend/src/connectivity/domain/connectivity.types";
+import type { BranchConnectivityHealth } from "../../../src/connectivity/domain/connectivity.types";
 
 interface BranchNetworkCardProps {
   branchId: string;

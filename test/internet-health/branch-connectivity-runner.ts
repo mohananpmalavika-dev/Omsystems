@@ -4,10 +4,10 @@
 
 import { ConnectivityMonitor } from "../../edge-agent/src/monitoring/connectivity/connectivity-monitor.js";
 import { DefaultRouteParser, WireGuardStatusParser } from "../../edge-agent/src/monitoring/connectivity/probes.js";
-import { BranchConnectivityService } from "../../backend/src/connectivity/services/branch-connectivity.service.js";
+import { BranchConnectivityService } from "../../src/connectivity/services/branch-connectivity.service.js";
 import { registerConnectivityHealthRoutes } from "../../src/routes/connectivity-health.routes.js";
 import Fastify from "fastify";
-import type { BranchNetworkConfig } from "../../backend/src/connectivity/domain/connectivity.types.js";
+import type { BranchNetworkConfig } from "../../src/connectivity/domain/connectivity.types.js";
 
 let passed = 0;
 let failed = 0;
@@ -167,6 +167,19 @@ peer-public-key	(none)	192.168.100.1:51820	10.0.0.1/32	${nowSec - 300}	1048576	2
   // Suite 5: Root-Cause Correlation & Blast Radius
   // --------------------------------------------------------------------------
   console.log("\nSuite 5: Root-Cause Correlation & Blast Radius");
+
+  // Seed branch-099 as confirmed OFFLINE via 3 consecutive offline reports
+  await service.ingestTelemetry({ ...bothOfflineHealth, branchId: "branch-099" });
+  await service.ingestTelemetry({ ...bothOfflineHealth, branchId: "branch-099" });
+  await service.ingestTelemetry({ ...bothOfflineHealth, branchId: "branch-099" });
+
+  // Seed branch-178 in FAILOVER state
+  await service.ingestTelemetry({
+    ...failoverHealth,
+    branchId: "branch-178",
+    primary: { ...failoverHealth.primary, providerName: "Jio Fiber 300M" },
+    backup: { ...failoverHealth.backup!, providerName: "Airtel LTE 4G" },
+  });
 
   const correlation = service.correlateCctvDownstreamImpact("branch-099"); // branch-099 is seeded OFFLINE
   assert(correlation.wanOffline === true, "Detects branch-099 WAN is offline");
