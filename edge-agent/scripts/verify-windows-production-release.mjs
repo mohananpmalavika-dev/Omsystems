@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const releaseRoot = join(edgeRoot, "release");
+const releaseRoot = process.argv[2] ? resolve(process.argv[2]) : join(edgeRoot, "release");
 const executablePath = join(releaseRoot, "edge-agent.exe");
 const manifestPath = join(releaseRoot, "windows-release.json");
 
