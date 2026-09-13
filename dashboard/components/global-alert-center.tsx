@@ -71,7 +71,8 @@ export function GlobalAlertCenter() {
       const response = await fetch("/v1/alerts/command-center?limit=200", {
         cache: "no-store",
         credentials: "include",
-        signal: AbortSignal.timeout(3_000),
+        headers: { "x-silent": "true" },
+        signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) return;
       const body = await response.json();
@@ -108,7 +109,8 @@ export function GlobalAlertCenter() {
         const response = await fetch(`/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
           cache: "no-store",
           credentials: "include",
-          signal: AbortSignal.timeout(3_000),
+          headers: { "x-silent": "true" },
+          signal: AbortSignal.timeout(10_000),
         });
         if (!response.ok) return;
         const body = await response.json();
@@ -146,7 +148,8 @@ export function GlobalAlertCenter() {
         const response = await fetch(`/v1/alerts/command-center/${encodeURIComponent(alertId)}`, {
           cache: "no-store",
           credentials: "include",
-          signal: AbortSignal.timeout(3_000),
+          headers: { "x-silent": "true" },
+          signal: AbortSignal.timeout(10_000),
         });
         if (!response.ok) return;
         const body = await response.json();
@@ -204,7 +207,10 @@ export function GlobalAlertCenter() {
     const refreshEvidence = async () => {
       try {
         const response = await fetch(`/v1/alerts/${encodeURIComponent(current.id)}/evidence/status`, {
-          cache: "no-store", credentials: "include", signal: AbortSignal.timeout(3_000),
+          cache: "no-store",
+          credentials: "include",
+          headers: { "x-silent": "true" },
+          signal: AbortSignal.timeout(10_000),
         });
         if (!response.ok || cancelled) return;
         const status = await response.json() as AlertEvidenceCaptureStatus;

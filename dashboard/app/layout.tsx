@@ -55,12 +55,11 @@ const THEME_SCRIPT = `
   }
 
   // Auto-recover from ChunkLoadError (timeout / hash mismatch after new deployments)
-  function handleChunkFailure(targetUrlOrMsg) {
+  function handleChunkFailure(targetUrlOrMsg, isScriptTag) {
     var str = (targetUrlOrMsg || '') + '';
-    if (
-      /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(str) ||
-      str.indexOf('/_next/static/chunks/') !== -1
-    ) {
+    var isChunkError = /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(str);
+    var isScriptFailure = isScriptTag === true && str.indexOf('/_next/static/chunks/') !== -1;
+    if (isChunkError || isScriptFailure) {
       var guardKey = 'sentinel_chunk_reload_guard';
       var lastReload = sessionStorage.getItem(guardKey);
       var now = Date.now();
@@ -75,16 +74,16 @@ const THEME_SCRIPT = `
   window.addEventListener('error', function(event) {
     if (!event) return;
     if (event.error && (event.error.name === 'ChunkLoadError' || /Loading chunk/i.test(event.error.message))) {
-      handleChunkFailure(event.error.message);
+      handleChunkFailure(event.error.message, false);
       return;
     }
     if (event.message && /Loading chunk|ChunkLoadError/i.test(event.message)) {
-      handleChunkFailure(event.message);
+      handleChunkFailure(event.message, false);
       return;
     }
     var target = event.target || event.srcElement;
     if (target && target.tagName === 'SCRIPT' && target.src && target.src.indexOf('/_next/static/chunks/') !== -1) {
-      handleChunkFailure(target.src);
+      handleChunkFailure(target.src, true);
     }
   }, true);
 
@@ -93,7 +92,7 @@ const THEME_SCRIPT = `
     var reason = event.reason;
     var msg = (reason && (reason.message || reason.stack || reason)) + '';
     if (/Loading chunk|ChunkLoadError/i.test(msg)) {
-      handleChunkFailure(msg);
+      handleChunkFailure(msg, false);
     }
   });
 })();

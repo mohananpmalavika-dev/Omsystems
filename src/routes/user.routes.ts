@@ -51,9 +51,9 @@ const createUserSchema = z.object({
   facePhotoBase64: z
     .string()
     .max(2_800_000)
-    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
+    .regex(/^data:image\/(jpe?g|png|webp);base64,/i, "Invalid employee face photo")
     .optional(),
-  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpeg|png|webp);base64,/)).min(3).max(7).optional(),
+  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpe?g|png|webp);base64,/i)).min(3).max(7).optional(),
   faceEnrolled: z.boolean().optional(),
   customRoleId: z.string().uuid().optional().nullable(),
 });
@@ -94,9 +94,9 @@ const updateUserSchema = z.object({
   facePhotoBase64: z
     .string()
     .max(2_800_000)
-    .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
+    .regex(/^data:image\/(jpe?g|png|webp);base64,/i, "Invalid employee face photo")
     .optional(),
-  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpeg|png|webp);base64,/)).min(3).max(7).optional(),
+  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpe?g|png|webp);base64,/i)).min(3).max(7).optional(),
   faceEnrolled: z.boolean().optional(),
   customRoleId: z.string().uuid().optional().nullable(),
 });
@@ -332,9 +332,12 @@ export async function registerUserRoutes(
             : await createEmployeeFaceTemplate(body.facePhotoBase64!),
         );
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : "Unable to process employee face photo";
         return reply.code(400).send({
           error: "invalid_face_photo",
-          message: error instanceof Error ? error.message : "Unable to process employee face photo",
+          message: errorMsg.includes("visual detail")
+            ? "Unable to extract facial biometric features from this image. Please upload a clear frontal face portrait, or remove the photo to enroll the employee without facial biometrics."
+            : errorMsg,
         });
       }
     }
@@ -343,14 +346,25 @@ export async function registerUserRoutes(
     // image is retained only as the existing profile photo field for display.
     const passwordHash = await hashPassword(body.password);
 
-    const user = await store.createUser(request.currentUser.tenantId, {
-      ...body,
-      profilePhotoUrl: body.facePhotosBase64?.[0] ?? body.facePhotoBase64 ?? body.photoUrl ?? body.avatarUrl,
-      preferences: biometricPreferences,
-      passwordHash,
-      createdBy: request.currentUser.id,
-      organizationScopeNodeIds: scopeNodeIds,
-    });
+    let user;
+    try {
+      user = await store.createUser(request.currentUser.tenantId, {
+        ...body,
+        profilePhotoUrl: body.facePhotosBase64?.[0] ?? body.facePhotoBase64 ?? body.photoUrl ?? body.avatarUrl,
+        preferences: biometricPreferences,
+        passwordHash,
+        createdBy: request.currentUser.id,
+        organizationScopeNodeIds: scopeNodeIds,
+      });
+    } catch (error: any) {
+      if (error?.statusCode === 409 || error?.code === "23505" || error?.code === "username_taken" || error?.code === "email_taken" || error?.code === "user_already_exists") {
+        return reply.code(409).send({
+          error: error.code || "conflict",
+          message: error.message || "An employee with this username or corporate email already exists in this organization.",
+        });
+      }
+      throw error;
+    }
 
     await store.writeAudit({
       tenantId: user.tenantId || request.currentUser.tenantId,

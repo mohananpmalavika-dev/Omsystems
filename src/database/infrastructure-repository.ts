@@ -949,8 +949,28 @@ export class InfrastructureRepository {
       }
       if (ownsTransaction) await client.query("COMMIT");
       return this.getUserWithPassword(id);
-    } catch (error) {
+    } catch (error: any) {
       if (ownsTransaction) await client.query("ROLLBACK");
+      if (error?.code === "23505") {
+        const detail = (error.detail || error.message || "").toLowerCase();
+        const constraint = (error.constraint || "").toLowerCase();
+        if (detail.includes("email") || constraint.includes("email")) {
+          const err: any = new Error("An employee with this corporate email already exists in this organization.");
+          err.statusCode = 409;
+          err.code = "email_taken";
+          throw err;
+        }
+        if (detail.includes("username") || detail.includes("identity_subject") || constraint.includes("username") || constraint.includes("identity_subject")) {
+          const err: any = new Error("An employee with this login username already exists in this organization.");
+          err.statusCode = 409;
+          err.code = "username_taken";
+          throw err;
+        }
+        const err: any = new Error("An employee with these credentials already exists in this organization.");
+        err.statusCode = 409;
+        err.code = "user_already_exists";
+        throw err;
+      }
       throw error;
     } finally {
       if (ownsTransaction) client.release();

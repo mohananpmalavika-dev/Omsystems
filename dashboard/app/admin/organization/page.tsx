@@ -188,6 +188,7 @@ export default function OrganizationHierarchyPage() {
   const [newEmpCustomRoleId, setNewEmpCustomRoleId] = useState("");
   const [empPhotoData, setEmpPhotoData] = useState<string>("");
   const [empFacePoseSamples, setEmpFacePoseSamples] = useState<string[]>([]);
+  const [empModalError, setEmpModalError] = useState<string | null>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -524,12 +525,13 @@ export default function OrganizationHierarchyPage() {
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setEmpModalError(null);
     if (!file.type.startsWith("image/")) {
-      setError("Please select a valid JPG/PNG/WEBP image file.");
+      setEmpModalError("Please select a valid JPG/PNG/WEBP image file.");
       return;
     }
     if (file.size > 2_000_000) {
-      setError("Please choose an image smaller than 2 MB.");
+      setEmpModalError("Please choose an image smaller than 2 MB.");
       return;
     }
     const reader = new FileReader();
@@ -537,7 +539,11 @@ export default function OrganizationHierarchyPage() {
       if (typeof reader.result === "string") {
         setEmpPhotoData(reader.result);
         setEmpFacePoseSamples([reader.result]);
+        setEmpModalError(null);
       }
+    };
+    reader.onerror = () => {
+      setEmpModalError("Unable to read the image file.");
     };
     reader.readAsDataURL(file);
   }
@@ -803,14 +809,15 @@ export default function OrganizationHierarchyPage() {
   async function handleCreateEmployee(e: React.FormEvent) {
     e.preventDefault();
     if (!newEmpName.trim() || !newEmpEmail.trim() || !newEmpUsername.trim() || !newEmpPassword || !newEmpScopeNodeIds.length) {
-      setError("Please fill all required fields, including login credentials and location scope.");
+      setEmpModalError("Please fill all required fields, including login credentials and location scope.");
       return;
     }
     if (newEmpPassword.length < 8) {
-      setError("The employee password must be at least 8 characters long.");
+      setEmpModalError("The employee password must be at least 8 characters long.");
       return;
     }
     setSaving(true);
+    setEmpModalError(null);
     setError(null);
     try {
       const scopeNodeIds = [...newEmpScopeNodeIds];
@@ -834,16 +841,18 @@ export default function OrganizationHierarchyPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(20_000),
       });
 
       if (!res.ok) {
-        const errJson = await res.json();
-        throw new Error(errJson.message || "Failed to create employee");
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || errJson.error || `Failed to create employee (status ${res.status})`);
       }
-      await res.json();
+      await res.json().catch(() => ({}));
 
       setNotice(`Employee ${newEmpName} enrolled successfully${empPhotoData ? " with a facial biometric profile for restricted areas." : "."}`);
       setShowAddEmpModal(false);
+      setEmpModalError(null);
       setNewEmpName("");
       setNewEmpEmail("");
       setNewEmpUsername("");
@@ -856,7 +865,9 @@ export default function OrganizationHierarchyPage() {
       stopWebcam();
       await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
-      setError(err.message || "Failed to create employee");
+      const msg = err?.message || "Failed to create employee";
+      setEmpModalError(msg);
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -1369,6 +1380,8 @@ export default function OrganizationHierarchyPage() {
             <button
               onClick={() => {
                 setEmpPhotoData("");
+                setEmpFacePoseSamples([]);
+                setEmpModalError(null);
                 setShowAddEmpModal(true);
               }}
               className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-2 transition-colors shadow-lg shadow-emerald-950"
@@ -2432,6 +2445,7 @@ export default function OrganizationHierarchyPage() {
                 <button
                   onClick={() => {
                     stopWebcam();
+                    setEmpModalError(null);
                     setShowAddEmpModal(false);
                   }}
                   className="text-slate-400 hover:text-slate-200 text-sm font-bold"
@@ -2439,6 +2453,37 @@ export default function OrganizationHierarchyPage() {
                   &times;
                 </button>
               </div>
+
+              {empModalError && (
+                <div className="p-3 bg-rose-950/70 border border-rose-500/40 text-rose-200 text-xs rounded-xl space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2">
+                      <XCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                      <span className="font-medium leading-relaxed">{empModalError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setEmpModalError(null)}
+                      className="text-rose-400 hover:text-rose-200 text-sm font-bold ml-1"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                  {(empPhotoData || empFacePoseSamples.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEmpPhotoData("");
+                        setEmpFacePoseSamples([]);
+                        setEmpModalError(null);
+                      }}
+                      className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded text-[11px] font-medium flex items-center gap-1.5 transition-colors"
+                    >
+                      <RotateCcw size={12} /> Clear photo and enroll without biometrics
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Photo Capture / Upload Section */}
               <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
@@ -2571,7 +2616,7 @@ export default function OrganizationHierarchyPage() {
 
                   <label className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors border border-slate-700 cursor-pointer text-center">
                     <Upload size={14} /> Upload Image
-                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleFileUpload} className="hidden" />
+                    <input type="file" accept="image/jpeg,image/jpg,image/png,image/webp" onChange={handleFileUpload} className="hidden" />
                   </label>
 
                   {empPhotoData && (

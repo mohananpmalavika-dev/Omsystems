@@ -27,12 +27,12 @@ export interface FaceVerificationResult {
 }
 
 function decodeImageDataUrl(value: string): Buffer {
-  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(value);
+  const match = /^data:image\/(jpe?g|png|webp);base64,\s*([A-Za-z0-9+/=\s]+)$/i.exec(value.trim());
   if (!match) {
     throw new Error("Facial scan must be a JPEG, PNG, or WEBP image");
   }
 
-  const encodedImage = match[2];
+  const encodedImage = match[2].replace(/\s+/g, "");
   if (!encodedImage) {
     throw new Error("Facial scan is empty");
   }
@@ -67,7 +67,7 @@ async function normalizeImage(value: string): Promise<Buffer> {
     0,
   ) / normalized.data.length;
   if (variance < 25) {
-    throw new Error("Facial scan does not contain enough visual detail");
+    throw new Error("Facial scan does not contain enough visual detail (a clear frontal photo is required for biometric enrollment)");
   }
 
   return normalized.data;

@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     const response = await fetch(`${CONTROL_PLANE_URL}/api/security/posture`, {
       headers,
       cache: "no-store",
-      signal: AbortSignal.timeout(5_000),
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {

@@ -61,7 +61,9 @@ export const StorageFailoverStatus: React.FC = () => {
 
   const fetchFailoverStatus = async () => {
     try {
-      const response = await fetch('/api/storage/failover-status');
+      const response = await fetch('/api/storage/failover-status', {
+        headers: { 'x-silent': 'true' },
+      });
       const data = await response.json();
       setData(data);
       setLoading(false);

@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { useNotifications } from "@/components/notifications/NotificationsProvider";
 
 const DEDUPE_WINDOW_MS = 10_000;
+const NETWORK_ERROR_DEDUPE_MS = 60_000;
 
 type ApiErrorBody = {
   message?: unknown;
@@ -19,6 +20,33 @@ function isDashboardApiRequest(input: RequestInfo | URL): boolean {
   } catch {
     return false;
   }
+}
+
+function isSilentRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+  try {
+    if (init?.headers) {
+      const headers = new Headers(init.headers);
+      if (headers.get("x-silent") === "true") return true;
+    }
+    if (input instanceof Request && input.headers.get("x-silent") === "true") {
+      return true;
+    }
+  } catch {
+    // Ignore inspection errors
+  }
+  return false;
+}
+
+function isIgnorableFetchError(error: unknown): boolean {
+  if (!error) return false;
+  if (error instanceof DOMException) {
+    return error.name === "AbortError" || error.name === "TimeoutError";
+  }
+  if (typeof error === "object" && error !== null && "name" in error) {
+    const name = (error as { name?: unknown }).name;
+    return name === "AbortError" || name === "TimeoutError" || name === "CanceledError";
+  }
+  return false;
 }
 
 async function messageFromResponse(response: Response): Promise<string> {
@@ -46,25 +74,34 @@ export function ApiErrorNotifier() {
   useEffect(() => {
     const originalFetch = window.fetch;
 
-    const notify = (message: string) => {
+    const notify = (message: string, dedupeMs = DEDUPE_WINDOW_MS) => {
+      // Suppress notifications when the page is in the background
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
       const now = Date.now();
       const previous = recentErrors.current.get(message) ?? 0;
-      if (now - previous < DEDUPE_WINDOW_MS) return;
+      if (now - previous < dedupeMs) return;
       recentErrors.current.set(message, now);
       showToast(message, "error");
     };
 
     window.fetch = async function visibleApiFetch(input, init) {
       const isApiRequest = isDashboardApiRequest(input);
+      const isSilent = isSilentRequest(input, init);
+
       try {
         const response = await originalFetch(input, init);
-        if (isApiRequest && !response.ok) {
-          void messageFromResponse(response).then(notify);
+        if (isApiRequest && !isSilent && !response.ok) {
+          void messageFromResponse(response).then((msg) => notify(msg, DEDUPE_WINDOW_MS));
         }
         return response;
       } catch (error) {
-        if (isApiRequest && !(error instanceof DOMException && error.name === "AbortError")) {
-          notify("Unable to reach the service. Check your connection and try again.");
+        if (isApiRequest && !isSilent && !isIgnorableFetchError(error)) {
+          notify(
+            "Unable to reach the service. Check your connection and try again.",
+            NETWORK_ERROR_DEDUPE_MS,
+          );
         }
         throw error;
       }

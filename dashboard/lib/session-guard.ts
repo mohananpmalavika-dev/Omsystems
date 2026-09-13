@@ -82,6 +82,7 @@ async function checkSession() {
     const token = sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'x-silent': 'true',
     };
     if (token) {
       headers['x-sentinel-session'] = token;

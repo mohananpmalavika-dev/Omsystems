@@ -111,7 +111,8 @@ export default function SecurityDashboard() {
       const response = await fetch('/api/security/posture', {
         cache: 'no-store',
         credentials: 'include',
-        signal: AbortSignal.timeout(6_000),
+        headers: isBackgroundRefresh ? { 'x-silent': 'true' } : undefined,
+        signal: AbortSignal.timeout(12_000),
       });
       const data = await response.json().catch(() => null) as SecurityOperationsPosture | { message?: string } | null;
       if (!response.ok || !data || !('available' in data) || data.available !== true || !data.summary || !data.operations) {
