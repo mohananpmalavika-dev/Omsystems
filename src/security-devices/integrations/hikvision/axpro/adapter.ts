@@ -1,4 +1,4 @@
-import { BaseSecurityDeviceAdapter } from '../../../adapters/base-adapter.js';
+import { BaseSecurityDeviceAdapter } from '../../../adapters/base-adapter';
 import {
   ConnectionResult,
   DeviceCapability,
@@ -13,9 +13,9 @@ import {
   SecurityDeviceEvent,
   SecurityDeviceHealthSnapshot,
   SecurityDeviceType,
-} from '../../../domain/security-device.types.js';
-import { AxProClient } from './client.js';
-import { AxProError } from './errors.js';
+} from '../../../domain/security-device.types';
+import { AxProClient } from './client';
+import { AxProError } from './errors';
 import {
   axProDeviceStatusFromHealth,
   axProReadOnlyCapabilities,
@@ -26,8 +26,8 @@ import {
   mapAxProHealthSnapshot,
   mapAxProHub,
   mapAxProSystemInfo,
-} from './mapper.js';
-import { AxProConnectionConfig, AxProConnectionResult, AxProCredentials, AxProEventContext } from './types.js';
+} from './mapper';
+import { AxProConnectionConfig, AxProConnectionResult, AxProCredentials, AxProEventContext } from './types';
 
 export type AxProCredentialResolver = (credentialSecretId: string) => Promise<AxProCredentials>;
 

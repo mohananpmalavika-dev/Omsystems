@@ -5,7 +5,7 @@
  * Supports vendor-specific API integrations through configuration.
  */
 
-import { BaseSecurityDeviceAdapter } from './base-adapter.js';
+import { BaseSecurityDeviceAdapter } from './base-adapter';
 import {
   SecurityDevice,
   SecurityDeviceHealthSnapshot,
@@ -20,7 +20,7 @@ import {
   DeviceProtocol,
   SecurityDeviceType,
   DeviceStatus,
-} from '../domain/security-device.types.js';
+} from '../domain/security-device.types';
 
 interface RestApiConfig {
   baseUrl?: string;

@@ -5,7 +5,7 @@
  * Simple Network Management Protocol is widely used for network device monitoring.
  */
 
-import { BaseSecurityDeviceAdapter } from './base-adapter.js';
+import { BaseSecurityDeviceAdapter } from './base-adapter';
 import {
   SecurityDevice,
   SecurityDeviceHealthSnapshot,
@@ -20,7 +20,7 @@ import {
   DeviceProtocol,
   SecurityDeviceType,
   DeviceStatus,
-} from '../domain/security-device.types.js';
+} from '../domain/security-device.types';
 
 // Common SNMP OIDs
 const SNMP_OIDS = {

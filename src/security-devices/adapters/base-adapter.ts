@@ -19,7 +19,7 @@ import {
   ConnectionResult,
   DeviceProtocol,
   SecurityDeviceType,
-} from '../domain/security-device.types.js';
+} from '../domain/security-device.types';
 
 export abstract class BaseSecurityDeviceAdapter implements SecurityDeviceAdapter {
   abstract readonly adapterName: string;

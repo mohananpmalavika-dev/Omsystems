@@ -13,9 +13,9 @@ import {
   SecurityDeviceType,
   DeviceProtocol,
   BulkEnrollDevicesRequest,
-} from '../domain/security-device.types.js';
-import { adapterRegistry } from '../adapters/index.js';
-import { getSecurityDeviceService } from './security-device.service.js';
+} from '../domain/security-device.types';
+import { adapterRegistry } from '../adapters/index';
+import { getSecurityDeviceService } from './security-device.service';
 
 export interface DiscoveryJob {
   id: string;

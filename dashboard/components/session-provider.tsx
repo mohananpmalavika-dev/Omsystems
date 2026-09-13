@@ -86,6 +86,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setSessionReady(false);
 
     const validateSession = async () => {
+      try {
         // Attempt to sync active session from open tabs if present
         const hasActiveBrowserSession = await syncSessionFromOpenTabs();
         if (cancelled) return;

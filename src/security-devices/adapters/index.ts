@@ -4,13 +4,13 @@
  * Export all security device adapters and the adapter registry.
  */
 
-export { BaseSecurityDeviceAdapter } from './base-adapter.js';
-export { OnvifAdapter } from './onvif-adapter.js';
-export { SnmpAdapter } from './snmp-adapter.js';
-export { RestAdapter } from './rest-adapter.js';
-export { MqttAdapter } from './mqtt-adapter.js';
-export { AxProAdapter } from '../integrations/hikvision/axpro/index.js';
+export { BaseSecurityDeviceAdapter } from './base-adapter';
+export { OnvifAdapter } from './onvif-adapter';
+export { SnmpAdapter } from './snmp-adapter';
+export { RestAdapter } from './rest-adapter';
+export { MqttAdapter } from './mqtt-adapter';
+export { AxProAdapter } from '../integrations/hikvision/axpro/index';
 export {
   SecurityDeviceAdapterRegistry,
   adapterRegistry,
-} from './adapter-registry.js';
+} from './adapter-registry';

@@ -9,9 +9,9 @@ import {
   SecurityDeviceEventType,
   SecurityDeviceHealthSnapshot,
   SecurityDeviceType,
-} from '../../../domain/security-device.types.js';
-import { AxProConnectionConfig, AxProEventContext, AxProEventMappingResult, AxProNormalizedHealth, AxProRawPayload, AxProSystemInfo } from './types.js';
-import { isRecord } from './client.js';
+} from '../../../domain/security-device.types';
+import { AxProConnectionConfig, AxProEventContext, AxProEventMappingResult, AxProNormalizedHealth, AxProRawPayload, AxProSystemInfo } from './types';
+import { isRecord } from './client';
 
 const READ_ONLY_CAPABILITIES: DeviceCapability[] = ['HEALTH_READ', 'EVENT_READ', 'STATUS_READ', 'METRICS_READ', 'LOG_READ'];
 

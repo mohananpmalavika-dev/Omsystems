@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
-import { AxProConnectionConfig, AxProCredentials, AxProRawPayload } from './types.js';
-import { AxProError } from './errors.js';
+import { AxProConnectionConfig, AxProCredentials, AxProRawPayload } from './types';
+import { AxProError } from './errors';
 
 type FetchLike = (input: string | URL, init?: RequestInit) => Promise<Response>;
 

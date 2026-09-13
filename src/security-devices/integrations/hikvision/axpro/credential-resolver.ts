@@ -1,5 +1,5 @@
-import { AxProCredentialResolver } from './adapter.js';
-import { AxProCredentials } from './types.js';
+import { AxProCredentialResolver } from './adapter';
+import { AxProCredentials } from './types';
 
 let resolver: AxProCredentialResolver | undefined;
 

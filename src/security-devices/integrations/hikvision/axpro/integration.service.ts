@@ -1,11 +1,11 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { Pool } from 'pg';
-import { AxProAdapter } from './adapter.js';
-import { getConfiguredAxProCredentialResolver } from './credential-resolver.js';
-import { parseAxProPayload } from './client.js';
-import { extractAxProEventRecords, mapAxProEvent } from './mapper.js';
-import { AxProConnectionConfig, AxProIntegrationSummary } from './types.js';
-import { DiscoveredDevice, SecurityDeviceEvent } from '../../../domain/security-device.types.js';
+import { AxProAdapter } from './adapter';
+import { getConfiguredAxProCredentialResolver } from './credential-resolver';
+import { parseAxProPayload } from './client';
+import { extractAxProEventRecords, mapAxProEvent } from './mapper';
+import { AxProConnectionConfig, AxProIntegrationSummary } from './types';
+import { DiscoveredDevice, SecurityDeviceEvent } from '../../../domain/security-device.types';
 
 export interface CreateAxProIntegrationInput {
   name: string;

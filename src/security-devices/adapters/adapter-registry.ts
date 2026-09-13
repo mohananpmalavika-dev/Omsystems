@@ -10,12 +10,12 @@ import {
   SecurityDeviceAdapter,
   DeviceProtocol,
   SecurityDeviceType,
-} from '../domain/security-device.types.js';
-import { OnvifAdapter } from './onvif-adapter.js';
-import { SnmpAdapter } from './snmp-adapter.js';
-import { RestAdapter } from './rest-adapter.js';
-import { MqttAdapter } from './mqtt-adapter.js';
-import { AxProAdapter } from '../integrations/hikvision/axpro/index.js';
+} from '../domain/security-device.types';
+import { OnvifAdapter } from './onvif-adapter';
+import { SnmpAdapter } from './snmp-adapter';
+import { RestAdapter } from './rest-adapter';
+import { MqttAdapter } from './mqtt-adapter';
+import { AxProAdapter } from '../integrations/hikvision/axpro/index';
 
 export class SecurityDeviceAdapterRegistry {
   private static instance: SecurityDeviceAdapterRegistry;
