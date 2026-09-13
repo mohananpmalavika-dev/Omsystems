@@ -60,7 +60,7 @@ for Z in "${CANDIDATE_ZONES[@]}"; do
         VM_CREATED=1
         echo "Triggering live container rebuild and restart on $INSTANCE_NAME..."
         gcloud compute ssh "$INSTANCE_NAME" --zone="$Z" --project="$PROJECT_ID" \
-            --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && cd deploy/gcp && docker compose -f docker-compose.gcp.yml build control-plane dashboard && docker compose -f docker-compose.gcp.yml up -d --force-recreate control-plane dashboard'" || true
+            --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'" || true
         break
     fi
 done
