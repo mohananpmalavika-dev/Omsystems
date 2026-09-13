@@ -12,6 +12,15 @@ const config = z.object({
   CONTROL_PLANE_URL: serviceUrl,
   ANALYTICS_ENGINE_SHARED_KEY: z.string().min(32),
   ANALYTICS_SOURCE_SHARED_KEY: z.string().min(32),
+  INCIDENT_API_URL: serviceUrl.optional(),
+  INCIDENT_API_KEY: z.string().min(32).optional(),
+}).superRefine((value, context) => {
+  if (Boolean(value.INCIDENT_API_URL) !== Boolean(value.INCIDENT_API_KEY)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "INCIDENT_API_URL and INCIDENT_API_KEY must be configured together",
+    });
+  }
 }).parse(process.env);
 
 const app = buildAnalyticsEngine({
@@ -24,6 +33,9 @@ const app = buildAnalyticsEngine({
     fallbackSharedKey: config.ANALYTICS_SOURCE_SHARED_KEY,
   }),
   logger: true,
+  ...(config.INCIDENT_API_URL && config.INCIDENT_API_KEY
+    ? { incidentIntegration: { url: config.INCIDENT_API_URL, apiKey: config.INCIDENT_API_KEY } }
+    : {}),
 });
 
 await app.listen({ host: config.HOST, port: config.PORT });

@@ -365,6 +365,9 @@ export class ConditionalScheduler {
         case 'intrusion':
         case 'line-crossing':
         case 'wrong-direction':
+        case 'after-hours-person':
+        case 'employee-only-zone':
+        case 'restricted-multiple-person':
           required.add('yolov8n'); // Base person detection
           break;
 

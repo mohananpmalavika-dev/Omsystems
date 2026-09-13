@@ -404,6 +404,24 @@ export async function registerDetectionApiRoutes(
           supported: true,
         },
         {
+          type: "after-hours-person",
+          name: "After-hours Person Detection",
+          features: ["authoritative-branch-hours", "zone-based"],
+          supported: true,
+        },
+        {
+          type: "employee-only-zone",
+          name: "Employee-only Zone Violation",
+          features: ["trusted-access-context", "zone-based"],
+          supported: true,
+        },
+        {
+          type: "restricted-multiple-person",
+          name: "Restricted-zone Multiple-person Entry",
+          features: ["zone-occupancy", "threshold-alerting"],
+          supported: true,
+        },
+        {
           type: "heatmap",
           name: "Heat Map Analysis",
           features: ["traffic-flow", "hotspot-detection", "pattern-analysis"],

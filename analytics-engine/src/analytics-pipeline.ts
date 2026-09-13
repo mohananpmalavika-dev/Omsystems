@@ -579,6 +579,64 @@ export class AnalyticsPipeline {
         }
         break;
 
+      case "after-hours-person":
+        // The authoritative branch-hours service supplies this flag to the
+        // trusted frame source. Never infer hours from a worker's local clock.
+        if (rule.zone.shape === "polygon" && frame.metadata?.branchClosed === true) {
+          const persons = filteredObjects.filter((object) =>
+            object.label === "person" && isInsideZone(object.boundingBox, rule.zone!.points),
+          );
+          if (persons.length > 0) {
+            results = [{
+              detectionType: "after-hours-person",
+              confidence: Math.max(...persons.map((person) => person.confidence ?? 0)),
+              objects: persons,
+              metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, branchClosed: true },
+              requiresAlert: true,
+            }];
+          }
+        }
+        break;
+
+      case "employee-only-zone":
+        // A visual detector must not invent identity. Only a signed access
+        // context can mark a tracked person as unauthorised for this zone.
+        if (rule.zone.shape === "polygon") {
+          const unauthorised = filteredObjects.filter((object) => {
+            if (object.label !== "person" || !isInsideZone(object.boundingBox, rule.zone!.points)) return false;
+            const authorisedZones = object.attributes?.authorisedZoneIds;
+            return Array.isArray(authorisedZones) && !authorisedZones.includes(rule.zone!.id);
+          });
+          if (unauthorised.length > 0) {
+            results = [{
+              detectionType: "employee-only-zone",
+              confidence: Math.max(...unauthorised.map((person) => person.confidence ?? 0)),
+              objects: unauthorised,
+              metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, authorizationSource: "trusted-edge-context" },
+              requiresAlert: true,
+            }];
+          }
+        }
+        break;
+
+      case "restricted-multiple-person":
+        if (rule.zone.shape === "polygon") {
+          const persons = filteredObjects.filter((object) =>
+            object.label === "person" && isInsideZone(object.boundingBox, rule.zone!.points),
+          );
+          const threshold = Math.max(2, Math.floor(rule.minDurationSeconds || 2));
+          if (persons.length >= threshold) {
+            results = [{
+              detectionType: "restricted-multiple-person",
+              confidence: Math.max(...persons.map((person) => person.confidence ?? 0)),
+              objects: persons,
+              metadata: { zoneId: rule.zone.id, zoneName: rule.zone.name, personCount: persons.length, threshold },
+              requiresAlert: true,
+            }];
+          }
+        }
+        break;
+
       case "loitering":
         if (rule.zone.shape === "polygon") {
           results = await this.zoneDetector.detectLoitering(
@@ -745,6 +803,7 @@ export class AnalyticsPipeline {
       "wrong-direction",
       "face", "face-recognition", "watchlist-match",
       "camera-tamper", "camera-tampering", "unattended-object", "abandoned-object", "removed-object",
+      "after-hours-person", "employee-only-zone", "restricted-multiple-person",
     ]);
   }
 
@@ -802,6 +861,9 @@ export class AnalyticsPipeline {
       "queue",
       "unattended-object",
       "abandoned-object",
+      "after-hours-person",
+      "employee-only-zone",
+      "restricted-multiple-person",
     ];
 
     return rules.some(
@@ -1129,4 +1191,20 @@ export class AnalyticsPipeline {
 function environmentProbability(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+}
+
+function isInsideZone(
+  box: { x: number; y: number; width: number; height: number },
+  polygon: Array<{ x: number; y: number }>,
+): boolean {
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  let inside = false;
+  for (let current = 0, previous = polygon.length - 1; current < polygon.length; previous = current++) {
+    const a = polygon[current]!;
+    const b = polygon[previous]!;
+    const intersects = (a.y > point.y) !== (b.y > point.y)
+      && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 }

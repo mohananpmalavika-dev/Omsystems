@@ -152,12 +152,24 @@ export class StreamProcessor {
             if (this.incidentHook) {
               try {
                 const detectionSummary = {
-                  detectionType: event.detectionType,
+                  // Keep the integration contract explicit.  The earlier
+                  // adapter passed only an internal summary, which discarded
+                  // tenant/camera/time/confidence and made incident creation
+                  // impossible to authorise or correlate correctly.
+                  type: event.detectionType,
+                  confidence: event.confidence,
+                  cameraId: event.cameraId,
+                  tenantId: event.tenantId,
+                  branchId: context.source.branchId,
+                  timestamp: event.occurredAt,
+                  zone: typeof event.metadata?.zoneId === "string"
+                    ? event.metadata.zoneId
+                    : typeof event.metadata?.zoneName === "string"
+                      ? event.metadata.zoneName
+                      : undefined,
                   metadata: event.metadata ?? {},
-                  objects: event.objects ?? [],
-                  frame,
                 };
-                await this.incidentHook.onDetection(detectionSummary as any);
+                await this.incidentHook.onDetection(detectionSummary);
               } catch (hookErr) {
                 console.error('incident integration hook failed', hookErr);
               }
