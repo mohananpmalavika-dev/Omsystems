@@ -176,6 +176,12 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
         );
       }
     }
+    const isLogout = pathString === "auth/logout" || pathString === "auth/logout-all";
+    if (isLogout) {
+      const isHttps = requestIsHttps(request);
+      outgoing.cookies.set("sentinel_access", "", { path: "/", maxAge: 0, sameSite: isHttps ? "none" : "lax", secure: isHttps, partitioned: isHttps } as any);
+      outgoing.cookies.set("sentinel_refresh", "", { path: "/", maxAge: 0, sameSite: isHttps ? "none" : "lax", secure: isHttps, partitioned: isHttps } as any);
+    }
 
     return outgoing;
   } catch (error) {

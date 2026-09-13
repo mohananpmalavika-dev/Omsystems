@@ -362,12 +362,12 @@ export class EventBus {
     // Store in tenant-specific event history
     const historyKey = this.getEventHistoryKey(event.tenantId);
     await this.client.lPush(historyKey, JSON.stringify(event));
-    await this.client.lTrim(historyKey, 0, 9999); // Keep last 10k events
-    await this.client.expire(historyKey, 86400 * 7); // 7 days
+    await this.client.lTrim(historyKey, 0, 499); // Keep last 500 events
+    await this.client.expire(historyKey, 3600 * 4); // 4 hours
 
     // Store individual event with TTL
     const eventKey = this.getEventKey(event.tenantId, event.eventId);
-    await this.client.setEx(eventKey, 86400 * 7, JSON.stringify(event)); // 7 days
+    await this.client.setEx(eventKey, 3600 * 4, JSON.stringify(event)); // 4 hours
   }
 
   /**

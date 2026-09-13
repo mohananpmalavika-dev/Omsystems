@@ -21,9 +21,13 @@ export function safeReturnPath(value: string | null | undefined): string {
   }
 }
 
-export function loginPath(reason: string, location: Pick<Location, "pathname" | "search" | "hash">): string {
-  const destination = safeReturnPath(`${location.pathname}${location.search || ""}${location.hash || ""}`);
-  const params = new URLSearchParams({ reason });
+export function loginPath(reason?: string, location?: Pick<Location, "pathname" | "search" | "hash">): string {
+  const destination = location ? safeReturnPath(`${location.pathname}${location.search || ""}${location.hash || ""}`) : "/";
+  const params = new URLSearchParams();
+  if (reason && reason !== "auth_required" && reason !== "login") {
+    params.set("reason", reason);
+  }
   if (destination !== "/") params.set("next", destination);
-  return `/login?${params}`;
+  const q = params.toString();
+  return q ? `/login?${q}` : `/login`;
 }

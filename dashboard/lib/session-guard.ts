@@ -30,7 +30,7 @@ export function isAuthenticated(): boolean {
 /**
  * Redirect to login page
  */
-export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' = 'expired') {
+export async function redirectToLogin(reason: 'expired' | 'invalid' | 'network' | 'auth_required' | 'login' = 'expired') {
   if (typeof window === 'undefined') return;
 
   // End activity session before clearing data

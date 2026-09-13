@@ -3212,14 +3212,6 @@ export async function buildApp(options?: {
     }
   }
 
-  // Register Multi-Camera Synchronized Playback and Timeline Drift Compensation routes
-  try {
-    await registerSynchronizedPlaybackRoutes(app, pool);
-    app.log.info("Multi-camera synchronized playback routes registered");
-  } catch (error) {
-    app.log.warn({ error }, "Failed to register synchronized playback routes");
-  }
-
   // Start export worker if enabled
   if (exportWorker && (options?.enableExportWorker ?? process.env.ENABLE_EXPORT_WORKER !== "false")) {
     startExportWorker(app, exportWorker, pool);

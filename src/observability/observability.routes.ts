@@ -9,13 +9,17 @@ import { digitalTwinTelemetryBridge } from "./digital-twin-telemetry-bridge.serv
 
 export async function registerObservabilityRoutes(app: FastifyInstance) {
   // 1. Authoritative Prometheus Metrics Exposition Endpoint
-  app.get("/metrics", { config: { noAuth: true } }, async (_request, reply) => {
-    const text = vmsMetricsRegistry.formatPrometheusText();
-    return reply
-      .header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-      .code(200)
-      .send(text);
-  });
+  try {
+    app.get("/metrics", { config: { noAuth: true } }, async (_request, reply) => {
+      const text = vmsMetricsRegistry.formatPrometheusText();
+      return reply
+        .header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+        .code(200)
+        .send(text);
+    });
+  } catch (err: any) {
+    if (err?.code !== "FST_ERR_DUPLICATED_ROUTE") throw err;
+  }
 
   // 2. Structured JSON Telemetry Summary for UI / Alerting
   app.get("/api/vms/observability/summary", async (_request, reply) => {

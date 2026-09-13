@@ -106,4 +106,15 @@ describe("session lifecycle and browser close isolation", () => {
     expect(mockLocalStorage.get("accessToken")).toBeUndefined();
     expect(isAuthFromGuard()).toBe(false);
   });
+
+  it("redirects cleanly to /login without error reason on browser close or fresh launch", async () => {
+    mockSessionStorage.clear();
+    mockLocalStorage.clear();
+
+    await redirectToLogin("auth_required");
+
+    expect(mockSessionStorage.size).toBe(0);
+    expect(isAuthFromGuard()).toBe(false);
+    expect(window.location.href).toBe("/login");
+  });
 });
