@@ -12,11 +12,14 @@ authHTTPExclude:
 
 hls: yes
 hlsAddress: :8888
-# Standard HLS is more reliable through the Cloudflare tunnel than LL-HLS
-# blocking playlist/partial-segment requests.
+# Standard HLS (MPEG-TS) is more reliable through Cloudflare tunnels than
+# LL-HLS (which requires sub-second round trips not achievable via Cloudflare).
 hlsVariant: mpegts
-hlsSegmentCount: 5
-hlsSegmentDuration: 2s
+# Buffer depth: 8 segments × 3s = 24s total — enough to absorb Cloudflare
+# tunnel latency (200–400ms) and client-side player prefetch delays without
+# segments expiring before they can be fetched.
+hlsSegmentCount: 8
+hlsSegmentDuration: 3s
 hlsPartDuration: 500ms
 hlsAllowOrigins:
   - "*"
@@ -28,7 +31,11 @@ webrtcAllowOrigins: ["*"]
 
 pathDefaults:
   sourceOnDemand: yes
-  sourceOnDemandStartTimeout: 15s
-  sourceOnDemandCloseAfter: 120s
+  # Increased from 15s: gives the RTSP source time to connect, authenticate,
+  # and buffer enough segments for the m3u8 to be valid before clients poll.
+  sourceOnDemandStartTimeout: 20s
+  # Keep the RTSP connection alive for 3 minutes after the last viewer
+  # leaves to avoid cold-start 500s on quick reconnect.
+  sourceOnDemandCloseAfter: 180s
 
 paths: {}

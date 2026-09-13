@@ -106,13 +106,30 @@ export async function buildMediaGateway(options: {
         }
         const suffix = request.raw.url?.slice("/hls".length) || "/";
         const target = mediaTarget(suffix, options.mediaMtxHlsUrl!);
-        const upstream = await fetch(target, {
-          method: request.method,
-          headers: forwardMediaHeaders(request.headers),
-          signal: AbortSignal.timeout(30_000),
-          redirect: "error",
-        });
-        reply.code(upstream.status);
+
+        // For m3u8 playlist requests, retry on 500 to handle the MediaMTX
+        // source on-demand startup window (RTSP connecting but not yet buffered).
+        // Segment files (.mp4 / .ts / .m4s) are never retried — a 404 means
+        // the segment has expired and the player must re-fetch the playlist.
+        const isPlaylist = suffix.endsWith(".m3u8") || suffix.endsWith(".m3u");
+        const maxAttempts = isPlaylist ? 4 : 1;
+        const retryDelayMs = 1500;
+
+        let upstream: Response | undefined;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          upstream = await fetch(target, {
+            method: request.method,
+            headers: forwardMediaHeaders(request.headers),
+            signal: AbortSignal.timeout(30_000),
+            redirect: "error",
+          });
+          // Retry only on 500 (MediaMTX startup race) for playlist requests
+          if (upstream.status !== 500 || attempt === maxAttempts) break;
+          await upstream.body?.cancel();
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+        }
+
+        reply.code(upstream!.status);
         for (const name of [
           "accept-ranges",
           "cache-control",
@@ -122,17 +139,18 @@ export async function buildMediaGateway(options: {
           "etag",
           "last-modified",
         ]) {
-          const value = upstream.headers.get(name);
+          const value = upstream!.headers.get(name);
           if (value) reply.header(name, value);
         }
-        if (request.method === "HEAD" || upstream.status === 204 || upstream.status === 304 || !upstream.body) {
-          await upstream.body?.cancel();
+        if (request.method === "HEAD" || upstream!.status === 204 || upstream!.status === 304 || !upstream!.body) {
+          await upstream!.body?.cancel();
           return reply.send();
         }
-        return reply.send(Readable.fromWeb(upstream.body as import("node:stream/web").ReadableStream));
+        return reply.send(Readable.fromWeb(upstream!.body as import("node:stream/web").ReadableStream));
       },
     });
   }
+
 
   // WebRTC WHEP / WHIP listener proxy
   const mediaMtxWebRtcUrl = options.mediaMtxWebRtcUrl || process.env.MEDIAMTX_WEBRTC_URL;
