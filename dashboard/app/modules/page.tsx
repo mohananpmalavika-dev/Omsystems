@@ -16,6 +16,7 @@ import { filterAuthorizedQuickActions } from "@/lib/module-directory-access";
 import { authApi } from "@/lib/api-client";
 
 const groupDescriptions: Record<string, string> = {
+  WORKSPACE: "Start with the NBFC operating playbook, then use the full directory only when a specialist workflow is required.",
   OPERATIONS: "Live control room, branch fleet, alert dispatch, incident response, and media streaming pipeline.",
   "DEVICE HEALTH & MAINTENANCE": "Camera, recorder, storage, gateway, power, and network health with diagnostics and recovery tools.",
   "INVESTIGATE & PLAYBACK": "AI semantic video search, synchronized multi-camera playback, recording archives, and chain of custody evidence.",
@@ -71,9 +72,9 @@ export default function ModulesPage() {
     <AppLayout>
       <div className="module-directory-page">
         <PageHero
-          eyebrow="Product directory"
-          title="Every KryptonVision module"
-          description="Find any operational workflow from one organized directory. Search by task, device, report or business function."
+          eyebrow="NBFC operations directory"
+          title="The right workflow for every branch event"
+          description="Start with branch security, incident evidence, cash-area monitoring, and audit readiness. Specialist tools remain available when needed."
           icon={LayoutGrid}
           actions={(
             <div className="page-hero-status">
