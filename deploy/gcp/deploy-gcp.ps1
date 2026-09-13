@@ -108,6 +108,10 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
         --zone=$Zone `
         --metadata-from-file="startup-script=$startupScriptPath" `
         --project=$currentProject
+
+    Write-Host "Triggering live container rebuild and restart on $InstanceName..." -ForegroundColor Cyan
+    & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject `
+        --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && cd deploy/gcp && docker compose -f docker-compose.gcp.yml build control-plane dashboard && docker compose -f docker-compose.gcp.yml up -d --force-recreate control-plane dashboard'"
 }
 
 # 8. Fetch Public External IP
