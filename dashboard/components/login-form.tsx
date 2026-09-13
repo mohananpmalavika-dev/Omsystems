@@ -78,6 +78,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   const [scanAttempts, setScanAttempts] = useState(0);
   const [matchedUser, setMatchedUser] = useState<any>(null);
   const [faceErrorMessage, setFaceErrorMessage] = useState<string | null>(null);
+  const [facePromptMessage, setFacePromptMessage] = useState<string | null>(null);
 
   const scanLockRef = useRef(false);
   const attemptsRef = useRef(0);
@@ -263,6 +264,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     setFaceCameraError(null);
     setFaceCameraReady(false);
     setFaceErrorMessage(null);
+    setFacePromptMessage(null);
     setFaceScanState("starting");
     attemptsRef.current = 0;
     setScanAttempts(0);
@@ -393,6 +395,49 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         }
 
         ctx.drawImage(video, startX, startY, cropSize, cropSize, 0, 0, targetSize, targetSize);
+
+        // Pre-flight face presence verification:
+        // 1. Hardware/browser accelerated Shape Detection API (Chromium / Edge)
+        if (typeof window !== "undefined" && "FaceDetector" in window) {
+          try {
+            const detector = new (window as any).FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+            const detectedFaces = await detector.detect(canvas);
+            if (!detectedFaces || detectedFaces.length === 0) {
+              setFacePromptMessage("Looking for face... Please look directly at the camera.");
+              scanLockRef.current = false;
+              return;
+            }
+          } catch {
+            // Fall back to canvas pixel inspection if FaceDetector throws
+          }
+        }
+
+        // 2. Optical luminance & contrast inspection across the central face zone
+        const sampleArea = Math.floor(targetSize * 0.5);
+        const sampleStart = Math.floor(targetSize * 0.25);
+        const imgData = ctx.getImageData(sampleStart, sampleStart, sampleArea, sampleArea);
+        const pixels = imgData.data;
+        let sumLum = 0;
+        const totalSamples = pixels.length / 4;
+        for (let i = 0; i < pixels.length; i += 4) {
+          sumLum += pixels[i]! * 0.299 + pixels[i + 1]! * 0.587 + pixels[i + 2]! * 0.114;
+        }
+        const avgLum = sumLum / totalSamples;
+        let varianceSum = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          const l = pixels[i]! * 0.299 + pixels[i + 1]! * 0.587 + pixels[i + 2]! * 0.114;
+          varianceSum += (l - avgLum) ** 2;
+        }
+        const lumVariance = varianceSum / totalSamples;
+
+        // If the frame is pitch black, washed out, or completely uniform/blank (e.g. wall, ceiling, covered lens):
+        if (avgLum < 20 || avgLum > 235 || lumVariance < 35) {
+          setFacePromptMessage("Looking for face... Please look directly at the camera.");
+          scanLockRef.current = false;
+          return;
+        }
+
+        setFacePromptMessage(null);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.90);
 
         const response = await authApi.faceLogin(
@@ -480,6 +525,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     attemptsRef.current = 0;
     setScanAttempts(0);
     setFaceErrorMessage(null);
+    setFacePromptMessage(null);
     setFaceScanState("idle");
     startFaceCamera();
   };
@@ -491,6 +537,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     stopFaceCamera();
     setAuthMode("credentials");
     setFaceErrorMessage(null);
+    setFacePromptMessage(null);
     setError(null);
   };
 
@@ -877,7 +924,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
 
                 <div className="face-scan-guidance">
                   <p>
-                    {faceCameraReady
+                    {facePromptMessage
+                      ? facePromptMessage
+                      : faceCameraReady
                       ? "Stand directly in front of the camera. Verification happens automatically without clicking."
                       : "Connecting to secure biometric sensor..."}
                   </p>
