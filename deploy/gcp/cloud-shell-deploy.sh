@@ -13,9 +13,13 @@ DISK_SIZE="80GB"
 # 1. Check GCP Project
 PROJECT_ID=$(gcloud config get-value project 2>/dev/null)
 if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" == "(unset)" ]; then
-    echo "Listing your GCP projects:"
-    gcloud projects list
-    read -p "Enter your Google Cloud Project ID: " PROJECT_ID
+    PROJECT_ID=$(gcloud projects list --format="value(projectId)" --limit=1 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$PROJECT_ID" ]; then
+        gcloud config set project "$PROJECT_ID"
+    fi
+fi
+if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" == "(unset)" ]; then
+    PROJECT_ID="project-7866fc3f-5dd5-4495-804"
     gcloud config set project "$PROJECT_ID"
 fi
 echo "✅ Using Project: $PROJECT_ID"
