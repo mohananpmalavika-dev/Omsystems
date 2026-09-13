@@ -2612,6 +2612,28 @@ export const secureAreaAuthorizationApi = {
     fetchApi<{ data: any[]; report: any }>(`/v1/secure-area-authorizations/reports/datewise?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
   lockerChangeAlerts: (scope: { branchId: string; locationId?: string; from?: string; to?: string }) =>
     fetchApi<{ data: any[]; report: any }>(`/v1/secure-area-authorizations/reports/locker-change-alerts?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+  listCameraMappings: (scope: { branchId?: string; locationId?: string; areaType?: 'cash_counter' | 'locker'; cameraId?: string }) =>
+    fetchApi<{ data: any[] }>(`/v1/secure-area-authorizations/camera-mappings?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+  createCameraMapping: (data: { branchId: string; locationId?: string; cameraId: string; areaType: 'cash_counter' | 'locker'; areaName: string; notes?: string }) =>
+    fetchApi<{ data: any }>('/v1/secure-area-authorizations/camera-mappings', { method: 'POST', body: JSON.stringify(data) }),
+  deleteCameraMapping: (id: string) =>
+    fetchApi<void>(`/v1/secure-area-authorizations/camera-mappings/${id}`, { method: 'DELETE' }),
+  cctvIdentify: (data: {
+    cameraId: string;
+    branchId?: string;
+    locationId?: string;
+    embedding?: number[];
+    facePersonId?: string;
+    detectedAt?: string;
+    snapshotReference?: string;
+    faceBbox?: { x: number; y: number; width: number; height: number };
+    similarityScore?: number;
+  }) =>
+    fetchApi<{ data: any }>('/v1/secure-area-authorizations/cctv-identify', { method: 'POST', body: JSON.stringify(data) }),
+  listCctvEvents: (scope: { branchId?: string; locationId?: string; areaType?: 'cash_counter' | 'locker'; cameraId?: string; verdict?: string; alertsOnly?: boolean; limit?: number }) =>
+    fetchApi<{ data: any[] }>(`/v1/secure-area-authorizations/cctv-events?${new URLSearchParams(Object.entries(scope).filter(([, value]) => value !== undefined && value !== '') as [string, string][])}`),
+  enrollFace: (personId: string, data: { photoBase64?: string; embedding?: number[]; snapshotReference?: string }) =>
+    fetchApi<{ data: any }>(`/v1/secure-area-authorizations/persons/${personId}/enroll-face`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const cameraPermissionApi = {
