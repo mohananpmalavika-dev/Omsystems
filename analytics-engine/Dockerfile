@@ -95,9 +95,15 @@ ENV ANALYTICS_REQUIRE_MODELS=true
 # Switch to non-root user
 USER analytics
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8092/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+# Health check: use /live (liveness) not /health (readiness).
+# /health returns 503 when AI models are initialising or degraded — which is
+# normal on startup and does not mean the process is dead. Docker marks the
+# container (unhealthy) if the HEALTHCHECK exits non-zero, causing unnecessary
+# restarts. /live always returns 200 while the Node.js process is responsive.
+# The /health readiness endpoint is consumed by the control plane's
+# /v1/analytics/engine-health proxy and by Kubernetes readiness probes.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8092/live', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 
 # Expose analytics engine port
 EXPOSE 8092
