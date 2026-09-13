@@ -40,7 +40,7 @@ try {
     `INSERT INTO users (
       tenant_id, identity_subject, display_name, email, username,
       password_hash, role, status, must_change_password, active,
-      failed_login_attempts, locked_until, created_at, updated_at
+      login_attempts, locked_until, created_at, updated_at
     ) VALUES ($1, $2, $3, $4, $5, $6, 'super_admin', 'active', false, true, 0, NULL, NOW(), NOW())
     ON CONFLICT (tenant_id, identity_subject) DO UPDATE SET
       username = EXCLUDED.username,
@@ -50,7 +50,7 @@ try {
       role = 'super_admin',
       status = 'active',
       active = true,
-      failed_login_attempts = 0,
+      login_attempts = 0,
       locked_until = NULL,
       must_change_password = false,
       updated_at = NOW()
