@@ -36,8 +36,20 @@ export async function registerAlertOperationsRoutes(
   }
 
   const registerEndpoints = (prefix: string) => {
+    const safeRoute = (method: "get" | "post" | "put" | "delete", url: string, handler: any) => {
+      try {
+        app[method](url, handler);
+      } catch (err: any) {
+        if (err?.code === "FST_ERR_DUPLICATED_ROUTE") {
+          app.log.warn(`Route ${method.toUpperCase()} ${url} already registered; skipping duplicate.`);
+          return;
+        }
+        throw err;
+      }
+    };
+
     // 1. List Alerts with Query Filters
-    app.get(`${prefix}/alerts`, async (request, reply) => {
+    safeRoute("get", `${prefix}/alerts`, async (request: any, reply: any) => {
       const query = request.query as {
         severity?: any;
         status?: any;
@@ -60,7 +72,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 2. Get Single Alert
-    app.get(`${prefix}/alerts/:id`, async (request, reply) => {
+    safeRoute("get", `${prefix}/alerts/:id`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const alert = await service.getAlert(id);
 
@@ -72,7 +84,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 3. Ingest Raw Event
-    app.post(`${prefix}/alerts/ingest`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/ingest`, async (request: any, reply: any) => {
       const body = request.body as any;
       if (!body || !body.type || !body.branchId || !body.tenantId) {
         return reply.code(400).send({
@@ -93,7 +105,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 4. Server-Authoritative Acknowledge
-    app.post(`${prefix}/alerts/:id/acknowledge`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/acknowledge`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const actor = (request as any).currentUser
         ? { id: (request as any).currentUser.id, name: (request as any).currentUser.name ?? "Operator" }
@@ -114,7 +126,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 5. Tiered Escalation
-    app.post(`${prefix}/alerts/:id/escalate`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/escalate`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const body = (request.body as { reason?: string }) ?? {};
       const actor = (request as any).currentUser
@@ -130,7 +142,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 6. Assign Alert
-    app.post(`${prefix}/alerts/:id/assign`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/assign`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const body = request.body as { userId: string; userName?: string };
       const actor = (request as any).currentUser
@@ -146,7 +158,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 7. Add Comment / Investigation Note
-    app.post(`${prefix}/alerts/:id/comment`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/comment`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const body = request.body as { comment: string };
       const actor = (request as any).currentUser
@@ -162,7 +174,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 8. Resolve Incident with Mandatory Disposition
-    app.post(`${prefix}/alerts/:id/resolve`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/resolve`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const body = request.body as { disposition: any; notes?: string };
       const actor = (request as any).currentUser
@@ -182,7 +194,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 9. Generate Short-Lived Live Stream Session Token
-    app.post(`${prefix}/alerts/:id/live-session`, async (request, reply) => {
+    safeRoute("post", `${prefix}/alerts/:id/live-session`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const actorId = (request as any).currentUser?.id ?? "op-soc-14";
 
@@ -191,7 +203,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 10. Get Audit Timeline Log
-    app.get(`${prefix}/alerts/:id/timeline`, async (request, reply) => {
+    safeRoute("get", `${prefix}/alerts/:id/timeline`, async (request: any, reply: any) => {
       const { id } = alertIdParamSchema.parse(request.params);
       const timeline = await service.getTimeline(id);
       return reply.code(200).send({
@@ -202,7 +214,7 @@ export async function registerAlertOperationsRoutes(
     });
 
     // 11. Daily Alert & SLA Report
-    app.get(`${prefix}/alerts/reports/daily`, async (_request, reply) => {
+    safeRoute("get", `${prefix}/alerts/reports/daily`, async (_request: any, reply: any) => {
       const alerts = await service.listAlerts();
       const p1 = alerts.filter((a) => a.severity === "P1").length;
       const p2 = alerts.filter((a) => a.severity === "P2").length;

@@ -62,19 +62,20 @@ services:
         max-file: "5"
 
   # -------------------------------------------------------------
+  # -------------------------------------------------------------
   # 2. Redis Cache & Distributed Event Bus
   # -------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: sentinel-aws-redis
     restart: always
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-SentinelGridRedisMaster2026} --maxmemory 80mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly no --save "" --requirepass ${REDIS_PASSWORD:-SentinelGridRedisMaster2026} --maxmemory 160mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     ports:
       - "127.0.0.1:6379:6379"
-    mem_limit: 128m
-    memswap_limit: 256m
+    mem_limit: 384m
+    memswap_limit: 768m
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-SentinelGridRedisMaster2026}", "ping"]
       interval: 5s
@@ -122,8 +123,8 @@ services:
       BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
     ports:
       - "8080:8080"
-    mem_limit: 384m
-    memswap_limit: 512m
+    mem_limit: 512m
+    memswap_limit: 768m
     depends_on:
       postgres:
         condition: service_healthy
@@ -161,8 +162,8 @@ services:
       NEXT_PUBLIC_APP_NAME: Sentinel Grid
     ports:
       - "10000:10000"
-    mem_limit: 256m
-    memswap_limit: 384m
+    mem_limit: 384m
+    memswap_limit: 512m
     depends_on:
       - control-plane
     logging:
