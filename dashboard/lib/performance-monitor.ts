@@ -109,7 +109,8 @@ class PerformanceMonitor {
     // Calculate derived metrics
     if (nav.responseStart > 0) {
       this.pageMetrics.metrics.ttfb = nav.responseStart - nav.fetchStart;
-      this.pageMetrics.metrics.fcp = (performance.getEntriesByName('first-contentful-paint')[0] as PerformancePaintTiming)?.startTime ?? 0;
+      const fcpEntries = performance.getEntriesByName('first-contentful-paint');
+      this.pageMetrics.metrics.fcp = (fcpEntries && fcpEntries[0] as PerformancePaintTiming)?.startTime ?? 0;
     }
   }
 
@@ -121,8 +122,10 @@ class PerformanceMonitor {
       try {
         const lcpObserver = new PerformanceObserver((list) => {
           const entries = list.getEntries();
+          if (!entries || entries.length === 0) return;
           const lastEntry = entries[entries.length - 1];
-          const lcp = (lastEntry as any).renderTime || (lastEntry as any).loadTime || lastEntry.startTime;
+          if (!lastEntry) return;
+          const lcp = (lastEntry as any).renderTime || (lastEntry as any).loadTime || (lastEntry as any).startTime || 0;
 
           if (this.pageMetrics) {
             this.pageMetrics.metrics.lcp = lcp;
