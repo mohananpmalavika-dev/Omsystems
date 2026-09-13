@@ -291,8 +291,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       console.warn("Face camera start failed:", err);
       autoScanActiveRef.current = false;
       const isDenied = err.name === "NotAllowedError" || err.name === "PermissionDeniedError";
+      const isEmbedded = typeof window !== "undefined" && window.self !== window.top;
       const msg = isDenied
-        ? "Camera access permission was denied. Please allow camera access in browser settings or sign in with username and password."
+        ? isEmbedded
+          ? "Camera permission is blocked by the host page. The kryptonlogic.com iframe must include allow=\"camera\" (and must not block it with sandbox), then allow the browser prompt."
+          : "Camera access permission was denied. Please allow camera access in browser settings or sign in with username and password."
         : err.message || "Unable to access the camera. Check camera permissions and try again.";
       setFaceCameraError(msg);
       setFaceScanState("camera_error");
@@ -349,7 +352,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
    * Automated Zero-Touch Face Recognition Scanning Loop:
    * Captures frames every 1.2s and runs 1-to-N biometric matching against enrolled faces.
    * If recognized: logs in automatically and redirects.
-   * If not recognized after 3 attempts: stops camera and reverts with "Face not found".
+   * If not recognized after 5 attempts: stops camera and reverts with "Face not found".
    */
   useEffect(() => {
     if (
@@ -368,7 +371,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     const interval = setInterval(async () => {
       if (!autoScanActiveRef.current) return;
       if (scanLockRef.current) return;
-      if (attemptsRef.current >= 3) return;
+      if (attemptsRef.current >= 5) return;
 
       const video = faceVideoRef.current;
       const canvas = faceCanvasRef.current;
@@ -479,11 +482,23 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           }
         }, 850);
       } catch (err: any) {
+        // Do not classify transport, enrollment, or server errors as a face
+        // mismatch. Previously three transient failures were displayed as
+        // "Face not found", which hid the actual deployment problem.
+        const apiCode = err?.details?.error ?? err?.details?.code;
+        const isMismatch = err?.statusCode === 401 && apiCode === "face_not_recognized";
+        if (!isMismatch) {
+          autoScanActiveRef.current = false;
+          if (autoScanTimerRef.current) clearInterval(autoScanTimerRef.current);
+          setFaceScanState("not_found");
+          setFaceErrorMessage(err instanceof Error ? err.message : "Face sign-in service is unavailable. Please try again.");
+          return;
+        }
         attemptsRef.current += 1;
         const currentCount = attemptsRef.current;
         setScanAttempts(currentCount);
 
-        if (currentCount >= 3) {
+        if (currentCount >= 5) {
           // Revert after 3 failed tries
           autoScanActiveRef.current = false;
           if (autoScanTimerRef.current) {
@@ -493,7 +508,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           stopFaceCamera();
           setFaceScanState("not_found");
           setFaceErrorMessage(
-            "Face not found. We could not recognize your face after 3 attempts. Please try again or sign in with your username and password."
+            "Face not found. We could not recognize your face after 5 attempts. Please improve lighting, center your face, and try again."
           );
         }
       } finally {
@@ -912,8 +927,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                         {faceCameraReady
                           ? `Scanning automatically... (Attempt ${Math.min(
                               scanAttempts + 1,
-                              3
-                            )} of 3)`
+                              5
+                            )} of 5)`
                           : "Initializing biometric camera..."}
                       </span>
                     </div>
@@ -931,7 +946,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                       : "Connecting to secure biometric sensor..."}
                   </p>
                   <div className="attempt-progress-dots">
-                    {[1, 2, 3].map((num) => (
+                    {[1, 2, 3, 4, 5].map((num) => (
                       <span
                         key={num}
                         className={`dot-step ${
@@ -941,7 +956,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                             ? "active"
                             : "pending"
                         }`}
-                        title={`Attempt ${num} of 3`}
+                        title={`Attempt ${num} of 5`}
                       />
                     ))}
                   </div>

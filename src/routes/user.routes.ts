@@ -8,6 +8,7 @@ import type {
 import { hashPassword, verifyPassword } from "../security/password.js";
 import {
   createEmployeeFaceTemplate,
+  createEmployeeFaceProfile,
   faceTemplatePreferences,
 } from "../security/employee-face-verification.service.js";
 import {
@@ -52,6 +53,7 @@ const createUserSchema = z.object({
     .max(2_800_000)
     .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
     .optional(),
+  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpeg|png|webp);base64,/)).min(3).max(7).optional(),
   faceEnrolled: z.boolean().optional(),
   customRoleId: z.string().uuid().optional().nullable(),
 });
@@ -94,6 +96,7 @@ const updateUserSchema = z.object({
     .max(2_800_000)
     .regex(/^data:image\/(jpeg|png|webp);base64,/, "Invalid employee face photo")
     .optional(),
+  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpeg|png|webp);base64,/)).min(3).max(7).optional(),
   faceEnrolled: z.boolean().optional(),
   customRoleId: z.string().uuid().optional().nullable(),
 });
@@ -321,10 +324,12 @@ export async function registerUserRoutes(
     }
 
     let biometricPreferences: Record<string, unknown> | undefined;
-    if (body.facePhotoBase64) {
+    if (body.facePhotoBase64 || body.facePhotosBase64) {
       try {
         biometricPreferences = faceTemplatePreferences(
-          await createEmployeeFaceTemplate(body.facePhotoBase64),
+          body.facePhotosBase64
+            ? await createEmployeeFaceProfile(body.facePhotosBase64)
+            : await createEmployeeFaceTemplate(body.facePhotoBase64!),
         );
       } catch (error) {
         return reply.code(400).send({
@@ -340,7 +345,7 @@ export async function registerUserRoutes(
 
     const user = await store.createUser(request.currentUser.tenantId, {
       ...body,
-      profilePhotoUrl: body.facePhotoBase64 ?? body.photoUrl ?? body.avatarUrl,
+      profilePhotoUrl: body.facePhotosBase64?.[0] ?? body.facePhotoBase64 ?? body.photoUrl ?? body.avatarUrl,
       preferences: biometricPreferences,
       passwordHash,
       createdBy: request.currentUser.id,
@@ -406,15 +411,16 @@ export async function registerUserRoutes(
     }
 
     let updateInput: Record<string, unknown> = body;
-    if (body.facePhotoBase64) {
+    if (body.facePhotoBase64 || body.facePhotosBase64) {
       try {
         updateInput = {
           ...body,
-          profilePhotoUrl: body.facePhotoBase64,
+          profilePhotoUrl: body.facePhotosBase64?.[0] ?? body.facePhotoBase64,
           preferences: {
             ...(body.preferences ?? {}),
-            ...faceTemplatePreferences(
-              await createEmployeeFaceTemplate(body.facePhotoBase64),
+            ...faceTemplatePreferences(body.facePhotosBase64
+              ? await createEmployeeFaceProfile(body.facePhotosBase64)
+              : await createEmployeeFaceTemplate(body.facePhotoBase64!),
             ),
           },
         };

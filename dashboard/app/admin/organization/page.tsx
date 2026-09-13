@@ -187,6 +187,7 @@ export default function OrganizationHierarchyPage() {
   const [newEmpScopeNodeIds, setNewEmpScopeNodeIds] = useState<string[]>([]);
   const [newEmpCustomRoleId, setNewEmpCustomRoleId] = useState("");
   const [empPhotoData, setEmpPhotoData] = useState<string>("");
+  const [empFacePoseSamples, setEmpFacePoseSamples] = useState<string[]>([]);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -515,7 +516,8 @@ export default function OrganizationHierarchyPage() {
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
       setEmpPhotoData(dataUrl);
-      stopWebcam();
+      setEmpFacePoseSamples((samples) => [...samples, dataUrl].slice(0, 5));
+      if (empFacePoseSamples.length + 1 >= 5) stopWebcam();
     }
   }
 
@@ -534,6 +536,7 @@ export default function OrganizationHierarchyPage() {
     reader.onload = () => {
       if (typeof reader.result === "string") {
         setEmpPhotoData(reader.result);
+        setEmpFacePoseSamples([reader.result]);
       }
     };
     reader.readAsDataURL(file);
@@ -823,6 +826,7 @@ export default function OrganizationHierarchyPage() {
         primaryOrgNodeId: scopeNodeIds[0],
         organizationScopeNodeIds: scopeNodeIds,
         facePhotoBase64: empPhotoData || undefined,
+        facePhotosBase64: empFacePoseSamples.length >= 3 ? empFacePoseSamples : undefined,
         faceEnrolled: Boolean(empPhotoData),
       };
 
@@ -848,6 +852,7 @@ export default function OrganizationHierarchyPage() {
       setNewEmpOrgNodeId("");
       setNewEmpCustomRoleId("");
       setEmpPhotoData("");
+      setEmpFacePoseSamples([]);
       stopWebcam();
       await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
@@ -2543,7 +2548,7 @@ export default function OrganizationHierarchyPage() {
                         disabled={!cameraReady}
                         className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow"
                       >
-                        <Camera size={14} /> {cameraReady ? "Snap Photo" : "Starting camera..."}
+                        <Camera size={14} /> {cameraReady ? `Capture pose ${Math.min(empFacePoseSamples.length + 1, 5)} of 5` : "Starting camera..."}
                       </button>
                       <button
                         type="button"
@@ -2572,7 +2577,7 @@ export default function OrganizationHierarchyPage() {
                   {empPhotoData && (
                     <button
                       type="button"
-                      onClick={() => setEmpPhotoData("")}
+                      onClick={() => { setEmpPhotoData(""); setEmpFacePoseSamples([]); }}
                       className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Clear Photo"
                     >
@@ -2580,6 +2585,7 @@ export default function OrganizationHierarchyPage() {
                     </button>
                   )}
                 </div>
+                <p className="text-[10px] text-slate-400">For biometric enrollment capture: front, left, right, look slightly up, and look slightly down. At least 3 poses are required for multi-pose recognition.</p>
               </div>
 
               {/* Employee Details Form */}

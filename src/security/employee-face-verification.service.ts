@@ -12,6 +12,13 @@ export interface EmployeeFaceTemplate {
   data: string;
 }
 
+export interface EmployeeFaceProfile {
+  version: 2;
+  templates: EmployeeFaceTemplate[];
+  enrolledAt: string;
+  method: "multi-pose-normalized-face-template";
+}
+
 export interface FaceVerificationResult {
   enrolled: boolean;
   matched: boolean;
@@ -93,6 +100,16 @@ function parseTemplate(value: unknown): EmployeeFaceTemplate | null {
   return data.length === TEMPLATE_SIZE * TEMPLATE_SIZE
     ? { ...candidate, version: 1, width: TEMPLATE_SIZE, height: TEMPLATE_SIZE, grayscale: true, data: candidate.data }
     : null;
+}
+
+/** Accept legacy one-photo profiles while using every pose in new profiles. */
+function parseTemplates(value: unknown): EmployeeFaceTemplate[] {
+  const legacy = parseTemplate(value);
+  if (legacy) return [legacy];
+  if (!value || typeof value !== "object") return [];
+  const profile = value as Partial<EmployeeFaceProfile>;
+  if (profile.version !== 2 || !Array.isArray(profile.templates)) return [];
+  return profile.templates.map(parseTemplate).filter((template): template is EmployeeFaceTemplate => Boolean(template));
 }
 
 // Pre-computed elliptical face mask weights for 48x48 template
@@ -377,6 +394,15 @@ export async function createEmployeeFaceTemplate(imageDataUrl: string): Promise<
   return toTemplate(await normalizeImage(imageDataUrl));
 }
 
+export async function createEmployeeFaceProfile(imageDataUrls: string[]): Promise<EmployeeFaceProfile> {
+  const uniqueSamples = [...new Set(imageDataUrls)].slice(0, 7);
+  if (uniqueSamples.length < 3) {
+    throw new Error("Capture at least three face poses: front, left, and right.");
+  }
+  const templates = await Promise.all(uniqueSamples.map(createEmployeeFaceTemplate));
+  return { version: 2, templates, enrolledAt: new Date().toISOString(), method: "multi-pose-normalized-face-template" };
+}
+
 /**
  * Production match threshold calibrated for real-world webcam conditions:
  * - Genuine user faces with head tilt, lighting variation, and webcam noise score 0.85 - 1.00.
@@ -400,13 +426,13 @@ export async function verifyEmployeeFace(
         }
       })()
     : preferences;
-  const enrolledTemplate = parseTemplate(
+  const enrolledTemplates = parseTemplates(
     preferencesObject && typeof preferencesObject === "object"
       ? (preferencesObject as Record<string, unknown>).faceVerification
       : undefined,
   );
 
-  if (!enrolledTemplate) {
+  if (enrolledTemplates.length === 0) {
     return { enrolled: false, matched: false, score: 0, reason: "not_enrolled" };
   }
 
@@ -417,8 +443,9 @@ export async function verifyEmployeeFace(
       return { enrolled: true, matched: false, score: 0, reason: "invalid_image" };
     }
 
-    const enrolledData = Buffer.from(enrolledTemplate.data, "base64");
-    const score = calculateSimilarity(enrolledData, liveTemplate);
+    const score = Math.max(...enrolledTemplates.map((template) =>
+      calculateSimilarity(Buffer.from(template.data, "base64"), liveTemplate),
+    ));
     const threshold = options?.threshold ?? PRODUCTION_FACE_MATCH_THRESHOLD;
     const matched = score >= threshold;
 
@@ -433,12 +460,12 @@ export async function verifyEmployeeFace(
   }
 }
 
-export function faceTemplatePreferences(template: EmployeeFaceTemplate): Record<string, unknown> {
+export function faceTemplatePreferences(template: EmployeeFaceTemplate | EmployeeFaceProfile): Record<string, unknown> {
   return {
     faceVerification: {
-      ...template,
-      enrolledAt: new Date().toISOString(),
-      method: "normalized-face-template",
+      ...(template.version === 2
+        ? template
+        : { ...template, enrolledAt: new Date().toISOString(), method: "normalized-face-template" }),
     },
   };
 }
@@ -547,21 +574,23 @@ export async function identifyUserByFace(
         })()
       : user.preferences;
 
-    const enrolledTemplate = parseTemplate(
+    const enrolledTemplates = parseTemplates(
       preferencesObject && typeof preferencesObject === "object"
         ? (preferencesObject as Record<string, unknown>).faceVerification
         : undefined,
     );
 
-    if (!enrolledTemplate) continue;
+    if (enrolledTemplates.length === 0) continue;
 
     try {
-      const enrolledData = Buffer.from(enrolledTemplate.data, "base64");
       // Find peak similarity across multi-scale candidate templates
       let peakScore = 0;
-      for (const candBuffer of candidateTemplates) {
-        const s = calculateSimilarity(enrolledData, candBuffer);
-        if (s > peakScore) peakScore = s;
+      for (const enrolledTemplate of enrolledTemplates) {
+        const enrolledData = Buffer.from(enrolledTemplate.data, "base64");
+        for (const candBuffer of candidateTemplates) {
+          const s = calculateSimilarity(enrolledData, candBuffer);
+          if (s > peakScore) peakScore = s;
+        }
       }
 
       if (peakScore >= threshold && (!bestMatch || peakScore > bestMatch.score)) {
