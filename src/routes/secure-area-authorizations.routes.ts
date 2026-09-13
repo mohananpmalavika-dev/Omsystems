@@ -5,7 +5,7 @@ import { activeFaceRegistryMatches, localIdentityState } from "../analytics/iden
 import { createAfterHoursAuthorizationAlert } from "../security/secure-area-after-hours.service.js";
 
 type Queryable = { query: (text: string, values?: unknown[]) => Promise<{ rows: any[] }> };
-type PoolLike = Queryable & { connect?: () => Promise<Queryable & { release?: () => void }> };
+type PoolLike = Queryable & { connect?: () => Promise<Queryable & { release?: () => void }>; release?: () => void };
 
 const areaTypeSchema = z.enum(["cash_counter", "locker"]);
 const idSchema = z.string().uuid();
@@ -579,8 +579,8 @@ export function registerSecureAreaAuthorizationRoutes(app: FastifyInstance, stor
         const matches = await activeFaceRegistryMatches(store, tenantId, body.embedding, {
           minSimilarity: 0.82,
         });
-        if (matches.length > 0) {
-          const topMatch = matches[0];
+        const topMatch = matches[0];
+        if (topMatch) {
           resolvedFacePersonId = topMatch.personId;
           matchSimilarity = topMatch.similarity;
           personName = topMatch.personName;
