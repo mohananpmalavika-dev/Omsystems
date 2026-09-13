@@ -37,7 +37,8 @@ edge-agent/installation-keys*.txt
 # Generated rollout archives are distributed outside Git.
 reports/*.zip
 
-# Ignore all executable files, including the Edge agent release binary
+# Ship Windows releases separately; GCP repair: deploy/gcp/update-edge-release.sh.
+# Keep generated executables out of Git (the bundled agent exceeds 100 MB).
 *.exe
 edge-agent/release/*.zip
 edge-agent/release/edge-agent.exe

@@ -3,7 +3,7 @@ import Fastify from "fastify";
 import { registerEdgeAgentPackageRoutes } from "../src/routes/edge-agent-package.routes.js";
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -32,6 +32,15 @@ async function fixture(manifestText?: string, binary?: Buffer) {
 }
 
 describe("Windows production release build verification", () => {
+  it("verifies a release supplied outside the checkout for GCP upload", async () => {
+    const script = await fixture(JSON.stringify(manifest), executable);
+    const root = dirname(dirname(script));
+    const suppliedRelease = join(root, "uploaded release");
+    await rename(join(root, "release"), suppliedRelease);
+    const result = spawnSync(process.execPath, [script, suppliedRelease], { encoding: "utf8" });
+    expect(result.status).toBe(0);
+  });
+
   it.each(["", "\uFEFF"])("serves a production package with manifest prefix %j", async (prefix) => {
     const script = await fixture(prefix + JSON.stringify(manifest), executable);
     const root = dirname(dirname(script));

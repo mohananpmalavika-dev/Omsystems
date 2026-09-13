@@ -91,6 +91,23 @@ deployment's normal workflow. Copying files into the host checkout alone does
 not update an existing container. Linux builds verify the manifest and hash;
 Authenticode signing and signature verification happen on the Windows runner.
 
+For the GCP deployment, upload the signed runner's EXE and matching manifest
+to a folder in Google Cloud Shell, alongside a checkout of this repository.
+From the checkout root run:
+
+```sh
+gcloud compute instances list --filter='name=kryptovision-server'
+bash deploy/gcp/update-edge-release.sh /path/to/signed-release YOUR_VM_ZONE YOUR_PROJECT_ID
+```
+
+The GCP helper transfers the files separately from Git, checks the transfer,
+rebuilds only `control-plane`, waits for its health check, and verifies the
+executable inside the running container. It leaves the other services running.
+The optional fourth argument selects an instance other than
+`kryptovision-server`. The Cloud Shell account needs SSH/SCP access to that VM
+and sudo access for Docker. The source directory must come from the signed
+Windows release workflow; a hash match alone does not prove Authenticode signing.
+
 ## Recommended branch installation
 
 1. Configure the control plane with a branch-reachable
