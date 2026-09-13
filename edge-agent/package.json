@@ -16,7 +16,7 @@
     "verify:secure-face-models": "node scripts/verify-secure-face-models.mjs",
     "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=build/edge-agent.cjs",
     "bundle:delta": "node scripts/build-delta-bundle.mjs",
-    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && release\\edge-agent.exe --verify-bundle",
+    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && npx @yao-pkg/pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && release\\edge-agent.exe --verify-bundle",
     "build:signed-windows-release": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File scripts/build-signed-windows-release.ps1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
@@ -39,9 +39,9 @@
     "@types/node": "^22.13.4",
     "@types/pg": "^8.21.0",
     "esbuild": "^0.25.0",
-    "pkg": "^5.8.1",
+    "@yao-pkg/pkg": "^5.13.0",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
   }
 }
