@@ -41,6 +41,17 @@ describe("website scanner launch flow", () => {
     expect(windowsLauncher).toContain("-Verb RunAs");
   });
 
+  it("downloads installer packages through the authenticated API path in an iframe", async () => {
+    const apiClient = await readFile("dashboard/lib/api-client.ts", "utf8");
+    const deviceManager = await readFile("dashboard/components/device-manager.tsx", "utf8");
+
+    expect(apiClient).not.toContain("function startNativeDownload");
+    expect(apiClient).toContain("downloadApi(");
+    expect(apiClient).toContain("saveBrowserDownload(blob, \"edge-agent-setup.zip\")");
+    expect(apiClient).toContain("third-party cookies are unavailable");
+    expect(deviceManager).toContain("await cameraInventoryApi.downloadInstallerFromActivation");
+  });
+
   it("opens a login prompt for discovered devices that reject saved credentials", async () => {
     const source = await readFile("dashboard/components/device-manager.tsx", "utf8");
 

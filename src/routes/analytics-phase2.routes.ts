@@ -14,6 +14,7 @@ import {
   recordFaceRegistryMatches,
   recordFaceMatchReview,
 } from "../analytics/identity-registry.js";
+import { createAfterHoursAuthorizationAlert } from "../security/secure-area-after-hours.service.js";
 
 // Type guard to check if store has pool access
 function hasPool(store: ControlPlaneStore): store is ControlPlaneStore & { db: any } {
@@ -1086,6 +1087,12 @@ export async function registerAnalyticsPhase2Routes(
         snapshotReference: z.string().optional(),
         occurredAt: z.string().datetime().optional(),
         analyticsEventId: z.string().uuid().optional(),
+        secureArea: z.object({
+          branchId: z.string().uuid(),
+          locationId: z.string().uuid().optional(),
+          areaType: z.enum(["cash_counter", "locker"]),
+          areaName: z.string().trim().min(1).max(160),
+        }).optional(),
       })
       .safeParse(request.body);
     if (!parsed.success) return invalidInput(reply, parsed.error);
@@ -1112,7 +1119,22 @@ export async function registerAnalyticsPhase2Routes(
       },
     });
 
-    return reply.code(201).send({ data: result });
+    const afterHoursAlert = body.secureArea && hasPool(store)
+      ? await createAfterHoursAuthorizationAlert(store.db, {
+        tenantId: request.currentUser.tenantId,
+        branchId: body.secureArea.branchId,
+        locationId: body.secureArea.locationId,
+        cameraId: body.cameraId,
+        areaType: body.secureArea.areaType,
+        areaName: body.secureArea.areaName,
+        facePersonId: body.personId,
+        faceEventId: result.id,
+        snapshotReference: body.snapshotReference,
+        occurredAt: body.occurredAt ?? new Date().toISOString(),
+      })
+      : undefined;
+
+    return reply.code(201).send({ data: result, afterHoursAlert });
   });
 
   /**

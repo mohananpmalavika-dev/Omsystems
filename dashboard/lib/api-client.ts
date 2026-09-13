@@ -19,27 +19,24 @@ const SESSION_API_TIMEOUT_MS = 3_000;
 let cookieRefreshPromise: Promise<boolean> | null = null;
 let loginRedirectInProgress = false;
 
-function startNativeDownload(endpoint: string, values: Record<string, string>) {
-  if (typeof document === "undefined") {
+function saveBrowserDownload(blob: Blob, filename: string) {
+  if (typeof document === "undefined" || typeof URL === "undefined") {
     throw new Error("Downloads can only be started from a browser.");
   }
 
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = `${API_BASE}${endpoint}`;
-  form.style.display = "none";
-
-  for (const [name, value] of Object.entries(values)) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = value;
-    form.appendChild(input);
-  }
-
-  document.body.appendChild(form);
-  form.submit();
-  form.remove();
+  // A form submission cannot carry the bearer fallback used when the dashboard
+  // is embedded cross-site and third-party cookies are unavailable. Creating a
+  // same-document Blob download keeps the authenticated request in fetch and
+  // avoids navigating the host iframe to the binary response.
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 class ApiError extends Error {
@@ -876,15 +873,21 @@ export const cameraInventoryApi = {
     branchId: string,
     data: { activationId: string; activationCode: string; agentName: string },
   ) =>
-    startNativeDownload(
+    downloadApi(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
       {
-        activationId: data.activationId,
-        activationCode: data.activationCode,
-        agentName: data.agentName,
-        format: "zip",
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          activationId: data.activationId,
+          activationCode: data.activationCode,
+          agentName: data.agentName,
+          format: "zip",
+        }),
       },
-    ),
+    ).then((blob) => {
+      saveBrowserDownload(blob, "edge-agent-setup.zip");
+    }),
   sendGatewayCommand: (
     branchId: string,
     edgeAgentId: string,
@@ -2594,6 +2597,21 @@ export const bankingAnalyticsApi = {
       `/v1/banking/sessions/${encodeURIComponent(sessionId)}/evidence`,
       { method: 'POST', body: JSON.stringify({}) },
     ),
+};
+
+export const secureAreaAuthorizationApi = {
+  listPersons: (scope: { branchId: string; locationId?: string }) =>
+    fetchApi<{ data: any[] }>(`/v1/secure-area-authorizations/persons?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+  registerPerson: (data: { branchId: string; locationId?: string; employeeCode: string; fullName: string; designation?: string; phone?: string; email?: string }) =>
+    fetchApi<{ data: any }>('/v1/secure-area-authorizations/persons', { method: 'POST', body: JSON.stringify(data) }),
+  listAssignments: (scope: { branchId: string; locationId?: string; areaType?: 'cash_counter' | 'locker'; date?: string }) =>
+    fetchApi<{ data: any[] }>(`/v1/secure-area-authorizations?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+  assign: (data: { branchId: string; locationId?: string; areaType: 'cash_counter' | 'locker'; areaName: string; authorizedPersonId: string; effectiveDate?: string; changeReason?: string; replaceCurrent?: boolean }) =>
+    fetchApi<{ data: any; lockerChangeAlertId?: string }>('/v1/secure-area-authorizations', { method: 'POST', body: JSON.stringify(data) }),
+  datewiseReport: (scope: { branchId: string; locationId?: string; from: string; to: string }) =>
+    fetchApi<{ data: any[]; report: any }>(`/v1/secure-area-authorizations/reports/datewise?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
+  lockerChangeAlerts: (scope: { branchId: string; locationId?: string; from?: string; to?: string }) =>
+    fetchApi<{ data: any[]; report: any }>(`/v1/secure-area-authorizations/reports/locker-change-alerts?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
 };
 
 export const cameraPermissionApi = {

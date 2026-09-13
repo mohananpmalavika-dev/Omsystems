@@ -1607,7 +1607,7 @@ export function DeviceManager() {
     setSaving(true);
     setError(undefined);
     try {
-      cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
+      await cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
         activationId: gatewayActivation.id,
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,

@@ -125,6 +125,7 @@ import { registerPortableCameraRoutes } from "./routes/portable-camera.routes.js
 import { PortableCameraRepository } from "./portable-camera/portable-camera-repository.js";
 import { PortableCameraLeaseManager } from "./ha/services/portable-camera-lease-manager.service.js";
 import { registerNbfcAnalyticsRoutes } from "./routes/nbfc-analytics.routes.js";
+import { registerSecureAreaAuthorizationRoutes } from "./routes/secure-area-authorizations.routes.js";
 import { NbfcRuleRepository } from "./analytics/nbfc-rule-repository.js";
 import { NbfcRuleEngineService } from "./analytics/nbfc-rule-engine.service.js";
 import {
@@ -2503,6 +2504,7 @@ export async function buildApp(options?: {
     repository: nbfcRuleRepo,
     engineService: nbfcRuleEngine,
   });
+  registerSecureAreaAuthorizationRoutes(app, store);
 
   // Security operations is intentionally based on data that the control plane
   // already observes.  Do not let optional external collectors (EDR, TPM,
