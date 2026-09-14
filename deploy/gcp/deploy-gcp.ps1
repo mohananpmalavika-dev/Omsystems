@@ -2,7 +2,7 @@
 # Sentinel Grid (KryptoVision) - Automated GCP Production Deployment
 # =================================================================
 param (
-    [string]$Zone = "asia-south1-a",
+    [string]$Zone = "asia-south1-b",
     [string]$MachineType = "e2-standard-8",
     [string]$InstanceName = "kryptovision-server",
     [int]$DiskSizeGb = 80
@@ -89,9 +89,16 @@ if (-not (Test-Path $startupScriptPath)) {
 }
 
 # 7. Check if VM exists
-Write-Host "Checking if VM '$InstanceName' already exists in $Zone..." -ForegroundColor Yellow
-$existingVm = (& gcloud compute instances list --filter="name=$InstanceName AND zone:($Zone)" --format="value(name)" 2>$null)
-if ($existingVm) { $existingVm = "$existingVm".Trim() }
+Write-Host "Checking for existing VM '$InstanceName' in $currentProject..." -ForegroundColor Yellow
+$foundZone = (& gcloud compute instances list --filter="name=$InstanceName" --format="value(zone)" --project=$currentProject 2>$null)
+if ($foundZone) {
+    $Zone = "$foundZone".Trim()
+    $existingVm = $InstanceName
+    Write-Host "✅ Found '$InstanceName' running in zone: $Zone" -ForegroundColor Green
+} else {
+    $existingVm = $null
+    Write-Host "Instance '$InstanceName' not found. Will create in zone: $Zone..." -ForegroundColor Yellow
+}
 
 if ([string]::IsNullOrWhiteSpace($existingVm)) {
     Write-Host "Creating High-Performance GCE Instance (${MachineType}: 4 vCPU, 16 GB RAM in $Zone)..." -ForegroundColor Cyan
@@ -107,14 +114,14 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
         --project=$currentProject
     Write-Host "✅ VM created successfully!" -ForegroundColor Green
 } else {
-    Write-Host "VM '$InstanceName' already exists. Updating startup metadata..." -ForegroundColor Yellow
+    Write-Host "VM '$InstanceName' already exists in $Zone. Updating startup metadata..." -ForegroundColor Yellow
     & gcloud compute instances add-metadata $InstanceName `
         --zone=$Zone `
         --metadata-from-file="startup-script=$startupScriptPath" `
         --project=$currentProject
 
-    Write-Host "Triggering live container rebuild and restart on $InstanceName..." -ForegroundColor Cyan
-    & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject `
+    Write-Host "Triggering live container rebuild and restart on $InstanceName ($Zone)..." -ForegroundColor Cyan
+    & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
         --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'"
 }
 
