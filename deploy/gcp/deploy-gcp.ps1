@@ -120,6 +120,29 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
         --metadata-from-file="startup-script=$startupScriptPath" `
         --project=$currentProject
 
+    # Verify or upload authentic edge-agent.exe if needed
+    $localManifest = Join-Path $scriptDir "..\..\edge-agent\release\windows-release.json"
+    $localExe = Join-Path $scriptDir "..\..\edge-agent\release\edge-agent.exe"
+    if ((Test-Path $localExe) -and (Test-Path $localManifest)) {
+        $manifestJson = Get-Content $localManifest -Raw | ConvertFrom-Json
+        $expectedHash = $manifestJson.sha256.ToLower()
+        Write-Host "Verifying Edge Agent release integrity on $InstanceName..." -ForegroundColor Yellow
+        $remoteHash = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+            --command="sha256sum /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null | cut -d ' ' -f 1" 2>$null)
+        if ($remoteHash) { $remoteHash = "$remoteHash".Trim().ToLower() }
+
+        if ($remoteHash -ne $expectedHash) {
+            Write-Host "Uploading signed Edge Agent release binary to $InstanceName..." -ForegroundColor Cyan
+            & gcloud compute scp --zone=$Zone --project=$currentProject --quiet `
+                "$localExe" "${InstanceName}:/tmp/edge-agent.exe"
+            & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+                --command="sudo install -d /opt/sentinel-grid/edge-agent/release && sudo mv /tmp/edge-agent.exe /opt/sentinel-grid/edge-agent/release/edge-agent.exe && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/edge-agent.exe"
+            Write-Host "✅ Edge Agent release binary uploaded and installed." -ForegroundColor Green
+        } else {
+            Write-Host "✅ Edge Agent release already matches signed manifest on $InstanceName." -ForegroundColor Green
+        }
+    }
+
     Write-Host "Triggering live container rebuild and restart on $InstanceName ($Zone)..." -ForegroundColor Cyan
     & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
         --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'"
