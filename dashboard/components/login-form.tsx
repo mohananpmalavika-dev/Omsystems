@@ -24,7 +24,7 @@ import { authApi } from "@/lib/api-client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/session-navigation";
 
-import { ThemeSwitcher } from "@/components/ui/theme-switcher";
+import "./sign-in.css";
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
 
 interface LoginFormProps {
@@ -733,70 +733,29 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   }
 
   return (
-    <div className="login-container login-workspace">
+    <div className="login-container login-workspace auth-entry">
+      <div className="auth-entry-layout">
       <aside className="login-introduction" aria-label="About your workspace">
-        <div className="login-introduction-brand"><ShieldCheck size={24} /><span>{branding.orgName || "KryptonVision"}</span></div>
+        <div className="login-introduction-brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="" /> : <span className="auth-brand-mark"><ShieldCheck size={24} /></span>}<span>{branding.orgName || "KryptonVision"}</span></div>
         <div className="login-introduction-copy">
           <p className="login-kicker">SECURITY OPERATIONS</p>
-          <h2>Every location.<br />One clear view.</h2>
-          <p>A connected workspace for the people who keep your branches safe.</p>
+          <h2>Clarity. Control.<br />Confidence.</h2>
+          <p>Your people, locations, and security operations. Connected in one workspace.</p>
           <ul>
             <li><CheckCircle2 size={18} /><span>Monitor cameras and branch health</span></li>
             <li><CheckCircle2 size={18} /><span>Investigate alerts and coordinate response</span></li>
             <li><CheckCircle2 size={18} /><span>Manage evidence and operational reports</span></li>
           </ul>
         </div>
-        <p className="login-introduction-footer">Built for everyday operational clarity.</p>
+        <p className="login-introduction-footer"><ShieldCheck size={15} /> Security operations, connected.</p>
       </aside>
       <div className="login-card">
-        <div className="login-header">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              width: "100%",
-              marginBottom: "6px",
-            }}
-          >
-            {isStandalone ? (
-              <span
-                className="pwa-status-badge standalone"
-                title="Running in standalone desktop/mobile app mode"
-              >
-                <Check size={12} /> App Mode
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={handleInstallClick}
-                className="pwa-quick-install-btn"
-                title="Install as Desktop Application"
-              >
-                <Download size={13} />
-                <span>Install App</span>
-              </button>
-            )}
-            <ThemeSwitcher />
-          </div>
-          <div className="login-brand">
-            {branding.logoUrl ? (
-              <img
-                src={branding.logoUrl}
-                alt={branding.orgName || "Organization Logo"}
-                className="login-org-logo"
-              />
-            ) : (
-              <ShieldCheck size={32} className="brand-icon" />
-            )}
-            <h1>{branding.orgName || "KryptonVision"}</h1>
-          </div>
-          <p className="login-subtitle">
-            {branding.tagline || "Enterprise Video Surveillance & Operations"}
-          </p>
-        </div>
+        <header className="login-header">
+          <p className="auth-entry-eyebrow">YOUR WORKSPACE</p>
+          <h1>Sign in</h1>
+          <p>Welcome back. Enter your account details to continue.</p>
+        </header>
 
-        <div className="login-welcome"><h2>Welcome back</h2><p>Sign in to your security workspace.</p></div>
         {/* Authentication Mode Switcher */}
         <div className="auth-mode-selector" role="group" aria-label="Sign-in method">
           <button
@@ -1000,7 +959,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             </div>
 
             <div className="form-group">
-              <label htmlFor="password">Password</label>
+              <div className="auth-label-row"><label htmlFor="password">Password</label><a href="/forgot-password" className="forgot-password-link">Forgot password?</a></div>
               <div className="password-input-wrapper">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -1045,31 +1004,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
               </div>
             </details>
 
-            <div className="form-actions">
-              <a href="/forgot-password" className="forgot-password-link">
-                Forgot password?
-              </a>
-            </div>
-
             <button type="submit" className="login-button" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </button>
 
-            <div className="face-quick-switch-link" style={{ marginTop: "14px" }}>
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMode("face");
-                  setError(null);
-                  setFaceErrorMessage(null);
-                  setScanAttempts(0);
-                  setFaceScanState("idle");
-                }}
-              >
-                <ScanFace size={13} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }} />
-                Use face recognition instead &rarr;
-              </button>
-            </div>
           </form>
         )}
 
@@ -1161,6 +1099,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           )}
         </div>
         </details>
+      </div>
       </div>
 
       <footer className="login-footer">
