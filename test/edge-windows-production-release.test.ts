@@ -32,6 +32,11 @@ async function fixture(manifestText?: string, binary?: Buffer) {
 }
 
 describe("Windows production release build verification", () => {
+  it("accepts an unsigned release with a matching checksum manifest", async () => {
+    const script = await fixture(JSON.stringify({ sha256: manifest.sha256, signing: "unsigned" }), executable);
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    expect(result.status).toBe(0);
+  });
   it("verifies a release supplied outside the checkout for GCP upload", async () => {
     const script = await fixture(JSON.stringify(manifest), executable);
     const root = dirname(dirname(script));
@@ -72,9 +77,11 @@ describe("Windows production release build verification", () => {
 
   it.each([
     ["matching release", JSON.stringify(manifest), executable, 200, undefined],
+    ["unsigned release", JSON.stringify({ sha256: manifest.sha256 }), executable, 200, undefined],
+    ["empty executable", JSON.stringify(manifest), Buffer.alloc(0), 503, "edge_agent_executable_not_built"],
     ["missing executable", JSON.stringify(manifest), undefined, 503, "edge_agent_executable_not_built"],
-    ["missing manifest", undefined, executable, 503, "edge_agent_windows_release_not_signed"],
-    ["mismatched executable", JSON.stringify(manifest), Buffer.from("MZ-sentinel-edge-agent-placeholder\n"), 503, "edge_agent_windows_release_not_signed"],
+    ["missing manifest", undefined, executable, 503, "edge_agent_windows_release_unavailable"],
+    ["mismatched executable", JSON.stringify(manifest), Buffer.from("MZ-sentinel-edge-agent-placeholder\n"), 503, "edge_agent_windows_release_unavailable"],
   ])("validates the activation installer with %s", async (_name, manifestText, binary, expectedStatus, expectedError) => {
     const script = await fixture(manifestText as string | undefined, binary as Buffer | undefined);
     const root = dirname(dirname(script));
@@ -119,8 +126,8 @@ describe("Windows production release build verification", () => {
   });
 
   it.each([
-    ["missing manifest", undefined, executable, "A Windows-signed Edge Agent release is required"],
-    ["malformed manifest", "{", executable, "A Windows-signed Edge Agent release is required"],
+    ["missing manifest", undefined, executable, "A Windows Edge Agent release with a checksum manifest is required"],
+    ["malformed manifest", "{", executable, "A Windows Edge Agent release with a checksum manifest is required"],
     ["invalid manifest", "{}", executable, "manifest is invalid"],
     ["missing executable", JSON.stringify(manifest), undefined, "executable is missing"],
     ["empty executable", JSON.stringify(manifest), Buffer.alloc(0), "executable is missing"],
@@ -141,6 +148,6 @@ describe("Windows production release build verification", () => {
     const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Verified Windows-signed Edge Agent release artifact");
+    expect(result.stdout).toContain("Verified Windows Edge Agent release checksum");
   });
 });

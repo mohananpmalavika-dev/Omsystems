@@ -36,7 +36,9 @@ function saveBrowserDownload(blob: Blob, filename: string) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  // Keep the blob alive while the browser hands a large installer to its
+  // download manager. Immediate revocation can cancel that handoff.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 class ApiError extends Error {
@@ -232,7 +234,7 @@ async function fetchApi<T>(
   return response.json();
 }
 
-async function downloadApi(endpoint: string, options: RequestInit = {}): Promise<Blob> {
+async function downloadApi(endpoint: string, options: RequestInit = {}, onProgress?: (received: number, total?: number) => void): Promise<Blob> {
   const token = getStoredToken('accessToken');
 
   const headers = new Headers(options.headers);
@@ -305,7 +307,24 @@ async function downloadApi(endpoint: string, options: RequestInit = {}): Promise
     );
   }
 
-  return response.blob();
+  if (!onProgress || !response.body) return response.blob();
+  const total = Number(response.headers.get("content-length")) || undefined;
+  const reader = response.body.getReader();
+  const chunks: BlobPart[] = [];
+  let received = 0;
+  try {
+    onProgress(0, total);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.byteLength;
+      onProgress(received, total);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return new Blob(chunks, { type: response.headers.get("content-type") ?? "application/octet-stream" });
 }
 
 export const authApi = {
@@ -872,6 +891,7 @@ export const cameraInventoryApi = {
   downloadInstallerFromActivation: (
     branchId: string,
     data: { activationId: string; activationCode: string; agentName: string },
+    onProgress?: (received: number, total?: number) => void,
   ) =>
     downloadApi(
       `/v1/branches/${encodeURIComponent(branchId)}/edge-agent-installer`,
@@ -885,6 +905,7 @@ export const cameraInventoryApi = {
           format: "zip",
         }),
       },
+      onProgress,
     ).then((blob) => {
       saveBrowserDownload(blob, "edge-agent-setup.zip");
     }),

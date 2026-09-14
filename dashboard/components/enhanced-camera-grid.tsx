@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useState, useRef, useMemo, type CSSProperties } from "react";
 import {
+  Maximize2,
+  Minimize2,
   Save,
   Settings,
   Layout,
@@ -11,6 +13,7 @@ import {
   clampDecoderLimit,
   createDefaultGridAssignments,
   getDecoderCapacityOptions,
+  retainCameraPageOnGridChange,
 } from "./enhanced-camera-grid-model";
 import { useDecoderBudgetManager } from "./decoderBudgetManager";
 import { useMediaOrchestrator } from "@/hooks/use-media-orchestrator";
@@ -20,7 +23,6 @@ import type { AnalyticsAlert, AnalyticsRule, Camera, LiveSessionResponse } from 
 import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { releaseLiveSession, startLiveFromBrowser } from "@/lib/live-client";
-import { cameraInventoryApi } from "@/lib/api-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
@@ -51,7 +53,6 @@ export interface EnhancedCameraGridProps {
   aiByCamera?: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
   showAiOverlay?: boolean;
   onOpenCameraAi?: (cameraId: string) => void;
-  onDeleteCamera?: (cameraId: string) => Promise<void>;
 }
 
 interface VisibleRange {
@@ -145,7 +146,6 @@ export function EnhancedCameraGrid({
   aiByCamera,
   showAiOverlay = true,
   onOpenCameraAi,
-  onDeleteCamera,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -181,6 +181,7 @@ export function EnhancedCameraGrid({
   const [tourInterval, setTourInterval] = useState(15);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [compactGrid, setCompactGrid] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches,
   );
@@ -193,12 +194,10 @@ export function EnhancedCameraGrid({
     return () => mediaQuery.removeEventListener("change", syncGridDensity);
   }, []);
 
-  const handleDeleteCamera = useCallback(async (cameraId: string) => {
-    if (onDeleteCamera) {
-      await onDeleteCamera(cameraId);
-    } else {
-      await cameraInventoryApi.deleteCamera(cameraId);
-    }
+  const handleRemoveFromWall = useCallback(async (cameraId: string) => {
+    // Removing a tile is an operator-layout action. It must never delete the
+    // camera from inventory: an accidental wall edit must not interrupt
+    // recording, alerting, or other operators' views.
     setGridPositions((prev) => {
       const next = new Map(prev);
       for (const [pos, entry] of next.entries()) {
@@ -210,14 +209,33 @@ export function EnhancedCameraGrid({
     });
     void releaseLiveSession(sessionsRef.current.get(cameraId));
     closeSession(cameraId);
-  }, [onDeleteCamera, closeSession]);
+  }, [closeSession]);
 
+  const wallRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const initialLayoutApplied = useRef(false);
   const activeStreamTypesRef = useRef(new Map<string, "main" | "sub">());
   const pendingLiveStartsRef = useRef(new Map<string, "main" | "sub">());
   const liveStartControllersRef = useRef(new Map<string, AbortController>());
   const activeLiveStartsRef = useRef(0);
+
+  const toggleWallFullscreen = useCallback(() => {
+    const wall = wallRef.current;
+    if (!wall) return;
+    if (document.fullscreenElement === wall) {
+      void document.exitFullscreen();
+      return;
+    }
+    void wall.requestFullscreen().catch((error) => {
+      console.error("Unable to enter video-wall fullscreen mode", error);
+    });
+  }, []);
+
+  useEffect(() => {
+    const syncFullscreenState = () => setIsFullscreen(document.fullscreenElement === wallRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
 
   const gridSizeMap = {
     "1x1": 1,
@@ -611,29 +629,16 @@ export function EnhancedCameraGrid({
   }, [adaptiveLayout, priorityCameraIds]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
-    const newTotalPositions = gridSizeMap[newSize];
-    const currentPositions = new Map(gridPositions);
-
-    // Remove positions that exceed new grid size
-    for (const [position] of currentPositions) {
-      if (position >= newTotalPositions) {
-        currentPositions.delete(position);
-      }
-    }
-
-    const dense = newTotalPositions > 16;
-    for (let position = 0; position < Math.min(newTotalPositions, cameras.length); position += 1) {
-      const existing = currentPositions.get(position);
-      if (existing) {
-        if (dense) currentPositions.set(position, { ...existing, stream: "sub" });
-        continue;
-      }
-      const camera = cameras[position];
-      if (camera) currentPositions.set(position, { camera, stream: dense ? "sub" : "main", priority: 0 });
-    }
-
+    // Keep the first camera from the current page in view while changing
+    // density. This avoids jumping an operator back to the beginning of a
+    // large wall when changing from, for example, 12×12 to 4×4.
+    setCurrentPage((current) => retainCameraPageOnGridChange(
+      cameras.length,
+      current,
+      totalPositions,
+      gridSizeMap[newSize],
+    ));
     setGridSize(newSize);
-    setGridPositions(currentPositions);
   };
 
   const handleCameraAssign = (position: number, camera: Camera | null) => {
@@ -846,7 +851,7 @@ export function EnhancedCameraGrid({
   }, [enableVirtualScrolling, totalPositions, visibleRange]);
 
   return (
-    <div className="camera-grid-container">
+    <div ref={wallRef} className={`camera-grid-container ${isFullscreen ? "camera-grid-fullscreen" : ""}`}>
       <div className="grid-toolbar">
         <div className="grid-actions">
           <label className="toolbar-control">
@@ -958,6 +963,16 @@ export function EnhancedCameraGrid({
           >
             <Save size={16} />
             Save Layout
+          </button>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={toggleWallFullscreen}
+            aria-pressed={isFullscreen}
+            title={isFullscreen ? "Exit fullscreen wall (Esc)" : "Open fullscreen wall"}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           </button>
         </div>
       </div>
@@ -1114,7 +1129,7 @@ export function EnhancedCameraGrid({
                   aiOverlay={aiByCamera?.get(camera.id)}
                   showAiOverlay={showAiOverlay}
                   onOpenAi={onOpenCameraAi}
-                  onDeleteCamera={handleDeleteCamera}
+                  onDeleteCamera={handleRemoveFromWall}
                   index={i}
                 />
               </div>
@@ -1129,6 +1144,19 @@ export function EnhancedCameraGrid({
           flex-direction: column;
           gap: 16px;
           height: 100%;
+        }
+
+        .camera-grid-container:fullscreen {
+          box-sizing: border-box;
+          width: 100dvw;
+          height: 100dvh;
+          padding: 16px;
+          overflow: hidden;
+          background: #071522;
+        }
+
+        .camera-grid-container:fullscreen .camera-grid {
+          min-height: 0;
         }
 
         .grid-toolbar {

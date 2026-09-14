@@ -3,6 +3,7 @@ import {
   clampDecoderLimit,
   createDefaultGridAssignments,
   getDecoderCapacityOptions,
+  retainCameraPageOnGridChange,
 } from "../components/enhanced-camera-grid-model.js";
 
 describe("camera wall decoder limits", () => {
@@ -22,5 +23,12 @@ describe("camera wall decoder limits", () => {
       { position: 0, cameraId: "cam-01", stream: "sub" },
       { position: 1, cameraId: "cam-02", stream: "sub" },
     ]);
+  });
+
+  it("keeps the operator at the same camera range when grid density changes", () => {
+    // Page two of a 12×12 wall starts at camera 145. In a 4×4 wall, that is
+    // page ten (zero-indexed page nine), rather than the first page.
+    expect(retainCameraPageOnGridChange(500, 1, 144, 16)).toBe(9);
+    expect(retainCameraPageOnGridChange(17, 1, 16, 144)).toBe(0);
   });
 });

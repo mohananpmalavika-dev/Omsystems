@@ -12,10 +12,10 @@ const temporaryRoots: string[] = [];
 function addTestBranch(store: MemoryStore) {
   store.nodes.set("branch-blr-001", {
     id: "branch-blr-001",
-    tenantId: "00000000-0000-4000-8000-000000000001",
+    tenantId: "omsystems",
     type: "branch",
     name: "Bengaluru Branch 001",
-    path: ["branch-blr-001"],
+    path: ["company-1", "division-retail", "region-south", "branch-blr-001"],
   } as any);
 }
 
@@ -45,7 +45,10 @@ function zipEntry(zip: Buffer, expectedName: string) {
     const name = zip.subarray(nameStart, nameStart + nameLength).toString("utf8");
     const contentStart = nameStart + nameLength + extraLength;
     const contentEnd = contentStart + compressedSize;
-    if (name === expectedName) return inflateRawSync(zip.subarray(contentStart, contentEnd));
+    if (name === expectedName) {
+      const data = zip.subarray(contentStart, contentEnd);
+      return zip.readUInt16LE(offset + 8) === 0 ? data : inflateRawSync(data);
+    }
     offset = contentEnd;
   }
   throw new Error(`ZIP entry not found: ${expectedName}`);
@@ -203,7 +206,7 @@ describe("branch edge-agent package", () => {
       });
 
       expect(response.statusCode).toBe(200);
-      expect(response.headers["content-disposition"]).toContain("signed-edge-agent.zip");
+      expect(response.headers["content-disposition"]).toContain("edge-agent.zip");
       const config = zipEntry(response.rawPayload, "edge-agent.env").toString("utf8");
       expect(config).toContain(`EDGE_ACTIVATION_CODE=${JSON.stringify(activationCode)}`);
       expect(config).toContain('EDGE_BRIDGE_SHARED_KEY=""');

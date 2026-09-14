@@ -24,9 +24,8 @@ ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
 
 
-# A production container may serve only a release built and Authenticode-signed
-# on the Windows release runner. Linux can package a Windows executable but
-# cannot establish its publisher trust.
+# Supply a Windows release with a matching checksum manifest. Authenticode
+# signing is optional; the manifest does not establish publisher trust.
 WORKDIR /app/edge-agent
 RUN npm install --legacy-peer-deps
 RUN npm run bundle:delta || true

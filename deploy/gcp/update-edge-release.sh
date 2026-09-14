@@ -20,8 +20,7 @@ for value in "$ZONE" "$PROJECT_ID" "$INSTANCE_NAME"; do
     fi
 done
 
-# This checks the signed runner's manifest and hash; signing remains a Windows
-# release step. In particular, do not generate a manifest for an unsigned EXE.
+# Verify the release checksum before uploading. Authenticode signing is optional.
 node "$SCRIPT_DIRECTORY/../../edge-agent/scripts/verify-windows-production-release.mjs" "$RELEASE_DIRECTORY"
 EXE_HASH=$(sha256sum "$RELEASE_DIRECTORY/edge-agent.exe" | cut -d ' ' -f 1)
 MANIFEST_HASH=$(sha256sum "$RELEASE_DIRECTORY/windows-release.json" | cut -d ' ' -f 1)

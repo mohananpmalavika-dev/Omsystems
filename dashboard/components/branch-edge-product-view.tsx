@@ -83,11 +83,11 @@ export function BranchEdgeProductView() {
               Managed Edge Agent Installation
               </h3>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                Authenticode Signed
+                Windows Installer
               </span>
             </div>
             <p className="text-xs text-slate-300 max-w-2xl">
-              Installers are generated from the branch device manager with a one-time activation. The signed executable is not modified per branch; enterprise trust policy is managed through Intune or Group Policy.
+              Installers are generated from the branch device manager with a one-time activation. The ZIP includes the executable, branch configuration, and installation launcher.
             </p>
           </div>
 
@@ -100,7 +100,7 @@ export function BranchEdgeProductView() {
           </div>
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">2</span>
-            <div><strong className="text-slate-200">Download:</strong> Download and extract the activation-bound signed ZIP package.</div>
+            <div><strong className="text-slate-200">Download:</strong> Download and extract the branch installer ZIP package.</div>
           </div>
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">3</span>

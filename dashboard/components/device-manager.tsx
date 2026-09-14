@@ -701,6 +701,7 @@ export function DeviceManager() {
   const [autoProvisionResults, setAutoProvisionResults] = useState<AutoProvisionResult[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
+  const [installerProgress, setInstallerProgress] = useState<string>();
   const [inventorySearch, setInventorySearch] = useState("");
   const [inventoryDeviceTypeFilter, setInventoryDeviceTypeFilter] = useState("all");
   const [inventoryLifecycleFilter, setInventoryLifecycleFilter] = useState("all");
@@ -1589,7 +1590,13 @@ export function DeviceManager() {
       
       // If this was for download (no gateway name form), show download-specific message
       if (!gatewayName.trim()) {
-        setNotice(`Package prepared for ${agentName}. Click "Download Ready Package" to get the installer.`);
+        setInstallerProgress("Preparing installer package...");
+        await cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
+          activationId: activation.id,
+          activationCode: activation.activationCode,
+          agentName: activation.agentName,
+        }, reportInstallerProgress);
+        setNotice("Installer downloaded. Extract the ZIP, then run Install Sentinel Grid Edge Agent.bat.");
       } else {
         setNotice(activation.bootstrap.media.managed
           ? `Gateway and named media tunnel created. ${activation.bootstrap.media.publicUrl ?? "The stable hostname"} is delivered automatically on first boot.`
@@ -1598,24 +1605,34 @@ export function DeviceManager() {
     } catch (reason) {
       setError(messageOf(reason, "Unable to prepare the installer package."));
     } finally {
+      setInstallerProgress(undefined);
       setSaving(false);
     }
+  }
+
+  function reportInstallerProgress(received: number, total?: number) {
+    const megabytes = (received / 1048576).toFixed(1);
+    setInstallerProgress(total
+      ? `Downloading: ${Math.round(received / total * 100)}% (${megabytes} / ${(total / 1048576).toFixed(1)} MB)`
+      : `Downloading: ${megabytes} MB`);
   }
 
   async function downloadWebsiteScanner() {
     if (!selectedBranch || !gatewayActivation) return;
     setSaving(true);
     setError(undefined);
+    setInstallerProgress("Preparing installer package...");
     try {
       await cameraInventoryApi.downloadInstallerFromActivation(selectedBranch, {
         activationId: gatewayActivation.id,
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,
-      });
-      setNotice("Signed installer package download started. Extract it, then run Install Sentinel Grid Edge Agent.bat and approve the Windows administrator prompt.");
+      }, reportInstallerProgress);
+      setNotice("Installer package downloaded. Extract it, then run Install Sentinel Grid Edge Agent.bat and approve the Windows administrator prompt.");
     } catch (reason) {
       setError(messageOf(reason, "Unable to download the scanner installer."));
     } finally {
+      setInstallerProgress(undefined);
       setSaving(false);
     }
   }
@@ -2422,6 +2439,9 @@ export function DeviceManager() {
             </div>
 
             <div className="modal-body space-y-4">
+              {error && <div className="device-message error" role="alert"><AlertTriangle size={16} /><span>{error}</span></div>}
+              {notice && !error && <div className="device-message" role="status">{notice}</div>}
+              {installerProgress && <div className="device-message" role="status" aria-live="polite">{installerProgress}</div>}
               <div className="form-info-banner">
                 <Network size={16} />
                 <div>
@@ -2464,7 +2484,7 @@ export function DeviceManager() {
                 </div>
               ) : null}
 
-              {/* Full installer and signed package download */}
+              {/* Full installer package download */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between pb-3 border-b border-slate-700/60">
                   <div className="flex items-center gap-2">
@@ -2474,14 +2494,14 @@ export function DeviceManager() {
                     </h3>
                   </div>
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
-                    <ShieldCheck size={12} className="text-emerald-400" /> Authenticode Signed
+                    <Download size={12} className="text-emerald-400" /> Windows Installer
                   </span>
                 </div>
 
                 <p className="text-xs text-slate-300">
                   {gateways.length > 0
                     ? <>Use this only for offline repair or runtime changes. It downloads the complete package again for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>
-                    : <>Download the pre-configured, signed installer package for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>}
+                    : <>Download the pre-configured installer package for <strong>{activeBranch?.name ?? "Branch"}</strong>.</>}
                 </p>
 
                 {!gatewayActivation ? (
@@ -2507,10 +2527,10 @@ export function DeviceManager() {
                         disabled={saving}
                       >
                         <div className="flex items-center gap-1.5 font-semibold text-xs text-emerald-300">
-                          <Download size={14} /> Download Signed ZIP (Recommended)
+                          <Download size={14} /> {saving ? "Downloading installer..." : "Download Installer ZIP"}
                         </div>
                         <span className="text-[11px] text-slate-300 leading-tight">
-                          Preserves the signed executable. Includes the pre-filled branch configuration and elevated installation launcher.
+                          Includes the Windows executable, pre-filled branch configuration, and installation launcher.
                         </span>
                       </button>
                     </div>

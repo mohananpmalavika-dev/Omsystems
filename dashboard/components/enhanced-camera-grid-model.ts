@@ -40,3 +40,25 @@ export function createDefaultGridAssignments(
     stream,
   }));
 }
+
+/**
+ * Maps the first camera on the current page to its equivalent page at a new
+ * grid density. Operators stay focused on the same part of a large wall when
+ * changing layouts instead of being sent back to the first cameras.
+ */
+export function retainCameraPageOnGridChange(
+  cameraCount: number,
+  currentPage: number,
+  currentPageSize: number,
+  nextPageSize: number,
+) {
+  const safeCount = Math.max(0, Math.floor(cameraCount));
+  const safeCurrentPage = Math.max(0, Math.floor(currentPage));
+  const safeCurrentPageSize = Math.max(1, Math.floor(currentPageSize));
+  const safeNextPageSize = Math.max(1, Math.floor(nextPageSize));
+  const nextPageCount = Math.max(1, Math.ceil(safeCount / safeNextPageSize));
+  return Math.min(
+    Math.floor((safeCurrentPage * safeCurrentPageSize) / safeNextPageSize),
+    nextPageCount - 1,
+  );
+}

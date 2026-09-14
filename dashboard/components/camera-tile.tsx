@@ -405,8 +405,8 @@ function CameraTileComponent({
           {onDeleteCamera && (
             <button
               type="button"
-              aria-label="Remove camera"
-              title="Remove camera from monitoring"
+              aria-label="Remove camera from this wall"
+              title="Remove camera from this wall"
               onClick={() => setShowDeleteModal(true)}
               style={{ color: "#f87171" }}
             >
@@ -568,21 +568,21 @@ function CameraTileComponent({
         <div className="modal-overlay">
           <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="tile-delete-camera-title">
             <div className="modal-header">
-              <h2 id="tile-delete-camera-title" style={{ color: "#ef4444" }}>Remove Camera</h2>
+              <h2 id="tile-delete-camera-title" style={{ color: "#ef4444" }}>Remove from video wall</h2>
               <button type="button" className="icon-button" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>×</button>
             </div>
             <div className="modal-body" style={{ padding: "16px 20px" }}>
               <div className="form-info-banner" style={{ background: "rgba(239, 68, 68, 0.1)", borderColor: "rgba(239, 68, 68, 0.3)", color: "#f87171" }}>
                 <AlertTriangle size={18} />
                 <div>
-                  <strong>Are you sure you want to remove &quot;{camera.name}&quot;?</strong>
+                  <strong>Remove &quot;{camera.name}&quot; from this wall?</strong>
                   <p style={{ margin: "4px 0 0", fontSize: "0.85rem", opacity: 0.9 }}>
-                    This camera stream will be removed from the video wall and active monitoring.
+                    This removes only this operator&apos;s wall tile and stops its live session. The camera remains registered, recording, and available to other operators.
                   </p>
                 </div>
               </div>
               <div style={{ marginTop: "12px", padding: "10px", borderRadius: "6px", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.2)", color: "#a5b4fc", fontSize: "0.85rem" }}>
-                💡 <b>Need this camera back later?</b> You can easily re-add it at any time from <b>Device Manager</b> via <b>Scan cameras</b>, <b>Direct IP Probe</b>, or <b>Add camera manually</b>.
+                <b>Need it back?</b> Add it to any empty slot on this wall, or load a saved layout.
               </div>
               <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "16px" }}>
                 <button type="button" className="secondary-button" onClick={() => setShowDeleteModal(false)} disabled={isDeleting}>
@@ -598,7 +598,7 @@ function CameraTileComponent({
                       await onDeleteCamera(camera.id);
                       setShowDeleteModal(false);
                     } catch (err) {
-                      console.error("Failed to delete camera", err);
+                      console.error("Failed to remove camera from video wall", err);
                     } finally {
                       setIsDeleting(false);
                     }
@@ -606,7 +606,7 @@ function CameraTileComponent({
                   disabled={isDeleting}
                   style={{ background: "#dc2626", borderColor: "#ef4444", color: "#ffffff" }}
                 >
-                  {isDeleting ? "Removing…" : "Remove Camera"}
+                  {isDeleting ? "Removing…" : "Remove from wall"}
                 </button>
               </div>
             </div>

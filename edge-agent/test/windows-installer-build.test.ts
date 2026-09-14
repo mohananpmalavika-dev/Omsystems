@@ -48,7 +48,7 @@ describe("Windows self-installer release build", () => {
     expect(script).toContain("sha256");
   });
 
-  it("requires the signed Windows release while building the control-plane image", async () => {
+  it("requires the checksum-verified Windows release while building the control-plane image", async () => {
     const dockerfile = await readFile("Dockerfile", "utf8");
 
     expect(dockerfile).toContain("RUN node edge-agent/scripts/verify-windows-production-release.mjs");
