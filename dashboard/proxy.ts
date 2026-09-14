@@ -29,6 +29,9 @@ export function proxy(request: NextRequest) {
 
   // 2. Allow API routes, static assets, and public routes
   if (
+    pathname === "/metrics" ||
+    pathname === "/health" ||
+    pathname === "/ready" ||
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
     pathname.includes(".") ||

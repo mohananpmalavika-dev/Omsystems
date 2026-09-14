@@ -69,6 +69,7 @@ import { registerHaClusterRoutes } from "./media/cluster/ha-cluster.routes.js";
 import { registerAdaptiveStreamRoutes } from "./media/adaptive/adaptive-stream.routes.js";
 import { registerEdgeProductRoutes } from "./edge-product/routes/edge-product.routes.js";
 import { registerObservabilityRoutes } from "./observability/observability.routes.js";
+import { vmsMetricsRegistry } from "./observability/vms-metrics-registry.js";
 import { registerPerformanceObservabilityRoutes, performanceTrackingMiddleware } from "./routes/observability-performance.routes.js";
 import { registerZeroTouchRoutes } from "./zero-touch/routes/zero-touch.routes.js";
 import { registerAdminDatabaseRoutes } from "./routes/admin-database.routes.js";
@@ -690,6 +691,9 @@ export async function buildApp(options?: {
       request.url === "/capabilities" ||
       request.url === "/metrics" ||
       request.url.startsWith("/api/observability/") ||
+      request.url.startsWith("/api/vms/observability/") ||
+      request.url.startsWith("/v1/observability/") ||
+      request.url.startsWith("/v1/vms/observability/") ||
       request.url === "/internal/live-sessions/consume" ||
       request.url.startsWith("/internal/recording/") ||
       request.url.startsWith("/internal/analytics/") ||
@@ -875,7 +879,15 @@ export async function buildApp(options?: {
     done(null, Object.fromEntries(new URLSearchParams(String(body))));
   });
 
-  app.get("/metrics", async (_request, reply) => reply.type("text/plain; version=0.0.4").send(runtimeGuard.prometheus()));
+  app.get("/metrics", async (_request, reply) => {
+    const runtime = runtimeGuard.prometheus().trimEnd();
+    let vms = "";
+    try {
+      vms = vmsMetricsRegistry.formatPrometheusText().trimEnd();
+    } catch {}
+    const combined = [runtime, vms].filter(Boolean).join("\n\n") + "\n";
+    return reply.type("text/plain; version=0.0.4; charset=utf-8").send(combined);
+  });
 
   app.get("/v1/me", async (request) => request.currentUser);
 

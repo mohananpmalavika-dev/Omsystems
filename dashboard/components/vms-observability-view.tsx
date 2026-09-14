@@ -34,8 +34,30 @@ export function VmsObservabilityView() {
     const sequence = ++requestSequence.current;
     try {
       const [snapRes, promRes] = await Promise.all([
-        fetch("/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null),
-        fetch("/metrics").catch(() => null),
+        fetch("/api/vms/observability/summary", { credentials: "include", cache: "no-store" })
+          .then(async (res) => {
+            if (res && res.ok) return res;
+            const bff = await fetch("/api/control/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
+            if (bff && bff.ok) return bff;
+            const fallback = await fetch("/v1/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
+            if (fallback && fallback.ok) return fallback;
+            return res;
+          })
+          .catch(async () => {
+            const bff = await fetch("/api/control/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
+            if (bff && bff.ok) return bff;
+            return fetch("/v1/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
+          }),
+        fetch("/metrics")
+          .then(async (res) => {
+            if (res && res.ok) return res;
+            const bff = await fetch("/api/control/metrics").catch(() => null);
+            if (bff && bff.ok) return bff;
+            return res;
+          })
+          .catch(async () => {
+            return fetch("/api/control/metrics").catch(() => null);
+          }),
       ]);
       if (!snapRes || !snapRes.ok) throw new Error(`Structured telemetry request failed (${snapRes?.status ?? "network"})`);
       const data = await snapRes.json();

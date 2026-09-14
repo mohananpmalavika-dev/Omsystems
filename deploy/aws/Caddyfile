@@ -37,6 +37,14 @@ http://3-7-216-169.sslip.io, http://3.7.216.169.sslip.io, http://3.7.216.169, :8
         reverse_proxy control-plane:8080
     }
 
+    handle /metrics {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /api/vms/* {
+        reverse_proxy control-plane:8080
+    }
+
     handle /webrtc/* {
         reverse_proxy media-gateway:8090
     }
@@ -104,6 +112,14 @@ https://3-7-216-169.sslip.io, https://3.7.216.169.sslip.io {
     }
 
     handle /health {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /metrics {
+        reverse_proxy control-plane:8080
+    }
+
+    handle /api/vms/* {
         reverse_proxy control-plane:8080
     }
 

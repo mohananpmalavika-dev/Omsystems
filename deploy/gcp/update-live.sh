@@ -15,7 +15,7 @@ echo "--> Building control-plane and dashboard images..."
 docker compose -f docker-compose.gcp.yml build control-plane dashboard
 
 echo "--> Recreating containers..."
-docker compose -f docker-compose.gcp.yml up -d --force-recreate control-plane dashboard
+docker compose -f docker-compose.gcp.yml up -d --force-recreate caddy control-plane dashboard
 
 echo "========================================================"
 echo "✅ Update complete! Sentinel Grid is running latest code."

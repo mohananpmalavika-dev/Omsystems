@@ -41,6 +41,9 @@ self.addEventListener("fetch", (event) => {
 
   // Exclude all APIs, streams, media chunks, and websockets
   if (
+    url.pathname === "/metrics" ||
+    url.pathname === "/health" ||
+    url.pathname === "/ready" ||
     url.pathname.startsWith("/api/") ||
     url.pathname.startsWith("/v1/") ||
     url.pathname.startsWith("/stream/") ||

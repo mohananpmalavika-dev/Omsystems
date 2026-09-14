@@ -47,6 +47,23 @@ http://34.14.220.41, :80 {
         reverse_proxy control-plane:8080
     }
 
+    handle /metrics {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            flush_interval -1
+        }
+    }
+
+    handle /api/vms/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+            flush_interval -1
+        }
+    }
+
     handle /webrtc/* {
         reverse_proxy media-gateway:8090 {
             flush_interval -1
