@@ -323,20 +323,27 @@ async function verifyProductionWindowsRelease(releaseDirectory: string, executab
   try {
     manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, "")) as { sha256?: unknown; signedAt?: unknown };
   } catch {
-    throw Object.assign(new Error("A signed Windows release manifest is required before production installers can be downloaded."), {
+    throw Object.assign(new Error("The signed Windows Edge Agent release is unavailable on this control plane. Deploy edge-agent/release/edge-agent.exe with its matching windows-release.json, then rebuild and restart the control plane."), {
       code: "edge_agent_windows_release_not_signed",
     });
   }
   if (typeof manifest.sha256 !== "string" || !/^[a-f0-9]{64}$/i.test(manifest.sha256) ||
       typeof manifest.signedAt !== "string" || Number.isNaN(Date.parse(manifest.signedAt))) {
-    throw Object.assign(new Error("The Windows release manifest is invalid."), { code: "edge_agent_windows_release_not_signed" });
+    throw Object.assign(new Error("The deployed Windows Edge Agent release manifest is invalid. Deploy a matching signed edge-agent.exe and windows-release.json, then rebuild and restart the control plane."), { code: "edge_agent_windows_release_not_signed" });
   }
   const executableHash = createHash("sha256").update(await readFile(executablePath)).digest("hex");
   if (executableHash !== manifest.sha256.toLowerCase()) {
-    throw Object.assign(new Error("The Windows executable does not match the signed release manifest."), {
+    throw Object.assign(new Error("The deployed Windows Edge Agent executable does not match its signed release manifest. Deploy matching release artifacts, then rebuild and restart the control plane."), {
       code: "edge_agent_windows_release_not_signed",
     });
   }
+}
+
+function missingWindowsReleaseError(executablePath: string) {
+  return Object.assign(
+    new Error(`The signed Windows Edge Agent executable is unavailable on this control plane (${executablePath}). Deploy edge-agent/release/edge-agent.exe with its matching windows-release.json, then rebuild and restart the control plane.`),
+    { code: "edge_agent_executable_not_built" },
+  );
 }
 
 function windowsInstallLauncher() {
@@ -440,7 +447,7 @@ export async function registerEdgeAgentPackageRoutes(
         executableSize = metadata.size;
         executableMtime = metadata.mtimeMs;
       } catch {
-        throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
+        throw missingWindowsReleaseError(executablePath);
       }
       await verifyProductionWindowsRelease(releaseDir, executablePath);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -498,7 +505,7 @@ export async function registerEdgeAgentPackageRoutes(
     } catch (error) {
       app.log.error({ err: error, branchId }, "Failed to build edge-agent installer from activation");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
-      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
+      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") || code === "edge_agent_windows_release_not_signed" ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
     }
   });
@@ -622,7 +629,7 @@ export async function registerEdgeAgentPackageRoutes(
           const metadata = await stat(executablePath);
           if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
         } catch {
-          throw Object.assign(new Error(`edge_agent_executable_not_built: ${executablePath}`), { code: "edge_agent_executable_not_built" });
+          throw missingWindowsReleaseError(executablePath);
         }
         await verifyProductionWindowsRelease(join(root, "release"), executablePath);
         const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
@@ -718,7 +725,7 @@ export async function registerEdgeAgentPackageRoutes(
     } catch (error) {
       app.log.error({ err: error, branchId, edgeAgentId }, "Failed to build edge-agent installer package");
       const code = error && typeof error === "object" && "code" in error ? String(error.code) : "edge_agent_package_failed";
-      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") ? 503 : 500;
+      const status = code.endsWith("_not_built") || code.endsWith("_unavailable") || code === "edge_agent_windows_release_not_signed" ? 503 : 500;
       return reply.code(status).send({ error: code, message: error instanceof Error ? error.message : "Package generation failed" });
     }
   });
