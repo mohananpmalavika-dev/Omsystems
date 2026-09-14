@@ -40,22 +40,24 @@ if (-not $gcloudCmd) {
 
 # 2. Check Auth
 Write-Host "Checking active GCP authentication..." -ForegroundColor Yellow
-$activeAccount = (& gcloud auth list --filter="status:ACTIVE" --format="value(account)").Trim()
+$activeAccount = (& gcloud auth list --filter="status:ACTIVE" --format="value(account)" 2>$null)
+if ($activeAccount) { $activeAccount = "$activeAccount".Trim() }
 if ([string]::IsNullOrWhiteSpace($activeAccount)) {
     Write-Host "No active account found. Initiating gcloud auth login..." -ForegroundColor Yellow
     & gcloud auth login
-    $activeAccount = (& gcloud auth list --filter="status:ACTIVE" --format="value(account)").Trim()
+    $activeAccount = (& gcloud auth list --filter="status:ACTIVE" --format="value(account)" 2>$null)
+    if ($activeAccount) { $activeAccount = "$activeAccount".Trim() }
 }
 Write-Host "✅ Authenticated as: $activeAccount" -ForegroundColor Green
 
 # 3. Check Project
-$currentProject = (& gcloud config get-value project 2>$null).Trim()
+$currentProject = (& gcloud config get-value project 2>$null)
+if ($currentProject) { $currentProject = "$currentProject".Trim() }
 if ([string]::IsNullOrWhiteSpace($currentProject) -or $currentProject -eq "(unset)") {
-    Write-Host "No active GCP project selected. Fetching your available projects..." -ForegroundColor Yellow
-    & gcloud projects list
-    $projectChoice = Read-Host "Please enter your GCP Project ID"
-    & gcloud config set project $projectChoice
-    $currentProject = $projectChoice
+    $defaultProject = "project-7866fc3f-5dd5-4495-804"
+    Write-Host "No active GCP project selected. Setting default project: $defaultProject..." -ForegroundColor Yellow
+    & gcloud config set project $defaultProject
+    $currentProject = $defaultProject
 }
 Write-Host "✅ Target Project: $currentProject" -ForegroundColor Green
 
@@ -65,7 +67,8 @@ Write-Host "Enabling Google Compute Engine API (this takes ~15 seconds)..." -For
 
 # 5. Create Firewall Rules if not present
 Write-Host "Configuring Google Cloud Firewall Rules..." -ForegroundColor Yellow
-$existingFirewall = (& gcloud compute firewall-rules list --filter="name=allow-kryptovision" --format="value(name)" 2>$null).Trim()
+$existingFirewall = (& gcloud compute firewall-rules list --filter="name=allow-kryptovision" --format="value(name)" 2>$null)
+if ($existingFirewall) { $existingFirewall = "$existingFirewall".Trim() }
 if ([string]::IsNullOrWhiteSpace($existingFirewall)) {
     & gcloud compute firewall-rules create allow-kryptovision `
         --allow="tcp:80,tcp:443,tcp:8080,tcp:8090,tcp:8091,tcp:8092,tcp:8554,tcp:8888,tcp:10000,udp:8189" `
@@ -87,10 +90,11 @@ if (-not (Test-Path $startupScriptPath)) {
 
 # 7. Check if VM exists
 Write-Host "Checking if VM '$InstanceName' already exists in $Zone..." -ForegroundColor Yellow
-$existingVm = (& gcloud compute instances list --filter="name=$InstanceName AND zone:($Zone)" --format="value(name)" 2>$null).Trim()
+$existingVm = (& gcloud compute instances list --filter="name=$InstanceName AND zone:($Zone)" --format="value(name)" 2>$null)
+if ($existingVm) { $existingVm = "$existingVm".Trim() }
 
 if ([string]::IsNullOrWhiteSpace($existingVm)) {
-    Write-Host "Creating High-Performance GCE Instance ($MachineType: 4 vCPU, 16 GB RAM in $Zone)..." -ForegroundColor Cyan
+    Write-Host "Creating High-Performance GCE Instance (${MachineType}: 4 vCPU, 16 GB RAM in $Zone)..." -ForegroundColor Cyan
     & gcloud compute instances create $InstanceName `
         --zone=$Zone `
         --machine-type=$MachineType `
@@ -111,12 +115,13 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
 
     Write-Host "Triggering live container rebuild and restart on $InstanceName..." -ForegroundColor Cyan
     & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject `
-        --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && cd deploy/gcp && docker compose -f docker-compose.gcp.yml build control-plane dashboard && docker compose -f docker-compose.gcp.yml up -d --force-recreate caddy control-plane dashboard'"
+        --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'"
 }
 
 # 8. Fetch Public External IP
 Write-Host "Retrieving Public IP address..." -ForegroundColor Yellow
-$externalIp = (& gcloud compute instances describe $InstanceName --zone=$Zone --format="get(networkInterfaces[0].accessConfigs[0].natIP)" --project=$currentProject).Trim()
+$externalIp = (& gcloud compute instances describe $InstanceName --zone=$Zone --format="get(networkInterfaces[0].accessConfigs[0].natIP)" --project=$currentProject 2>$null)
+if ($externalIp) { $externalIp = "$externalIp".Trim() }
 
 Write-Host "========================================================" -ForegroundColor Green
 Write-Host "🎉 Sentinel Grid (KryptoVision) GCP Deployment Initiated!" -ForegroundColor Green
