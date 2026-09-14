@@ -103,6 +103,7 @@ export default function SecurityDashboard() {
     return () => window.clearInterval(interval);
   }, []);
 
+
   async function fetchSecurityOperations(isBackgroundRefresh = false) {
     const sequence = ++requestSequence.current;
     if (!isBackgroundRefresh) setRefreshing(true);
