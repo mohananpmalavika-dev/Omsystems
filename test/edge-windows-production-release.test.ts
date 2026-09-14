@@ -71,6 +71,55 @@ describe("Windows production release build verification", () => {
   });
 
   it.each([
+    ["matching release", JSON.stringify(manifest), executable, 200],
+    ["missing executable", JSON.stringify(manifest), undefined, 503],
+    ["missing manifest", undefined, executable, 500],
+    ["mismatched executable", JSON.stringify(manifest), Buffer.from("MZ-sentinel-edge-agent-placeholder\n"), 500],
+  ])("validates the activation installer with %s", async (_name, manifestText, binary, expectedStatus) => {
+    const script = await fixture(manifestText as string | undefined, binary as Buffer | undefined);
+    const root = dirname(dirname(script));
+    await writeFile(join(root, "package.json"), JSON.stringify({ version: "1.0.0" }));
+    vi.stubEnv("NODE_ENV", "production");
+    const app = Fastify();
+    app.addHook("onRequest", async (request) => {
+      request.currentUser = { id: "test-user" } as typeof request.currentUser;
+    });
+    const writeAudit = vi.fn();
+    const store = {
+      getNode: async () => ({ id: "branch", type: "branch", name: "Test", tenantId: "tenant" }),
+      checkAccess: async () => ({ allowed: true }),
+      getActiveEdgeActivation: async () => ({ agentName: "Test" }),
+      writeAudit,
+    } as unknown as Parameters<typeof registerEdgeAgentPackageRoutes>[1];
+    try {
+      await registerEdgeAgentPackageRoutes(app, store, {
+        artifactRoot: root,
+        controlPlanePublicUrl: "https://control.example.com",
+      });
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/branches/branch/edge-agent-installer",
+        payload: {
+          activationId: "00000000-0000-4000-8000-000000000104",
+          activationCode: `sgact_${"a".repeat(48)}`,
+          agentName: "Test",
+        },
+      });
+      expect(response.statusCode).toBe(expectedStatus);
+      if (expectedStatus === 200) {
+        expect(response.headers["content-type"]).toContain("application/zip");
+        expect(writeAudit).toHaveBeenCalledOnce();
+      } else {
+        expect(response.json().error).toBe(expectedStatus === 503
+          ? "edge_agent_executable_not_built" : "edge_agent_windows_release_not_signed");
+        expect(writeAudit).not.toHaveBeenCalled();
+      }
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([
     ["missing manifest", undefined, executable, "A Windows-signed Edge Agent release is required"],
     ["malformed manifest", "{", executable, "A Windows-signed Edge Agent release is required"],
     ["invalid manifest", "{}", executable, "manifest is invalid"],
@@ -81,7 +130,7 @@ describe("Windows production release build verification", () => {
     const script = await fixture(manifestText, binary);
     const result = spawnSync(process.execPath, [script], {
       encoding: "utf8",
-      env: { ...process.env, SKIP_WINDOWS_RELEASE_VERIFY: "true" },
+      env: { ...process.env, SKIP_WINDOWS_RELEASE_VERIFY: "true", ALLOW_MISSING_WINDOWS_RELEASE: "true" },
     });
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(1);

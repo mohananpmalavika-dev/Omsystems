@@ -13,13 +13,14 @@ git reset --hard origin/main
 mkdir -p /opt/sentinel-grid/edge-agent/release
 if [ ! -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
   echo "--> Ensuring edge-agent binary presence..."
-  docker cp sentinel-gcp-control-plane:/app/edge-agent/release/edge-agent.exe /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null || \
-    printf 'MZ-sentinel-edge-agent-placeholder\n' > /opt/sentinel-grid/edge-agent/release/edge-agent.exe
+  if ! docker cp sentinel-gcp-control-plane:/app/edge-agent/release/edge-agent.exe /opt/sentinel-grid/edge-agent/release/edge-agent.exe; then
+    echo "No Windows release is available. Upload the signed release with deploy/gcp/update-edge-release.sh before retrying. The running containers have not been replaced." >&2
+    exit 1
+  fi
 fi
 
 cd /opt/sentinel-grid/deploy/gcp
 echo "--> Building control-plane and dashboard images..."
-export ALLOW_MISSING_WINDOWS_RELEASE=true
 docker compose -f docker-compose.gcp.yml build control-plane dashboard
 
 echo "--> Recreating containers..."

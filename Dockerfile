@@ -16,9 +16,8 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 
-# The control plane distributes only a Windows executable built and
-ARG ALLOW_MISSING_WINDOWS_RELEASE="true"
-ENV ALLOW_MISSING_WINDOWS_RELEASE=${ALLOW_MISSING_WINDOWS_RELEASE}
+# Supply the Windows release separately: edge-agent.exe is not tracked in Git.
+# Fail before replacing a working image if the release is missing or mismatched.
 RUN node edge-agent/scripts/verify-windows-production-release.mjs
 
 ENV NODE_OPTIONS="--max-old-space-size=3072"
