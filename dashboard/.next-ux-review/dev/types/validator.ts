@@ -2323,6 +2323,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../../app/api/vms/[...path]/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/vms/[...path]">> = Specific
+  const handler = {} as typeof import("../../../app/api/vms/[...path]/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../../app/api/zero-touch/[...path]/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/zero-touch/[...path]">> = Specific
@@ -2336,6 +2345,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/health">> = Specific
   const handler = {} as typeof import("../../../app/health/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../../app/metrics/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/metrics">> = Specific
+  const handler = {} as typeof import("../../../app/metrics/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

@@ -16,9 +16,12 @@ COPY root-cause-analysis-engine/ ./root-cause-analysis-engine/
 COPY analytics-engine/ ./analytics-engine/
 COPY edge-agent/ ./edge-agent/
 
-# Check release inputs before compiling the server. Do not block container build
-# if Windows release executable is not present on Linux build hosts.
-RUN node edge-agent/scripts/verify-windows-production-release.mjs || true
+# The control plane distributes only a Windows executable built and
+# Authenticode-signed on the Windows release runner. Fail the image build when
+# those staged release inputs are absent or mismatched; deferring this check
+# until an installer download would leave a seemingly healthy deployment unable
+# to provision edge agents.
+RUN node edge-agent/scripts/verify-windows-production-release.mjs
 
 ENV NODE_OPTIONS="--max-old-space-size=3072"
 RUN npm run build
@@ -30,7 +33,7 @@ RUN npm run build
 WORKDIR /app/edge-agent
 RUN npm install --legacy-peer-deps
 RUN npm run bundle:delta || true
-RUN mkdir -p /app/edge-agent/build /app/edge-agent/release /app/edge-agent/installer
+RUN mkdir -p /app/edge-agent/build /app/edge-agent/installer
 WORKDIR /app
 
 # Stage 2: Production

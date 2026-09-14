@@ -67,9 +67,11 @@ from being mistaken for a signed production release.
 ### Restore missing installer downloads
 
 `edge_agent_executable_not_built: /app/edge-agent/release/edge-agent.exe`
-means the running control-plane container is missing the Windows release.
-The TypeScript build does not create this executable, and Git excludes `.exe`
-files, so a fresh server checkout does not include it.
+can only occur in an image built by an older deployment flow that bypassed the
+release verifier. Current control-plane image builds fail before deployment if
+the signed Windows release is missing or mismatched. The TypeScript build does
+not create this executable, and Git excludes `.exe` files, so a fresh server
+checkout does not include it.
 
 Build a signed production release on the Windows release machine using the
 command above. Transfer both `edge-agent/release/edge-agent.exe` and

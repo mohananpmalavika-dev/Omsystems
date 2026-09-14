@@ -54,3 +54,6 @@ edge-agent/release/runtime/
 
 # Deprecated components (Sprint 6 cleanup)
 .deprecated/
+
+# Local UX preview build outputs
+dashboard/.next-ux-*/
