@@ -71,11 +71,11 @@ describe("Windows production release build verification", () => {
   });
 
   it.each([
-    ["matching release", JSON.stringify(manifest), executable, 200],
-    ["missing executable", JSON.stringify(manifest), undefined, 503],
-    ["missing manifest", undefined, executable, 500],
-    ["mismatched executable", JSON.stringify(manifest), Buffer.from("MZ-sentinel-edge-agent-placeholder\n"), 500],
-  ])("validates the activation installer with %s", async (_name, manifestText, binary, expectedStatus) => {
+    ["matching release", JSON.stringify(manifest), executable, 200, undefined],
+    ["missing executable", JSON.stringify(manifest), undefined, 503, "edge_agent_executable_not_built"],
+    ["missing manifest", undefined, executable, 503, "edge_agent_windows_release_not_signed"],
+    ["mismatched executable", JSON.stringify(manifest), Buffer.from("MZ-sentinel-edge-agent-placeholder\n"), 503, "edge_agent_windows_release_not_signed"],
+  ])("validates the activation installer with %s", async (_name, manifestText, binary, expectedStatus, expectedError) => {
     const script = await fixture(manifestText as string | undefined, binary as Buffer | undefined);
     const root = dirname(dirname(script));
     await writeFile(join(root, "package.json"), JSON.stringify({ version: "1.0.0" }));
@@ -110,8 +110,7 @@ describe("Windows production release build verification", () => {
         expect(response.headers["content-type"]).toContain("application/zip");
         expect(writeAudit).toHaveBeenCalledOnce();
       } else {
-        expect(response.json().error).toBe(expectedStatus === 503
-          ? "edge_agent_executable_not_built" : "edge_agent_windows_release_not_signed");
+        expect(response.json().error).toBe(expectedError);
         expect(writeAudit).not.toHaveBeenCalled();
       }
     } finally {
