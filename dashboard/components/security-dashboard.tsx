@@ -108,6 +108,7 @@ export default function SecurityDashboard() {
     const sequence = ++requestSequence.current;
     if (!isBackgroundRefresh) setRefreshing(true);
 
+
     try {
       const response = await fetch('/api/security/posture', {
         cache: 'no-store',
