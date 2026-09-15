@@ -8,7 +8,6 @@ import {
   AlertAudioService,
   type AlertSeverity,
 } from "../../dashboard/services/alert-audio/index.js";
-import { app } from "../../src/app.js";
 
 async function runAlertAudioTests() {
   console.log("================================================================================");
