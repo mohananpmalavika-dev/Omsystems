@@ -2308,23 +2308,30 @@ export class PostgresStore
 
   async listOperationalAlertEventsForAlerts(tenantId: string, alertIds: string[]): Promise<any[]> {
     if (alertIds.length === 0) return [];
-    const result = await this.pool.query(
-      `SELECT id::text, alert_id AS "alertId", tenant_id::text AS "tenantId",
-              branch_id::text AS "branchId", event_type AS "eventType",
-              actor_type AS "actorType", actor_user_id::text AS "actorUserId",
-              actor_user_name AS "actorUserName", actor_service AS "actorService",
-              target_user_id::text AS "targetUserId", target_user_name AS "targetUserName",
-              previous_status AS "previousStatus", new_status AS "newStatus",
-              metadata, request_id AS "requestId", correlation_id::text AS "correlationId",
-              session_id::text AS "sessionId", host(ip_address) AS "ipAddress",
-              user_agent AS "userAgent", occurred_at AS "occurredAt",
-              created_at AS "createdAt"
-       FROM operational_alert_events
-       WHERE tenant_id = $1::uuid AND alert_id = ANY($2::text[])
-       ORDER BY occurred_at ASC, created_at ASC`,
-      [tenantId, alertIds],
-    );
-    return result.rows;
+    try {
+      const result = await this.pool.query(
+        `SELECT id::text, alert_id AS "alertId", tenant_id::text AS "tenantId",
+                branch_id::text AS "branchId", event_type AS "eventType",
+                actor_type AS "actorType", actor_user_id::text AS "actorUserId",
+                actor_user_name AS "actorUserName", actor_service AS "actorService",
+                target_user_id::text AS "targetUserId", target_user_name AS "targetUserName",
+                previous_status AS "previousStatus", new_status AS "newStatus",
+                metadata, request_id AS "requestId", correlation_id::text AS "correlationId",
+                session_id::text AS "sessionId", host(ip_address) AS "ipAddress",
+                user_agent AS "userAgent", occurred_at AS "occurredAt",
+                created_at AS "createdAt"
+         FROM operational_alert_events
+         WHERE tenant_id = $1::uuid AND alert_id = ANY($2::text[])
+         ORDER BY occurred_at ASC, created_at ASC`,
+        [tenantId, alertIds],
+      );
+      return result.rows;
+    } catch (err: any) {
+      if (err?.code === "42P01") {
+        return [];
+      }
+      throw err;
+    }
   }
 
   // ============================================
