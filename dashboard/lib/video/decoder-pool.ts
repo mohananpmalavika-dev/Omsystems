@@ -379,10 +379,9 @@ export class DecoderPool {
    */
   private cleanupVideoElement(videoElement: HTMLVideoElement): void {
     try {
-      // Pause and clear source
+      // Pause video to free decoding resources without destroying the element's src
+      // which would trigger a fatal error event on active player instances
       videoElement.pause();
-      videoElement.src = '';
-      videoElement.load();
 
       // Remove srcObject if present
       if (videoElement.srcObject) {

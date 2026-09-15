@@ -20,13 +20,34 @@ interface LegacyCameraProfile {
  */
 export function normalizeCameraStreamProfiles(camera: Camera & { profiles?: unknown }): Camera {
   if (camera.streamProfiles?.length) return camera;
-  if (!Array.isArray(camera.profiles)) return camera;
+  if (Array.isArray(camera.profiles) && camera.profiles.length > 0) {
+    const streamProfiles = camera.profiles
+      .map(normalizeLegacyProfile)
+      .filter((profile): profile is CameraStreamProfile => Boolean(profile));
+    if (streamProfiles.length > 0) return { ...camera, streamProfiles };
+  }
 
-  const streamProfiles = camera.profiles
-    .map(normalizeLegacyProfile)
-    .filter((profile): profile is CameraStreamProfile => Boolean(profile));
-
-  return streamProfiles.length > 0 ? { ...camera, streamProfiles } : camera;
+  return {
+    ...camera,
+    streamProfiles: [
+      {
+        type: "MAIN",
+        codec: "H264",
+        width: 1920,
+        height: 1080,
+        fps: 25,
+        estimatedBitrateKbps: 2_048,
+      },
+      {
+        type: "SUB",
+        codec: "H264",
+        width: 640,
+        height: 360,
+        fps: 15,
+        estimatedBitrateKbps: 512,
+      },
+    ],
+  };
 }
 
 function normalizeLegacyProfile(value: unknown): CameraStreamProfile | undefined {

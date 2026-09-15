@@ -174,7 +174,13 @@ export function useVideoWallScheduler(
     const now = Date.now();
 
     return cameras.map((camera) => {
-      const advertisedProfiles = (camera.streamProfiles ?? []).map((profile) => profileFromCapability(camera.id, profile));
+      const rawProfiles = camera.streamProfiles && camera.streamProfiles.length > 0
+        ? camera.streamProfiles
+        : [
+            { type: "MAIN" as const, codec: "H264" as const, width: 1920, height: 1080, fps: 25, estimatedBitrateKbps: 2_048 },
+            { type: "SUB" as const, codec: "H264" as const, width: 640, height: 360, fps: 15, estimatedBitrateKbps: 512 },
+          ];
+      const advertisedProfiles = rawProfiles.map((profile) => profileFromCapability(camera.id, profile));
       const mainStreams = advertisedProfiles.filter((profile) => profile.streamType === "MAIN");
       const subStreams = advertisedProfiles.filter((profile) => profile.streamType === "SUB");
       const failure = playbackFailuresRef.current.get(camera.id);
