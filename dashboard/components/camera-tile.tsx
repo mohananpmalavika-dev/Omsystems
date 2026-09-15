@@ -156,6 +156,12 @@ function CameraTileComponent({
         ? "rotation queue"
       : null;
   const canPlayLive = isActive && hasLiveFrame;
+  const isTalkbackSupported =
+    camera.capabilities?.talkback?.supported === true ||
+    (camera.capabilities?.audio === true && camera.capabilities?.talkback?.supported !== false);
+  const talkbackUnsupportedReason = !isTalkbackSupported
+    ? camera.capabilities?.talkback?.reason ?? "two-way audio is not supported on this camera"
+    : undefined;
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
   const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
@@ -377,9 +383,7 @@ function CameraTileComponent({
           <HoldToTalkButton
             cameraId={camera.id}
             disabled={!canPlayLive}
-            unsupportedReason={camera.capabilities?.talkback?.supported === false
-              ? camera.capabilities.talkback.reason ?? "two-way audio is not supported"
-              : undefined}
+            unsupportedReason={talkbackUnsupportedReason}
           />
           {camera.capabilities.ptz && (
             <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>

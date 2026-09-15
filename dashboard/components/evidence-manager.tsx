@@ -904,7 +904,7 @@ function RedactedExportModal({
           </div>
 
           <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
-            <button type="button" className="button secondary" onClick={onClose} disabled={loading}>
+            <button type="button" className="button secondary" onClick={onClose}>
               Cancel
             </button>
             <button

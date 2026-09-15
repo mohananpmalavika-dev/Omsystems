@@ -1161,6 +1161,28 @@ export function DeviceManager() {
     setError(undefined);
   }
 
+  function closeCredentialActivation() {
+    scanAbortedRef.current = true;
+    scanCancellationRef.current += 1;
+    setSaving(false);
+    setScanning(false);
+    setCredentialActivation(undefined);
+    setActivationPassword("");
+    setCredentialVerificationStatus(undefined);
+    setCredentialVerificationError(undefined);
+  }
+
+  useEffect(() => {
+    if (!credentialActivation) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeCredentialActivation();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [credentialActivation]);
+
   function openActiveCameraCredentialUpdate(camera: CameraRecord) {
     if (!camera.ipAddress) {
       setError(`No IP address is saved for ${camera.name}. Re-add or rediscover this camera before updating its login.`);
@@ -1296,6 +1318,7 @@ export function DeviceManager() {
         setActivationPassword("");
         setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and refresh its stream route…");
         await waitForCredentialCommand(activation.commandId);
+        if (scanAbortedRef.current) return;
         setCredentialActivation(undefined);
         setCredentialVerificationStatus(undefined);
         setCredentialVerificationError(undefined);
@@ -1308,16 +1331,20 @@ export function DeviceManager() {
         username: activationUsername,
         password: activationPassword,
       });
+      if (scanAbortedRef.current) return;
       setActivationPassword("");
       setCredentialVerificationStatus("Waiting for the installed scanner to verify this device and enumerate its channels…");
       await waitForCredentialCommand(activation.commandId);
+      if (scanAbortedRef.current) return;
       if (activation.scanId) {
         setCredentialVerificationStatus("Refreshing this device with the verified login…");
         const outcome = await completeCameraScan(activation.scanId, targetAgentId);
-        if (!outcome) return;
+        if (!outcome || scanAbortedRef.current) return;
       }
+      if (scanAbortedRef.current) return;
       setCredentialVerificationStatus("Verification completed. Loading the discovered channels…");
       const refreshed = await cameraInventoryApi.listDiscovered(selectedBranch);
+      if (scanAbortedRef.current) return;
       const refreshedDiscoveries = refreshed.data ?? [];
       const verifiedTargets = refreshedDiscoveries.filter((item: any) =>
         item.edgeAgentId === targetAgentId &&
@@ -1330,6 +1357,7 @@ export function DeviceManager() {
       setDiscoveredCameras(refreshedDiscoveries);
       updateDiscoveryReviewState(refreshedDiscoveries);
       if (verifiedTargets.length === 0) {
+        if (scanAbortedRef.current) return;
         const stillNeedsCredentials = refreshedDiscoveries.find((item: any) =>
           item.edgeAgentId === targetAgentId && item.ipAddress === targetIpAddress && item.credentialsRequired
         );
@@ -1350,6 +1378,9 @@ export function DeviceManager() {
         : `Credentials verified for ${targetName}. Review and approve it to add the stream to live monitoring.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
+      if (scanAbortedRef.current) {
+        return;
+      }
       if (isAgentUpdateRequired(reason)) {
         setCredentialActivation(undefined);
         setActivationPassword("");
@@ -2566,9 +2597,26 @@ export function DeviceManager() {
         </div>
       )}
       {credentialActivation && (
-        <div className="modal-overlay">
+        <div
+          className="modal-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeCredentialActivation();
+            }
+          }}
+        >
           <div className="modal-container" role="dialog" aria-modal="true" aria-labelledby="credential-modal-title">
-            <div className="modal-header"><h2 id="credential-modal-title">{credentialActivation.existingCamera ? "Update camera login" : "Device login required"}</h2><button type="button" className="icon-button" aria-label="Close device login" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}><X size={20} /></button></div>
+            <div className="modal-header">
+              <h2 id="credential-modal-title">{credentialActivation.existingCamera ? "Update camera login" : "Device login required"}</h2>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close device login"
+                onClick={closeCredentialActivation}
+              >
+                <X size={20} />
+              </button>
+            </div>
             <form className="modal-form" onSubmit={activateDiscoveredCamera}>
               <div className="form-info-banner credential-device-banner">
                 <Camera size={16} />
@@ -2612,7 +2660,22 @@ export function DeviceManager() {
               <p className="field-help">This login is saved only for this detected IP address. No broadcast discovery, subnet scan, or other camera probe will run.</p>
               {credentialVerificationStatus && <div className="form-info-banner" role="status" aria-live="polite">{credentialVerificationStatus}</div>}
               {credentialVerificationError && <div className="device-message error" role="alert"><AlertTriangle size={16} />{credentialVerificationError}</div>}
-              <div className="modal-actions"><button type="button" className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}>Cancel</button><button type="submit" className="primary-button" disabled={saving || !activationUsername.trim()}>{saving ? "Verifying this device…" : "Save & verify this device"}</button></div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeCredentialActivation}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving || !activationUsername.trim()}
+                >
+                  {saving ? "Verifying this device…" : "Save & verify this device"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -2686,7 +2749,7 @@ export function DeviceManager() {
                             {!camera.credentialsRequired && previewEditMode === "rename" ? (
                               <button type="button" className="primary-button" onClick={() => void approveDiscoveredCamera(camera)} disabled={saving || !camera.streamVerified || camera.duplicateStatus === "duplicate"}>{camera.duplicateStatus === "duplicate" ? "Duplicate — approval blocked" : camera.streamVerified ? "Approve & start live" : "Awaiting gateway verification"}</button>
                             ) : null}
-                            <button type="button" className="secondary-button" onClick={() => setPreviewDiscoveryId(undefined)} disabled={saving}>Close preview</button>
+                            <button type="button" className="secondary-button" onClick={() => setPreviewDiscoveryId(undefined)}>Close preview</button>
                           </div>
                         )}
                       </div>

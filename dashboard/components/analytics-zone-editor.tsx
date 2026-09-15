@@ -253,7 +253,7 @@ export function ZoneEditor({
             <h2>Zone Editor</h2>
             <p>Camera {cameraId}</p>
           </div>
-          <button onClick={onClose} disabled={saving}>
+          <button onClick={onClose} type="button">
             <X size={18} />
           </button>
         </header>
@@ -392,7 +392,7 @@ export function ZoneEditor({
         </div>
 
         <footer className="zone-editor-footer">
-          <button onClick={onClose} disabled={saving}>
+          <button onClick={onClose} type="button">
             Cancel
           </button>
           <button

@@ -99,4 +99,17 @@ describe("website scanner launch flow", () => {
     expect(source).toContain("This login is used only for this address");
     expect(source).not.toContain("Branch default");
   });
+
+  it("allows closing or canceling device login even when verification is in progress", async () => {
+    const source = await readFile("dashboard/components/device-manager.tsx", "utf8");
+
+    expect(source).toContain("function closeCredentialActivation()");
+    expect(source).toContain("onClick={closeCredentialActivation}");
+    // Verify that Close and Cancel buttons are not disabled while saving
+    expect(source).not.toContain('aria-label="Close device login" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}');
+    expect(source).not.toContain('className="secondary-button" onClick={() => { setCredentialActivation(undefined); setActivationPassword(""); setCredentialVerificationStatus(undefined); setCredentialVerificationError(undefined); }} disabled={saving}>Cancel');
+    // Verify overlay backdrop and Escape key dismissal
+    expect(source).toContain('closeCredentialActivation();');
+    expect(source).toContain('event.key === "Escape"');
+  });
 });
