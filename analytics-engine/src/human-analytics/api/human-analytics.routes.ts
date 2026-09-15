@@ -120,11 +120,63 @@ export async function registerHumanAnalyticsRoutes(
         const headers = tenantIdHeader.parse(request.headers);
         const query = trackingQueryParams.parse(request.query);
 
-        // TODO: Implement database query for tracks
-        // For now, return empty array
+        // Query active person tracks from database
+        const conditions: string[] = ["t.tenant_id = $1"];
+        const params: any[] = [headers["x-tenant-id"]];
+        let paramIndex = 2;
+
+        if (query.cameraId) {
+          conditions.push(`t.camera_id = $${paramIndex++}`);
+          params.push(query.cameraId);
+        }
+
+        if (query.status) {
+          conditions.push(`t.status = $${paramIndex++}`);
+          params.push(query.status);
+        }
+
+        const sql = `
+          SELECT 
+            t.id,
+            t.track_id,
+            t.camera_id,
+            t.status,
+            t.first_seen_at,
+            t.last_seen_at,
+            t.observation_count,
+            t.best_confidence,
+            t.mean_confidence,
+            t.dwell_time_seconds,
+            t.trajectory,
+            t.attributes,
+            t.last_bbox,
+            c.name as camera_name
+          FROM person_tracks t
+          LEFT JOIN cameras c ON c.id = t.camera_id
+          WHERE ${conditions.join(" AND ")}
+            AND t.status IN ('tentative', 'confirmed')
+            AND t.last_seen_at > NOW() - INTERVAL '5 minutes'
+          ORDER BY t.last_seen_at DESC
+          LIMIT $${paramIndex}
+        `;
+
+        params.push(query.limit);
+
+        const result = await pool.query(sql, params);
+
         return reply.send({
-          tracks: [],
-          total: 0,
+          tracks: result.rows.map(row => ({
+            ...row,
+            dwellTimeSeconds: row.dwell_time_seconds,
+            observationCount: row.observation_count,
+            bestConfidence: row.best_confidence,
+            meanConfidence: row.mean_confidence,
+            lastBbox: row.last_bbox,
+            firstSeenAt: row.first_seen_at,
+            lastSeenAt: row.last_seen_at,
+            cameraName: row.camera_name,
+          })),
+          total: result.rowCount || 0,
         });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -158,11 +210,56 @@ export async function registerHumanAnalyticsRoutes(
         const params = cameraIdParam.parse(request.params);
         const query = trackingQueryParams.parse(request.query);
 
-        // TODO: Implement camera-specific track query
+        // Query camera-specific person tracks
+        const conditions: string[] = ["t.tenant_id = $1", "t.camera_id = $2"];
+        const sqlParams: any[] = [headers["x-tenant-id"], params.cameraId];
+        let paramIndex = 3;
+
+        if (query.status) {
+          conditions.push(`t.status = $${paramIndex++}`);
+          sqlParams.push(query.status);
+        }
+
+        const sql = `
+          SELECT 
+            t.id,
+            t.track_id,
+            t.camera_id,
+            t.status,
+            t.first_seen_at,
+            t.last_seen_at,
+            t.observation_count,
+            t.best_confidence,
+            t.mean_confidence,
+            t.dwell_time_seconds,
+            t.trajectory,
+            t.attributes,
+            t.last_bbox
+          FROM person_tracks t
+          WHERE ${conditions.join(" AND ")}
+            AND t.status IN ('tentative', 'confirmed')
+            AND t.last_seen_at > NOW() - INTERVAL '5 minutes'
+          ORDER BY t.last_seen_at DESC
+          LIMIT $${paramIndex}
+        `;
+
+        sqlParams.push(query.limit);
+
+        const result = await pool.query(sql, sqlParams);
+
         return reply.send({
           cameraId: params.cameraId,
-          tracks: [],
-          total: 0,
+          tracks: result.rows.map(row => ({
+            ...row,
+            dwellTimeSeconds: row.dwell_time_seconds,
+            observationCount: row.observation_count,
+            bestConfidence: row.best_confidence,
+            meanConfidence: row.mean_confidence,
+            lastBbox: row.last_bbox,
+            firstSeenAt: row.first_seen_at,
+            lastSeenAt: row.last_seen_at,
+          })),
+          total: result.rowCount || 0,
         });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -438,9 +535,21 @@ export async function registerHumanAnalyticsRoutes(
           });
         }
 
+        const row = result.rows[0];
+        
+        // Calculate confidence based on event count and time since last update
+        const minutesSinceUpdate = row.last_updated 
+          ? (Date.now() - new Date(row.last_updated).getTime()) / 60000
+          : 999;
+        
+        // Confidence decreases with time and increases with event count
+        const timeConfidence = Math.max(0, 1 - (minutesSinceUpdate / 30)); // 30 min decay
+        const eventConfidence = Math.min(1, row.event_count / 50); // Max at 50 events
+        const calculatedConfidence = (timeConfidence * 0.6 + eventConfidence * 0.4);
+        
         return reply.send({
-          ...result.rows[0],
-          confidence: 0.7, // TODO: Calculate actual confidence
+          ...row,
+          confidence: Number(calculatedConfidence.toFixed(3)),
         });
       } catch (error) {
         request.log.error({ err: error }, "Error getting occupancy");
@@ -467,10 +576,58 @@ export async function registerHumanAnalyticsRoutes(
         const { zoneId } = request.params;
         const query = occupancyQueryParams.parse(request.query);
 
-        // TODO: Implement occupancy history calculation
+        // Implement occupancy history calculation with time-series aggregation
+        const conditions: string[] = ["s.tenant_id = $1", "l.zone_id = $2"];
+        const params: any[] = [headers["x-tenant-id"], zoneId];
+        let paramIndex = 3;
+
+        if (query.fromDate) {
+          conditions.push(`l.timestamp >= $${paramIndex++}`);
+          params.push(query.fromDate);
+        }
+
+        if (query.toDate) {
+          conditions.push(`l.timestamp <= $${paramIndex++}`);
+          params.push(query.toDate);
+        }
+
+        // Aggregate occupancy in time intervals
+        const sql = `
+          WITH time_series AS (
+            SELECT 
+              date_trunc('minute', timestamp) + 
+                (EXTRACT(minute FROM timestamp)::int / $${paramIndex}) * 
+                INTERVAL '1 minute' * $${paramIndex} as time_bucket,
+              SUM(delta) OVER (ORDER BY timestamp) as cumulative_occupancy,
+              MAX(timestamp) OVER (PARTITION BY date_trunc('minute', timestamp) + 
+                (EXTRACT(minute FROM timestamp)::int / $${paramIndex}) * 
+                INTERVAL '1 minute' * $${paramIndex}) as last_event_in_bucket
+            FROM occupancy_ledger l
+            JOIN sites s ON l.site_id = s.id
+            WHERE ${conditions.join(" AND ")}
+            ORDER BY timestamp
+          )
+          SELECT DISTINCT ON (time_bucket)
+            time_bucket,
+            cumulative_occupancy as occupancy,
+            last_event_in_bucket
+          FROM time_series
+          ORDER BY time_bucket DESC, last_event_in_bucket DESC
+          LIMIT 288
+        `;
+
+        params.push(query.intervalMinutes);
+
+        const result = await pool.query(sql, params);
+
         return reply.send({
           zoneId,
-          history: [],
+          intervalMinutes: query.intervalMinutes,
+          history: result.rows.map(row => ({
+            timestamp: row.time_bucket,
+            occupancy: parseInt(row.occupancy || '0', 10),
+          })),
+          count: result.rowCount || 0,
         });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -504,10 +661,65 @@ export async function registerHumanAnalyticsRoutes(
         const { zoneId } = request.params;
         const body = manualCorrectionBody.parse(request.body);
 
-        // TODO: Add manual correction to occupancy ledger
+        // Add manual correction to occupancy ledger
+        // First get site_id for the zone
+        const siteResult = await pool.query(
+          `
+          SELECT DISTINCT site_id 
+          FROM occupancy_ledger l
+          JOIN sites s ON l.site_id = s.id
+          WHERE s.tenant_id = $1 AND l.zone_id = $2
+          LIMIT 1
+          `,
+          [headers["x-tenant-id"], zoneId]
+        );
+
+        if (siteResult.rowCount === 0) {
+          return reply.code(404).send({
+            error: "zone_not_found",
+            message: `Zone ${zoneId} not found or has no occupancy data`,
+          });
+        }
+
+        const siteId = siteResult.rows[0].site_id;
+
+        // Insert manual correction event
+        const sql = `
+          INSERT INTO occupancy_ledger (
+            site_id, zone_id, delta, source, metadata, timestamp
+          ) VALUES ($1, $2, $3, $4, $5, NOW())
+          RETURNING *
+        `;
+
+        const result = await pool.query(sql, [
+          siteId,
+          zoneId,
+          body.delta,
+          'manual_correction',
+          JSON.stringify({
+            reason: body.reason,
+            correctedBy: request.headers["x-user-id"] || "system",
+            correctedAt: new Date().toISOString(),
+          }),
+        ]);
+
+        // Get updated occupancy
+        const occupancyResult = await pool.query(
+          `
+          SELECT SUM(delta) as occupancy
+          FROM occupancy_ledger l
+          JOIN sites s ON l.site_id = s.id
+          WHERE s.tenant_id = $1 AND l.zone_id = $2
+          GROUP BY zone_id
+          `,
+          [headers["x-tenant-id"], zoneId]
+        );
+
         return reply.send({
           success: true,
           message: "Manual correction added",
+          correction: result.rows[0],
+          currentOccupancy: parseInt(occupancyResult.rows[0]?.occupancy || '0', 10),
         });
       } catch (error) {
         if (error instanceof z.ZodError) {

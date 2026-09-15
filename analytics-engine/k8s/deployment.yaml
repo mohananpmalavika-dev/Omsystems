@@ -1,0 +1,218 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-engine
+  namespace: sentinel-analytics
+  labels:
+    app: analytics-engine
+    version: v2.0.0
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: analytics-engine
+  template:
+    metadata:
+      labels:
+        app: analytics-engine
+        version: v2.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9092"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: analytics-engine
+      
+      # Init container to verify models and database
+      initContainers:
+        - name: verify-models
+          image: aditisentinel/analytics-engine:2.0.0
+          command: ['sh', '-c']
+          args:
+            - |
+              echo "Verifying model files..."
+              if [ ! -f /app/models/manifest.json ]; then
+                echo "ERROR: Model manifest not found"
+                exit 1
+              fi
+              echo "Model manifest found: OK"
+              ls -lh /app/models/
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+              readOnly: true
+        
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ['sh', '-c']
+          args:
+            - |
+              until pg_isready -h postgres -p 5432 -U analytics; do
+                echo "Waiting for PostgreSQL..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready"
+      
+      containers:
+        - name: analytics-engine
+          image: aditisentinel/analytics-engine:2.0.0
+          imagePullPolicy: Always
+          
+          ports:
+            - name: http
+              containerPort: 8092
+              protocol: TCP
+            - name: metrics
+              containerPort: 9092
+              protocol: TCP
+          
+          env:
+            # Load from ConfigMap
+            - name: NODE_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-engine-config
+                  key: NODE_ENV
+            - name: HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-engine-config
+                  key: HOST
+            - name: PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: analytics-engine-config
+                  key: PORT
+            
+            # Load secrets
+            - name: ANALYTICS_ENGINE_SHARED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-engine-secrets
+                  key: ANALYTICS_ENGINE_SHARED_KEY
+            - name: ANALYTICS_SOURCE_SHARED_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-engine-secrets
+                  key: ANALYTICS_SOURCE_SHARED_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-engine-secrets
+                  key: DATABASE_URL
+            
+            # Service URLs
+            - name: CONTROL_PLANE_URL
+              value: "http://control-plane.sentinel-backend.svc.cluster.local:4000"
+            - name: INCIDENT_API_URL
+              value: "http://control-plane.sentinel-backend.svc.cluster.local:4000/v1/incidents"
+            - name: INCIDENT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: analytics-engine-secrets
+                  key: INCIDENT_API_KEY
+            
+            # Pod metadata
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          
+          envFrom:
+            - configMapRef:
+                name: analytics-engine-config
+          
+          volumeMounts:
+            - name: models
+              mountPath: /app/models
+              readOnly: true
+            - name: logs
+              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
+          
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+          
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+          
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+      
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: analytics-models-pvc
+        - name: logs
+          emptyDir: {}
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - analytics-engine
+                topologyKey: kubernetes.io/hostname
+      
+      terminationGracePeriodSeconds: 60

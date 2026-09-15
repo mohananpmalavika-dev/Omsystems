@@ -8,9 +8,16 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run test/app.test.ts test/inference.test.ts test/specialty-inference.test.ts test/model-manager.test.ts",
+    "test:face": "vitest run test/face-recognition-e2e.test.ts",
+    "test:bfsi": "vitest run test/bfsi-compliance.test.ts",
+    "test:industrial": "vitest run test/industrial-analytics-e2e.test.ts",
+    "test:performance": "vitest run test/performance-benchmarks.test.ts",
+    "test:failures": "vitest run test/failure-scenarios.test.ts",
+    "test:production": "vitest run test/face-recognition-e2e.test.ts test/bfsi-compliance.test.ts test/industrial-analytics-e2e.test.ts test/performance-benchmarks.test.ts test/failure-scenarios.test.ts",
+    "test:all": "vitest run",
+    "test:watch": "vitest",
     "models:download": "tsx scripts/provision-models.ts",
     "models:verify": "tsx scripts/verify-models.ts",
-    "test:watch": "vitest",
     "setup-banking-demo": "tsx scripts/setup-banking-demo.ts"
   },
   "dependencies": {

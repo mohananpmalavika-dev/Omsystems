@@ -185,6 +185,39 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     const module = await import("./digital-twin/api/index.js");
     await module.registerDigitalTwinRoutes(instance);
   });
+  app.register(async (instance) => {
+    const module = await import("./routes/face-recognition.routes.js");
+    // Face recognition routes will be enabled when services are initialized
+    // Services are initialized in the banking analytics activation
+    if (process.env.ENABLE_FACE_RECOGNITION === 'true') {
+      try {
+        const { Pool } = await import('pg');
+        const db = new Pool({ connectionString: process.env.DATABASE_URL });
+        const { FaceRecognitionService } = await import("./face/face-recognition.service.js");
+        const { FaceEnrollmentService } = await import("./face/face-enrollment.service.js");
+        const { FaceSearchService } = await import("./face/face-search.service.js");
+        const { FaceRecognitionGovernanceService } = await import("./banking/governance/face-recognition-governance.service.js");
+        
+        const recognitionService = new FaceRecognitionService(db);
+        const enrollmentService = new FaceEnrollmentService(db, recognitionService);
+        const searchService = new FaceSearchService(db);
+        const governanceService = new FaceRecognitionGovernanceService();
+        
+        await recognitionService.initialize();
+        await module.registerFaceRecognitionRoutes(
+          instance,
+          db,
+          recognitionService,
+          enrollmentService,
+          searchService,
+          governanceService,
+        );
+        instance.log.info('Face Recognition API enabled');
+      } catch (error) {
+        instance.log.warn({ err: error }, 'Face Recognition API initialization failed');
+      }
+    }
+  });
 
   app.addHook("preHandler", async (request, reply) => {
     if (request.url === "/health" || request.url === "/live") return;

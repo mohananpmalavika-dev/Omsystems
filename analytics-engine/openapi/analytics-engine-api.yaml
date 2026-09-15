@@ -1,0 +1,960 @@
+openapi: 3.0.3
+info:
+  title: Analytics Engine API
+  description: |
+    Production-ready Analytics Engine API for AI video analytics, human tracking,
+    vehicle analytics, industrial safety, and real-time detection processing.
+    
+    **Core Features:**
+    - Real-time frame processing with ONNX inference
+    - 14 analytics modules (human, vehicle, industrial, retail, banking, etc.)
+    - Person/vehicle tracking with Re-ID
+    - Heat map generation and crowd analytics
+    - Industrial safety monitoring
+    - SNMP device integration
+    - Camera health monitoring
+    
+    **Performance:**
+    - <100ms person detection latency
+    - 1-2 FPS frame processing
+    - 30+ concurrent camera streams (CPU)
+    - 50-80+ streams (GPU)
+    
+    **Authentication:**
+    All endpoints require `x-analytics-source-key` or `x-analytics-engine-key` header.
+  version: 2.0.0
+  contact:
+    name: Analytics Engine Team
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8092
+    description: Development server
+  - url: https://analytics.sentinelgrid.com
+    description: Production server
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Health
+    description: Service health and status
+  - name: Detection
+    description: Detection event submission
+  - name: Human Analytics
+    description: Person tracking and occupancy
+  - name: Vehicle Analytics
+    description: Vehicle tracking and ANPR
+  - name: Industrial Analytics
+    description: Industrial safety monitoring
+  - name: Heat Maps
+    description: Traffic heat maps
+  - name: Crowd Analytics
+    description: Crowd density and queue management
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Get detailed service health including AI pipeline status
+      operationId: getHealth
+      security: []
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Service unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /v1/analytics/cameras/{cameraId}/status:
+    get:
+      tags: [Health]
+      summary: Get camera AI status
+      description: Get per-camera AI analytics status with inference metrics
+      operationId: getCameraStatus
+      parameters:
+        - name: cameraId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Camera status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CameraStatus'
+
+  /internal/detections:
+    post:
+      tags: [Detection]
+      summary: Submit detection event
+      description: Submit a single detection event to control plane
+      operationId: submitDetection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DetectionEvent'
+      responses:
+        '202':
+          description: Detection accepted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '502':
+          description: Control plane unavailable
+
+  /internal/detections/batch:
+    post:
+      tags: [Detection]
+      summary: Submit batch detection events
+      description: Submit up to 100 detection events in a single request
+      operationId: submitDetectionBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/DetectionEvent'
+              minItems: 1
+              maxItems: 100
+      responses:
+        '202':
+          description: Batch accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: integer
+                  failed:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sourceEventId:
+                          type: string
+                        status:
+                          type: string
+                          enum: [accepted, failed]
+
+  /internal/frames:
+    post:
+      tags: [Detection]
+      summary: Process frame
+      description: |
+        Submit RGB24 frame for local ONNX inference or provide pre-computed detections.
+        Omit `detections` to run local inference. Provide `detections: []` to indicate
+        upstream worker found no objects.
+      operationId: processFrame
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FrameInput'
+      responses:
+        '202':
+          description: Frame processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cameraId:
+                    type: string
+                  inferenceMode:
+                    type: string
+                    enum: [local-onnx, normalized-observation]
+                  detectionsReceived:
+                    type: integer
+                  eventsGenerated:
+                    type: integer
+                  accepted:
+                    type: integer
+                  failed:
+                    type: integer
+
+  /v1/detections/persons/tracks:
+    get:
+      tags: [Human Analytics]
+      summary: Get active person tracks
+      description: Get currently tracked persons across all cameras
+      operationId: getPersonTracks
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+        - name: minDwellSeconds
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Active tracks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  tracks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonTrack'
+
+  /v1/analytics/human/occupancy:
+    get:
+      tags: [Human Analytics]
+      summary: Get current occupancy
+      description: Get real-time occupancy count per camera or zone
+      operationId: getCurrentOccupancy
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+        - name: zoneId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Occupancy data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OccupancyResponse'
+
+  /v1/analytics/human/occupancy/history:
+    get:
+      tags: [Human Analytics]
+      summary: Get occupancy history
+      description: Get time-series occupancy data with configurable intervals
+      operationId: getOccupancyHistory
+      parameters:
+        - name: cameraId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [1min, 5min, 15min, 1hour]
+            default: 15min
+      responses:
+        '200':
+          description: Historical occupancy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          format: date-time
+                        occupancy:
+                          type: integer
+                        confidence:
+                          type: number
+
+  /v1/detections/vehicles/tracks:
+    get:
+      tags: [Vehicle Analytics]
+      summary: Get active vehicle tracks
+      description: Get currently tracked vehicles with speed and direction
+      operationId: getVehicleTracks
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active tracks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                  tracks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VehicleTrack'
+
+  /v1/analytics/industrial/zones:
+    get:
+      tags: [Industrial Analytics]
+      summary: List industrial zones
+      description: Get all configured industrial safety zones
+      operationId: listIndustrialZones
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Zone list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IndustrialZone'
+
+    post:
+      tags: [Industrial Analytics]
+      summary: Create industrial zone
+      description: Create new industrial safety zone
+      operationId: createIndustrialZone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndustrialZoneCreate'
+      responses:
+        '201':
+          description: Zone created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IndustrialZone'
+
+  /v1/analytics/industrial/zones/{zoneId}:
+    get:
+      tags: [Industrial Analytics]
+      summary: Get zone details
+      operationId: getIndustrialZone
+      parameters:
+        - name: zoneId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Zone details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/IndustrialZone'
+
+    patch:
+      tags: [Industrial Analytics]
+      summary: Update zone
+      operationId: updateIndustrialZone
+      parameters:
+        - name: zoneId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndustrialZoneUpdate'
+      responses:
+        '200':
+          description: Zone updated
+
+    delete:
+      tags: [Industrial Analytics]
+      summary: Delete zone
+      operationId: deleteIndustrialZone
+      parameters:
+        - name: zoneId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Zone deleted
+
+  /v1/analytics/industrial/violations:
+    get:
+      tags: [Industrial Analytics]
+      summary: List safety violations
+      description: Get industrial safety violation events
+      operationId: listIndustrialViolations
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+        - name: zoneId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [P1, P2, P3]
+        - name: reviewStatus
+          in: query
+          schema:
+            type: string
+            enum: [unreviewed, confirmed, rejected]
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Violations list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IndustrialViolation'
+
+  /v1/analytics/heatmap:
+    get:
+      tags: [Heat Maps]
+      summary: Get current heat map
+      description: Get accumulated heat map data in grid or image format
+      operationId: getHeatMap
+      parameters:
+        - name: cameraId
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [grid, image]
+            default: grid
+      responses:
+        '200':
+          description: Heat map data
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/HeatMapGrid'
+                  - $ref: '#/components/schemas/HeatMapImage'
+
+  /v1/analytics/heatmap/reset:
+    post:
+      tags: [Heat Maps]
+      summary: Reset heat map
+      description: Clear accumulated heat map data
+      operationId: resetHeatMap
+      parameters:
+        - name: cameraId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Heat map reset
+
+  /v1/analytics/crowd/metrics:
+    get:
+      tags: [Crowd Analytics]
+      summary: Get crowd metrics
+      description: Get real-time crowd density and bottleneck analysis
+      operationId: getCrowdMetrics
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Crowd metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrowdMetrics'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-analytics-source-key
+      description: Analytics engine API key
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded, unhealthy]
+        aiState:
+          type: string
+          enum: [AI_OPERATIONAL, AI_DEGRADED, AI_UNAVAILABLE]
+        service:
+          type: string
+          example: sentinel-analytics-engine
+        received:
+          type: integer
+        accepted:
+          type: integer
+        failed:
+          type: integer
+        lastAcceptedAt:
+          type: string
+          format: date-time
+        pipeline:
+          type: object
+          properties:
+            initialized:
+              type: boolean
+            detectors:
+              type: object
+            models:
+              type: object
+              properties:
+                ready:
+                  type: boolean
+                primaryModel:
+                  type: object
+                gpu:
+                  type: object
+        streams:
+          type: object
+          properties:
+            active:
+              type: integer
+
+    CameraStatus:
+      type: object
+      properties:
+        cameraId:
+          type: string
+        stream:
+          type: string
+          enum: [connected, disconnected, unknown]
+        recording:
+          type: boolean
+        aiEngine:
+          type: string
+          enum: [AI_OPERATIONAL, AI_DEGRADED, AI_UNAVAILABLE]
+        model:
+          type: string
+          example: "YOLOX Tiny 0.1.1"
+        inferenceMode:
+          type: string
+          enum: [local-onnx, normalized-observation]
+        inference:
+          type: object
+          properties:
+            fps:
+              type: number
+            latencyMs:
+              type: number
+            gpu:
+              type: object
+        detection:
+          type: object
+          properties:
+            persons:
+              type: integer
+            vehicles:
+              type: integer
+            lastDetectionAt:
+              type: string
+              format: date-time
+
+    DetectionEvent:
+      type: object
+      required: [tenantId, cameraId, detectionType, confidence, modelVersion]
+      properties:
+        tenantId:
+          type: string
+        cameraId:
+          type: string
+        sourceEventId:
+          type: string
+        detectionType:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        durationSeconds:
+          type: number
+        modelVersion:
+          type: string
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetectedObject'
+        snapshotReference:
+          type: string
+        clipReference:
+          type: string
+        metadata:
+          type: object
+
+    DetectedObject:
+      type: object
+      required: [label, confidence]
+      properties:
+        label:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        trackId:
+          type: string
+        boundingBox:
+          type: object
+          properties:
+            x:
+              type: number
+            y:
+              type: number
+            width:
+              type: number
+            height:
+              type: number
+
+    FrameInput:
+      type: object
+      required: [tenantId, cameraId, width, height]
+      properties:
+        tenantId:
+          type: string
+        cameraId:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+        width:
+          type: integer
+        height:
+          type: integer
+        imageBase64:
+          type: string
+          format: byte
+          description: RGB24 image data (width * height * 3 bytes)
+        detections:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetectedObject'
+          description: Pre-computed detections (omit to run local inference)
+        rules:
+          type: array
+          items:
+            type: object
+        metadata:
+          type: object
+
+    PersonTrack:
+      type: object
+      properties:
+        trackId:
+          type: string
+        firstSeen:
+          type: string
+          format: date-time
+        lastSeen:
+          type: string
+          format: date-time
+        dwellTimeSeconds:
+          type: number
+        isStationary:
+          type: boolean
+        positionHistory:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+              y:
+                type: number
+              timestamp:
+                type: string
+                format: date-time
+
+    VehicleTrack:
+      type: object
+      properties:
+        trackId:
+          type: string
+        vehicleType:
+          type: string
+        speed:
+          type: number
+        direction:
+          type: string
+        licensePlate:
+          type: string
+        firstSeen:
+          type: string
+          format: date-time
+        lastSeen:
+          type: string
+          format: date-time
+
+    OccupancyResponse:
+      type: object
+      properties:
+        cameras:
+          type: array
+          items:
+            type: object
+            properties:
+              cameraId:
+                type: string
+              occupancy:
+                type: integer
+              confidence:
+                type: number
+              lastUpdated:
+                type: string
+                format: date-time
+
+    IndustrialZone:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        camera_id:
+          type: string
+        zone_name:
+          type: string
+        zone_type:
+          type: string
+          enum: [restricted, equipment-only, pedestrian-only, hazard, monitoring]
+        polygon_points:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+              y:
+                type: number
+        enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    IndustrialZoneCreate:
+      type: object
+      required: [cameraId, zoneName, zoneType, polygonPoints]
+      properties:
+        cameraId:
+          type: string
+        zoneName:
+          type: string
+        zoneType:
+          type: string
+          enum: [restricted, equipment-only, pedestrian-only, hazard, monitoring]
+        polygonPoints:
+          type: array
+          items:
+            type: object
+            properties:
+              x:
+                type: number
+              y:
+                type: number
+          minItems: 3
+        enabled:
+          type: boolean
+          default: true
+
+    IndustrialZoneUpdate:
+      type: object
+      properties:
+        zoneName:
+          type: string
+        enabled:
+          type: boolean
+        polygonPoints:
+          type: array
+          items:
+            type: object
+
+    IndustrialViolation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        zone_id:
+          type: string
+          format: uuid
+        violation_type:
+          type: string
+        severity:
+          type: string
+        description:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        review_status:
+          type: string
+          enum: [unreviewed, confirmed, rejected]
+
+    HeatMapGrid:
+      type: object
+      properties:
+        grid:
+          type: array
+          items:
+            type: array
+            items:
+              type: integer
+        dimensions:
+          type: object
+          properties:
+            width:
+              type: integer
+            height:
+              type: integer
+
+    HeatMapImage:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+          format: byte
+        width:
+          type: integer
+        height:
+          type: integer
+
+    CrowdMetrics:
+      type: object
+      properties:
+        zones:
+          type: array
+          items:
+            type: object
+            properties:
+              zoneId:
+                type: string
+              personCount:
+                type: integer
+              densityLevel:
+                type: string
+                enum: [sparse, moderate, crowded, overcrowded]
+              occupancyPercent:
+                type: number
+              isBottleneck:
+                type: boolean
+        summary:
+          type: object
+          properties:
+            totalPersons:
+              type: integer
+            overcrowdedZones:
+              type: integer
+            bottlenecks:
+              type: integer
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              details:
+                type: object
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: invalid_analytics_source_identity

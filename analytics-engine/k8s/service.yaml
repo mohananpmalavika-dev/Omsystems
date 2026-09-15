@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-engine
+  namespace: sentinel-analytics
+  labels:
+    app: analytics-engine
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9092"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: analytics-engine
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8092
+      targetPort: 8092
+    - name: metrics
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+  sessionAffinity: None
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-engine-headless
+  namespace: sentinel-analytics
+  labels:
+    app: analytics-engine
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: analytics-engine
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8092
+      targetPort: 8092
+    - name: metrics
+      protocol: TCP
+      port: 9092
+      targetPort: 9092

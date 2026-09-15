@@ -1,0 +1,1073 @@
+openapi: 3.0.3
+info:
+  title: Face Recognition API
+  description: |
+    Production-ready Face Recognition API for watchlist management, person enrollment, 
+    face matching, and BFSI compliance workflows.
+    
+    **Features:**
+    - Watchlist management (security, VIP, staff, blacklist, missing-person)
+    - Multi-image person enrollment with quality assessment
+    - Real-time face matching with pgvector search
+    - Temporal confirmation (3-frame minimum for BFSI)
+    - Liveness validation (≥0.95 threshold)
+    - Human-in-the-loop review workflow
+    - Biometric consent management (RBI compliance)
+    - Comprehensive audit trails
+    
+    **BFSI Compliance:**
+    - Written consent required before enrollment
+    - Minimum liveness score 0.95
+    - 3-frame temporal confirmation
+    - Mandatory human review for P1/P2 alerts
+    - 90-day retention with audit logs
+    
+    **Authentication:**
+    All endpoints require `x-analytics-source-key` header with valid API key.
+  version: 2.0.0
+  contact:
+    name: Analytics Engine Team
+    email: support@sentinelgrid.com
+  license:
+    name: Proprietary
+    url: https://sentinelgrid.com/license
+
+servers:
+  - url: http://localhost:8092
+    description: Development server
+  - url: https://analytics.sentinelgrid.com
+    description: Production server
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Watchlists
+    description: Face watchlist management operations
+  - name: Persons
+    description: Person enrollment and management
+  - name: Matching
+    description: Face matching and search
+  - name: Events
+    description: Face recognition events
+  - name: Reviews
+    description: Human review workflow
+  - name: Consent
+    description: Biometric consent management
+
+paths:
+  /v1/analytics/face-watchlists:
+    get:
+      tags: [Watchlists]
+      summary: List all watchlists
+      description: Get all face watchlists for the tenant with person counts and statistics
+      operationId: listWatchlists
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/WatchlistWithStats'
+                  count:
+                    type: integer
+                    example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Watchlists]
+      summary: Create watchlist
+      description: Create a new face watchlist with custom thresholds and alert configuration
+      operationId: createWatchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchlistCreate'
+      responses:
+        '201':
+          description: Watchlist created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/analytics/face-watchlists/{watchlistId}:
+    get:
+      tags: [Watchlists]
+      summary: Get watchlist details
+      description: Get detailed information about a specific watchlist
+      operationId: getWatchlist
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/WatchlistWithStats'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Watchlists]
+      summary: Update watchlist
+      description: Update watchlist configuration and thresholds
+      operationId: updateWatchlist
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchlistUpdate'
+      responses:
+        '200':
+          description: Watchlist updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Watchlist'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Watchlists]
+      summary: Archive watchlist
+      description: Soft delete watchlist (can be restored)
+      operationId: archiveWatchlist
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+      responses:
+        '204':
+          description: Watchlist archived
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/analytics/face-watchlists/{watchlistId}/persons:
+    get:
+      tags: [Persons]
+      summary: List persons in watchlist
+      description: Get all enrolled persons in a watchlist with statistics
+      operationId: listPersons
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonWithStats'
+                  count:
+                    type: integer
+
+    post:
+      tags: [Persons]
+      summary: Enroll person
+      description: |
+        Enroll a new person in the watchlist with face images or embedding.
+        Images will be processed for face detection, quality assessment, and embedding extraction.
+      operationId: enrollPerson
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonEnroll'
+      responses:
+        '201':
+          description: Person enrolled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Person'
+                  enrollment:
+                    type: object
+                    properties:
+                      acceptedImages:
+                        type: integer
+                        example: 3
+                      rejectedImages:
+                        type: integer
+                        example: 1
+                      failures:
+                        type: array
+                        items:
+                          type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/analytics/face-watchlists/{watchlistId}/persons/{personId}:
+    get:
+      tags: [Persons]
+      summary: Get person details
+      description: Get detailed information about an enrolled person
+      operationId: getPerson
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+        - $ref: '#/components/parameters/PersonId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PersonWithStats'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    patch:
+      tags: [Persons]
+      summary: Update person
+      description: Update person details and metadata
+      operationId: updatePerson
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+        - $ref: '#/components/parameters/PersonId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonUpdate'
+      responses:
+        '200':
+          description: Person updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Person'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Persons]
+      summary: Archive person
+      description: Soft delete person from watchlist
+      operationId: archivePerson
+      parameters:
+        - $ref: '#/components/parameters/WatchlistId'
+        - $ref: '#/components/parameters/PersonId'
+      responses:
+        '204':
+          description: Person archived
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/analytics/face-match:
+    post:
+      tags: [Matching]
+      summary: Match face embedding
+      description: |
+        Search for matching persons across watchlists using face embedding.
+        Returns ranked candidates with similarity scores.
+      operationId: matchFace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceMatchRequest'
+      responses:
+        '200':
+          description: Match results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceMatchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /v1/analytics/face-events:
+    get:
+      tags: [Events]
+      summary: List recognition events
+      description: Get face recognition events with filtering and pagination
+      operationId: listFaceEvents
+      parameters:
+        - name: cameraId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: watchlistId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: personId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FaceRecognitionEvent'
+                  count:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+    post:
+      tags: [Events]
+      summary: Record recognition event
+      description: |
+        Record a face recognition event from live camera stream.
+        Validates through BFSI governance (liveness, temporal confirmation, consent).
+      operationId: createFaceEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FaceEventCreate'
+      responses:
+        '201':
+          description: Event recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FaceRecognitionEvent'
+        '400':
+          description: Governance validation failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: governance_validation_failed
+                  reason:
+                    type: string
+                    example: "LIVENESS_REJECTED: liveness score 0.85 below threshold 0.95"
+
+  /v1/analytics/face-events/{eventId}/reviews:
+    post:
+      tags: [Reviews]
+      summary: Submit human review
+      description: Submit human review decision for a face match event
+      operationId: submitReview
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewDecision'
+      responses:
+        '201':
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/FaceMatchReview'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/analytics/face/consent:
+    post:
+      tags: [Consent]
+      summary: Register biometric consent
+      description: Register written biometric consent for a person (BFSI requirement)
+      operationId: registerConsent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRecord'
+      responses:
+        '201':
+          description: Consent registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      personId:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: registered
+                      expiresAt:
+                        type: string
+                        format: date-time
+
+  /v1/analytics/face/consent/{personId}:
+    get:
+      tags: [Consent]
+      summary: Check consent status
+      description: Check if person has active biometric consent
+      operationId: checkConsent
+      parameters:
+        - name: personId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Consent status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      personId:
+                        type: string
+                        format: uuid
+                      hasActiveConsent:
+                        type: boolean
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-analytics-source-key
+      description: Analytics engine API key
+
+  parameters:
+    WatchlistId:
+      name: watchlistId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Watchlist UUID
+
+    PersonId:
+      name: personId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Person UUID
+
+  schemas:
+    Watchlist:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: Security Watchlist
+        description:
+          type: string
+        list_type:
+          type: string
+          enum: [security, vip, staff, blacklist, missing-person]
+        enabled:
+          type: boolean
+        alert_on_match:
+          type: boolean
+        alert_severity:
+          type: string
+          enum: [P1, P2, P3, P4, P5]
+        match_threshold:
+          type: number
+          format: float
+          minimum: 0.40
+          maximum: 0.95
+          example: 0.70
+        review_threshold:
+          type: number
+          format: float
+          example: 0.60
+        minimum_margin:
+          type: number
+          format: float
+          example: 0.05
+        minimum_quality:
+          type: number
+          format: float
+          example: 0.55
+        temporal_confirmation_frames:
+          type: integer
+          minimum: 1
+          maximum: 20
+          example: 3
+        temporal_window_seconds:
+          type: integer
+          minimum: 1
+          maximum: 30
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    WatchlistWithStats:
+      allOf:
+        - $ref: '#/components/schemas/Watchlist'
+        - type: object
+          properties:
+            person_count:
+              type: integer
+              example: 45
+            last_match_at:
+              type: string
+              format: date-time
+
+    WatchlistCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 160
+        description:
+          type: string
+          maxLength: 1000
+        listType:
+          type: string
+          enum: [security, vip, staff, blacklist, missing-person]
+          default: security
+        alertOnMatch:
+          type: boolean
+          default: true
+        alertSeverity:
+          type: string
+          enum: [P1, P2, P3, P4, P5]
+          default: P2
+        matchThreshold:
+          type: number
+          format: float
+          minimum: 0.40
+          maximum: 0.95
+          default: 0.70
+        reviewThreshold:
+          type: number
+          format: float
+          minimum: 0.40
+          maximum: 0.95
+          default: 0.60
+        minimumMargin:
+          type: number
+          format: float
+          minimum: 0.01
+          maximum: 0.30
+          default: 0.05
+        minimumQuality:
+          type: number
+          format: float
+          minimum: 0.30
+          maximum: 0.95
+          default: 0.55
+        temporalConfirmationFrames:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 3
+        temporalWindowSeconds:
+          type: integer
+          minimum: 1
+          maximum: 30
+          default: 2
+
+    WatchlistUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        alertOnMatch:
+          type: boolean
+        alertSeverity:
+          type: string
+          enum: [P1, P2, P3, P4, P5]
+        matchThreshold:
+          type: number
+          format: float
+        reviewThreshold:
+          type: number
+          format: float
+
+    Person:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        watchlist_id:
+          type: string
+          format: uuid
+        external_id:
+          type: string
+        full_name:
+          type: string
+        date_of_birth:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        notes:
+          type: string
+        metadata:
+          type: object
+        match_count:
+          type: integer
+        last_seen_at:
+          type: string
+          format: date-time
+        enrolled_at:
+          type: string
+          format: date-time
+
+    PersonWithStats:
+      allOf:
+        - $ref: '#/components/schemas/Person'
+        - type: object
+          properties:
+            embedding_count:
+              type: integer
+              example: 5
+            best_quality:
+              type: number
+              format: float
+              example: 0.92
+
+    PersonEnroll:
+      type: object
+      required: [fullName]
+      properties:
+        fullName:
+          type: string
+          minLength: 1
+          maxLength: 255
+        externalId:
+          type: string
+          maxLength: 100
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        notes:
+          type: string
+          maxLength: 2000
+        metadata:
+          type: object
+        images:
+          type: array
+          items:
+            type: string
+            format: byte
+          description: Base64-encoded JPEG/PNG images
+          minItems: 1
+          maxItems: 10
+        embedding:
+          type: array
+          items:
+            type: number
+          description: Pre-computed 512-dimensional embedding
+          minItems: 512
+          maxItems: 512
+
+    PersonUpdate:
+      type: object
+      properties:
+        fullName:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          type: string
+          enum: [male, female, other, unknown]
+        notes:
+          type: string
+        metadata:
+          type: object
+
+    FaceMatchRequest:
+      type: object
+      required: [embedding]
+      properties:
+        embedding:
+          type: array
+          items:
+            type: number
+          minItems: 512
+          maxItems: 512
+        minSimilarity:
+          type: number
+          format: float
+          minimum: 0.50
+          maximum: 0.99
+          default: 0.70
+        watchlistIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+
+    FaceMatchResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            matched:
+              type: boolean
+            bestMatch:
+              type: object
+              nullable: true
+              properties:
+                personId:
+                  type: string
+                  format: uuid
+                personName:
+                  type: string
+                watchlistId:
+                  type: string
+                  format: uuid
+                watchlistName:
+                  type: string
+                similarity:
+                  type: number
+                  format: float
+                confidence:
+                  type: integer
+                meanSimilarity:
+                  type: number
+                  format: float
+            allCandidates:
+              type: array
+              items:
+                type: object
+                properties:
+                  personId:
+                    type: string
+                    format: uuid
+                  personName:
+                    type: string
+                  watchlistId:
+                    type: string
+                    format: uuid
+                  watchlistName:
+                    type: string
+                  similarity:
+                    type: number
+                    format: float
+            count:
+              type: integer
+
+    FaceEventCreate:
+      type: object
+      required: [cameraId, similarityScore, faceBbox, occurredAt]
+      properties:
+        cameraId:
+          type: string
+          format: uuid
+        watchlistId:
+          type: string
+          format: uuid
+        personId:
+          type: string
+          format: uuid
+        similarityScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        faceBbox:
+          type: object
+          required: [x, y, width, height]
+          properties:
+            x:
+              type: number
+              minimum: 0
+              maximum: 1
+            y:
+              type: number
+              minimum: 0
+              maximum: 1
+            width:
+              type: number
+              minimum: 0
+              maximum: 1
+            height:
+              type: number
+              minimum: 0
+              maximum: 1
+        faceQuality:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+        ageEstimate:
+          type: integer
+          minimum: 0
+          maximum: 150
+        genderEstimate:
+          type: string
+          enum: [male, female]
+        wearingMask:
+          type: boolean
+        snapshotReference:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        livenessScore:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: Required for BFSI compliance (minimum 0.95)
+
+    FaceRecognitionEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        camera_id:
+          type: string
+          format: uuid
+        watchlist_id:
+          type: string
+          format: uuid
+        person_id:
+          type: string
+          format: uuid
+        similarity_score:
+          type: number
+          format: float
+        face_bbox:
+          type: object
+        face_quality:
+          type: number
+          format: float
+        age_estimate:
+          type: integer
+        gender_estimate:
+          type: string
+        wearing_mask:
+          type: boolean
+        snapshot_reference:
+          type: string
+        occurred_at:
+          type: string
+          format: date-time
+        person_name:
+          type: string
+        watchlist_name:
+          type: string
+        camera_name:
+          type: string
+        review_status:
+          type: string
+          enum: [pending, confirmed, rejected, unsure]
+
+    ReviewDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision:
+          type: string
+          enum: [confirmed, rejected, unsure]
+        notes:
+          type: string
+          maxLength: 2000
+
+    FaceMatchReview:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        recognition_event_id:
+          type: string
+          format: uuid
+        reviewer_id:
+          type: string
+        decision:
+          type: string
+          enum: [confirmed, rejected, unsure]
+        notes:
+          type: string
+        reviewed_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+
+    ConsentRecord:
+      type: object
+      required: [personId, role, documentReference, consentExpiryAt]
+      properties:
+        personId:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [EMPLOYEE, CUSTOMER, VENDOR, SECURITY_STAFF]
+        documentReference:
+          type: string
+          minLength: 1
+          maxLength: 500
+          description: Reference to signed consent document
+        consentExpiryAt:
+          type: string
+          format: date-time
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: invalid_request
+              details:
+                type: object
+
+    Unauthorized:
+      description: Unauthorized - invalid or missing API key
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: invalid_analytics_source_identity
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: watchlist_not_found

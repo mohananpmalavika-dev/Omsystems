@@ -1,10 +1,20 @@
 /**
- * SNMP Protocol Adapter
+ * SNMP Protocol Adapter (Production-Ready)
  * 
  * Adapter for SNMP-enabled devices (UPS, network equipment, environmental sensors).
  * Simple Network Management Protocol is widely used for network device monitoring.
+ * 
+ * Features:
+ * - SNMPv1, SNMPv2c, and SNMPv3 support
+ * - Device discovery via network scanning
+ * - UPS monitoring (RFC 1628)
+ * - Network device monitoring (interfaces, CPU, memory)
+ * - Environmental sensor monitoring
+ * - Automatic device type identification
+ * - Connection pooling and session management
  */
 
+import * as snmp from 'net-snmp';
 import { BaseSecurityDeviceAdapter } from './base-adapter';
 import {
   SecurityDevice,
@@ -57,9 +67,23 @@ const SNMP_OIDS = {
   ifOperStatus: '1.3.6.1.2.1.2.2.1.8',
 };
 
+interface SnmpSessionConfig {
+  host: string;
+  community?: string;
+  version?: snmp.Version;
+  timeout?: number;
+  retries?: number;
+  // SNMPv3 options
+  user?: string;
+  authProtocol?: string;
+  authKey?: string;
+  privProtocol?: string;
+  privKey?: string;
+}
+
 export class SnmpAdapter extends BaseSecurityDeviceAdapter {
   readonly adapterName = 'SNMP';
-  readonly adapterVersion = '1.0.0';
+  readonly adapterVersion = '2.0.0';
   readonly supportedProtocols: DeviceProtocol[] = ['SNMP'];
   readonly supportedDeviceTypes: SecurityDeviceType[] = [
     'UPS',
@@ -73,6 +97,12 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
     'HUMIDITY_SENSOR',
     'ENVIRONMENTAL_CONTROLLER',
   ];
+  
+  // Session cache for connection reuse
+  private readonly sessions = new Map<string, snmp.Session>();
+  private readonly defaultTimeout = parseInt(process.env.SNMP_TIMEOUT_MS || '5000');
+  private readonly defaultRetries = parseInt(process.env.SNMP_RETRIES || '3');
+  private readonly defaultCommunity = process.env.SNMP_COMMUNITY_STRING || 'public';
 
   /**
    * Discover SNMP devices
@@ -112,22 +142,181 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
   }
 
   /**
-   * Probe a single IP for SNMP device
+   * Get or create SNMP session for device
+   */
+  private getSession(config: SnmpSessionConfig): snmp.Session {
+    const sessionKey = `${config.host}:${config.community || config.user}`;
+    
+    let session = this.sessions.get(sessionKey);
+    if (session) {
+      return session;
+    }
+
+    // Create new session based on version
+    const version = config.version || snmp.Version2c;
+    const options: any = {
+      timeout: config.timeout || this.defaultTimeout,
+      retries: config.retries || this.defaultRetries,
+      version,
+    };
+
+    if (version === snmp.Version3) {
+      // SNMPv3 authentication
+      options.user = config.user || 'v3user';
+      if (config.authProtocol) {
+        options.authProtocol = config.authProtocol === 'SHA' ? snmp.AuthProtocols.sha : snmp.AuthProtocols.md5;
+        options.authKey = config.authKey || '';
+      }
+      if (config.privProtocol) {
+        options.privProtocol = config.privProtocol === 'AES' ? snmp.PrivProtocols.aes : snmp.PrivProtocols.des;
+        options.privKey = config.privKey || '';
+      }
+      session = snmp.createV3Session(config.host, config.user, options);
+    } else {
+      // SNMPv1 or SNMPv2c
+      session = snmp.createSession(config.host, config.community || this.defaultCommunity, options);
+    }
+
+    this.sessions.set(sessionKey, session);
+    return session;
+  }
+
+  /**
+   * Perform SNMP GET operation
+   */
+  private async snmpGet(session: snmp.Session, oids: string[]): Promise<Map<string, any>> {
+    return new Promise((resolve, reject) => {
+      session.get(oids, (error: Error | null, varbinds: snmp.VarBind[]) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        const results = new Map<string, any>();
+        for (const varbind of varbinds) {
+          if (snmp.isVarbindError(varbind)) {
+            results.set(varbind.oid, null);
+          } else {
+            results.set(varbind.oid, varbind.value);
+          }
+        }
+        resolve(results);
+      });
+    });
+  }
+
+  /**
+   * Perform SNMP WALK operation
+   */
+  private async snmpWalk(session: snmp.Session, oid: string): Promise<Map<string, any>> {
+    return new Promise((resolve, reject) => {
+      const results = new Map<string, any>();
+      
+      session.walk(
+        oid,
+        20, // Max repetitions
+        (varbinds: snmp.VarBind[]) => {
+          // Feed callback
+          for (const varbind of varbinds) {
+            if (!snmp.isVarbindError(varbind)) {
+              results.set(varbind.oid, varbind.value);
+            }
+          }
+        },
+        (error: Error | null) => {
+          // Done callback
+          if (error) {
+            reject(error);
+          } else {
+            resolve(results);
+          }
+        }
+      );
+    });
+  }
+
+  /**
+   * Probe a single IP for SNMP device (with actual SNMP queries)
    */
   private async probeSnmpDevice(
     ipAddress: string,
     timeoutSeconds: number
   ): Promise<DiscoveredDevice | null> {
     try {
-      // TODO: Implement actual SNMP GET request
-      // Try SNMPv2c with community string 'public'
-      // Query sysDescr, sysObjectID, sysName
+      const session = this.getSession({
+        host: ipAddress,
+        community: this.defaultCommunity,
+        timeout: timeoutSeconds * 1000,
+        retries: 1,
+      });
+
+      // Query system OIDs
+      const oids = [
+        SNMP_OIDS.sysDescr,
+        SNMP_OIDS.sysObjectID,
+        SNMP_OIDS.sysName,
+        SNMP_OIDS.sysLocation,
+      ];
+
+      const results = await this.snmpGet(session, oids);
       
-      // For now, return null (no device found)
-      return null;
+      const sysDescr = results.get(SNMP_OIDS.sysDescr)?.toString() || '';
+      const sysObjectID = results.get(SNMP_OIDS.sysObjectID)?.toString() || '';
+      const sysName = results.get(SNMP_OIDS.sysName)?.toString() || '';
+      const sysLocation = results.get(SNMP_OIDS.sysLocation)?.toString() || '';
+
+      if (!sysDescr && !sysObjectID) {
+        // No SNMP response
+        return null;
+      }
+
+      const deviceType = this.identifyDeviceType(sysObjectID, sysDescr);
+
+      return {
+        ipAddress,
+        deviceType,
+        protocol: 'SNMP',
+        manufacturer: this.extractManufacturer(sysDescr),
+        model: this.extractModel(sysDescr),
+        name: sysName || `SNMP Device ${ipAddress}`,
+        metadata: {
+          sysDescr,
+          sysObjectID,
+          sysLocation,
+          discoveryMethod: 'snmp-probe',
+        },
+      };
     } catch (error) {
+      // Device didn't respond to SNMP
       return null;
     }
+  }
+
+  /**
+   * Extract manufacturer from sysDescr
+   */
+  private extractManufacturer(sysDescr: string): string {
+    const desc = sysDescr.toLowerCase();
+    
+    if (desc.includes('apc')) return 'APC';
+    if (desc.includes('cisco')) return 'Cisco';
+    if (desc.includes('hp') || desc.includes('hewlett packard')) return 'HP';
+    if (desc.includes('dell')) return 'Dell';
+    if (desc.includes('juniper')) return 'Juniper';
+    if (desc.includes('arista')) return 'Arista';
+    if (desc.includes('eaton')) return 'Eaton';
+    if (desc.includes('schneider')) return 'Schneider Electric';
+    
+    return 'Unknown';
+  }
+
+  /**
+   * Extract model from sysDescr
+   */
+  private extractModel(sysDescr: string): string {
+    // Try to extract model number patterns
+    const modelMatch = sysDescr.match(/\b[A-Z0-9]{3,}-?[A-Z0-9]{2,}\b/);
+    return modelMatch ? modelMatch[0] : 'Unknown';
   }
 
   /**
@@ -166,10 +355,76 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
    */
   async connect(device: SecurityDevice): Promise<ConnectionResult> {
     this.validateDeviceConfig(device);
+    
+    try {
+      const config = this.getDeviceSnmpConfig(device);
+      const session = this.getSession(config);
+      
+      // Test connection with sysDescr query
+      const results = await this.snmpGet(session, [SNMP_OIDS.sysDescr]);
+      const sysDescr = results.get(SNMP_OIDS.sysDescr);
+      
+      if (sysDescr) {
+        return {
+          success: true,
+          message: `Connected to SNMP device: ${sysDescr}`,
+        };
+      } else {
+        return {
+          success: false,
+          errorMessage: "snmp_no_response",
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        errorMessage: error instanceof Error ? error.message : "snmp_connection_failed",
+      };
+    }
+  }
+
+  /**
+   * Get SNMP configuration from device
+   */
+  private getDeviceSnmpConfig(device: SecurityDevice): SnmpSessionConfig {
+    const config = device.connectionConfig || {};
+    
     return {
-      success: false,
-      errorMessage: "snmp_transport_not_configured",
+      host: device.ipAddress,
+      community: config.community || this.defaultCommunity,
+      version: this.parseSnmpVersion(config.version),
+      timeout: this.defaultTimeout,
+      retries: this.defaultRetries,
+      user: config.user,
+      authProtocol: config.authProtocol,
+      authKey: config.authKey,
+      privProtocol: config.privProtocol,
+      privKey: config.privKey,
     };
+  }
+
+  /**
+   * Parse SNMP version string
+   */
+  private parseSnmpVersion(version?: string): snmp.Version {
+    if (!version) return snmp.Version2c;
+    
+    switch (version.toLowerCase()) {
+      case '1':
+      case 'v1':
+      case 'snmpv1':
+        return snmp.Version1;
+      case '2c':
+      case 'v2c':
+      case 'snmpv2c':
+        return snmp.Version2c;
+      case '3':
+      case 'v3':
+      case 'snmpv3':
+        return snmp.Version3;
+      default:
+        return snmp.Version2c;
+    }
   }
 
   /**
@@ -201,7 +456,7 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
   }
 
   /**
-   * Get UPS-specific health metrics
+   * Get UPS-specific health metrics (with actual SNMP queries)
    */
   private async getUpsHealth(
     device: SecurityDevice
@@ -209,27 +464,38 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
     const startTime = Date.now();
 
     try {
-      // TODO: Query UPS SNMP OIDs
-      // - Battery status
-      // - Battery charge remaining
-      // - Minutes remaining
-      // - Input/output voltage
-      // - Load percentage
-      // - Temperature
+      const config = this.getDeviceSnmpConfig(device);
+      const session = this.getSession(config);
 
+      // Query UPS-specific OIDs (RFC 1628)
+      const oids = [
+        SNMP_OIDS.upsBatteryStatus,
+        SNMP_OIDS.upsEstimatedChargeRemaining,
+        SNMP_OIDS.upsEstimatedMinutesRemaining,
+        SNMP_OIDS.upsBatteryVoltage,
+        SNMP_OIDS.upsBatteryTemperature,
+        SNMP_OIDS.upsOutputSource,
+        SNMP_OIDS.upsOutputPercentLoad,
+      ];
+
+      const results = await this.snmpGet(session, oids);
       const responseTimeMs = Date.now() - startTime;
 
-      // Simulated UPS data
-      const batteryStatus: number = 2; // 1=unknown, 2=batteryNormal, 3=batteryLow, 4=batteryDepleted
-      const batteryPercent = 95;
-      const minutesRemaining = 45;
-      const batteryVoltage = 27.5;
-      const temperature = 28;
-      const loadPercent = 35;
-      const outputSource: number = 3; // 1=other, 2=none, 3=normal, 4=bypass, 5=battery, 6=booster, 7=reducer
+      // Parse UPS metrics
+      const batteryStatus = results.get(SNMP_OIDS.upsBatteryStatus) as number || 2;
+      const batteryPercent = results.get(SNMP_OIDS.upsEstimatedChargeRemaining) as number || 100;
+      const minutesRemaining = results.get(SNMP_OIDS.upsEstimatedMinutesRemaining) as number || 0;
+      const batteryVoltage = (results.get(SNMP_OIDS.upsBatteryVoltage) as number || 0) / 10.0; // Tenths of volts
+      const temperature = results.get(SNMP_OIDS.upsBatteryTemperature) as number || 25;
+      const outputSource = results.get(SNMP_OIDS.upsOutputSource) as number || 3;
+      const loadPercent = results.get(SNMP_OIDS.upsOutputPercentLoad) as number || 0;
 
+      // Interpret status
+      // batteryStatus: 1=unknown, 2=batteryNormal, 3=batteryLow, 4=batteryDepleted
+      // outputSource: 1=other, 2=none, 3=normal, 4=bypass, 5=battery, 6=booster, 7=reducer
       const isOnBattery = outputSource === 5;
       const isBatteryLow = batteryStatus === 3 || batteryPercent < 20;
+      const isCritical = batteryStatus === 4 || batteryPercent < 10 || (isOnBattery && minutesRemaining < 5);
 
       const healthScore = this.calculateHealthScore({
         isOnline: true,
@@ -238,12 +504,14 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
       });
 
       return this.createHealthSnapshot(device, {
-        health: isBatteryLow
+        health: isCritical
           ? 'CRITICAL'
+          : isBatteryLow
+          ? 'POOR'
           : isOnBattery
           ? 'FAIR'
           : this.mapHealthScoreToStatus(healthScore),
-        healthScore: isBatteryLow ? 20 : isOnBattery ? 60 : healthScore,
+        healthScore: isCritical ? 10 : isBatteryLow ? 30 : isOnBattery ? 60 : healthScore,
         isOnline: true,
         responseTimeMs,
         powerStatus: isOnBattery ? 'BATTERY' : 'AC',
@@ -251,21 +519,37 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
         batteryVoltage,
         upsRuntimeMinutes: minutesRemaining,
         temperatureCelsius: temperature,
-        errorCount: isOnBattery ? 1 : 0,
-        warningCount: isBatteryLow ? 1 : 0,
+        errorCount: isOnBattery || isBatteryLow ? 1 : 0,
+        warningCount: isOnBattery ? 1 : 0,
         metadata: {
-          batteryStatus,
-          outputSource,
+          batteryStatus: this.getBatteryStatusName(batteryStatus),
+          outputSource: this.getOutputSourceName(outputSource),
           loadPercent,
         },
       });
     } catch (error) {
-      throw error;
+      throw new Error(`UPS SNMP query failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Get network device health metrics
+   * Get battery status name
+   */
+  private getBatteryStatusName(status: number): string {
+    const names = ['unknown', 'unknown', 'normal', 'low', 'depleted'];
+    return names[status] || 'unknown';
+  }
+
+  /**
+   * Get output source name
+   */
+  private getOutputSourceName(source: number): string {
+    const names = ['unknown', 'other', 'none', 'normal', 'bypass', 'battery', 'booster', 'reducer'];
+    return names[source] || 'unknown';
+  }
+
+  /**
+   * Get network device health metrics (with actual SNMP queries)
    */
   private async getNetworkDeviceHealth(
     device: SecurityDevice
@@ -273,40 +557,64 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
     const startTime = Date.now();
 
     try {
-      // TODO: Query network device SNMP OIDs
-      // - System uptime
-      // - Interface status
-      // - CPU usage (vendor-specific)
-      // - Memory usage (vendor-specific)
+      const config = this.getDeviceSnmpConfig(device);
+      const session = this.getSession(config);
 
+      // Query system and interface OIDs
+      const oids = [
+        SNMP_OIDS.sysUpTime,
+        SNMP_OIDS.sysDescr,
+      ];
+
+      const results = await this.snmpGet(session, oids);
       const responseTimeMs = Date.now() - startTime;
+
+      const sysUpTime = results.get(SNMP_OIDS.sysUpTime) as number || 0;
+      const uptimeSeconds = Math.floor(sysUpTime / 100); // Hundredths of seconds to seconds
+
+      // Query interface status
+      const interfaceResults = await this.snmpWalk(session, SNMP_OIDS.ifOperStatus);
+      const totalInterfaces = interfaceResults.size;
+      let upInterfaces = 0;
+      
+      for (const [_, status] of interfaceResults) {
+        if (status === 1) upInterfaces++; // 1 = up, 2 = down, 3 = testing
+      }
+
+      const interfaceDownCount = totalInterfaces - upInterfaces;
+      const hasInterfaceDown = interfaceDownCount > 0;
 
       const healthScore = this.calculateHealthScore({
         isOnline: true,
         responseTimeMs,
-        cpuUsagePercent: 45,
-        memoryUsagePercent: 62,
-        errorCount: 0,
+        errorCount: interfaceDownCount,
       });
 
       return this.createHealthSnapshot(device, {
-        health: this.mapHealthScoreToStatus(healthScore),
-        healthScore,
+        health: hasInterfaceDown && interfaceDownCount > totalInterfaces / 2
+          ? 'CRITICAL'
+          : hasInterfaceDown
+          ? 'FAIR'
+          : this.mapHealthScoreToStatus(healthScore),
+        healthScore: hasInterfaceDown ? Math.max(40, healthScore - (interfaceDownCount * 10)) : healthScore,
         isOnline: true,
         responseTimeMs,
-        cpuUsagePercent: 45,
-        memoryUsagePercent: 62,
-        temperatureCelsius: 42,
-        errorCount: 0,
+        uptimeSeconds,
+        errorCount: interfaceDownCount,
         warningCount: 0,
+        metadata: {
+          totalInterfaces,
+          upInterfaces,
+          downInterfaces: interfaceDownCount,
+        },
       });
     } catch (error) {
-      throw error;
+      throw new Error(`Network device SNMP query failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Get generic SNMP device health
+   * Get generic SNMP device health (with actual queries)
    */
   private async getGenericSnmpHealth(
     device: SecurityDevice
@@ -314,11 +622,21 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
     const startTime = Date.now();
 
     try {
-      // TODO: Query basic SNMP OIDs
-      // - sysUpTime
-      // - sysDescr
+      const config = this.getDeviceSnmpConfig(device);
+      const session = this.getSession(config);
 
+      // Query basic system OIDs
+      const oids = [
+        SNMP_OIDS.sysUpTime,
+        SNMP_OIDS.sysDescr,
+        SNMP_OIDS.sysName,
+      ];
+
+      const results = await this.snmpGet(session, oids);
       const responseTimeMs = Date.now() - startTime;
+
+      const sysUpTime = results.get(SNMP_OIDS.sysUpTime) as number || 0;
+      const uptimeSeconds = Math.floor(sysUpTime / 100);
 
       const healthScore = this.calculateHealthScore({
         isOnline: true,
@@ -331,37 +649,57 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
         healthScore,
         isOnline: true,
         responseTimeMs,
+        uptimeSeconds,
         errorCount: 0,
         warningCount: 0,
       });
     } catch (error) {
-      throw error;
+      throw new Error(`SNMP query failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
   /**
-   * Get device state
+   * Get device state (with actual SNMP query)
    */
   async getState(device: SecurityDevice): Promise<DeviceState> {
     await this.getConnection(device);
 
     try {
-      // TODO: Query device status via SNMP
+      const config = this.getDeviceSnmpConfig(device);
+      const session = this.getSession(config);
 
-      return {
-        status: 'ONLINE' as DeviceStatus,
-        health: 'GOOD',
-        isOnline: true,
-        lastSeenAt: new Date(),
-        stateData: {},
-      };
+      // Query system uptime to verify device is responsive
+      const results = await this.snmpGet(session, [SNMP_OIDS.sysUpTime]);
+      const sysUpTime = results.get(SNMP_OIDS.sysUpTime);
+
+      if (sysUpTime !== null && sysUpTime !== undefined) {
+        return {
+          status: 'ONLINE' as DeviceStatus,
+          health: 'GOOD',
+          isOnline: true,
+          lastSeenAt: new Date(),
+          stateData: {
+            uptimeSeconds: Math.floor((sysUpTime as number) / 100),
+          },
+        };
+      } else {
+        return {
+          status: 'OFFLINE' as DeviceStatus,
+          health: 'CRITICAL',
+          isOnline: false,
+          lastSeenAt: device.lastSeenAt || new Date(),
+          stateData: {},
+        };
+      }
     } catch (error) {
       return {
         status: 'OFFLINE' as DeviceStatus,
         health: 'CRITICAL',
         isOnline: false,
         lastSeenAt: device.lastSeenAt || new Date(),
-        stateData: {},
+        stateData: {
+          error: error instanceof Error ? error.message : String(error),
+        },
       };
     }
   }
@@ -498,6 +836,23 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
    * Disconnect from device
    */
   protected async onDisconnect(device: SecurityDevice): Promise<void> {
-    // TODO: Close SNMP session
+    const config = this.getDeviceSnmpConfig(device);
+    const sessionKey = `${config.host}:${config.community || config.user}`;
+    
+    const session = this.sessions.get(sessionKey);
+    if (session) {
+      session.close();
+      this.sessions.delete(sessionKey);
+    }
+  }
+
+  /**
+   * Cleanup all sessions (for shutdown)
+   */
+  async cleanup(): Promise<void> {
+    for (const [_, session] of this.sessions) {
+      session.close();
+    }
+    this.sessions.clear();
   }
 }

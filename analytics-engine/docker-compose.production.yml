@@ -1,0 +1,254 @@
+# Production Docker Compose for Analytics Engine
+# High-availability configuration with health checks, resource limits, and monitoring
+
+version: '3.8'
+
+services:
+  analytics-engine:
+    image: ${DOCKER_REGISTRY:-aditisentinel}/analytics-engine:${VERSION:-latest}
+    container_name: analytics-engine-prod
+    restart: unless-stopped
+    
+    ports:
+      - "${ANALYTICS_PORT:-8092}:8092"
+      - "${METRICS_PORT:-9092}:9092"
+    
+    environment:
+      # Server Configuration
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      PORT: "8092"
+      
+      # Control Plane Integration
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-http://control-plane:4000}
+      ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY}
+      ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY}
+      
+      # Database
+      DATABASE_URL: ${DATABASE_URL:-postgresql://analytics:analytics@postgres:5432/sentinel_analytics}
+      DB_POOL_MIN: "2"
+      DB_POOL_MAX: "10"
+      
+      # Model Configuration
+      ANALYTICS_REQUIRE_MODELS: "${ANALYTICS_REQUIRE_MODELS:-true}"
+      MODEL_MANIFEST_PATH: "/app/models/manifest.json"
+      REQUIRE_MODEL_VERIFICATION: "true"
+      
+      # Face Recognition
+      ENABLE_FACE_RECOGNITION: "${ENABLE_FACE_RECOGNITION:-false}"
+      FACE_MATCH_THRESHOLD: "0.70"
+      FACE_LIVENESS_THRESHOLD: "0.95"
+      FACE_TEMPORAL_CONFIRMATION_FRAMES: "3"
+      FACE_REQUIRE_CONSENT: "true"
+      FACE_REQUIRE_LIVENESS: "true"
+      
+      # Industrial Analytics
+      ENABLE_INDUSTRIAL_ANALYTICS: "${ENABLE_INDUSTRIAL_ANALYTICS:-false}"
+      
+      # Banking Analytics
+      ENABLE_BANKING_ANALYTICS: "${ENABLE_BANKING_ANALYTICS:-false}"
+      
+      # Security Devices (SNMP)
+      ENABLE_SNMP_DEVICES: "${ENABLE_SNMP_DEVICES:-false}"
+      SNMP_COMMUNITY_STRING: "${SNMP_COMMUNITY_STRING:-public}"
+      SNMP_TIMEOUT_MS: "5000"
+      
+      # Performance
+      MAX_CONCURRENT_STREAMS: "${MAX_CONCURRENT_STREAMS:-30}"
+      WORKER_THREADS: "${WORKER_THREADS:-4}"
+      FRAME_PROCESSING_RATE: "1"
+      ENABLE_GPU_ACCELERATION: "${ENABLE_GPU_ACCELERATION:-false}"
+      
+      # Detection Thresholds
+      PERSON_CONFIDENCE_THRESHOLD: "0.5"
+      VEHICLE_CONFIDENCE_THRESHOLD: "0.6"
+      HELMET_CONFIDENCE_THRESHOLD: "0.7"
+      FIRE_CONFIDENCE_THRESHOLD: "0.65"
+      
+      # Logging
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      LOG_FORMAT: "json"
+      ENABLE_AUDIT_LOG: "true"
+      
+      # Monitoring
+      ENABLE_METRICS: "true"
+      METRICS_PORT: "9092"
+      HEALTH_CHECK_INTERVAL_MS: "30000"
+      
+      # Incident Integration
+      INCIDENT_API_URL: ${INCIDENT_API_URL:-}
+      INCIDENT_API_KEY: ${INCIDENT_API_KEY:-}
+    
+    volumes:
+      # Model files (read-only)
+      - ${MODELS_PATH:-./models}:/app/models:ro
+      # Logs (persistent)
+      - analytics-logs:/app/logs
+      # Runtime data
+      - analytics-data:/app/data
+    
+    networks:
+      - analytics-network
+      - backend-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '${CPU_LIMIT:-4.0}'
+          memory: ${MEMORY_LIMIT:-8G}
+        reservations:
+          cpus: '${CPU_RESERVATION:-2.0}'
+          memory: ${MEMORY_RESERVATION:-4G}
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+        labels: "service=analytics-engine,env=production"
+
+  # PostgreSQL Database (for face recognition & industrial analytics)
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: analytics-postgres
+    restart: unless-stopped
+    
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-analytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-sentinel_analytics}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d:ro
+    
+    networks:
+      - analytics-network
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # Redis (for caching and pub/sub)
+  redis:
+    image: redis:7-alpine
+    container_name: analytics-redis
+    restart: unless-stopped
+    
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    
+    volumes:
+      - redis-data:/data
+    
+    networks:
+      - analytics-network
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Prometheus (metrics collection)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: analytics-prometheus
+    restart: unless-stopped
+    
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    
+    networks:
+      - analytics-network
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana (metrics visualization)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: analytics-grafana
+    restart: unless-stopped
+    
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_INSTALL_PLUGINS: ''
+    
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    
+    networks:
+      - analytics-network
+    
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  analytics-logs:
+    driver: local
+  analytics-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  analytics-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+  backend-network:
+    external: true
+    name: sentinel_backend_network

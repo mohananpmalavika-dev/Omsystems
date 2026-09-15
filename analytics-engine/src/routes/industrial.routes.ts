@@ -28,12 +28,28 @@
  */
 
 import { Router, type Request, type Response } from 'express';
+import type { Pool } from 'pg';
 import { getIndustrialCapabilityHealth } from '../industrial/capability-health.js';
 import { getIndustrialInitializer } from '../industrial/industrial-init.js';
 import { getSceneStateRegistry } from '../tracking/scene-state.js';
 import { createIndustrialAnalytics } from '../detectors/industrial-analytics.js';
+import { IndustrialPersistenceService } from '../industrial/industrial-persistence.service.js';
 import type { Zone } from '../tracking/scene-state.js';
 import type { IndustrialConfig } from '../industrial/rules/types.js';
+
+// Singleton persistence service (initialized when database is available)
+let persistenceService: IndustrialPersistenceService | null = null;
+
+export function initializeIndustrialPersistence(db: Pool): void {
+  persistenceService = new IndustrialPersistenceService(db);
+  persistenceService.initializeTables().catch((error) => {
+    console.error("Failed to initialize industrial persistence tables:", error);
+  });
+}
+
+export function getPersistenceService(): IndustrialPersistenceService | null {
+  return persistenceService;
+}
 
 const router = Router();
 
@@ -307,20 +323,44 @@ router.get('/equipment/:cameraId/stationary', (req: Request, res: Response) => {
  * GET /api/industrial/violations/:cameraId
  * Get recent violations for a camera
  */
-router.get('/violations/:cameraId', (req: Request, res: Response) => {
+router.get('/violations/:cameraId', async (req: Request, res: Response) => {
   try {
     const { cameraId } = req.params;
-    const { limit = 100, severity, type } = req.query;
+    const { limit, severity, type, reviewStatus, fromDate, toDate } = req.query;
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
 
-    // TODO: Integrate with event storage system
-    // For now, return empty array
-    res.json({
-      cameraId,
-      violations: [],
-      count: 0,
-      filters: { limit, severity, type },
-      timestamp: new Date(),
-    });
+    // Use persistence service if available
+    if (persistenceService) {
+      const result = await persistenceService.getViolations(tenantId, {
+        cameraId,
+        severity: severity as string,
+        violationType: type as string,
+        reviewStatus: reviewStatus as string,
+        fromDate: fromDate ? new Date(fromDate as string) : undefined,
+        toDate: toDate ? new Date(toDate as string) : undefined,
+        limit: limit ? parseInt(limit as string, 10) : 100,
+      });
+
+      res.json({
+        cameraId,
+        violations: result.violations,
+        count: result.violations.length,
+        total: result.total,
+        filters: { limit, severity, type, reviewStatus },
+        timestamp: new Date(),
+      });
+    } else {
+      // Fallback when persistence not available
+      res.json({
+        cameraId,
+        violations: [],
+        count: 0,
+        total: 0,
+        filters: { limit, severity, type },
+        timestamp: new Date(),
+        warning: 'Persistence service not initialized',
+      });
+    }
   } catch (error) {
     console.error('Violations query failed:', error);
     res.status(500).json({
@@ -338,21 +378,39 @@ router.get('/violations/:cameraId', (req: Request, res: Response) => {
  * GET /api/industrial/zones/:cameraId
  * Get configured zones for a camera
  */
-router.get('/zones/:cameraId', (req: Request, res: Response) => {
+router.get('/zones/:cameraId', async (req: Request, res: Response) => {
   try {
     const { cameraId } = req.params;
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
 
-    // TODO: Integrate with persistent configuration storage
-    // For now, get from scene state
-    const sceneRegistry = getSceneStateRegistry();
-    const scene = sceneRegistry.getSceneState(cameraId);
+    // Get zones from persistent storage
+    if (persistenceService) {
+      const zones = await persistenceService.getZonesByCamera(tenantId, cameraId);
+      
+      // Also sync to scene state for runtime use
+      const sceneRegistry = getSceneStateRegistry();
+      const scene = sceneRegistry.getSceneState(cameraId);
+      scene.updateZones(zones);
 
-    res.json({
-      cameraId,
-      zones: [], // Would come from persistent storage
-      count: 0,
-      timestamp: new Date(),
-    });
+      res.json({
+        cameraId,
+        zones,
+        count: zones.length,
+        timestamp: new Date(),
+      });
+    } else {
+      // Fallback to scene state only
+      const sceneRegistry = getSceneStateRegistry();
+      const scene = sceneRegistry.getSceneState(cameraId);
+
+      res.json({
+        cameraId,
+        zones: [],
+        count: 0,
+        timestamp: new Date(),
+        warning: 'Persistence service not initialized - zones are memory-only',
+      });
+    }
   } catch (error) {
     console.error('Zones query failed:', error);
     res.status(500).json({
@@ -366,10 +424,12 @@ router.get('/zones/:cameraId', (req: Request, res: Response) => {
  * POST /api/industrial/zones/:cameraId
  * Add a safety zone
  */
-router.post('/zones/:cameraId', (req: Request, res: Response) => {
+router.post('/zones/:cameraId', async (req: Request, res: Response) => {
   try {
     const { cameraId } = req.params;
-    const zone: Zone = req.body;
+    const zone: any = req.body;
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
+    const userId = (req.headers['x-user-id'] as string) || 'system';
 
     // Validate zone
     if (!zone.id || !zone.name || !zone.polygon || zone.polygon.length < 3) {
@@ -380,17 +440,40 @@ router.post('/zones/:cameraId', (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Persist zone configuration
-    // For now, add to scene state
-    const sceneRegistry = getSceneStateRegistry();
-    const scene = sceneRegistry.getSceneState(cameraId);
-    scene.updateZones([zone]);
+    // Ensure zone type is set
+    zone.zoneType = zone.zoneType || 'monitoring';
+    zone.enabled = zone.enabled !== false;
+    zone.tenantId = tenantId;
+    zone.cameraId = cameraId;
+    zone.createdBy = userId;
 
-    res.status(201).json({
-      success: true,
-      message: 'Zone added',
-      zone,
-    });
+    // Persist zone configuration
+    if (persistenceService) {
+      const savedZone = await persistenceService.saveZone(zone);
+      
+      // Also add to scene state for runtime use
+      const sceneRegistry = getSceneStateRegistry();
+      const scene = sceneRegistry.getSceneState(cameraId);
+      scene.updateZones([savedZone]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Zone added and persisted',
+        zone: savedZone,
+      });
+    } else {
+      // Fallback to memory-only
+      const sceneRegistry = getSceneStateRegistry();
+      const scene = sceneRegistry.getSceneState(cameraId);
+      scene.updateZones([zone]);
+
+      res.status(201).json({
+        success: true,
+        message: 'Zone added (memory only - persistence not available)',
+        zone,
+        warning: 'Zone will be lost on restart',
+      });
+    }
   } catch (error) {
     console.error('Zone creation failed:', error);
     res.status(500).json({
@@ -406,18 +489,38 @@ router.post('/zones/:cameraId', (req: Request, res: Response) => {
  */
 router.delete(
   '/zones/:cameraId/:zoneId',
-  (req: Request, res: Response) => {
+  async (req: Request, res: Response) => {
     try {
       const { cameraId, zoneId } = req.params;
+      const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
 
-      // TODO: Remove from persistent storage
-
-      res.json({
-        success: true,
-        message: 'Zone removed',
-        cameraId,
-        zoneId,
-      });
+      // Remove from persistent storage
+      if (persistenceService) {
+        const deleted = await persistenceService.deleteZone(tenantId, zoneId);
+        
+        if (deleted) {
+          res.json({
+            success: true,
+            message: 'Zone removed from database',
+            cameraId,
+            zoneId,
+          });
+        } else {
+          res.status(404).json({
+            error: 'Zone not found',
+            cameraId,
+            zoneId,
+          });
+        }
+      } else {
+        res.json({
+          success: true,
+          message: 'Zone removed from memory (persistence not available)',
+          cameraId,
+          zoneId,
+          warning: 'Zone was not persisted',
+        });
+      }
     } catch (error) {
       console.error('Zone deletion failed:', error);
       res.status(500).json({
@@ -436,23 +539,43 @@ router.delete(
  * GET /api/industrial/config/:cameraId
  * Get industrial analytics configuration for a camera
  */
-router.get('/config/:cameraId', (req: Request, res: Response) => {
+router.get('/config/:cameraId', async (req: Request, res: Response) => {
   try {
     const { cameraId } = req.params;
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
 
-    // TODO: Get from persistent configuration
-    const defaultConfig: IndustrialConfig = {
-      minPersonEquipmentDistance: 150,
-      enforceZoneRestrictions: true,
-      idleTimeThreshold: 300,
-      stationaryTimeThreshold: 60,
-    };
+    // Get from persistent configuration
+    if (persistenceService) {
+      let config = await persistenceService.getConfig(tenantId, cameraId);
+      
+      if (!config) {
+        // Return default config
+        config = await persistenceService.getDefaultConfig();
+        config.cameraId = cameraId;
+        config.tenantId = tenantId;
+      }
 
-    res.json({
-      cameraId,
-      config: defaultConfig,
-      timestamp: new Date(),
-    });
+      res.json({
+        cameraId,
+        config,
+        timestamp: new Date(),
+      });
+    } else {
+      // Return default config
+      const defaultConfig: IndustrialConfig = {
+        minPersonEquipmentDistance: 150,
+        enforceZoneRestrictions: true,
+        idleTimeThreshold: 300,
+        stationaryTimeThreshold: 60,
+      };
+
+      res.json({
+        cameraId,
+        config: defaultConfig,
+        timestamp: new Date(),
+        warning: 'Using default config - persistence not available',
+      });
+    }
   } catch (error) {
     console.error('Config query failed:', error);
     res.status(500).json({
@@ -466,10 +589,12 @@ router.get('/config/:cameraId', (req: Request, res: Response) => {
  * PUT /api/industrial/config/:cameraId
  * Update configuration
  */
-router.put('/config/:cameraId', (req: Request, res: Response) => {
+router.put('/config/:cameraId', async (req: Request, res: Response) => {
   try {
     const { cameraId } = req.params;
     const config: Partial<IndustrialConfig> = req.body;
+    const tenantId = (req.headers['x-tenant-id'] as string) || 'default';
+    const userId = (req.headers['x-user-id'] as string) || 'system';
 
     // Validate configuration
     if (
@@ -482,14 +607,43 @@ router.put('/config/:cameraId', (req: Request, res: Response) => {
       });
     }
 
-    // TODO: Persist configuration
+    // Persist configuration
+    if (persistenceService) {
+      // Get existing config or create new one
+      let existingConfig = await persistenceService.getConfig(tenantId, cameraId);
+      
+      if (!existingConfig) {
+        existingConfig = await persistenceService.getDefaultConfig();
+        existingConfig.cameraId = cameraId;
+        existingConfig.tenantId = tenantId;
+      }
 
-    res.json({
-      success: true,
-      message: 'Configuration updated',
-      cameraId,
-      config,
-    });
+      // Merge with updates
+      const updatedConfig = {
+        ...existingConfig,
+        ...config,
+        cameraId,
+        tenantId,
+        updatedBy: userId,
+      };
+
+      const savedConfig = await persistenceService.saveConfig(updatedConfig);
+
+      res.json({
+        success: true,
+        message: 'Configuration updated and persisted',
+        cameraId,
+        config: savedConfig,
+      });
+    } else {
+      res.json({
+        success: true,
+        message: 'Configuration accepted (memory only - persistence not available)',
+        cameraId,
+        config,
+        warning: 'Configuration will be lost on restart',
+      });
+    }
   } catch (error) {
     console.error('Config update failed:', error);
     res.status(500).json({
