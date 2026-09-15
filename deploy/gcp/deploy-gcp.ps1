@@ -131,6 +131,7 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
             --command="sha256sum /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null | cut -d ' ' -f 1" 2>$null)
         if ($remoteHash) { $remoteHash = "$remoteHash".Trim().ToLower() }
 
+        if ($remoteHash -ne $expectedHash) {
             Write-Host "Uploading signed Edge Agent release binary and manifest to $InstanceName..." -ForegroundColor Cyan
             & gcloud compute scp --zone=$Zone --project=$currentProject --quiet `
                 "$localExe" "$localManifest" "${InstanceName}:/tmp/"
