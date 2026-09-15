@@ -738,16 +738,16 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       <aside className="login-introduction" aria-label="About your workspace">
         <div className="login-introduction-brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="" /> : <span className="auth-brand-mark"><ShieldCheck size={24} /></span>}<span>{branding.orgName || "KryptonVision"}</span></div>
         <div className="login-introduction-copy">
-          <p className="login-kicker">SECURITY OPERATIONS</p>
-          <h2>Clarity. Control.<br />Confidence.</h2>
-          <p>Your people, locations, and security operations. Connected in one workspace.</p>
+          <p className="login-kicker">NEXT-GENERATION SECURITY INTELLIGENCE</p>
+          <h2>Redefining Security.<br />Empowering Excellence.</h2>
+          <p>Transform your security operations with an enterprise-grade command center that delivers unparalleled visibility, intelligent automation, and actionable insights across your entire organization.</p>
           <ul>
-            <li><CheckCircle2 size={18} /><span>Monitor cameras and branch health</span></li>
-            <li><CheckCircle2 size={18} /><span>Investigate alerts and coordinate response</span></li>
-            <li><CheckCircle2 size={18} /><span>Manage evidence and operational reports</span></li>
+            <li><CheckCircle2 size={18} /><span>Unified surveillance with predictive analytics and AI-driven insights</span></li>
+            <li><CheckCircle2 size={18} /><span>Proactive threat intelligence with instant incident orchestration</span></li>
+            <li><CheckCircle2 size={18} /><span>Enterprise-grade compliance, forensics, and audit capabilities</span></li>
           </ul>
         </div>
-        <p className="login-introduction-footer"><ShieldCheck size={15} /> Security operations, connected.</p>
+        <p className="login-introduction-footer"><ShieldCheck size={15} /> Where intelligence meets security excellence.</p>
       </aside>
       <div className="login-card">
         <header className="login-header">
