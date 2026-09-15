@@ -131,13 +131,12 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
             --command="sha256sum /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null | cut -d ' ' -f 1" 2>$null)
         if ($remoteHash) { $remoteHash = "$remoteHash".Trim().ToLower() }
 
-        if ($remoteHash -ne $expectedHash) {
-            Write-Host "Uploading signed Edge Agent release binary to $InstanceName..." -ForegroundColor Cyan
+            Write-Host "Uploading signed Edge Agent release binary and manifest to $InstanceName..." -ForegroundColor Cyan
             & gcloud compute scp --zone=$Zone --project=$currentProject --quiet `
-                "$localExe" "${InstanceName}:/tmp/edge-agent.exe"
+                "$localExe" "$localManifest" "${InstanceName}:/tmp/"
             & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-                --command="sudo install -d /opt/sentinel-grid/edge-agent/release && sudo mv /tmp/edge-agent.exe /opt/sentinel-grid/edge-agent/release/edge-agent.exe && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/edge-agent.exe"
-            Write-Host "✅ Edge Agent release binary uploaded and installed." -ForegroundColor Green
+                --command="sudo install -d /opt/sentinel-grid/edge-agent/release && sudo mv /tmp/edge-agent.exe /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/ && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/*"
+            Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
         } else {
             Write-Host "✅ Edge Agent release already matches signed manifest on $InstanceName." -ForegroundColor Green
         }
