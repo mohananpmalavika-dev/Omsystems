@@ -15,7 +15,6 @@ import {
   monitoringReconciliationWorker,
   AlertPriorityService,
 } from "../../src/monitoring/index.js";
-import { app } from "../../src/app.js";
 
 async function runCentralMonitoringQueueTests() {
   console.log("================================================================================");

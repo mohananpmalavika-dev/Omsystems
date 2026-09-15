@@ -13,7 +13,6 @@ import {
   VoiceCallbackTokens,
   type NotificationContext,
 } from "../../src/notifications/index.js";
-import { app } from "../../src/app.js";
 
 async function runNotificationConsolidationTests() {
   console.log("================================================================================");

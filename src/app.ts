@@ -3348,8 +3348,6 @@ export async function buildApp(options?: {
   return app;
 }
 
-export const app = await buildApp();
-
 function secureEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);
   const rightBuffer = Buffer.from(right);

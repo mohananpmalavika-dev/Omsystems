@@ -10,7 +10,6 @@ import {
   aiAlertCorrelationService,
   alertPresentationService,
 } from "../../src/alerts/index.js";
-import { app } from "../../src/app.js";
 
 async function runUnifiedAiAlertTests() {
   console.log("================================================================================");

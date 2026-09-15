@@ -8,7 +8,6 @@ import {
   alertStormSuppressorService,
   incidentRecoveryService,
 } from "../../src/incidents/index.js";
-import { app } from "../../src/app.js";
 
 async function runAlertStormSuppressionTests() {
   console.log("================================================================================");
