@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
-const executable = join(edgeRoot, "release", "edge-agent.exe");
+const executable = process.argv[2] || join(edgeRoot, "release", "edge-agent.exe");
 
 if (!existsSync(executable)) {
   throw new Error(`Windows package verification failed: ${executable} was not created.`);

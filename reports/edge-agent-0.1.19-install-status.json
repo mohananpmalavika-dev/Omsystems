@@ -1,0 +1,12 @@
+﻿{
+    "success":  true,
+    "version":  "0.1.19",
+    "startedAt":  "2026-09-15T14:24:39.7103182Z",
+    "backupPath":  "C:\\Program Files\\Sentinel Grid\\Edge Agent.backup-20260915T142439Z",
+    "signatureStatus":  "UnknownError",
+    "pid":  23808,
+    "registration":  "2026-09-15T14:25:37.150Z [edge-agent] [info] Edge agent 1dc1e258-8cae-479a-86db-ea5638a2e6a1 registered; waiting for branch commands {\"branchId\":\"00000000-0000-4000-8000-000000000104\",\"version\":\"0.1.19\"}",
+    "gatewayHealthy":  true,
+    "sha256":  "bb9d3ff21d43904acfbeab4e9d51b18e32b42d9137c54b3796c5eb0270c8ad52",
+    "completedAt":  "2026-09-15T14:25:40.6478401Z"
+}

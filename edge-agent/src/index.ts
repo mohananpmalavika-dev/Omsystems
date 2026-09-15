@@ -50,6 +50,7 @@ import { identifyVendorFamily, probeVendorStream } from "./devices/vendor-stream
 import type { RecorderConfig } from "./monitoring/recorder-probe.js";
 import { recoverCamera } from "./recovery/camera-recovery.js";
 import { startAgentPresenceHeartbeat } from "./runtime/agent-presence.js";
+import { assertMediaPortAvailable } from "./runtime/media-port-check.js";
 import { PhysicalSirenController, physicalSirenTriggerFromPayload } from "./alerts/physical-siren.js";
 import { SecureFaceRuntime } from "./ai/secure-face-runtime.js";
 import { SecureFaceObservationBuffer } from "./ai/secure-face-observation-buffer.js";
@@ -83,7 +84,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.18\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.19\n");
   process.exit(0);
 }
 
@@ -119,9 +120,12 @@ if (!scanOnce && !isDiagnostic && process.env.SENTINEL_EDGE_PATCH_RUNTIME !== "1
 if (!scanOnce && !isDiagnostic) {
   const lock = acquireSingleInstanceLock(runtime.homeDirectory);
   if (!lock.acquired) {
-    logger.warn(`[SingleInstance] Sentinel Grid Edge Agent is already running (PID: ${lock.existingPid}). Exiting duplicate instance.`, { existingPid: lock.existingPid });
-    process.stdout.write(`Sentinel Grid Edge Agent is already running on this machine (PID: ${lock.existingPid}). Exiting duplicate instance.\n`);
+    logger.warn("Edge agent installation is already running or its instance lock is unavailable", { existingPid: lock.existingPid, lockPath: lock.lockPath });
+    process.stdout.write(`Edge agent instance lock is held: ${lock.lockPath}. Exiting duplicate instance.\n`);
     process.exit(0);
+  }
+  if (config.LIVE_MEDIA_ENABLED) {
+    await assertMediaPortAvailable(config.EDGE_LIVE_GATEWAY_HOST, config.EDGE_LIVE_GATEWAY_PORT);
   }
 }
 process.env.EDGE_LOG_PATH = config.EDGE_LOG_PATH;

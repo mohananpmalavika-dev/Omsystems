@@ -1,0 +1,86 @@
+﻿{
+    "processes":  [
+                      {
+                          "pid":  3216,
+                          "path":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\edge-agent.exe",
+                          "configPath":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\config\\edge-agent.env"
+                      }
+                  ],
+    "tasks":  [
+                  {
+                      "name":  "Sentinel Grid Edge Agent",
+                      "path":  "\\",
+                      "state":  "Running",
+                      "actions":  [
+                                      {
+                                          "CimClass":  {
+                                                           "CimSuperClassName":  "MSFT_TaskAction",
+                                                           "CimSuperClass":  {
+                                                                                 "CimSuperClassName":  null,
+                                                                                 "CimSuperClass":  null,
+                                                                                 "CimClassProperties":  "Id",
+                                                                                 "CimClassQualifiers":  "",
+                                                                                 "CimClassMethods":  "",
+                                                                                 "CimSystemProperties":  "Microsoft.Management.Infrastructure.CimSystemProperties"
+                                                                             },
+                                                           "CimClassProperties":  [
+                                                                                      "Id",
+                                                                                      "Arguments",
+                                                                                      "Execute",
+                                                                                      "WorkingDirectory"
+                                                                                  ],
+                                                           "CimClassQualifiers":  [
+
+                                                                                  ],
+                                                           "CimClassMethods":  [
+
+                                                                               ],
+                                                           "CimSystemProperties":  {
+                                                                                       "Namespace":  "Root/Microsoft/Windows/TaskScheduler",
+                                                                                       "ServerName":  "MALAVIKA",
+                                                                                       "ClassName":  "MSFT_TaskExecAction",
+                                                                                       "Path":  null
+                                                                                   }
+                                                       },
+                                          "CimInstanceProperties":  [
+                                                                        {
+                                                                            "Name":  "Id",
+                                                                            "Value":  null,
+                                                                            "CimType":  14,
+                                                                            "Flags":  "Property, NotModified, NullValue",
+                                                                            "IsValueModified":  false
+                                                                        },
+                                                                        {
+                                                                            "Name":  "Arguments",
+                                                                            "Value":  "--run --config \"C:\\Program Files\\Sentinel Grid\\Edge Agent\\config\\edge-agent.env\"",
+                                                                            "CimType":  14,
+                                                                            "Flags":  "Property, NotModified",
+                                                                            "IsValueModified":  false
+                                                                        },
+                                                                        {
+                                                                            "Name":  "Execute",
+                                                                            "Value":  "C:\\Program Files\\Sentinel Grid\\Edge Agent\\edge-agent.exe",
+                                                                            "CimType":  14,
+                                                                            "Flags":  "Property, NotModified",
+                                                                            "IsValueModified":  false
+                                                                        },
+                                                                        {
+                                                                            "Name":  "WorkingDirectory",
+                                                                            "Value":  "C:\\Program Files\\Sentinel Grid\\Edge Agent",
+                                                                            "CimType":  14,
+                                                                            "Flags":  "Property, NotModified",
+                                                                            "IsValueModified":  false
+                                                                        }
+                                                                    ],
+                                          "CimSystemProperties":  {
+                                                                      "Namespace":  "Root/Microsoft/Windows/TaskScheduler",
+                                                                      "ServerName":  "MALAVIKA",
+                                                                      "ClassName":  "MSFT_TaskExecAction",
+                                                                      "Path":  null
+                                                                  }
+                                      }
+                                  ]
+                  }
+              ],
+    "success":  true
+}

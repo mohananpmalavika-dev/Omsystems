@@ -1,6 +1,6 @@
 {
   "name": "@sentinel/edge-agent",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,9 +14,9 @@
     "verify:windows-package": "node scripts/verify-windows-package.mjs",
     "verify:windows-production-release": "node scripts/verify-windows-production-release.mjs",
     "verify:secure-face-models": "node scripts/verify-secure-face-models.mjs",
-    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node18 --outfile=build/edge-agent.cjs",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node22 --external:onnxruntime-node --external:sharp --outfile=build/edge-agent.cjs",
     "bundle:delta": "node scripts/build-delta-bundle.mjs",
-    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && npx @yao-pkg/pkg --config package.json --target node18-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && npm run verify:windows-package",
+    "build:exe": "npm run clean && npm run fetch:windows-runtime && npm run verify:windows-installer-assets && npm run typecheck && npm run bundle && npx @yao-pkg/pkg --config package.json --target node22-win-x64 --output release/edge-agent.exe build/edge-agent.cjs && npm run verify:windows-package",
     "build:signed-windows-release": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File scripts/build-signed-windows-release.ps1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
@@ -32,14 +32,16 @@
   "pkg": {
     "assets": [
       "vendor/windows/**/*",
-      "installer/windows/*.ps1"
+      "installer/windows/*.ps1",
+      "../node_modules/onnxruntime-node/bin/napi-v6/win32/x64/*",
+      "../node_modules/@img/sharp-win32-x64/**/*"
     ]
   },
   "devDependencies": {
     "@types/node": "^22.13.4",
     "@types/pg": "^8.21.0",
+    "@yao-pkg/pkg": "^6.22.0",
     "esbuild": "^0.25.0",
-    "@yao-pkg/pkg": "^5.13.0",
     "tsx": "^4.19.3",
     "typescript": "^5.7.3",
     "vitest": "^4.1.11"
