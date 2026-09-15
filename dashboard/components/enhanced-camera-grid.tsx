@@ -349,6 +349,19 @@ export function EnhancedCameraGrid({
       return next;
     });
     reportPlaybackFailure(cameraId, reason);
+
+    // Auto-recover after cooldown: clear error and request a fresh live stream
+    const timer = setTimeout(() => {
+      setLiveErrors((current) => {
+        if (!current.has(cameraId)) return current;
+        const next = new Map(current);
+        next.delete(cameraId);
+        return next;
+      });
+      const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
+      void handleStartLive(cameraId, stream, true);
+    }, 12_000);
+    return () => clearTimeout(timer);
   }, [reportPlaybackFailure]);
 
   const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
@@ -363,9 +376,9 @@ export function EnhancedCameraGrid({
     void closeSession(cameraId);
   }, [closeSession]);
 
-  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub") => {
+  const handleStartLive = useCallback(async (cameraId: string, stream: "main" | "sub" = "sub", forceRefresh = false) => {
     if (
-      sessionsRef.current.has(cameraId) ||
+      (!forceRefresh && sessionsRef.current.has(cameraId)) ||
       loadingRef.current.has(cameraId)
     ) return;
 
@@ -459,13 +472,13 @@ export function EnhancedCameraGrid({
       if (!Number.isFinite(expiry)) return [];
       const remainingMs = expiry - Date.now();
       // If the session has already expired or expires very soon, do not trigger a fast flap loop
-      if (remainingMs <= 30_000) return [];
-      const delay = Math.max(30_000, remainingMs - 60_000);
+      if (remainingMs <= 10_000) return [];
+      const delay = Math.max(10_000, remainingMs - 30_000);
       return [window.setTimeout(() => {
         if (sessionsRef.current.get(cameraId) !== session) return;
         const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
-        // Refresh authorization smoothly without tearing down the existing stream first
-        void handleStartLive(cameraId, stream);
+        // Refresh authorization smoothly with forceRefresh = true
+        void handleStartLive(cameraId, stream, true);
       }, delay)];
     });
 

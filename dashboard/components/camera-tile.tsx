@@ -62,6 +62,12 @@ function formatLiveError(reason: string) {
   return labels[reason] ?? "Unable to start the live feed";
 }
 
+function isFatalLiveError(reason?: string) {
+  if (!reason) return false;
+  const nonFatal = ["playback_stalled", "HLS playback failed", "reconnect_failed", "media_error", "hls_error"];
+  return !nonFatal.includes(reason);
+}
+
 function shouldOfferCredentialUpdate(reason?: string) {
   if (!reason) return false;
   const normalized = reason.toLowerCase();
@@ -262,7 +268,7 @@ function CameraTileComponent({
         setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
       }}>
         <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
-          {session?.hls && !liveError ? (
+          {session?.hls && (!liveError || !isFatalLiveError(liveError)) ? (
             <HlsPlayer
               url={session.hls.url}
               bearerToken={session.hls.bearerToken ?? ""}
@@ -295,9 +301,9 @@ function CameraTileComponent({
                 #{String(index + 1).padStart(2, "0")}
               </span>
             )}
-            <span className={`status-pill ${hasLiveFrame ? "online" : liveError ? "offline" : camera.status}`}>
+            <span className={`status-pill ${hasLiveFrame ? "online" : (liveError && isFatalLiveError(liveError)) ? "offline" : camera.status}`}>
               <i />
-              {hasLiveFrame ? "Live HLS" : liveError ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
+              {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
             </span>
           </div>
           {onToggleRecording && (
@@ -342,7 +348,7 @@ function CameraTileComponent({
           </div>
         )}
 
-        {liveError && !loading && (
+        {liveError && !loading && isFatalLiveError(liveError) && (
           <div className="camera-live-error" role="status">
             <AlertTriangle size={13} />
             <span>{formatLiveError(liveError)}</span>

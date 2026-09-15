@@ -4,9 +4,9 @@ import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw } from "lucide-react";
 
-const MAX_RECOVERY_ATTEMPTS = 8;
-const STALL_TIMEOUT_MS = 8_000;
-const RECOVERY_DELAY_MS = 1_000;
+const MAX_RECOVERY_ATTEMPTS = 25;
+const STALL_TIMEOUT_MS = 15_000;
+const RECOVERY_DELAY_MS = 1_200;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
@@ -147,6 +147,17 @@ export function HlsPlayer({
           if (hls) {
             if (reason === "media_error") {
               hls.recoverMediaError();
+              lastProgressAt = Date.now();
+              return;
+            } else if (reason === "playback_stalled" && recoveryAttempts % 4 !== 0) {
+              // Try catching up to live edge without full teardown
+              hls.startLoad(-1);
+              if (typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
+                try { video.currentTime = hls.liveSyncPosition; } catch {}
+              }
+              void video.play().catch(() => undefined);
+              lastProgressAt = Date.now();
+              return;
             } else {
               hls.destroy();
               hls = null;

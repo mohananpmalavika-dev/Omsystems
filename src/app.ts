@@ -98,6 +98,7 @@ import type { DeviceConfigurationService } from "./services/device-configuration
 import { registerDVRNVRMonitorRoutes } from "./routes/dvr-nvr-monitor.routes.js";
 import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.routes.js";
 import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
+import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
@@ -2997,6 +2998,14 @@ export async function buildApp(options?: {
     app.log.info('Edge telemetry ingestion and agent liveness routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register edge telemetry routes');
+  }
+
+  // Register Edge Lifecycle Fleet Management routes
+  try {
+    await registerEdgeLifecycleRoutes(app, store);
+    app.log.info('Edge lifecycle fleet management routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register edge lifecycle routes');
   }
 
   // Register Maintenance Windows & Operational State routes

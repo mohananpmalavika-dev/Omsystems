@@ -12,7 +12,7 @@ describe("custom role navigation & menu permissions", () => {
         "/operations/cameras",
         "/operations/recording",
         "/video-search",
-        "/operations/alert-command-center",
+        "/analytics/alerts",
       ],
     };
 
@@ -25,7 +25,7 @@ describe("custom role navigation & menu permissions", () => {
     expect(visibleHrefs).toContain("/operations/cameras");
     expect(visibleHrefs).toContain("/operations/recording");
     expect(visibleHrefs).toContain("/video-search");
-    expect(visibleHrefs).toContain("/operations/alert-command-center");
+    expect(visibleHrefs).toContain("/analytics/alerts");
 
     // Must not contain unassigned modules
     expect(visibleHrefs).not.toContain("/admin/system");

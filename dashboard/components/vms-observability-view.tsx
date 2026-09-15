@@ -33,43 +33,42 @@ export function VmsObservabilityView() {
   const fetchMetrics = useCallback(async () => {
     const sequence = ++requestSequence.current;
     try {
-      const [snapRes, promRes] = await Promise.all([
-        fetch("/api/vms/observability/summary", { credentials: "include", cache: "no-store" })
-          .then(async (res) => {
-            if (res && res.ok) return res;
-            const bff = await fetch("/api/control/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
-            if (bff && bff.ok) return bff;
-            const fallback = await fetch("/v1/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
-            if (fallback && fallback.ok) return fallback;
-            return res;
-          })
-          .catch(async () => {
-            const bff = await fetch("/api/control/api/vms/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
-            if (bff && bff.ok) return bff;
-            return fetch("/v1/observability/summary", { credentials: "include", cache: "no-store" }).catch(() => null);
-          }),
-        fetch("/metrics")
-          .then(async (res) => {
-            if (res && res.ok) return res;
-            const bff = await fetch("/api/control/metrics").catch(() => null);
-            if (bff && bff.ok) return bff;
-            return res;
-          })
-          .catch(async () => {
-            return fetch("/api/control/metrics").catch(() => null);
-          }),
-      ]);
-      if (!snapRes || !snapRes.ok) throw new Error(`Structured telemetry request failed (${snapRes?.status ?? "network"})`);
+      // Primary path: /api/vms/observability/summary goes through the Next.js API
+      // route which already tries multiple upstream candidates internally.
+      // Do NOT add a /api/control/api/... fallback here — that creates a
+      // malformed double-prefix path (/api/control/api/vms/...) that always 400s.
+      const snapRes = await fetch("/api/vms/observability/summary", {
+        credentials: "include",
+        cache: "no-store",
+      }).catch(() => null);
+
+      if (!snapRes || !snapRes.ok) {
+        throw new Error(
+          `Structured telemetry request failed (${
+            snapRes?.status ?? "network"
+          })`
+        );
+      }
       const data = await snapRes.json();
-      if (!data?.success || !data.data) throw new Error("Observability service returned an invalid snapshot");
+      if (!data?.success || !data.data)
+        throw new Error("Observability service returned an invalid snapshot");
       if (sequence !== requestSequence.current) return;
       setMetricsSnapshot(data.data);
-      if (promRes?.ok) setRawPrometheusText(await promRes.text());
-      else setRawPrometheusText("");
+
+      // Prometheus raw text is best-effort — failures here must not surface an
+      // error banner since the main snapshot already succeeded.
+      // /metrics is rewritten by next.config.ts → upstream /metrics (Prometheus).
+      const promRes = await fetch("/metrics", { cache: "no-store" })
+        .then((r) => (r.ok ? r : null))
+        .catch(() => null);
+      setRawPrometheusText(promRes ? await promRes.text() : "");
+
       setError(null);
     } catch (reason) {
       if (sequence !== requestSequence.current) return;
-      setError(reason instanceof Error ? reason.message : "Observability data is unavailable");
+      setError(
+        reason instanceof Error ? reason.message : "Observability data is unavailable"
+      );
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }

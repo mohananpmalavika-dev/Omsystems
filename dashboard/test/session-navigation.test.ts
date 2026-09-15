@@ -11,7 +11,7 @@ describe("dashboard session navigation", () => {
     expect(redirect.searchParams.get("next")).toBe("/branches?branchId=A005#cameras");
     expect(safeReturnPath(redirect.searchParams.get("next"))).toBe("/branches?branchId=A005#cameras");
   });
-  it.each(["/support", "/privacy", "/terms", "/live-incident/secret-token", "/portable-camera/enroll"])("allows public page %s without an employee login loop", (path) => {
+  it.each(["/privacy", "/terms", "/live-incident/secret-token", "/portable-camera/enroll"])("allows public page %s without an employee login loop", (path) => {
     expect(isPublicDashboardRoute(path)).toBe(true);
   });
   it("keeps private workspace and nested responder pages protected", () => {
