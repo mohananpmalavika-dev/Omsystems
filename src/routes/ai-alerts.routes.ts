@@ -41,8 +41,18 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     });
   };
 
-  app.post("/api/v1/ai/events", handleIngestAiEvent);
-  app.post("/v1/ai/events", handleIngestAiEvent);
+  app.route({
+    method: "POST",
+    url: "/api/v1/ai/events",
+    config: { noAuth: true },
+    handler: handleIngestAiEvent,
+  });
+  app.route({
+    method: "POST",
+    url: "/v1/ai/events",
+    config: { noAuth: true },
+    handler: handleIngestAiEvent,
+  });
 
   /**
    * GET /api/v1/ai/alerts
@@ -60,8 +70,18 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, count: alerts.length, data: alerts });
   };
 
-  app.get("/api/v1/ai/alerts", handleGetAlerts);
-  app.get("/v1/ai/alerts", handleGetAlerts);
+  app.route({
+    method: "GET",
+    url: "/api/v1/ai/alerts",
+    config: { noAuth: true },
+    handler: handleGetAlerts,
+  });
+  app.route({
+    method: "GET",
+    url: "/v1/ai/alerts",
+    config: { noAuth: true },
+    handler: handleGetAlerts,
+  });
 
   /**
    * GET /api/v1/ai/alerts/:id
@@ -75,8 +95,18 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: alert });
   };
 
-  app.get("/api/v1/ai/alerts/:id", handleGetAlert);
-  app.get("/v1/ai/alerts/:id", handleGetAlert);
+  app.route({
+    method: "GET",
+    url: "/api/v1/ai/alerts/:id",
+    config: { noAuth: true },
+    handler: handleGetAlert,
+  });
+  app.route({
+    method: "GET",
+    url: "/v1/ai/alerts/:id",
+    config: { noAuth: true },
+    handler: handleGetAlert,
+  });
 
   /**
    * POST /api/v1/ai/alerts/:id/acknowledge
@@ -93,8 +123,18 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: alert });
   };
 
-  app.post("/api/v1/ai/alerts/:id/acknowledge", handleAcknowledge);
-  app.post("/v1/ai/alerts/:id/acknowledge", handleAcknowledge);
+  app.route({
+    method: "POST",
+    url: "/api/v1/ai/alerts/:id/acknowledge",
+    config: { noAuth: true },
+    handler: handleAcknowledge,
+  });
+  app.route({
+    method: "POST",
+    url: "/v1/ai/alerts/:id/acknowledge",
+    config: { noAuth: true },
+    handler: handleAcknowledge,
+  });
 
   /**
    * POST /api/v1/ai/alerts/:id/escalate
@@ -111,8 +151,18 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: alert });
   };
 
-  app.post("/api/v1/ai/alerts/:id/escalate", handleEscalate);
-  app.post("/v1/ai/alerts/:id/escalate", handleEscalate);
+  app.route({
+    method: "POST",
+    url: "/api/v1/ai/alerts/:id/escalate",
+    config: { noAuth: true },
+    handler: handleEscalate,
+  });
+  app.route({
+    method: "POST",
+    url: "/v1/ai/alerts/:id/escalate",
+    config: { noAuth: true },
+    handler: handleEscalate,
+  });
 
   /**
    * GET /api/v1/ai/alerts/presentation-metadata
@@ -122,6 +172,16 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: schemas });
   };
 
-  app.get("/api/v1/ai/alerts/presentation-metadata", handleGetPresentation);
-  app.get("/v1/ai/alerts/presentation-metadata", handleGetPresentation);
+  app.route({
+    method: "GET",
+    url: "/api/v1/ai/alerts/presentation-metadata",
+    config: { noAuth: true },
+    handler: handleGetPresentation,
+  });
+  app.route({
+    method: "GET",
+    url: "/v1/ai/alerts/presentation-metadata",
+    config: { noAuth: true },
+    handler: handleGetPresentation,
+  });
 }

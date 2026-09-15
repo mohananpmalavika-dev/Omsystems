@@ -160,6 +160,7 @@ import { registerEnterpriseSocOperationsRoutes } from "./routes/enterprise-soc-o
 import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchmarks.routes.js";
 import { redisModule } from "./bootstrap/redis.module.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
+import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -3181,6 +3182,14 @@ export async function buildApp(options?: {
     app.log.error({ err }, "failed to register event normalization routes");
   }
 
+  // Register normalized AI alert intake and lifecycle routes
+  try {
+    await registerAiAlertsRoutes(app);
+    app.log.info("Unified AI alert routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register unified AI alert routes");
+  }
+
   // Register Capacity & Performance Benchmark SLO routes
   try {
     await registerPerformanceBenchmarkRoutes(app);
@@ -3338,6 +3347,8 @@ export async function buildApp(options?: {
 
   return app;
 }
+
+export const app = await buildApp();
 
 function secureEqual(left: string, right: string) {
   const leftBuffer = Buffer.from(left);

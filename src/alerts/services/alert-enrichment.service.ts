@@ -20,6 +20,7 @@ export class AlertEnrichmentService {
   private branchNameMap: Map<string, string> = new Map();
 
   constructor() {
+    this.seedDefaultMetadata();
   }
 
   private seedDefaultMetadata() {
