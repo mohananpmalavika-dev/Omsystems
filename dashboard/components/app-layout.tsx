@@ -152,7 +152,6 @@ export const navigation: NavGroup[] = [
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
       { label: "AI Alert Review", href: "/analytics/alerts", icon: BellRing },
       { label: "Alert Queue", href: "/operations/alerts", icon: Radio },
-      { label: "Alert Command Center", href: "/operations/alert-command-center", icon: Bell },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Security Operations", href: "/security-operations", icon: Shield },
       { label: "Video Processing", href: "/operations/media-pipeline", icon: Layers },

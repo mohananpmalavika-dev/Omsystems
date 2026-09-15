@@ -6,7 +6,7 @@
 
 const CONTROL_PLANE_URL = process.env.CONTROL_PLANE_URL || 
                           process.env.CONTROL_PLANE_INTERNAL_URL || 
-                          'http://3.7.216.169:8080';
+                          'https://34-14-220-41.sslip.io';
 
 async function diagnose() {
   console.log('🔍 Diagnosing Maintenance API Connectivity\n');

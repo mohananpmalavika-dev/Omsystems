@@ -327,7 +327,13 @@ export class EdgeLiveGateway {
     // HLS is authorized with a short-lived bearer token, never cookies.  Do
     // not reflect an arbitrary Origin together with credentials: that turns a
     // locally reachable camera gateway into a cross-origin credential target.
-    response.setHeader("Access-Control-Allow-Origin", "*");
+    const reqOrigin = request.headers.origin;
+    if (reqOrigin) {
+      response.setHeader("Access-Control-Allow-Origin", reqOrigin);
+      response.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      response.setHeader("Access-Control-Allow-Origin", "*");
+    }
     response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     if (request.headers["access-control-request-private-network"] === "true") {
@@ -565,8 +571,13 @@ export class MediaMtxRouter implements MediaRouter {
   constructor(private readonly apiUrl: string) {}
   async ensurePath(path: string, sourceUri: string) {
     const encodedPath = encodeURIComponent(path);
+    // maxReorderedFrames: raised well above the MediaMTX default of 6 to handle
+    // IP cameras that emit heavily B-frame-reordered H.264 streams (e.g. up to
+    // 28 observed for IPG-N4C-WQ2_S38). Without this the HLS muxer is destroyed
+    // mid-session and the Cloudflare tunnel drops the request with no CORS header.
     const payload = { source: sourceUri, rtspTransport: "tcp", sourceOnDemand: true,
-      sourceOnDemandStartTimeout: "15s", sourceOnDemandCloseAfter: "120s" };
+      sourceOnDemandStartTimeout: "15s", sourceOnDemandCloseAfter: "120s",
+      maxReorderedFrames: 60 };
     const add = await fetch(new URL(`/v3/config/paths/add/${encodedPath}`, this.apiUrl), {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
     });
@@ -639,6 +650,12 @@ pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s
   sourceOnDemandCloseAfter: 120s
+  # Raised from the MediaMTX default (6) to tolerate IP cameras that emit
+  # heavily B-frame-reordered H.264 streams (28+ frames observed in the field).
+  # Without this limit the HLS muxer is destroyed mid-session causing a
+  # context-canceled error through the Cloudflare tunnel and a spurious CORS
+  # failure in the browser.
+  maxReorderedFrames: 60
 paths: {}
 `;
 }

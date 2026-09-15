@@ -1,5 +1,5 @@
 const publicPages = new Set([
-  "/login", "/forgot-password", "/reset-password", "/support", "/privacy", "/terms", "/portable-camera/enroll",
+  "/login", "/forgot-password", "/reset-password", "/privacy", "/terms", "/portable-camera/enroll",
 ]);
 
 export function isPublicDashboardRoute(pathname: string | null | undefined): boolean {

@@ -24,7 +24,6 @@ describe("dashboard middleware navigation and auth guards", () => {
       "https://sentinel.example/login",
       "https://sentinel.example/forgot-password",
       "https://sentinel.example/reset-password",
-      "https://sentinel.example/support",
       "https://sentinel.example/privacy",
       "https://sentinel.example/terms",
       "https://sentinel.example/portable-camera/enroll",

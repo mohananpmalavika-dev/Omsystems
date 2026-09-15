@@ -68,7 +68,9 @@ export function GlobalAlertCenter() {
   const load = useCallback(async () => {
     if (!enabledForRoute) return;
     try {
-      const response = await fetch("/v1/alerts/command-center?limit=200", {
+      // Route through the BFF proxy so auth cookies are forwarded correctly
+      // and backend 502s are absorbed gracefully.
+      const response = await fetch("/api/control/v1/alerts/alert-center?limit=200", {
         cache: "no-store",
         credentials: "include",
         headers: { "x-silent": "true" },
@@ -99,6 +101,8 @@ export function GlobalAlertCenter() {
     void load();
 
     const events = new EventSource("/v1/alerts/events", { withCredentials: true });
+    // Suppress console noise when backend is temporarily unavailable.
+    events.onerror = () => { /* reconnect handled automatically by EventSource */ };
 
     // On created — fetch enriched single alert and insert
     events.addEventListener("alert.created", async (ev: MessageEvent) => {
