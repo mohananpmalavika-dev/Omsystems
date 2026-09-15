@@ -306,23 +306,30 @@ export class AnalyticsRepository {
         const bbox = object.boundingBox ?? { x: 0, y: 0, width: 1, height: 1 };
         const objectClass = (object.label || input.detectionType || "object").slice(0, 50);
         const confidence = Math.min(1.0, Math.max(0.0, Number(Number(object.confidence ?? input.confidence ?? 0).toFixed(2))));
-        await client.query(
-          `INSERT INTO detected_objects (
-             id, event_id, camera_id, tenant_id, detected_at, object_class, label, confidence, track_id, bounding_box
-           ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-          [
-            randomUUID(),
-            eventId,
-            input.cameraId,
-            input.tenantId,
-            input.occurredAt || new Date().toISOString(),
-            objectClass,
-            object.label || objectClass,
-            confidence,
-            object.trackId ?? null,
-            JSON.stringify(bbox),
-          ],
-        );
+        await client.query("SAVEPOINT insert_object");
+        try {
+          await client.query(
+            `INSERT INTO detected_objects (
+               id, event_id, camera_id, tenant_id, detected_at, object_class, label, confidence, track_id, bounding_box
+             ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+            [
+              randomUUID(),
+              eventId,
+              input.cameraId,
+              input.tenantId,
+              input.occurredAt || new Date().toISOString(),
+              objectClass,
+              object.label || objectClass,
+              confidence,
+              object.trackId ?? null,
+              JSON.stringify(bbox),
+            ],
+          );
+          await client.query("RELEASE SAVEPOINT insert_object");
+        } catch (err) {
+          await client.query("ROLLBACK TO SAVEPOINT insert_object");
+          console.warn(`Failed to insert detected object: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
 
       const alerts: AnalyticsAlert[] = [];

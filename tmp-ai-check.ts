@@ -1,6 +1,7 @@
-import { app } from './src/app.ts';
+import { buildApp } from './src/app.ts';
 
 async function main() {
+  const app = await buildApp();
   await app.ready();
   const res = await app.inject({
     method: 'POST',
