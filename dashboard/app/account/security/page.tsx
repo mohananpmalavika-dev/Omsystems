@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
+  Bell,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -27,6 +28,7 @@ import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { authApi } from "@/lib/api-client";
 import { logout, logoutAllSessions } from "@/lib/auth-manager";
+import { useUserAlertPreferences } from "@/services/user-alert-preferences";
 
 type Session = Awaited<ReturnType<typeof authApi.listSessions>>["data"][number];
 
@@ -200,6 +202,7 @@ function evaluatePasswordStrength(password: string): {
 }
 
 export default function AccountSecurityPage() {
+  const { alertPopupEnabled, alertToastEnabled, setAlertPopupEnabled, setAlertToastEnabled } = useUserAlertPreferences();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [revokingId, setRevokingId] = useState<string | null>(null);
@@ -846,6 +849,89 @@ export default function AccountSecurityPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </section>
+
+        {/* Alert & Notification Preferences Card */}
+        <section
+          className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
+          aria-label="Alert and notification preferences"
+        >
+          <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-600 dark:text-amber-400">
+                <Bell className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Alert & Notification Preferences
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Configure how security incidents alert you. These settings are tied to your personal account.
+                </p>
+              </div>
+            </div>
+
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-800">
+              <CheckCircle2 size={13} />
+              Account Synced
+            </span>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {/* Setting 1: Incident Modal Popup */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Emergency Alert Modal Popup
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${alertPopupEnabled ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
+                    {alertPopupEnabled ? "ENABLED" : "DISABLED"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+                  Automatically display a fullscreen incident triage modal when critical (P1/P2) alerts are detected. When disabled, alerts remain accessible in your dashboard queue without interrupting your workflow.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={alertPopupEnabled}
+                onClick={() => setAlertPopupEnabled(!alertPopupEnabled)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/30 ${alertPopupEnabled ? "bg-amber-600" : "bg-slate-300 dark:bg-slate-700"}`}
+                title={alertPopupEnabled ? "Disable emergency modal popups" : "Enable emergency modal popups"}
+              >
+                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${alertPopupEnabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
+
+            {/* Setting 2: Corner Toast Notifications */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/30">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    Corner Toast Notification Banners
+                  </span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${alertToastEnabled ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : "bg-slate-200 dark:bg-slate-800 text-slate-500"}`}>
+                    {alertToastEnabled ? "ENABLED" : "DISABLED"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
+                  Show floating notification cards in the bottom-right corner of your screen when operational and AI alerts are raised.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={alertToastEnabled}
+                onClick={() => setAlertToastEnabled(!alertToastEnabled)}
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/30 ${alertToastEnabled ? "bg-amber-600" : "bg-slate-300 dark:bg-slate-700"}`}
+                title={alertToastEnabled ? "Disable toast notifications" : "Enable toast notifications"}
+              >
+                <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${alertToastEnabled ? "translate-x-6" : "translate-x-1"}`} />
+              </button>
+            </div>
           </div>
         </section>
 
