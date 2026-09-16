@@ -167,8 +167,48 @@ export function setupSessionGuard() {
   // Check session on page focus
   const onFocus = () => { checkSession(); };
 
-  // Cleanup on page unload
-  const onBeforeUnload = () => { stopSessionCheck(); };
+  // On browser/tab close: immediately invalidate the backend session using
+  // navigator.sendBeacon — the only API that survives page unload reliably.
+  // Also clear localStorage tokens synchronously so no credentials linger.
+  const onBeforeUnload = () => {
+    stopSessionCheck();
+
+    // Clear local credentials immediately — synchronous, always runs
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+    } catch {}
+
+    // Fire logout to the server — sendBeacon survives tab/browser close.
+    // sendBeacon automatically includes cookies, so the backend authenticates
+    // the request normally via the sentinel_access / sentinel_session cookie.
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
+
+    // End activity session
+    const activitySessionId = (() => {
+      try { return sessionStorage.getItem('activitySessionId') || ''; } catch { return ''; }
+    })();
+    if (activitySessionId) {
+      const activityBlob = new Blob(
+        [JSON.stringify({ terminationReason: 'browser_close' })],
+        { type: 'application/json' }
+      );
+      navigator.sendBeacon?.(
+        `${apiBase}/v1/activity/sessions/${activitySessionId}/end`,
+        activityBlob
+      );
+    }
+
+    // Logout — invalidate the backend cookie/token session
+    const logoutBlob = new Blob(
+      [JSON.stringify({ reason: 'browser_close' })],
+      { type: 'application/json' }
+    );
+    navigator.sendBeacon?.(`${apiBase}/v1/auth/logout`, logoutBlob);
+  };
+
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('focus', onFocus);
   window.addEventListener('beforeunload', onBeforeUnload);
