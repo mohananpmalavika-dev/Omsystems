@@ -24,7 +24,7 @@ function getEnv(name: string): string {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
         const [k, ...rest] = trimmed.split("=");
-        if (k.trim() === name) {
+        if (k && k.trim() === name) {
           return rest.join("=").trim().replace(/^["']|["']$/g, "");
         }
       }
