@@ -46,7 +46,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         if (!byCategory[feature.featureCategory]) {
           byCategory[feature.featureCategory] = [];
         }
-        byCategory[feature.featureCategory].push(feature);
+        byCategory[feature.featureCategory]!.push(feature);
       });
 
       return {
@@ -474,7 +474,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         params.featureKey,
         body.enabled,
         {
-          usageLimit: body.usageLimit,
+          usageLimit: body.usageLimit ?? undefined,
           expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
           config: body.config,
           notes: body.notes,
