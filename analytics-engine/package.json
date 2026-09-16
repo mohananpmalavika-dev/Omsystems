@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "models:download": "tsx scripts/provision-models.ts",
     "models:verify": "tsx scripts/verify-models.ts",
+    "models:generate-manifest": "tsx scripts/generate-model-manifest.ts",
     "setup-banking-demo": "tsx scripts/setup-banking-demo.ts"
   },
   "dependencies": {

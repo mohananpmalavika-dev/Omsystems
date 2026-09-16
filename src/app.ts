@@ -84,6 +84,7 @@ import { registerMaintenanceHealthRoutes } from "./routes/maintenance-health.rou
 import { registerMaintenanceReportsRoutes } from "./routes/maintenance-reports.routes.js";
 import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.routes.js";
 import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
+import { registerCameraLocationMapRoutes } from "./routes/camera-location-map.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
 import { registerEvidenceRoutes } from "./routes/evidence.routes.js";
 import { registerHsmSigningRoutes } from "./routes/hsm-signing.routes.js";
@@ -2491,6 +2492,7 @@ export async function buildApp(options?: {
   // available for both the in-memory development runtime and PostgreSQL.
   await registerMaintenanceRoutes(app, store);
   await registerMaintenanceExportRoutes(app, store);
+  await registerCameraLocationMapRoutes(app, store);
   await registerSlaReportRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);
   await registerBranchCommandCenterRoutes(app, store);

@@ -237,6 +237,7 @@ export const navigation: NavGroup[] = [
     icon: Wrench,
     items: [
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+      { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
       { label: "Asset Replacement & Lineage", href: "/operations/assets", icon: Boxes },
       { label: "Maintenance Work Orders", href: "/maintenance/workorders", icon: ClipboardCheck },
@@ -513,6 +514,7 @@ const pageMeta = [
   }))),
   { path: "/operations/branches", section: "Operations", title: "Branch health" },
   { path: "/camera-detail", section: "Infrastructure health", title: "Camera details" },
+  { path: "/maintenance/camera-map", section: "Fleet maintenance", title: "Camera Location Map" },
   { path: "/maintenance/assets/new", section: "Fleet maintenance", title: "Register asset" },
   { path: "/maintenance/vendors/new", section: "Fleet maintenance", title: "Add vendor" },
   { path: "/maintenance/amc/new", section: "Fleet maintenance", title: "Add AMC contract" },

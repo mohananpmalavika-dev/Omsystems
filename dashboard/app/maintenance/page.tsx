@@ -436,6 +436,7 @@ export default function MaintenancePage() {
           <Link href="/maintenance/vendors">Vendors</Link>
           <Link href="/maintenance/amc">AMC contracts</Link>
           <Link href="/maintenance/device-management">Device management</Link>
+          <Link href="/maintenance/camera-map">📍 Camera locations map</Link>
           <Link href="/maintenance/privacy">Privacy & data</Link>
           <Link href="/reports">Reports</Link>
           <Link href="/maintenance/predictive">Predictive alerts</Link>

@@ -739,8 +739,8 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         <div className="login-introduction-brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="" /> : <span className="auth-brand-mark"><ShieldCheck size={24} /></span>}<span>{branding.orgName || "KryptonVision"}</span></div>
         <div className="login-introduction-copy">
           <p className="login-kicker">NEXT-GENERATION SECURITY INTELLIGENCE</p>
-          <h2>Redefining Security.<br />Empowering Excellence.</h2>
-          <p>Transform your security operations with an enterprise-grade command center that delivers unparalleled visibility, intelligent automation, and actionable insights across your entire organization.</p>
+          <h2><strong>KryptoVision</strong><br />See Every Risk.<br />Secure Every Branch.</h2>
+          <p>AI-powered security intelligence for safer branches, stronger operations, and faster response.</p>
           <ul>
             <li><CheckCircle2 size={18} /><span>Unified surveillance with predictive analytics and AI-driven insights</span></li>
             <li><CheckCircle2 size={18} /><span>Proactive threat intelligence with instant incident orchestration</span></li>
