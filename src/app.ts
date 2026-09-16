@@ -162,6 +162,8 @@ import { registerPerformanceBenchmarkRoutes } from "./routes/performance-benchma
 import { redisModule } from "./bootstrap/redis.module.js";
 import { registerEventNormalizationRoutes } from "./event-normalization/routes/event-normalization.routes.js";
 import { registerAiAlertsRoutes } from "./routes/ai-alerts.routes.js";
+import { registerSmartMotionSearchRoutes } from "./routes/smart-motion-search.routes.js";
+import { registerEdgeReplenishmentRoutes } from "./routes/edge-replenishment.routes.js";
 import { autoProvisionVerifiedCameras } from "./services/camera-auto-provision.js";
 import {
   EmptyFederationLocalSearchProvider,
@@ -3273,7 +3275,10 @@ export async function buildApp(options?: {
     await registerOnvifRoutes(app);
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, and LDAP Sync routes registered");
+    await registerVideoWallRoutes(app, store);
+    await registerSmartMotionSearchRoutes(app, store);
+    await registerEdgeReplenishmentRoutes(app, store);
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, Video Wall, Smart Motion Search, and Edge Replenishment routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }
