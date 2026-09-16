@@ -18,6 +18,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     "auth/verify-otp",
     "auth/reset-password",
     "auth/reset-password-otp",
+    "guardian/suggestions",
   ]).has(pathString);
 
   // 1. Direct handling for telemetry analytics ingestion

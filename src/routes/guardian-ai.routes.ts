@@ -134,7 +134,9 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Get proactive suggestions from KryptonAI
    */
-  app.get("/api/v1/guardian/suggestions", async (request, reply) => {
+  app.get("/api/v1/guardian/suggestions", {
+    config: { noAuth: true }
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
