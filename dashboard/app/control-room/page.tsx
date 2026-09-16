@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { EnhancedCameraGrid, type GridLayout, type GridSize } from "@/components/enhanced-camera-grid";
 import { LiveAiWallPanel } from "@/components/live-ai-wall-panel";
+import { EmergencyAlarmPopup } from "@/components/emergency-alarm-popup";
 import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
 import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
@@ -685,6 +686,7 @@ function ControlRoomContent() {
 
   return (
     <div className="control-room">
+      <EmergencyAlarmPopup />
       <header className="control-room-nav-hub">
         <div className="wall-heading">
           <span className="brand-pill"><Video size={22} aria-hidden="true" /></span>

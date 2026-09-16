@@ -20,6 +20,8 @@ import {
   SlidersHorizontal,
   AlertTriangle,
   Trash2,
+  Tv,
+  Move,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -34,6 +36,8 @@ import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { HlsPlayer } from "./hls-player";
 import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
+import { FisheyeDewarpCanvas } from "./fisheye-dewarp-canvas";
+import { VideoWallDispatchModal } from "./video-wall-dispatch-modal";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -154,7 +158,12 @@ function CameraTileComponent({
   const [settingsScheduleDays, setSettingsScheduleDays] = useState<number[]>(recording?.schedule?.windows?.[0]?.days ?? [1, 2, 3, 4, 5]);
   const [settingsScheduleStart, setSettingsScheduleStart] = useState(recording?.schedule?.windows?.[0]?.start ?? "09:00");
   const [settingsScheduleEnd, setSettingsScheduleEnd] = useState(recording?.schedule?.windows?.[0]?.end ?? "18:00");
+  const [showFisheyeDewarp, setShowFisheyeDewarp] = useState(false);
+  const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [internalVideoElement, setInternalVideoElement] = useState<HTMLVideoElement | null>(null);
+
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
+    setInternalVideoElement(videoElement);
     onVideoElementChange?.(videoElement);
   }, [onVideoElementChange]);
   const handlePlaybackStateChange = useCallback((playing: boolean) => {
@@ -327,16 +336,25 @@ function CameraTileComponent({
       >
         <div className="zoom-stage" style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)` }}>
           {session?.hls && (!liveError || !isFatalLiveError(liveError)) ? (
-            <HlsPlayer
-              url={session.hls.url}
-              bearerToken={session.hls.bearerToken ?? ""}
-              cameraName={camera.name}
-              cameraId={camera.id}
-              muted={isMuted}
-              onPlaybackError={onPlaybackError}
-              onPlaybackStateChange={handlePlaybackStateChange}
-              onVideoElementChange={handleVideoElementChange}
-            />
+            <>
+              <HlsPlayer
+                url={session.hls.url}
+                bearerToken={session.hls.bearerToken ?? ""}
+                cameraName={camera.name}
+                cameraId={camera.id}
+                muted={isMuted}
+                onPlaybackError={onPlaybackError}
+                onPlaybackStateChange={handlePlaybackStateChange}
+                onVideoElementChange={handleVideoElementChange}
+              />
+              {showFisheyeDewarp && internalVideoElement && (
+                <FisheyeDewarpCanvas
+                  videoElement={internalVideoElement}
+                  className="absolute inset-0 z-20"
+                  onClose={() => setShowFisheyeDewarp(false)}
+                />
+              )}
+            </>
           ) : snapshotUrl ? (
             <img
               src={snapshotUrl}
@@ -466,6 +484,25 @@ function CameraTileComponent({
               <SlidersHorizontal size={15} />
             </button>
           )}
+          <button
+            type="button"
+            aria-label="360 Dewarp"
+            title={showFisheyeDewarp ? "Exit 360 Dewarp" : "Enter 360 Dewarp (Virtual PTZ & Quad Split)"}
+            className={showFisheyeDewarp ? "text-sky-400 border-sky-500/60 bg-sky-950/70" : ""}
+            onClick={() => setShowFisheyeDewarp(!showFisheyeDewarp)}
+            disabled={!canPlayLive}
+          >
+            <Move size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Dispatch to Wall"
+            title="Dispatch camera to physical SOC Video Wall"
+            onClick={() => setShowDispatchModal(true)}
+            disabled={!canPlayLive}
+          >
+            <Tv size={15} />
+          </button>
           <button
             type="button"
             aria-label="Open fullscreen"
@@ -744,6 +781,14 @@ function CameraTileComponent({
           </select>
         )}
       </footer>
+      {showDispatchModal && (
+        <VideoWallDispatchModal
+          cameraId={camera.id}
+          cameraName={camera.name}
+          isOpen={showDispatchModal}
+          onClose={() => setShowDispatchModal(false)}
+        />
+      )}
     </article>
   );
 }

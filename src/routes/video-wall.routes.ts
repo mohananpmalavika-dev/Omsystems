@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { ControlPlaneStore } from "../control-plane-store.js";
+import { pool } from "../database/pool.js";
+import { VideoWallDispatcherService } from "../media/services/video-wall-dispatcher.service.js";
 
 const gridSizes = ["1x1","2x2","3x3","4x4","5x5","6x6","7x7","8x8","9x9","10x10","11x11","12x12"] as const;
 const capacities = Object.fromEntries(gridSizes.map((size) => [size, Number(size.split("x")[0]) ** 2]));
+
 const createSchema = z.object({
   name: z.string().trim().min(1).max(100),
   gridSize: z.enum(gridSizes),
@@ -14,7 +17,29 @@ const createSchema = z.object({
   })).max(144),
 });
 
-export async function registerVideoWallRoutes(app: FastifyInstance, store: ControlPlaneStore) {
+const registerDisplaySchema = z.object({
+  displayCode: z.string().trim().min(2).max(100),
+  name: z.string().trim().min(1).max(200),
+  resolution: z.string().optional(),
+  location: z.string().optional(),
+  activeLayout: z.string().optional(),
+});
+
+const dispatchSchema = z.object({
+  displayCode: z.string().trim().min(2).max(100),
+  layout: z.string().trim().min(1).max(50),
+  assignedCameras: z.array(z.string().min(1)).max(144),
+  reason: z.string().optional(),
+});
+
+export const videoWallDispatcherService = new VideoWallDispatcherService(pool || undefined);
+
+export async function registerVideoWallRoutes(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+  dispatcher: VideoWallDispatcherService = videoWallDispatcherService
+) {
+  // Existing layout routes
   app.get("/v1/video-wall/layouts", async (request) => ({
     data: await store.listVideoWallLayouts(request.currentUser.tenantId, request.currentUser.id),
   }));
@@ -45,5 +70,55 @@ export async function registerVideoWallRoutes(app: FastifyInstance, store: Contr
       cameraPositions,
     });
     return reply.code(201).send(layout);
+  });
+
+  // Physical Video Wall Display Nodes & Matrix Dispatching
+  app.get("/v1/video-wall/displays", async (request) => {
+    const displays = await dispatcher.listDisplays(request.currentUser.tenantId);
+    return { success: true, count: displays.length, displays };
+  });
+
+  app.post("/v1/video-wall/displays/register", async (request, reply) => {
+    const body = registerDisplaySchema.parse(request.body);
+    const display = await dispatcher.registerDisplay({
+      tenantId: request.currentUser.tenantId,
+      displayCode: body.displayCode,
+      name: body.name,
+      resolution: body.resolution,
+      location: body.location,
+      activeLayout: body.activeLayout,
+    });
+    return reply.code(201).send({ success: true, display });
+  });
+
+  app.get("/v1/video-wall/displays/:displayCode", async (request, reply) => {
+    const params = request.params as { displayCode: string };
+    const display = await dispatcher.getDisplay(params.displayCode);
+    if (!display || display.tenantId !== request.currentUser.tenantId) {
+      return reply.code(404).send({ error: "display_not_found" });
+    }
+    return reply.code(200).send({ success: true, display });
+  });
+
+  app.post("/v1/video-wall/displays/:displayCode/heartbeat", async (request, reply) => {
+    const params = request.params as { displayCode: string };
+    const ok = await dispatcher.recordHeartbeat(params.displayCode);
+    if (!ok) {
+      return reply.code(404).send({ error: "display_not_found" });
+    }
+    return reply.code(200).send({ success: true, status: "online" });
+  });
+
+  app.post("/v1/video-wall/dispatch", async (request, reply) => {
+    const body = dispatchSchema.parse(request.body);
+    const updated = await dispatcher.dispatchMatrix({
+      tenantId: request.currentUser.tenantId,
+      displayCode: body.displayCode,
+      layout: body.layout,
+      assignedCameras: body.assignedCameras,
+      dispatchedBy: request.currentUser.username || request.currentUser.id,
+      reason: body.reason,
+    });
+    return reply.code(200).send({ success: true, display: updated });
   });
 }
