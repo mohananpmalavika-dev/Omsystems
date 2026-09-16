@@ -70,6 +70,7 @@ import {
   SlidersHorizontal,
   Snowflake,
   Sparkles,
+  ToggleLeft,
   TrendingUp,
   Truck,
   UserRoundCog,
@@ -284,6 +285,7 @@ export const navigation: NavGroup[] = [
       { label: "Employees & Location Access", href: "/admin/organization?tab=employees", icon: Users },
       { label: "Roles & Menu Access", href: "/admin/organization?tab=roles", icon: Shield },
       { label: "Platform Capability Matrix", href: "/admin/platform/capabilities", icon: ShieldCheck },
+      { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", icon: Building2, badge: "cameras" },
       { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", icon: Cpu },
       { label: "ZTP Fleet Diagnostics", href: "/admin/zero-touch/diagnostics", icon: Gauge },
@@ -484,6 +486,7 @@ function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<strin
 
 export const quickActions: NavItem[] = [
   { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+  { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
   { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
   { label: "Report an incident", href: "/incidents/create", icon: Siren },
   { label: "Create work order", href: "/maintenance/workorders/new", icon: ClipboardCheck },

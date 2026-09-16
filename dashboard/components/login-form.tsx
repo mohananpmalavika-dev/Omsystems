@@ -959,7 +959,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             </div>
 
             <div className="form-group">
-              <div className="auth-label-row"><label htmlFor="password">Password</label><a href="/forgot-password" className="forgot-password-link">Forgot password?</a></div>
+              <label htmlFor="password">Password</label>
               <div className="password-input-wrapper">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -982,6 +982,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
+              </div>
+              <div className="auth-label-row">
+                <a href="/forgot-password" className="forgot-password-link">Forgot password?</a>
               </div>
             </div>
 
