@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import { alertAudioService } from "../../services/alert-audio/alert-audio.service";
 import type { AlertAudioStatus, AlertSeverity } from "../../services/alert-audio/alert-audio.types";
+import { useUserAlertPreferences } from "../../services/user-alert-preferences";
 
 export function AlertAudioIndicator() {
   const [status, setStatus] = useState<AlertAudioStatus>(alertAudioService.getAudioStatus());
+  const { alertPopupEnabled, alertToastEnabled, setAlertPopupEnabled, setAlertToastEnabled } = useUserAlertPreferences();
   const [open, setOpen] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,41 @@ export function AlertAudioIndicator() {
               title={status.speechEnabled ? "Disable spoken AI alerts" : "Enable spoken AI alerts"}
             >
               <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${status.speechEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+
+          {/* User Popup & Notification Preferences */}
+          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+            <div>
+              <div className="text-[11px] font-semibold text-slate-200">Incident modal popup</div>
+              <div className="text-[10px] text-slate-500">Auto-open triage modal on P1/P2 alerts</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={alertPopupEnabled}
+              onClick={() => setAlertPopupEnabled(!alertPopupEnabled)}
+              className={`relative h-5 w-10 rounded-full transition-colors cursor-pointer ${alertPopupEnabled ? "bg-emerald-600" : "bg-slate-700"}`}
+              title={alertPopupEnabled ? "Disable incident modal popups" : "Enable incident modal popups"}
+            >
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${alertPopupEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+            <div>
+              <div className="text-[11px] font-semibold text-slate-200">Toast notification banners</div>
+              <div className="text-[10px] text-slate-500">Floating alert popups in screen corner</div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={alertToastEnabled}
+              onClick={() => setAlertToastEnabled(!alertToastEnabled)}
+              className={`relative h-5 w-10 rounded-full transition-colors cursor-pointer ${alertToastEnabled ? "bg-emerald-600" : "bg-slate-700"}`}
+              title={alertToastEnabled ? "Disable toast notifications" : "Enable toast notifications"}
+            >
+              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${alertToastEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
             </button>
           </div>
 

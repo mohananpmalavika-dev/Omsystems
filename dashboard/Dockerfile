@@ -8,8 +8,8 @@ COPY src/ ./src/
 COPY qa-engine/ ./qa-engine/
 COPY dashboard/ ./dashboard/
 WORKDIR /app/dashboard
-ARG CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
-ARG MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
+ARG CONTROL_PLANE_INTERNAL_URL=http://control-plane:8080
+ARG MEDIA_GATEWAY_INTERNAL_URL=http://media-gateway:8090
 ENV CONTROL_PLANE_INTERNAL_URL=$CONTROL_PLANE_INTERNAL_URL
 ENV MEDIA_GATEWAY_INTERNAL_URL=$MEDIA_GATEWAY_INTERNAL_URL
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -20,8 +20,8 @@ RUN npm run build
 FROM node:22-alpine
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
-ENV CONTROL_PLANE_INTERNAL_URL=http://localhost:8080
-ENV MEDIA_GATEWAY_INTERNAL_URL=http://localhost:8090
+ENV CONTROL_PLANE_INTERNAL_URL=http://control-plane:8080
+ENV MEDIA_GATEWAY_INTERNAL_URL=http://media-gateway:8090
 WORKDIR /app
 COPY --from=build /app/dashboard/.next/standalone ./
 COPY --from=build /app/dashboard/.next/server ./dashboard/.next/server

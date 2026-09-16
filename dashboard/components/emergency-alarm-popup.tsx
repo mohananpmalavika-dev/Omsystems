@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { AlertOctagon, Siren, Eye, CheckCircle, ExternalLink, Volume2, VolumeX, X } from "lucide-react";
 import Link from "next/link";
+import { useUserAlertPreferences } from "@/services/user-alert-preferences";
 
 export interface EmergencyAlarm {
   id: string;
@@ -24,6 +25,7 @@ export function EmergencyAlarmPopup({
   onSpotlightCamera,
   className = "",
 }: EmergencyAlarmPopupProps) {
+  const { alertPopupEnabled } = useUserAlertPreferences();
   const [activeAlarm, setActiveAlarm] = useState<EmergencyAlarm | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
@@ -83,7 +85,7 @@ export function EmergencyAlarmPopup({
     }
   };
 
-  if (!activeAlarm) return null;
+  if (!activeAlarm || !alertPopupEnabled) return null;
 
   return (
     <div
