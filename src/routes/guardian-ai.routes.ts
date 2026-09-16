@@ -7,6 +7,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { GuardianAIAssistant } from "../services/guardian-ai-assistant.service.js";
+import { requireFeatureWithLogging } from "../middleware/feature-flag.middleware.js";
 
 const messageSchema = z.object({
   message: z.string().min(1).max(1000),
@@ -24,7 +25,9 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Send message to KryptonAI assistant
    */
-  app.post("/api/v1/guardian/chat", async (request, reply) => {
+  app.post("/api/v1/guardian/chat", {
+    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "chat")
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -75,7 +78,9 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Process voice command using Whisper + KryptonAI
    */
-  app.post("/api/v1/guardian/voice", async (request, reply) => {
+  app.post("/api/v1/guardian/voice", {
+    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "voice")
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -133,7 +138,9 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Get proactive suggestions from KryptonAI
    */
-  app.get("/api/v1/guardian/suggestions", async (request, reply) => {
+  app.get("/api/v1/guardian/suggestions", {
+    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "suggestions")
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
