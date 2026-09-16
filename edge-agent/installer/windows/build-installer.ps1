@@ -1,11 +1,11 @@
-# Build Sentinel Grid Installer
+# Build KryptonVision Installer
 # This script builds the complete installer package
 
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "======================================"
-Write-Host "  Building Sentinel Grid Installer"
+Write-Host "  Building KryptonVision Installer"
 Write-Host "======================================"
 Write-Host ""
 
@@ -118,7 +118,7 @@ try {
         Write-Host "======================================"
         Write-Host ""
         
-        $outputFile = "output\KryptonVisionInstaller-v0.1.0-windows.exe"
+        $outputFile = "output\KryptonVisionInstaller-v0.1.20-windows.exe"
         if (Test-Path $outputFile) {
             $installerInfo = Get-Item $outputFile
             Write-Host "Installer created:"

@@ -1,16 +1,16 @@
-; Sentinel Grid Edge Agent - Inno Setup Installer Script
+; KryptonVision Edge Agent - Inno Setup Installer Script
 ; This creates a one-click installer for branch deployment
 
 [Setup]
-AppName=Sentinel Grid Edge Agent
-AppVersion=0.1.8
-AppPublisher=Sentinel Grid
+AppName=KryptonVision Edge Agent
+AppVersion=0.1.20
+AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
-DefaultGroupName=Sentinel Grid
+DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=SentinelGridInstaller-v0.1.8-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.20-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -27,7 +27,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startservice"; Description: "Start Sentinel Grid service after installation"; GroupDescription: "Service Configuration:"; Flags: checkedonce
+Name: "startservice"; Description: "Start KryptonVision service after installation"; GroupDescription: "Service Configuration:"; Flags: checkedonce
 
 [Files]
 ; Main executable
@@ -53,14 +53,14 @@ Name: "{app}\logs"
 Name: "{app}\config"
 
 [Icons]
-Name: "{group}\Sentinel Grid Edge Agent"; Filename: "{app}\edge-agent.exe"
+Name: "{group}\KryptonVision Edge Agent"; Filename: "{app}\edge-agent.exe"
 Name: "{group}\Configuration Folder"; Filename: "{app}\config"
 Name: "{group}\Logs Folder"; Filename: "{app}\logs"
-Name: "{group}\Uninstall Sentinel Grid"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\Sentinel Grid Edge Agent"; Filename: "{app}\edge-agent.exe"; Tasks: desktopicon
+Name: "{group}\Uninstall KryptonVision"; Filename: "{uninstallexe}"
+Name: "{autodesktop}\KryptonVision Edge Agent"; Filename: "{app}\edge-agent.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\register-branch.ps1"""; Description: "Register with Sentinel Grid Cloud"; Flags: runhidden waituntilterminated; StatusMsg: "Registering branch with cloud..."
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\register-branch.ps1"""; Description: "Register with KryptonVision Cloud"; Flags: runhidden waituntilterminated; StatusMsg: "Registering branch with cloud..."
 Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\scripts\install-service.ps1"""; Description: "Install Windows Service"; Flags: runhidden waituntilterminated; StatusMsg: "Installing Windows service..."; Tasks: startservice
 
 [UninstallRun]
@@ -77,15 +77,15 @@ begin
   BranchNamePage := CreateInputQueryPage(wpWelcome,
     'Branch Information', 
     'Enter your branch details',
-    'Please enter a name for this branch location. This will be used to identify this branch in the Sentinel Grid dashboard.');
+    'Please enter a name for this branch location. This will be used to identify this branch in the KryptonVision dashboard.');
   BranchNamePage.Add('Branch Name:', False);
   BranchNamePage.Values[0] := 'Branch Office';
 
-  // One-time activation issued by Sentinel Grid.
+  // One-time activation issued by KryptonVision.
   ActivationPage := CreateInputQueryPage(BranchNamePage.ID,
     'Gateway Activation',
     'Enter the one-time activation code',
-    'Create a gateway activation in Sentinel Grid and paste the code here. It is consumed on first boot.');
+    'Create a gateway activation in KryptonVision and paste the code here. It is consumed on first boot.');
   ActivationPage.Add('Activation Code:', False);
   ActivationPage.Values[0] := '';
 end;
@@ -112,7 +112,7 @@ begin
   begin
     if Pos('sgact_', Trim(ActivationPage.Values[0])) <> 1 then
     begin
-      MsgBox('A valid one-time Sentinel Grid activation code is required.', mbError, MB_OK);
+      MsgBox('A valid one-time KryptonVision activation code is required.', mbError, MB_OK);
       Result := False;
     end;
   end;
@@ -139,14 +139,14 @@ begin
       'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
       'Branch Name: ' + BranchName + #13#10 +
       'Installation Path: ' + ExpandConstant('{app}') + #13#10 +
-      'Version: 0.1.8',
+      'Version: 0.1.20',
       False);
   end;
 end;
 
 function InitializeUninstall(): Boolean;
 begin
-  Result := MsgBox('Are you sure you want to uninstall Sentinel Grid Edge Agent?' + #13#10 + #13#10 + 
+  Result := MsgBox('Are you sure you want to uninstall KryptonVision Edge Agent?' + #13#10 + #13#10 +
                    'This will stop monitoring cameras at this branch location.', 
                    mbConfirmation, MB_YESNO) = IDYES;
 end;
@@ -155,7 +155,7 @@ procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    MsgBox('Sentinel Grid Edge Agent has been uninstalled.' + #13#10 + #13#10 +
+    MsgBox('KryptonVision Edge Agent has been uninstalled.' + #13#10 + #13#10 +
            'Configuration and log files have been preserved in case you reinstall.', 
            mbInformation, MB_OK);
   end;
