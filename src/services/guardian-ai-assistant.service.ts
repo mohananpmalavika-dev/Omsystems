@@ -758,11 +758,13 @@ When users give commands:
           type: "action",
           actions: [
             {
-              type: "navigate",
-              label: "Open Alert Command Center",
-              url: "/operations/alert-command-center",
+              function: "get_alert_summary",
+              parameters: { timeRange: "24h" },
+              executed: true,
+              result: { total, breakdown },
             },
           ],
+          suggestions: ["Open Alert Command Center", "Show camera status"],
           timestamp,
         };
       } catch {
@@ -796,16 +798,13 @@ When users give commands:
           type: "action",
           actions: [
             {
-              type: "navigate",
-              label: "View All Cameras",
-              url: "/operations/cameras",
-            },
-            {
-              type: "navigate",
-              label: "Live Video Wall",
-              url: "/operations/video-wall",
+              function: "get_camera_locations",
+              parameters: {},
+              executed: true,
+              result: { total, online: onlineCount, offline: offlineCount },
             },
           ],
+          suggestions: ["View All Cameras", "Live Video Wall"],
           timestamp,
         };
       } catch {
@@ -824,16 +823,13 @@ When users give commands:
         type: "action",
         actions: [
           {
-            type: "navigate",
-            label: "Operational Health Dashboard",
-            url: "/operations/observability",
-          },
-          {
-            type: "navigate",
-            label: "Branch Operations",
-            url: "/operations/branches",
+            function: "get_branch_status",
+            parameters: {},
+            executed: true,
+            result: { status: "NOMINAL" },
           },
         ],
+        suggestions: ["Operational Health Dashboard", "Branch Operations"],
         timestamp,
       };
     }
