@@ -51,9 +51,9 @@ export function FeatureProtected(featureKey: string) {
       }
 
       // Get feature service from instance if available
-      const featureService: FeatureManagementService = 
+      const featureService: FeatureManagementService | null = 
         (this as any).featureService || 
-        (this as any).pool ? new FeatureManagementService((this as any).pool) : null;
+        ((this as any).pool ? new FeatureManagementService((this as any).pool) : null);
 
       if (!featureService) {
         throw new Error("FeatureManagementService not available. Add 'featureService' or 'pool' property to class.");
@@ -97,9 +97,9 @@ export function FeatureProtectedWithLogging(
         throw new Error("tenantId is required as first argument");
       }
 
-      const featureService: FeatureManagementService = 
+      const featureService: FeatureManagementService | null = 
         (this as any).featureService || 
-        (this as any).pool ? new FeatureManagementService((this as any).pool) : null;
+        ((this as any).pool ? new FeatureManagementService((this as any).pool) : null);
 
       if (!featureService) {
         throw new Error("FeatureManagementService not available");
@@ -150,9 +150,9 @@ export function FeatureOptional(featureKey: string) {
         return null;
       }
 
-      const featureService: FeatureManagementService = 
+      const featureService: FeatureManagementService | null = 
         (this as any).featureService || 
-        (this as any).pool ? new FeatureManagementService((this as any).pool) : null;
+        ((this as any).pool ? new FeatureManagementService((this as any).pool) : null);
 
       if (!featureService) {
         return null;
@@ -191,9 +191,9 @@ export function FeatureProtectedAny(featureKeys: string[]) {
         throw new Error("tenantId is required as first argument");
       }
 
-      const featureService: FeatureManagementService = 
+      const featureService: FeatureManagementService | null = 
         (this as any).featureService || 
-        (this as any).pool ? new FeatureManagementService((this as any).pool) : null;
+        ((this as any).pool ? new FeatureManagementService((this as any).pool) : null);
 
       if (!featureService) {
         throw new Error("FeatureManagementService not available");
@@ -235,9 +235,9 @@ export function FeatureProtectedAll(featureKeys: string[]) {
         throw new Error("tenantId is required as first argument");
       }
 
-      const featureService: FeatureManagementService = 
+      const featureService: FeatureManagementService | null = 
         (this as any).featureService || 
-        (this as any).pool ? new FeatureManagementService((this as any).pool) : null;
+        ((this as any).pool ? new FeatureManagementService((this as any).pool) : null);
 
       if (!featureService) {
         throw new Error("FeatureManagementService not available");

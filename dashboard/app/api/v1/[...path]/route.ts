@@ -34,10 +34,10 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   }
 
   const upstreamBase =
-    process.env.CONTROL_PLANE_INTERNAL_URL ||
-    process.env.CONTROL_PLANE_PUBLIC_URL ||
-    process.env.CONTROL_PLANE_URL ||
-    "http://localhost:8080";
+    (Reflect.get(process.env, "CONTROL_PLANE_INTERNAL_URL") as string | undefined) ||
+    (Reflect.get(process.env, "CONTROL_PLANE_URL") as string | undefined) ||
+    (Reflect.get(process.env, "CONTROL_PLANE_PUBLIC_URL") as string | undefined) ||
+    (process.env.NODE_ENV === "production" ? "http://control-plane:8080" : "http://localhost:8080");
 
   // Try /api/v1/... first, then fallback to /v1/...
   const upstreamUrl = new URL(`/api/v1/${pathString}`, upstreamBase);

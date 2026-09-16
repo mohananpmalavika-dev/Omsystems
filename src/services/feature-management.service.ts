@@ -205,7 +205,7 @@ export class FeatureManagementService {
       `SELECT * FROM global_features ORDER BY feature_category, feature_name`
     );
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       id: row.id,
       featureKey: row.feature_key,
       featureName: row.feature_name,
@@ -363,7 +363,7 @@ export class FeatureManagementService {
       `SELECT * FROM v_feature_usage_summary ORDER BY total_usage DESC`
     );
 
-    return result.rows.map((row) => ({
+    return result.rows.map((row: any) => ({
       featureKey: row.feature_key,
       totalUsage: parseInt(row.total_usage),
       uniqueTenants: parseInt(row.unique_tenants),

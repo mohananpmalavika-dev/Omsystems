@@ -7,12 +7,14 @@ import { analyticsApi } from "@/lib/api-client";
 import { acknowledgeAlert, fetchOperationalAlerts } from "@/lib/api/operational-health";
 import type { AnalyticsAlert } from "@/lib/types";
 import type { OperationalAlert } from "@/lib/types/operational-health";
+import { useUserAlertPreferences } from "@/services/user-alert-preferences";
 
 type TrayAlert = { id: string; source: "AI" | "Operational"; severity: string; status: string; title: string; detail?: string; occurredAt: string; href: string };
 const POLL_INTERVAL_MS = 30_000;
 const MAX_VISIBLE_NOTIFICATIONS = 4;
 
 export function AlertNotificationTray() {
+  const { alertToastEnabled } = useUserAlertPreferences();
   const [notifications, setNotifications] = useState<TrayAlert[]>([]);
   const [acknowledging, setAcknowledging] = useState<string | null>(null);
   const initialized = useRef(false);
@@ -68,7 +70,7 @@ export function AlertNotificationTray() {
       setAcknowledging(null);
     }
   };
-  if (!notifications.length) return null;
+  if (!alertToastEnabled || !notifications.length) return null;
   return <aside className="alert-notification-tray" aria-live="assertive" aria-label="New critical and operational alerts">{notifications.map((alert) => <article className={`alert-notification-card severity-${(alert.severity || "info").toLowerCase()}`} key={notificationKey(alert)}><span className="alert-notification-icon" aria-hidden="true">{alert.source === "AI" ? <BrainCircuit size={17} /> : <AlertTriangle size={17} />}</span><div className="alert-notification-content"><div><b>{alert.source} alert</b><time dateTime={alert.occurredAt}>{formatTime(alert.occurredAt)}</time></div><strong>{alert.title}</strong>{alert.detail && <p>{alert.detail}</p>}<div className="flex gap-2"><Link href={alert.href}><BellRing size={13} /> Open alert queue</Link><button type="button" disabled={acknowledging === notificationKey(alert)} onClick={() => void acknowledge(alert)}><Check size={13} />Acknowledge</button></div></div><button type="button" aria-label={`Dismiss ${alert.title}`} onClick={() => setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)))}><X size={15} /></button></article>)}</aside>;
 }
 

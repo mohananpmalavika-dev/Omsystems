@@ -26,10 +26,6 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/v1/:path*",
-        destination: `${apiBase}/api/v1/:path*`,
-      },
-      {
         source: "/api/portable-camera/:path*",
         destination: `${apiBase}/api/portable-camera/:path*`,
       },

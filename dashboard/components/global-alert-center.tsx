@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BellOff,
   BellRing,
   AlertTriangle,
   Check,
@@ -22,6 +23,7 @@ import { isPublicDashboardRoute } from "@/lib/session-navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { LiveSessionResponse } from "@/lib/types";
 import { startLiveFromBrowser } from "@/lib/live-client";
+import { useUserAlertPreferences } from "@/services/user-alert-preferences";
 import {
   activeDashboardQueue,
   dashboardEvidenceUrl,
@@ -57,6 +59,7 @@ export function GlobalAlertCenter() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [notificationAlert, setNotificationAlert] = useState<CommandAlert>();
+  const { alertPopupEnabled, alertToastEnabled, setAlertPopupEnabled } = useUserAlertPreferences();
   const alertsRef = useRef<CommandAlert[]>([]);
   const hasLoadedAlerts = useRef(false);
   const notificationTimer = useRef<number | undefined>(undefined);
@@ -82,7 +85,7 @@ export function GlobalAlertCenter() {
       if (hasLoadedAlerts.current) {
         const previousIds = new Set(alertsRef.current.map((alert) => alert.id));
         const newAlert = nextAlerts.find((alert) => !previousIds.has(alert.id));
-        if (newAlert) {
+        if (newAlert && alertToastEnabled) {
           if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
           setNotificationAlert(newAlert);
           notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
@@ -121,9 +124,11 @@ export function GlobalAlertCenter() {
         const next = (body.data ?? []) as CommandAlert[];
         if (next.length === 0) return;
         const newAlert = next[0];
-        if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
-        setNotificationAlert(newAlert);
-        notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
+        if (alertToastEnabled) {
+          if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
+          setNotificationAlert(newAlert);
+          notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
+        }
         alertsRef.current = [newAlert, ...alertsRef.current.filter((alert) => alert.id !== newAlert.id)];
         setAlerts((prev) => {
           const present = prev.find((a) => a.id === newAlert.id);
@@ -178,7 +183,9 @@ export function GlobalAlertCenter() {
 
   const dashboardQueue = useMemo(() => activeDashboardQueue(alerts), [alerts]);
   const urgentQueue = useMemo(() => popupQueue(alerts, dismissed), [alerts, dismissed]);
-  const current = dashboardQueue.find((alert) => alert.id === manualAlertId) ?? urgentQueue[0];
+  const current = alertPopupEnabled
+    ? (dashboardQueue.find((alert) => alert.id === manualAlertId) ?? urgentQueue[0])
+    : dashboardQueue.find((alert) => alert.id === manualAlertId);
 
   const activeP1Count = useMemo(() => {
     return alerts.filter((a) => a.severity === "P1" && !terminalAlertStatus(a.status)).length;
@@ -399,6 +406,18 @@ export function GlobalAlertCenter() {
 
               <div className="flex items-center gap-2">
                 <Sla alert={current} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAlertPopupEnabled(false);
+                    dismissCurrent();
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-amber-300 hover:bg-slate-800 border border-slate-700/60 transition-colors"
+                  title="Disable automatic incident popups (alerts remain accessible in your dashboard queue)"
+                >
+                  <BellOff className="h-3.5 w-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Disable Popups</span>
+                </button>
                 <button
                   onClick={dismissCurrent}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors"
