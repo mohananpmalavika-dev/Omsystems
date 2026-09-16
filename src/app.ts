@@ -3238,6 +3238,24 @@ export async function buildApp(options?: {
     } catch (error) {
       app.log.warn({ error }, "Failed to register AI video search routes");
     }
+
+    // Register AI Video Search V2 (Natural Language + GPT-4V)
+    try {
+      const { registerAIVideoSearchV2Routes } = await import("./routes/ai-video-search-v2.routes.js");
+      await registerAIVideoSearchV2Routes(app, pool);
+      app.log.info("AI Video Search V2 (Natural Language) routes registered");
+    } catch (error) {
+      app.log.warn({ error }, "Failed to register AI Video Search V2 routes");
+    }
+
+    // Register Guardian AI Assistant (JARVIS-like assistant)
+    try {
+      const { registerGuardianAIRoutes } = await import("./routes/guardian-ai.routes.js");
+      await registerGuardianAIRoutes(app, pool);
+      app.log.info("Guardian AI Assistant routes registered");
+    } catch (error) {
+      app.log.warn({ error }, "Failed to register Guardian AI routes");
+    }
   }
 
   // Start export worker if enabled

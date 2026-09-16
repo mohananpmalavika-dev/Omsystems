@@ -8,6 +8,7 @@ import { OrgBrandingProvider } from "@/components/ui/org-branding-provider";
 import { PerformanceMonitorProvider } from "@/components/performance-monitor-provider";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
 import { ApiErrorNotifier } from "@/components/api-error-notifier";
+import { GuardianFAB } from "@/components/guardian-ai/guardian-fab";
 import "./globals.css";
 import "./workspace.css";
 
@@ -125,6 +126,7 @@ export default function RootLayout({
                    <PerformanceMonitorProvider>
                   <ApplicationShell>{children}</ApplicationShell>
                   <GlobalAlertCenter />
+                  <GuardianFAB />
                    </PerformanceMonitorProvider>
                 </ActivityMonitor>
               </SessionProvider>
