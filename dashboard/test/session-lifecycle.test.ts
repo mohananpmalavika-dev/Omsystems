@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { isAuthenticated as isAuthFromGuard, redirectToLogin } from "../lib/session-guard";
-import { isAuthenticated as isAuthFromManager, getCurrentUser } from "../lib/auth-manager";
+import { isAuthenticated as isAuthFromManager, getCurrentUser, logout as logoutFromManager } from "../lib/auth-manager";
 import { authApi } from "../lib/api-client";
 
 describe("session lifecycle and browser close isolation", () => {
@@ -92,6 +92,27 @@ describe("session lifecycle and browser close isolation", () => {
     expect(mockLocalStorage.get("refreshToken")).toBeUndefined();
     expect(mockLocalStorage.get("user")).toBeUndefined();
     expect(mockLocalStorage.get("sentinel_login_time")).toBeUndefined();
+  });
+
+  it("includes the client system name and session metadata when ending an activity log on logout", async () => {
+    mockSessionStorage.set("sentinel_browser_session", "active");
+    mockSessionStorage.set("accessToken", "token");
+    mockSessionStorage.set("activitySessionId", "session-123");
+    mockSessionStorage.set("activityAccessToken", "token");
+
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ success: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    Object.defineProperty(globalThis, "navigator", {
+      value: { platform: "Win32", userAgent: "TestBrowser" },
+      configurable: true,
+    });
+
+    await logoutFromManager();
+
+    expect(fetchMock).toHaveBeenCalled();
+    const [, requestInit] = fetchMock.mock.calls[0];
+    const payload = JSON.parse(String(requestInit?.body || "{}"));
+    expect(payload.deviceInfo).toMatchObject({ systemName: "Win32" });
   });
 
   it("clears storage and redirects when redirectToLogin is invoked", async () => {

@@ -7,6 +7,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AIVideoSearchService, naturalLanguageSearchSchema, videoSummaryRequestSchema } from "../services/ai-video-search.service.js";
+import { requireFeatureWithLogging } from "../middleware/feature-flag.middleware.js";
 
 export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: any) {
   const aiVideoSearch = new AIVideoSearchService(pool);
@@ -21,7 +22,9 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
    * - "Find vehicles entering the parking lot after 10pm"
    * - "Show me anyone running or fighting in the last hour"
    */
-  app.post("/api/v1/video-search/natural-language", async (request, reply) => {
+  app.post("/api/v1/video-search/natural-language", {
+    preHandler: requireFeatureWithLogging("ai-video-search", "search")
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -68,7 +71,9 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
    * 
    * Content-Type: audio/webm or audio/wav
    */
-  app.post("/api/v1/video-search/voice-query", async (request, reply) => {
+  app.post("/api/v1/video-search/voice-query", {
+    preHandler: requireFeatureWithLogging("ai-video-search", "voice_search")
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {

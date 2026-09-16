@@ -2705,6 +2705,28 @@ export async function buildApp(options?: {
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
     alertEvidenceClient);
   
+  // Initialize Feature Flag Middleware
+  if (pool) {
+    try {
+      const { initializeFeatureMiddleware } = await import("./middleware/feature-flag.middleware.js");
+      initializeFeatureMiddleware(pool);
+      app.log.info('Feature Flag middleware initialized');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to initialize Feature Flag middleware');
+    }
+  }
+
+  // Register Feature Management routes
+  if (pool) {
+    try {
+      const { registerFeatureManagementRoutes } = await import("./routes/feature-management.routes.js");
+      await registerFeatureManagementRoutes(app, pool);
+      app.log.info('Feature Management routes registered');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to register Feature Management routes');
+    }
+  }
+
   // Register AI Assistant V2 routes (behind feature flag)
   if (pool) {
     try {
