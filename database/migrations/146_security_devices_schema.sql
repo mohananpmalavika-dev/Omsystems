@@ -223,14 +223,48 @@ CREATE INDEX IF NOT EXISTS idx_sec_commands_pending ON security_device_commands(
 COMMENT ON TABLE security_device_commands IS 'Device control commands with approval workflow and full audit trail';
 
 -- ============================================================================
+-- Security Device Discovery Jobs
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS security_device_discovery_jobs (
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id             TEXT NOT NULL,
+  branch_id             UUID REFERENCES branches(id) ON DELETE SET NULL,
+  network_range         TEXT NOT NULL,
+  scan_type             TEXT NOT NULL DEFAULT 'QUICK',
+  include_device_types  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  exclude_device_types  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  status                TEXT NOT NULL DEFAULT 'PENDING'
+                          CHECK (status IN ('PENDING','RUNNING','COMPLETED','FAILED','CANCELLED')),
+  progress_percent      NUMERIC(5,2) NOT NULL DEFAULT 0,
+  devices_discovered    INTEGER NOT NULL DEFAULT 0,
+  devices_enrolled      INTEGER NOT NULL DEFAULT 0,
+  started_at            TIMESTAMPTZ,
+  completed_at          TIMESTAMPTZ,
+  duration_seconds      INTEGER,
+  error_message         TEXT,
+  metadata              JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_by            TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sec_disc_jobs_tenant ON security_device_discovery_jobs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_sec_disc_jobs_branch ON security_device_discovery_jobs(branch_id);
+CREATE INDEX IF NOT EXISTS idx_sec_disc_jobs_status ON security_device_discovery_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_sec_disc_jobs_created ON security_device_discovery_jobs(created_at DESC);
+
+COMMENT ON TABLE security_device_discovery_jobs IS 'Device discovery scans and jobs';
+
+-- ============================================================================
 -- Discovered Devices (pending enrollment from network scans)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS security_discovered_devices (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id           TEXT NOT NULL,
-  branch_id           UUID,
-  discovery_job_id    UUID,
+  branch_id           UUID REFERENCES branches(id) ON DELETE SET NULL,
+  discovery_job_id    UUID REFERENCES security_device_discovery_jobs(id) ON DELETE SET NULL,
 
   ip_address          INET,
   mac_address         TEXT,
@@ -243,20 +277,25 @@ CREATE TABLE IF NOT EXISTS security_discovered_devices (
   protocol            TEXT,
   port                INTEGER,
 
+  capabilities        JSONB NOT NULL DEFAULT '[]'::jsonb,
   open_ports          INTEGER[],
   detected_services   JSONB NOT NULL DEFAULT '[]'::jsonb,
   banner              TEXT,
   fingerprint         TEXT,
+  confidence          NUMERIC(5,2) NOT NULL DEFAULT 0,
   confidence_score    NUMERIC(5,2),
 
-  enrollment_status   TEXT NOT NULL DEFAULT 'PENDING'
-                        CHECK (enrollment_status IN ('PENDING','APPROVED','REJECTED','ENROLLED')),
+  enrollment_status   TEXT NOT NULL DEFAULT 'PENDING_REVIEW'
+                        CHECK (enrollment_status IN ('PENDING','PENDING_REVIEW','APPROVED','REJECTED','ENROLLED')),
   enrolled_device_id  UUID REFERENCES security_devices(id) ON DELETE SET NULL,
   enrolled_at         TIMESTAMPTZ,
+  reviewed_by         TEXT,
+  reviewed_at         TIMESTAMPTZ,
   rejected_by         TEXT,
   rejected_at         TIMESTAMPTZ,
   rejection_reason    TEXT,
 
+  discovered_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   first_seen_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_seen_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   metadata            JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -270,6 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_sec_discovered_status  ON security_discovered_dev
 CREATE INDEX IF NOT EXISTS idx_sec_discovered_ip      ON security_discovered_devices(ip_address);
 CREATE INDEX IF NOT EXISTS idx_sec_discovered_mac     ON security_discovered_devices(LOWER(mac_address));
 CREATE INDEX IF NOT EXISTS idx_sec_discovered_job     ON security_discovered_devices(discovery_job_id);
+CREATE INDEX IF NOT EXISTS idx_sec_discovered_disc_at ON security_discovered_devices(discovered_at DESC);
 
 COMMENT ON TABLE security_discovered_devices IS 'Devices found by network discovery scans, pending enrollment approval';
 
