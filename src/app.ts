@@ -1820,8 +1820,7 @@ export async function buildApp(options?: {
       await audit(request, store, "talk_session.created", camera.nodeId, "denied");
       return;
     }
-    if (camera.capabilities.talkback?.supported === false ||
-        (!camera.capabilities.audio && camera.capabilities.talkback?.supported !== true)) {
+    if (camera.capabilities.talkback?.supported === false) {
       return reply.code(409).send({
         error: "talkback_not_supported",
         reason: camera.capabilities.talkback?.reason ?? "device_does_not_advertise_two_way_audio",

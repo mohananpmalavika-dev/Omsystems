@@ -138,6 +138,7 @@ function CameraTileComponent({
     setPan({ x: 0, y: 0 });
   }, []);
   const [isMuted, setIsMuted] = useState(true);
+  const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -170,12 +171,23 @@ function CameraTileComponent({
         ? "rotation queue"
       : null;
   const canPlayLive = isActive && hasLiveFrame;
-  const isTalkbackSupported =
-    camera.capabilities?.talkback?.supported === true ||
-    (camera.capabilities?.audio === true && camera.capabilities?.talkback?.supported !== false);
+
+  // Two-way audio talkback is enabled for all live cameras unless explicitly unsupported (supported === false)
+  const isTalkbackSupported = camera.capabilities?.talkback?.supported !== false;
   const talkbackUnsupportedReason = !isTalkbackSupported
     ? camera.capabilities?.talkback?.reason ?? "two-way audio is not supported on this camera"
     : undefined;
+
+  const handleTalkChange = useCallback((talking: boolean) => {
+    setIsTalking(talking);
+    if (talking) {
+      // Temporarily mute incoming playback while holding talk to avoid acoustic mic feedback
+      setIsMuted(true);
+    } else {
+      // Automatically unmute when done talking so operator hears the other person's reply
+      setIsMuted(false);
+    }
+  }, []);
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
   const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
@@ -351,6 +363,12 @@ function CameraTileComponent({
               <i />
               {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
             </span>
+            {!isMuted && (
+              <span className="status-pill text-emerald-400 border-emerald-500/40 bg-emerald-950/70" title="Audio from camera is active and playing">
+                <Volume2 size={11} className="animate-pulse inline mr-1 text-emerald-400" />
+                Audio ON
+              </span>
+            )}
           </div>
           {onToggleRecording && (
             <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
@@ -424,9 +442,9 @@ function CameraTileComponent({
           )}
           <button
             type="button"
-            aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio"}
-            title={isMuted ? "Click to hear live audio from camera" : "Mute camera audio (Listening)"}
-            className={!isMuted ? "audio-listening-active text-emerald-400" : ""}
+            aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio (Listening)"}
+            title={isMuted ? "Click to hear live audio from camera" : "Camera audio listening is active. Click to mute."}
+            className={!isMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
             onClick={() => setIsMuted(!isMuted)}
             disabled={!canPlayLive}
           >
@@ -436,6 +454,7 @@ function CameraTileComponent({
             cameraId={camera.id}
             disabled={!canPlayLive}
             unsupportedReason={talkbackUnsupportedReason}
+            onTalkingChange={handleTalkChange}
           />
           {camera.capabilities.ptz && (
             <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>

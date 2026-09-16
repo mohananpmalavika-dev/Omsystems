@@ -65,10 +65,7 @@ export class TalkbackService {
     }
 
     // Verify camera hardware audio/speaker capability
-    if (
-      camera.capabilities.talkback?.supported === false ||
-      (!camera.capabilities.audio && camera.capabilities.talkback?.supported !== true)
-    ) {
+    if (camera.capabilities.talkback?.supported === false) {
       throw new TalkbackServiceError(
         'talkback_not_supported',
         409,
@@ -305,10 +302,7 @@ export class TalkbackService {
       throw new TalkbackServiceError('camera_not_found', 404);
     }
 
-    const isSupported = Boolean(
-      camera.capabilities.talkback?.supported ??
-      camera.capabilities.audio
-    );
+    const isSupported = camera.capabilities.talkback?.supported !== false;
 
     const transport = camera.capabilities.talkback?.transport ?? (
       camera.vendor === 'cp-plus' || camera.vendor === 'dahua'

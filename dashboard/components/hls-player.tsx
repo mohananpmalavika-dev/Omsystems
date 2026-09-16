@@ -51,6 +51,9 @@ export function HlsPlayer({
     if (!video) return;
     video.muted = muted;
     video.volume = volume;
+    if (!muted && video.paused) {
+      void video.play().catch(() => undefined);
+    }
   }, [muted, volume]);
 
   const onVideoElementChangeRef = useRef(onVideoElementChange);

@@ -7,10 +7,11 @@ import { sendTalkAudio, startTalkFromBrowser, stopTalk } from "@/lib/talk-client
 
 type TalkState = "idle" | "connecting" | "talking" | "error";
 
-export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
+export function HoldToTalkButton({ cameraId, disabled, unsupportedReason, onTalkingChange }: {
   cameraId: string;
   disabled?: boolean;
   unsupportedReason?: string;
+  onTalkingChange?: (talking: boolean) => void;
 }) {
   const [state, setState] = useState<TalkState>("idle");
   const [error, setError] = useState(unsupportedReason ?? "");
@@ -24,6 +25,10 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
   const queue = useRef<ArrayBuffer[]>([]);
   const sending = useRef(false);
   const finishRef = useRef<() => Promise<void>>(async () => undefined);
+  const onTalkingChangeRef = useRef(onTalkingChange);
+  useEffect(() => {
+    onTalkingChangeRef.current = onTalkingChange;
+  }, [onTalkingChange]);
 
   useEffect(() => {
     const release = () => { releaseRequested.current = true; void finishRef.current(); };
@@ -94,6 +99,7 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
       processor.connect(silent);
       silent.connect(context.destination);
       setState("talking");
+      onTalkingChangeRef.current?.(true);
     } catch (cause) {
       setError(talkMessage(cause));
       setState("error");
@@ -124,6 +130,7 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
     releaseRequested.current = true;
     queue.current = [];
     setAudioLevel(0);
+    onTalkingChangeRef.current?.(false);
     if (heartbeatTimer.current) {
       clearInterval(heartbeatTimer.current);
       heartbeatTimer.current = undefined;
@@ -144,7 +151,7 @@ export function HoldToTalkButton({ cameraId, disabled, unsupportedReason }: {
 
   const release = () => { releaseRequested.current = true; void finish(); };
   const title = unsupportedReason ? `Talk unavailable: ${unsupportedReason}` :
-    error ? `Talk failed: ${error}` : state === "talking" ? "Release to stop talking" : "Hold to talk";
+    error ? `Talk failed: ${error}` : state === "talking" ? "Release to stop talking (Listening will resume)" : "Hold to Talk (Speak to camera)";
 
   return (
     <button

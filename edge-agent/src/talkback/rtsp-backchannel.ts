@@ -33,6 +33,17 @@ export async function openTalkback(context: TalkbackDeviceContext): Promise<Talk
     try { return await RtspTalkbackConnection.open(candidate); }
     catch (error) {
       failures.push(error instanceof TalkbackTransportError ? error.code : "talkback_transport_failed");
+      if (candidate.requireOnvif) {
+        try {
+          return await RtspTalkbackConnection.open({
+            ...candidate,
+            requireOnvif: false,
+            adapter: "standard-rtsp-backchannel",
+          });
+        } catch (subErr) {
+          failures.push(subErr instanceof TalkbackTransportError ? subErr.code : "talkback_transport_failed");
+        }
+      }
     }
   }
   const code = failures.includes("device_credentials_rejected")
@@ -299,14 +310,26 @@ function selectBackchannelTrack(sdp: string, aggregateUri: string, contentBase: 
   const normalized = sdp.replace(/\r\n/g, "\n");
   const sessionControl = normalized.split("\nm=")[0]?.match(/(?:^|\n)a=control:([^\n]+)/)?.[1]?.trim();
   const media = normalized.split(/\nm=/).slice(1).map((part) => `m=${part}`);
-  const candidates = media.filter((section) => /^m=audio\s/im.test(section) && /(?:^|\n)a=sendonly\s*(?:\n|$)/im.test(section));
-  const selected = candidates.find((section) => /a=rtpmap:\d+\s+PCMA\/8000/i.test(section)) ??
-    candidates.find((section) => /a=rtpmap:\d+\s+PCMU\/8000/i.test(section)) ??
-    (packetMode === "dhav" ? media.find((section) => /^m=audio\s/im.test(section)) : undefined);
-  if (!selected) throw new TalkbackTransportError("talkback_not_supported", 422, "No G.711 send-only backchannel was advertised");
+  const candidates = media.filter((section) =>
+    /^m=audio\s/im.test(section) &&
+    (/(?:^|\n)a=(?:sendonly|recvonly|sendrecv)\s*(?:\n|$)/im.test(section) || media.filter((m) => /^m=audio\s/im.test(m)).length > 1)
+  );
+  const allAudio = media.filter((section) => /^m=audio\s/im.test(section));
+  const pool = candidates.length > 0 ? candidates : allAudio;
+  const selected = pool.find((section) => /a=rtpmap:\d+\s+PCMA\/8000/i.test(section) || /^m=audio\s+\d+\s+RTP\/AVP\s+.*?\b8\b/im.test(section)) ??
+    pool.find((section) => /a=rtpmap:\d+\s+PCMU\/8000/i.test(section) || /^m=audio\s+\d+\s+RTP\/AVP\s+.*?\b0\b/im.test(section)) ??
+    (packetMode === "dhav" ? allAudio[0] : pool[0]);
+  if (!selected) throw new TalkbackTransportError("talkback_not_supported", 422, "No compatible audio backchannel was advertised");
   const mapping = selected.match(/a=rtpmap:(\d+)\s+(PCMA|PCMU)\/8000/i);
-  const codec = (mapping?.[2]?.toUpperCase() === "PCMU" ? "PCMU" : "PCMA") as G711Codec;
-  const payloadType = Number(mapping?.[1] ?? (codec === "PCMA" ? 8 : 0));
+  let codec: G711Codec = "PCMA";
+  let payloadType = 8;
+  if (mapping) {
+    codec = (mapping[2]?.toUpperCase() === "PCMU" ? "PCMU" : "PCMA") as G711Codec;
+    payloadType = Number(mapping[1] ?? (codec === "PCMA" ? 8 : 0));
+  } else if (/^m=audio\s+\d+\s+RTP\/AVP\s+.*?\b0\b/im.test(selected)) {
+    codec = "PCMU";
+    payloadType = 0;
+  }
   const control = selected.match(/(?:^|\n)a=control:([^\n]+)/)?.[1]?.trim() ?? sessionControl;
   if (!control) throw new TalkbackTransportError("talkback_protocol_error", 502, "Backchannel track has no control URI");
   return { codec, payloadType, controlUri: resolveControlUri(control, contentBase ?? aggregateUri) };
