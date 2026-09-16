@@ -130,6 +130,57 @@ const liveWallQuery = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(200),
 });
 
+function correlateLiveWallAlerts(alerts: AnalyticsAlert[]) {
+  const active = alerts.filter((alert) => !["resolved", "false_alarm", "suppressed"].includes(alert.status));
+  const clusters: Array<{
+    id: string;
+    branchId: string;
+    branchName?: string;
+    alertIds: string[];
+    cameraIds: string[];
+    severity: AnalyticsAlert["severity"];
+    startedAt: string;
+    title: string;
+  }> = [];
+
+  for (const alert of active.sort((a, b) => Date.parse(a.firstDetectedAt) - Date.parse(b.firstDetectedAt))) {
+    const branchKey = alert.branchId || `camera:${alert.cameraId}`;
+    const startedAt = Date.parse(alert.firstDetectedAt);
+    const cluster = clusters.find((candidate) =>
+      candidate.branchId === branchKey &&
+      Math.abs(startedAt - Date.parse(candidate.startedAt)) <= 5 * 60 * 1000 &&
+      !candidate.alertIds.includes(alert.id)
+    );
+
+    if (cluster) {
+      cluster.alertIds.push(alert.id);
+      if (!cluster.cameraIds.includes(alert.cameraId)) cluster.cameraIds.push(alert.cameraId);
+      if (["P1", "P2"].includes(alert.severity) && !["P1", "P2"].includes(cluster.severity)) {
+        cluster.severity = alert.severity;
+      }
+      continue;
+    }
+
+    clusters.push({
+      id: `wall-cluster-${alert.id}`,
+      branchId: branchKey,
+      branchName: alert.branchName,
+      alertIds: [alert.id],
+      cameraIds: [alert.cameraId],
+      severity: alert.severity,
+      startedAt: alert.firstDetectedAt,
+      title: alert.title,
+    });
+  }
+
+  return clusters
+    .filter((cluster) => cluster.cameraIds.length > 1)
+    .map((cluster) => ({
+      ...cluster,
+      title: `${cluster.alertIds.length} correlated alerts across ${cluster.cameraIds.length} cameras`,
+    }));
+}
+
 async function enrichAnprMetadata(
   store: ControlPlaneStore,
   tenantId: string,
@@ -347,6 +398,7 @@ export async function registerAnalyticsRoutes(
         cameraIds: authorizedCameraIds,
         rules,
         alerts,
+        correlations: correlateLiveWallAlerts(alerts),
         summary: summarize(alerts),
         sampledAt: new Date().toISOString(),
       },

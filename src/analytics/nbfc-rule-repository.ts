@@ -13,6 +13,15 @@ import type {
 } from "../domain/nbfc-analytics.types.js";
 
 export class NbfcRuleRepository {
+  private readonly excludedTemplateIds = new Set([
+    "tmpl-04-cash-counter-crowd",
+    "tmpl-05-customer-queue-length",
+    "tmpl-06-customer-waiting-time",
+    "tmpl-07-counter-unattended",
+    "tmpl-29-people-counting",
+    "tmpl-30-crowd-density-roi",
+  ]);
+
   private inMemoryRules = new Map<string, AnalyticsRule>();
   private inMemoryVersions = new Map<string, RuleVersion[]>();
   private inMemoryZones = new Map<string, AnalyticsZone>();
@@ -498,7 +507,11 @@ export class NbfcRuleRepository {
         }
         query += ` ORDER BY id ASC`;
         const res = await this.pool.query(query, params);
-        if (res.rows.length > 0) return res.rows.map(r => this.mapTemplateRow(r));
+        if (res.rows.length > 0) {
+          return res.rows
+            .map(r => this.mapTemplateRow(r))
+            .filter((template) => !this.excludedTemplateIds.has(template.id));
+        }
       } catch (err) {
         console.warn("NbfcRuleRepository: Postgres listTemplates failed:", err);
       }
@@ -508,6 +521,7 @@ export class NbfcRuleRepository {
     if (category && category !== "ALL") {
       templates = templates.filter(t => t.category === category);
     }
+    templates = templates.filter((template) => !this.excludedTemplateIds.has(template.id));
     return templates;
   }
 
@@ -519,16 +533,20 @@ export class NbfcRuleRepository {
           `SELECT * FROM nbfc_rule_templates WHERE id = $1 OR id ILIKE $2 LIMIT 1`,
           [id, `%${cleanId}%`]
         );
-        if (res.rows[0]) return this.mapTemplateRow(res.rows[0]);
+        if (res.rows[0]) {
+          const template = this.mapTemplateRow(res.rows[0]);
+          return this.excludedTemplateIds.has(template.id) ? null : template;
+        }
       } catch (err) {
         console.warn("NbfcRuleRepository: Postgres getTemplate failed:", err);
       }
     }
     const direct = this.inMemoryTemplates.get(id);
-    if (direct) return direct;
+    if (direct && !this.excludedTemplateIds.has(id)) return direct;
 
     const normalizedTarget = id.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
     for (const [key, tmpl] of this.inMemoryTemplates.entries()) {
+      if (this.excludedTemplateIds.has(key)) continue;
       const normKey = key.toLowerCase().replace(/^(tpl|tmpl)-?(\d+-)?/, "").replace(/[^a-z0-9]/g, "");
       if (normKey === normalizedTarget || normKey.includes(normalizedTarget) || normalizedTarget.includes(normKey)) {
         return tmpl;
@@ -1806,7 +1824,9 @@ export class NbfcRuleRepository {
       },
     ];
 
-    for (const tmpl of defaultTemplates) {
+    const activeTemplates = defaultTemplates.filter((template) => !this.excludedTemplateIds.has(template.id));
+
+    for (const tmpl of activeTemplates) {
       this.inMemoryTemplates.set(tmpl.id, tmpl);
     }
   }

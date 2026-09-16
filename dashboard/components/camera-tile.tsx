@@ -261,7 +261,7 @@ function CameraTileComponent({
   };
 
   return (
-    <article className="camera-tile" ref={tileRef}>
+    <article className="camera-tile" ref={tileRef} data-camera-id={camera.id}>
       <div className="feed-stage" onWheel={(event) => {
         if (!event.ctrlKey && !event.metaKey) return;
         event.preventDefault();

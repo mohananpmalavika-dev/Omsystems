@@ -1417,6 +1417,7 @@ export const analyticsApi = {
         cameraIds: string[];
         rules: AnalyticsRule[];
         alerts: AnalyticsAlert[];
+        correlations: import("./types").LiveWallCorrelation[];
         summary: AnalyticsAlertSummary;
         sampledAt: string;
       };

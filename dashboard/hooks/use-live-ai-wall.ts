@@ -7,6 +7,7 @@ import type {
   AnalyticsAlertSummary,
   AnalyticsRule,
   Camera,
+  LiveWallCorrelation,
 } from "@/lib/types";
 
 export type AiEngineState = "checking" | "online" | "degraded" | "offline" | "unavailable";
@@ -32,6 +33,7 @@ const TELEMETRY_STALE_AFTER_MS = 30_000;
 export function useLiveAiWall(cameras: Camera[], enabled = true) {
   const [rules, setRules] = useState<AnalyticsRule[]>([]);
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
+  const [correlations, setCorrelations] = useState<LiveWallCorrelation[]>([]);
   const [summary, setSummary] = useState<AnalyticsAlertSummary>(EMPTY_SUMMARY);
   const [engineState, setEngineState] = useState<AiEngineState>("checking");
   const [capabilityDomains, setCapabilityDomains] = useState<AiCapabilityDomain[]>([]);
@@ -51,6 +53,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
     if (!enabled || cameraIds.length === 0) {
       setRules([]);
       setAlerts([]);
+      setCorrelations([]);
       setSummary(EMPTY_SUMMARY);
       setLoading(false);
       setError(undefined);
@@ -64,6 +67,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
       if (requestSequence !== requestSequenceRef.current) return;
       setRules(response.data.rules);
       setAlerts(response.data.alerts);
+      setCorrelations(response.data.correlations ?? []);
       setSummary(response.data.summary);
       setLastUpdatedAt(response.data.sampledAt);
       setError(undefined);
@@ -71,6 +75,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
       if (requestSequence !== requestSequenceRef.current) return;
       setRules([]);
       setAlerts([]);
+      setCorrelations([]);
       setSummary(EMPTY_SUMMARY);
       setLastUpdatedAt(undefined);
       setError(reason instanceof Error ? reason.message : "Live AI telemetry is unavailable");
@@ -140,6 +145,7 @@ export function useLiveAiWall(cameras: Camera[], enabled = true) {
   return {
     rules,
     alerts,
+    correlations,
     openAlerts,
     summary,
     rulesByCamera,
