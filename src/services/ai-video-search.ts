@@ -13,6 +13,49 @@ import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
 
+/**
+ * Custom error classes for video search
+ */
+export class VideoSearchError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly statusCode: number = 500,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "VideoSearchError";
+  }
+}
+
+export class ValidationError extends VideoSearchError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "VALIDATION_ERROR", 400, details);
+    this.name = "ValidationError";
+  }
+}
+
+export class EmbeddingGenerationError extends VideoSearchError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "EMBEDDING_ERROR", 500, details);
+    this.name = "EmbeddingGenerationError";
+  }
+}
+
+export class QueryParsingError extends VideoSearchError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "QUERY_PARSING_ERROR", 400, details);
+    this.name = "QueryParsingError";
+  }
+}
+
+export class DatabaseError extends VideoSearchError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "DATABASE_ERROR", 500, details);
+    this.name = "DatabaseError";
+  }
+}
+
 
 export interface VideoMetadata {
   id: string;
@@ -227,69 +270,123 @@ export class AIVideoSearchService {
       embeddingModel?: string;
     }
   ): Promise<VideoMetadata> {
+    // Validate inputs
+    if (!tenantId || typeof tenantId !== "string") {
+      throw new ValidationError("Invalid tenantId", { tenantId });
+    }
+    if (!cameraId || typeof cameraId !== "string") {
+      throw new ValidationError("Invalid cameraId", { cameraId });
+    }
+    if (!segmentId || typeof segmentId !== "string") {
+      throw new ValidationError("Invalid segmentId", { segmentId });
+    }
+    if (!Array.isArray(objects)) {
+      throw new ValidationError("Objects must be an array", { objects });
+    }
+    if (objects.length > 1000) {
+      throw new ValidationError("Too many objects per segment (max 1000)", { count: objects.length });
+    }
+
     const startTime = new Date(metadata.startTime);
     const endTime = new Date(metadata.endTime);
-    if (!Number.isFinite(startTime.getTime()) || !Number.isFinite(endTime.getTime()) || endTime <= startTime) {
-      throw new Error("invalid_video_time_range");
+    
+    if (!Number.isFinite(startTime.getTime())) {
+      throw new ValidationError("Invalid startTime", { startTime: metadata.startTime });
+    }
+    if (!Number.isFinite(endTime.getTime())) {
+      throw new ValidationError("Invalid endTime", { endTime: metadata.endTime });
+    }
+    if (endTime <= startTime) {
+      throw new ValidationError("endTime must be after startTime", { 
+        startTime: metadata.startTime, 
+        endTime: metadata.endTime 
+      });
     }
 
     const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000);
+    
+    if (durationSeconds > 3600) {
+      throw new ValidationError("Segment duration exceeds 1 hour limit", { durationSeconds });
+    }
 
     const videoMetadataId = randomUUID();
 
-    // Insert video metadata
-    await this.pool.query(
-      `INSERT INTO video_metadata (
-        id, tenant_id, camera_id, branch_id, segment_id,
-        timestamp, start_time, end_time, duration_seconds,
-        scene_type, lighting_condition, weather_condition, crowd_density,
-        embedding, embedding_model, indexed_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())`,
-      [
-        videoMetadataId,
-        tenantId,
-        cameraId,
-        metadata.branchId || null,
-        segmentId,
-        metadata.startTime,
-        metadata.startTime,
-        metadata.endTime,
-        durationSeconds,
-        metadata.sceneType || null,
-        metadata.lightingCondition || null,
-        metadata.weatherCondition || null,
-        metadata.crowdDensity || null,
-        metadata.embedding ? JSON.stringify(metadata.embedding) : null,
-        metadata.embeddingModel || null,
-      ]
-    );
-
-    // Insert video objects
-    for (const obj of objects) {
+    try {
+      // Insert video metadata
       await this.pool.query(
-        `INSERT INTO video_objects (
-          id, video_metadata_id, object_id, object_type, tracking_id,
-          first_seen, last_seen, duration_seconds,
-          bounding_boxes, attributes,
-          cross_camera_tracking_id, related_camera_detections,
-          embedding, confidence
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        `INSERT INTO video_metadata (
+          id, tenant_id, camera_id, branch_id, segment_id,
+          timestamp, start_time, end_time, duration_seconds,
+          scene_type, lighting_condition, weather_condition, crowd_density,
+          embedding, embedding_model, indexed_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())`,
         [
-          randomUUID(),
           videoMetadataId,
-          obj.objectId,
-          obj.objectType,
-          obj.trackingId || null,
-          obj.firstSeen,
-          obj.lastSeen,
-          obj.durationSeconds,
-          JSON.stringify(obj.boundingBoxes),
-          JSON.stringify(obj.attributes),
-          obj.crossCameraTrackingId || null,
-          JSON.stringify(obj.relatedCameraDetections || []),
-          obj.embedding ? JSON.stringify(obj.embedding) : null,
-          obj.confidence,
+          tenantId,
+          cameraId,
+          metadata.branchId || null,
+          segmentId,
+          metadata.startTime,
+          metadata.startTime,
+          metadata.endTime,
+          durationSeconds,
+          metadata.sceneType || null,
+          metadata.lightingCondition || null,
+          metadata.weatherCondition || null,
+          metadata.crowdDensity || null,
+          metadata.embedding ? JSON.stringify(metadata.embedding) : null,
+          metadata.embeddingModel || null,
         ]
+      );
+
+      // Insert video objects with validation
+      for (const obj of objects) {
+        // Validate object structure
+        if (!obj.objectId || !obj.objectType) {
+          console.warn(`Skipping invalid object:`, obj);
+          continue;
+        }
+
+        try {
+          await this.pool.query(
+            `INSERT INTO video_objects (
+              id, video_metadata_id, object_id, object_type, tracking_id,
+              first_seen, last_seen, duration_seconds,
+              bounding_boxes, attributes,
+              cross_camera_tracking_id, related_camera_detections,
+              embedding, confidence
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+            [
+              randomUUID(),
+              videoMetadataId,
+              obj.objectId,
+              obj.objectType,
+              obj.trackingId || null,
+              obj.firstSeen,
+              obj.lastSeen,
+              obj.durationSeconds,
+              JSON.stringify(obj.boundingBoxes),
+              JSON.stringify(obj.attributes),
+              obj.crossCameraTrackingId || null,
+              JSON.stringify(obj.relatedCameraDetections || []),
+              obj.embedding ? JSON.stringify(obj.embedding) : null,
+              obj.confidence,
+            ]
+          );
+        } catch (error) {
+          // Log but don't fail the entire indexing operation for one object
+          console.error(`Failed to index object ${obj.objectId}:`, error);
+        }
+      }
+    } catch (error) {
+      throw new DatabaseError(
+        "Failed to index video metadata",
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          tenantId,
+          cameraId,
+          segmentId
+        }
       );
     }
 
@@ -331,42 +428,114 @@ export class AIVideoSearchService {
       limit?: number;
     }
   ): Promise<VideoSearchResult[]> {
-    // Parse natural language query
-    const parsedQuery = this.parseNaturalLanguageQuery(query);
+    // Validate inputs
+    if (!tenantId || typeof tenantId !== "string") {
+      throw new ValidationError("Invalid tenantId", { tenantId });
+    }
+    if (!query || typeof query !== "string") {
+      throw new ValidationError("Query is required", { query });
+    }
+    if (query.length < 3) {
+      throw new ValidationError("Query must be at least 3 characters", { length: query.length });
+    }
+    if (query.length > 500) {
+      throw new ValidationError("Query exceeds maximum length of 500 characters", { length: query.length });
+    }
 
-    // Execute structured search
-    return this.searchVideos(tenantId, {
-      ...parsedQuery,
-      branchId: options?.branchId ?? parsedQuery.branchId,
-      cameraIds: options?.cameraIds ?? parsedQuery.cameraIds,
-      from: options?.from ?? parsedQuery.from,
-      to: options?.to ?? parsedQuery.to,
-      minConfidence: options?.minConfidence ?? parsedQuery.minConfidence,
-      limit: options?.limit ?? parsedQuery.limit,
-    });
+    // Validate time range if provided
+    if (options?.from && options?.to) {
+      const from = new Date(options.from);
+      const to = new Date(options.to);
+      if (!Number.isFinite(from.getTime())) {
+        throw new ValidationError("Invalid from date", { from: options.from });
+      }
+      if (!Number.isFinite(to.getTime())) {
+        throw new ValidationError("Invalid to date", { to: options.to });
+      }
+      if (to <= from) {
+        throw new ValidationError("to date must be after from date", { from: options.from, to: options.to });
+      }
+      
+      const daysDiff = (to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysDiff > 90) {
+        throw new ValidationError("Search time range cannot exceed 90 days", { days: daysDiff });
+      }
+    }
+
+    // Validate camera IDs
+    if (options?.cameraIds && (!Array.isArray(options.cameraIds) || options.cameraIds.length > 100)) {
+      throw new ValidationError("cameraIds must be an array with max 100 items", { count: options.cameraIds?.length });
+    }
+
+    // Validate confidence
+    if (options?.minConfidence !== undefined && (options.minConfidence < 0 || options.minConfidence > 1)) {
+      throw new ValidationError("minConfidence must be between 0 and 1", { minConfidence: options.minConfidence });
+    }
+
+    // Validate limit
+    if (options?.limit !== undefined && (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 200)) {
+      throw new ValidationError("limit must be an integer between 1 and 200", { limit: options.limit });
+    }
+
+    try {
+      // Parse natural language query
+      const parsedQuery = this.parseNaturalLanguageQuery(query);
+
+      // Execute structured search
+      return await this.searchVideos(tenantId, {
+        ...parsedQuery,
+        branchId: options?.branchId ?? parsedQuery.branchId,
+        cameraIds: options?.cameraIds ?? parsedQuery.cameraIds,
+        from: options?.from ?? parsedQuery.from,
+        to: options?.to ?? parsedQuery.to,
+        minConfidence: options?.minConfidence ?? parsedQuery.minConfidence,
+        limit: options?.limit ?? parsedQuery.limit,
+      });
+    } catch (error) {
+      if (error instanceof VideoSearchError) {
+        throw error;
+      }
+      throw new QueryParsingError(
+        "Failed to parse and execute search query",
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          query 
+        }
+      );
+    }
   }
 
   /**
    * Parse natural language query into structured search (Enhanced)
    */
   private parseNaturalLanguageQuery(query: string): VideoSearchQuery {
+    if (!query || typeof query !== "string") {
+      throw new QueryParsingError("Invalid query string", { query });
+    }
+
     const lowerQuery = query.toLowerCase().trim();
+    
+    if (lowerQuery.length === 0) {
+      throw new QueryParsingError("Empty query after trimming", { query });
+    }
+
     const parsedQuery: VideoSearchQuery = {
       naturalLanguageQuery: query,
       attributes: {},
     };
 
-    // Extract object type with synonyms
-    const personTerms = ["person", "man", "woman", "people", "individual", "male", "female", 
-                         "boy", "girl", "human", "pedestrian", "someone", "anybody"];
-    const vehicleTerms = ["vehicle", "auto", "automobile"];
-    
-    if (personTerms.some(term => lowerQuery.includes(term))) {
-      parsedQuery.objectType = "person";
-    } else if (vehicleTerms.some(term => lowerQuery.includes(term)) || 
-               lowerQuery.match(/\b(car|truck|motorcycle|bike|bicycle|bus|van)\b/)) {
-      parsedQuery.objectType = "vehicle";
-    }
+    try {
+      // Extract object type with synonyms
+      const personTerms = ["person", "man", "woman", "people", "individual", "male", "female", 
+                           "boy", "girl", "human", "pedestrian", "someone", "anybody"];
+      const vehicleTerms = ["vehicle", "auto", "automobile"];
+      
+      if (personTerms.some(term => lowerQuery.includes(term))) {
+        parsedQuery.objectType = "person";
+      } else if (vehicleTerms.some(term => lowerQuery.includes(term)) || 
+                 lowerQuery.match(/\b(car|truck|motorcycle|bike|bicycle|bus|van)\b/)) {
+        parsedQuery.objectType = "vehicle";
+      }
 
     // Enhanced color extraction with context and synonyms
     const colorMap: Record<string, string[]> = {
@@ -520,6 +689,15 @@ export class AIVideoSearchService {
     }
 
     return parsedQuery;
+    } catch (error) {
+      throw new QueryParsingError(
+        "Failed to parse natural language query",
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          query 
+        }
+      );
+    }
   }
 
   /**
@@ -655,28 +833,42 @@ export class AIVideoSearchService {
       limit?: number;
     }
   ): Promise<VideoSearchResult[]> {
-    const results: VideoSearchResult[] = [];
-
-    // Build WHERE clause dynamically
-    const conditions: string[] = ["vm.tenant_id = $1"];
-    const params: any[] = [tenantId];
-    let paramIndex = 2;
-
-    // Time range filters
-    const from = query.from || options?.from;
-    const to = query.to || options?.to;
-
-    if (from) {
-      conditions.push(`vm.end_time >= $${paramIndex}::timestamptz`);
-      params.push(from);
-      paramIndex++;
+    // Validate tenant
+    if (!tenantId || typeof tenantId !== "string") {
+      throw new ValidationError("Invalid tenantId", { tenantId });
     }
 
-    if (to) {
-      conditions.push(`vm.start_time <= $${paramIndex}::timestamptz`);
-      params.push(to);
-      paramIndex++;
-    }
+    try {
+      const results: VideoSearchResult[] = [];
+
+      // Build WHERE clause dynamically
+      const conditions: string[] = ["vm.tenant_id = $1"];
+      const params: any[] = [tenantId];
+      let paramIndex = 2;
+
+      // Time range filters
+      const from = query.from || options?.from;
+      const to = query.to || options?.to;
+
+      if (from) {
+        const fromDate = new Date(from);
+        if (!Number.isFinite(fromDate.getTime())) {
+          throw new ValidationError("Invalid from date", { from });
+        }
+        conditions.push(`vm.end_time >= $${paramIndex}::timestamptz`);
+        params.push(from);
+        paramIndex++;
+      }
+
+      if (to) {
+        const toDate = new Date(to);
+        if (!Number.isFinite(toDate.getTime())) {
+          throw new ValidationError("Invalid to date", { to });
+        }
+        conditions.push(`vm.start_time <= $${paramIndex}::timestamptz`);
+        params.push(to);
+        paramIndex++;
+      }
 
     // Location filters
     const branchId = query.branchId || options?.branchId;
@@ -786,44 +978,57 @@ export class AIVideoSearchService {
     const requestedLimit = query.limit ?? options?.limit ?? 50;
     const limit = Math.min(Math.max(Number.isInteger(requestedLimit) ? requestedLimit : 50, 1), 200);
 
-    // Execute query
-    const queryText = `
-      SELECT 
-        vm.id as video_metadata_id,
-        vm.camera_id,
-        vm.segment_id,
-        vm.timestamp,
-        vm.start_time,
-        vm.end_time,
-        vm.duration_seconds,
-        ${needsObjectJoin ? `
-        vo.id as object_id,
-        vo.object_id as object_identifier,
-        vo.object_type,
-        vo.tracking_id,
-        vo.first_seen,
-        vo.last_seen,
-        vo.duration_seconds as object_duration,
-        vo.bounding_boxes,
-        vo.attributes,
-        vo.cross_camera_tracking_id,
-        vo.related_camera_detections,
-        vo.embedding as object_embedding,
-        vo.confidence,
-        ` : ""}
-        c.name as camera_name,
-        vm.branch_id
-      FROM video_metadata vm
-      ${joinClause}
-      LEFT JOIN cameras c ON c.id = vm.camera_id
-      WHERE ${whereClause}
-      ORDER BY vm.start_time DESC
-      LIMIT $${paramIndex}
-    `;
+    // Execute query with error handling
+    let result;
+    try {
+      const queryText = `
+        SELECT 
+          vm.id as video_metadata_id,
+          vm.camera_id,
+          vm.segment_id,
+          vm.timestamp,
+          vm.start_time,
+          vm.end_time,
+          vm.duration_seconds,
+          ${needsObjectJoin ? `
+          vo.id as object_id,
+          vo.object_id as object_identifier,
+          vo.object_type,
+          vo.tracking_id,
+          vo.first_seen,
+          vo.last_seen,
+          vo.duration_seconds as object_duration,
+          vo.bounding_boxes,
+          vo.attributes,
+          vo.cross_camera_tracking_id,
+          vo.related_camera_detections,
+          vo.embedding as object_embedding,
+          vo.confidence,
+          ` : ""}
+          c.name as camera_name,
+          vm.branch_id
+        FROM video_metadata vm
+        ${joinClause}
+        LEFT JOIN cameras c ON c.id = vm.camera_id
+        WHERE ${whereClause}
+        ORDER BY vm.start_time DESC
+        LIMIT $${paramIndex}
+      `;
 
-    params.push(limit);
-
-    const result = await this.pool.query(queryText, params);
+      params.push(limit);
+      
+      result = await this.pool.query(queryText, params);
+    } catch (error) {
+      throw new DatabaseError(
+        "Failed to execute video search query",
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          tenantId,
+          queryType: query.objectType,
+          hasAttributes: query.attributes && Object.keys(query.attributes).length > 0
+        }
+      );
+    }
 
     // Group results by video metadata and calculate scores
     const metadataMap = new Map<string, VideoSearchResult>();
@@ -900,6 +1105,18 @@ export class AIVideoSearchService {
     results.sort((a, b) => b.score - a.score);
 
     return results;
+    } catch (error) {
+      if (error instanceof VideoSearchError) {
+        throw error;
+      }
+      throw new DatabaseError(
+        "Failed to search videos",
+        { 
+          error: error instanceof Error ? error.message : String(error),
+          tenantId
+        }
+      );
+    }
   }
 
   /**

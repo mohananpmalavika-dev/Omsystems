@@ -409,9 +409,15 @@ export async function registerAuthRoutes(
         );
 
         if (!match) {
+          // Enhanced diagnostic information for troubleshooting
           return reply.code(401).send({
             error: "face_not_recognized",
-            message: "Face not recognized. Please face the camera directly.",
+            message: "Face not recognized. Please ensure good lighting and face the camera directly. If this persists, try re-enrolling your face.",
+            debug: {
+              candidatesChecked: candidateUsers.length,
+              threshold: 0.70,
+              hint: "Your match score was below the required threshold of 0.70"
+            }
           });
         }
 
@@ -504,6 +510,98 @@ export async function registerAuthRoutes(
         return reply.code(500).send({ error: "internal_error" });
       }
     },
+  );
+
+  // Face Login Diagnostic Endpoint - Test face match score without logging in
+  app.post(
+    "/v1/auth/face-login-test",
+    { config: { noAuth: true } },
+    async (request, reply) => {
+      try {
+        const body = z.object({
+          faceScan: z.string().min(1),
+          username: z.string().min(1),
+          tenantSlug: z.string().optional(),
+        }).parse(request.body);
+
+        // Find specific user
+        const user = await store.findUserByUsername(body.username, body.tenantSlug);
+        if (!user) {
+          return reply.code(404).send({
+            error: "user_not_found",
+            message: "User not found"
+          });
+        }
+
+        // Check if user has face template
+        const preferencesObject = typeof user.preferences === "string"
+          ? JSON.parse(user.preferences)
+          : user.preferences;
+
+        const hasTemplate = preferencesObject?.faceVerification?.templates?.length > 0;
+        
+        if (!hasTemplate) {
+          return reply.code(404).send({
+            error: "no_template",
+            message: "User has no enrolled face template"
+          });
+        }
+
+        // Test against this user only
+        const match = await identifyUserByFace(body.faceScan, [user]);
+        
+        // If match is null, it could be no face detected OR score too low
+        if (!match) {
+          // Try to create a template to validate if face is detectable
+          const { validateFacePresence, createEmployeeFaceTemplate } = await import("../security/employee-face-verification.service.js");
+          let faceDetected = false;
+          let faceQualityMessage = "";
+          
+          try {
+            const testTemplate = await createEmployeeFaceTemplate(body.faceScan);
+            if (testTemplate) {
+              const presence = validateFacePresence(Buffer.from(testTemplate.data, "base64"));
+              faceDetected = presence.hasFace;
+              if (!faceDetected) {
+                faceQualityMessage = presence.reason || "Poor image quality";
+              }
+            }
+          } catch (error: any) {
+            faceDetected = false;
+            faceQualityMessage = error?.message || "Could not process image";
+          }
+
+          return reply.send({
+            username: body.username,
+            hasTemplate: true,
+            matched: false,
+            score: 0,
+            threshold: 0.70,
+            faceDetected,
+            message: !faceDetected
+              ? `✗ Face quality issue: ${faceQualityMessage}. Ensure good lighting, face is clearly visible, and camera is working.`
+              : `✗ Face detected but no match. Score below threshold of 0.70. Try: 1) Better lighting, 2) Face camera directly, 3) Remove glasses/hat, 4) Re-enroll your face.`
+          });
+        }
+        
+        return reply.send({
+          username: body.username,
+          hasTemplate: true,
+          matched: true,
+          score: match.score,
+          threshold: 0.70,
+          faceDetected: true,
+          message: `✓ Match successful! Score: ${match.score.toFixed(3)} (threshold: 0.70)`
+        });
+
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({ error: "invalid_request", details: error.flatten() });
+        }
+        app.log.error({ err: error }, "Error in /v1/auth/face-login-test");
+        return reply.code(500).send({ error: "internal_error" });
+      }
+    }
   );
 
   // Refresh token endpoint (no authentication required)

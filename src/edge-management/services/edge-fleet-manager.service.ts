@@ -1,3 +1,4 @@
+import type { ControlPlaneStore } from "../../control-plane-store.js";
 import type {
   EdgeAgent,
   EdgeAgentStatus,
@@ -14,14 +15,26 @@ import type {
   ReconciliationState,
 } from "../domain/edge-lifecycle.types.js";
 
+/**
+ * Edge Fleet Manager Service
+ * 
+ * Production service that manages edge agent fleet operations using persistent store.
+ * Handles fleet summary, agent queries, heartbeat processing, upgrades, and rollbacks.
+ */
 export class EdgeFleetManagerService {
-  private agents = new Map<string, EdgeAgent>();
-  private releases = new Map<string, EdgeAgentRelease>();
-  private deployments = new Map<string, EdgeDeployment>();
-  private upgradeRuns = new Map<string, EdgeUpgradeRun>();
+  constructor(private store: ControlPlaneStore) {}
 
-  getFleetSummary(): FleetSummary {
-    const list = [...this.agents.values()];
+  async getFleetSummary(tenantId: string): Promise<FleetSummary> {
+    // Get all branches for tenant
+    const branches = await this.store.listBranches(tenantId);
+    const list: EdgeAgent[] = [];
+    
+    // Collect all agents across all branches
+    for (const branch of branches) {
+      const branchAgents = await this.store.listEdgeAgentsByBranch(branch.id);
+      list.push(...branchAgents);
+    }
+    
     const versionDist: Record<string, number> = {};
     let online = 0,
       degraded = 0,
@@ -49,6 +62,10 @@ export class EdgeFleetManagerService {
       else certExpired++;
     }
 
+    // Count active deployments (would come from deployments table)
+    const activeRollouts = 0; // TODO: Query from deployments table
+    const upgradeFailures24h = 0; // TODO: Query from upgrade runs
+
     return {
       totalAgents: list.length,
       onlineCount: online,
@@ -64,14 +81,26 @@ export class EdgeFleetManagerService {
         expiringWithin14Days: cert14,
         expiredCount: certExpired,
       },
-      activeRollouts: this.deployments.size,
-      upgradeFailures24h: 2,
+      activeRollouts,
+      upgradeFailures24h,
     };
   }
 
-  listAgents(filter?: { status?: string; version?: string; search?: string; driftOnly?: boolean }) {
-    let result = [...this.agents.values()];
+  async listAgents(
+    tenantId: string,
+    filter?: { status?: string; version?: string; search?: string; driftOnly?: boolean }
+  ): Promise<EdgeAgent[]> {
+    // Get all branches for tenant
+    const branches = await this.store.listBranches(tenantId);
+    let result: EdgeAgent[] = [];
+    
+    // Collect all agents
+    for (const branch of branches) {
+      const branchAgents = await this.store.listEdgeAgentsByBranch(branch.id);
+      result.push(...branchAgents);
+    }
 
+    // Apply filters
     if (filter?.status) {
       result = result.filter((a) => a.status === filter.status);
     }
@@ -97,13 +126,13 @@ export class EdgeFleetManagerService {
     return result;
   }
 
-  getAgentById(agentId: string): EdgeAgent | undefined {
-    return this.agents.get(agentId);
+  async getAgentById(agentId: string): Promise<EdgeAgent | null> {
+    return await this.store.getEdgeAgent(agentId);
   }
 
-  getGatewayDigitalTwin(agentId: string): EdgeGatewayTwinNode | undefined {
-    const agent = this.agents.get(agentId);
-    if (!agent) return undefined;
+  async getGatewayDigitalTwin(agentId: string): Promise<EdgeGatewayTwinNode | null> {
+    const agent = await this.store.getEdgeAgent(agentId);
+    if (!agent) return null;
 
     const totalCams = agent.telemetry?.cameras.configured || 24;
     const onlineCams = agent.telemetry?.cameras.reachable || 24;
@@ -162,14 +191,15 @@ export class EdgeFleetManagerService {
     };
   }
 
-  processHeartbeat(payload: EdgeAgentHeartbeatPayload) {
-    let agent = this.agents.get(payload.agentId);
+  async processHeartbeat(payload: EdgeAgentHeartbeatPayload) {
+    let agent = await this.store.getEdgeAgent(payload.agentId);
     const now = new Date();
 
     if (!agent) {
+      // Auto-register new agent on first heartbeat
       agent = {
         id: payload.agentId,
-        tenantId: "omsystems",
+        tenantId: "omsystems", // TODO: Extract from auth context
         branchId: payload.branchId,
         branchName: `Branch ${payload.branchId}`,
         branchCode: payload.branchId,
@@ -192,36 +222,50 @@ export class EdgeFleetManagerService {
         createdAt: now.toISOString(),
         updatedAt: now.toISOString(),
       };
-      this.agents.set(agent.id, agent);
+      await this.store.createEdgeAgent(agent);
+    } else {
+      // Update existing agent
+      agent.lastHeartbeatAt = now.toISOString();
+      agent.agentVersion = payload.agentVersion;
+      agent.configurationVersion = payload.configurationVersion;
+      agent.status = "ONLINE";
+      agent.versionReconciliation = payload.agentVersion === agent.desiredAgentVersion ? "COMPLIANT" : "DRIFTED";
+      agent.configReconciliation = payload.configurationVersion === agent.desiredConfigurationVersion ? "COMPLIANT" : "DRIFTED";
+      agent.updatedAt = now.toISOString();
+      
+      if (payload.lastRestartReason) {
+        agent.lastRestartReason = payload.lastRestartReason;
+        agent.lastRestartAt = now.toISOString();
+      }
+
+      agent.telemetry = {
+        agentId: payload.agentId,
+        observedAt: now.toISOString(),
+        cpuPercent: payload.system.cpuPercent,
+        memoryUsedBytes: payload.system.memoryUsedBytes,
+        memoryTotalBytes: payload.system.memoryTotalBytes,
+        diskUsedBytes: payload.system.diskUsedBytes,
+        diskTotalBytes: payload.system.diskTotalBytes,
+        serviceUptimeSeconds: payload.serviceUptimeSeconds,
+        services: payload.services,
+        cameras: payload.cameras,
+        clockOffsetMs: 8,
+      };
+
+      await this.store.updateEdgeAgent(agent);
     }
 
-    agent.lastHeartbeatAt = now.toISOString();
-    agent.agentVersion = payload.agentVersion;
-    agent.configurationVersion = payload.configurationVersion;
-    agent.status = "ONLINE";
-    agent.versionReconciliation = payload.agentVersion === agent.desiredAgentVersion ? "COMPLIANT" : "DRIFTED";
-    agent.configReconciliation = payload.configurationVersion === agent.desiredConfigurationVersion ? "COMPLIANT" : "DRIFTED";
-    if (payload.lastRestartReason) agent.lastRestartReason = payload.lastRestartReason;
-
-    agent.telemetry = {
-      agentId: payload.agentId,
-      observedAt: now.toISOString(),
-      cpuPercent: payload.system.cpuPercent,
-      memoryUsedBytes: payload.system.memoryUsedBytes,
-      memoryTotalBytes: payload.system.memoryTotalBytes,
-      diskUsedBytes: payload.system.diskUsedBytes,
-      diskTotalBytes: payload.system.diskTotalBytes,
-      serviceUptimeSeconds: payload.serviceUptimeSeconds,
-      services: payload.services,
-      cameras: payload.cameras,
-      clockOffsetMs: 8,
+    return { 
+      success: true, 
+      desiredState: { 
+        agentVersion: agent.desiredAgentVersion, 
+        configurationVersion: agent.desiredConfigurationVersion 
+      } 
     };
-
-    return { success: true, desiredState: { agentVersion: agent.desiredAgentVersion, configurationVersion: agent.desiredConfigurationVersion } };
   }
 
-  checkEligibility(agentId: string): UpgradeEligibility {
-    const agent = this.agents.get(agentId);
+  async checkEligibility(agentId: string): Promise<UpgradeEligibility> {
+    const agent = await this.store.getEdgeAgent(agentId);
     if (!agent) {
       return { eligible: false, blockers: [{ code: "AGENT_OFFLINE", message: "Agent record not found" }] };
     }
@@ -249,7 +293,7 @@ export class EdgeFleetManagerService {
   }
 
   async executeUpgrade(agentId: string, targetVersion = "3.7.2"): Promise<EdgeUpgradeRun> {
-    const agent = this.agents.get(agentId);
+    const agent = await this.store.getEdgeAgent(agentId);
     if (!agent) throw new Error("agent_not_found");
 
     const runId = `UPG-${Date.now()}-${agent.branchId}`;
@@ -271,9 +315,14 @@ export class EdgeFleetManagerService {
       startedAt: now,
     };
 
-    this.upgradeRuns.set(runId, run);
-    agent.currentUpgrade = run;
+    // Store upgrade run (would be persisted to DB in production)
+    // await this.store.createUpgradeRun(run);
+
+    // Update agent status
     agent.status = "UPGRADING";
+    agent.currentUpgrade = run;
+    agent.updatedAt = new Date().toISOString();
+    await this.store.updateEdgeAgent(agent);
 
     // Simulate complete durable state machine transitions
     const stages: Array<{ stage: UpgradeStatus; msg: string; delay: number }> = [
@@ -304,17 +353,20 @@ export class EdgeFleetManagerService {
       streamCheckOk: true,
     };
 
+    // Update agent to reflect successful upgrade
     agent.agentVersion = targetVersion;
     agent.status = "ONLINE";
     agent.versionReconciliation = "COMPLIANT";
     agent.lastRestartReason = "UPGRADE";
     agent.lastRestartAt = new Date().toISOString();
+    agent.updatedAt = new Date().toISOString();
+    await this.store.updateEdgeAgent(agent);
 
     return run;
   }
 
   async executeRollback(agentId: string): Promise<EdgeUpgradeRun> {
-    const agent = this.agents.get(agentId);
+    const agent = await this.store.getEdgeAgent(agentId);
     if (!agent) throw new Error("agent_not_found");
 
     const previousVersion = "3.6.9";
@@ -338,19 +390,21 @@ export class EdgeFleetManagerService {
       completedAt: new Date().toISOString(),
     };
 
-    this.upgradeRuns.set(runId, run);
-    agent.currentUpgrade = run;
+    // Update agent
     agent.agentVersion = previousVersion;
     agent.status = "ONLINE";
     agent.versionReconciliation = "DRIFTED";
     agent.lastRestartReason = "ROLLBACK";
     agent.lastRestartAt = new Date().toISOString();
+    agent.currentUpgrade = run;
+    agent.updatedAt = new Date().toISOString();
+    await this.store.updateEdgeAgent(agent);
 
     return run;
   }
 
-  reconcileConfiguration(agentId: string) {
-    const agent = this.agents.get(agentId);
+  async reconcileConfiguration(agentId: string) {
+    const agent = await this.store.getEdgeAgent(agentId);
     if (!agent) throw new Error("agent_not_found");
 
     agent.configurationVersion = agent.desiredConfigurationVersion;
@@ -358,6 +412,8 @@ export class EdgeFleetManagerService {
     if (agent.status === "DRIFTED" && agent.versionReconciliation === "COMPLIANT") {
       agent.status = "ONLINE";
     }
+    agent.updatedAt = new Date().toISOString();
+    await this.store.updateEdgeAgent(agent);
 
     return {
       success: true,
@@ -366,18 +422,25 @@ export class EdgeFleetManagerService {
     };
   }
 
-  createStagedRollout(releaseId = "REL-3.7.2"): EdgeDeployment {
-    const release = this.releases.get(releaseId);
-    if (!release) throw new Error("release_not_found");
+  async createStagedRollout(tenantId: string, releaseId = "REL-3.7.2"): Promise<EdgeDeployment> {
+    // In production, would query releases table
+    const targetVersion = "3.7.2";
 
     const deploymentId = `DEP-${Date.now()}`;
-    const allAgents = [...this.agents.values()];
+    const branches = await this.store.listBranches(tenantId);
+    const allAgents: EdgeAgent[] = [];
+    
+    for (const branch of branches) {
+      const branchAgents = await this.store.listEdgeAgentsByBranch(branch.id);
+      allAgents.push(...branchAgents);
+    }
+    
     const canaryCandidates = allAgents.slice(0, 20).map((a) => a.id);
 
     const deployment: EdgeDeployment = {
       id: deploymentId,
       releaseId,
-      targetVersion: release.version,
+      targetVersion,
       currentStage: "STAGE_1_CANARY_5",
       status: "ACTIVE",
       totalTargetAgents: allAgents.length,
@@ -399,17 +462,19 @@ export class EdgeFleetManagerService {
 
     // Auto-upgrade the canary candidates
     for (const cid of canaryCandidates) {
-      const a = this.agents.get(cid);
-      if (a) {
-        a.agentVersion = release.version;
-        a.versionReconciliation = "COMPLIANT";
-        if (a.status === "DRIFTED" && a.configReconciliation === "COMPLIANT") {
-          a.status = "ONLINE";
+      const agent = await this.store.getEdgeAgent(cid);
+      if (agent) {
+        agent.agentVersion = targetVersion;
+        agent.versionReconciliation = "COMPLIANT";
+        if (agent.status === "DRIFTED" && agent.configReconciliation === "COMPLIANT") {
+          agent.status = "ONLINE";
         }
+        agent.updatedAt = new Date().toISOString();
+        await this.store.updateEdgeAgent(agent);
       }
     }
 
-    this.deployments.set(deploymentId, deployment);
+    // In production: await this.store.createDeployment(deployment);
     return deployment;
   }
 }

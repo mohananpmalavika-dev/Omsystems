@@ -12,8 +12,57 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";
-import { AIVideoSearchService } from "../services/ai-video-search.js";
-import { VideoSearchIntegrationPipeline } from "../services/video-search-integration.js";
+import { AIVideoSearchService, VideoSearchError, ValidationError as SearchValidationError } from "../services/ai-video-search.js";
+import { VideoSearchIntegrationPipeline, PipelineError } from "../services/video-search-integration.js";
+import { 
+  RateLimiter, 
+  createRateLimitMiddleware, 
+  RATE_LIMITS,
+  RequestQueue,
+  QueryComplexityAnalyzer 
+} from "../middleware/rate-limiter.js";
+import { initializeMetrics, getMetrics } from "../services/video-search-metrics.js";
+
+/**
+ * Error response formatter
+ */
+function formatErrorResponse(error: unknown) {
+  if (error instanceof SearchValidationError || error instanceof PipelineError) {
+    return {
+      error: error.code,
+      message: error.message,
+      details: error.details,
+      statusCode: error instanceof SearchValidationError ? error.statusCode : 400,
+    };
+  }
+  
+  if (error instanceof VideoSearchError) {
+    return {
+      error: error.code,
+      message: error.message,
+      details: error.details,
+      statusCode: error.statusCode,
+    };
+  }
+
+  if (error instanceof z.ZodError) {
+    return {
+      error: "VALIDATION_ERROR",
+      message: "Invalid request parameters",
+      details: error.errors,
+      statusCode: 400,
+    };
+  }
+
+  // Generic error
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    error: "INTERNAL_ERROR",
+    message: "An unexpected error occurred",
+    details: { originalError: message },
+    statusCode: 500,
+  };
+}
 
 const nlSearchSchema = z.object({
   query: z.string().trim().min(3).max(500),
@@ -91,46 +140,149 @@ export async function registerAIVideoSearchRoutes(
   integrationPipeline.start();
   app.addHook("onClose", async () => integrationPipeline.stop());
 
+  // Initialize rate limiter and metrics
+  const rateLimiter = new RateLimiter(pool);
+  const metrics = initializeMetrics(pool);
+  
+  // Initialize request queue for expensive operations
+  const searchQueue = new RequestQueue(5); // Max 5 concurrent searches
+  const indexingQueue = new RequestQueue(10); // Max 10 concurrent indexing jobs
+
+  // Set up metrics event listeners
+  metrics.on("critical_error", (error) => {
+    app.log.error({ error }, "Critical video search error");
+    // Could integrate with alerting system here (PagerDuty, Slack, etc.)
+  });
+
+  metrics.on("aggregated_metrics", (data) => {
+    app.log.info({ metrics: data }, "Video search metrics aggregated");
+  });
+
   /**
    * Natural language video search
    * POST /v1/ai-video-search/natural-language
    */
-  app.post("/v1/ai-video-search/natural-language", async (request, reply) => {
-    const body = nlSearchSchema.parse(request.body);
-    const tenantId = request.currentUser.tenantId;
-
-    if (!hasValidSearchWindow(body.from, body.to)) {
-      return reply.code(400).send({ error: "invalid_time_range" });
-    }
-
-    try {
-      const results = await aiVideoSearch.searchByNaturalLanguage(
-        tenantId,
-        body.query,
+  app.post(
+    "/v1/ai-video-search/natural-language", 
+    {
+      preHandler: createRateLimitMiddleware(
+        rateLimiter, 
+        RATE_LIMITS.NATURAL_LANGUAGE_SEARCH,
         {
-          branchId: body.branchId,
-          cameraIds: body.cameraIds,
-          from: body.from,
-          to: body.to,
-          minConfidence: body.minConfidence,
-          limit: body.limit,
+          multiLimit: true,
+          errorMessage: "Too many search requests. Please try again later.",
         }
-      );
+      ),
+    },
+    async (request, reply) => {
+    const operationId = `search_${Date.now()}_${Math.random()}`;
+    metrics.startTimer(operationId);
+    
+    try {
+      const body = nlSearchSchema.parse(request.body);
+      const tenantId = request.currentUser.tenantId;
 
-      // Enrich results with context
-      const enrichedResults = await integrationPipeline.enrichSearchResults(
+      if (!hasValidSearchWindow(body.from, body.to)) {
+        metrics.recordError({
+          errorType: "VALIDATION_ERROR",
+          errorMessage: "Invalid time range",
+          endpoint: "/v1/ai-video-search/natural-language",
+          tenantId,
+          severity: "low",
+        });
+        return reply.code(400).send({ 
+          error: "INVALID_TIME_RANGE",
+          message: "Search time range is invalid or exceeds maximum allowed duration" 
+        });
+      }
+
+      // Calculate query complexity
+      const timeRangeDays = body.from && body.to
+        ? (new Date(body.to).getTime() - new Date(body.from).getTime()) / (1000 * 60 * 60 * 24)
+        : undefined;
+      
+      const complexity = QueryComplexityAnalyzer.calculateComplexity({
+        naturalLanguageQuery: body.query,
+        timeRangeDays,
+        cameraCount: body.cameraIds?.length || 1,
+      });
+
+      // Queue search if complex
+      const searchOperation = async () => {
+        const results = await aiVideoSearch.searchByNaturalLanguage(
+          tenantId,
+          body.query,
+          {
+            branchId: body.branchId,
+            cameraIds: body.cameraIds,
+            from: body.from,
+            to: body.to,
+            minConfidence: body.minConfidence,
+            limit: body.limit,
+          }
+        );
+
+        // Enrich results with context
+        return await integrationPipeline.enrichSearchResults(tenantId, results);
+      };
+
+      const enrichedResults = QueryComplexityAnalyzer.isComplexQuery(complexity, 5)
+        ? await searchQueue.enqueue(searchOperation)
+        : await searchOperation();
+
+      const responseTimeMs = metrics.endTimer(operationId, "video_search_response_time");
+      
+      // Record successful search
+      metrics.recordSearch({
+        success: true,
+        responseTimeMs,
+        queryType: "natural_language",
         tenantId,
-        results
-      );
+        resultCount: enrichedResults.length,
+        query: body.query,
+        complexity,
+      });
+
+      // Update query analytics in database
+      await pool.query(
+        "SELECT update_query_analytics($1, $2, $3, $4)",
+        [tenantId, body.query, "natural_language", responseTimeMs]
+      ).catch(err => {
+        app.log.warn({ err }, "Failed to update query analytics");
+      });
 
       return {
         query: body.query,
         results: enrichedResults,
         total: enrichedResults.length,
+        metadata: {
+          complexity,
+          responseTimeMs,
+          queueStats: searchQueue.getStats(),
+        },
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return reply.code(500).send({ error: "search_failed", details: message });
+      const responseTimeMs = metrics.endTimer(operationId, "video_search_response_time");
+      
+      metrics.recordSearch({
+        success: false,
+        responseTimeMs,
+        queryType: "natural_language",
+        tenantId: request.currentUser?.tenantId || "unknown",
+        resultCount: 0,
+      });
+
+      metrics.recordError({
+        errorType: error instanceof VideoSearchError ? error.code : "UNKNOWN_ERROR",
+        errorMessage: error instanceof Error ? error.message : String(error),
+        endpoint: "/v1/ai-video-search/natural-language",
+        tenantId: request.currentUser?.tenantId,
+        severity: error instanceof SearchValidationError ? "low" : "high",
+      });
+
+      const errorResponse = formatErrorResponse(error);
+      app.log.error({ error, route: "natural-language-search" }, "Video search failed");
+      return reply.code(errorResponse.statusCode).send(errorResponse);
     }
   });
 
@@ -138,15 +290,27 @@ export async function registerAIVideoSearchRoutes(
    * Attribute-based video search
    * POST /v1/ai-video-search/attributes
    */
-  app.post("/v1/ai-video-search/attributes", async (request, reply) => {
-    const body = attributeSearchSchema.parse(request.body);
-    const tenantId = request.currentUser.tenantId;
-
-    if (!hasValidSearchWindow(body.from, body.to)) {
-      return reply.code(400).send({ error: "invalid_time_range" });
-    }
-
+  app.post(
+    "/v1/ai-video-search/attributes",
+    {
+      preHandler: createRateLimitMiddleware(
+        rateLimiter,
+        RATE_LIMITS.ATTRIBUTE_SEARCH,
+        { multiLimit: true }
+      ),
+    },
+    async (request, reply) => {
     try {
+      const body = attributeSearchSchema.parse(request.body);
+      const tenantId = request.currentUser.tenantId;
+
+      if (!hasValidSearchWindow(body.from, body.to)) {
+        return reply.code(400).send({ 
+          error: "INVALID_TIME_RANGE",
+          message: "Search time range is invalid or exceeds maximum allowed duration" 
+        });
+      }
+
       const results = await aiVideoSearch.searchByAttributes(
         tenantId,
         body.objectType,
@@ -166,8 +330,9 @@ export async function registerAIVideoSearchRoutes(
         total: results.length,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return reply.code(500).send({ error: "search_failed", details: message });
+      const errorResponse = formatErrorResponse(error);
+      app.log.error({ error, route: "attribute-search" }, "Attribute search failed");
+      return reply.code(errorResponse.statusCode).send(errorResponse);
     }
   });
 
@@ -175,7 +340,19 @@ export async function registerAIVideoSearchRoutes(
    * Visual similarity search
    * POST /v1/ai-video-search/similarity
    */
-  app.post("/v1/ai-video-search/similarity", async (request, reply) => {
+  app.post(
+    "/v1/ai-video-search/similarity",
+    {
+      preHandler: createRateLimitMiddleware(
+        rateLimiter,
+        RATE_LIMITS.SIMILARITY_SEARCH,
+        { 
+          multiLimit: true,
+          errorMessage: "Similarity search rate limit exceeded. This is an expensive operation."
+        }
+      ),
+    },
+    async (request, reply) => {
     const body = similaritySearchSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
 
@@ -229,7 +406,19 @@ export async function registerAIVideoSearchRoutes(
    * Track object across cameras
    * POST /v1/ai-video-search/track
    */
-  app.post("/v1/ai-video-search/track", async (request, reply) => {
+  app.post(
+    "/v1/ai-video-search/track",
+    {
+      preHandler: createRateLimitMiddleware(
+        rateLimiter,
+        RATE_LIMITS.CROSS_CAMERA_TRACKING,
+        {
+          multiLimit: true,
+          errorMessage: "Cross-camera tracking rate limit exceeded. This is a very expensive operation."
+        }
+      ),
+    },
+    async (request, reply) => {
     const body = crossCameraTrackingSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
 
@@ -347,7 +536,19 @@ export async function registerAIVideoSearchRoutes(
    * Trigger bulk re-indexing
    * POST /v1/ai-video-search/indexing/reindex
    */
-  app.post("/v1/ai-video-search/indexing/reindex", async (request, reply) => {
+  app.post(
+    "/v1/ai-video-search/indexing/reindex",
+    {
+      preHandler: createRateLimitMiddleware(
+        rateLimiter,
+        RATE_LIMITS.BULK_INDEXING,
+        {
+          multiLimit: true,
+          errorMessage: "Bulk indexing rate limit exceeded. Please wait before starting another indexing job."
+        }
+      ),
+    },
+    async (request, reply) => {
     const body = bulkReindexSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
 
@@ -469,4 +670,118 @@ export async function registerAIVideoSearchRoutes(
   });
 
   app.log.info("AI video search routes registered");
+
+  /**
+   * Health check endpoint
+   * GET /v1/ai-video-search/health
+   */
+  app.get("/v1/ai-video-search/health", async (request, reply) => {
+    try {
+      const health = await metrics.getHealthStatus();
+      const statusCode = health.status === "healthy" ? 200 
+                       : health.status === "degraded" ? 200 
+                       : 503;
+      return reply.code(statusCode).send(health);
+    } catch (error) {
+      return reply.code(503).send({
+        status: "unhealthy",
+        checks: { error: { status: "unhealthy", message: "Health check failed" } },
+      });
+    }
+  });
+
+  /**
+   * Performance metrics endpoint
+   * GET /v1/ai-video-search/metrics/performance
+   */
+  app.get("/v1/ai-video-search/metrics/performance", async (request, reply) => {
+    try {
+      const searchMetrics = metrics.getSearchPerformanceMetrics();
+      const indexingMetrics = await metrics.getIndexingPerformanceMetrics(
+        request.currentUser?.tenantId
+      );
+      
+      return {
+        search: searchMetrics,
+        indexing: indexingMetrics,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "metrics_failed", details: message });
+    }
+  });
+
+  /**
+   * Error metrics endpoint
+   * GET /v1/ai-video-search/metrics/errors
+   */
+  app.get("/v1/ai-video-search/metrics/errors", async (request, reply) => {
+    try {
+      const errorMetrics = metrics.getErrorMetrics();
+      return errorMetrics;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "metrics_failed", details: message });
+    }
+  });
+
+  /**
+   * Query analytics endpoint
+   * GET /v1/ai-video-search/metrics/queries
+   */
+  app.get("/v1/ai-video-search/metrics/queries", async (request, reply) => {
+    try {
+      const tenantId = request.currentUser.tenantId;
+      
+      const result = await pool.query(
+        `SELECT 
+           query_text, query_type, execution_count,
+           avg_response_time_ms, last_executed_at
+         FROM video_search_query_analytics
+         WHERE tenant_id = $1
+         ORDER BY execution_count DESC
+         LIMIT 50`,
+        [tenantId]
+      );
+
+      return {
+        topQueries: result.rows,
+        total: result.rows.length,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "analytics_failed", details: message });
+    }
+  });
+
+  /**
+   * SLA metrics endpoint
+   * GET /v1/ai-video-search/metrics/sla
+   */
+  app.get("/v1/ai-video-search/metrics/sla", async (request, reply) => {
+    try {
+      const tenantId = request.currentUser.tenantId;
+      const query = z.object({
+        days: z.coerce.number().int().min(1).max(90).default(30),
+      }).parse(request.query);
+
+      const result = await pool.query(
+        `SELECT * FROM video_search_sla_summary
+         WHERE tenant_id = $1
+         AND metric_date >= CURRENT_DATE - INTERVAL '1 day' * $2
+         ORDER BY metric_date DESC`,
+        [tenantId, query.days]
+      );
+
+      return {
+        sla: result.rows,
+        period: query.days,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return reply.code(500).send({ error: "sla_failed", details: message });
+    }
+  });
 }
+
