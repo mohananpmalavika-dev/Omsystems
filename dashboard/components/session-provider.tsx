@@ -75,6 +75,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    // Track consecutive failures so a single transient blip doesn't show the banner.
+    let consecutiveFailures = 0;
+
     if (isPublicRoute) {
       teardownSessionGuard();
       setConnectionError(false);
@@ -112,6 +115,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem('user', JSON.stringify(user));
           }
         } catch { /* Restricted browser storage does not invalidate a session. */ }
+        // Reset failure tracking on success
+        consecutiveFailures = 0;
         setConnectionError(false);
         setSessionReady(true);
         setupSessionGuard();
@@ -125,8 +130,16 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           redirectToLogin('expired');
           return;
         }
-        setConnectionError(true);
-        retryTimer = setTimeout(() => void validateSession(), 5000);
+        consecutiveFailures += 1;
+        // Only show the banner after 2+ consecutive failures to avoid
+        // flashing the message on brief/transient network blips.
+        if (consecutiveFailures >= 2) {
+          setConnectionError(true);
+        }
+        // Exponential backoff: 8s → 16s → 32s → max 60s.
+        // Avoids hammering the server when it is slow or briefly unavailable.
+        const backoffMs = Math.min(8000 * Math.pow(2, consecutiveFailures - 1), 60000);
+        retryTimer = setTimeout(() => void validateSession(), backoffMs);
       }
     };
 
