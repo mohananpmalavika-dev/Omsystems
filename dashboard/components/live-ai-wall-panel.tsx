@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { analyticsApi } from "@/lib/api-client";
+import { buildPrivacyExportRequest, buildReplayWindow, buildSecurityHeatmap, createWallPreset } from "@/lib/live-wall-security";
 import type { AiCapabilityDomain, AiEngineState } from "@/hooks/use-live-ai-wall";
 import type { AnalyticsAlert, AnalyticsRule, Camera, LiveWallCorrelation } from "@/lib/types";
 
@@ -68,6 +69,54 @@ export function LiveAiWallPanel({
     [alerts, selectedCameraId],
   );
   const enabledRuleCount = visibleRules.filter((rule) => rule.enabled).length;
+  const securityHeatmap = useMemo(
+    () => buildSecurityHeatmap(
+      cameras,
+      alerts.map((alert) => ({
+        id: alert.id,
+        cameraId: alert.cameraId,
+        severity: alert.severity,
+        status: alert.status,
+        confidence: alert.confidence,
+        createdAt: alert.firstDetectedAt || alert.createdAt,
+      })),
+      correlations,
+    ),
+    [alerts, cameras, correlations],
+  );
+  const selectedBranchId = selectedCameraId ? cameraById.get(selectedCameraId)?.branchId : undefined;
+  const replayWindow = useMemo(
+    () => buildReplayWindow(
+      alerts.map((alert) => ({
+        id: alert.id,
+        cameraId: alert.cameraId,
+        severity: alert.severity,
+        status: alert.status,
+        confidence: alert.confidence,
+        createdAt: alert.firstDetectedAt || alert.createdAt,
+      })),
+      selectedCameraId ?? alerts[0]?.cameraId ?? cameras[0]?.id ?? "",
+      300,
+    ),
+    [alerts, cameras, selectedCameraId],
+  );
+  const wallPreset = useMemo(
+    () => createWallPreset({
+      name: selectedBranchId ? `${cameraById.get(selectedCameraId ?? "")?.branchName ?? "Branch"} security overview` : "live security overview",
+      branchId: selectedBranchId ?? "all",
+      cameraIds: (selectedCameraId ? [selectedCameraId] : cameras.slice(0, 12).map((camera) => camera.id)).slice(0, 12),
+      view: "security-overview",
+    }),
+    [cameraById, cameras, selectedCameraId, selectedBranchId],
+  );
+  const privacyExportRequest = useMemo(
+    () => buildPrivacyExportRequest({
+      reason: `Security evidence export for ${selectedCameraId ?? "live wall review"}`,
+      cameraId: selectedCameraId,
+      branchId: selectedBranchId,
+    }),
+    [selectedBranchId, selectedCameraId],
+  );
 
   const mutateAlert = async (alert: AnalyticsAlert, action: AlertAction) => {
     setBusyId(alert.id);
@@ -160,6 +209,35 @@ export function LiveAiWallPanel({
           <article><strong>{visibleAlerts.length}</strong><span>Open detections</span></article>
           <article><strong>{visibleAlerts.filter((alert) => alert.severity === "P1").length}</strong><span>Critical P1</span></article>
         </section>
+
+        <section className="live-ai-ops-strip" aria-label="Live wall security operations">
+          <div className="live-ai-ops-pill">
+            <span>Heatmap</span>
+            <strong>{securityHeatmap[0]?.severity ?? "low"}</strong>
+            <small>{securityHeatmap[0]?.branchName ?? "No active branch"}</small>
+          </div>
+          <div className="live-ai-ops-pill">
+            <span>Replay</span>
+            <strong>{Math.round(replayWindow.windowSeconds / 60)} min</strong>
+            <small>{new Date(replayWindow.from).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+          </div>
+          <div className="live-ai-ops-pill">
+            <span>Preset</span>
+            <strong>{wallPreset.name.split(" ").slice(0, 2).join(" ")}</strong>
+            <small>{wallPreset.cameraIds.length} cams</small>
+          </div>
+          <div className="live-ai-ops-pill emphasis">
+            <span>Privacy export</span>
+            <strong>{privacyExportRequest.redaction.complianceStandard}</strong>
+            <small>{privacyExportRequest.redaction.mode}</small>
+          </div>
+        </section>
+
+        <div className="live-ai-ops-actions">
+          <Link href={selectedCameraId ? `/playback/synced?cameraIds=${encodeURIComponent(selectedCameraId)}` : "/playback/synced"}>Open replay</Link>
+          <button type="button" onClick={() => setMessage({ kind: "success", text: `Preset saved: ${wallPreset.name}` })}>Save wall preset</button>
+          <Link href="/evidence">Privacy-safe export</Link>
+        </div>
 
         <form className="live-ai-assistant" onSubmit={(event) => void askAssistant(event)}>
           <Sparkles size={16} />
@@ -283,7 +361,16 @@ export function LiveAiWallPanel({
         .live-ai-message { margin: 10px 20px 0; padding: 8px 10px; border: 1px solid #166534; border-radius: 7px; color: #bbf7d0; background: #052e16; font-size: 11px; }.live-ai-message.error { color: #fecaca; border-color: #7f1d1d; background: #3f0a0a; }
         .live-ai-camera-scope { display: grid; gap: 6px; padding: 14px 20px 0; color: #94a3b8; font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }.live-ai-camera-scope select { min-height: 38px; padding: 0 10px; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; background: #101b2d; font-size: 12px; text-transform: none; }
         .live-ai-metrics { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; padding: 12px 20px; }.live-ai-metrics article { padding: 10px; border: 1px solid #26364d; border-radius: 9px; background: #101b2d; }.live-ai-metrics strong,.live-ai-metrics span { display: block; }.live-ai-metrics strong { color: #f8fafc; font-size: 18px; }.live-ai-metrics span { margin-top: 2px; color: #94a3b8; font-size: 9px; }
-        .live-ai-assistant { margin: 0 20px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 9px; color: #a5b4fc; border: 1px solid #3730a3; border-radius: 9px; background: #16163b; }.live-ai-assistant input { min-width: 0; color: #fff; border: 0; outline: 0; background: transparent; font-size: 11px; }.live-ai-assistant button { padding: 6px 9px; color: #fff; border: 0; border-radius: 6px; background: #4f46e5; font-size: 10px; font-weight: 800; }.live-ai-assistant button:disabled { opacity: .5; }
+        .live-ai-ops-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 0 20px; margin-top: 8px; }
+        .live-ai-ops-pill { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid #27364c; border-radius: 8px; background: #101b2d; }
+        .live-ai-ops-pill span { color: #7dd3fc; font-size: 8px; letter-spacing: .12em; text-transform: uppercase; }
+        .live-ai-ops-pill strong { color: #f8fafc; font-size: 11px; }
+        .live-ai-ops-pill small { color: #94a3b8; font-size: 8px; }
+        .live-ai-ops-pill.emphasis { border-color: #1d4ed8; background: rgba(30, 64, 175, 0.15); }
+        .live-ai-ops-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 20px 0; }
+        .live-ai-ops-actions > * { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 6px 10px; border: 1px solid #334155; border-radius: 7px; background: #101b2d; color: #dbeafe; font-size: 10px; }
+        .live-ai-ops-actions button { cursor: pointer; }
+        .live-ai-assistant { margin: 12px 20px 0; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 9px; color: #a5b4fc; border: 1px solid #3730a3; border-radius: 9px; background: #16163b; }.live-ai-assistant input { min-width: 0; color: #fff; border: 0; outline: 0; background: transparent; font-size: 11px; }.live-ai-assistant button { padding: 6px 9px; color: #fff; border: 0; border-radius: 6px; background: #4f46e5; font-size: 10px; font-weight: 800; }.live-ai-assistant button:disabled { opacity: .5; }
         .live-ai-answer { margin: 8px 20px 0; padding: 9px 10px; display: flex; align-items: center; gap: 8px; border: 1px solid #334155; border-radius: 8px; background: #101b2d; font-size: 10px; }.live-ai-answer strong { flex: 1; }.live-ai-answer a { display: inline-flex; align-items: center; gap: 4px; color: #7dd3fc; }
         .live-ai-section { padding: 17px 20px 0; }.live-ai-section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 9px; }.live-ai-section-title span { color: #22d3ee; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }.live-ai-section-title h3 { margin: 2px 0 0; color: #f8fafc; font-size: 14px; }.live-ai-section-title > a { display: inline-flex; align-items: center; gap: 4px; color: #7dd3fc; font-size: 10px; }
         .live-ai-list { display: grid; gap: 7px; }.live-ai-alert { padding: 10px; border: 1px solid #334155; border-left: 3px solid #64748b; border-radius: 8px; background: #101b2d; }.live-ai-alert.p1 { border-left-color: #ef4444; }.live-ai-alert.p2 { border-left-color: #f59e0b; }.live-ai-alert-title { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 7px; }.live-ai-alert-title > span { padding: 2px 5px; color: #fff; border-radius: 4px; background: #dc2626; font-size: 8px; font-weight: 800; }.live-ai-alert-title strong,.live-ai-alert-title small { display: block; }.live-ai-alert-title strong { color: #fff; font-size: 11px; }.live-ai-alert-title small { margin-top: 2px; color: #94a3b8; font-size: 9px; }.live-ai-alert-title > b { color: #fde68a; font-size: 11px; }.live-ai-alert > p { margin: 7px 0; color: #64748b; font-size: 9px; }
