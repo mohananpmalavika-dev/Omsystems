@@ -45,8 +45,8 @@ export async function registerCameraLocationMapRoutes(
       const allCameras = await store.listCameras(tenantId);
       
       // Get branches to access metadata (including GPS coordinates)
-      const branches = await store.listNodes(tenantId, "branch");
-      const branchMap = new Map(branches.map((b) => [b.id, b]));
+      const branches: any[] = (await (store as any).listAccessibleNodes?.(request.currentUser, "live:view", "branch")) || [];
+      const branchMap = new Map(branches.map((b: any) => [b.id, b]));
 
       // Filter cameras that have location data
       const camerasWithLocation: CameraWithLocation[] = [];
@@ -67,7 +67,7 @@ export async function registerCameraLocationMapRoutes(
           continue;
         }
 
-        const branch = branchMap.get(camera.branchId);
+        const branch: any = branchMap.get(camera.branchId);
         if (!branch) continue;
 
         // Check if branch has metadata with GPS coordinates
@@ -137,7 +137,7 @@ export async function registerCameraLocationMapRoutes(
 
     try {
       const allCameras = await store.listCameras(tenantId);
-      const branches = await store.listNodes(tenantId, "branch");
+      const branches: any[] = (await (store as any).listAccessibleNodes?.(request.currentUser, "live:view", "branch")) || [];
 
       interface BranchCluster {
         id: string;
