@@ -1,5 +1,5 @@
-import { SoapClient } from "../soap/soap-client";
-import type { WsSecurityCredentials } from "../security/ws-security";
+import { SoapClient } from "../soap/soap-client.js";
+import type { WsSecurityCredentials } from "../security/ws-security.js";
 
 export interface PtzVector {
   x: number; // Pan: -1.0 (full left) to +1.0 (full right)

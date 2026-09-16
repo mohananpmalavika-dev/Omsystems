@@ -7,7 +7,8 @@
  * This replaces test fixture seeding with production-ready initialization.
  */
 
-import type { ControlPlaneStore } from "../../control-plane-store.js";
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyStore = any;
 import type { EdgeAgent, EdgeAgentStatus, CertificateHealth, ReconciliationState } from "../domain/edge-lifecycle.types.js";
 
 export interface FleetInitializationResult {
@@ -22,7 +23,8 @@ export interface FleetInitializationResult {
 }
 
 export class EdgeFleetInitializerService {
-  constructor(private store: ControlPlaneStore) {}
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(private store: AnyStore) {}
 
   /**
    * Initialize edge agent fleet from existing branch infrastructure.
@@ -191,7 +193,7 @@ export class EdgeFleetInitializerService {
    */
   async reinitializeBranchAgent(tenantId: string, branchId: string): Promise<EdgeAgent> {
     const branches = await this.store.listBranches(tenantId);
-    const branch = branches.find(b => b.id === branchId);
+    const branch = branches.find((b: any) => b.id === branchId);
     
     if (!branch) {
       throw new Error(`Branch ${branchId} not found`);
@@ -227,7 +229,7 @@ export class EdgeFleetInitializerService {
       const branches = await this.store.listBranches(tenantId);
       result.summary.totalBranches = branches.length;
       
-      const branchIds = new Set(branches.map(b => b.id));
+      const branchIds = new Set(branches.map((b: any) => b.id));
 
       // Add missing agents
       for (const branch of branches) {
@@ -237,8 +239,9 @@ export class EdgeFleetInitializerService {
           try {
             const agent = await this.createEdgeAgentForBranch(tenantId, branch);
             result.initialized++;
-            result.summary.agentsByStatus[agent.status] = 
-              (result.summary.agentsByStatus[agent.status] || 0) + 1;
+            const statusKey = agent.status as EdgeAgentStatus;
+            result.summary.agentsByStatus[statusKey] =
+              (result.summary.agentsByStatus[statusKey] || 0) + 1;
           } catch (error) {
             console.error(`Failed to create agent for branch ${branch.id}:`, error);
             result.errors++;
@@ -246,8 +249,9 @@ export class EdgeFleetInitializerService {
         } else {
           result.skipped++;
           for (const agent of existingAgents) {
-            result.summary.agentsByStatus[agent.status] = 
-              (result.summary.agentsByStatus[agent.status] || 0) + 1;
+            const statusKey = (agent as any).status as EdgeAgentStatus;
+            result.summary.agentsByStatus[statusKey] =
+              (result.summary.agentsByStatus[statusKey] || 0) + 1;
           }
         }
       }

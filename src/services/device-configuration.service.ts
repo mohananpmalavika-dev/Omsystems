@@ -110,7 +110,7 @@ export class DeviceConfigurationService {
 
     const profiles = await client.media.getProfiles();
     const targetProfile = profileToken
-      ? profiles.find((p) => p.token === profileToken) ?? profiles[0]
+      ? profiles.find((p: any) => p.token === profileToken) ?? profiles[0]
       : profiles[0];
     const enc = targetProfile?.videoEncoderConfiguration;
 
@@ -154,7 +154,7 @@ export class DeviceConfigurationService {
 
     const profiles = await client.media.getProfiles();
     const targetProfile = profileToken
-      ? profiles.find((p) => p.token === profileToken) ?? profiles[0]
+      ? profiles.find((p: any) => p.token === profileToken) ?? profiles[0]
       : profiles[0];
     const encToken = targetProfile?.videoEncoderConfiguration?.token;
 
@@ -204,7 +204,7 @@ export class DeviceConfigurationService {
 
       const profiles = await client.media.getProfiles();
       const targetProfile = desired.streamProfileToken
-        ? profiles.find((p) => p.token === desired.streamProfileToken) ?? profiles[0]
+        ? profiles.find((p: any) => p.token === desired.streamProfileToken) ?? profiles[0]
         : profiles[0];
       const enc = targetProfile?.videoEncoderConfiguration;
 
@@ -224,7 +224,7 @@ export class DeviceConfigurationService {
 
       if (options.resolutionsAvailable.length > 0) {
         const resMatch = options.resolutionsAvailable.some(
-          (r) =>
+          (r: any) =>
             r.width === desired.resolution.width &&
             r.height === desired.resolution.height
         );

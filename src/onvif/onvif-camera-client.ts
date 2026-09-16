@@ -1,10 +1,10 @@
-import { SoapClient } from "./soap/soap-client";
-import type { WsSecurityCredentials } from "./security/ws-security";
-import { DeviceService, type DeviceInformation, type DeviceCapabilities } from "./services/device-service";
-import { MediaService, type OnvifMediaProfile, type StreamUriResult } from "./services/media-service";
-import { PtzService, type PtzVector, type PtzStatus, type PtzPreset } from "./services/ptz-service";
-import { ImagingService, type ImagingSettings } from "./services/imaging-service";
-import { EventsService } from "./services/events-service";
+import { SoapClient } from "./soap/soap-client.js";
+import type { WsSecurityCredentials } from "./security/ws-security.js";
+import { DeviceService, type DeviceInformation, type DeviceCapabilities } from "./services/device-service.js";
+import { MediaService, type OnvifMediaProfile, type StreamUriResult } from "./services/media-service.js";
+import { PtzService, type PtzVector, type PtzStatus, type PtzPreset } from "./services/ptz-service.js";
+import { ImagingService, type ImagingSettings } from "./services/imaging-service.js";
+import { EventsService } from "./services/events-service.js";
 
 export interface OnvifCameraClientConfig {
   deviceServiceUrl: string;

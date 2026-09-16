@@ -295,7 +295,7 @@ export function createRateLimitMiddleware(
     if (options?.multiLimit) {
       // Check both tenant and user limits
       const tenantId = request.currentUser?.tenantId;
-      const userId = request.currentUser?.userId;
+      const userId = (request.currentUser as any)?.id || (request.currentUser as any)?.userId;
 
       if (!tenantId || !userId) {
         return reply.code(401).send({ error: "AUTHENTICATION_REQUIRED" });
@@ -332,9 +332,10 @@ export function createRateLimitMiddleware(
     }
 
     // Add rate limit headers
-    reply.header("X-RateLimit-Limit", result.limit || config.maxRequests);
-    reply.header("X-RateLimit-Remaining", Math.max(0, (result.limit || config.maxRequests) - (result.current || 0)));
-    reply.header("X-RateLimit-Reset", result.reset || Date.now() + config.windowSeconds * 1000);
+    const res = result as any;
+    reply.header("X-RateLimit-Limit", res?.limit || config.maxRequests);
+    reply.header("X-RateLimit-Remaining", Math.max(0, (res?.limit || config.maxRequests) - (res?.current || 0)));
+    reply.header("X-RateLimit-Reset", res?.reset || Date.now() + config.windowSeconds * 1000);
   };
 }
 
