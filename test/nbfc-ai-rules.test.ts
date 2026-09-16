@@ -19,17 +19,17 @@ describe('NBFC AI Surveillance & Dynamic Rule Engine', () => {
   });
 
   describe('Template Library & Seeding', () => {
-    it('pre-seeds all 36 NBFC production rule templates', async () => {
+    it('pre-seeds the active security-first NBFC production template library', async () => {
       const templates = await repository.listTemplates();
-      expect(templates.length).toBeGreaterThanOrEqual(36);
+      expect(templates.length).toBeGreaterThanOrEqual(31);
 
       const templateIds = templates.map((t) => t.id);
       expect(templateIds.some((id) => id.includes("locker-max-occupancy"))).toBe(true);
       expect(templateIds.some((id) => id.includes("minimum-personnel"))).toBe(true);
       expect(templateIds.some((id) => id.includes("after-hours-person"))).toBe(true);
-      expect(templateIds.some((id) => id.includes("cash-counter-crowd"))).toBe(true);
-      expect(templateIds.some((id) => id.includes("queue-length"))).toBe(true);
-      expect(templateIds.some((id) => id.includes("unattended") || id.includes("counter-unattended"))).toBe(true);
+      expect(templateIds.some((id) => id.includes("cash-counter-crowd"))).toBe(false);
+      expect(templateIds.some((id) => id.includes("queue-length"))).toBe(false);
+      expect(templateIds.some((id) => id.includes("left-object") || id.includes("object-removal"))).toBe(true);
       expect(templateIds.some((id) => id.includes("tailgating"))).toBe(true);
       expect(templateIds.some((id) => id.includes("loitering"))).toBe(true);
       expect(templateIds.some((id) => id.includes("line-crossing"))).toBe(true);
@@ -37,6 +37,25 @@ describe('NBFC AI Surveillance & Dynamic Rule Engine', () => {
       expect(templateIds.some((id) => id.includes("camera-obstruction"))).toBe(true);
       expect(templateIds.some((id) => id.includes("recording-failure"))).toBe(true);
       expect(templateIds.some((id) => id.includes("cash-van"))).toBe(true);
+    });
+
+    it('excludes customer-service and queue-monitoring templates from the active security-first NBFC library', async () => {
+      const templates = await repository.listTemplates();
+      const excludedIds = [
+        'tmpl-04-cash-counter-crowd',
+        'tmpl-05-customer-queue-length',
+        'tmpl-06-customer-waiting-time',
+        'tmpl-07-counter-unattended',
+        'tmpl-29-people-counting',
+        'tmpl-30-crowd-density-roi',
+      ];
+
+      excludedIds.forEach((id) => {
+        expect(templates.some((template) => template.id === id)).toBe(false);
+      });
+
+      expect(templates.some((template) => template.id === 'tmpl-11-restricted-zone-intrusion')).toBe(true);
+      expect(templates.some((template) => template.id === 'tmpl-14-camera-tamper')).toBe(true);
     });
 
     it("instantiates an editable rule from template without code changes", async () => {

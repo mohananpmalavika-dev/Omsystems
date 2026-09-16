@@ -313,6 +313,7 @@ function ControlRoomContent() {
   const [hideUnavailableChannels, setHideUnavailableChannels] = useState(true);
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();
+  const [focusCameraId, setFocusCameraId] = useState<string>();
   
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
@@ -1077,8 +1078,10 @@ function ControlRoomContent() {
             enableGPUAcceleration
             aiByCamera={aiByCamera}
             showAiOverlay={showAiOverlays}
+            focusCameraId={focusCameraId}
             onOpenCameraAi={(cameraId) => {
               setSelectedAiCameraId(cameraId);
+              setFocusCameraId(cameraId);
               setAiPanelOpen(true);
             }}
             onActiveStreamsChange={setActiveStreams}
@@ -1124,6 +1127,7 @@ function ControlRoomContent() {
           cameras={cameras.slice(0, 144)}
           rules={liveAi.rules}
           alerts={liveAi.alerts}
+          correlations={liveAi.correlations}
           engineState={liveAi.engineState}
           capabilityDomains={liveAi.capabilityDomains}
           capabilityCount={liveAi.capabilityCount}
@@ -1131,7 +1135,10 @@ function ControlRoomContent() {
           loading={liveAi.loading}
           error={liveAi.error}
           lastUpdatedAt={liveAi.lastUpdatedAt}
-          onSelectCamera={setSelectedAiCameraId}
+          onSelectCamera={(cameraId) => {
+            setSelectedAiCameraId(cameraId);
+            setFocusCameraId(cameraId);
+          }}
           onClose={() => setAiPanelOpen(false)}
           onRefresh={liveAi.refresh}
         />

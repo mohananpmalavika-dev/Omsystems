@@ -11,6 +11,8 @@ import {
   Radio,
   ShieldAlert,
   WifiOff,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import { HlsPlayer } from "@/components/hls-player";
 import { CctvVisualCanvas } from "@/components/cctv-visual-canvas";
@@ -46,6 +48,7 @@ export function CameraTile({
   const [session, setSession] = useState<LiveSessionResponse | null>(null);
   const [starting, setStarting] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
 
   const isOffline = camera.health.connectivity === "OFFLINE" || camera.health.videoLoss === "DETECTED";
   const isNotRecording = camera.health.recording === "NOT_RECORDING";
@@ -138,42 +141,52 @@ export function CameraTile({
         </div>
 
         <div className="relative flex h-full w-full flex-1 items-center justify-center bg-slate-950">
-          {isOffline ? (
-            <div className="flex flex-col items-center justify-center p-4 text-center">
-              <WifiOff className="mb-2 h-8 w-8 text-rose-400/80" />
-              <div className="font-mono text-xs font-semibold text-rose-300">SIGNAL LOST</div>
-              <div className="mt-1 text-[10px] text-slate-500">Camera or recorder channel is unavailable</div>
-            </div>
-          ) : session?.hls ? (
-            <HlsPlayer
-              url={session.hls.url}
-              bearerToken={session.hls.bearerToken ?? ""}
-              cameraName={camera.name}
-              cameraId={camera.cameraId}
-            />
-          ) : (
-            <div className="relative w-full h-full">
-              <CctvVisualCanvas
-                cameraName={camera.name || `CAM-${camera.channelNumber}`}
-                branchName="BRANCH STREAM"
-                zone={`CH-${camera.channelNumber}`}
-                status={isOffline ? "offline" : "online"}
+          <div
+            className="h-full w-full origin-center transition-transform duration-150"
+            style={{ transform: `scale(${zoom})` }}
+            onWheel={(event) => {
+              if (!event.ctrlKey && !event.metaKey) return;
+              event.preventDefault();
+              setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
+            }}
+          >
+            {isOffline ? (
+              <div className="flex h-full flex-col items-center justify-center p-4 text-center">
+                <WifiOff className="mb-2 h-8 w-8 text-rose-400/80" />
+                <div className="font-mono text-xs font-semibold text-rose-300">SIGNAL LOST</div>
+                <div className="mt-1 text-[10px] text-slate-500">Camera or recorder channel is unavailable</div>
+              </div>
+            ) : session?.hls ? (
+              <HlsPlayer
+                url={session.hls.url}
+                bearerToken={session.hls.bearerToken ?? ""}
+                cameraName={camera.name}
+                cameraId={camera.cameraId}
               />
-              {isDecoderAllocated && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
-                  <button
-                    type="button"
-                    onClick={startLive}
-                    disabled={starting}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-blue-500 disabled:opacity-60"
-                  >
-                    {starting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
-                    {starting ? "Authorizing…" : "Full Stream"}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+            ) : (
+              <div className="relative h-full w-full">
+                <CctvVisualCanvas
+                  cameraName={camera.name || `CAM-${camera.channelNumber}`}
+                  branchName="BRANCH STREAM"
+                  zone={`CH-${camera.channelNumber}`}
+                  status={isOffline ? "offline" : "online"}
+                />
+                {isDecoderAllocated && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity hover:opacity-100">
+                    <button
+                      type="button"
+                      onClick={startLive}
+                      disabled={starting}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg hover:bg-blue-500 disabled:opacity-60"
+                    >
+                      {starting ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Radio className="h-3.5 w-3.5" />}
+                      {starting ? "Authorizing…" : "Full Stream"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {isAlarmActive && (
             <div className="absolute inset-x-0 bottom-8 z-20 flex items-center gap-1.5 border-y border-rose-700 bg-rose-950/90 px-3 py-1 font-mono text-[11px] font-bold text-rose-200">
@@ -212,6 +225,45 @@ export function CameraTile({
           </div>
           <div className="flex items-center gap-2 text-slate-400">
             {profileLabel && <span className="text-[10px] uppercase">{profileLabel}</span>}
+            <button
+              type="button"
+              title="Zoom out"
+              aria-label="Zoom out"
+              onClick={(event) => {
+                event.stopPropagation();
+                setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))));
+              }}
+              disabled={zoom === 1}
+              className="rounded p-1 hover:bg-slate-800 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ZoomOut className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Zoom in (max 300%)"
+              aria-label="Zoom in (max 300%)"
+              onClick={(event) => {
+                event.stopPropagation();
+                setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))));
+              }}
+              disabled={zoom === 3}
+              className="rounded p-1 hover:bg-slate-800 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+            {zoom > 1 && (
+              <button
+                type="button"
+                title="Reset zoom"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setZoom(1);
+                }}
+                className="rounded px-1.5 py-0.5 text-[10px] hover:bg-slate-800 hover:text-slate-100"
+              >
+                {Math.round(zoom * 100)}%
+              </button>
+            )}
             <Maximize2 className="h-3 w-3 opacity-0 group-hover:opacity-100" />
           </div>
         </div>

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { analyticsApi } from "@/lib/api-client";
 import type { AiCapabilityDomain, AiEngineState } from "@/hooks/use-live-ai-wall";
-import type { AnalyticsAlert, AnalyticsRule, Camera } from "@/lib/types";
+import type { AnalyticsAlert, AnalyticsRule, Camera, LiveWallCorrelation } from "@/lib/types";
 
 type AlertAction = "acknowledge" | "investigating" | "incident" | "resolved";
 
@@ -23,6 +23,7 @@ export function LiveAiWallPanel({
   cameras,
   rules,
   alerts,
+  correlations,
   engineState,
   capabilityDomains,
   capabilityCount,
@@ -37,6 +38,7 @@ export function LiveAiWallPanel({
   cameras: Camera[];
   rules: AnalyticsRule[];
   alerts: AnalyticsAlert[];
+  correlations: LiveWallCorrelation[];
   engineState: AiEngineState;
   capabilityDomains: AiCapabilityDomain[];
   capabilityCount: number;
@@ -207,6 +209,29 @@ export function LiveAiWallPanel({
             </div>
           )}
         </section>
+
+        {correlations.length > 0 && (
+          <section className="live-ai-section">
+            <div className="live-ai-section-title"><div><span>Cross-camera analysis</span><h3>Correlated incidents</h3></div></div>
+            <div className="live-ai-list">
+              {correlations.slice(0, 10).map((correlation) => (
+                <button
+                  type="button"
+                  className={`live-ai-alert ${correlation.severity.toLowerCase()}`}
+                  key={correlation.id}
+                  onClick={() => onSelectCamera(correlation.cameraIds[0])}
+                >
+                  <div className="live-ai-alert-title">
+                    <span>{correlation.severity}</span>
+                    <div><strong>{correlation.title}</strong><small>{correlation.branchName ?? correlation.branchId}</small></div>
+                    <b>{correlation.cameraIds.length} cams</b>
+                  </div>
+                  <p>{new Date(correlation.startedAt).toLocaleString()}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="live-ai-section">
           <div className="live-ai-section-title"><div><span>Camera policy</span><h3>Analytics rules</h3></div></div>

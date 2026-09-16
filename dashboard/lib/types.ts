@@ -693,6 +693,17 @@ export interface AnalyticsAlertSummary {
   highPriority: number;
 }
 
+export interface LiveWallCorrelation {
+  id: string;
+  branchId: string;
+  branchName?: string;
+  alertIds: string[];
+  cameraIds: string[];
+  severity: AnalyticsAlert["severity"];
+  startedAt: string;
+  title: string;
+}
+
 export interface AnalyticsAlertsAggregateSummary {
   total: number;
   active: number;

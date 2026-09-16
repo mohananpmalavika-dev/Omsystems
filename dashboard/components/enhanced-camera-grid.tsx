@@ -53,6 +53,7 @@ export interface EnhancedCameraGridProps {
   aiByCamera?: ReadonlyMap<string, { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] }>;
   showAiOverlay?: boolean;
   onOpenCameraAi?: (cameraId: string) => void;
+  focusCameraId?: string;
 }
 
 interface VisibleRange {
@@ -146,6 +147,7 @@ export function EnhancedCameraGrid({
   aiByCamera,
   showAiOverlay = true,
   onOpenCameraAi,
+  focusCameraId,
 }: EnhancedCameraGridProps) {
   const [gridSize, setGridSize] = useState<GridSize>(
     initialLayout?.gridSize || "2x2"
@@ -193,6 +195,16 @@ export function EnhancedCameraGrid({
     mediaQuery.addEventListener("change", syncGridDensity);
     return () => mediaQuery.removeEventListener("change", syncGridDensity);
   }, []);
+
+  useEffect(() => {
+    if (!focusCameraId) return;
+    const tile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(focusCameraId)}"]`);
+    tile?.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+    tile?.animate(
+      [{ boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" }, { boxShadow: "0 0 0 4px rgba(14, 165, 233, 0.8)" }, { boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" }],
+      { duration: 1400, easing: "ease-out" },
+    );
+  }, [focusCameraId]);
 
   const handleRemoveFromWall = useCallback(async (cameraId: string) => {
     // Removing a tile is an operator-layout action. It must never delete the
