@@ -52,6 +52,81 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
     c("beard-detection", "Beard detection"), c("glasses-detection", "Glasses detection"),
     c("age-estimation", "Age estimation"), c("gender-estimation", "Gender estimation"), c("emotion-recognition", "Emotion recognition"),
   ]},
+  
+  /**
+   * Voice Biometrics - Speaker Identification and Authentication
+   * 
+   * Voice biometric authentication system using speaker recognition technology.
+   * Enables passwordless login through voice identification with anti-spoofing protection.
+   * 
+   * Architecture:
+   * - Voice Feature Extraction: Extract speaker embeddings from audio samples
+   * - Speaker Recognition: Deep learning models for voice identification (x-vector, d-vector)
+   * - Enrollment: Multi-sample voice profile creation with quality checks
+   * - Authentication: Real-time voice verification against enrolled profiles
+   * - Liveness Detection: Anti-spoofing and replay attack prevention
+   * 
+   * Capabilities:
+   * - Voice Enrollment: Users record voice samples to create unique voice profiles
+   * - Voice Authentication: Identify and authenticate users by their voice
+   * - Speaker Verification: Verify claimed identity against voice profile
+   * - Anti-Spoofing: Detect synthetic, replayed, or manipulated audio
+   * - Quality Control: Audio quality validation, SNR checks, speech detection
+   * 
+   * Security Features:
+   * - Multi-factor option: Combine voice with PIN/OTP for enhanced security
+   * - Liveness detection: Challenge-response to prevent replay attacks
+   * - Audio fingerprinting: Detect synthetic speech and deepfakes
+   * - Session timeout: Time-limited authentication tokens
+   * - Audit logging: Complete authentication attempt history
+   * 
+   * Privacy & Compliance:
+   * - Consent-based enrollment with explicit user permission
+   * - Encrypted voice profile storage
+   * - Right to deletion: Users can remove voice profiles
+   * - Audit trail for all voice authentication events
+   * - Configurable retention policies
+   * 
+   * Model Requirements:
+   * - Speaker embedding model (ONNX): ResNet-based or ECAPA-TDNN
+   * - Voice activity detection (VAD) for speech segmentation
+   * - Anti-spoofing model for liveness detection
+   * 
+   * Status: Open-model stage - requires model deployment and configuration
+   */
+  { id: "voice-biometric", name: "Voice biometric authentication", description: "Speaker identification, voice authentication, and anti-spoofing for secure passwordless login", capabilities: [
+    // Core voice processing
+    c("voice-activity-detection", "Voice activity detection", "open-model"),
+    c("speaker-embedding", "Speaker embedding extraction", "open-model"),
+    c("audio-quality-check", "Audio quality validation", "derived"),
+    
+    // Speaker identification and verification
+    c("speaker-identification", "Speaker identification", "open-model"),
+    c("speaker-verification", "Speaker verification", "open-model"),
+    c("voice-authentication", "Voice-based authentication", "derived", "P2"),
+    
+    // Enrollment and profile management
+    c("voice-enrollment", "Voice profile enrollment", "derived"),
+    c("voice-profile-update", "Voice profile update", "derived"),
+    c("multi-sample-enrollment", "Multi-sample voice enrollment", "derived"),
+    
+    // Security and anti-spoofing
+    c("voice-liveness-detection", "Voice liveness detection", "open-model", "P1"),
+    c("replay-attack-detection", "Replay attack detection", "open-model", "P1"),
+    c("synthetic-speech-detection", "Synthetic speech detection", "open-model", "P1"),
+    c("deepfake-voice-detection", "Deepfake voice detection", "open-model", "P1"),
+    
+    // Advanced features
+    c("continuous-authentication", "Continuous voice authentication", "derived", "P2"),
+    c("voice-mfa", "Voice multi-factor authentication", "derived", "P2"),
+    c("voice-passphrase", "Voice passphrase authentication", "derived"),
+    c("challenge-response-voice", "Challenge-response voice verification", "derived", "P2"),
+    
+    // Analytics and monitoring
+    c("voice-auth-analytics", "Voice authentication analytics", "derived"),
+    c("voice-fraud-detection", "Voice authentication fraud detection", "derived", "P1"),
+    c("enrollment-quality-score", "Enrollment quality scoring", "derived"),
+  ]},
   { id: "safety", name: "Fire & safety", description: "Immediate life-safety and PPE conditions", capabilities: [
     c("fire", "Fire detection", "open-model", "P1"), c("smoke", "Smoke detection", "open-model", "P1"),
     c("fire-smoke", "Combined fire / smoke detection", "open-model", "P1"),
