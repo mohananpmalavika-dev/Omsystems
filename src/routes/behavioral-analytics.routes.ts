@@ -14,8 +14,8 @@ import { z } from "zod";
 import { 
   BehavioralAnalyticsService,
   behaviorAnalysisQuerySchema,
-  type NaturalLanguageSearchInput 
 } from "../services/behavioral-analytics.service.js";
+import type { NaturalLanguageSearchInput } from "../services/ai-video-search.service.js";
 import type { ControlPlaneStore } from "../control-plane-store.js";
 import { actions } from "../domain/models.js";
 
@@ -47,8 +47,12 @@ const dismissPredictionSchema = z.object({
 export async function registerBehavioralAnalyticsRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
-  pool: Pool
+  pool?: Pool
 ) {
+  if (!pool) {
+    app.log.warn("Behavioral analytics routes skipped: PostgreSQL pool not available");
+    return;
+  }
   const service = new BehavioralAnalyticsService(pool);
 
   // ============================================================================
@@ -184,7 +188,7 @@ export async function registerBehavioralAnalyticsRoutes(
       const cameras = await store.listAccessibleCameras(
         request.currentUser,
         "analytics:view",
-        query.branchId ? { branchId: query.branchId } : {}
+        { branchId: query.branchId, limit: 1000, offset: 0 }
       );
       const cameraIds = cameras.cameras.map(c => c.id);
 
@@ -281,7 +285,7 @@ export async function registerBehavioralAnalyticsRoutes(
       const cameras = await store.listAccessibleCameras(
         request.currentUser,
         "analytics:view",
-        query.branchId ? { branchId: query.branchId } : {}
+        { branchId: query.branchId, limit: 1000, offset: 0 }
       );
       const cameraIds = cameras.cameras.map(c => c.id);
 
@@ -515,7 +519,7 @@ export async function registerBehavioralAnalyticsRoutes(
       const cameras = await store.listAccessibleCameras(
         request.currentUser,
         "analytics:view",
-        query.branchId ? { branchId: query.branchId } : {}
+        { branchId: query.branchId, limit: 1000, offset: 0 }
       );
       const cameraIds = cameras.cameras.map(c => c.id);
 

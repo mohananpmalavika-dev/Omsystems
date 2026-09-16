@@ -2698,7 +2698,7 @@ export async function buildApp(options?: {
     alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
-  await registerBehavioralAnalyticsRoutes(app, store);
+  await registerBehavioralAnalyticsRoutes(app, store, pool);
   await registerIntegrationRoutes(app, store);
   await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
