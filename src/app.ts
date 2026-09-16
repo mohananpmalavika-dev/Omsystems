@@ -149,6 +149,7 @@ import { registerStorageFailoverRoutes } from "./routes/storage-failover.routes.
 import { registerMediaGatewayFailoverRoutes } from "./routes/media-gateway-failover.routes.js";
 import { registerMtlsRoutes } from "./routes/mtls.routes.js";
 import { registerAbacRoutes } from "./routes/abac.routes.js";
+import { registerBehavioralAnalyticsRoutes } from "./routes/behavioral-analytics.routes.js";
 import { registerSignedConfigurationRoutes } from "./routes/signed-configuration.routes.js";
 import { registerLdapSyncRoutes } from "./routes/ldap-sync.routes.js";
 import { mtlsAuthenticator } from "./security/mtls/index.js";
@@ -2697,6 +2698,7 @@ export async function buildApp(options?: {
     alertDispatcher,
   });
   await registerAnalyticsPhase2Routes(app, store);
+  await registerBehavioralAnalyticsRoutes(app, store);
   await registerIntegrationRoutes(app, store);
   await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
