@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Guardian AI Chat Interface
+ * KryptonAI Chat Interface
  * 
  * JARVIS-like AI assistant for security operations
  */
@@ -31,7 +31,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "Guardian AI online. How can I assist you with security operations?",
+      content: "KryptonAI online. How can I assist you with security operations?",
       type: "text",
       timestamp: new Date().toISOString(),
     },
@@ -66,11 +66,18 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
 
       if (response.ok) {
         const data = await response.json();
-        setSuggestions(data.suggestions || []);
+        if (Array.isArray(data.suggestions) && data.suggestions.length > 0) {
+          setSuggestions(data.suggestions);
+          return;
+        }
       }
-    } catch (error) {
-      console.error("Failed to load suggestions:", error);
-    }
+    } catch {}
+    // Safe default suggestions
+    setSuggestions([
+      "Check all cameras status",
+      "Review open operational alerts",
+      "Show system operational health overview",
+    ]);
   };
 
   const sendMessage = async (message?: string) => {
@@ -103,7 +110,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Guardian AI error: ${response.status}`);
+        throw new Error(`KryptonAI error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -124,7 +131,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
 
       setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
-      console.error("Guardian AI error:", error);
+      console.error("KryptonAI error:", error);
       
       setMessages((prev) => [
         ...prev,
@@ -263,7 +270,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
               <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-slate-900"></div>
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-100">Guardian AI</h2>
+              <h2 className="text-lg font-bold text-slate-100">KryptonAI</h2>
               <p className="text-xs text-slate-400">Intelligent Security Assistant</p>
             </div>
           </div>
@@ -389,7 +396,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask Guardian anything... (e.g., 'Show me all cameras', 'Lock doors on floor 3')"
+                placeholder="Ask KryptonAI anything... (e.g., 'Show me all cameras', 'Lock doors on floor 3')"
                 className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
                 rows={2}
                 disabled={isLoading || isRecording}
