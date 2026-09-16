@@ -2,6 +2,18 @@
 -- Video Search Performance Optimization - Indexes
 -- ============================================================================
 -- Comprehensive indexing strategy for video search queries
+-- Guard: all statements are no-ops if the base tables don't exist yet.
+
+DO $guard$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'video_metadata'
+  ) THEN
+    RAISE NOTICE 'video_metadata table not found — skipping 148_optimize_video_search_indexes migration';
+    RETURN;
+  END IF;
+END $guard$;
 
 -- ============================================================================
 -- 1. VIDEO METADATA TABLE INDEXES
@@ -97,19 +109,12 @@ CREATE INDEX IF NOT EXISTS idx_video_objects_metadata_type
 
 -- Materialized view for frequently accessed object summaries
 CREATE MATERIALIZED VIEW IF NOT EXISTS video_objects_summary AS
-SELECT 
+SELECT
     vo.video_metadata_id,
     vo.object_type,
     COUNT(*) as object_count,
     AVG(vo.confidence) as avg_confidence,
-    MAX(vo.confidence) as max_confidence,
-    jsonb_object_agg(
-        vo.object_type,
-        jsonb_build_object(
-            'count', COUNT(*),
-            'avgConfidence', AVG(vo.confidence)
-        )
-    ) as type_summary
+    MAX(vo.confidence) as max_confidence
 FROM video_objects vo
 GROUP BY vo.video_metadata_id, vo.object_type;
 
@@ -160,8 +165,12 @@ CREATE INDEX IF NOT EXISTS idx_video_search_vehicle_covering
 -- ============================================================================
 
 -- Update table statistics for better query planning
-ANALYZE video_metadata;
-ANALYZE video_objects;
+DO $$ BEGIN
+    ANALYZE video_metadata;
+    ANALYZE video_objects;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'ANALYZE skipped: %', SQLERRM;
+END $$;
 
 -- Increase statistics target for frequently filtered columns
 ALTER TABLE video_metadata ALTER COLUMN tenant_id SET STATISTICS 1000;
@@ -334,27 +343,35 @@ COMMENT ON FUNCTION refresh_video_search_materialized_views() IS
 
 -- ============================================================================
 -- VACUUM AND MAINTENANCE
--- ============================================================================
-
--- Vacuum analyze to update statistics
-VACUUM ANALYZE video_metadata;
-VACUUM ANALYZE video_objects;
-VACUUM ANALYZE video_search_query_analytics;
+-- ANALYZE to update statistics (safe - skips tables that may not exist yet)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'video_metadata' AND table_schema = 'public') THEN
+        ANALYZE video_metadata;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'video_objects' AND table_schema = 'public') THEN
+        ANALYZE video_objects;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'video_search_query_analytics' AND table_schema = 'public') THEN
+        ANALYZE video_search_query_analytics;
+    END IF;
+END $$;
 
 -- Show index usage statistics
+-- pg_stat_user_indexes columns: schemaname, relname (table), indexrelname (index), idx_scan, idx_tup_read, idx_tup_fetch
 CREATE OR REPLACE VIEW video_search_index_usage AS
-SELECT 
-    schemaname,
-    tablename,
-    indexname,
-    idx_scan as index_scans,
-    idx_tup_read as tuples_read,
-    idx_tup_fetch as tuples_fetched,
-    pg_size_pretty(pg_relation_size(indexrelid)) as index_size
-FROM pg_stat_user_indexes
-WHERE schemaname = 'public'
-  AND (tablename = 'video_metadata' OR tablename = 'video_objects')
-ORDER BY idx_scan DESC;
+SELECT
+    s.schemaname,
+    s.relname      AS tablename,
+    s.indexrelname AS indexname,
+    s.idx_scan     AS index_scans,
+    s.idx_tup_read AS tuples_read,
+    s.idx_tup_fetch AS tuples_fetched,
+    pg_size_pretty(pg_relation_size(s.indexrelid)) AS index_size
+FROM pg_stat_user_indexes s
+WHERE s.schemaname = 'public'
+  AND s.relname IN ('video_metadata', 'video_objects')
+ORDER BY s.idx_scan DESC;
 
-COMMENT ON VIEW video_search_index_usage IS 
+COMMENT ON VIEW video_search_index_usage IS
     'Monitor index usage to identify unused or underutilized indexes';

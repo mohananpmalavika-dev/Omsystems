@@ -78,6 +78,15 @@ http://34.14.220.41, :80 {
         reverse_proxy control-plane:8080
     }
 
+    handle /api/mobile/* {
+        reverse_proxy control-plane:8080 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+            flush_interval -1
+        }
+    }
+
     handle /ws/* {
         reverse_proxy control-plane:8080 {
             header_up Upgrade {>Upgrade}
