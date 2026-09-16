@@ -2348,8 +2348,14 @@ export class PostgresStore
     return this.activityTracking.startActivitySession(userId, tenantId, deviceInfo, ipAddress, locationInfo);
   }
 
-  async endActivitySession(sessionId: string, userId: string, terminationReason?: string): Promise<void> {
-    return this.activityTracking.endActivitySession(sessionId, userId, terminationReason);
+  async endActivitySession(
+    sessionId: string,
+    userId: string,
+    terminationReason?: string,
+    deviceInfo?: any,
+    ipAddress?: string,
+  ): Promise<void> {
+    return this.activityTracking.endActivitySession(sessionId, userId, terminationReason, deviceInfo, ipAddress);
   }
 
   async updateSessionHeartbeat(sessionId: string, userId: string): Promise<void> {

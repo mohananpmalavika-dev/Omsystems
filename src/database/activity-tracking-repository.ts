@@ -216,8 +216,15 @@ export class ActivityTrackingRepository {
   async endActivitySession(
     sessionId: string,
     userId: string,
-    terminationReason = 'user_logout'
+    terminationReason = 'user_logout',
+    deviceInfo?: any,
+    ipAddress?: string,
   ): Promise<void> {
+    const mergedDeviceInfo = {
+      ...(deviceInfo || {}),
+      ...(ipAddress ? { ipAddress } : {}),
+    };
+
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -246,7 +253,9 @@ export class ActivityTrackingRepository {
       );
       await client.query(
         `UPDATE user_activity_sessions
-         SET logout_time = CURRENT_TIMESTAMP,
+         SET device_info = COALESCE(device_info, '{}'::jsonb) || COALESCE($4::jsonb, '{}'::jsonb),
+             ip_address = COALESCE(NULLIF($5, ''), ip_address),
+             logout_time = CURRENT_TIMESTAMP,
              total_duration_seconds = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - login_time))::INT,
              active_duration_seconds = COALESCE((
                SELECT SUM(active_time_seconds) FROM user_page_visits WHERE session_id = $1
@@ -258,7 +267,7 @@ export class ActivityTrackingRepository {
              termination_reason = $3,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = $1 AND user_id = $2 AND logout_time IS NULL`,
-        [sessionId, userId, terminationReason]
+        [sessionId, userId, terminationReason, JSON.stringify(mergedDeviceInfo || {}), ipAddress || null]
       );
       await client.query(
         `UPDATE user_current_activity

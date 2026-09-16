@@ -132,6 +132,10 @@ class ActivityTracker {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          terminationReason: 'user_logout',
+          deviceInfo: this.getDeviceInfo(),
+        }),
       });
 
       this.log('Session ended:', this.session.sessionId);
@@ -479,7 +483,10 @@ class ActivityTracker {
   private getDeviceInfo() {
     if (typeof window === 'undefined') return {};
 
+    const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+
     return {
+      systemName: userAgentData?.platform || navigator.platform || 'Unknown system',
       browser: this.getBrowserInfo(),
       os: this.getOSInfo(),
       deviceType: this.getDeviceType(),

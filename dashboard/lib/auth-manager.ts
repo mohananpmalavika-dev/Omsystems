@@ -5,6 +5,21 @@
 
 import { authApi } from './api-client';
 
+function getClientDeviceInfo() {
+  if (typeof navigator === 'undefined') {
+    return { systemName: 'Unknown system' };
+  }
+
+  const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+
+  return {
+    systemName: userAgentData?.platform || navigator.platform || 'Unknown system',
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    browser: navigator.userAgent,
+  };
+}
+
 /**
  * End activity tracking session
  */
@@ -26,7 +41,10 @@ async function endActivitySession(): Promise<void> {
       },
       credentials: 'include',
       keepalive: true,
-      body: JSON.stringify({ terminationReason: 'user_logout' }),
+      body: JSON.stringify({
+        terminationReason: 'user_logout',
+        deviceInfo: getClientDeviceInfo(),
+      }),
     });
     
     console.log('[AuthManager] Activity session ended:', sessionId);

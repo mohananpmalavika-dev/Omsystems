@@ -2061,7 +2061,13 @@ export interface ActivityTrackingStore {
     ipAddress: string,
     locationInfo?: any
   ): Promise<string>;
-  endActivitySession(sessionId: string, userId: string, terminationReason?: string): Promise<void>;
+  endActivitySession(
+    sessionId: string,
+    userId: string,
+    terminationReason?: string,
+    deviceInfo?: any,
+    ipAddress?: string,
+  ): Promise<void>;
   updateSessionHeartbeat(sessionId: string, userId: string): Promise<void>;
   expireStaleActivitySessions(staleAfterSeconds: number): Promise<number>;
   

@@ -78,8 +78,11 @@ function getUserId(): string | null {
 
 function getDeviceInfo() {
   if (typeof window === 'undefined') return {};
-  
+
+  const userAgentData = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
+
   return {
+    systemName: userAgentData?.platform || navigator.platform || 'Unknown system',
     userAgent: navigator.userAgent,
     platform: navigator.platform,
     language: navigator.language,
@@ -149,7 +152,10 @@ async function endSession(): Promise<void> {
       headers: activityHeaders(true),
       credentials: 'include',
       keepalive: true,
-      body: JSON.stringify({ terminationReason: 'component_unmount' }),
+      body: JSON.stringify({
+        terminationReason: 'component_unmount',
+        deviceInfo: getDeviceInfo(),
+      }),
     });
     
     console.log('[ActivityMonitor] Session ended:', currentSessionId);

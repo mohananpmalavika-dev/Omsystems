@@ -10,6 +10,9 @@ const startSessionSchema = z.object({
   deviceInfo: z.object({
     browser: z.string().optional(),
     os: z.string().optional(),
+    systemName: z.string().max(200).optional(),
+    computerName: z.string().max(200).optional(),
+    hostname: z.string().max(200).optional(),
     deviceType: z.string().optional(),
     screenResolution: z.string().max(50).optional(),
     userAgent: z.string().max(500).optional(),
@@ -83,7 +86,30 @@ const endSessionSchema = z.object({
   terminationReason: z.enum(['user_logout', 'browser_exit', 'session_timeout', 'component_unmount'])
     .optional()
     .default('user_logout'),
+  deviceInfo: z.object({
+    browser: z.string().optional(),
+    os: z.string().optional(),
+    systemName: z.string().max(200).optional(),
+    computerName: z.string().max(200).optional(),
+    hostname: z.string().max(200).optional(),
+    deviceType: z.string().optional(),
+    userAgent: z.string().max(500).optional(),
+    platform: z.string().max(100).optional(),
+  }).passthrough().optional(),
+  ipAddress: z.string().max(100).optional(),
 });
+
+function resolveClientIp(request: FastifyRequest): string {
+  const forwardedFor = request.headers['x-forwarded-for'];
+  const realIp = request.headers['x-real-ip'];
+  const forwardedIp = Array.isArray(forwardedFor)
+    ? String(forwardedFor[0])
+    : typeof forwardedFor === 'string'
+      ? forwardedFor.split(',')[0]?.trim()
+      : null;
+
+  return (forwardedIp || (typeof realIp === 'string' ? realIp : null) || request.ip || '127.0.0.1').trim() || '127.0.0.1';
+}
 
 const activityReportPeriodBase = z.object({
   userId: z.string().uuid().optional(),
@@ -184,13 +210,21 @@ export async function registerEmployeeActivityTrackingRoutes(
   app.post("/v1/activity/sessions/start", async (request, reply) => {
     const body = startSessionSchema.parse(request.body || {});
     const user = getAuthUser(request);
+    const clientIp = resolveClientIp(request);
+    const normalizedDeviceInfo = {
+      ...(body.deviceInfo || {}),
+      ...(body.deviceInfo?.systemName || body.deviceInfo?.computerName || body.deviceInfo?.hostname
+        ? { systemName: body.deviceInfo.systemName || body.deviceInfo.computerName || body.deviceInfo.hostname }
+        : {}),
+      ipAddress: clientIp,
+    };
     
     try {
       const sessionId = await store.startActivitySession(
         user.id,
         user.tenantId,
-        body.deviceInfo || {},
-        request.ip || "127.0.0.1",
+        normalizedDeviceInfo,
+        clientIp,
         body.locationInfo
       );
       
@@ -205,9 +239,23 @@ export async function registerEmployeeActivityTrackingRoutes(
     const params = z.object({ sessionId: z.string() }).parse(request.params);
     const body = endSessionSchema.parse(request.body ?? {});
     const user = getAuthUser(request);
+    const clientIp = body.ipAddress || resolveClientIp(request);
+    const normalizedDeviceInfo = {
+      ...(body.deviceInfo || {}),
+      ...(body.deviceInfo?.systemName || body.deviceInfo?.computerName || body.deviceInfo?.hostname
+        ? { systemName: body.deviceInfo.systemName || body.deviceInfo.computerName || body.deviceInfo.hostname }
+        : {}),
+      ipAddress: clientIp,
+    };
     
     try {
-      await store.endActivitySession(params.sessionId, user.id, body.terminationReason);
+      await store.endActivitySession(
+        params.sessionId,
+        user.id,
+        body.terminationReason,
+        normalizedDeviceInfo,
+        clientIp,
+      );
       return { status: 'ended' };
     } catch (error) {
       app.log.error({ err: error }, "Error ending activity session");
