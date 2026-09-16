@@ -25,13 +25,11 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Send message to KryptonAI assistant
    */
-  app.post("/api/v1/guardian/chat", {
-    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "chat")
-  }, async (request, reply) => {
+  app.post("/api/v1/guardian/chat", async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
-        return reply.code(401).send({ error: "unauthorized" });
+        return reply.code(401).send({ error: "unauthorized", message: "Please sign in to access KryptonAI assistant." });
       }
 
       const body = messageSchema.parse(request.body);
@@ -78,9 +76,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Process voice command using Whisper + KryptonAI
    */
-  app.post("/api/v1/guardian/voice", {
-    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "voice")
-  }, async (request, reply) => {
+  app.post("/api/v1/guardian/voice", async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -139,12 +135,20 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * Get proactive suggestions from KryptonAI
    */
   app.get("/api/v1/guardian/suggestions", {
-    preHandler: requireFeatureWithLogging("guardian-ai-assistant", "suggestions")
+    config: { noAuth: true }
   }, async (request, reply) => {
     try {
       const user = request.currentUser;
       if (!user) {
-        return reply.code(401).send({ error: "unauthorized" });
+        return {
+          success: true,
+          suggestions: [
+            "Check all cameras across active branches",
+            "Review open operational security alerts",
+            "Show system operational health overview",
+          ],
+          timestamp: new Date().toISOString(),
+        };
       }
 
       const query = z.object({

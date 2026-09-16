@@ -322,8 +322,8 @@ export class GuardianAIAssistant {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.error("[KryptonAI] Failed to process message:", error);
-      throw error;
+      console.warn("[KryptonAI] OpenAI API error, falling back to operational assistant:", error);
+      return await this.processFallbackMessage(message, context);
     }
   }
 

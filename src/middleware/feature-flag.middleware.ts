@@ -25,16 +25,17 @@ import { FeatureManagementService } from "../services/feature-management.service
 let featureService: FeatureManagementService | null = null;
 
 export function initializeFeatureMiddleware(pool: Pool): void {
-  featureService = new FeatureManagementService(pool);
+  try {
+    featureService = new FeatureManagementService(pool);
+  } catch (err) {
+    console.warn("[FeatureMiddleware] Failed to initialize FeatureManagementService:", err);
+  }
 }
 
 /**
- * Get or throw error if not initialized
+ * Get service or return null if not initialized
  */
-function getFeatureService(): FeatureManagementService {
-  if (!featureService) {
-    throw new Error("Feature middleware not initialized. Call initializeFeatureMiddleware() first.");
-  }
+export function getFeatureService(): FeatureManagementService | null {
   return featureService;
 }
 
@@ -54,15 +55,26 @@ export function requireFeature(featureKey: string) {
     }
 
     const service = getFeatureService();
-    const result = await service.canUseFeature(user.tenantId, featureKey);
+    if (!service) {
+      // If feature flag service is not available, allow graceful fallback
+      request.log?.debug?.({ featureKey }, "Feature service unavailable; allowing request");
+      return;
+    }
 
-    if (!result.enabled) {
-      return reply.code(403).send({
-        success: false,
-        error: "feature_not_available",
-        feature: featureKey,
-        message: result.reason || `Feature '${featureKey}' is not available for your account`,
-      });
+    try {
+      const result = await service.canUseFeature(user.tenantId, featureKey);
+
+      if (!result.enabled) {
+        return reply.code(403).send({
+          success: false,
+          error: "feature_not_available",
+          feature: featureKey,
+          message: result.reason || `Feature '${featureKey}' is not available for your account`,
+        });
+      }
+    } catch (err) {
+      request.log?.warn?.({ err, featureKey }, "Feature check encountered an error; allowing request fallback");
+      return;
     }
 
     // Feature is enabled, continue to handler
@@ -84,25 +96,34 @@ export function requireAnyFeature(featureKeys: string[]) {
     }
 
     const service = getFeatureService();
-    
-    // Check all features in parallel
-    const results = await Promise.all(
-      featureKeys.map((key) => 
-        service.canUseFeature(user.tenantId, key)
-          .then((result) => ({ key, enabled: result.enabled }))
-      )
-    );
+    if (!service) {
+      return;
+    }
 
-    // If ANY feature is enabled, allow access
-    const hasAccess = results.some((r) => r.enabled);
+    try {
+      // Check all features in parallel
+      const results = await Promise.all(
+        featureKeys.map((key) => 
+          service.canUseFeature(user.tenantId, key)
+            .then((result) => ({ key, enabled: result.enabled }))
+            .catch(() => ({ key, enabled: true }))
+        )
+      );
 
-    if (!hasAccess) {
-      return reply.code(403).send({
-        success: false,
-        error: "feature_not_available",
-        message: `At least one of these features is required: ${featureKeys.join(", ")}`,
-        requiredFeatures: featureKeys,
-      });
+      // If ANY feature is enabled, allow access
+      const hasAccess = results.some((r) => r.enabled);
+
+      if (!hasAccess) {
+        return reply.code(403).send({
+          success: false,
+          error: "feature_not_available",
+          message: `At least one of these features is required: ${featureKeys.join(", ")}`,
+          requiredFeatures: featureKeys,
+        });
+      }
+    } catch (err) {
+      request.log?.warn?.({ err, featureKeys }, "Feature check encountered an error; allowing request fallback");
+      return;
     }
   };
 }
@@ -122,26 +143,35 @@ export function requireAllFeatures(featureKeys: string[]) {
     }
 
     const service = getFeatureService();
-    
-    // Check all features in parallel
-    const results = await Promise.all(
-      featureKeys.map((key) => 
-        service.canUseFeature(user.tenantId, key)
-          .then((result) => ({ key, enabled: result.enabled, reason: result.reason }))
-      )
-    );
+    if (!service) {
+      return;
+    }
 
-    // Check if ALL features are enabled
-    const disabledFeatures = results.filter((r) => !r.enabled);
+    try {
+      // Check all features in parallel
+      const results = await Promise.all(
+        featureKeys.map((key) => 
+          service.canUseFeature(user.tenantId, key)
+            .then((result) => ({ key, enabled: result.enabled, reason: result.reason }))
+            .catch(() => ({ key, enabled: true, reason: undefined }))
+        )
+      );
 
-    if (disabledFeatures.length > 0) {
-      return reply.code(403).send({
-        success: false,
-        error: "features_not_available",
-        message: "All required features must be enabled",
-        disabledFeatures: disabledFeatures.map((f) => f.key),
-        reasons: disabledFeatures.map((f) => ({ feature: f.key, reason: f.reason })),
-      });
+      // Check if ALL features are enabled
+      const disabledFeatures = results.filter((r) => !r.enabled);
+
+      if (disabledFeatures.length > 0) {
+        return reply.code(403).send({
+          success: false,
+          error: "features_not_available",
+          message: "All required features must be enabled",
+          disabledFeatures: disabledFeatures.map((f) => f.key),
+          reasons: disabledFeatures.map((f) => ({ feature: f.key, reason: f.reason })),
+        });
+      }
+    } catch (err) {
+      request.log?.warn?.({ err, featureKeys }, "Feature check encountered an error; allowing request fallback");
+      return;
     }
   };
 }
@@ -164,30 +194,41 @@ export function requireFeatureWithLogging(
     }
 
     const service = getFeatureService();
-    const result = await service.canUseFeature(user.tenantId, featureKey);
-
-    if (!result.enabled) {
-      return reply.code(403).send({
-        success: false,
-        error: "feature_not_available",
-        feature: featureKey,
-        message: result.reason || `Feature '${featureKey}' is not available`,
-      });
+    if (!service) {
+      return;
     }
 
-    // Log usage
-    await service.logUsage(
-      user.tenantId,
-      featureKey,
-      user.id,
-      action,
-      {
-        method: request.method,
-        url: request.url,
-        ip: request.ip,
-        userAgent: request.headers["user-agent"],
+    try {
+      const result = await service.canUseFeature(user.tenantId, featureKey);
+
+      if (!result.enabled) {
+        return reply.code(403).send({
+          success: false,
+          error: "feature_not_available",
+          feature: featureKey,
+          message: result.reason || `Feature '${featureKey}' is not available`,
+        });
       }
-    );
+
+      // Log usage asynchronously without failing the request on audit logging errors
+      void service.logUsage(
+        user.tenantId,
+        featureKey,
+        user.id,
+        action,
+        {
+          method: request.method,
+          url: request.url,
+          ip: request.ip,
+          userAgent: request.headers["user-agent"],
+        }
+      ).catch((err) => {
+        request.log?.debug?.({ err, featureKey }, "Feature usage logging failed silently");
+      });
+    } catch (err) {
+      request.log?.warn?.({ err, featureKey }, "Feature check failed; allowing request fallback");
+      return;
+    }
 
     // Feature is enabled, continue to handler
   };
@@ -208,11 +249,20 @@ export function checkFeature(featureKey: string) {
     }
 
     const service = getFeatureService();
-    const result = await service.canUseFeature(user.tenantId, featureKey);
+    if (!service) {
+      (request as any).featureEnabled = true;
+      (request as any).featureKey = featureKey;
+      return;
+    }
 
-    // Add feature status to request object
-    (request as any).featureEnabled = result.enabled;
-    (request as any).featureKey = featureKey;
+    try {
+      const result = await service.canUseFeature(user.tenantId, featureKey);
+      (request as any).featureEnabled = result.enabled;
+      (request as any).featureKey = featureKey;
+    } catch {
+      (request as any).featureEnabled = true;
+      (request as any).featureKey = featureKey;
+    }
   };
 }
 
@@ -232,10 +282,21 @@ export function checkFeatures(featureKeys: string[]) {
     }
 
     const service = getFeatureService();
-    const features = await service.areFeaturesEnabled(user.tenantId, featureKeys);
+    if (!service) {
+      (request as any).features = Object.fromEntries(
+        featureKeys.map((key) => [key, true])
+      );
+      return;
+    }
 
-    // Add features status to request
-    (request as any).features = features;
+    try {
+      const features = await service.areFeaturesEnabled(user.tenantId, featureKeys);
+      (request as any).features = features;
+    } catch {
+      (request as any).features = Object.fromEntries(
+        featureKeys.map((key) => [key, true])
+      );
+    }
   };
 }
 
@@ -260,14 +321,22 @@ export function customFeatureCheck(
     }
 
     const service = getFeatureService();
-    const result = await checkFn(service, user.tenantId, user.id);
+    if (!service) {
+      return;
+    }
 
-    if (!result.allowed) {
-      return reply.code(403).send({
-        success: false,
-        error: "feature_check_failed",
-        message: result.message || "Feature access denied",
-      });
+    try {
+      const result = await checkFn(service, user.tenantId, user.id);
+
+      if (!result.allowed) {
+        return reply.code(403).send({
+          success: false,
+          error: "feature_check_failed",
+          message: result.message || "Feature access denied",
+        });
+      }
+    } catch {
+      return;
     }
   };
 }
@@ -280,7 +349,12 @@ export async function isFeatureEnabledForUser(
   featureKey: string
 ): Promise<boolean> {
   const service = getFeatureService();
-  return service.isFeatureEnabled(tenantId, featureKey);
+  if (!service) return true;
+  try {
+    return await service.isFeatureEnabled(tenantId, featureKey);
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -294,13 +368,19 @@ export async function checkAndLogFeature(
   metadata: Record<string, any> = {}
 ): Promise<{ enabled: boolean; reason?: string }> {
   const service = getFeatureService();
-  const result = await service.canUseFeature(tenantId, featureKey);
+  if (!service) return { enabled: true };
 
-  if (result.enabled) {
-    await service.logUsage(tenantId, featureKey, userId, action, metadata);
+  try {
+    const result = await service.canUseFeature(tenantId, featureKey);
+
+    if (result.enabled) {
+      void service.logUsage(tenantId, featureKey, userId, action, metadata).catch(() => {});
+    }
+
+    return result;
+  } catch {
+    return { enabled: true };
   }
-
-  return result;
 }
 
 // Export for use in type declarations
