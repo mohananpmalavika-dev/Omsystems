@@ -97,6 +97,7 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
         tenantId: user.tenantId,
         maxResults: 20,
         confidenceThreshold: 0.7,
+        includeVideoSummary: false,
       });
 
       return {
@@ -254,7 +255,7 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
         data: {
           originalQuery: body.query,
           understanding: parsed,
-          explanation: `I understood you're looking for ${parsed.objectTypes.join(", ")}`,
+          explanation: `I understood you're looking for ${parsed.objectTypes?.join(", ") || "relevant objects"}`,
         },
       };
     } catch (error) {

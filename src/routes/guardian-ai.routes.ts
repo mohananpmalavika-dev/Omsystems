@@ -41,7 +41,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         userId: user.id,
         tenantId: user.tenantId,
         currentBranchId: body.context?.currentBranchId,
-        permissions: user.permissions || [],
+        permissions: (user as any).permissions || [],
       };
 
       // Process message
@@ -99,7 +99,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
       const context = {
         userId: user.id,
         tenantId: user.tenantId,
-        permissions: user.permissions || [],
+        permissions: (user as any).permissions || [],
       };
 
       const response = await guardianAI.processMessage(

@@ -276,14 +276,14 @@ Respond in JSON format only.`;
     }
 
     // Object type filter
-    if (parsed.objectTypes.length > 0) {
+    if (parsed.objectTypes && parsed.objectTypes.length > 0) {
       conditions.push(`r.detection_type = ANY($${paramIndex})`);
       params.push(parsed.objectTypes);
       paramIndex++;
     }
 
     // Color filter (if metadata supports it)
-    if (parsed.colors.length > 0) {
+    if (parsed.colors && parsed.colors.length > 0) {
       conditions.push(`r.metadata->>'dominantColor' = ANY($${paramIndex})`);
       params.push(parsed.colors);
       paramIndex++;
@@ -687,7 +687,7 @@ Respond in JSON format only.`;
 
     try {
       const formData = new FormData();
-      formData.append("file", new Blob([audioBuffer]), "audio.webm");
+      formData.append("file", new Blob([new Uint8Array(audioBuffer)]), "audio.webm");
       formData.append("model", this.whisperModel);
 
       const response = await fetch(`${this.openAIBaseUrl}/audio/transcriptions`, {
