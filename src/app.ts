@@ -3252,13 +3252,13 @@ export async function buildApp(options?: {
       app.log.warn({ error }, "Failed to register AI Video Search V2 routes");
     }
 
-    // Register Guardian AI Assistant (JARVIS-like assistant)
+    // Register KryptonAI Assistant (JARVIS-like assistant)
     try {
       const { registerGuardianAIRoutes } = await import("./routes/guardian-ai.routes.js");
       await registerGuardianAIRoutes(app, pool);
-      app.log.info("Guardian AI Assistant routes registered");
+      app.log.info("KryptonAI Assistant routes registered");
     } catch (error) {
-      app.log.warn({ error }, "Failed to register Guardian AI routes");
+      app.log.warn({ error }, "Failed to register KryptonAI routes");
     }
   }
 
