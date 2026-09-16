@@ -35,6 +35,8 @@ export function InfrastructurePathVisualization({ branchId, refreshKey, classNam
   useEffect(() => {
     if (branchId) {
       loadCameras();
+    } else {
+      setLoading(false);
     }
   }, [branchId, refreshKey]);
 
@@ -63,7 +65,17 @@ export function InfrastructurePathVisualization({ branchId, refreshKey, classNam
 
   const loadInfrastructurePath = async () => {
     try {
-      const response = await fetch(`/api/control/v1/infrastructure/rca/camera/${selectedCamera}/infrastructure-path`, { cache: "no-store" });
+      const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-sentinel-session"] = token;
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const response = await fetch(`/api/control/v1/infrastructure/rca/camera/${selectedCamera}/infrastructure-path`, {
+        cache: "no-store",
+        credentials: "include",
+        headers,
+      });
       if (!response.ok) throw new Error("Failed to load infrastructure path");
       
       const { data, graphCoverage: coverage } = await response.json();

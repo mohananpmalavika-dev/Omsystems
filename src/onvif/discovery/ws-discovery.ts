@@ -1,6 +1,6 @@
 import { createSocket, type Socket } from "node:dgram";
 import { randomUUID } from "node:crypto";
-import { SoapClient } from "../soap/soap-client.js";
+import { SoapClient } from "../soap/soap-client";
 
 export interface DiscoveredOnvifDevice {
   endpointReference: string; // urn:uuid:...

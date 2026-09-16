@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 // In production (Vercel/Railway), set CONTROL_PLANE_URL to your Railway backend URL.
 // Locally defaults to http://localhost:8080.
@@ -91,6 +90,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Silence the "webpack config present but no turbopack config" warning introduced in Next.js 16.
+  // The webpack block below is retained for explicit --webpack builds and webpack-only plugins.
+  turbopack: {},
   webpack: (config) => {
     config.resolve = config.resolve || {};
     config.resolve.extensionAlias = {

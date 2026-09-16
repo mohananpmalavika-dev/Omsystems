@@ -16,37 +16,74 @@ export async function registerMaintenanceDashboardRoutes(
   app.get("/v1/maintenance/dashboard/status", async (request, reply) => {
     if (!request.currentUser?.tenantId) return reply.code(401).send({ error: "unauthorized" });
     const tenantId = request.currentUser.tenantId;
-    
-    const assets = await store.listMaintenanceAssets(tenantId);
-    const workOrders = await store.listWorkOrders(tenantId);
-    const schedules = await store.listMaintenanceSchedules(tenantId);
-    const visits = await store.listMaintenanceVisits(tenantId);
-    const amcContracts = await store.listAmcContracts(tenantId);
-    const predictiveAlerts = await store.listPredictiveAlerts(tenantId);
 
-    const now = new Date();
-    const overdueVisits = visits.filter(v => v.status !== 'completed' && new Date(v.dueAt) < now).length;
-    const expiringAmcs = amcContracts.filter(c => new Date(c.endDate) < new Date(Date.now() + 90 * 24 * 60 * 60 * 1000)).length;
+    try {
+      const now = new Date();
 
-    return {
-      totalAssets: assets.length,
-      assetsOnline: assets.filter(a => a.status === 'operational').length,
-      assetsOffline: assets.filter(a => a.status === 'offline').length,
-      assetsDegraded: assets.filter(a => a.status === 'degraded').length,
-      
-      workOrdersOpen: workOrders.filter(w => w.status !== 'closed').length,
-      workOrdersOverdueSla: workOrders.filter(w => w.status !== 'closed' && w.slaDueAt && new Date(w.slaDueAt) < now).length,
-      
-      scheduledMaintenanceCount: schedules.filter(s => s.status === 'active').length,
-      visitsPending: visits.filter(v => v.status === 'pending').length,
-      visitsOverdue: overdueVisits,
-      
-      amcContractsActive: amcContracts.filter(c => c.status === 'active').length,
-      amcContractsExpiring: expiringAmcs,
-      
-      criticalAlerts: predictiveAlerts.filter(p => p.score > 0.8).length,
-      warningAlerts: predictiveAlerts.filter(p => p.score > 0.5 && p.score <= 0.8).length,
-    };
+      // Use allSettled so a single failing table (e.g. missing in a fresh DB
+      // or a temporary connection blip) returns zeros rather than a 500.
+      const [
+        assetsResult,
+        workOrdersResult,
+        schedulesResult,
+        visitsResult,
+        amcResult,
+        alertsResult,
+      ] = await Promise.allSettled([
+        store.listMaintenanceAssets(tenantId),
+        store.listWorkOrders(tenantId),
+        store.listMaintenanceSchedules(tenantId),
+        store.listMaintenanceVisits(tenantId),
+        store.listAmcContracts(tenantId),
+        store.listPredictiveAlerts(tenantId),
+      ]);
+
+      const assets       = assetsResult.status       === "fulfilled" ? assetsResult.value       : [];
+      const workOrders   = workOrdersResult.status   === "fulfilled" ? workOrdersResult.value   : [];
+      const schedules    = schedulesResult.status    === "fulfilled" ? schedulesResult.value    : [];
+      const visits       = visitsResult.status       === "fulfilled" ? visitsResult.value       : [];
+      const amcContracts = amcResult.status          === "fulfilled" ? amcResult.value          : [];
+      const predictiveAlerts = alertsResult.status   === "fulfilled" ? alertsResult.value       : [];
+
+      const overdueVisits   = visits.filter(v => v.status !== "completed" && new Date(v.dueAt) < now).length;
+      const ninetyDaysOut   = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
+      const expiringAmcs    = amcContracts.filter(c => new Date(c.endDate) < ninetyDaysOut).length;
+
+      // Surface which sub-queries failed so operators can diagnose quickly.
+      const errors: string[] = [];
+      if (assetsResult.status       === "rejected") errors.push("assets");
+      if (workOrdersResult.status   === "rejected") errors.push("workOrders");
+      if (schedulesResult.status    === "rejected") errors.push("schedules");
+      if (visitsResult.status       === "rejected") errors.push("visits");
+      if (amcResult.status          === "rejected") errors.push("amcContracts");
+      if (alertsResult.status       === "rejected") errors.push("predictiveAlerts");
+
+      return {
+        totalAssets:              assets.length,
+        assetsOnline:             assets.filter(a => a.status === "operational").length,
+        assetsOffline:            assets.filter(a => a.status === "offline").length,
+        assetsDegraded:           assets.filter(a => a.status === "degraded").length,
+
+        workOrdersOpen:           workOrders.filter(w => w.status !== "closed").length,
+        workOrdersOverdueSla:     workOrders.filter(w => w.status !== "closed" && w.slaDueAt && new Date(w.slaDueAt) < now).length,
+
+        scheduledMaintenanceCount: schedules.filter(s => s.status === "active").length,
+        visitsPending:            visits.filter(v => v.status === "pending").length,
+        visitsOverdue:            overdueVisits,
+
+        amcContractsActive:       amcContracts.filter(c => c.status === "active").length,
+        amcContractsExpiring:     expiringAmcs,
+
+        criticalAlerts:           predictiveAlerts.filter(p => p.score > 0.8).length,
+        warningAlerts:            predictiveAlerts.filter(p => p.score > 0.5 && p.score <= 0.8).length,
+
+        ...(errors.length > 0 && { _partialErrors: errors }),
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Maintenance dashboard unavailable";
+      request.log.error({ err }, "maintenance dashboard status failed");
+      return reply.code(503).send({ error: "service_unavailable", message });
+    }
   });
 
   // Health Monitoring - Camera health details

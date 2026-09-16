@@ -1,5 +1,5 @@
-import type { WsSecurityCredentials } from "../security/ws-security.js";
-import { WsSecurityManager } from "../security/ws-security.js";
+import type { WsSecurityCredentials } from "../security/ws-security";
+import { WsSecurityManager } from "../security/ws-security";
 
 export interface SoapClientOptions {
   timeoutMs?: number;

@@ -1,5 +1,5 @@
-import { SoapClient } from "../soap/soap-client.js";
-import type { WsSecurityCredentials } from "../security/ws-security.js";
+import { SoapClient } from "../soap/soap-client";
+import type { WsSecurityCredentials } from "../security/ws-security";
 
 export interface ImagingSettings {
   brightness?: number; // 0.0 - 100.0
