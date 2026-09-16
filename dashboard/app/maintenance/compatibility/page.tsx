@@ -46,7 +46,7 @@ export default function CompatibilityPage() {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/control/v1/operational-health/recorders", { credentials: "include" });
+      const res = await fetch("/api/control/v1/operations/health/recorders", { credentials: "include" });
       if (!res.ok) throw new Error(`Recorder inventory request failed (${res.status})`);
       const json = await res.json();
       const list = (json.data?.recorders ?? json.recorders ?? []).map((r: any) => ({

@@ -10,6 +10,20 @@ import { loginPath } from './session-navigation';
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
 let sessionGuardCleanup: (() => void) | null = null;
+// Set to true before window.location.assign() for in-app hard navigations
+// so the beforeunload logout beacon is skipped (only fires on actual browser close).
+let inAppNavigating = false;
+
+/**
+ * Call this immediately before any window.location.assign() / window.location.href
+ * assignment that is an in-app navigation (not a browser close).
+ * Prevents the logout beacon from firing on hard in-app navigation.
+ */
+export function markInAppNavigation(): void {
+  inAppNavigating = true;
+  // Reset after a short delay in case the navigation is somehow cancelled
+  setTimeout(() => { inAppNavigating = false; }, 3000);
+}
 
 /**
  * Check if user is authenticated
@@ -167,8 +181,54 @@ export function setupSessionGuard() {
   // Check session on page focus
   const onFocus = () => { checkSession(); };
 
-  // Cleanup on page unload
-  const onBeforeUnload = () => { stopSessionCheck(); };
+  // On browser/tab close: immediately invalidate the backend session using
+  // navigator.sendBeacon — the only API that survives page unload reliably.
+  // Also clear localStorage tokens synchronously so no credentials linger.
+  const onBeforeUnload = () => {
+    stopSessionCheck();
+
+    // Clear local credentials immediately — synchronous, always runs
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+    } catch {}
+
+    // Only send logout beacon on actual browser/tab close.
+    // Skip when this unload was triggered by an in-app hard navigation
+    // (e.g. window.location.assign from the Live Wall) — those navigations
+    // call markInAppNavigation() before assigning the URL.
+    if (inAppNavigating) return;
+
+    // Fire logout to the server — sendBeacon survives tab/browser close.
+    // sendBeacon automatically includes cookies, so the backend authenticates
+    // the request normally via the sentinel_access / sentinel_session cookie.
+    const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
+
+    // End activity session
+    const activitySessionId = (() => {
+      try { return sessionStorage.getItem('activitySessionId') || ''; } catch { return ''; }
+    })();
+    if (activitySessionId) {
+      const activityBlob = new Blob(
+        [JSON.stringify({ terminationReason: 'browser_close' })],
+        { type: 'application/json' }
+      );
+      navigator.sendBeacon?.(
+        `${apiBase}/v1/activity/sessions/${activitySessionId}/end`,
+        activityBlob
+      );
+    }
+
+    // Logout — invalidate the backend cookie/token session
+    const logoutBlob = new Blob(
+      [JSON.stringify({ reason: 'browser_close' })],
+      { type: 'application/json' }
+    );
+    navigator.sendBeacon?.(`${apiBase}/v1/auth/logout`, logoutBlob);
+  };
+
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('focus', onFocus);
   window.addEventListener('beforeunload', onBeforeUnload);

@@ -90,6 +90,7 @@ import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
 import { AlertNotificationTray } from "@/components/alerts/alert-notification-tray";
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
+import { markInAppNavigation } from "@/lib/session-guard";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -888,14 +889,33 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       return; // Already on this exact page
     }
 
-    try {
-      router.push(href);
-    } catch {
+    // The Live Video Wall (/control-room) runs many concurrent streams and AbortControllers.
+    // router.push() can silently fail to navigate away from resource-heavy pages.
+    // Use hard navigation from /control-room to guarantee menu links always work.
+    if (currentPath === "/control-room") {
+      markInAppNavigation();
       window.location.assign(href);
       return;
     }
 
-
+    try {
+      router.push(href);
+      // Fallback: if router.push doesn't navigate within 1.5s (e.g. intercepted by
+      // a streaming page), force a hard navigation to ensure the link always works.
+      const fallbackTimer = setTimeout(() => {
+        if (routePath(window.location.pathname) === currentPath) {
+          markInAppNavigation();
+          window.location.assign(href);
+        }
+      }, 1500);
+      // Clean up the timer if we successfully navigate away
+      const cleanup = () => clearTimeout(fallbackTimer);
+      window.addEventListener("popstate", cleanup, { once: true });
+    } catch {
+      markInAppNavigation();
+      window.location.assign(href);
+      return;
+    }
   };
 
   const createMenuRef = useRef<HTMLDivElement>(null);

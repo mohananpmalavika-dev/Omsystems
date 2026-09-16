@@ -32,6 +32,8 @@ export function RootCauseBreakdownWidget({
   useEffect(() => {
     if (branchId) {
       loadBranchStats();
+    } else {
+      setLoading(false);
     }
   }, [branchId, refreshKey]);
 

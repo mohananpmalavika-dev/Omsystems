@@ -36,6 +36,8 @@ export function PredictedFailuresWidget({
   useEffect(() => {
     if (branchId) {
       loadPredictedFailures();
+    } else {
+      setLoading(false);
     }
   }, [branchId, refreshKey]);
 
