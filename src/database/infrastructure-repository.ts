@@ -714,7 +714,7 @@ export class InfrastructureRepository {
       u.custom_role_id::text AS custom_role_id,
       (SELECT cr.name FROM custom_roles cr WHERE cr.id=u.custom_role_id) AS custom_role_name,
       (SELECT cr.menu_access FROM custom_roles cr WHERE cr.id=u.custom_role_id) AS menu_access,
-      ((u.preferences->'faceVerification'->>'data') IS NOT NULL) AS face_enrolled,
+      (((u.preferences->'faceVerification'->>'data') IS NOT NULL) OR ((u.preferences->'faceVerification'->'templates') IS NOT NULL)) AS face_enrolled,
       u.active, u.created_at, u.updated_at
       ,(SELECT assignment.scope_node_id::text
         FROM user_organizational_assignments assignment
@@ -801,7 +801,10 @@ export class InfrastructureRepository {
       `${this.userSelect(true)}
        LEFT JOIN tenants t ON t.id=u.tenant_id
        WHERE u.status = 'active'
-         AND (u.preferences->'faceVerification'->>'data') IS NOT NULL
+         AND (
+           (u.preferences->'faceVerification'->>'data') IS NOT NULL
+           OR (u.preferences->'faceVerification'->'templates') IS NOT NULL
+         )
          AND ($1::text IS NULL OR t.slug=$1 OR t.id::text=$1)`,
       [tenantSlug ?? null],
     );

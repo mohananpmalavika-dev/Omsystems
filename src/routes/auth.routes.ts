@@ -385,9 +385,14 @@ export async function registerAuthRoutes(
         const body = faceLoginSchema.parse(request.body);
 
         // Fetch all active employees who have an enrolled biometric face template
-        const candidateUsers = typeof store.findUsersWithFaceTemplates === "function"
+        let candidateUsers = typeof store.findUsersWithFaceTemplates === "function"
           ? await store.findUsersWithFaceTemplates(body.tenantSlug)
           : [];
+
+        // If tenantSlug was provided but yielded 0 candidates, fall back to checking across tenants
+        if ((!candidateUsers || candidateUsers.length === 0) && body.tenantSlug && typeof store.findUsersWithFaceTemplates === "function") {
+          candidateUsers = await store.findUsersWithFaceTemplates();
+        }
 
         if (!candidateUsers || candidateUsers.length === 0) {
           return reply.code(404).send({
@@ -538,7 +543,11 @@ export async function registerAuthRoutes(
           ? JSON.parse(user.preferences)
           : user.preferences;
 
-        const hasTemplate = preferencesObject?.faceVerification?.templates?.length > 0;
+        const fv = preferencesObject?.faceVerification;
+        const hasTemplate = Boolean(
+          fv?.data ||
+          (Array.isArray(fv?.templates) && fv.templates.length > 0)
+        );
         
         if (!hasTemplate) {
           return reply.code(404).send({

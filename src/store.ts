@@ -1222,7 +1222,12 @@ export class MemoryStore {
     for (const user of this.users.values()) {
       if (user.status !== "active") continue;
       const prefs = typeof user.preferences === "string" ? (() => { try { return JSON.parse(user.preferences); } catch { return null; } })() : user.preferences;
-      if (prefs?.faceVerification?.data) {
+      const fv = prefs?.faceVerification;
+      const hasTemplate = Boolean(
+        fv?.data ||
+        (Array.isArray(fv?.templates) && fv.templates.length > 0)
+      );
+      if (hasTemplate) {
         list.push(user);
       }
     }
