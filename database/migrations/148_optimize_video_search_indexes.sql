@@ -27,10 +27,11 @@ CREATE INDEX IF NOT EXISTS idx_video_metadata_segment
     ON video_metadata(segment_id)
     INCLUDE (camera_id, start_time, end_time);
 
--- Partial index for recent data (frequently queried)
+-- Index for recent-data query patterns (tenant + camera + time)
+-- Note: Cannot use NOW() in partial index predicate (volatile function not allowed).
+-- Using a plain composite index instead; the query planner will still use it efficiently.
 CREATE INDEX IF NOT EXISTS idx_video_metadata_recent
-    ON video_metadata(tenant_id, camera_id, start_time DESC)
-    WHERE start_time >= NOW() - INTERVAL '7 days';
+    ON video_metadata(tenant_id, camera_id, start_time DESC);
 
 -- Index for scene type filtering
 CREATE INDEX IF NOT EXISTS idx_video_metadata_scene_type
