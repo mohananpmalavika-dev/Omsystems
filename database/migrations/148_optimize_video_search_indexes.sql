@@ -97,19 +97,12 @@ CREATE INDEX IF NOT EXISTS idx_video_objects_metadata_type
 
 -- Materialized view for frequently accessed object summaries
 CREATE MATERIALIZED VIEW IF NOT EXISTS video_objects_summary AS
-SELECT 
+SELECT
     vo.video_metadata_id,
     vo.object_type,
     COUNT(*) as object_count,
     AVG(vo.confidence) as avg_confidence,
-    MAX(vo.confidence) as max_confidence,
-    jsonb_object_agg(
-        vo.object_type,
-        jsonb_build_object(
-            'count', COUNT(*),
-            'avgConfidence', AVG(vo.confidence)
-        )
-    ) as type_summary
+    MAX(vo.confidence) as max_confidence
 FROM video_objects vo
 GROUP BY vo.video_metadata_id, vo.object_type;
 
@@ -336,10 +329,10 @@ COMMENT ON FUNCTION refresh_video_search_materialized_views() IS
 -- VACUUM AND MAINTENANCE
 -- ============================================================================
 
--- Vacuum analyze to update statistics
-VACUUM ANALYZE video_metadata;
-VACUUM ANALYZE video_objects;
-VACUUM ANALYZE video_search_query_analytics;
+-- ANALYZE to update statistics (VACUUM cannot run inside a transaction block)
+ANALYZE video_metadata;
+ANALYZE video_objects;
+ANALYZE video_search_query_analytics;
 
 -- Show index usage statistics
 CREATE OR REPLACE VIEW video_search_index_usage AS
