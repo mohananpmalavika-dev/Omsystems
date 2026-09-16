@@ -129,6 +129,14 @@ function CameraTileComponent({
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
   const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
   const [isMuted, setIsMuted] = useState(true);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -262,12 +270,50 @@ function CameraTileComponent({
 
   return (
     <article className="camera-tile" ref={tileRef} data-camera-id={camera.id}>
-      <div className="feed-stage" onWheel={(event) => {
-        if (!event.ctrlKey && !event.metaKey) return;
-        event.preventDefault();
-        setZoom((value) => Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.15 : -0.15)).toFixed(2)))));
-      }}>
-        <div className="zoom-stage" style={{ transform: `scale(${zoom})` }}>
+      <div
+        className="feed-stage"
+        style={{ cursor: zoom > 1 ? "grab" : undefined }}
+        onMouseDown={(event) => {
+          if (zoom <= 1 || event.button !== 0) return;
+          if ((event.target as HTMLElement).closest("button, a, input, select")) return;
+          isDraggingRef.current = true;
+          dragStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
+          if (event.currentTarget) {
+            event.currentTarget.style.cursor = "grabbing";
+          }
+        }}
+        onMouseMove={(event) => {
+          if (!isDraggingRef.current || zoom <= 1) return;
+          const dx = event.clientX - dragStartRef.current.x;
+          const dy = event.clientY - dragStartRef.current.y;
+          setPan({
+            x: dragStartRef.current.panX + dx,
+            y: dragStartRef.current.panY + dy,
+          });
+        }}
+        onMouseUp={(event) => {
+          isDraggingRef.current = false;
+          if (event.currentTarget) {
+            event.currentTarget.style.cursor = zoom > 1 ? "grab" : "";
+          }
+        }}
+        onMouseLeave={(event) => {
+          isDraggingRef.current = false;
+          if (event.currentTarget) {
+            event.currentTarget.style.cursor = zoom > 1 ? "grab" : "";
+          }
+        }}
+        onWheel={(event) => {
+          if (!event.ctrlKey && !event.metaKey) return;
+          event.preventDefault();
+          setZoom((value) => {
+            const next = Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.25 : -0.25)).toFixed(2))));
+            if (next === 1) setPan({ x: 0, y: 0 });
+            return next;
+          });
+        }}
+      >
+        <div className="zoom-stage" style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)` }}>
           {session?.hls && (!liveError || !isFatalLiveError(liveError)) ? (
             <HlsPlayer
               url={session.hls.url}
@@ -409,8 +455,50 @@ function CameraTileComponent({
           >
             <Maximize2 size={15} />
           </button>
-          <button type="button" aria-label="Zoom out" title="Zoom out" onClick={() => setZoom((value) => Math.max(1, Number((value - 0.25).toFixed(2))))} disabled={zoom === 1}><ZoomOut size={15} /></button>
-          <button type="button" aria-label="Zoom in" title="Zoom in" onClick={() => setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))))}><ZoomIn size={15} /></button>
+          <button
+            type="button"
+            aria-label="Zoom out"
+            title="Zoom out (-25% · Shift+Click for 100%)"
+            onClick={(e) => {
+              if (e.shiftKey) {
+                resetZoom();
+              } else {
+                setZoom((value) => {
+                  const next = Math.max(1, Number((value - 0.25).toFixed(2)));
+                  if (next === 1) setPan({ x: 0, y: 0 });
+                  return next;
+                });
+              }
+            }}
+            disabled={zoom <= 1}
+          >
+            <ZoomOut size={15} />
+          </button>
+          {zoom > 1 && (
+            <button
+              type="button"
+              className="zoom-pill"
+              title={`Zoom: ${Math.round(zoom * 100)}% (Click to reset to 100%)`}
+              onClick={resetZoom}
+            >
+              {Math.round(zoom * 100)}% · Reset
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Zoom in"
+            title="Zoom in (+25%, max 300% · Shift+Click for 300%)"
+            onClick={(e) => {
+              if (e.shiftKey) {
+                setZoom(3);
+              } else {
+                setZoom((value) => Math.min(3, Number((value + 0.25).toFixed(2))));
+              }
+            }}
+            disabled={zoom >= 3}
+          >
+            <ZoomIn size={15} />
+          </button>
           <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
           {onDeleteCamera && (
             <button
@@ -424,7 +512,6 @@ function CameraTileComponent({
             </button>
           )}
         </div>
-        {zoom > 1 && <button type="button" className="zoom-reset" onClick={() => setZoom(1)}>Zoom {Math.round(zoom * 100)}% · Reset</button>}
         {showPtzControl && isActive && session?.sessionId && (
           <div className="ptz-overlay">
             <PtzControl

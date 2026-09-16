@@ -2,8 +2,8 @@ import React from "react";
 import { EdgeFleetManager } from "@/components/edge-fleet-manager";
 
 export const metadata = {
-  title: "Edge Fleet Lifecycle & Digital Twin | KryptonVision",
-  description: "Enterprise 400-Branch Edge Gateway Lifecycle, Signed Staged Rollouts, and Blast Radius Analysis",
+  title: "Edge Agent Management | KryptonVision",
+  description: "Enterprise Edge Gateway & Agent Fleet Management, Cryptographic Signed OTA Rollouts, State Reconciliation, and Digital Twin Telemetry",
 };
 
 export default function EdgeFleetPage() {
