@@ -63,7 +63,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         success: true,
         sessionId: (request.body as any)?.sessionId || `guardian-${Date.now()}`,
         data: {
-          message: "Guardian operational assistant is active. How can I assist you with checking alerts, camera status, or branch health?",
+          message: "KryptonAI operational assistant is active. How can I assist you with checking alerts, camera status, or branch health?",
           type: "text",
           timestamp: new Date().toISOString(),
         },
@@ -205,7 +205,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         message: "Session cleared",
       };
     } catch (error) {
-      app.log.error({ error }, "[GuardianAI] Failed to clear session");
+      app.log.error({ error }, "[KryptonAI] Failed to clear session");
       return reply.code(500).send({
         success: false,
         error: "clear_session_failed",
@@ -250,7 +250,7 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         data: response,
       };
     } catch (error) {
-      app.log.error({ error }, "[GuardianAI] Action execution failed");
+      app.log.error({ error }, "[KryptonAI] Action execution failed");
       return reply.code(500).send({
         success: false,
         error: "execution_failed",
@@ -259,5 +259,5 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
     }
   });
 
-  app.log.info("[GuardianAI] Routes registered successfully");
+  app.log.info("[KryptonAI] Routes registered successfully");
 }

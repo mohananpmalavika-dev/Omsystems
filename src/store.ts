@@ -3701,7 +3701,7 @@ export class MemoryStore {
     inputTenantId: string,
     filters: Parameters<ControlPlaneStore["listAnalyticsAlerts"]>[1],
   ) {
-    return this.analyticsAlerts
+    const raw = this.analyticsAlerts
       .filter((alert) => alert.tenantId === inputTenantId)
       .filter((alert) => !filters.cameraId || alert.cameraId === filters.cameraId)
       .filter((alert) => !filters.branchId ||
@@ -3712,6 +3712,29 @@ export class MemoryStore {
       .filter((alert) => !filters.to || alert.firstDetectedAt <= filters.to)
       .sort((left, right) => right.lastDetectedAt.localeCompare(left.lastDetectedAt))
       .slice(0, filters.limit);
+
+    return raw.map((alert) => {
+      const camera = this.cameras.get(alert.cameraId);
+      const branchId = alert.branchId || camera?.branchId;
+      const branchNode = branchId ? this.nodes.get(branchId) : undefined;
+      const parentNode = branchNode?.parentId ? this.nodes.get(branchNode.parentId) : undefined;
+      const grandParentNode = parentNode?.parentId ? this.nodes.get(parentNode.parentId) : undefined;
+
+      const areaName = alert.areaName ||
+        (parentNode?.type === "area" ? parentNode.name : (grandParentNode?.type === "area" ? grandParentNode.name : undefined));
+      const regionName = alert.regionName ||
+        (parentNode?.type === "region" ? parentNode.name : (grandParentNode?.type === "region" ? grandParentNode.name : undefined));
+      const branchName = alert.branchName || branchNode?.name;
+      const alertType = alert.alertType || alert.detectionType || alert.objectClasses?.[0] || alert.title;
+
+      return {
+        ...alert,
+        ...(branchName ? { branchName } : {}),
+        ...(areaName ? { areaName } : {}),
+        ...(regionName ? { regionName } : {}),
+        ...(alertType ? { alertType, detectionType: alertType } : {}),
+      };
+    });
   }
 
   async countAnalyticsAlerts(

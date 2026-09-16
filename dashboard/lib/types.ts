@@ -677,6 +677,12 @@ export interface AnalyticsAlert {
   branchName?: string;
   cameraName?: string;
   zoneName?: string;
+  regionId?: string;
+  regionName?: string;
+  areaId?: string;
+  areaName?: string;
+  alertType?: string;
+  detectionType?: string;
   incidentNumber?: string;
   incidentStatus?: string;
   snapshotUrl?: string;

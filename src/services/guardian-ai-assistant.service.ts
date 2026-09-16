@@ -11,8 +11,31 @@
 
 import { z } from "zod";
 import type { Pool } from "pg";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 
-// Function definitions for GPT-4 function calling
+function getEnv(name: string): string {
+  if (process.env[name]) return process.env[name]!;
+  try {
+    const envPath = resolve(process.cwd(), ".env");
+    if (existsSync(envPath)) {
+      const content = readFileSync(envPath, "utf-8");
+      for (const line of content.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const [k, ...rest] = trimmed.split("=");
+        if (k.trim() === name) {
+          return rest.join("=").trim().replace(/^["']|["']$/g, "");
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return "";
+}
+
+// Function definitions for GPT-4 / Groq function calling
 const GUARDIAN_FUNCTIONS = [
   {
     name: "show_camera_feed",
@@ -189,9 +212,18 @@ const GUARDIAN_FUNCTIONS = [
 ];
 
 export interface GuardianMessage {
-  role: "system" | "user" | "assistant" | "function";
-  content: string;
+  role: "system" | "user" | "assistant" | "function" | "tool";
+  content: string | null;
   name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: "function";
+    function: {
+      name: string;
+      arguments: string;
+    };
+  }>;
   function_call?: {
     name: string;
     arguments: string;
@@ -235,12 +267,34 @@ export class GuardianAIAssistant {
       model?: string;
     } = {}
   ) {
-    this.openAIApiKey = config.openAIApiKey || process.env.OPENAI_API_KEY || "";
-    this.openAIBaseUrl = config.openAIBaseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-    this.model = config.model || process.env.KRYPTON_AI_MODEL || process.env.GUARDIAN_AI_MODEL || "gpt-4-turbo-preview";
+    const rawApiKey =
+      config.openAIApiKey ||
+      getEnv("GROQ_API_KEY") ||
+      getEnv("OPENAI_API_KEY") ||
+      "";
+    this.openAIApiKey = rawApiKey;
+
+    const envBaseUrl = getEnv("OPENAI_BASE_URL");
+    const isGroq =
+      Boolean(getEnv("GROQ_API_KEY")) ||
+      rawApiKey.startsWith("gsk_") ||
+      Boolean(envBaseUrl && envBaseUrl.includes("groq.com"));
+
+    this.openAIBaseUrl =
+      config.openAIBaseUrl ||
+      envBaseUrl ||
+      (isGroq ? "https://api.groq.com/openai/v1" : "https://api.openai.com/v1");
+
+    this.model =
+      config.model ||
+      getEnv("KRYPTON_AI_MODEL") ||
+      getEnv("GUARDIAN_AI_MODEL") ||
+      (isGroq ? "openai/gpt-oss-120b" : "gpt-4-turbo-preview");
 
     if (!this.openAIApiKey) {
-      console.warn("[KryptonAI] OpenAI API key not configured");
+      console.warn("[KryptonAI] AI API key (GROQ_API_KEY / OPENAI_API_KEY) not configured");
+    } else {
+      console.log(`[KryptonAI] Initialized with endpoint: ${this.openAIBaseUrl}, model: ${this.model}`);
     }
   }
 
@@ -270,33 +324,66 @@ export class GuardianAIAssistant {
     });
 
     try {
-      // Call GPT-4 with function calling
+      const isGroq = this.openAIBaseUrl.includes("groq.com");
+      const payload: any = {
+        model: this.model,
+        messages: history.map((m) => {
+          const item: any = { role: m.role, content: m.content ?? "" };
+          if (m.name) item.name = m.name;
+          if (m.tool_calls) item.tool_calls = m.tool_calls;
+          if (m.tool_call_id) item.tool_call_id = m.tool_call_id;
+          return item;
+        }),
+        temperature: 0.7,
+        max_tokens: 500,
+      };
+
+      if (isGroq) {
+        payload.tools = GUARDIAN_FUNCTIONS.map((f) => ({
+          type: "function",
+          function: f,
+        }));
+        payload.tool_choice = "auto";
+      } else {
+        payload.functions = GUARDIAN_FUNCTIONS;
+        payload.function_call = "auto";
+      }
+
+      // Call AI endpoint
       const response = await fetch(`${this.openAIBaseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.openAIApiKey}`,
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages: history,
-          functions: GUARDIAN_FUNCTIONS,
-          function_call: "auto",
-          temperature: 0.7,
-          max_tokens: 500,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
+        const errBody = await response.text().catch(() => "");
+        throw new Error(`AI API error (${response.status}): ${errBody}`);
       }
 
       const data = await response.json();
-      const choice = data.choices[0];
+      const choice = data.choices?.[0];
+      if (!choice?.message) {
+        throw new Error("Invalid AI response: missing choice message");
+      }
 
-      // Handle function calling
+      // Handle modern tool_calls (Groq / OpenAI modern)
+      const toolCall = choice.message.tool_calls?.[0];
+      if (toolCall?.function) {
+        return await this.handleModernToolCall(
+          sessionId,
+          toolCall,
+          context,
+          history
+        );
+      }
+
+      // Handle legacy function_call (OpenAI legacy)
       if (choice.message.function_call) {
-        return await this.handleFunctionCall(
+        return await this.handleLegacyFunctionCall(
           sessionId,
           choice.message,
           context,
@@ -305,7 +392,7 @@ export class GuardianAIAssistant {
       }
 
       // Regular text response
-      const assistantMessage = choice.message.content;
+      const assistantMessage = choice.message.content || "";
       history.push({
         role: "assistant",
         content: assistantMessage,
@@ -322,33 +409,19 @@ export class GuardianAIAssistant {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
-      console.warn("[KryptonAI] OpenAI API error, falling back to operational assistant:", error);
+      console.warn("[KryptonAI] AI API error, falling back to operational assistant:", error);
       return await this.processFallbackMessage(message, context);
     }
   }
 
   /**
-   * Handle function calls from GPT-4
+   * Execute core function logic for security operations
    */
-  private async handleFunctionCall(
-    sessionId: string,
-    message: any,
-    context: GuardianContext,
-    history: GuardianMessage[]
-  ): Promise<GuardianResponse> {
-    const functionName = message.function_call.name;
-    const functionArgs = JSON.parse(message.function_call.arguments);
-
-    console.log(`[KryptonAI] Function called: ${functionName}`, functionArgs);
-
-    // Add function call to history
-    history.push({
-      role: "assistant",
-      content: "",
-      function_call: message.function_call,
-    });
-
-    // Execute the function
+  private async executeFunctionCore(
+    functionName: string,
+    functionArgs: any,
+    context: GuardianContext
+  ): Promise<{ functionResult: any; executed: boolean }> {
     let functionResult: any;
     let executed = false;
 
@@ -408,30 +481,164 @@ export class GuardianAIAssistant {
       };
     }
 
-    // Add function result to history
+    return { functionResult, executed };
+  }
+
+  /**
+   * Handle modern tool calls (Groq / OpenAI modern)
+   */
+  private async handleModernToolCall(
+    sessionId: string,
+    toolCall: any,
+    context: GuardianContext,
+    history: GuardianMessage[]
+  ): Promise<GuardianResponse> {
+    const functionName = toolCall.function.name;
+    let functionArgs: any = {};
+    try {
+      functionArgs = JSON.parse(toolCall.function.arguments || "{}");
+    } catch {
+      functionArgs = {};
+    }
+
+    console.log(`[KryptonAI] Tool called: ${functionName}`, functionArgs);
+
+    history.push({
+      role: "assistant",
+      content: null,
+      tool_calls: [toolCall],
+    });
+
+    const { functionResult, executed } = await this.executeFunctionCore(
+      functionName,
+      functionArgs,
+      context
+    );
+
+    history.push({
+      role: "tool",
+      tool_call_id: toolCall.id,
+      content: JSON.stringify(functionResult),
+    });
+
+    let assistantMessage = "";
+    try {
+      const followupResponse = await fetch(`${this.openAIBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.openAIApiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: history.map((m) => {
+            const item: any = { role: m.role, content: m.content ?? "" };
+            if (m.name) item.name = m.name;
+            if (m.tool_calls) item.tool_calls = m.tool_calls;
+            if (m.tool_call_id) item.tool_call_id = m.tool_call_id;
+            return item;
+          }),
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+      });
+
+      if (followupResponse.ok) {
+        const followupData = await followupResponse.json();
+        assistantMessage = followupData.choices?.[0]?.message?.content || "";
+      }
+    } catch (err) {
+      console.warn("[KryptonAI] Followup tool call failed:", err);
+    }
+
+    if (!assistantMessage) {
+      assistantMessage = `Command executed: ${functionName}. Result: ${JSON.stringify(functionResult)}`;
+    }
+
+    history.push({
+      role: "assistant",
+      content: assistantMessage,
+    });
+
+    return {
+      message: assistantMessage,
+      type: "action",
+      actions: [
+        {
+          function: functionName,
+          parameters: functionArgs,
+          executed,
+          result: functionResult,
+        },
+      ],
+      timestamp: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Handle legacy function calls from GPT-4
+   */
+  private async handleLegacyFunctionCall(
+    sessionId: string,
+    message: any,
+    context: GuardianContext,
+    history: GuardianMessage[]
+  ): Promise<GuardianResponse> {
+    const functionName = message.function_call.name;
+    let functionArgs: any = {};
+    try {
+      functionArgs = JSON.parse(message.function_call.arguments || "{}");
+    } catch {
+      functionArgs = {};
+    }
+
+    console.log(`[KryptonAI] Function called: ${functionName}`, functionArgs);
+
+    history.push({
+      role: "assistant",
+      content: "",
+      function_call: message.function_call,
+    });
+
+    const { functionResult, executed } = await this.executeFunctionCore(
+      functionName,
+      functionArgs,
+      context
+    );
+
     history.push({
       role: "function",
       name: functionName,
       content: JSON.stringify(functionResult),
     });
 
-    // Get AI's response to the function result
-    const followupResponse = await fetch(`${this.openAIBaseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${this.openAIApiKey}`,
-      },
-      body: JSON.stringify({
-        model: this.model,
-        messages: history,
-        temperature: 0.7,
-        max_tokens: 500,
-      }),
-    });
+    let assistantMessage = "";
+    try {
+      const followupResponse = await fetch(`${this.openAIBaseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.openAIApiKey}`,
+        },
+        body: JSON.stringify({
+          model: this.model,
+          messages: history,
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+      });
 
-    const followupData = await followupResponse.json();
-    const assistantMessage = followupData.choices[0].message.content;
+      if (followupResponse.ok) {
+        const followupData = await followupResponse.json();
+        assistantMessage = followupData.choices?.[0]?.message?.content || "";
+      }
+    } catch (err) {
+      console.warn("[KryptonAI] Followup function call failed:", err);
+    }
+
+    if (!assistantMessage) {
+      assistantMessage = `Command executed: ${functionName}. Result: ${JSON.stringify(functionResult)}`;
+    }
 
     history.push({
       role: "assistant",
@@ -819,7 +1026,7 @@ When users give commands:
     // 3. System status / overview / branches
     if (lower.includes("status") || lower.includes("system") || lower.includes("health") || lower.includes("branch")) {
       return {
-        message: "Guardian Security Status: Core control plane, media streaming pipelines, and perimeter monitoring are operational.",
+        message: "KryptonAI Security Status: Core control plane, media streaming pipelines, and perimeter monitoring are operational.",
         type: "action",
         actions: [
           {
@@ -836,7 +1043,7 @@ When users give commands:
 
     // 4. Help / default response
     return {
-      message: `Guardian AI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"\n\n(Tip: Configure the OPENAI_API_KEY environment variable to enable full generative conversational dialogue.)`,
+      message: `KryptonAI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"\n\n(Tip: Configure the GROQ_API_KEY or OPENAI_API_KEY environment variable to enable full generative conversational dialogue.)`,
       type: "text",
       timestamp,
     };

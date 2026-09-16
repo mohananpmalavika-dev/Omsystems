@@ -470,6 +470,19 @@ export class AnalyticsRepository {
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
          event.metadata->>'zoneName' AS zone_name,
+         COALESCE(
+           CASE WHEN parent_node.node_type = 'area' THEN parent_node.name
+                WHEN grandparent_node.node_type = 'area' THEN grandparent_node.name
+                ELSE NULL END,
+           NULL
+         ) AS area_name,
+         COALESCE(
+           CASE WHEN parent_node.node_type = 'region' THEN parent_node.name
+                WHEN grandparent_node.node_type = 'region' THEN grandparent_node.name
+                ELSE NULL END,
+           NULL
+         ) AS region_name,
+         COALESCE(event.detection_type, alert.object_classes->>0, 'intrusion') AS detection_type,
          inc.incident_number,
          inc.status AS incident_status
        FROM analytics_alerts alert
@@ -477,6 +490,8 @@ export class AnalyticsRepository {
        LEFT JOIN analytics_events event ON event.id=alert.event_id
        LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
+       LEFT JOIN resource_nodes parent_node ON parent_node.id=branch.parent_id
+       LEFT JOIN resource_nodes grandparent_node ON grandparent_node.id=parent_node.parent_id
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
@@ -586,12 +601,28 @@ export class AnalyticsRepository {
          camera.branch_node_id AS branch_id,
          branch.name AS branch_name,
          zone.name AS zone_name,
+         COALESCE(
+           CASE WHEN parent_node.node_type = 'area' THEN parent_node.name
+                WHEN grandparent_node.node_type = 'area' THEN grandparent_node.name
+                ELSE NULL END,
+           NULL
+         ) AS area_name,
+         COALESCE(
+           CASE WHEN parent_node.node_type = 'region' THEN parent_node.name
+                WHEN grandparent_node.node_type = 'region' THEN grandparent_node.name
+                ELSE NULL END,
+           NULL
+         ) AS region_name,
+         COALESCE(event.detection_type, alert.object_classes->>0, 'intrusion') AS detection_type,
          inc.incident_number,
          inc.status AS incident_status
        FROM analytics_alerts alert
        JOIN cameras camera ON camera.id=alert.camera_id
+       LEFT JOIN analytics_events event ON event.id=alert.event_id
        LEFT JOIN resource_nodes cam_node ON cam_node.id=camera.resource_node_id
        LEFT JOIN resource_nodes branch ON branch.id=camera.branch_node_id
+       LEFT JOIN resource_nodes parent_node ON parent_node.id=branch.parent_id
+       LEFT JOIN resource_nodes grandparent_node ON grandparent_node.id=parent_node.parent_id
        LEFT JOIN LATERAL (
          SELECT name FROM nbfc_analytics_zones 
          WHERE camera_id = camera.id::text OR branch_id = camera.branch_node_id::text 
@@ -973,6 +1004,9 @@ function mapAlert(row: any): AnalyticsAlert {
     ...(row.branch_id ? { branchId: row.branch_id } : {}),
     ...(row.branch_name ? { branchName: row.branch_name } : {}),
     ...(row.zone_name ? { zoneName: row.zone_name } : {}),
+    ...(row.region_name ? { regionName: row.region_name } : {}),
+    ...(row.area_name ? { areaName: row.area_name } : {}),
+    ...(row.detection_type ? { detectionType: row.detection_type, alertType: row.detection_type } : {}),
     ...(row.incident_number ? { incidentNumber: row.incident_number } : {}),
     ...(row.incident_status ? { incidentStatus: row.incident_status } : {}),
     snapshotUrl: row.snapshot_reference ?? `/v1/analytics/alerts/${row.id}/snapshot`,

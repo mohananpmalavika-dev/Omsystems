@@ -1555,6 +1555,12 @@ export interface AnalyticsAlert {
   branchName?: string | undefined;
   cameraName?: string | undefined;
   zoneName?: string | undefined;
+  regionId?: string | undefined;
+  regionName?: string | undefined;
+  areaId?: string | undefined;
+  areaName?: string | undefined;
+  alertType?: string | undefined;
+  detectionType?: string | undefined;
   incidentNumber?: string | undefined;
   incidentStatus?: string | undefined;
   snapshotUrl?: string | undefined;

@@ -27,9 +27,24 @@ import {
   Check,
   Siren,
   Loader2,
-  ShieldX
+  ShieldX,
+  Globe2,
+  BarChart3,
+  Calendar,
+  CalendarDays,
+  X,
 } from "lucide-react";
 import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from "@/lib/types";
+import {
+  AlertsGraphicalAnalytics,
+  normalizeZone,
+  normalizeBranch,
+  normalizeRegion,
+  normalizeArea,
+  normalizeAlertType,
+  normalizeAlertDate,
+  formatDisplayDate,
+} from "@/components/alerts/alerts-graphical-analytics";
 
 export default function AiAlertsIncidentHubPage() {
   const [alerts, setAlerts] = useState<AnalyticsAlert[]>([]);
@@ -37,8 +52,13 @@ export default function AiAlertsIncidentHubPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState<"split" | "charts" | "table">("split");
   const [branchFilter, setBranchFilter] = useState("all");
   const [zoneFilter, setZoneFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [areaFilter, setAreaFilter] = useState("all");
+  const [alertTypeFilter, setAlertTypeFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState("all");
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conversionFilter, setConversionFilter] = useState<"all" | "unconverted" | "converted" | "false_alarm">("all");
@@ -103,28 +123,81 @@ export default function AiAlertsIncidentHubPage() {
     return () => clearInterval(interval);
   }, [loadAlerts]);
 
-  // Distinct branches and zones for filters
+  // Distinct filter options across all 5 dimensions
   const uniqueBranches = useMemo(() => {
-    const map = new Map<string, string>();
+    const set = new Set<string>();
     for (const a of alerts) {
-      if (a.branchName) map.set(a.branchName, a.branchName);
+      if (a.branchName) set.add(a.branchName);
+      set.add(normalizeBranch(a));
     }
-    return Array.from(map.values()).sort();
+    return Array.from(set).sort();
   }, [alerts]);
 
   const uniqueZones = useMemo(() => {
-    const map = new Map<string, string>();
+    const set = new Set<string>();
     for (const a of alerts) {
-      if (a.zoneName) map.set(a.zoneName, a.zoneName);
+      if (a.zoneName) set.add(a.zoneName);
+      set.add(normalizeZone(a));
     }
-    return Array.from(map.values()).sort();
+    return Array.from(set).sort();
   }, [alerts]);
 
-  // Filtering
+  const uniqueRegions = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts) {
+      if (a.regionName) set.add(a.regionName);
+      set.add(normalizeRegion(a));
+    }
+    return Array.from(set).sort();
+  }, [alerts]);
+
+  const uniqueAreas = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts) {
+      if (a.areaName) set.add(a.areaName);
+      set.add(normalizeArea(a));
+    }
+    return Array.from(set).sort();
+  }, [alerts]);
+
+  const uniqueAlertTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts) {
+      set.add(normalizeAlertType(a));
+    }
+    return Array.from(set).sort();
+  }, [alerts]);
+
+  const uniqueDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alerts) {
+      set.add(normalizeAlertDate(a));
+    }
+    return Array.from(set).sort().reverse();
+  }, [alerts]);
+
+  const handleResetAllFilters = useCallback(() => {
+    setBranchFilter("all");
+    setZoneFilter("all");
+    setRegionFilter("all");
+    setAreaFilter("all");
+    setAlertTypeFilter("all");
+    setDateFilter("all");
+    setSeverityFilter("all");
+    setStatusFilter("all");
+    setConversionFilter("all");
+    setSearchQuery("");
+  }, []);
+
+  // Multi-dimensional Filtering
   const filteredAlerts = useMemo(() => {
     return alerts.filter((alert) => {
-      if (branchFilter !== "all" && alert.branchName !== branchFilter) return false;
-      if (zoneFilter !== "all" && alert.zoneName !== zoneFilter) return false;
+      if (branchFilter !== "all" && alert.branchName !== branchFilter && normalizeBranch(alert) !== branchFilter) return false;
+      if (zoneFilter !== "all" && alert.zoneName !== zoneFilter && normalizeZone(alert) !== zoneFilter) return false;
+      if (regionFilter !== "all" && alert.regionName !== regionFilter && normalizeRegion(alert) !== regionFilter) return false;
+      if (areaFilter !== "all" && alert.areaName !== areaFilter && normalizeArea(alert) !== areaFilter) return false;
+      if (alertTypeFilter !== "all" && normalizeAlertType(alert) !== alertTypeFilter) return false;
+      if (dateFilter !== "all" && normalizeAlertDate(alert) !== dateFilter) return false;
       if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
       if (statusFilter !== "all" && alert.status !== statusFilter) return false;
       if (conversionFilter === "unconverted" && (alert.incidentId || alert.incidentNumber || ["resolved", "false_alarm", "suppressed"].includes(alert.status))) return false;
@@ -135,18 +208,31 @@ export default function AiAlertsIncidentHubPage() {
         const q = searchQuery.toLowerCase();
         const matchTitle = alert.title.toLowerCase().includes(q);
         const matchCamera = alert.cameraName?.toLowerCase().includes(q) || alert.cameraId.toLowerCase().includes(q);
-        const matchBranch = alert.branchName?.toLowerCase().includes(q);
-        const matchZone = alert.zoneName?.toLowerCase().includes(q);
+        const matchBranch = alert.branchName?.toLowerCase().includes(q) || normalizeBranch(alert).toLowerCase().includes(q);
+        const matchZone = alert.zoneName?.toLowerCase().includes(q) || normalizeZone(alert).toLowerCase().includes(q);
+        const matchRegion = alert.regionName?.toLowerCase().includes(q) || normalizeRegion(alert).toLowerCase().includes(q);
+        const matchArea = alert.areaName?.toLowerCase().includes(q) || normalizeArea(alert).toLowerCase().includes(q);
+        const matchType = normalizeAlertType(alert).toLowerCase().includes(q);
         const matchIncident = alert.incidentNumber?.toLowerCase().includes(q);
         const matchFalseReason = alert.falseAlarmReason?.toLowerCase().includes(q);
-        if (!matchTitle && !matchCamera && !matchBranch && !matchZone && !matchIncident && !matchFalseReason) return false;
+        if (!matchTitle && !matchCamera && !matchBranch && !matchZone && !matchRegion && !matchArea && !matchType && !matchIncident && !matchFalseReason) return false;
       }
 
       return true;
     });
-  }, [alerts, branchFilter, zoneFilter, severityFilter, statusFilter, conversionFilter, searchQuery]);
+  }, [alerts, branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, searchQuery]);
 
-  const isFiltered = branchFilter !== "all" || zoneFilter !== "all" || severityFilter !== "all" || statusFilter !== "all" || conversionFilter !== "all" || Boolean(searchQuery.trim());
+  const isFiltered =
+    branchFilter !== "all" ||
+    zoneFilter !== "all" ||
+    regionFilter !== "all" ||
+    areaFilter !== "all" ||
+    alertTypeFilter !== "all" ||
+    dateFilter !== "all" ||
+    severityFilter !== "all" ||
+    statusFilter !== "all" ||
+    conversionFilter !== "all" ||
+    Boolean(searchQuery.trim());
 
   // Summary counts - uses accurate PostgreSQL aggregate counts when unfiltered, and filtered slice when filters are applied
   const stats = useMemo(() => {
@@ -328,7 +414,47 @@ export default function AiAlertsIncidentHubPage() {
           title="AI Alerts & Incident Conversion Hub"
           description="Real-time multi-camera detection feed with Zone, Branch, Camera, Alert context, and one-click enterprise Incident Conversion"
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* View Switcher */}
+              <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 text-xs shadow-inner">
+                <button
+                  onClick={() => setViewMode("charts")}
+                  className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                    viewMode === "charts"
+                      ? "bg-sky-600 text-white shadow"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Graphical Analytics (Zone, Region, Area, Branch, Alert Type)"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                  <span>Graphical Charts</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("split")}
+                  className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                    viewMode === "split"
+                      ? "bg-sky-600 text-white shadow"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Unified Split View (Charts + Feed)"
+                >
+                  <Layers className="h-4 w-4" />
+                  <span>Split View</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("table")}
+                  className={`px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition-all ${
+                    viewMode === "table"
+                      ? "bg-sky-600 text-white shadow"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                  title="Table Detections Feed Only"
+                >
+                  <BellRing className="h-4 w-4" />
+                  <span>Alerts Feed</span>
+                </button>
+              </div>
+
               <Link
                 href="/incidents"
                 className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 shadow-sm transition-colors"
@@ -348,6 +474,26 @@ export default function AiAlertsIncidentHubPage() {
             </div>
           }
         />
+
+        {/* Graphical Representation of Alerts (Zone-wise, Region-wise, Area-wise, Branch-wise, Alert Type-wise, Date-wise) */}
+        {viewMode !== "table" && (
+          <AlertsGraphicalAnalytics
+            alerts={alerts}
+            selectedZone={zoneFilter}
+            selectedBranch={branchFilter}
+            selectedRegion={regionFilter}
+            selectedArea={areaFilter}
+            selectedAlertType={alertTypeFilter}
+            selectedDate={dateFilter}
+            onSelectZone={(z) => setZoneFilter((prev) => (prev === z ? "all" : z))}
+            onSelectBranch={(b) => setBranchFilter((prev) => (prev === b ? "all" : b))}
+            onSelectRegion={(r) => setRegionFilter((prev) => (prev === r ? "all" : r))}
+            onSelectArea={(a) => setAreaFilter((prev) => (prev === a ? "all" : a))}
+            onSelectAlertType={(t) => setAlertTypeFilter((prev) => (prev === t ? "all" : t))}
+            onSelectDate={(d) => setDateFilter((prev) => (prev === d ? "all" : d))}
+            onResetFilters={handleResetAllFilters}
+          />
+        )}
 
         {/* Action Status Message */}
         {actionMessage && (
@@ -505,6 +651,56 @@ export default function AiAlertsIncidentHubPage() {
               ))}
             </select>
 
+            {/* Region Filter */}
+            <select
+              value={regionFilter}
+              onChange={(e) => setRegionFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+            >
+              <option value="all">All Regions</option>
+              {uniqueRegions.map((r) => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+
+            {/* Area Filter */}
+            <select
+              value={areaFilter}
+              onChange={(e) => setAreaFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+            >
+              <option value="all">All Areas</option>
+              {uniqueAreas.map((a) => (
+                <option key={a} value={a}>{a}</option>
+              ))}
+            </select>
+
+            {/* Alert Type Filter */}
+            <select
+              value={alertTypeFilter}
+              onChange={(e) => setAlertTypeFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+            >
+              <option value="all">All Alert Types</option>
+              {uniqueAlertTypes.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+
+            {/* Date Filter */}
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              className="px-3 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+            >
+              <option value="all">All Dates ({uniqueDates.length})</option>
+              {uniqueDates.map((d) => (
+                <option key={d} value={d}>
+                  {formatDisplayDate(d)}
+                </option>
+              ))}
+            </select>
+
             {/* Severity Filter */}
             <select
               value={severityFilter}
@@ -533,6 +729,19 @@ export default function AiAlertsIncidentHubPage() {
               <option value="resolved">Resolved</option>
               <option value="false_alarm">False Alarm</option>
             </select>
+
+            {/* Reset Filter Button */}
+            {isFiltered && (
+              <button
+                type="button"
+                onClick={handleResetAllFilters}
+                className="px-3 py-2 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                title="Reset all active dimension and status filters"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Reset Filters</span>
+              </button>
+            )}
 
             {/* Conversion Filter Chips */}
             <div className="flex items-center gap-1 bg-slate-950/80 p-1 rounded-xl border border-slate-800">
@@ -572,256 +781,252 @@ export default function AiAlertsIncidentHubPage() {
           </div>
         </div>
 
-        {/* AI Alerts Table */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-slate-400 font-semibold uppercase tracking-wider">
-                  <th className="py-3 px-4">Zone</th>
-                  <th className="py-3 px-4">Branch</th>
-                  <th className="py-3 px-4">Camera</th>
-                  <th className="py-3 px-4">Alert Details</th>
-                  <th className="py-3 px-4 text-center">Alert Status</th>
-                  <th className="py-3 px-4 text-center">Incident Status</th>
-                  <th className="py-3 px-4 text-center">Evidence</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {loading && alerts.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
-                      <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-sky-400" />
-                      <span>Loading AI detections across fleet cameras…</span>
-                    </td>
+        {/* AI Alerts Table / List */}
+        {viewMode !== "charts" ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-950/80 text-slate-400 font-semibold uppercase tracking-wider">
+                    <th className="py-3 px-4">Zone</th>
+                    <th className="py-3 px-4">Branch</th>
+                    <th className="py-3 px-4">Camera</th>
+                    <th className="py-3 px-4">Alert Details</th>
+                    <th className="py-3 px-4 text-center">Alert Status</th>
+                    <th className="py-3 px-4 text-center">Incident Status</th>
+                    <th className="py-3 px-4 text-center">Evidence</th>
+                    <th className="py-3 px-4 text-right">Action</th>
                   </tr>
-                ) : filteredAlerts.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400">
-                      <ShieldCheck className="h-8 w-8 text-slate-600 mx-auto mb-2" />
-                      <p className="font-semibold text-slate-300">No matching AI alerts found</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Try clearing or relaxing your search/status filters.
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredAlerts.map((alert) => {
-                    const isConverted = Boolean(alert.incidentId || alert.incidentNumber);
-                    const isConverting = convertingId === alert.id;
-                    const zoneName = alert.zoneName || "Zone not specified";
-                    const branchName = alert.branchName || "Fleet Branch";
-                    const cameraName = alert.cameraName || alert.cameraId.slice(0, 8);
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {loading && alerts.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-sky-400" />
+                        <span>Loading AI detections across fleet cameras…</span>
+                      </td>
+                    </tr>
+                  ) : filteredAlerts.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <ShieldCheck className="h-8 w-8 text-slate-600 mx-auto mb-2" />
+                        <p className="font-semibold text-slate-300">No matching AI alerts found</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Try clearing or relaxing your search/status filters.
+                        </p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredAlerts.map((alert) => {
+                      const isConverted = Boolean(alert.incidentId || alert.incidentNumber);
+                      const isConverting = convertingId === alert.id;
+                      const zoneName = alert.zoneName || normalizeZone(alert);
+                      const branchName = alert.branchName || normalizeBranch(alert);
+                      const cameraName = alert.cameraName || alert.cameraId.slice(0, 8);
 
-                    return (
-                      <tr
-                        key={alert.id}
-                        className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
-                        onClick={() => {
-                          setActiveMediaAlert(alert);
-                          setMediaModalTab("image");
-                        }}
-                      >
-                        {/* Zone Column */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-950/60 border border-emerald-700/40 text-emerald-300">
-                            <MapPin className="h-3 w-3 text-emerald-400" />
-                            <span>{zoneName}</span>
-                          </span>
-                        </td>
-
-                        {/* Branch Column */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 font-medium text-slate-200">
-                            <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                            <span>{branchName}</span>
-                          </div>
-                        </td>
-
-                        {/* Camera Column */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <Camera className="h-3.5 w-3.5 text-sky-400" />
-                            <span className="font-mono text-slate-200">{cameraName}</span>
-                          </div>
-                        </td>
-
-                        {/* Alert Details Column */}
-                        <td className="py-3 px-4 min-w-[220px]">
-                          <div className="flex items-start gap-2">
-                            <span
-                              className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] border mt-0.5 flex-shrink-0 ${getSeverityBadge(
-                                alert.severity
-                              )}`}
-                            >
-                              {alert.severity}
+                      return (
+                        <tr
+                          key={alert.id}
+                          className="hover:bg-slate-800/40 transition-colors group cursor-pointer"
+                          onClick={() => {
+                            setActiveMediaAlert(alert);
+                            setMediaModalTab("image");
+                          }}
+                        >
+                          {/* Zone Column */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-950/60 border border-emerald-700/40 text-emerald-300">
+                              <MapPin className="h-3 w-3 text-emerald-400" />
+                              <span>{zoneName}</span>
                             </span>
-                            <div className="min-w-0">
-                              <p className="font-semibold text-slate-100 truncate group-hover:text-sky-300 transition-colors">
-                                {alert.title}
-                              </p>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
-                                <span>{Math.round(alert.confidence * 100)}% match</span>
-                                <span>•</span>
+                          </td>
+
+                          {/* Branch Column */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 font-medium text-slate-200">
+                              <Building2 className="h-3.5 w-3.5 text-slate-400" />
+                              <span>{branchName}</span>
+                            </div>
+                          </td>
+
+                          {/* Camera Column */}
+                          <td className="py-3 px-4 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <Camera className="h-3.5 w-3.5 text-sky-400" />
+                              <span className="font-mono text-slate-200">{cameraName}</span>
+                            </div>
+                          </td>
+
+                          {/* Alert Details Column */}
+                          <td className="py-3 px-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
                                 <span
-                                  className="flex items-center gap-1"
-                                  title={
-                                    alert.occurrenceCount && alert.occurrenceCount > 1 && alert.lastDetectedAt
-                                      ? `Triggered: ${new Date(alert.firstDetectedAt || alert.createdAt).toLocaleString()}\nLatest occurrence: ${new Date(alert.lastDetectedAt).toLocaleString()} (${alert.occurrenceCount} detections)`
-                                      : `Detected at: ${new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleString()}`
-                                  }
+                                  className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${getSeverityBadge(
+                                    alert.severity
+                                  )}`}
                                 >
-                                  <Clock className="h-3 w-3 text-slate-500" />
-                                  <span>{new Date(alert.firstDetectedAt || alert.createdAt || alert.lastDetectedAt).toLocaleTimeString()}</span>
+                                  {alert.severity}
                                 </span>
-                                {alert.occurrenceCount && alert.occurrenceCount > 1 && (
-                                  <>
-                                    <span>•</span>
-                                    <span
-                                      className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/60 font-mono"
-                                      title={`Repeated ${alert.occurrenceCount} times (latest at ${new Date(alert.lastDetectedAt).toLocaleTimeString()})`}
-                                    >
-                                      {alert.occurrenceCount}x
-                                    </span>
-                                  </>
+                                <span className="font-semibold text-slate-100 group-hover:text-sky-300 transition-colors">
+                                  {alert.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 text-slate-400 text-[11px]">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3 text-slate-500" />
+                                  <span>{new Date(alert.lastDetectedAt || alert.createdAt).toLocaleTimeString()}</span>
+                                </span>
+                                {alert.confidence !== undefined && (
+                                  <span>Confidence: {Math.round(Number(alert.confidence) * 100)}%</span>
+                                )}
+                                {alert.occurrenceCount > 1 && (
+                                  <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 text-[10px] font-mono font-medium">
+                                    ×{alert.occurrenceCount} occurrences
+                                  </span>
                                 )}
                               </div>
-                              {alert.falseAlarmReason && (
-                                <div className="flex items-center gap-1.5 text-[11px] text-rose-400 font-medium mt-1">
-                                  <ShieldX className="h-3 w-3 text-rose-400 flex-shrink-0" />
-                                  <span className="italic truncate">{alert.falseAlarmReason}</span>
-                                </div>
-                              )}
                             </div>
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Alert Status Column */}
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border uppercase tracking-wider ${getStatusBadge(
-                              alert.status
-                            )}`}
-                          >
-                            {alert.status.replace("_", " ")}
-                          </span>
-                        </td>
-
-                        {/* Incident Status Column */}
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
-                          {isConverted ? (
-                            <Link
-                              href={`/incidents/${alert.incidentId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/80 border border-indigo-700/50 text-indigo-300 hover:bg-indigo-900 transition-colors font-mono font-semibold"
+                          {/* Alert Status Column */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-medium border uppercase tracking-wider ${getStatusBadge(
+                                alert.status
+                              )}`}
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
-                              <span>{alert.incidentNumber || "Incident"}</span>
-                            </Link>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800/80 text-slate-400 border border-slate-700">
-                              Not Converted
+                              {alert.status.replace("_", " ")}
                             </span>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* Evidence Column */}
-                        <td className="py-3 px-4 text-center whitespace-nowrap">
-                          <div className="inline-flex items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMediaAlert(alert);
-                                setMediaModalTab("image");
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-colors"
-                              title="View Snapshot Image"
-                            >
-                              <Eye className="h-3.5 w-3.5 text-sky-400" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveMediaAlert(alert);
-                                setMediaModalTab("video");
-                              }}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition-colors"
-                              title="View Video Clip / Stream"
-                            >
-                              <FileVideo className="h-3.5 w-3.5 text-amber-400" />
-                            </button>
-                          </div>
-                        </td>
+                          {/* Incident Status Column */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            {isConverted ? (
+                              <Link
+                                href={`/incidents/${alert.incidentId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-950/80 border border-indigo-700/50 text-indigo-300 hover:bg-indigo-900 transition-colors font-mono font-semibold"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
+                                <span>{alert.incidentNumber || "Incident"}</span>
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-slate-800/80 text-slate-400 border border-slate-700">
+                                Not Converted
+                              </span>
+                            )}
+                          </td>
 
-                        {/* Action Column */}
-                        <td className="py-3 px-4 text-right whitespace-nowrap">
-                          {isConverted ? (
-                            <Link
-                              href={`/incidents/${alert.incidentId}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold transition-colors"
-                            >
-                              <span>View Incident</span>
-                              <ArrowRight className="h-3 w-3" />
-                            </Link>
-                          ) : alert.status === "false_alarm" ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/40 text-rose-300 border border-rose-800/40 text-xs font-medium">
-                              <ShieldX className="h-3.5 w-3.5 text-rose-400" />
-                              <span>False Alarm</span>
-                            </span>
-                          ) : (
-                            <div className="flex items-center justify-end gap-1.5">
+                          {/* Evidence Column */}
+                          <td className="py-3 px-4 text-center whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setMarkingFalseAlert(alert);
+                                  setActiveMediaAlert(alert);
+                                  setMediaModalTab("image");
                                 }}
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors shadow-sm"
-                                title="Mark as False Alarm"
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-sky-600/30 text-slate-300 hover:text-sky-300 border border-slate-700 transition-colors"
+                                title="View Snapshot"
                               >
-                                <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                                <Eye className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveMediaAlert(alert);
+                                  setMediaModalTab("video");
+                                }}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-indigo-600/30 text-slate-300 hover:text-indigo-300 border border-slate-700 transition-colors"
+                                title="View Video Clip"
+                              >
+                                <FileVideo className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+
+                          {/* Action Column */}
+                          <td className="py-3 px-4 text-right whitespace-nowrap">
+                            {isConverted ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-[11px]">
+                                <Check className="h-3.5 w-3.5" />
+                                <span>Converted</span>
+                              </span>
+                            ) : alert.status === "false_alarm" ? (
+                              <span className="inline-flex items-center gap-1 text-rose-400 font-medium text-[11px]">
+                                <ShieldX className="h-3.5 w-3.5" />
                                 <span>False Alarm</span>
-                              </button>
-                              <button
-                                type="button"
-                                disabled={isConverting}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleConvertIncident(alert.id);
-                                }}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition-colors"
-                                title="Convert this alert into an Incident"
-                              >
-                                {isConverting ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Sparkles className="h-3 w-3" />
-                                )}
-                                <span>Convert</span>
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                              </span>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setMarkingFalseAlert(alert);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-semibold transition-colors shadow-sm"
+                                  title="Mark as False Alarm"
+                                >
+                                  <ShieldX className="h-3.5 w-3.5 text-rose-400" />
+                                  <span>False Alarm</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={isConverting}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleConvertIncident(alert.id);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold shadow transition-colors"
+                                  title="Convert this alert into an Incident"
+                                >
+                                  {isConverting ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-3 w-3" />
+                                  )}
+                                  <span>Convert</span>
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="py-3 px-4 bg-slate-950/70 border-t border-slate-800 text-slate-400 text-xs flex items-center justify-between">
-            <span>
-              Showing {filteredAlerts.length} of {alerts.length} loaded alerts
-              {summary?.total && summary.total > alerts.length ? ` (${summary.total} total in database)` : ""}
-            </span>
-            <span className="font-mono text-slate-500">Auto-refresh active (12s)</span>
+            <div className="py-3 px-4 bg-slate-950/70 border-t border-slate-800 text-slate-400 text-xs flex items-center justify-between">
+              <span>
+                Showing {filteredAlerts.length} of {alerts.length} loaded alerts
+                {summary?.total && summary.total > alerts.length ? ` (${summary.total} total in database)` : ""}
+              </span>
+              <span className="font-mono text-slate-500">Auto-refresh active (12s)</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 text-center space-y-3">
+            <div className="text-slate-300 font-semibold text-sm">
+              Graphical Analytics Mode Active
+            </div>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Visual charts are currently showing all {filteredAlerts.length} filtered alerts. Switch to Split View to inspect the tabular detections feed simultaneously.
+            </p>
+            <button
+              onClick={() => setViewMode("split")}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow transition-colors"
+            >
+              <Layers className="h-3.5 w-3.5" />
+              <span>Switch to Split View</span>
+            </button>
+          </div>
+        )}
 
         {/* Modal: Dismiss as False Alarm */}
         {markingFalseAlert && (

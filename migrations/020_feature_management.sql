@@ -295,7 +295,7 @@ INSERT INTO global_features (feature_key, feature_name, feature_category, descri
 
 -- AI Features
 ('ai-video-search', 'AI Video Search', 'ai', 'Natural language video search with semantic understanding', true, '{"requires_openai": true}'),
-('guardian-ai-assistant', 'Guardian AI Assistant', 'ai', 'JARVIS-like AI security assistant', true, '{"requires_openai": true, "requires_gpt4": true}'),
+('guardian-ai-assistant', 'KryptonAI Assistant', 'ai', 'JARVIS-like AI security assistant', true, '{"requires_openai": true, "requires_gpt4": true}'),
 ('ai-incident-summary', 'AI Incident Summary', 'ai', 'Automatic incident report generation', true, '{"requires_openai": true}'),
 ('ai-evidence-builder', 'AI Evidence Builder', 'ai', 'Intelligent evidence collection and organization', true, '{}'),
 ('ai-prediction', 'AI Prediction Engine', 'ai', 'Predictive analytics for incidents and failures', false, '{"experimental": true}'),
