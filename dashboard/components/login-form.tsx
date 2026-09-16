@@ -738,16 +738,25 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       <aside className="login-introduction" aria-label="About your workspace">
         <div className="login-introduction-brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="" /> : <span className="auth-brand-mark"><ShieldCheck size={24} /></span>}<span>{branding.orgName || "KryptonVision"}</span></div>
         <div className="login-introduction-copy">
-          <p className="login-kicker">NEXT-GENERATION SECURITY INTELLIGENCE</p>
-          <h2><strong>KryptoVision</strong><br />See Every Risk.<br />Secure Every Branch.</h2>
-          <p>AI-powered security intelligence for safer branches, stronger operations, and faster response.</p>
+          <p className="login-kicker">ENTERPRISE SECURITY COMMAND</p>
+          <h2>See the operation<br /><em>before it becomes</em><br />an incident.</h2>
+          <p>One trusted command surface for video intelligence, branch health, and decisive response.</p>
           <ul>
-            <li><CheckCircle2 size={18} /><span>Unified surveillance with predictive analytics and AI-driven insights</span></li>
-            <li><CheckCircle2 size={18} /><span>Proactive threat intelligence with instant incident orchestration</span></li>
-            <li><CheckCircle2 size={18} /><span>Enterprise-grade compliance, forensics, and audit capabilities</span></li>
+            <li><CheckCircle2 size={18} /><span>Live visibility across every critical site and device</span></li>
+            <li><CheckCircle2 size={18} /><span>Intelligence that prioritizes the next best response</span></li>
+            <li><CheckCircle2 size={18} /><span>Controls built for resilient, auditable operations</span></li>
           </ul>
         </div>
-        <p className="login-introduction-footer"><ShieldCheck size={15} /> Where intelligence meets security excellence.</p>
+        <div className="auth-command-visual" aria-hidden="true">
+          <div className="auth-visual-grid" />
+          <div className="auth-orbit auth-orbit-one" />
+          <div className="auth-orbit auth-orbit-two" />
+          <div className="auth-signal auth-signal-one" />
+          <div className="auth-signal auth-signal-two" />
+          <div className="auth-core"><ShieldCheck size={27} /></div>
+          <div className="auth-visual-caption"><span className="auth-visual-pulse" /> LIVE SECURITY POSTURE</div>
+        </div>
+        <p className="login-introduction-footer"><ShieldCheck size={15} /> Intelligence, clarity, and control—always within reach.</p>
       </aside>
       <div className="login-card">
         <header className="login-header">
