@@ -10,7 +10,35 @@
  */
 
 import type { Pool } from "pg";
-import { AIVideoSearchService, type VideoObject, type VideoObjectAttributes } from "./ai-video-search.js";
+import { AIVideoSearchService, type VideoObject, type VideoObjectAttributes, ValidationError, DatabaseError } from "./ai-video-search.js";
+
+/**
+ * Custom error classes for integration pipeline
+ */
+export class PipelineError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+    public readonly details?: Record<string, unknown>
+  ) {
+    super(message);
+    this.name = "PipelineError";
+  }
+}
+
+export class IndexingError extends PipelineError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "INDEXING_ERROR", details);
+    this.name = "IndexingError";
+  }
+}
+
+export class EnrichmentError extends PipelineError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message, "ENRICHMENT_ERROR", details);
+    this.name = "EnrichmentError";
+  }
+}
 
 export interface VideoIndexingJob {
   id: string;
@@ -36,6 +64,8 @@ export interface IndexingResult {
   trackingIdsAssigned: number;
   processingTimeMs: number;
   error?: string;
+  warnings?: Array<{ step: string; error: string }>;
+  additionalErrors?: Array<{ step: string; error: string }>;
 }
 
 export interface SearchEnrichment {
@@ -113,10 +143,28 @@ export class VideoSearchIntegrationPipeline {
     generateEmbeddings?: boolean;
     enableCrossCameraTracking?: boolean;
   }): Promise<IndexingResult> {
+    // Validate inputs
+    if (!input.tenantId || typeof input.tenantId !== "string") {
+      throw new ValidationError("Invalid tenantId", { tenantId: input.tenantId });
+    }
+    if (!input.cameraId || typeof input.cameraId !== "string") {
+      throw new ValidationError("Invalid cameraId", { cameraId: input.cameraId });
+    }
+    if (!input.segmentId || typeof input.segmentId !== "string") {
+      throw new ValidationError("Invalid segmentId", { segmentId: input.segmentId });
+    }
+    if (!input.videoPath || typeof input.videoPath !== "string") {
+      throw new ValidationError("Invalid videoPath", { videoPath: input.videoPath });
+    }
+    if (!Array.isArray(input.objects)) {
+      throw new ValidationError("Objects must be an array", { objects: input.objects });
+    }
+
     const startTime = Date.now();
     let objectsIndexed = 0;
     let embeddingsGenerated = 0;
     let trackingIdsAssigned = 0;
+    const errors: Array<{ step: string; error: string }> = [];
 
     try {
       // Step 1: Generate embeddings for objects if requested
@@ -131,7 +179,10 @@ export class VideoSearchIntegrationPipeline {
             obj.embedding = embedding;
             embeddingsGenerated++;
           } catch (error) {
-            console.warn(`Failed to generate embedding for object ${obj.objectId}:`, error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.warn(`Failed to generate embedding for object ${obj.objectId}:`, errorMsg);
+            errors.push({ step: "embedding_generation", error: errorMsg });
+            
             // Embeddings improve similarity search but are not required for
             // attribute and natural-language retrieval. Keep indexing the
             // detection if both embedding providers are unavailable.
@@ -139,29 +190,40 @@ export class VideoSearchIntegrationPipeline {
               obj.embedding = await this.aiVideoSearch.generateAttributeEmbedding(obj.attributes);
               embeddingsGenerated++;
             } catch (fallbackError) {
-              console.warn(`Failed to generate fallback embedding for object ${obj.objectId}:`, fallbackError);
+              const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+              console.warn(`Failed to generate fallback embedding for object ${obj.objectId}:`, fallbackMsg);
+              errors.push({ step: "fallback_embedding", error: fallbackMsg });
             }
           }
         }
       }
 
       // Step 2: Index video metadata with objects
-      await this.aiVideoSearch.indexVideoMetadata(
-        input.tenantId,
-        input.cameraId,
-        input.segmentId,
-        input.objects,
-        {
-          startTime: input.startTime,
-          endTime: input.endTime,
-          branchId: input.metadata?.branchId,
-          sceneType: input.metadata?.sceneType,
-          lightingCondition: input.metadata?.lightingCondition,
-          weatherCondition: input.metadata?.weatherCondition,
-          crowdDensity: input.metadata?.crowdDensity,
-        }
-      );
-      objectsIndexed = input.objects.length;
+      try {
+        await this.aiVideoSearch.indexVideoMetadata(
+          input.tenantId,
+          input.cameraId,
+          input.segmentId,
+          input.objects,
+          {
+            startTime: input.startTime,
+            endTime: input.endTime,
+            branchId: input.metadata?.branchId,
+            sceneType: input.metadata?.sceneType,
+            lightingCondition: input.metadata?.lightingCondition,
+            weatherCondition: input.metadata?.weatherCondition,
+            crowdDensity: input.metadata?.crowdDensity,
+          }
+        );
+        objectsIndexed = input.objects.length;
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        errors.push({ step: "metadata_indexing", error: errorMsg });
+        throw new IndexingError("Failed to index video metadata", { 
+          segmentId: input.segmentId,
+          error: errorMsg 
+        });
+      }
 
       // Step 3: Attempt cross-camera tracking if enabled
       if (input.enableCrossCameraTracking && input.objects.length > 0) {
@@ -177,7 +239,10 @@ export class VideoSearchIntegrationPipeline {
               trackingIdsAssigned++;
             }
           } catch (error) {
-            console.warn(`Cross-camera tracking failed for object ${obj.objectId}:`, error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            console.warn(`Cross-camera tracking failed for object ${obj.objectId}:`, errorMsg);
+            errors.push({ step: "cross_camera_tracking", error: errorMsg });
+            // Continue - tracking is optional enhancement
           }
         }
       }
@@ -190,16 +255,20 @@ export class VideoSearchIntegrationPipeline {
         embeddingsGenerated,
         trackingIdsAssigned,
         processingTimeMs,
+        ...(errors.length > 0 && { warnings: errors }),
       };
     } catch (error) {
       const processingTimeMs = Date.now() - startTime;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
       return {
         success: false,
         objectsIndexed,
         embeddingsGenerated,
         trackingIdsAssigned,
         processingTimeMs,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMsg,
+        ...(errors.length > 0 && { additionalErrors: errors }),
       };
     }
   }

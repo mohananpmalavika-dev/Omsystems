@@ -239,41 +239,71 @@ export function EdgeFleetManager() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Total Gateways</div>
-          <div className="text-2xl font-bold text-white font-mono">{summary?.totalAgents || 400}</div>
-          <div className="text-[10px] text-slate-400">100% Branches Enrolled</div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-white font-mono">{summary?.totalAgents ?? 0}</div>
+          )}
+          <div className="text-[10px] text-slate-400">
+            {summary?.totalAgents ? "Branches Enrolled" : "No agents enrolled"}
+          </div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Online & Streaming</div>
-          <div className="text-2xl font-bold text-emerald-400 font-mono">{summary?.onlineCount || 388}</div>
-          <div className="text-[10px] text-emerald-400">97.0% Fleet Healthy</div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-emerald-400 font-mono">{summary?.onlineCount ?? 0}</div>
+          )}
+          <div className="text-[10px] text-emerald-400">
+            {summary?.totalAgents ? `${((summary.onlineCount / summary.totalAgents) * 100).toFixed(1)}% Fleet Healthy` : "—"}
+          </div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Latest (v3.7.2)</div>
-          <div className="text-2xl font-bold text-cyan-400 font-mono">
-            {summary?.versionDistribution?.["3.7.2"] || 315}
-          </div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-cyan-400 font-mono">
+              {summary?.versionDistribution?.["3.7.2"] ?? 0}
+            </div>
+          )}
           <div className="text-[10px] text-cyan-300 font-mono">Target Standard</div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Config Drifted</div>
-          <div className="text-2xl font-bold text-amber-400 font-mono">{summary?.configDriftedCount || 29}</div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-amber-400 font-mono">{summary?.configDriftedCount ?? 0}</div>
+          )}
           <div className="text-[10px] text-amber-300">Requires Reconciliation</div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Certs (&lt;30 Days)</div>
-          <div className="text-2xl font-bold text-amber-400 font-mono">{summary?.certificates?.expiringWithin30Days || 12}</div>
-          <div className="text-[10px] text-rose-400">3 &lt; 14 Days Critical</div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-amber-400 font-mono">{summary?.certificates?.expiringWithin30Days ?? 0}</div>
+          )}
+          <div className="text-[10px] text-rose-400">
+            {summary?.certificates?.expiringWithin14Days ? `${summary.certificates.expiringWithin14Days} < 14 Days Critical` : "Monitor renewal"}
+          </div>
         </div>
 
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-[11px] font-mono text-slate-400">Degraded / Offline</div>
-          <div className="text-2xl font-bold text-rose-400 font-mono">
-            {(summary?.degradedCount || 7) + (summary?.offlineCount || 5)}
-          </div>
+          {loading ? (
+            <div className="text-2xl font-bold text-slate-600 font-mono">—</div>
+          ) : (
+            <div className="text-2xl font-bold text-rose-400 font-mono">
+              {(summary?.degradedCount ?? 0) + (summary?.offlineCount ?? 0)}
+            </div>
+          )}
           <div className="text-[10px] text-rose-400">Automated Triage</div>
         </div>
       </div>
@@ -322,22 +352,38 @@ export function EdgeFleetManager() {
 
       {/* Fleet Table */}
       <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800">
-                <th className="py-3.5 px-4 font-semibold">Branch & Gateway</th>
-                <th className="py-3.5 px-4 font-semibold">Agent (Act / Des)</th>
-                <th className="py-3.5 px-4 font-semibold">Config (Act / Des)</th>
-                <th className="py-3.5 px-4 font-semibold">CPU / RAM</th>
-                <th className="py-3.5 px-4 font-semibold">Cert Health</th>
-                <th className="py-3.5 px-4 font-semibold">Cameras</th>
-                <th className="py-3.5 px-4 font-semibold">Status</th>
-                <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60">
-              {filteredAgents.slice(0, 50).map((agent) => {
+        {filteredAgents.length === 0 && !loading ? (
+          <div className="p-12 text-center">
+            <Server className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-slate-300 mb-2">No Edge Agents Enrolled</h3>
+            <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
+              {agents.length === 0 
+                ? "Edge agents will appear here once branches are configured with gateway infrastructure. Agents report heartbeats every 30 seconds."
+                : "No agents match your current filters. Try adjusting the search criteria or status filters."}
+            </p>
+            {agents.length === 0 && (
+              <div className="text-xs text-slate-600 font-mono">
+                Fleet initialization may be required. Contact your system administrator.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-950 text-slate-400 font-mono border-b border-slate-800">
+                  <th className="py-3.5 px-4 font-semibold">Branch & Gateway</th>
+                  <th className="py-3.5 px-4 font-semibold">Agent (Act / Des)</th>
+                  <th className="py-3.5 px-4 font-semibold">Config (Act / Des)</th>
+                  <th className="py-3.5 px-4 font-semibold">CPU / RAM</th>
+                  <th className="py-3.5 px-4 font-semibold">Cert Health</th>
+                  <th className="py-3.5 px-4 font-semibold">Cameras</th>
+                  <th className="py-3.5 px-4 font-semibold">Status</th>
+                  <th className="py-3.5 px-4 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {filteredAgents.slice(0, 50).map((agent) => {
                 const isVersionDrift = agent.versionReconciliation === "DRIFTED";
                 const isConfigDrift = agent.configReconciliation === "DRIFTED";
                 const isUpgrading = actionLoading === `upgrading-${agent.id}` || agent.status === "UPGRADING";
@@ -467,10 +513,13 @@ export function EdgeFleetManager() {
             </tbody>
           </table>
         </div>
-        <div className="p-3 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between font-mono">
-          <span>Showing {Math.min(50, filteredAgents.length)} of {filteredAgents.length} gateways</span>
-          <span>KryptonVision Enterprise Fleet Orchestrator</span>
-        </div>
+        )}
+        {filteredAgents.length > 0 && (
+          <div className="p-3 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-500 flex justify-between font-mono">
+            <span>Showing {Math.min(50, filteredAgents.length)} of {filteredAgents.length} gateways</span>
+            <span>KryptonVision Enterprise Fleet Orchestrator</span>
+          </div>
+        )}
       </div>
 
       {/* Digital Twin & Detail Drawer */}

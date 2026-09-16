@@ -57,6 +57,286 @@ Version 1.0.0-rc.2 | Last Updated: September 15, 2026
 - Try incognito/private browsing mode
 - Try different browser (Chrome, Firefox, Edge)
 
+### Face Login Not Working (Face Already Enrolled)
+
+**Symptoms:**
+- Face login fails with "Face not recognized"
+- Face verification fails despite being enrolled
+- Works sometimes but not consistently
+- Error: "No enrolled employee faces found"
+
+**Solutions:**
+
+**1. Lighting and Image Quality (Most Common)**
+```
+Problem: Poor lighting or camera conditions preventing face detection
+Solutions:
+  ✓ Face camera directly - no side angles
+  ✓ Ensure good lighting (avoid backlighting from windows)
+  ✓ Remove glasses or sunglasses if possible
+  ✓ Remove masks, scarves, or face coverings
+  ✓ Keep face steady for 2-3 seconds during scan
+  ✓ Clean webcam lens
+  ✓ Avoid extreme shadows (direct overhead lighting)
+  ✓ Distance: 1-3 feet from camera works best
+  ✓ Look directly at camera (not screen)
+```
+
+**2. Multi-Pose Enrollment vs Single-Pose**
+```
+Check enrollment method:
+  - New enrollments: Require 3+ poses (front, left, right)
+  - Old enrollments: May have only 1 photo
+  
+Solution:
+  - Re-enroll with multiple poses: Profile → Security → Face Enrollment
+  - Capture 3-5 different head positions:
+    * Front view (mandatory)
+    * 30° left turn
+    * 30° right turn
+    * Slightly up/down if using glasses
+  - Wait 10 seconds between each capture
+```
+
+**3. Match Threshold Too Strict**
+```
+Problem: Similarity score below threshold (default 0.70 = 70%)
+Understanding scores:
+  - 0.85-1.00: Genuine user (typical range)
+  - 0.70-0.84: Borderline (may be rejected if strict threshold)
+  - Below 0.70: Likely different person or poor image quality
+  
+Solutions:
+  - Contact admin to check your current threshold setting
+  - Admin path: Users → [Your Name] → Biometric Settings → Match Threshold
+  - Production default: 0.70 (balanced)
+  - Strict mode: 0.85 (very secure but may reject genuine users)
+  - If threshold at 0.85 and failing: Re-enroll with better photos
+```
+
+**4. Template Data Corruption**
+```
+Problem: Stored face template corrupted or invalid
+Check:
+  - Admin can verify: Users → [Your Name] → Preferences → faceVerification
+  - Should show "version: 2" and "templates: [array]"
+  
+Solution:
+  - Re-enroll face completely:
+    1. Profile → Security → Face Enrollment
+    2. Delete existing enrollment
+    3. Capture new multi-pose enrollment (3+ photos)
+    4. Test immediately after enrollment
+```
+
+**5. Browser/Camera Permission Issues**
+```
+Problem: Browser blocking webcam access
+Check:
+  - Look for camera icon in address bar (Chrome/Firefox)
+  - May show red "X" or blocked icon
+  
+Solutions:
+  - Chrome: Click camera icon → Always allow
+  - Firefox: Click camera icon → Allow
+  - Settings → Privacy → Camera → Allow for KryptoVision domain
+  - Try different browser (Chrome recommended)
+  - Check system camera permissions:
+    * Windows: Settings → Privacy → Camera → Allow apps
+    * Mac: System Preferences → Security → Privacy → Camera
+```
+
+**6. Face Template Not Found in Database**
+```
+Problem: Database query not finding your enrolled face
+Check if you appear in enrolled users:
+  - Admin query: SQL check for preferences->'faceVerification'
+  
+Symptoms:
+  - Error: "No enrolled employee faces found"
+  - Even though you completed enrollment
+  
+Solutions:
+  - Verify enrollment saved: Profile → Security → Face Enrollment Status
+  - Should show "✓ Enrolled" with date
+  - If shows "Not enrolled": Re-enroll
+  - Contact admin if enrollment shows saved but login still fails
+  - Admin can check database: 
+    SELECT username, (preferences->'faceVerification'->'version') as version
+    FROM users WHERE id='your-user-id';
+```
+
+**7. Tenant/Branch Isolation Issue**
+```
+Problem: Enrolled under different tenant than login attempt
+Check:
+  - Are you using correct company/tenant URL?
+  - Multi-tenant system may have separate enrollments
+  
+Solution:
+  - Verify tenant slug in URL matches enrollment tenant
+  - Contact admin to verify your tenant association
+  - May need separate enrollment per tenant
+```
+
+**8. Scale/Distance Variation**
+```
+Problem: Face distance during login differs from enrollment
+Understanding:
+  - System generates multi-scale templates (85%, 100%, 115%)
+  - But extreme differences still cause issues
+  
+Solutions:
+  - Match enrollment distance during login
+  - If enrolled with laptop camera: Use laptop camera for login
+  - If enrolled with external webcam: Use same webcam for login
+  - Stay 1-3 feet from camera (same as enrollment)
+```
+
+**9. Appearance Changed Significantly**
+```
+Problem: Major appearance change since enrollment
+Examples:
+  - Grew/shaved beard
+  - Significant weight change
+  - New glasses (especially thick frames)
+  - Different hairstyle covering face
+  
+Solution:
+  - Re-enroll with current appearance
+  - System learns new appearance while keeping verification secure
+  - Consider periodic re-enrollment (every 6-12 months)
+```
+
+**10. System Configuration Check (Admin Only)**
+```
+Admin troubleshooting steps:
+
+A. Verify face login endpoint enabled:
+   - Check auth.routes.ts: /v1/auth/face-login endpoint active
+   - Verify findUsersWithFaceTemplates() function available
+
+B. Check database query:
+   SQL: SELECT * FROM users 
+        WHERE status='active' 
+        AND preferences->'faceVerification'->>'data' IS NOT NULL;
+   - Should return enrolled users including failing user
+
+C. Check threshold configuration:
+   - Default: PRODUCTION_FACE_MATCH_THRESHOLD = 0.70
+   - Strict: STRICT_FACE_MATCH_THRESHOLD = 0.85
+   - Verify per-user overrides in preferences
+
+D. Review logs for actual similarity scores:
+   - Check application logs for: [FaceLogin] Evaluation complete
+   - Shows: candidateCount, matchedUser, score
+   - Score tells you how close match was (below threshold = failure)
+
+E. Test with known-good image:
+   - Use original enrollment photo for login test
+   - If that fails: Template corruption issue
+   - If succeeds: Live image quality issue
+
+F. Verify face template structure:
+   - Query user preferences JSON
+   - Should have:
+     {
+       "faceVerification": {
+         "version": 2,
+         "templates": [array of templates],
+         "enrolledAt": "ISO date",
+         "method": "multi-pose-normalized-face-template"
+       }
+     }
+   - Legacy version 1 still supported but less robust
+```
+
+**11. Testing & Validation Steps**
+```
+For users experiencing persistent issues:
+
+Step 1: Test with enrollment photo
+  - Take screenshot during enrollment process
+  - Use that exact image for login attempt
+  - Should succeed (proves template valid)
+
+Step 2: Test with similar conditions
+  - Same lighting as enrollment
+  - Same distance from camera
+  - Same head position (straight on)
+  - Should succeed (proves matching works)
+
+Step 3: Gradually vary conditions
+  - Slight head tilt (±15°)
+  - Different lighting
+  - Different distance
+  - Identifies which factor causes failure
+
+Step 4: Compare similarity scores
+  - Admin: Enable debug logging
+  - Check score for each attempt
+  - Scores 0.60-0.69: Just below threshold (increase threshold or improve image)
+  - Scores 0.40-0.59: Significant mismatch (re-enroll recommended)
+  - Scores <0.40: Wrong person or no face detected
+```
+
+**12. Common Error Messages & Meanings**
+
+| Error Message | Meaning | Solution |
+|--------------|---------|----------|
+| "No enrolled employee faces found" | System can't find any enrolled users in database | Verify enrollment completed, check tenant slug |
+| "Face not recognized" | Face detected but similarity score below threshold | Improve lighting, face camera directly, or re-enroll |
+| "Facial scan must be JPEG, PNG, or WEBP" | Invalid image format | Check browser/camera compatibility |
+| "Facial scan is empty or too large" | Image size issue | Check camera resolution settings |
+| "Face not detected / insufficient contrast" | No clear face in image | Improve lighting, remove obstructions, face camera |
+| "Session creation failed" | Backend error after successful match | Contact admin - database/session issue |
+
+**13. Best Practices for Reliable Face Login**
+
+**During Enrollment:**
+- ✓ Use good quality webcam (720p minimum, 1080p recommended)
+- ✓ Capture in well-lit environment (natural daylight best)
+- ✓ Face camera directly for all poses
+- ✓ Keep face steady during capture (2-3 seconds)
+- ✓ Capture 3-5 different poses
+- ✓ Test login immediately after enrollment
+
+**During Login:**
+- ✓ Use same device/camera as enrollment when possible
+- ✓ Match lighting conditions from enrollment
+- ✓ Face camera directly, stay centered
+- ✓ Remove glasses if you didn't wear them during enrollment
+- ✓ Keep face steady for 2-3 seconds
+- ✓ Don't move during capture
+
+**Periodic Maintenance:**
+- ✓ Re-enroll every 6-12 months
+- ✓ Re-enroll after significant appearance changes
+- ✓ Keep backup authentication method (password) active
+- ✓ Test face login periodically even if not primary method
+
+**14. Fallback Options**
+
+If face login continues to fail:
+- **Immediate:** Use password login (username + password)
+- **Short-term:** Disable face verification requirement (admin can toggle)
+- **Long-term:** Re-enroll with better quality images
+- **Alternative:** Enable multi-factor with app or SMS instead of face
+
+**15. Security Considerations**
+
+**Why threshold matters:**
+- Too low (0.50-0.60): Security risk - may accept wrong people
+- Balanced (0.70): Production default - good security vs convenience
+- Too high (0.90+): Usability issue - rejects genuine users frequently
+
+**Current production settings:**
+- Default threshold: 0.70 (70% similarity required)
+- Strict threshold: 0.85 (85% similarity for high-security areas)
+- Template size: 48x48 pixels (normalized grayscale)
+- Matching algorithm: Multi-scale with gradient correlation
+- Mirror invariance: Handles selfie vs external camera differences
+
 ### Two-Factor Authentication Not Working
 
 **Symptoms:**
