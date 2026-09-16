@@ -93,14 +93,14 @@ export default function SignedConfigurationConsolePage() {
       if (selectedEdgeId) {
         try {
           const bundleRes = await signedConfigApi.getDesiredBundle(selectedEdgeId);
-          if (bundleRes.success) setCurrentBundle(bundleRes.data);
+          if (bundleRes.success) setCurrentBundle(bundleRes.data ?? null);
         } catch {
           setCurrentBundle(null);
         }
 
         try {
           const driftRes = await signedConfigApi.getDrift(selectedEdgeId);
-          if (driftRes.success) setDriftStatus(driftRes.data);
+          if (driftRes.success) setDriftStatus(driftRes.data ?? null);
         } catch {
           setDriftStatus(null);
         }
@@ -361,6 +361,8 @@ export default function SignedConfigurationConsolePage() {
                     ? "bg-emerald-400 animate-pulse"
                     : driftStatus?.status === "TAMPERED"
                     ? "bg-red-500 animate-ping"
+                    : driftStatus?.status === "NO_CONFIG"
+                    ? "bg-slate-500"
                     : "bg-amber-400 animate-pulse"
                 }`}
               />
@@ -370,6 +372,8 @@ export default function SignedConfigurationConsolePage() {
                     ? "text-emerald-400"
                     : driftStatus?.status === "TAMPERED"
                     ? "text-red-400"
+                    : driftStatus?.status === "NO_CONFIG"
+                    ? "text-slate-400"
                     : "text-amber-400"
                 }
               >

@@ -107,7 +107,8 @@ export class AudioDecoders {
     const len = buffer.length;
     const output = new Float32Array(len);
     for (let i = 0; i < len; i++) {
-      output[i] = ULAW_TO_FLOAT32[buffer[i]];
+      const byte = buffer[i] ?? 0;
+      output[i] = ULAW_TO_FLOAT32[byte] ?? 0;
     }
     return output;
   }
@@ -119,7 +120,8 @@ export class AudioDecoders {
     const len = buffer.length;
     const output = new Float32Array(len);
     for (let i = 0; i < len; i++) {
-      output[i] = ALAW_TO_FLOAT32[buffer[i]];
+      const byte = buffer[i] ?? 0;
+      output[i] = ALAW_TO_FLOAT32[byte] ?? 0;
     }
     return output;
   }
@@ -142,7 +144,8 @@ export class AudioDecoders {
     for (let i = 0; i < samplesPerChannel; i++) {
       for (let c = 0; c < channels; c++) {
         const int16 = dataView.getInt16(sampleIdx * 2, true);
-        result[c][i] = int16 / 32768.0;
+        const chArr = result[c];
+        if (chArr) chArr[i] = int16 / 32768.0;
         sampleIdx++;
       }
     }
@@ -168,7 +171,8 @@ export class AudioDecoders {
     for (let i = 0; i < samplesPerChannel; i++) {
       for (let c = 0; c < channels; c++) {
         const int16 = dataView.getInt16(sampleIdx * 2, false);
-        result[c][i] = int16 / 32768.0;
+        const chArr = result[c];
+        if (chArr) chArr[i] = int16 / 32768.0;
         sampleIdx++;
       }
     }
@@ -191,7 +195,8 @@ export class AudioDecoders {
     let sampleIdx = 0;
     for (let i = 0; i < samplesPerChannel; i++) {
       for (let c = 0; c < channels; c++) {
-        result[c][i] = (buffer[sampleIdx] - 128) / 128.0;
+        const chArr = result[c];
+        if (chArr) chArr[i] = ((buffer[sampleIdx] ?? 128) - 128) / 128.0;
         sampleIdx++;
       }
     }
@@ -214,15 +219,16 @@ export class AudioDecoders {
     let byteOffset = 0;
     for (let i = 0; i < samplesPerChannel; i++) {
       for (let c = 0; c < channels; c++) {
-        const b0 = buffer[byteOffset];
-        const b1 = buffer[byteOffset + 1];
-        const b2 = buffer[byteOffset + 2];
+        const b0 = buffer[byteOffset] ?? 0;
+        const b1 = buffer[byteOffset + 1] ?? 0;
+        const b2 = buffer[byteOffset + 2] ?? 0;
         let int24 = (b2 << 16) | (b1 << 8) | b0;
         // Sign extension for 24-bit
         if (int24 & 0x800000) {
           int24 |= ~0xFFFFFF;
         }
-        result[c][i] = int24 / 8388608.0;
+        const chArr = result[c];
+        if (chArr) chArr[i] = int24 / 8388608.0;
         byteOffset += 3;
       }
     }
@@ -247,7 +253,8 @@ export class AudioDecoders {
     for (let i = 0; i < samplesPerChannel; i++) {
       for (let c = 0; c < channels; c++) {
         const val = dataView.getFloat32(sampleIdx * 4, true);
-        result[c][i] = Math.max(-1.0, Math.min(1.0, val));
+        const chArr = result[c];
+        if (chArr) chArr[i] = Math.max(-1.0, Math.min(1.0, val));
         sampleIdx++;
       }
     }
@@ -266,6 +273,9 @@ export class AudioDecoders {
 
     const b0 = buffer[offset];
     const b1 = buffer[offset + 1];
+    if (b0 === undefined || b1 === undefined) {
+      return null;
+    }
 
     // Check 12-bit syncword 0xFFF
     if (b0 !== 0xFF || (b1 & 0xF0) !== 0xF0) {
@@ -277,18 +287,21 @@ export class AudioDecoders {
     const protectionAbsent = (b1 & 0x01) === 1;
 
     const b2 = buffer[offset + 2];
+    if (b2 === undefined) return null;
     const profile = (b2 >> 6) & 0x03; // Profile: 0=Main, 1=LC, 2=SSR, 3=LTP
     const samplingFrequencyIndex = (b2 >> 2) & 0x0F;
     const sampleRate = AAC_SAMPLE_RATES[samplingFrequencyIndex] ?? 44100;
 
     const b3 = buffer[offset + 3];
-    const channelConfiguration = ((b2 & 0x01) << 2) | ((b3 >> 6) & 0x03);
-
     const b4 = buffer[offset + 4];
     const b5 = buffer[offset + 5];
-    const frameLength = ((b3 & 0x03) << 11) | (b4 << 3) | ((b5 >> 5) & 0x07);
-
     const b6 = buffer[offset + 6];
+    if (b3 === undefined || b4 === undefined || b5 === undefined || b6 === undefined) {
+      return null;
+    }
+
+    const channelConfiguration = ((b2 & 0x01) << 2) | ((b3 >> 6) & 0x03);
+    const frameLength = ((b3 & 0x03) << 11) | (b4 << 3) | ((b5 >> 5) & 0x07);
     const bufferFullness = ((b5 & 0x1F) << 6) | ((b6 >> 2) & 0x3F);
     const rawBlocks = b6 & 0x03;
 

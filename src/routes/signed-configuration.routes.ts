@@ -268,9 +268,9 @@ export async function registerSignedConfigurationRoutes(
     try {
       const bundle = await repository.getLatestDesiredBundle(edgeId);
       if (!bundle) {
-        return reply.code(404).send({
-          success: false,
-          error: "no_desired_config",
+        return reply.code(200).send({
+          success: true,
+          data: null,
           message: `No signed configuration bundle found for edge gateway ${edgeId}`,
         });
       }
@@ -354,10 +354,21 @@ export async function registerSignedConfigurationRoutes(
     try {
       const desired = await repository.getLatestDesiredBundle(edgeId);
       if (!desired) {
-        return reply.code(404).send({
-          success: false,
-          error: "no_configuration",
-          message: `No configuration found for edge ${edgeId}`,
+        return reply.code(200).send({
+          success: true,
+          data: {
+            edgeId,
+            desiredVersion: null,
+            appliedVersion: null,
+            desiredHash: null,
+            appliedHash: null,
+            verificationStatus: "UNCHECKED",
+            status: "NO_CONFIG",
+            isDrifted: false,
+            driftReason: `No signed configuration bundle provisioned yet for edge gateway ${edgeId}`,
+            details: null,
+            lastAppliedAt: null,
+          },
         });
       }
 

@@ -30,7 +30,7 @@ import {
   type BundleStatus,
 } from "../../database/signed-config-repository.js";
 
-export type ConfigDriftStatus = "IN_SYNC" | "DRIFTED" | "PENDING_APPLY" | "ROLLED_BACK" | "TAMPERED";
+export type ConfigDriftStatus = "IN_SYNC" | "DRIFTED" | "PENDING_APPLY" | "ROLLED_BACK" | "TAMPERED" | "NO_CONFIG";
 
 export interface SignedConfigRecord {
   bundleId?: string;
