@@ -53,6 +53,12 @@ export class AudioLevelMeterEngine {
 
     // Combine channels for mono metering or analyze primary channel
     const primaryChannel = frame.channels[0];
+    if (!primaryChannel || primaryChannel.length === 0) {
+      return {
+        metrics: this.createSilentMetrics(),
+        nextState: state,
+      };
+    }
     const sampleCount = primaryChannel.length;
 
     // 1. Calculate Sample Peak
@@ -62,7 +68,8 @@ export class AudioLevelMeterEngine {
     let zeroCrossings = 0;
 
     for (let i = 0; i < sampleCount; i++) {
-      const sample = primaryChannel[i];
+      const sample = primaryChannel[i] ?? 0;
+      const prevSample = i > 0 ? (primaryChannel[i - 1] ?? 0) : 0;
       const absVal = Math.abs(sample);
       if (absVal > maxAbs) {
         maxAbs = absVal;
@@ -72,7 +79,7 @@ export class AudioLevelMeterEngine {
       }
       sumSquares += sample * sample;
 
-      if (i > 0 && ((sample >= 0 && primaryChannel[i - 1] < 0) || (sample < 0 && primaryChannel[i - 1] >= 0))) {
+      if (i > 0 && ((sample >= 0 && prevSample < 0) || (sample < 0 && prevSample >= 0))) {
         zeroCrossings++;
       }
     }
@@ -196,9 +203,10 @@ export class AudioLevelMeterEngine {
    */
   private static calculateLUFS(channels: Float32Array[], sampleRate: number): number {
     const channelCount = channels.length;
-    if (channelCount === 0 || channels[0].length === 0) return this.DB_FLOOR;
+    const firstCh = channels[0];
+    if (channelCount === 0 || !firstCh || firstCh.length === 0) return this.DB_FLOOR;
 
-    const sampleCount = channels[0].length;
+    const sampleCount = firstCh.length;
     let totalWeightedEnergy = 0;
 
     // K-weighting Stage 1: High-shelf filter (+4dB boost above 1.5kHz)
@@ -206,12 +214,13 @@ export class AudioLevelMeterEngine {
     // For fast real-time DSP, we compute the K-weighted energy using second-order difference
     for (let c = 0; c < channelCount; c++) {
       const ch = channels[c];
+      if (!ch) continue;
       let chEnergy = 0;
       let prev1 = 0;
       let prev2 = 0;
 
       for (let i = 0; i < sampleCount; i++) {
-        const x = ch[i];
+        const x = ch[i] ?? 0;
         // Biquad high-shelf + RLB approximation filter
         const y = 1.25 * x - 0.75 * prev1 + 0.15 * prev2;
         prev2 = prev1;
@@ -301,7 +310,7 @@ export class AudioLevelMeterEngine {
     let samplePrev = 0;
 
     for (let i = 0; i < len; i++) {
-      const s = samples[i];
+      const s = samples[i] ?? 0;
       totalEnergy += s * s;
 
       // Lowpass
@@ -348,7 +357,7 @@ export class AudioLevelMeterEngine {
       const end = Math.min(len, Math.floor((p + 1) * step));
       let maxAbs = 0;
       for (let i = start; i < end; i++) {
-        const absVal = Math.abs(samples[i]);
+        const absVal = Math.abs(samples[i] ?? 0);
         if (absVal > maxAbs) maxAbs = absVal;
       }
       result[p] = Math.round(maxAbs * 100) / 100;

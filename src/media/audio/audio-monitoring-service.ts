@@ -50,7 +50,13 @@ export class AudioMonitoringService {
    * merged with live level metering and configuration.
    */
   async listChannels(tenantId?: string): Promise<AudioChannelStatus[]> {
-    const cameras = await this.store.getCameras();
+    const tid = tenantId || '00000000-0000-4000-8000-000000000000';
+    let cameras: any[] = [];
+    if (typeof (this.store as any).listCameras === 'function') {
+      cameras = await (this.store as any).listCameras(tid);
+    } else if (typeof (this.store as any).getCameras === 'function') {
+      cameras = await (this.store as any).getCameras();
+    }
     const configs = await this.repository.listChannelConfigs(tenantId);
     const configMap = new Map(configs.map((c) => [c.cameraId, c]));
 
@@ -210,7 +216,8 @@ export class AudioMonitoringService {
       const gainLinear = Math.pow(10.0, config.gainDb / 20.0);
       for (const ch of decodedFrame.channels) {
         for (let i = 0; i < ch.length; i++) {
-          ch[i] = Math.max(-1.0, Math.min(1.0, ch[i] * gainLinear));
+          const sample = ch[i] ?? 0;
+          ch[i] = Math.max(-1.0, Math.min(1.0, sample * gainLinear));
         }
       }
     }

@@ -246,6 +246,31 @@ describe("Signed Configuration Fastify REST Routes (End-to-End)", () => {
       expect(json.data.appliedVersion).toBe(2);
     });
 
+    it("GET /v1/edge/config/bundles/:edgeId/desired returns null data for unconfigured edge", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/edge/config/bundles/edge-unconfigured-999/desired",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = JSON.parse(res.body);
+      expect(json.success).toBe(true);
+      expect(json.data).toBeNull();
+    });
+
+    it("GET /v1/edge/config/bundles/:edgeId/drift returns NO_CONFIG for unconfigured edge", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/v1/edge/config/bundles/edge-unconfigured-999/drift",
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = JSON.parse(res.body);
+      expect(json.success).toBe(true);
+      expect(json.data.status).toBe("NO_CONFIG");
+      expect(json.data.isDrifted).toBe(false);
+    });
+
     it("GET /v1/edge/config/audit-logs retrieves cryptographic audit trail", async () => {
       const res = await app.inject({
         method: "GET",

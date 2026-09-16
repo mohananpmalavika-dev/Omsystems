@@ -6146,15 +6146,15 @@ export interface SignedConfigBundleItem {
 
 export interface SignedConfigDriftItem {
   edgeId: string;
-  desiredVersion: number;
+  desiredVersion: number | null;
   appliedVersion: number | null;
-  desiredHash: string;
+  desiredHash: string | null;
   appliedHash: string | null;
   verificationStatus: string;
-  status: 'IN_SYNC' | 'DRIFTED' | 'PENDING_APPLY' | 'ROLLED_BACK' | 'TAMPERED';
+  status: 'IN_SYNC' | 'DRIFTED' | 'PENDING_APPLY' | 'ROLLED_BACK' | 'TAMPERED' | 'NO_CONFIG';
   isDrifted: boolean;
   driftReason?: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, unknown> | null;
   lastAppliedAt?: string | null;
 }
 
@@ -6264,9 +6264,14 @@ export const signedConfigApi = {
     }),
 
   getDesiredBundle: (edgeId: string) =>
-    fetchApi<{ success: boolean; data: SignedConfigBundleItem }>(
+    fetchApi<{ success: boolean; data: SignedConfigBundleItem | null }>(
       `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/desired`
-    ),
+    ).catch((err) => {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return { success: true, data: null };
+      }
+      throw err;
+    }),
 
   getBundleHistory: (edgeId: string, limit?: number) => {
     const qs = limit ? `?limit=${limit}` : '';
@@ -6297,7 +6302,27 @@ export const signedConfigApi = {
   getDrift: (edgeId: string) =>
     fetchApi<{ success: boolean; data: SignedConfigDriftItem }>(
       `/v1/edge/config/bundles/${encodeURIComponent(edgeId)}/drift`
-    ),
+    ).catch((err) => {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return {
+          success: true,
+          data: {
+            edgeId,
+            desiredVersion: null,
+            appliedVersion: null,
+            desiredHash: null,
+            appliedHash: null,
+            verificationStatus: 'UNCHECKED',
+            status: 'NO_CONFIG' as const,
+            isDrifted: false,
+            driftReason: `No signed configuration bundle provisioned yet for edge gateway ${edgeId}`,
+            details: null,
+            lastAppliedAt: null,
+          },
+        };
+      }
+      throw err;
+    }),
 
   getAuditLogs: (params?: { edgeId?: string; keyId?: string; limit?: number }) => {
     const qs = new URLSearchParams();

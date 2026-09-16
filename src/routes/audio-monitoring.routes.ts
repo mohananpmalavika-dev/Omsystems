@@ -187,7 +187,11 @@ export async function registerAudioMonitoringRoutes(
         clipPercentage: body.clipPercentage ?? 0.0,
         isClipping: body.isClipping ?? false,
         vadState: body.vadState ?? 'SILENCE',
-        frequencyBands: body.frequencyBands ?? { low: 33.3, mid: 33.3, high: 33.4 },
+        frequencyBands: {
+          low: body.frequencyBands?.low ?? 33.3,
+          mid: body.frequencyBands?.mid ?? 33.3,
+          high: body.frequencyBands?.high ?? 33.4,
+        },
         waveform: body.waveform ?? new Array(48).fill(0),
         timestamp: body.timestamp ?? new Date().toISOString(),
       };

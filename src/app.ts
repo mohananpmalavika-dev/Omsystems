@@ -2814,8 +2814,7 @@ export async function buildApp(options?: {
 
   // Register Audio Stream Monitoring (video.audio) routes
   try {
-    const audioRouteModule = "./routes/audio-monitoring.routes.js";
-    const { registerAudioMonitoringRoutes } = await (import(audioRouteModule) as Promise<any>);
+    const { registerAudioMonitoringRoutes } = await import("./routes/audio-monitoring.routes.js");
     await registerAudioMonitoringRoutes(app, store);
     app.log.info('Audio Stream Monitoring (video.audio) routes registered');
   } catch (err: unknown) {

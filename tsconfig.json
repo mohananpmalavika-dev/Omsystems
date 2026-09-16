@@ -55,7 +55,6 @@
     "src/mobile/**",
     "src/integrations/**",
     "src/**/legacy/**",
-    "src/media/audio/**",
     "src/security-devices/**",
     "src/edge-management/**",
 
