@@ -10,6 +10,20 @@ import { loginPath } from './session-navigation';
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
 let sessionGuardCleanup: (() => void) | null = null;
+// Set to true before window.location.assign() for in-app hard navigations
+// so the beforeunload logout beacon is skipped (only fires on actual browser close).
+let inAppNavigating = false;
+
+/**
+ * Call this immediately before any window.location.assign() / window.location.href
+ * assignment that is an in-app navigation (not a browser close).
+ * Prevents the logout beacon from firing on hard in-app navigation.
+ */
+export function markInAppNavigation(): void {
+  inAppNavigating = true;
+  // Reset after a short delay in case the navigation is somehow cancelled
+  setTimeout(() => { inAppNavigating = false; }, 3000);
+}
 
 /**
  * Check if user is authenticated
@@ -180,6 +194,12 @@ export function setupSessionGuard() {
       localStorage.removeItem('user');
       localStorage.removeItem('sentinel_login_time');
     } catch {}
+
+    // Only send logout beacon on actual browser/tab close.
+    // Skip when this unload was triggered by an in-app hard navigation
+    // (e.g. window.location.assign from the Live Wall) — those navigations
+    // call markInAppNavigation() before assigning the URL.
+    if (inAppNavigating) return;
 
     // Fire logout to the server — sendBeacon survives tab/browser close.
     // sendBeacon automatically includes cookies, so the backend authenticates

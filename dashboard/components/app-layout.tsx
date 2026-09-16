@@ -90,6 +90,7 @@ import { AlertAudioIndicator } from "@/components/alerts/alert-audio-indicator";
 import { AlertNotificationTray } from "@/components/alerts/alert-notification-tray";
 import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
+import { markInAppNavigation } from "@/lib/session-guard";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -892,6 +893,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
     // router.push() can silently fail to navigate away from resource-heavy pages.
     // Use hard navigation from /control-room to guarantee menu links always work.
     if (currentPath === "/control-room") {
+      markInAppNavigation();
       window.location.assign(href);
       return;
     }
@@ -902,6 +904,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       // a streaming page), force a hard navigation to ensure the link always works.
       const fallbackTimer = setTimeout(() => {
         if (routePath(window.location.pathname) === currentPath) {
+          markInAppNavigation();
           window.location.assign(href);
         }
       }, 1500);
@@ -909,6 +912,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
       const cleanup = () => clearTimeout(fallbackTimer);
       window.addEventListener("popstate", cleanup, { once: true });
     } catch {
+      markInAppNavigation();
       window.location.assign(href);
       return;
     }
