@@ -130,36 +130,6 @@ export default function MaintenancePredictivePage() {
           })),
         ];
 
-        // Default mock rows if empty
-        if (rows.length === 0) {
-          rows.push(
-            {
-              id: "CAM-01-PTZ",
-              name: "Vault PTZ Dome Camera (Hikvision 4K)",
-              type: "high-risk",
-              score: 0.92,
-              details: { recommendation: "Pan motor micro-stutter detected. Replace servo gear before lockout." },
-              nextFailureDays: 2,
-            },
-            {
-              id: "UPS-BATTERY-04",
-              name: "Eaton 6kVA Central Online UPS Battery Bank",
-              type: "forecast",
-              score: 0.76,
-              details: { recommendation: "Internal resistance degradation cell #4. Run cell calibration test." },
-              nextFailureDays: 7,
-            },
-            {
-              id: "POE-SW-CORE-01",
-              name: "Cisco 24-Port Industrial PoE+ Core Switch",
-              type: "forecast",
-              score: 0.65,
-              details: { recommendation: "Fan 2 RPM dropped below 2200 RPM. Replace thermal blower module." },
-              nextFailureDays: 14,
-            }
-          );
-        }
-
         setAlerts(Array.from(new Map(rows.map((item) => [item.id, item])).values()));
       })
       .catch((err) => {
@@ -554,21 +524,29 @@ export default function MaintenancePredictivePage() {
                 </tr>
               </thead>
               <tbody>
-                {alerts.map((alert) => (
-                  <tr key={alert.id}>
-                    <td>
-                      <strong className="module-row-title">{alert.name}</strong>
+                {alerts.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      No high-risk equipment failures predicted. All monitored assets are operating within normal health tolerances.
                     </td>
-                    <td>
-                      <span className={`module-priority ${alert.type === "high-risk" ? "critical" : "high"}`}>
-                        {alert.type === "high-risk" ? "High risk" : "Failure forecast"}
-                      </span>
-                    </td>
-                    <td>{typeof alert.score === "number" ? `${Math.round(alert.score * 100)}%` : "Not scored"}</td>
-                    <td>{alert.nextFailureDays !== undefined ? `${alert.nextFailureDays} days` : "Not estimated"}</td>
-                    <td>{alert.details?.recommendation || alert.details?.message || "Review asset and schedule maintenance."}</td>
                   </tr>
-                ))}
+                ) : (
+                  alerts.map((alert) => (
+                    <tr key={alert.id}>
+                      <td>
+                        <strong className="module-row-title">{alert.name}</strong>
+                      </td>
+                      <td>
+                        <span className={`module-priority ${alert.type === "high-risk" ? "critical" : "high"}`}>
+                          {alert.type === "high-risk" ? "High risk" : "Failure forecast"}
+                        </span>
+                      </td>
+                      <td>{typeof alert.score === "number" ? `${Math.round(alert.score * 100)}%` : "Not scored"}</td>
+                      <td>{alert.nextFailureDays !== undefined ? `${alert.nextFailureDays} days` : "Not estimated"}</td>
+                      <td>{alert.details?.recommendation || alert.details?.message || "Review asset and schedule maintenance."}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

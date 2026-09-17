@@ -74,6 +74,10 @@ const nextConfig: NextConfig = {
         destination: `${apiBase}/api/bulk/:path*`,
       },
       {
+        source: "/api/v1/:path*",
+        destination: `${apiBase}/api/v1/:path*`,
+      },
+      {
         source: "/v1/:path*",
         destination: `${apiBase}/v1/:path*`,
       },

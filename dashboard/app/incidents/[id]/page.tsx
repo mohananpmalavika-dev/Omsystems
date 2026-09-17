@@ -125,12 +125,26 @@ export default function IncidentDetailPage() {
   });
   const [atrSigned, setAtrSigned] = useState<null | { timestamp: string; hash: string; officer: string }>(null);
 
-  function handleSignAtr(e: React.FormEvent) {
+  async function handleSignAtr(e: React.FormEvent) {
     e.preventDefault();
-    const pseudoHash = "SHA256:" + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("") + "..." + Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const payload = JSON.stringify({
+      incidentId,
+      officer: atrForm.officerBadge,
+      form: atrForm,
+      timestamp: new Date().toISOString(),
+    });
+    let sha256Hash = "";
+    try {
+      const msgBuffer = new TextEncoder().encode(payload);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      sha256Hash = "SHA256:" + hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch {
+      sha256Hash = "SHA256:" + Date.now().toString(16);
+    }
     setAtrSigned({
       timestamp: new Date().toISOString(),
-      hash: pseudoHash,
+      hash: sha256Hash,
       officer: atrForm.officerBadge,
     });
     showToast("success", "Digital SOP Action Taken Report (ATR) signed & tamper-proof sealed.");

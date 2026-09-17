@@ -59,23 +59,38 @@ export function CrowdMonitor({
   const fetchCrowdData = async () => {
     setLoading(true);
     try {
-      // Placeholder - will be replaced with actual API call
-      // const response = await fetch(`/api/behavioral/crowd-analysis${branchId ? `?branchId=${branchId}` : ''}`);
-      // const data = await response.json();
-      
-      // Mock data for demonstration
-      setMetrics({
-        totalOccupancy: Math.floor(Math.random() * 100),
-        peakOccupancy: Math.floor(Math.random() * 150),
-        averageDensity: Math.random() * 2,
-        densityLevel: ["empty", "sparse", "normal", "crowded"][Math.floor(Math.random() * 4)] as any,
-        trend: ["increasing", "stable", "decreasing"][Math.floor(Math.random() * 3)] as any,
-        changeRate: (Math.random() - 0.5) * 10,
-        timestamp: new Date().toISOString(),
-      });
-      setLastUpdate(new Date());
+      const response = await fetch(
+        `/v1/analytics/crowd/zones${branchId ? `?branchId=${encodeURIComponent(branchId)}` : ""}`
+      );
+      if (response.ok) {
+        const payload = await response.json();
+        const zoneList: any[] = payload.data || [];
+        setZones(zoneList);
+
+        const totalOcc = zoneList.reduce((sum, z) => sum + (z.currentOccupancy || 0), 0);
+        const peakOcc = zoneList.reduce((max, z) => Math.max(max, z.peakOccupancy || z.currentOccupancy || 0), 0);
+        const totalArea = zoneList.reduce((sum, z) => sum + (z.areaSqm || 1), 0);
+        const avgDensity = totalArea > 0 ? Number((totalOcc / totalArea).toFixed(2)) : 0;
+
+        let densityLvl: "empty" | "sparse" | "normal" | "crowded" | "dangerous" = "empty";
+        if (avgDensity > 1.8) densityLvl = "dangerous";
+        else if (avgDensity > 1.2) densityLvl = "crowded";
+        else if (avgDensity > 0.5) densityLvl = "normal";
+        else if (avgDensity > 0) densityLvl = "sparse";
+
+        setMetrics({
+          totalOccupancy: totalOcc,
+          peakOccupancy: peakOcc,
+          averageDensity: avgDensity,
+          densityLevel: densityLvl,
+          trend: "stable",
+          changeRate: 0,
+          timestamp: new Date().toISOString(),
+        });
+        setLastUpdate(new Date());
+      }
     } catch (err) {
-      console.error("Failed to fetch crowd data:", err);
+      console.error("Failed to fetch live crowd data:", err);
     } finally {
       setLoading(false);
     }

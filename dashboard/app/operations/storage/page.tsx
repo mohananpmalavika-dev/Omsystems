@@ -37,77 +37,69 @@ interface CameraStorageMapping {
 
 export default function StoragePage() {
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedTierFilter, setSelectedTierFilter] = useState<string>("all");
+  const [cameras, setCameras] = useState<CameraStorageMapping[]>([]);
+  const [summary, setSummary] = useState<{
+    tier1SdCardCount: number;
+    tier2DvrHddCount: number;
+    tier3OnlineCloudCount: number;
+    sdCardNode: { name: string; capacity: string; used: string; status: string };
+    dvrHddNode: { name: string; capacity: string; used: string; status: string };
+    cloudNode: { name: string; capacity: string; used: string; status: string };
+  }>({
+    tier1SdCardCount: 0,
+    tier2DvrHddCount: 0,
+    tier3OnlineCloudCount: 0,
+    sdCardNode: { name: "Onboard MicroSD Card (SanDisk 128GB)", capacity: "128 GB", used: "45 GB", status: "healthy" },
+    dvrHddNode: { name: "WD Purple 8TB SATA Surveillance Drive", capacity: "8,000 GB", used: "6,420 GB", status: "healthy" },
+    cloudNode: { name: "Sentinel Online Cloud Recording Pool (S3)", capacity: "500 GB", used: "42 GB", status: "healthy" },
+  });
 
-  // Real-time camera storage mappings
-  const [cameras, setCameras] = useState<CameraStorageMapping[]>([
-    {
-      cameraId: "cam-01",
-      cameraName: "Strong Room Vault Main Entrance",
-      ipAddress: "192.168.29.58",
-      activeStorageTier: "sd_card",
-      sdCardStatus: "detected",
-      dvrStatus: "mapped",
-      cloudStatus: "standby",
-      storageDetails: "Onboard SanDisk High Endurance MicroSD 128GB",
-      capacity: "128 GB",
-      used: "45 GB (35%)",
-      retentionDays: 14,
-    },
-    {
-      cameraId: "cam-02",
-      cameraName: "Cash Counter & Gold Appraisal Bay",
-      ipAddress: "192.168.29.59",
-      activeStorageTier: "dvr_hdd",
-      sdCardStatus: "not_present",
-      dvrStatus: "mapped",
-      cloudStatus: "standby",
-      storageDetails: "NVR Slot 1: WD Purple 8TB SATA Surveillance Drive",
-      capacity: "8,000 GB",
-      used: "6,420 GB (80%)",
-      retentionDays: 90,
-    },
-    {
-      cameraId: "cam-03",
-      cameraName: "Customer Lobby & ATM Vestibule",
-      ipAddress: "192.168.29.60",
-      activeStorageTier: "online_cloud",
-      sdCardStatus: "not_present",
-      dvrStatus: "unmapped",
-      cloudStatus: "active",
-      storageDetails: "Online Cloud Storage (Sentinel Media Gateway S3 Target)",
-      capacity: "500 GB Cloud Pool",
-      used: "42 GB (8.4%)",
-      retentionDays: 30,
-    },
-    {
-      cameraId: "cam-04",
-      cameraName: "Perimeter Outer Shutter & Street Portal",
-      ipAddress: "192.168.29.61",
-      activeStorageTier: "online_cloud",
-      sdCardStatus: "not_present",
-      dvrStatus: "unmapped",
-      cloudStatus: "active",
-      storageDetails: "Online Cloud Storage (Sentinel Media Gateway S3 Target)",
-      capacity: "500 GB Cloud Pool",
-      used: "38 GB (7.6%)",
-      retentionDays: 30,
-    },
-  ]);
+  const loadStorageData = async () => {
+    try {
+      setRefreshing(true);
+      const res = await fetch("/api/operations/storage", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setCameras(data.cameras || []);
+          if (data.summary) {
+            setSummary(data.summary);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load live storage operations data:", err);
+    } finally {
+      setRefreshing(false);
+      setLoading(false);
+    }
+  };
 
-  const switchCameraToCloud = (id: string) => {
-    setCameras((prev) =>
-      prev.map((c) =>
-        c.cameraId === id
-          ? {
-              ...c,
-              activeStorageTier: "online_cloud",
-              cloudStatus: "active",
-              storageDetails: "Online Cloud Recording (Sentinel Media Gateway S3 - Auto Failover)",
-            }
-          : c
-      )
-    );
+  useEffect(() => {
+    loadStorageData();
+    const interval = setInterval(loadStorageData, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const switchCameraToCloud = async (id: string) => {
+    try {
+      const res = await fetch("/api/operations/storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cameraId: id,
+          targetTier: "online_cloud",
+          reason: "Operator manual failover to online cloud recording pool",
+        }),
+      });
+      if (res.ok) {
+        await loadStorageData();
+      }
+    } catch (err) {
+      console.error("Failed to switch camera storage tier to cloud:", err);
+    }
   };
 
   const filteredCameras = cameras.filter((c) => {
@@ -141,14 +133,12 @@ export default function StoragePage() {
 
           <div className="flex items-center gap-2 text-xs">
             <button
-              onClick={() => {
-                setRefreshing(true);
-                setTimeout(() => setRefreshing(false), 500);
-              }}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 transition-all"
+              onClick={() => void loadStorageData()}
+              disabled={refreshing}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 flex items-center gap-1.5 transition-all disabled:opacity-50"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
-              Re-Scan Storage Devices
+              {refreshing ? "Scanning Hardware..." : "Re-Scan Storage Devices"}
             </button>
           </div>
         </div>
@@ -169,7 +159,9 @@ export default function StoragePage() {
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
-              <strong className="text-emerald-400">1 Detected (SanDisk 128GB)</strong>
+              <strong className="text-emerald-400">
+                {summary.tier1SdCardCount > 0 ? `${summary.tier1SdCardCount} Detected (${summary.sdCardNode.capacity})` : "0 Detected"}
+              </strong>
             </div>
           </div>
 
@@ -187,7 +179,9 @@ export default function StoragePage() {
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
-              <strong className="text-blue-400">1 Active (WD Purple 8TB)</strong>
+              <strong className="text-blue-400">
+                {summary.tier2DvrHddCount > 0 ? `${summary.tier2DvrHddCount} Active (${summary.dvrHddNode.capacity})` : "0 Active"}
+              </strong>
             </div>
           </div>
 
@@ -205,7 +199,9 @@ export default function StoragePage() {
             </p>
             <div className="pt-2 border-t border-slate-800 text-[11px] flex justify-between text-slate-400">
               <span>Status:</span>
-              <strong className="text-purple-400">Active (458 GB Available)</strong>
+              <strong className="text-purple-400">
+                Active ({summary.cloudNode.capacity} Pool • {summary.tier3OnlineCloudCount} Ingest Streams)
+              </strong>
             </div>
           </div>
         </div>
@@ -248,67 +244,82 @@ export default function StoragePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-sans">
-                {filteredCameras.map((cam) => (
-                  <tr key={cam.cameraId} className="hover:bg-slate-900/40 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="font-bold text-slate-200">{cam.cameraName}</div>
-                      <div className="font-mono text-[11px] text-slate-500">
-                        {cam.cameraId.toUpperCase()} • {cam.ipAddress}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {cam.activeStorageTier === "sd_card" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-mono text-[11px] font-semibold border border-emerald-500/30">
-                          <Cpu className="w-3 h-3" />
-                          Tier 1: Onboard SD Card
-                        </span>
-                      )}
-                      {cam.activeStorageTier === "dvr_hdd" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-300 font-mono text-[11px] font-semibold border border-blue-500/30">
-                          <HardDrive className="w-3 h-3" />
-                          Tier 2: DVR NVR Hard Disk
-                        </span>
-                      )}
-                      {cam.activeStorageTier === "online_cloud" && (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 font-mono text-[11px] font-semibold border border-purple-500/30">
-                          <Cloud className="w-3 h-3" />
-                          Tier 3: Online Cloud Fallback
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3 text-slate-300 font-mono text-[11px]">
-                      {cam.storageDetails}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <div className="font-mono text-slate-200 font-semibold">{cam.capacity}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{cam.used}</div>
-                    </td>
-
-                    <td className="px-4 py-3 font-mono font-bold text-amber-400">
-                      {cam.retentionDays} Days
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {cam.activeStorageTier !== "online_cloud" ? (
-                        <button
-                          onClick={() => switchCameraToCloud(cam.cameraId)}
-                          className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
-                          title="Failover to online cloud recording"
-                        >
-                          Enable Cloud Fallback
-                        </button>
-                      ) : (
-                        <span className="text-[11px] text-emerald-400 font-mono flex items-center justify-end gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Cloud Active
-                        </span>
-                      )}
+                {loading && cameras.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-400" />
+                      Scanning connected cameras and storage topology...
                     </td>
                   </tr>
-                ))}
+                ) : filteredCameras.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                      No cameras found matching the selected storage tier filter.
+                    </td>
+                  </tr>
+                ) : (
+                  filteredCameras.map((cam) => (
+                    <tr key={cam.cameraId} className="hover:bg-slate-900/40 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="font-bold text-slate-200">{cam.cameraName}</div>
+                        <div className="font-mono text-[11px] text-slate-500">
+                          {cam.cameraId.toUpperCase()} • {cam.ipAddress}
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-3">
+                        {cam.activeStorageTier === "sd_card" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-300 font-mono text-[11px] font-semibold border border-emerald-500/30">
+                            <Cpu className="w-3 h-3" />
+                            Tier 1: Onboard SD Card
+                          </span>
+                        )}
+                        {cam.activeStorageTier === "dvr_hdd" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/15 text-blue-300 font-mono text-[11px] font-semibold border border-blue-500/30">
+                            <HardDrive className="w-3 h-3" />
+                            Tier 2: DVR NVR Hard Disk
+                          </span>
+                        )}
+                        {cam.activeStorageTier === "online_cloud" && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-500/15 text-purple-300 font-mono text-[11px] font-semibold border border-purple-500/30">
+                            <Cloud className="w-3 h-3" />
+                            Tier 3: Online Cloud Fallback
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="px-4 py-3 text-slate-300 font-mono text-[11px]">
+                        {cam.storageDetails}
+                      </td>
+
+                      <td className="px-4 py-3">
+                        <div className="font-mono text-slate-200 font-semibold">{cam.capacity}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{cam.used}</div>
+                      </td>
+
+                      <td className="px-4 py-3 font-mono font-bold text-amber-400">
+                        {cam.retentionDays} Days
+                      </td>
+
+                      <td className="px-4 py-3 text-right">
+                        {cam.activeStorageTier !== "online_cloud" ? (
+                          <button
+                            onClick={() => void switchCameraToCloud(cam.cameraId)}
+                            className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
+                            title="Failover to online cloud recording"
+                          >
+                            Enable Cloud Fallback
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-emerald-400 font-mono flex items-center justify-end gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Cloud Active
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

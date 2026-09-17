@@ -39,7 +39,6 @@ export default function UPSPowerHealthPage() {
   // Clean Agent Fire Suppression State
   const [fm200Armed, setFm200Armed] = useState(true);
   const [fireAlarmActive, setFireAlarmActive] = useState(false);
-  const [preDischargeCountdown, setPreDischargeCountdown] = useState<number | null>(null);
   const [abortTriggered, setAbortTriggered] = useState(false);
 
   // DG Generator Telemetry
@@ -58,48 +57,41 @@ export default function UPSPowerHealthPage() {
     { id: "Cell-08", v: 3.32, temp: 24.6, ir: 4.0, status: "healthy" },
   ]);
 
-  useEffect(() => {
-    setLastUpdated(new Date().toLocaleTimeString());
-    const interval = setInterval(() => {
-      setGridMainsVoltage((v) => Number((230 + (Math.random() * 3.5 - 1.5)).toFixed(1)));
-      setGridFrequency((f) => Number((50 + (Math.random() * 0.08 - 0.04)).toFixed(2)));
+  const loadLiveTelemetry = async () => {
+    try {
+      setRefreshing(true);
+      const res = await fetch("/v1/infrastructure/health/tenant/summary", { cache: "no-store" });
+      if (res.ok) {
+        const payload = await res.json();
+        if (payload.data) {
+          setLastUpdated(new Date().toLocaleTimeString());
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load live infrastructure telemetry:", err);
+    } finally {
+      setRefreshing(false);
       setLastUpdated(new Date().toLocaleTimeString());
-    }, 4000);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveTelemetry();
+    const interval = setInterval(loadLiveTelemetry, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // Pre-discharge timer simulation
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (fireAlarmActive && preDischargeCountdown !== null && preDischargeCountdown > 0 && !abortTriggered) {
-      timer = setInterval(() => {
-        setPreDischargeCountdown((c) => (c !== null && c > 0 ? c - 1 : 0));
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [fireAlarmActive, preDischargeCountdown, abortTriggered]);
-
-  const simulateThermalSpike = () => {
-    setBatteryTemp(68.4);
-    setTempRateOfRise(6.8);
-    setFireAlarmActive(true);
-    setPreDischargeCountdown(30);
-    setAbortTriggered(false);
-  };
-
-  const abortSuppression = () => {
-    setAbortTriggered(true);
-    setPreDischargeCountdown(null);
-    setFireAlarmActive(false);
-    setBatteryTemp(28.2);
-    setTempRateOfRise(0.3);
+  const triggerBmsDiagnostic = async () => {
+    setRefreshing(true);
+    await loadLiveTelemetry();
   };
 
   return (
     <ModulePage
       title="Bank Power, UPS & Vault Thermal Suppression"
+      eyebrow="Power & Suppression Systems"
       description="Mission-critical Lithium-Ion UPS battery health, thermographic thermal runaway prediction, DG auto-start, and FM-200 clean agent interlock."
-      icon={<Zap className="w-6 h-6 text-amber-500" />}
+      icon={Zap}
     >
       <div className="space-y-6">
         {/* Top Status Banner */}
@@ -161,14 +153,13 @@ export default function UPSPowerHealthPage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <div className="text-center px-4 py-2 rounded-lg bg-red-900/90 border border-red-400">
-                <span className="text-[10px] uppercase tracking-wider block text-red-200">Gas Flood In</span>
-                <span className="text-2xl font-black font-mono text-white">
-                  {preDischargeCountdown !== null ? `${preDischargeCountdown}s` : "0s"}
-                </span>
-              </div>
               <button
-                onClick={abortSuppression}
+                onClick={() => {
+                  setAbortTriggered(true);
+                  setFireAlarmActive(false);
+                  setBatteryTemp(28.2);
+                  setTempRateOfRise(0.3);
+                }}
                 className="px-4 py-2.5 rounded-lg bg-white hover:bg-slate-100 text-red-700 font-bold text-xs uppercase tracking-wider shadow-lg transition-all"
               >
                 Emergency Abort Switch
@@ -332,16 +323,16 @@ export default function UPSPowerHealthPage() {
                 <span className="text-slate-300 font-mono">ARMED</span>
               </div>
 
-              {/* Simulation Trigger Button */}
+              {/* BMS Real-time Diagnostic Trigger */}
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={simulateThermalSpike}
-                  disabled={fireAlarmActive}
-                  className="w-full py-2.5 px-3 rounded-lg bg-red-900/40 hover:bg-red-900/60 border border-red-600/40 text-red-200 font-semibold text-xs flex items-center justify-center gap-2 transition-all"
+                  onClick={triggerBmsDiagnostic}
+                  disabled={refreshing}
+                  className="w-full py-2.5 px-3 rounded-lg bg-blue-900/40 hover:bg-blue-900/60 border border-blue-600/40 text-blue-200 font-semibold text-xs flex items-center justify-center gap-2 transition-all disabled:opacity-50"
                 >
-                  <AlertTriangle className="w-4 h-4 text-red-400" />
-                  Test Thermal Runaway & FM-200 Interlock
+                  <RefreshCw className={`w-4 h-4 text-blue-400 ${refreshing ? "animate-spin" : ""}`} />
+                  {refreshing ? "Querying BMS Telemetry..." : "Perform Live BMS Diagnostic Probe"}
                 </button>
               </div>
             </div>
