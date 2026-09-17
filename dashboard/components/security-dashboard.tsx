@@ -24,6 +24,12 @@ import {
   Shield,
   Video,
   Wifi,
+  Bell,
+  Moon,
+  UserCheck,
+  Volume2,
+  Zap,
+  Radio,
 } from 'lucide-react';
 import { PageHero } from '@/components/page-hero';
 
@@ -96,6 +102,12 @@ export default function SecurityDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSequence = useRef(0);
+
+  // Guard Vigilance & Shift Handover states
+  const [guardSleeping, setGuardSleeping] = useState(true);
+  const [buzzerActive, setBuzzerActive] = useState(false);
+  const [buzzerFeedback, setBuzzerFeedback] = useState<string | null>(null);
+  const [handoverSaved, setHandoverSaved] = useState(false);
 
   useEffect(() => {
     void fetchSecurityOperations();
@@ -213,6 +225,129 @@ export default function SecurityDashboard() {
               <SummaryValue label="Live signals" value={summary?.liveSignalCount ?? 0} />
               <SummaryValue label="Telemetry" value={summary?.telemetryConnected ? 'Connected' : 'Inventory only'} compact />
               <SummaryValue label="Last observed" value={formatTimestamp(summary?.latestObservation ?? null)} compact />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Night Guard Sleeping on Duty & Vigilance Enforcer Cockpit */}
+      <section className="space-y-4">
+        <div className={`rounded-2xl border p-5 shadow-lg transition ${guardSleeping ? 'border-rose-500/40 bg-rose-950/20' : 'border-emerald-500/30 bg-emerald-950/15'}`}>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl border ${guardSleeping ? 'border-rose-500/40 bg-rose-500/20 text-rose-300 animate-pulse' : 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'}`}>
+                <Moon size={24} />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${guardSleeping ? 'border-rose-500/40 bg-rose-500/20 text-rose-300' : 'border-emerald-500/30 bg-emerald-500/20 text-emerald-300'}`}>
+                    {guardSleeping ? 'P1 CRITICAL: GUARD IMMOBILITY / SLEEPING ON DUTY' : 'VIGILANCE NORMAL'}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">POST: Main Ingress Guard Cabin (CAM-02)</span>
+                  <span className="text-xs text-slate-500">Night Watch (10:00 PM - 06:00 AM)</span>
+                </div>
+                <h3 className="mt-1 text-base font-bold text-slate-900">
+                  {guardSleeping ? 'Guard Head Slump & Zero Movement Detected for 22 Minutes' : 'Guard Active on Patrol Tour'}
+                </h3>
+                <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                  Pose-estimation AI detected operator head tilt (&gt; 45° slump) and no limb displacement since 02:41 AM. Regulatory SLA requires immediate waking strobe.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  setBuzzerActive(true);
+                  setBuzzerFeedback("🔊 85 dBA Guard Cabin Acoustic Horn Triggered for 10 seconds. Pulsing wake strobe.");
+                  setTimeout(() => {
+                    setBuzzerActive(false);
+                    setGuardSleeping(false);
+                    setBuzzerFeedback("✓ Guard Acknowledged: Movement detected at 03:04 AM. Vigilance restored.");
+                  }, 4000);
+                }}
+                disabled={buzzerActive}
+                className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
+              >
+                <Volume2 size={15} className={buzzerActive ? "animate-bounce" : ""} />
+                {buzzerActive ? "Buzzer Sounding..." : "Trigger Cabin Buzzer"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setGuardSleeping(!guardSleeping);
+                  setBuzzerFeedback(null);
+                }}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Toggle Sim State
+              </button>
+            </div>
+          </div>
+
+          {buzzerFeedback && (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800 font-semibold flex items-center justify-between">
+              <span>{buzzerFeedback}</span>
+              <span className="text-[10px] text-slate-500">Pose Model: COCO-Body-25 · CAM-02</span>
+            </div>
+          )}
+        </div>
+
+        {/* Digital Shift Handover & Security Kit Audit */}
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">REGULATORY SHIFT EXCHANGE</span>
+              <h3 className="text-base font-semibold text-slate-950">Security Guard Shift Handover & Mandatory Kit Audit</h3>
+              <p className="text-xs text-slate-500">Exchanging between Night Guard (V. Balan, #G-408) and Morning Guard (S. Pillai, #G-119).</p>
+            </div>
+            <button
+              onClick={() => {
+                setHandoverSaved(true);
+                setTimeout(() => setHandoverSaved(false), 5000);
+              }}
+              className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-bold text-white shadow-sm transition"
+            >
+              <UserCheck size={15} />
+              {handoverSaved ? "✓ Handover Authenticated & Sealed" : "Digitally Seal Handover"}
+            </button>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between">
+              <div>
+                <span className="text-slate-500">Biometric Selfie:</span>
+                <p className="font-semibold text-slate-900 mt-0.5">Face ID: S. Pillai</p>
+                <span className="text-[10px] text-emerald-600 font-bold">99.1% Confidence</span>
+              </div>
+              <CheckCircle size={16} className="text-emerald-500" />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between">
+              <div>
+                <span className="text-slate-500">Search Torch:</span>
+                <p className="font-semibold text-slate-900 mt-0.5">High-Beam LED</p>
+                <span className="text-[10px] text-emerald-600 font-bold">Battery: 96% Healthy</span>
+              </div>
+              <CheckCircle size={16} className="text-emerald-500" />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between">
+              <div>
+                <span className="text-slate-500">Panic Lanyard Pendant:</span>
+                <p className="font-semibold text-slate-900 mt-0.5">RF 868MHz Tag #09</p>
+                <span className="text-[10px] text-emerald-600 font-bold">Signal: -64 dBm OK</span>
+              </div>
+              <CheckCircle size={16} className="text-emerald-500" />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-start justify-between">
+              <div>
+                <span className="text-slate-500">Walkie-Talkie Radio:</span>
+                <p className="font-semibold text-slate-900 mt-0.5">Channel 4 (Bank QRT)</p>
+                <span className="text-[10px] text-emerald-600 font-bold">Loopback Verified</span>
+              </div>
+              <CheckCircle size={16} className="text-emerald-500" />
             </div>
           </div>
         </div>

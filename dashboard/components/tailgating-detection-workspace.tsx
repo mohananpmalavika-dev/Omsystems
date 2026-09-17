@@ -23,6 +23,10 @@ import {
   UserCheck,
   UserX,
   Play,
+  Volume2,
+  Truck,
+  ShieldCheck,
+  Megaphone,
 } from "lucide-react";
 import {
   tailgatingApi,
@@ -35,6 +39,7 @@ import {
 } from "@/lib/api-client";
 
 export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }) {
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'airlock' | 'atm_lobby' | 'cit_bay'>('airlock');
   const [portals, setPortals] = useState<AirlockPortal[]>([]);
   const [selectedPortalId, setSelectedPortalId] = useState<string>(portalId || "");
   const [events, setEvents] = useState<TailgatingEvent[]>([]);
@@ -51,6 +56,17 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
   const [savingConfig, setSavingConfig] = useState(false);
   const [testingSequence, setTestingSequence] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
+
+  // ATM Lobby Enforcer states
+  const [atmOccupancy, setAtmOccupancy] = useState<number>(2);
+  const [atmVoicePlaying, setAtmVoicePlaying] = useState<boolean>(false);
+  const [atmVoiceFeedback, setAtmVoiceFeedback] = useState<string | null>(null);
+  const [atmLockdown, setAtmLockdown] = useState<boolean>(false);
+
+  // CIT Armored Bay states
+  const [citDockSeconds, setCitDockSeconds] = useState<number>(864); // 14m 24s
+  const [citGuardCount, setCitGuardCount] = useState<number>(2);
+  const [citStatusFeedback, setCitStatusFeedback] = useState<string | null>(null);
 
   // Load Portals
   useEffect(() => {
@@ -311,6 +327,46 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
         </div>
       </div>
 
+      {/* Sub-module Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-3">
+        <button
+          onClick={() => setActiveWorkspaceTab('airlock')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            activeWorkspaceTab === 'airlock'
+              ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-500/20'
+              : 'border border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <DoorClosed size={16} /> Airlock Portals & Mantrap
+        </button>
+        <button
+          onClick={() => setActiveWorkspaceTab('atm_lobby')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            activeWorkspaceTab === 'atm_lobby'
+              ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20'
+              : 'border border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Users size={16} /> ATM Lobby Single-Occupancy Enforcer
+          {atmOccupancy > 1 && (
+            <span className="rounded-full bg-rose-500/30 text-rose-300 px-1.5 py-0.5 text-[10px] animate-pulse">BREACH</span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveWorkspaceTab('cit_bay')}
+          className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            activeWorkspaceTab === 'cit_bay'
+              ? 'bg-amber-600 text-white shadow-lg shadow-amber-500/20'
+              : 'border border-slate-700 bg-slate-900/60 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Truck size={16} /> CIT Armored Van Bay Security
+          <span className="rounded-full bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 text-[10px]">2 GUARDS</span>
+        </button>
+      </div>
+
+      {activeWorkspaceTab === 'airlock' && (
+        <>
       {/* Active Portal Banner */}
       {activePortal && (
         <div className="grid gap-3 sm:grid-cols-4 rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-xs">
@@ -722,6 +778,292 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
               >
                 Confirm Tailgating Violation
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* ATM Lobby Single-Occupancy Enforcer Cockpit */}
+      {activeWorkspaceTab === 'atm_lobby' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-5 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                  <Users size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300 uppercase tracking-widest border border-rose-500/30">
+                      P1 REGULATORY VIOLATION
+                    </span>
+                    <span className="text-xs text-rose-300">ATM ENCLOSURE: ATM-01 (Kaloor Main Branch Foyer)</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white mt-1">Multi-Occupancy Tailgating In Progress</h2>
+                  <p className="text-xs text-slate-400">Optical sensor detected 2 occupants inside single-customer biometric safety enclosure.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setAtmVoicePlaying(true);
+                    setAtmVoiceFeedback("🔊 Broadcasting Bilingual Warning to ATM Kiosk Speaker (Malayalam + English)...");
+                    setTimeout(() => {
+                      setAtmVoicePlaying(false);
+                      setAtmVoiceFeedback("✓ Audio Warning Dispatched. Occupant count reduced to 1.");
+                      setAtmOccupancy(1);
+                    }, 4000);
+                  }}
+                  disabled={atmVoicePlaying}
+                  className="flex items-center gap-2 rounded-xl bg-rose-600 hover:bg-rose-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
+                >
+                  <Megaphone size={16} className={atmVoicePlaying ? "animate-bounce" : ""} />
+                  {atmVoicePlaying ? "Broadcasting Voice Warning..." : "Broadcast Bilingual Voice Strobe"}
+                </button>
+                <button
+                  onClick={() => setAtmLockdown(!atmLockdown)}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-bold transition ${
+                    atmLockdown
+                      ? 'border-red-500 bg-red-600 text-white'
+                      : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  <Lock size={15} />
+                  {atmLockdown ? "Kiosk Shutter Locked" : "Lock Down Shutter"}
+                </button>
+                <button
+                  onClick={() => {
+                    setAtmOccupancy(atmOccupancy === 1 ? 2 : 1);
+                    setAtmVoiceFeedback(null);
+                  }}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-700"
+                >
+                  Toggle Sim ({atmOccupancy} Persons)
+                </button>
+              </div>
+            </div>
+
+            {atmVoiceFeedback && (
+              <div className="mt-4 rounded-xl border border-rose-500/40 bg-rose-500/10 p-3 text-xs text-rose-200 flex items-center justify-between">
+                <span>{atmVoiceFeedback}</span>
+                <span className="text-[10px] text-slate-400">Audio DSP: 85 dBA Horn</span>
+              </div>
+            )}
+          </div>
+
+          {/* Real-time Visual Simulation Card */}
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
+                  <Camera size={16} className="text-cyan-400" />
+                  Top-Down Optical Enclosure Telemetry
+                </h3>
+                <span className="text-[10px] text-emerald-400 font-mono">LIVE TRACKING: 30 FPS</span>
+              </div>
+
+              {/* Graphic Representation of ATM Cabin */}
+              <div className="relative aspect-video w-full rounded-xl border border-slate-800 bg-slate-950 overflow-hidden flex items-center justify-center p-6">
+                {/* Door Graphic */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 h-3 w-32 bg-slate-700 rounded-b flex items-center justify-center text-[8px] text-slate-300 font-bold uppercase tracking-wider">
+                  ATM Cabin Glass Door
+                </div>
+
+                {/* ATM Kiosk Terminal Graphic */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-48 h-16 rounded-xl border border-cyan-500/40 bg-cyan-950/40 p-2 text-center shadow-[0_0_20px_rgba(6,182,212,0.15)]">
+                  <span className="text-[10px] font-bold text-cyan-300">ATM KIOSK #01 TERMINAL</span>
+                  <div className="mt-1 flex justify-center gap-1">
+                    <span className="h-1.5 w-6 rounded bg-cyan-400 animate-pulse" />
+                    <span className="h-1.5 w-6 rounded bg-slate-700" />
+                  </div>
+                </div>
+
+                {/* Person 1: Legitimate customer */}
+                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                  <div className="h-12 w-12 rounded-full border-2 border-emerald-500 bg-emerald-500/20 grid place-items-center text-emerald-300 font-bold text-xs shadow-[0_0_15px_#10b981]">
+                    P1
+                  </div>
+                  <span className="mt-1 rounded bg-slate-900/90 border border-emerald-500/30 px-2 py-0.5 text-[9px] text-emerald-300 font-semibold">
+                    Cardholder at Keypad
+                  </span>
+                </div>
+
+                {/* Person 2: Tailgater / Unbadged */}
+                {atmOccupancy > 1 && (
+                  <div className="absolute top-24 left-1/2 -translate-x-1/2 flex flex-col items-center animate-pulse">
+                    <div className="h-12 w-12 rounded-full border-2 border-rose-500 bg-rose-500/30 grid place-items-center text-rose-300 font-bold text-xs shadow-[0_0_20px_#f43f5e]">
+                      P2
+                    </div>
+                    <span className="mt-1 rounded bg-slate-900/90 border border-rose-500/50 px-2 py-0.5 text-[9px] text-rose-300 font-bold">
+                      TAILGATER (0.78m Distance)
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Warning script details */}
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs space-y-1 text-slate-300">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Automated Speaker Voice Prompt</span>
+                <p className="font-semibold text-rose-300">Malayalam: "ഒരു സമയം ഒരാൾക്ക് മാത്രമേ ATM കിയോസ്കിനുള്ളിൽ പ്രവേശനമുള്ളൂ. രണ്ടാമത്തെയാൾ ദയവായി പുറത്തു നിൽക്കുക."</p>
+                <p className="text-slate-400">English: "Only one occupant permitted inside the ATM enclosure. Please maintain queue outside."</p>
+              </div>
+            </div>
+
+            {/* Side Analytics & Anti-Skimmer Integrity */}
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">ATM Safety & Anti-Tamper Telemetry</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-400">Card Slot Bezel Sensor:</span>
+                    <span className="font-bold text-emerald-400 flex items-center gap-1"><CheckCircle2 size={12}/> Intact (No Skimmer)</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-400">Keypad Optical Offset:</span>
+                    <span className="font-bold text-emerald-400 flex items-center gap-1"><CheckCircle2 size={12}/> 0.01mm (Flush)</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-400">Dwell Time In Enclosure:</span>
+                    <span className="font-bold text-amber-400 font-mono">48 seconds</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+                    <span className="text-slate-400">Occupancy Limit:</span>
+                    <span className="font-bold text-slate-200">1 Person (Regulatory)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent ATM Tailgating Incidents</h4>
+                <div className="space-y-2 text-xs">
+                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2">
+                    <div className="flex justify-between text-[10px] text-slate-500">
+                      <span>Today, 06:14 PM</span>
+                      <span className="text-rose-400 font-bold">P1 CONFIRMED</span>
+                    </div>
+                    <p className="mt-1 font-semibold text-slate-200">2 persons inside ATM-01 for 1m 12s</p>
+                    <p className="text-[10px] text-slate-400">Auto Voice Strobe played · Second occupant exited</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
+                    <div className="flex justify-between text-[10px] text-slate-500">
+                      <span>Yesterday, 11:32 AM</span>
+                      <span className="text-emerald-400 font-bold">CLEARED</span>
+                    </div>
+                    <p className="mt-1 font-semibold text-slate-200">Elderly citizen assisted by family member</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CIT Armored Van Bay Security Cockpit */}
+      {activeWorkspaceTab === 'cit_bay' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  <Truck size={24} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 uppercase tracking-widest border border-amber-500/30">
+                      CASH REPLENISHMENT PROTOCOL
+                    </span>
+                    <span className="text-xs text-amber-300">VEHICLE: KL-07-AR-9921 (SIS Prosegur Logistics)</span>
+                  </div>
+                  <h2 className="text-xl font-bold text-white mt-1">Armored Van Bay Docking & Armed Escort Telemetry</h2>
+                  <p className="text-xs text-slate-400">Real-time surveillance of Cash-in-Transit (CIT) transfer corridor and mandatory armed guard compliance.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    setCitStatusFeedback("✓ Transfer Corridor Authorized. Outer Interlock Gate locked; Vault Mantrap unlocked for 4 minutes.");
+                    setTimeout(() => setCitStatusFeedback(null), 6000);
+                  }}
+                  className="flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/30 transition"
+                >
+                  <ShieldCheck size={16} /> Authorize Cash Transfer Corridor
+                </button>
+                <button
+                  onClick={() => {
+                    setCitStatusFeedback("⚠️ P1 Alert Dispatched: Bay Perimeter Breach reported to Armed QRT-01 and Central Command.");
+                    setTimeout(() => setCitStatusFeedback(null), 6000);
+                  }}
+                  className="flex items-center gap-2 rounded-xl border border-red-500/40 bg-red-600/20 hover:bg-red-600/40 px-3 py-2.5 text-xs font-bold text-red-200 transition"
+                >
+                  <ShieldAlert size={15} /> Trigger Bay Alert
+                </button>
+              </div>
+            </div>
+
+            {citStatusFeedback && (
+              <div className="mt-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-xs text-emerald-200 flex items-center justify-between">
+                <span>{citStatusFeedback}</span>
+                <span className="text-[10px] text-slate-400">Protocol: RBI Cash-in-Transit SOP #44</span>
+              </div>
+            )}
+          </div>
+
+          {/* CIT Key Metrics & Armed Escort Status */}
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Bay Docking Timer</span>
+              <div className="flex items-baseline gap-2">
+                <p className="text-3xl font-bold font-mono text-amber-300">14m 24s</p>
+                <span className="text-xs text-slate-400">/ 20m Max SLA</span>
+              </div>
+              <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-2">
+                <div className="bg-amber-400 h-full rounded-full" style={{ width: "72%" }} />
+              </div>
+              <span className="text-[10px] text-slate-500">Auto-escalation to BM at 18 minutes</span>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Armed Escort Compliance</span>
+              <div className="flex items-center gap-2">
+                <p className="text-3xl font-bold text-emerald-400 font-mono">2 / 2</p>
+                <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-xs font-bold">COMPLIANT</span>
+              </div>
+              <p className="text-xs text-slate-300">Both armed guards detected in camera FOV with weapons unholstered.</p>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Transfer Route Interlock</span>
+              <p className="text-xl font-bold text-cyan-300">MANTRA-INTERLOCK ACTIVE</p>
+              <p className="text-xs text-slate-400">Outer roll shutter locked. Vestibule pressure sensor verified.</p>
+            </div>
+          </div>
+
+          {/* Guard Verification Roster */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-4">
+            <h3 className="text-sm font-bold text-slate-200">CIT Guard & Weapon Roster Verification</h3>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-200">Ex-Serviceman R. Nair (Badge #SIS-992)</span>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Weapon: 12-Bore DBBL Shotgun · Gun Lic: KE/COK/2019/882</p>
+                  <span className="mt-1 inline-block rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold px-2 py-0.5">
+                    Biometric & Weapon Match: 98.4%
+                  </span>
+                </div>
+                <CheckCircle2 size={24} className="text-emerald-400" />
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-slate-200">Armed Custodian K. Varghese (Badge #SIS-414)</span>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Weapon: .32 Revolver · Gun Lic: KE/ERN/2021/104</p>
+                  <span className="mt-1 inline-block rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold px-2 py-0.5">
+                    Biometric & Weapon Match: 97.9%
+                  </span>
+                </div>
+                <CheckCircle2 size={24} className="text-emerald-400" />
+              </div>
             </div>
           </div>
         </div>

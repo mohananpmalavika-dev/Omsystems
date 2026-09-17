@@ -573,8 +573,8 @@ function ControlRoomContent() {
     if (!isPatrolActive) return wallSelection.cameras;
     const currentKeywords = PATROL_STAGES[patrolStageIndex].keywords;
     return [...wallSelection.cameras].sort((a, b) => {
-      const aText = `${a.name} ${a.zone || ""} ${a.location || ""}`.toLowerCase();
-      const bText = `${b.name} ${b.zone || ""} ${b.location || ""}`.toLowerCase();
+      const aText = `${a.name} ${(a as any).zone || ""} ${(a as any).location || ""}`.toLowerCase();
+      const bText = `${b.name} ${(b as any).zone || ""} ${(b as any).location || ""}`.toLowerCase();
       const aMatches = currentKeywords.some((k) => aText.includes(k));
       const bMatches = currentKeywords.some((k) => bText.includes(k));
       if (aMatches && !bMatches) return -1;

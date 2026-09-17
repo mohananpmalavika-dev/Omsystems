@@ -40,6 +40,7 @@ interface EvidenceItem {
   hash?: string;
   fileSize?: number;
   verificationStatus?: "verified" | "mismatch" | "pending";
+  preservationHold?: boolean;
 }
 
 interface ChainOfCustodyEvent {
@@ -75,6 +76,25 @@ export function EvidenceManager() {
   const [selected65BItem, setSelected65BItem] = useState<EvidenceItem | null>(null);
   const [selectedAuditData, setSelectedAuditData] = useState<any | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
+  const [preservationFeedback, setPreservationFeedback] = useState<string | null>(null);
+
+  const togglePreservationHold = (itemId: string) => {
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id === itemId) {
+          const nextHold = !item.preservationHold;
+          setPreservationFeedback(
+            nextHold
+              ? `🔒 Legal Preservation Hold ENABLED for item "${item.description.slice(0, 35)}..." (Exempted from 90-day FIFO auto-purge).`
+              : `🔓 Legal Preservation Hold REMOVED for item "${item.description.slice(0, 35)}..."`
+          );
+          setTimeout(() => setPreservationFeedback(null), 5000);
+          return { ...item, preservationHold: nextHold };
+        }
+        return item;
+      })
+    );
+  };
 
   const statusColors: Record<EvidenceCase["status"], string> = {
     open: "#3B82F6",
@@ -249,6 +269,11 @@ export function EvidenceManager() {
             {/* Evidence Items */}
             <div className="items-section">
               <h4>Evidence Items ({items.length})</h4>
+              {preservationFeedback && (
+                <div style={{ marginBottom: "12px", padding: "8px 12px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#fca5a5", fontSize: "12px", fontWeight: 600 }}>
+                  {preservationFeedback}
+                </div>
+              )}
               <div className="items-list">
                 {items.length === 0 ? (
                   <div className="empty-state-small">
@@ -301,6 +326,28 @@ export function EvidenceManager() {
                           title="Generate Section 65B Evidence Certificate for this item"
                         >
                           65B Cert
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => togglePreservationHold(item.id)}
+                          style={{
+                            marginLeft: "6px",
+                            background: item.preservationHold ? "rgba(239, 68, 68, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                            border: item.preservationHold ? "1px solid rgba(239, 68, 68, 0.5)" : "1px solid rgba(255, 255, 255, 0.15)",
+                            color: item.preservationHold ? "#fca5a5" : "#94a3b8",
+                            borderRadius: "4px",
+                            padding: "2px 6px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                          }}
+                          title="Toggle legal preservation hold (prevents FIFO 90-day auto deletion)"
+                        >
+                          <Lock size={11} />
+                          {item.preservationHold ? "Preserved (No FIFO)" : "Hold"}
                         </button>
                       </div>
                     </div>
