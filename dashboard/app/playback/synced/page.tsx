@@ -209,6 +209,44 @@ export default function SyncedPlaybackPage() {
   return (
     <NotificationsProvider>
       <div className="min-h-screen bg-slate-950 p-4 lg:p-6 text-slate-100 space-y-6">
+        {/* Forensic & Playback Suite Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 pb-1 scrollbar-none">
+          <a
+            href="/control-room"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
+          >
+            <MonitorPlay size={14} />
+            Live Video Wall
+          </a>
+          <a
+            href="/video-search"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
+          >
+            <Search size={14} />
+            Smart Video Search
+          </a>
+          <span
+            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap bg-slate-800/80 text-cyan-400 border-b-2 border-cyan-500 shadow-sm"
+          >
+            <Play size={14} className="fill-current" />
+            Multi-Camera Synced Playback
+          </span>
+          <a
+            href="/recordings"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
+          >
+            <Layers size={14} />
+            Recordings & Vault
+          </a>
+          <a
+            href="/evidence"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
+          >
+            <CheckCircle2 size={14} />
+            Evidence & Chain of Custody
+          </a>
+        </div>
+
         {/* Header Banner */}
         <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 shadow-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -226,6 +264,13 @@ export default function SyncedPlaybackPage() {
             </div>
 
             <div className="flex items-center gap-3">
+              <a
+                href="/evidence"
+                className="px-3.5 py-2.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-semibold text-xs flex items-center gap-2 transition-all"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Export Evidence Clip</span>
+              </a>
               <button
                 onClick={() => {
                   setPlaybackRunId((current) => current + 1);

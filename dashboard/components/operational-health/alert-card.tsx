@@ -195,6 +195,21 @@ export function AlertCard({
               View Work Order
             </a>
           )}
+          {alert.componentType && (
+            <a
+              href={
+                alert.componentType === 'camera' ? '/operations/cameras' :
+                alert.componentType === 'recording' ? '/operations/recording' :
+                alert.componentType === 'storage' ? '/operations/storage' :
+                alert.componentType === 'network' ? '/operations/network' :
+                alert.componentType === 'ups' ? '/operations/ups' :
+                '/operations/edge-agents'
+              }
+              className="btn-sm btn-secondary flex items-center gap-1 text-blue-600 hover:text-blue-700"
+            >
+              Inspect Hardware &rarr;
+            </a>
+          )}
         </div>
       )}
 

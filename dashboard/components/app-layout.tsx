@@ -155,8 +155,8 @@ export const navigation: NavGroup[] = [
       { label: "Multi-Camera Synced Playback", href: "/playback/synced", icon: Play },
       { label: "Recordings & Vault", href: "/recordings", icon: FileVideo2 },
       { label: "Evidence & Chain of Custody", href: "/evidence", icon: FileCheck2 },
-      { label: "AI Alerts & Incident Hub", href: "/analytics/alerts", icon: BellRing },
-      { label: "Alert Queue", href: "/operations/alerts", icon: Radio },
+      { label: "AI Security Alerts", href: "/analytics/alerts", icon: BellRing },
+      { label: "Hardware Health Alerts", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
     ],
   },
@@ -178,7 +178,7 @@ export const navigation: NavGroup[] = [
     label: "DEVICE HEALTH & MAINTENANCE",
     icon: HeartPulse,
     items: [
-      { label: "Camera Health", href: "/operations/cameras", icon: Camera, badge: "cameras" },
+      { label: "Camera & Device Health", href: "/operations/cameras", icon: Camera, badge: "cameras" },
       { label: "Recording Health", href: "/operations/recording", icon: FileVideo2 },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
@@ -204,9 +204,7 @@ export const navigation: NavGroup[] = [
     label: "ADMINISTRATION",
     icon: Settings,
     items: [
-      { label: "Organization & Locations", href: "/admin/organization?tab=hierarchy", icon: Building2 },
-      { label: "Employees & Location Access", href: "/admin/organization?tab=employees", icon: Users },
-      { label: "Roles & Menu Access", href: "/admin/organization?tab=roles", icon: Shield },
+      { label: "Organization & RBAC", href: "/admin/organization", icon: Building2 },
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "System Management & OTA", href: "/admin/system", icon: Settings },
@@ -309,6 +307,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
   admin: [
     "/",
     "/analytics/alerts",
+    "/admin/organization",
     "/admin/organization?tab=hierarchy",
     "/admin/organization?tab=employees",
     "/admin/organization?tab=roles",

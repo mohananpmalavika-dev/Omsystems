@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Shield, Search, CheckCircle2, XCircle, Clock, AlertCircle, FileText } from 'lucide-react';
 import { PageHero } from '@/components/page-hero';
+import { ComplianceHubNav } from '@/components/compliance/compliance-hub-nav';
 
 interface Control {
   id: string;
@@ -105,6 +106,8 @@ export default function ControlsPage() {
           icon={Shield}
           actions={<Link href="/compliance/requirements" className="btn-secondary"><FileText size={16} /> Review requirements</Link>}
         />
+
+        <ComplianceHubNav />
 
         {/* Stats Cards */}
         <div className="compliance-controls-stats grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">

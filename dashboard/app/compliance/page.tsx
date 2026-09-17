@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { complianceApi } from "@/lib/api-client";
 import type { ComplianceFramework } from "@/lib/types";
+import { ComplianceHubNav } from "@/components/compliance/compliance-hub-nav";
 
 export default function CompliancePage() {
   const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([]);
@@ -82,6 +83,7 @@ export default function CompliancePage() {
       </header>
 
       <div className="page-content">
+        <ComplianceHubNav />
         {error && !showForm && (
           <div className="compliance-warning-card" role="alert">
             <AlertCircle size={20} />
