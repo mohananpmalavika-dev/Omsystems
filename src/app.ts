@@ -2673,6 +2673,38 @@ export async function buildApp(options?: {
   }
   await registerPrivacyRoutes(app, store, options?.dependencies?.privacyService ?? undefined);
   await registerReportsRoutes(app, store);
+  
+  // Phase 1 MIS Reports - Executive & Financial Intelligence
+  if (pool) {
+    try {
+      const {
+        createExecutiveKpiRoutes,
+        createFinancialTcoRoutes,
+        createBranchBenchmarkingRoutes,
+        createComplianceScorecardRoutes,
+        createMISUnifiedRoutes
+      } = await import('./routes/reports/index.js');
+      
+      await app.register(async (instance) => {
+        instance.addHook('preHandler', async (request, reply) => {
+          if (!request.currentUser) {
+            return reply.code(401).send({ error: 'unauthenticated' });
+          }
+        });
+        
+        createExecutiveKpiRoutes(instance, pool);
+        createFinancialTcoRoutes(instance, pool);
+        createBranchBenchmarkingRoutes(instance, pool);
+        createComplianceScorecardRoutes(instance, pool);
+        createMISUnifiedRoutes(instance, pool);
+      }, { prefix: '/api/control/v1/reports' });
+      
+      app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');
+    } catch (err: unknown) {
+      app.log.error({ err }, 'failed to register Phase 1 MIS report routes');
+    }
+  }
+  
   await registerOperationalReportRoutes(app, store, operationalReportWorker, {
     downloadSecret: reportDownloadSecret, exportRoot: reportExportRoot,
     workerKey: options?.reportWorkerKey ?? process.env.REPORT_WORKER_SHARED_KEY,
