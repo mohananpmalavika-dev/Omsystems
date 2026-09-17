@@ -289,7 +289,7 @@ export class GuardianAIAssistant {
       config.model ||
       getEnv("KRYPTON_AI_MODEL") ||
       getEnv("GUARDIAN_AI_MODEL") ||
-      (isGroq ? "openai/gpt-oss-120b" : "gpt-4-turbo-preview");
+      (isGroq ? "qwen/qwen3.8-27b" : "gpt-4-turbo-preview");
 
     if (!this.openAIApiKey) {
       console.warn("[KryptonAI] AI API key (GROQ_API_KEY / OPENAI_API_KEY) not configured");
@@ -560,17 +560,30 @@ export class GuardianAIAssistant {
       content: assistantMessage,
     });
 
+    const isStateChangingAction = [
+      "lock_doors",
+      "dispatch_guard",
+      "trigger_alarm",
+      "show_camera_feed",
+    ].includes(functionName);
+
     return {
       message: assistantMessage,
-      type: "action",
-      actions: [
-        {
-          function: functionName,
-          parameters: functionArgs,
-          executed,
-          result: functionResult,
-        },
-      ],
+      type: isStateChangingAction ? "action" : "text",
+      actions: isStateChangingAction
+        ? [
+            {
+              function: functionName,
+              parameters: Object.fromEntries(
+                Object.entries(functionArgs).filter(
+                  ([_, v]) => v !== null && v !== undefined
+                )
+              ),
+              executed,
+              result: functionResult,
+            },
+          ]
+        : undefined,
       timestamp: new Date().toISOString(),
     };
   }
@@ -645,17 +658,30 @@ export class GuardianAIAssistant {
       content: assistantMessage,
     });
 
+    const isStateChangingAction = [
+      "lock_doors",
+      "dispatch_guard",
+      "trigger_alarm",
+      "show_camera_feed",
+    ].includes(functionName);
+
     return {
       message: assistantMessage,
-      type: "action",
-      actions: [
-        {
-          function: functionName,
-          parameters: functionArgs,
-          executed,
-          result: functionResult,
-        },
-      ],
+      type: isStateChangingAction ? "action" : "text",
+      actions: isStateChangingAction
+        ? [
+            {
+              function: functionName,
+              parameters: Object.fromEntries(
+                Object.entries(functionArgs).filter(
+                  ([_, v]) => v !== null && v !== undefined
+                )
+              ),
+              executed,
+              result: functionResult,
+            },
+          ]
+        : undefined,
       timestamp: new Date().toISOString(),
     };
   }

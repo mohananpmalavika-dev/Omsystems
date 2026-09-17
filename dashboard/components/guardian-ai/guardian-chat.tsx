@@ -334,7 +334,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                     ? "bg-yellow-500/10 border border-yellow-500/20 text-slate-300"
                     : "bg-slate-800 border border-slate-700 text-slate-300"
                 }`}>
-                  {message.role === "assistant" && message.type && (
+                  {message.role === "assistant" && message.type && message.type !== "text" && message.type !== "action" && (
                     <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
                       {getMessageIcon(message.type)}
                       <span className="text-xs font-medium uppercase">{message.type}</span>
@@ -342,25 +342,22 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                   )}
                   <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   
-                  {/* Actions */}
+                  {/* Executed Action Indicators */}
                   {message.actions && message.actions.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-slate-700 space-y-2">
-                      {message.actions.map((action, actionIndex) => (
-                        <div
-                          key={actionIndex}
-                          className="p-2 bg-slate-900/50 rounded-lg text-xs"
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="font-medium text-indigo-400">{action.function}</span>
-                            {action.executed && (
-                              <CheckCircle2 className="w-4 h-4 text-green-400" />
-                            )}
+                    <div className="mt-2.5 pt-2 border-t border-slate-700/50 flex flex-wrap gap-2">
+                      {message.actions
+                        .filter((action) => !action.function.startsWith("get_"))
+                        .map((action, actionIndex) => (
+                          <div
+                            key={actionIndex}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-900/60 border border-slate-700/60 rounded-lg text-xs text-indigo-300"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                            <span className="font-medium capitalize">
+                              {action.function.replace(/_/g, " ")}
+                            </span>
                           </div>
-                          <pre className="text-slate-500 overflow-x-auto">
-                            {JSON.stringify(action.parameters, null, 2)}
-                          </pre>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   )}
                 </div>

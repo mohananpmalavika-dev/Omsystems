@@ -152,7 +152,7 @@ export const navigation: NavGroup[] = [
       { label: "Executive Dashboard", href: "/dashboards", icon: BarChart3 },
       { label: "Branch Overview", href: "/operations/branches", icon: Building2 },
       { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
-      { label: "AI Alert Review", href: "/analytics/alerts", icon: BellRing },
+      { label: "AI Alerts & Incident Hub", href: "/analytics/alerts", icon: BellRing },
       { label: "Alert Queue", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
       { label: "Security Operations", href: "/security-operations", icon: Shield },
@@ -212,6 +212,7 @@ export const navigation: NavGroup[] = [
       { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", icon: TrendingUp },
       { label: "Video Analytics Hub", href: "/analytics", icon: Activity },
       { label: "Analytics Performance Dashboard", href: "/analytics/dashboard", icon: BarChart3 },
+      { label: "AI Alerts Graphical Analytics", href: "/analytics/alerts", icon: BellRing },
       { label: "AI Rules & Automation", href: "/analytics/rules", icon: SlidersHorizontal },
       { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
@@ -338,6 +339,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/",
     "/operations/branches",
     "/operations/cameras",
+    "/analytics/alerts",
     "/operations/recording",
     "/operations/workorders",
     "/operations/storage",
@@ -350,6 +352,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/",
     "/operations/branches",
     "/operations/cameras",
+    "/analytics/alerts",
     "/operations/recording",
     "/operations/workorders",
     "/operations/storage",
@@ -363,6 +366,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/",
     "/operations/branches",
     "/operations/cameras",
+    "/analytics/alerts",
     "/operations/recording",
     "/operations/workorders",
     "/operations/storage",
@@ -376,6 +380,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/",
     "/operations/branches",
     "/operations/cameras",
+    "/analytics/alerts",
     "/operations/recording",
     "/operations/workorders",
     "/operations/storage",
@@ -387,6 +392,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
   auditor: [
     "/",
     "/evidence",
+    "/analytics/alerts",
     "/compliance",
     "/compliance/assessments",
     "/compliance/controls",
@@ -399,6 +405,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
   ],
   admin: [
     "/",
+    "/analytics/alerts",
     "/admin/organization?tab=hierarchy",
     "/admin/organization?tab=employees",
     "/admin/organization?tab=roles",
@@ -486,6 +493,7 @@ function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<strin
 
 
 export const quickActions: NavItem[] = [
+  { label: "AI Alerts Graphical Visualizer", href: "/analytics/alerts", icon: BarChart3 },
   { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
   { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
   { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
