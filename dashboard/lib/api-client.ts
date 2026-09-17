@@ -2962,50 +2962,6 @@ export const branchComparisonApi = {
     }),
 };
 
-export const cameraPermissionApi = {
-  listUserGrants: (userId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),
-
-  listCameraGrants: (cameraId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/cameras/${cameraId}/grants`),
-
-  createGrant: (data: any) =>
-    fetchApi<any>('/v1/camera-grants', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  deleteGrant: (id: string) =>
-    fetchApi<void>(`/v1/camera-grants/${id}`, { method: 'DELETE' }),
-
-  listAccessRequests: (filters?: any) => {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined) params.append(key, String(value));
-      });
-    }
-    return fetchApi<{ data: any[] }>(`/v1/camera-access-requests?${params}`);
-  },
-
-  createAccessRequest: (data: any) =>
-    fetchApi<any>('/v1/camera-access-requests', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  reviewAccessRequest: (id: string, status: 'approved' | 'rejected', reviewNotes?: string) =>
-    fetchApi<any>(`/v1/camera-access-requests/${id}/review`, {
-      method: 'POST',
-      body: JSON.stringify({ status, reviewNotes }),
-    }),
-
-  checkCameraAccess: (cameraId: string, action = 'live:view') =>
-    fetchApi<{ allowed: boolean; reason: string; requiresApproval: boolean }>(
-      `/v1/cameras/${cameraId}/check-access?action=${action}`
-    ),
-};
-
 export const videoSearchApi = {
   searchRecordings: (query: { cameraId?: string; from: string; to: string; eventType?: string; minConfidence?: number; limit?: number; offset?: number }) => {
     const params = new URLSearchParams();
