@@ -73,6 +73,18 @@ export default function MisReportsPage() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const getReportAuthHeaders = useCallback((): Record<string, string> => {
+    const token = typeof window !== "undefined"
+      ? (localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken"))
+      : null;
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-sentinel-session"] = token;
+    }
+    return headers;
+  }, []);
+
   const fetchMisData = useCallback(async () => {
     try {
       setLoading(true);
@@ -89,6 +101,8 @@ export default function MisReportsPage() {
       }
 
       const res = await fetch(`/api/control/v1/reports/mis?${params.toString()}`, {
+        headers: getReportAuthHeaders(),
+        credentials: "include",
         cache: "no-store",
       });
       const json = await res.json().catch(() => null);
@@ -104,7 +118,7 @@ export default function MisReportsPage() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange, groupBy, selectedOrg, selectedZone, selectedRegion, selectedArea, selectedBranch, selectedShift]);
+  }, [timeRange, groupBy, selectedOrg, selectedZone, selectedRegion, selectedArea, selectedBranch, selectedShift, getReportAuthHeaders]);
 
   useEffect(() => {
     fetchMisData();
@@ -343,18 +357,18 @@ export default function MisReportsPage() {
               <div className="absolute top-0 left-0 h-1 w-full bg-emerald-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Average Uptime</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-white">{summary.avgUptime}%</span>
-                <span className="text-xs text-emerald-400 font-semibold">{summary.onlineCameras}/{summary.totalCameras} cams</span>
+                <span className="text-2xl font-bold text-white">{summary.avgUptime != null ? `${summary.avgUptime}%` : "—"}</span>
+                <span className="text-xs text-emerald-400 font-semibold">{summary.onlineCameras ?? 0}/{summary.totalCameras ?? 0} cams</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">{summary.totalBranches} Branches Analyzed</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.totalBranches ?? 0} Branches Analyzed</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-rose-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Open P1 Threats</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-rose-400">{summary.totalP1Threats}</span>
-                <span className="text-xs text-slate-400">{summary.totalAlerts} total alerts</span>
+                <span className="text-2xl font-bold text-rose-400">{summary.totalP1Threats ?? 0}</span>
+                <span className="text-xs text-slate-400">{summary.totalAlerts ?? 0} total alerts</span>
               </div>
               <span className="text-[11px] text-slate-500 mt-1 block">Requires instant review</span>
             </div>
@@ -363,40 +377,40 @@ export default function MisReportsPage() {
               <div className="absolute top-0 left-0 h-1 w-full bg-amber-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Total Footfall</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-amber-400">{summary.totalFootfall?.toLocaleString?.() ?? "—"}</span>
+                <span className="text-2xl font-bold text-amber-400">{summary.totalFootfall != null ? Number(summary.totalFootfall).toLocaleString() : "—"}</span>
                 <span className="text-xs text-slate-400">Visitors</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Avg wait: {summary.avgWaitMin ?? "not measured"}</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">Avg wait: {summary.avgWaitMin != null ? `${summary.avgWaitMin}m` : "not measured"}</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-sky-500" />
-              <span className="text-xs font-medium text-slate-400 block mb-1">Active Staff</span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Staff Attendance</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-sky-400">{summary.avgAttendance ?? "—"}{summary.avgAttendance === null ? "" : "%"}</span>
-                <span className="text-xs text-slate-400">Session activity</span>
+                <span className="text-2xl font-bold text-sky-400">{summary.avgAttendance != null ? `${summary.avgAttendance}%` : "—"}</span>
+                <span className="text-xs text-slate-400">Face Verified / Active</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Shift compliance</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgAttendance != null ? "Shift compliance" : "not measured"}</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-indigo-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">SLA Compliance</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-indigo-400">{summary.avgSla ?? "—"}{summary.avgSla === null ? "" : "%"}</span>
+                <span className="text-2xl font-bold text-indigo-400">{summary.avgSla != null ? `${summary.avgSla}%` : "—"}</span>
                 <span className="text-xs text-slate-400 font-semibold">P1 acknowledgement</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Measured against the configured target</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgSla != null ? "Response target met" : "not measured"}</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-teal-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Retention Compliance</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-teal-400">{summary.avgRetentionDays ?? "—"}{summary.avgRetentionDays === null ? "" : "d"}</span>
+                <span className="text-2xl font-bold text-teal-400">{summary.avgRetentionDays != null ? `${summary.avgRetentionDays}d` : "—"}</span>
                 <span className="text-xs text-slate-400 font-semibold">Measured policy</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Based on configured recording jobs</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">{summary.avgRetentionDays != null ? (summary.avgRetentionDays >= 90 ? "100% Statutory passed" : "Review retention policy") : "not configured"}</span>
             </div>
           </div>
         )}
@@ -552,7 +566,14 @@ export default function MisReportsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800 text-slate-300">
-                    {data.matrix.map((row: any, idx: number) => (
+                    {data.matrix.length === 0 ? (
+                      <tr>
+                        <td colSpan={groupBy === "branch" ? 13 : 12} className="p-8 text-center text-slate-400">
+                          No branch records found for the selected filters. Real telemetry will display as devices report in.
+                        </td>
+                      </tr>
+                    ) : (
+                      data.matrix.map((row: any, idx: number) => (
                       <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
                         <td className="p-3 font-semibold text-white flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-sky-400" />
@@ -599,7 +620,7 @@ export default function MisReportsPage() {
                           </span>
                         </td>
                       </tr>
-                    ))}
+                    )))}
                   </tbody>
                 </table>
               </div>

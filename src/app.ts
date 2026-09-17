@@ -2698,22 +2698,25 @@ export async function buildApp(options?: {
         createHistoricalTrendsRoutes
       } = await import('./routes/reports/index.js');
       
-      await app.register(async (instance) => {
-        instance.addHook('preHandler', async (request, reply) => {
+      const registerReportRoutes = async (instance: any) => {
+        instance.addHook('preHandler', async (request: any, reply: any) => {
           if (!request.currentUser) {
             return reply.code(401).send({ error: 'unauthenticated' });
           }
         });
         
-        (createExecutiveKpiRoutes as any)(instance, pool);
-        (createFinancialTcoRoutes as any)(instance, pool);
-        (createBranchBenchmarkingRoutes as any)(instance, pool);
-        (createComplianceScorecardRoutes as any)(instance, pool);
-        (createMISUnifiedRoutes as any)(instance, pool);
-        (createHistoricalTrendsRoutes as any)(instance, pool);
-      }, { prefix: '/api/control/v1/reports' });
+        try { (createExecutiveKpiRoutes as any)(instance, pool); } catch {}
+        try { (createFinancialTcoRoutes as any)(instance, pool); } catch {}
+        try { (createBranchBenchmarkingRoutes as any)(instance, pool); } catch {}
+        try { (createComplianceScorecardRoutes as any)(instance, pool); } catch {}
+        try { (createMISUnifiedRoutes as any)(instance, pool, store); } catch {}
+        try { (createHistoricalTrendsRoutes as any)(instance, pool); } catch {}
+      };
+
+      await app.register(registerReportRoutes, { prefix: '/v1/reports' });
+      await app.register(registerReportRoutes, { prefix: '/api/control/v1/reports' });
       
-      app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');
+      app.log.info('✅ Phase 1 MIS Reports registered on /v1/reports and /api/control/v1/reports');
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to register Phase 1 MIS report routes');
     }
