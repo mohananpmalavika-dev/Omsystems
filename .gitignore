@@ -42,6 +42,7 @@ reports/*.zip
 *.exe
 edge-agent/release/*.zip
 edge-agent/release/edge-agent.exe
+edge-agent/release/*.deflated*
 edge-agent/release/updates/
 edge-agent/release/config/
 edge-agent/release/data/

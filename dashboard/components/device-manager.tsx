@@ -702,6 +702,7 @@ export function DeviceManager() {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [installerProgress, setInstallerProgress] = useState<string>();
+  const lastInstallerProgressUpdateRef = useRef(0);
   const [inventorySearch, setInventorySearch] = useState("");
   const [inventoryDeviceTypeFilter, setInventoryDeviceTypeFilter] = useState("all");
   const [inventoryLifecycleFilter, setInventoryLifecycleFilter] = useState("all");
@@ -1642,6 +1643,14 @@ export function DeviceManager() {
   }
 
   function reportInstallerProgress(received: number, total?: number) {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    // Throttle React state updates to at most once every 150ms unless complete or starting,
+    // preventing thousands of full DeviceManager re-renders that starve the browser's
+    // network stream consumer.
+    if (total && received < total && received > 0 && now - lastInstallerProgressUpdateRef.current < 150) {
+      return;
+    }
+    lastInstallerProgressUpdateRef.current = now;
     const megabytes = (received / 1048576).toFixed(1);
     setInstallerProgress(total
       ? `Downloading: ${Math.round(received / total * 100)}% (${megabytes} / ${(total / 1048576).toFixed(1)} MB)`
