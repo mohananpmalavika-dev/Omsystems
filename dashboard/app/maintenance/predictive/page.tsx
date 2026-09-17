@@ -15,6 +15,10 @@ import {
   Truck,
   FileSpreadsheet,
   Activity,
+  Droplets,
+  Eye,
+  Zap,
+  Settings,
 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { maintenanceApi } from "@/lib/api-client";
@@ -45,7 +49,13 @@ export default function MaintenancePredictivePage() {
   const [dispatchTime, setDispatchTime] = useState<string | null>(null);
   const [ticketId, setTicketId] = useState<string | null>(null);
   const [slaSecondsRemaining, setSlaSecondsRemaining] = useState<number>(4 * 3600); // 4 hour SLA
-  const [activeTab, setActiveTab] = useState<"smart" | "fleet">("smart");
+  const [activeTab, setActiveTab] = useState<"smart" | "optics_ptz" | "fleet">("smart");
+
+  // Lens Moisture & PTZ Stall states
+  const [heaterActive, setHeaterActive] = useState(false);
+  const [heaterFeedback, setHeaterFeedback] = useState<string | null>(null);
+  const [ptzDispatched, setPtzDispatched] = useState(false);
+  const [ptzFeedback, setPtzFeedback] = useState<string | null>(null);
 
   const criticalDrives: SmartTelemetry[] = [
     {
@@ -195,7 +205,7 @@ export default function MaintenancePredictivePage() {
     >
       <div className="space-y-6">
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-3 border-b border-gray-800 pb-3">
+        <div className="flex flex-wrap items-center gap-3 border-b border-gray-800 pb-3">
           <button
             onClick={() => setActiveTab("smart")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
@@ -206,6 +216,17 @@ export default function MaintenancePredictivePage() {
           >
             <HardDrive className="w-4 h-4" />
             NVR S.M.A.R.T. HDD Failure Predictor (48h Warning)
+          </button>
+          <button
+            onClick={() => setActiveTab("optics_ptz")}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              activeTab === "optics_ptz"
+                ? "bg-amber-600/20 text-amber-300 border border-amber-500/30"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            <Droplets className="w-4 h-4" />
+            Camera Lens Moisture & PTZ Motor Stall Predictor
           </button>
           <button
             onClick={() => setActiveTab("fleet")}
@@ -389,6 +410,132 @@ export default function MaintenancePredictivePage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Camera Lens Moisture & PTZ Motor Stall Predictor Tab */}
+        {activeTab === "optics_ptz" && (
+          <div className="space-y-6">
+            {/* Card 1: Lens Moisture & Ingress */}
+            <div className="bg-gradient-to-br from-amber-950/40 via-gray-900 to-black border-2 border-amber-500/40 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+              <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-6 border-b border-gray-800">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-600 text-white animate-pulse">
+                      Predictive Alert: Lens Fogging & Ingress
+                    </span>
+                    <span className="text-xs text-gray-400 font-mono">
+                      Target: CAM-07 Outdoor Bullet • North Boundary Gate
+                    </span>
+                  </div>
+                  <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                    <Droplets className="w-7 h-7 text-amber-500" />
+                    Internal Dome Condensation & Fogging Degradation
+                  </h2>
+                  <p className="text-sm text-gray-300 max-w-2xl">
+                    Internal sensor cavity Relative Humidity reached <strong>94% RH</strong> (Threshold: 85%). Optical MTF contrast degradation at 38% due to lens condensation. Total blindness predicted within 18 hours if untreated.
+                  </p>
+                </div>
+
+                <div className="bg-gray-950/80 border border-gray-800 rounded-xl p-4 min-w-[280px]">
+                  <div className="space-y-3">
+                    <div className="text-xs text-gray-400">Internal Enclosure Desiccant Cycle</div>
+                    <button
+                      onClick={() => {
+                        setHeaterActive(true);
+                        setHeaterFeedback("✓ Internal PTC Dome Heater & Desiccant Blower engaged for 15 minutes. Condensation drying in progress.");
+                        setTimeout(() => setHeaterFeedback(null), 6000);
+                      }}
+                      disabled={heaterActive}
+                      className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-600/30 transition disabled:opacity-50"
+                    >
+                      <Zap className="w-4 h-4" />
+                      {heaterActive ? "Dome Heater Drying Active" : "Activate Dome Heater Cycle"}
+                    </button>
+                    {heaterFeedback && (
+                      <p className="text-[11px] text-amber-300 font-semibold">{heaterFeedback}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 text-xs">
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Internal Cavity RH</span>
+                  <div className="text-xl font-bold font-mono text-amber-400 mt-1">94.2%</div>
+                  <span className="text-[10px] text-red-400">Above 85% limit</span>
+                </div>
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Optical Contrast Loss</span>
+                  <div className="text-xl font-bold font-mono text-amber-400 mt-1">-38.4%</div>
+                  <span className="text-[10px] text-gray-500">Laplacian variance dropping</span>
+                </div>
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Desiccant Life</span>
+                  <div className="text-xl font-bold font-mono text-rose-400 mt-1">12%</div>
+                  <span className="text-[10px] text-rose-400">Replace packet on next AMC</span>
+                </div>
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Ingress Protection</span>
+                  <div className="text-xl font-bold font-mono text-cyan-400 mt-1">IP67 / IK10</div>
+                  <span className="text-[10px] text-gray-500">Gasket seal integrity: Marginal</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Card 2: PTZ Motor Jamming & Stall Predictor */}
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/40 grid place-items-center">
+                    <Settings className="w-6 h-6 animate-spin" />
+                  </div>
+                  <div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      PREDICTIVE MOTOR WEAR
+                    </span>
+                    <h3 className="text-lg font-bold text-white mt-1">PTZ Pan-Tilt Stepper Motor Gear Backlash & Torque Stall</h3>
+                    <p className="text-xs text-gray-400">Vault Corridor High-Speed PTZ (CAM-01-PTZ) • Azimuth Gearbox Resistance</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setPtzDispatched(true);
+                    setPtzFeedback("✓ Priority OEM Servo Replacement Ticket #TKT-PTZ-8812 Dispatched to CP PLUS Engineer.");
+                    setTimeout(() => setPtzFeedback(null), 6000);
+                  }}
+                  disabled={ptzDispatched}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition shadow-lg shadow-purple-600/30 disabled:opacity-50"
+                >
+                  {ptzDispatched ? "Ticket Dispatched" : "Dispatch Preventive Gear Replacement"}
+                </button>
+              </div>
+
+              {ptzFeedback && (
+                <div className="rounded-xl border border-purple-500/30 bg-purple-950/20 p-2.5 text-xs text-purple-200 font-semibold">
+                  {ptzFeedback}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Pan Motor Peak Current</span>
+                  <div className="text-xl font-bold font-mono text-amber-400 mt-1">1.84 A</div>
+                  <span className="text-[10px] text-amber-400">Normal continuous: 0.65 A</span>
+                </div>
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">Patrol Tour Micro-Stutter</span>
+                  <div className="text-xl font-bold font-mono text-rose-400 mt-1">14% Slippage</div>
+                  <span className="text-[10px] text-rose-400">Gear tooth backlash detected</span>
+                </div>
+                <div className="bg-gray-950/60 border border-gray-800 p-3 rounded-xl">
+                  <span className="text-gray-400">MTBF Window Before Lockout</span>
+                  <div className="text-xl font-bold font-mono text-purple-300 mt-1">48 Hours</div>
+                  <span className="text-[10px] text-gray-500">Preventive servicing window</span>
+                </div>
               </div>
             </div>
           </div>

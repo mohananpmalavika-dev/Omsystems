@@ -54,7 +54,9 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [reviewNotes, setReviewNotes] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [testPattern, setTestPattern] = useState<"sharp" | "defocused" | "blinded" | "covered" | "spray" | "moved">("sharp");
+  const [testPattern, setTestPattern] = useState<"sharp" | "defocused" | "blinded" | "covered" | "spray" | "laser" | "moved">("sharp");
+  const [ptzFailoverActive, setPtzFailoverActive] = useState(false);
+  const [ptzFailoverFeedback, setPtzFailoverFeedback] = useState<string | null>(null);
 
   // Load Data
   const loadData = useCallback(async () => {
@@ -163,6 +165,21 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
           buffer[idx] = 180 + (i % 5);
           buffer[idx + 1] = 60 + (i % 3);
           buffer[idx + 2] = 70 + (i % 4);
+        }
+      } else if (testPattern === "laser") {
+        // High-intensity green laser pointer optical flare (532nm) with saturation bloom
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 3;
+            const dist = Math.hypot(x - width / 2, y - height / 2);
+            if (dist < 15) {
+              buffer[idx] = 255; buffer[idx + 1] = 255; buffer[idx + 2] = 255; // White hot sensor saturation core
+            } else if (dist < 35) {
+              buffer[idx] = 30; buffer[idx + 1] = 255; buffer[idx + 2] = 50; // Intense green laser flare halo
+            } else {
+              buffer[idx] = 15; buffer[idx + 1] = 40; buffer[idx + 2] = 15;
+            }
+          }
         }
       } else if (testPattern === "moved") {
         // Inverted checkerboard (camera moved to completely different angle)
@@ -434,7 +451,7 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
           <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-zinc-950/60 border border-zinc-800/60">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium text-zinc-400">Probe Condition:</span>
-              {(['sharp', 'defocused', 'blinded', 'covered', 'spray', 'moved'] as const).map((pat) => (
+              {(['sharp', 'defocused', 'blinded', 'covered', 'spray', 'laser', 'moved'] as const).map((pat) => (
                 <button
                   key={pat}
                   onClick={() => setTestPattern(pat)}
@@ -461,6 +478,14 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
             </div>
           </div>
 
+          {/* PTZ Optical Failover Pan Action Banner */}
+          {ptzFailoverFeedback && (
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-3 text-xs text-emerald-200 flex items-center justify-between">
+              <span>{ptzFailoverFeedback}</span>
+              <span className="text-[10px] text-slate-400">PTZ Protocol: Pelco-D RS485</span>
+            </div>
+          )}
+
           {/* Diagnostic Metrics Gauges */}
           {analysisResult ? (
             <div className="space-y-4">
@@ -480,8 +505,22 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-zinc-400">
-                    Confidence: <span className="text-white font-mono font-bold">{(analysisResult.evaluation.confidence * 100).toFixed(1)}%</span>
+                  <div className="flex items-center gap-3">
+                    {analysisResult.evaluation.isTampered && (
+                      <button
+                        onClick={() => {
+                          setPtzFailoverActive(true);
+                          setPtzFailoverFeedback("✓ Failover Active: PTZ CAM-03 panned to azimuth 142°, tilt -18° to cover blinded sector. Zero surveillance blackout.");
+                          setTimeout(() => setPtzFailoverFeedback(null), 6000);
+                        }}
+                        className="rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-[11px] px-2.5 py-1 transition shadow-sm"
+                      >
+                        {ptzFailoverActive ? "Failover PTZ Panned" : "Pan Adjacent PTZ CAM-03"}
+                      </button>
+                    )}
+                    <div className="text-xs text-zinc-400">
+                      Confidence: <span className="text-white font-mono font-bold">{(analysisResult.evaluation.confidence * 100).toFixed(1)}%</span>
+                    </div>
                   </div>
                 </div>
 

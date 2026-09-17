@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, CheckCircle2, RefreshCw, Server } from "lucide-react";
+import { AlertTriangle, CheckCircle2, RefreshCw, Server, Wifi, Zap, Radio, Sliders, Layers } from "lucide-react";
 
 type HaState = {
   metrics?: Record<string, unknown>;
@@ -15,6 +15,11 @@ export function HaFailoverView() {
   const [events, setEvents] = useState<Array<Record<string, any>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Dual WAN 5G Auto-Failover states
+  const [activeWan, setActiveWan] = useState<"fiber" | "cellular_5g">("fiber");
+  const [throttleMode, setThrottleMode] = useState<"high_bandwidth" | "data_saver">("high_bandwidth");
+  const [failoverFeedback, setFailoverFeedback] = useState<string | null>(null);
 
   const metrics = cluster?.metrics ?? {};
   const nodes = cluster?.nodes ?? [];
@@ -91,6 +96,109 @@ export function HaFailoverView() {
           ["Failovers today", metrics.failoversToday],
         ] as [string, unknown][]).map(([label, value]) => <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/90 p-4"><p className="text-xs text-slate-400">{label}</p><p className="mt-2 text-2xl font-bold text-slate-100">{value == null ? "—" : String(value)}</p></div>)}
       </div>
+
+      {/* Dual WAN 5G Auto-Failover & Bandwidth Throttle Cockpit */}
+      <section className="space-y-4">
+        <div className={`rounded-2xl border p-5 shadow-xl transition ${activeWan === "cellular_5g" ? "border-amber-500/40 bg-gradient-to-r from-amber-950/30 via-slate-900 to-slate-900" : "border-slate-800 bg-slate-900/90"}`}>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl border ${activeWan === "cellular_5g" ? "border-amber-500/40 bg-amber-500/20 text-amber-300 animate-pulse" : "border-cyan-500/30 bg-cyan-500/10 text-cyan-300"}`}>
+                <Wifi size={24} />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${activeWan === "cellular_5g" ? "border-amber-500/40 bg-amber-500/20 text-amber-300" : "border-emerald-500/40 bg-emerald-500/20 text-emerald-300"}`}>
+                    {activeWan === "cellular_5g" ? "CELLULAR 5G FAILOVER ACTIVE" : "PRIMARY FIBER LINK ACTIVE"}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">GATEWAY: Teltonika RUTX50 Industrial Dual-SIM</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${throttleMode === "data_saver" ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"}`}>
+                    {throttleMode === "data_saver" ? "ADAPTIVE DATA-SAVER (480p Sub-stream)" : "FULL BITRATE (1080p Main-stream)"}
+                  </span>
+                </div>
+                <h3 className="mt-1 text-base font-bold text-white">
+                  {activeWan === "cellular_5g"
+                    ? "Primary Fiber Dropped · Operating on 5G Standby Backup SIM"
+                    : "Zero Packet Loss on BSNL Bharat Fibre 500 Mbps"}
+                </h3>
+                <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                  Automatic link health monitoring via ICMP & HTTP ping to central media gateway. On link drop, streams are dynamically throttled to preserve SIM quotas while keeping full 1080p archives on branch edge NVR.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  if (activeWan === "fiber") {
+                    setActiveWan("cellular_5g");
+                    setThrottleMode("data_saver");
+                    setFailoverFeedback("⚠️ Primary Fiber dropped (Simulated). Switched to 5G Backup SIM in 1.4s. Streams throttled to 480p/15FPS to conserve mobile quota.");
+                  } else {
+                    setActiveWan("fiber");
+                    setThrottleMode("high_bandwidth");
+                    setFailoverFeedback("✓ Primary Fiber restored. Uplink stabilized at 500 Mbps. Restored full 1080p/30FPS streaming.");
+                  }
+                  setTimeout(() => setFailoverFeedback(null), 6000);
+                }}
+                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition shadow-sm ${
+                  activeWan === "fiber"
+                    ? "bg-amber-600 hover:bg-amber-500 text-white"
+                    : "bg-emerald-600 hover:bg-emerald-500 text-white"
+                }`}
+              >
+                <Zap size={14} />
+                {activeWan === "fiber" ? "Simulate Fiber Drop (Trigger 5G)" : "Restore Primary Fiber"}
+              </button>
+            </div>
+          </div>
+
+          {failoverFeedback && (
+            <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-200 font-semibold flex items-center justify-between">
+              <span>{failoverFeedback}</span>
+              <span className="text-[10px] text-slate-400 font-mono">VRRP / Multi-WAN Metric: 10/20</span>
+            </div>
+          )}
+
+          {/* Dual Link Telemetry Row */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-xs">
+            <div className={`rounded-xl border p-3 ${activeWan === "fiber" ? "border-emerald-500/40 bg-emerald-950/20" : "border-slate-800 bg-slate-950/60"}`}>
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="font-semibold text-white">WAN 1: BSNL Bharat Fibre</span>
+                <span className={`text-[10px] font-bold ${activeWan === "fiber" ? "text-emerald-400" : "text-rose-400"}`}>
+                  {activeWan === "fiber" ? "CONNECTED" : "OFFLINE"}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-slate-300">500 Mbps · Latency: 14ms</p>
+              <span className="text-[10px] text-slate-500">Packet loss: {activeWan === "fiber" ? "0.02%" : "100%"}</span>
+            </div>
+
+            <div className={`rounded-xl border p-3 ${activeWan === "cellular_5g" ? "border-amber-500/40 bg-amber-950/20" : "border-slate-800 bg-slate-950/60"}`}>
+              <div className="flex justify-between items-center text-slate-400">
+                <span className="font-semibold text-white">WAN 2: Jio 5G Gateway</span>
+                <span className={`text-[10px] font-bold ${activeWan === "cellular_5g" ? "text-amber-400" : "text-cyan-400"}`}>
+                  {activeWan === "cellular_5g" ? "ACTIVE ROUTE" : "STANDBY (HOT)"}
+                </span>
+              </div>
+              <p className="mt-1 font-mono text-slate-300">RSRP: -78 dBm (5G NR Band n78)</p>
+              <span className="text-[10px] text-slate-500">Bandwidth: 140 Mbps Down / 35 Up</span>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <span className="text-slate-400">Stream Bitrate Mode:</span>
+              <p className="mt-1 font-bold text-white">
+                {throttleMode === "data_saver" ? "480p Sub-Stream (512 Kbps)" : "1080p Main-Stream (4.5 Mbps)"}
+              </p>
+              <span className="text-[10px] text-emerald-400">Local NVR SD: 100% 1080p Saved</span>
+            </div>
+
+            <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+              <span className="text-slate-400">Auto-Reversion Watchdog:</span>
+              <p className="mt-1 font-bold text-cyan-300">ENABLED (5 min stability)</p>
+              <span className="text-[10px] text-slate-500">Auto-switches back when fiber stable</span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         {nodes.length === 0 ? <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-6 text-sm text-slate-400">No HA nodes were returned. If this is unexpected, confirm that the HA service is connected and retry the cluster sync.</div> : nodes.map((node) => (

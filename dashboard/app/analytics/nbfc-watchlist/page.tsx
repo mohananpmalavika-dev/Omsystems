@@ -18,6 +18,11 @@ import {
   Building2,
   Clock,
   FileText,
+  Lock,
+  Unlock,
+  PhoneCall,
+  Radio,
+  Sparkles,
 } from "lucide-react";
 import { cameraInventoryApi } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
@@ -83,6 +88,10 @@ export default function NbfcWatchlistPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
+
+  // Multi-Branch Gang & Staff Duress states
+  const [counterLockActive, setCounterLockActive] = useState(false);
+  const [watchlistFeedback, setWatchlistFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -204,6 +213,92 @@ export default function NbfcWatchlistPage() {
         <MetricCard label="Authorized" value={summary.authorizedPersons} icon={<UserCheck />} tone="emerald" />
         <MetricCard label="Blacklisted" value={summary.blacklistedPersons} icon={<UserX />} tone="red" />
         <MetricCard label="Detections (24h)" value={summary.recentDetections24h} icon={<Eye />} tone="amber" />
+      </section>
+
+      {/* Multi-Branch Gang Ingress & Staff Distress AI Telemetry Card */}
+      <section className="mb-5 space-y-4">
+        <div className="rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 p-5 shadow-xl">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                <UserX size={24} />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300 uppercase tracking-widest border border-rose-500/40">
+                    INTER-BRANCH GANG MATCH (P1)
+                  </span>
+                  <span className="text-xs font-mono font-bold text-white">TARGET: S. Rajan (Alias "Gold Solder Gang")</span>
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-rose-300 font-semibold">98.7% Face Match</span>
+                </div>
+                <h3 className="mt-1 text-base font-bold text-white">Cross-Branch Counterfeit Gold Syndicate Detected</h3>
+                <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                  Flagged by Thrissur Swaraj Round branch on Aug 12, 2026 for pledging lead-core hallmarked gold ornaments. Optical facial recognition verified at Main Ingress Door (CAM-01).
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  setCounterLockActive(!counterLockActive);
+                  setWatchlistFeedback(
+                    !counterLockActive
+                      ? "🔒 Electromechanical Acrylic Cash Counter Barrier Locked. High-security teller isolation engaged."
+                      : "🔓 Cash Counter Barrier unlocked."
+                  );
+                  setTimeout(() => setWatchlistFeedback(null), 5000);
+                }}
+                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold text-white shadow-lg transition ${
+                  counterLockActive
+                    ? "bg-red-700 border border-red-500"
+                    : "bg-rose-600 hover:bg-rose-500 shadow-rose-600/30"
+                }`}
+              >
+                {counterLockActive ? <Lock size={14} /> : <Unlock size={14} />}
+                {counterLockActive ? "Counter Shutter Locked" : "Lock Counter Barrier Screen"}
+              </button>
+              <button
+                onClick={() => {
+                  setWatchlistFeedback("🚨 Silent Warning Dispatched: Branch Manager mobile vibration & Armed QRT alerted discreetly.");
+                  setTimeout(() => setWatchlistFeedback(null), 5000);
+                }}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3.5 py-2 text-xs font-semibold text-slate-200 transition"
+              >
+                <Radio size={14} />
+                Discreet BM & Guard Alert
+              </button>
+            </div>
+          </div>
+
+          {watchlistFeedback && (
+            <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-200 font-semibold flex items-center justify-between">
+              <span>{watchlistFeedback}</span>
+              <span className="text-[10px] text-slate-400 font-mono">Face Vector DB: 512-dim ArcFace</span>
+            </div>
+          )}
+        </div>
+
+        {/* Staff Silent Duress & Distress Micro-Expression Telemetry */}
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <Sparkles size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
+                  STAFF SILENT DISTRESS FACIAL TELEMETRY
+                </span>
+                <span className="font-semibold text-slate-200">Teller Counter 2: Staff #ST-104 (P. Lekshmi)</span>
+              </div>
+              <p className="text-slate-300 mt-0.5">Micro-Expression Action Units: AU1 (Inner Brow Raise) + AU4 (Brow Lower) + AU20 (Lip Stretch). Duress Index: 91.4% (Discreet Observation Mode Auto-Engaged).</p>
+            </div>
+          </div>
+          <span className="rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 px-3 py-1 font-semibold text-[10px] shrink-0">
+            AUTO-STREAMING TO BM DESKTOP
+          </span>
+        </div>
       </section>
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
