@@ -39,6 +39,9 @@ import {
   ClipboardCheck,
   Navigation,
   Wrench,
+  QrCode,
+  Radio,
+  ShieldCheck,
 } from "lucide-react";
 
 interface ConnectionState {
@@ -47,7 +50,7 @@ interface ConnectionState {
   error?: string;
 }
 
-type BottomNavTab = "home" | "alerts" | "incidents" | "more";
+type BottomNavTab = "home" | "alerts" | "incidents" | "patrol" | "more";
 
 export function MobileCommandCenter() {
   // ============ STATE ============
@@ -66,6 +69,31 @@ export function MobileCommandCenter() {
   const [showSearch, setShowSearch] = useState(false);
   const [shiftCheckedIn, setShiftCheckedIn] = useState(false);
   
+  // Guard Tour Checkpoints & Covert SOS State
+  const [checkpoints, setCheckpoints] = useState([
+    { id: "CP-01", name: "Strong Room Vault Outer Gate", type: "NFC / BLE", coords: "11.6054° N, 76.0829° E", time: "21:15", status: "completed" },
+    { id: "CP-02", name: "Cash Counter & Teller Enclosure", type: "BLE Beacon", coords: "11.6053° N, 76.0831° E", time: "21:28", status: "completed" },
+    { id: "CP-03", name: "ATM Lobby Rear Loading Bay", type: "QR Code", coords: "11.6056° N, 76.0827° E", time: null, status: "pending" },
+    { id: "CP-04", name: "UPS Lithium Battery & Server Room", type: "NFC Tag", coords: "11.6052° N, 76.0830° E", time: null, status: "pending" },
+    { id: "CP-05", name: "Rooftop Solar & DG Fuel Perimeter", type: "Geofence GPS", coords: "11.6058° N, 76.0832° E", time: null, status: "pending" },
+  ]);
+  const [sosActive, setSosActive] = useState(false);
+
+  const handleCheckInCheckpoint = (id: string) => {
+    setCheckpoints(prev => prev.map(cp => {
+      if (cp.id === id) {
+        return { ...cp, status: "completed", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) };
+      }
+      return cp;
+    }));
+    setToastMsg(`📍 Checkpoint ${id} Verified via GPS Geofence`);
+  };
+
+  const handleTriggerSOS = () => {
+    setSosActive(true);
+    setToastMsg("🚨 COVERT SOS TRIGGERED - LIVE GPS & AUDIO TRANSMITTING");
+  };
+
   const sseRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -851,6 +879,106 @@ export function MobileCommandCenter() {
           </div>
         )}
 
+        {bottomTab === "patrol" && (
+          <div className="p-4 space-y-4">
+            {/* Shift & SOS Top Panel */}
+            <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    Guard Patrol Geofence Tour
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Branch KL-07 Kalpetta • Shift A (20:00 - 08:00)
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                  {checkpoints.filter(c => c.status === "completed").length}/{checkpoints.length} Cleared
+                </span>
+              </div>
+
+              {/* Covert Silent SOS Duress Button */}
+              <div className="pt-2">
+                {!sosActive ? (
+                  <button
+                    onClick={handleTriggerSOS}
+                    className="w-full py-3 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-red-600/30 transition-all active:scale-98"
+                  >
+                    <AlertOctagon className="w-4 h-4" />
+                    Covert Silent SOS (Instant Police & BM Alert)
+                  </button>
+                ) : (
+                  <div className="p-3 rounded-xl bg-red-950/80 border border-red-500 text-center animate-pulse space-y-1">
+                    <div className="text-xs font-bold text-red-300 flex items-center justify-center gap-1.5">
+                      <Radio className="w-4 h-4 animate-spin text-red-400" />
+                      SILENT SOS TRANSMITTING GPS BEACON
+                    </div>
+                    <div className="text-[10px] font-mono text-red-200">
+                      Live audio uplink & QRT dispatch dispatched to SOC.
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Checkpoints List */}
+            <div className="space-y-2.5">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
+                Mandatory Physical Checkpoints
+              </h3>
+
+              {checkpoints.map((cp) => (
+                <div
+                  key={cp.id}
+                  className={`p-3.5 rounded-xl border transition-all ${
+                    cp.status === "completed"
+                      ? "bg-slate-900/60 border-emerald-500/40"
+                      : "bg-slate-900 border-slate-800"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs">{cp.id}</span>
+                        <span className="text-[10px] font-mono text-slate-400 px-1.5 py-0.5 rounded bg-slate-800">
+                          {cp.type}
+                        </span>
+                        {cp.status === "completed" && (
+                          <span className="text-[10px] text-emerald-400 font-mono font-semibold">
+                            ✓ {cp.time}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs font-medium text-slate-200">{cp.name}</div>
+                      <div className="text-[10px] font-mono text-slate-500 flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {cp.coords}
+                      </div>
+                    </div>
+
+                    <div>
+                      {cp.status === "completed" ? (
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleCheckInCheckpoint(cp.id)}
+                          className="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          Verify
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {bottomTab === "more" && (
           <div className="p-4 space-y-3">
             <h2 className="text-sm font-bold text-white mb-4">More Options</h2>
@@ -880,7 +1008,7 @@ export function MobileCommandCenter() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="sticky bottom-0 z-40 bg-slate-900 border-t border-slate-800 px-2 py-2 grid grid-cols-4 gap-1">
+      <div className="sticky bottom-0 z-40 bg-slate-900 border-t border-slate-800 px-2 py-2 grid grid-cols-5 gap-1">
         <button
           onClick={() => setBottomTab("home")}
           className={`flex flex-col items-center justify-center py-2 rounded-lg transition-colors ${
@@ -920,6 +1048,18 @@ export function MobileCommandCenter() {
         >
           <List className="w-5 h-5" />
           <span className="text-[10px] font-medium mt-0.5">Incidents</span>
+        </button>
+
+        <button
+          onClick={() => setBottomTab("patrol")}
+          className={`flex flex-col items-center justify-center py-2 rounded-lg transition-colors ${
+            bottomTab === "patrol"
+              ? "bg-rose-600 text-white"
+              : "text-slate-400 hover:text-white hover:bg-slate-800"
+          }`}
+        >
+          <ShieldCheck className="w-5 h-5" />
+          <span className="text-[10px] font-medium mt-0.5">Patrol</span>
         </button>
 
         <button

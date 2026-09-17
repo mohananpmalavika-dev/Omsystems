@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Clock3, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Bell, Clock3, Plus, ShieldCheck, Trash2, UserCheck, PhoneCall, Radio, AlertOctagon, Siren, CheckCircle2, Play, RefreshCw, Volume2, ShieldAlert, ArrowRight, Shield } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
 import { alertPolicyApi } from "@/lib/api-client";
 import type { AlertNotificationPolicy, AlertNotificationPolicyInput, AlertNotificationPolicySchedule } from "@/lib/types";
@@ -65,6 +65,14 @@ export default function AlertNotificationPolicyPage() {
   const [matrix, setMatrix] = useState<Record<string, string[]> | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [, setSaveState] = useState<"idle" | "saving" | "saved" | "unsaved" | "failed">("idle");
+
+  // Enterprise SOP Escalation Hierarchy & Drill Simulator State
+  const [drillRunning, setDrillRunning] = useState(false);
+  const [drillScenario, setDrillScenario] = useState<string>("vault_open");
+  const [drillCountdown, setDrillCountdown] = useState<number>(60);
+  const [drillTier, setDrillTier] = useState<1 | 2 | 3 | 4>(1);
+  const [drillAcknowledged, setDrillAcknowledged] = useState(false);
+  const [drillLogs, setDrillLogs] = useState<Array<{ time: string; tier: number; msg: string; status: "dispatched" | "acknowledged" | "pending" }>>([]);
 
   const loadPolicy = async () => {
     setLoading(true);
@@ -144,6 +152,84 @@ export default function AlertNotificationPolicyPage() {
     setInput({ ...input, onCallSchedules: schedules });
     setIsDirty(true);
     setSaveState("unsaved");
+  };
+
+  // SOP Escalation Drill Simulation Logic
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (drillRunning && !drillAcknowledged && drillCountdown > 0) {
+      interval = setInterval(() => {
+        setDrillCountdown((prev) => {
+          const next = prev - 1;
+          if (next === 45 && drillTier === 1) {
+            setDrillTier(2);
+            setDrillLogs((l) => [
+              {
+                time: new Date().toLocaleTimeString(),
+                tier: 2,
+                msg: "Tier 1 Guard SLA Breached (45s). Auto-triggered Tier 2: Automated Malayalam/English IVR Call to Branch Manager (+91 94470 12345) & Push Alert.",
+                status: "dispatched",
+              },
+              ...l,
+            ]);
+          } else if (next === 20 && drillTier === 2) {
+            setDrillTier(3);
+            setDrillLogs((l) => [
+              {
+                time: new Date().toLocaleTimeString(),
+                tier: 3,
+                msg: "Tier 2 BM SLA Breached (20s). Auto-triggered Tier 3: Regional Security Officer (RSO) & Central SOC Surveillance Supervisor SMS & Snapshot Uplink.",
+                status: "dispatched",
+              },
+              ...l,
+            ]);
+          } else if (next === 0 && drillTier === 3) {
+            setDrillTier(4);
+            setDrillLogs((l) => [
+              {
+                time: new Date().toLocaleTimeString(),
+                tier: 4,
+                msg: "CRITICAL P1 BREACH (>300s SLA): Escalated to Tier 4 CRO, CISO, and Police 112 Control Room dispatch with live GPS pin.",
+                status: "dispatched",
+              },
+              ...l,
+            ]);
+            setDrillRunning(false);
+          }
+          return next;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [drillRunning, drillAcknowledged, drillCountdown, drillTier]);
+
+  const startDrill = () => {
+    setDrillAcknowledged(false);
+    setDrillCountdown(60);
+    setDrillTier(1);
+    setDrillRunning(true);
+    setDrillLogs([
+      {
+        time: new Date().toLocaleTimeString(),
+        tier: 1,
+        msg: `Initiated Incident Drill [${drillScenario.toUpperCase()}]. Tier 1: Local Hooter Strobe Activated, Handheld PTT alert sent to Guard Desk.`,
+        status: "dispatched",
+      },
+    ]);
+  };
+
+  const acknowledgeDrill = () => {
+    setDrillAcknowledged(true);
+    setDrillRunning(false);
+    setDrillLogs((l) => [
+      {
+        time: new Date().toLocaleTimeString(),
+        tier: drillTier,
+        msg: `Drill Incident ACKNOWLEDGED by SOC Operator (UID #OPR-4029). Escalation chain halted safely.`,
+        status: "acknowledged",
+      },
+      ...l,
+    ]);
   };
 
   const handleSubmit = async () => {
@@ -469,6 +555,179 @@ export default function AlertNotificationPolicyPage() {
                 </div>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Enterprise Banking Multi-Tier SOP Escalation Hierarchy Matrix */}
+        <section className="card p-5 space-y-5 border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-500/5 via-slate-900/40 to-slate-950">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/20 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-inner">
+                <Siren className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  RBI Master Direction: Multi-Tier SOP Incident Escalation Hierarchy
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                    Tier-1 NBFC Standard
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Automated chronological role escalation cascade for high-risk physical & cyber breaches (Vault, Cash, Silent Duress).
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3.5">
+            {/* Tier 1 */}
+            <div className={`p-4 rounded-xl border transition-all ${drillTier === 1 && drillRunning ? "bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/40" : "bg-slate-900/60 border-slate-800"}`}>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 font-semibold text-[10px] uppercase tracking-wider">
+                  Tier 1 • 0-60s
+                </span>
+                <Radio className="w-3.5 h-3.5 text-blue-400" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-200">On-Duty Branch Guard</h4>
+              <p className="text-xs text-slate-400 mt-1">Local Hooter Strobe & Handheld PTT Radio prompt</p>
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>SLA Window:</span>
+                <strong className="text-amber-400 font-mono">&le; 60 seconds</strong>
+              </div>
+            </div>
+
+            {/* Tier 2 */}
+            <div className={`p-4 rounded-xl border transition-all ${drillTier === 2 && drillRunning ? "bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/40" : "bg-slate-900/60 border-slate-800"}`}>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold text-[10px] uppercase tracking-wider">
+                  Tier 2 • 60-180s
+                </span>
+                <PhoneCall className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-200">Branch Manager & Custodian</h4>
+              <p className="text-xs text-slate-400 mt-1">Automated Bilingual IVR Call & Push Notification</p>
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>SLA Window:</span>
+                <strong className="text-amber-400 font-mono">&le; 180 seconds</strong>
+              </div>
+            </div>
+
+            {/* Tier 3 */}
+            <div className={`p-4 rounded-xl border transition-all ${drillTier === 3 && drillRunning ? "bg-amber-500/15 border-amber-400 ring-2 ring-amber-400/40" : "bg-slate-900/60 border-slate-800"}`}>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 font-semibold text-[10px] uppercase tracking-wider">
+                  Tier 3 • 180-300s
+                </span>
+                <ShieldAlert className="w-3.5 h-3.5 text-purple-400" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-200">Regional Security Officer</h4>
+              <p className="text-xs text-slate-400 mt-1">Central SOC Video Feed Dispatch & SMS Uplink</p>
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>SLA Window:</span>
+                <strong className="text-purple-400 font-mono">&le; 300 seconds</strong>
+              </div>
+            </div>
+
+            {/* Tier 4 */}
+            <div className={`p-4 rounded-xl border transition-all ${drillTier === 4 && drillRunning ? "bg-red-500/20 border-red-500 ring-2 ring-red-500/50" : "bg-slate-900/60 border-slate-800"}`}>
+              <div className="flex items-center justify-between text-xs mb-2">
+                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold text-[10px] uppercase tracking-wider">
+                  Tier 4 • SLA Breach
+                </span>
+                <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+              </div>
+              <h4 className="font-bold text-sm text-slate-200">CRO, CISO & Police 112</h4>
+              <p className="text-xs text-slate-400 mt-1">Armed QRT GPS Dispatch & Kerala Police Auto-Bridge</p>
+              <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                <span>Trigger:</span>
+                <strong className="text-red-400 font-mono">&gt; 300s Unacknowledged</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Interactive Live Drill Simulator */}
+          <div className="mt-4 p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                  Live SOP Cascade Drill & Voice Dispatch Simulator
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <select
+                  value={drillScenario}
+                  onChange={(e) => setDrillScenario(e.target.value)}
+                  disabled={drillRunning}
+                  className="bg-slate-900 border border-slate-700 text-xs rounded-lg px-2.5 py-1.5 text-slate-200"
+                >
+                  <option value="vault_open">Scenario 1: Vault Door Open After 19:30</option>
+                  <option value="silent_duress">Scenario 2: Cash Counter Silent Duress (*911#)</option>
+                  <option value="acoustic_shutter">Scenario 3: Acoustic Shutter Drilling Attack</option>
+                  <option value="atm_tamper">Scenario 4: ATM Safe Skimmer & Multiple Occupants</option>
+                </select>
+
+                {!drillRunning ? (
+                  <button
+                    type="button"
+                    onClick={startDrill}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Run SOP Drill
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={acknowledgeDrill}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm animate-pulse"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Acknowledge & Stop Drill ({drillCountdown}s)
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Bilingual Voice Dispatch Audio Script Box */}
+            <div className="p-3 rounded-lg bg-slate-900/90 border border-slate-800 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 text-amber-400 font-mono font-medium">
+                <Volume2 className="w-3.5 h-3.5" />
+                <span>Automated Bilingual IVR Script (Malayalam + English Engine):</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-slate-300">
+                <div className="p-2 rounded bg-slate-950/60 border border-slate-800 font-sans leading-relaxed">
+                  <span className="text-[10px] text-amber-400 uppercase font-mono block mb-0.5">Malayalam TTS Voice:</span>
+                  &ldquo;ശ്രദ്ധിക്കുക: കൽപ്പറ്റ ശാഖയിലെ സ്ട്രോങ് റൂം അടിയന്തര സുരക്ഷാ അലാറം പ്രവർത്തനക്ഷമമായിരിക്കുന്നു. ശാഖാ അധികൃതർ ഉടൻ പരിശോധിക്കുക.&rdquo;
+                </div>
+                <div className="p-2 rounded bg-slate-950/60 border border-slate-800 font-sans leading-relaxed">
+                  <span className="text-[10px] text-amber-400 uppercase font-mono block mb-0.5">English TTS Voice:</span>
+                  &ldquo;Priority Alert: Strong room security perimeter triggered at Kalpetta Branch KL-07. Authorized custodians are requested to verify immediately.&rdquo;
+                </div>
+              </div>
+            </div>
+
+            {/* Live Drill Log stream */}
+            {drillLogs.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 font-mono text-[11px] max-h-32 overflow-y-auto space-y-1">
+                {drillLogs.map((log, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-slate-300">
+                    <span className="text-slate-500">[{log.time}]</span>
+                    <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                      log.tier === 1 ? "bg-blue-500/20 text-blue-300" :
+                      log.tier === 2 ? "bg-amber-500/20 text-amber-300" :
+                      log.tier === 3 ? "bg-purple-500/20 text-purple-300" :
+                      "bg-red-500/20 text-red-300"
+                    }`}>
+                      T{log.tier}
+                    </span>
+                    <span className={log.status === "acknowledged" ? "text-emerald-400 font-semibold" : "text-slate-300"}>
+                      {log.msg}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
 
