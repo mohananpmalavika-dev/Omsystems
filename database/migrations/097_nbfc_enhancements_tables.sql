@@ -114,10 +114,60 @@ CREATE TABLE IF NOT EXISTS device_health_snapshots (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_device_health_tenant ON device_health_snapshots(tenant_id);
-CREATE INDEX idx_device_health_branch ON device_health_snapshots(branch_id);
-CREATE INDEX idx_device_health_time ON device_health_snapshots(snapshot_time DESC);
-CREATE INDEX idx_device_health_overall ON device_health_snapshots(overall_health);
+-- Ensure all columns exist if table was already created by migration 042
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS branch_id UUID;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS snapshot_time TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS overall_health VARCHAR(50) DEFAULT 'unknown';
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_total INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_online INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_recording INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_healthy INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_warning INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_critical INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS cameras_offline INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS camera_health_score DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_total INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_online INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_healthy INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_degraded INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_full INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS recorders_offline INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS network_status VARCHAR(50) DEFAULT 'unknown';
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS network_latency_ms INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS network_packet_loss DECIMAL(5,2) DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS network_bandwidth_mbps INTEGER DEFAULT 0;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS power_status VARCHAR(50) DEFAULT 'unknown';
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS ups_online BOOLEAN DEFAULT true;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS ups_battery_percent INTEGER DEFAULT 100;
+ALTER TABLE device_health_snapshots ADD COLUMN IF NOT EXISTS power_outages_24h INTEGER DEFAULT 0;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='device_health_snapshots' AND column_name='device_id' AND is_nullable='NO') THEN
+    ALTER TABLE device_health_snapshots ALTER COLUMN device_id DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='device_health_snapshots' AND column_name='device_type' AND is_nullable='NO') THEN
+    ALTER TABLE device_health_snapshots ALTER COLUMN device_type DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='device_health_snapshots' AND column_name='snapshot_timestamp' AND is_nullable='NO') THEN
+    ALTER TABLE device_health_snapshots ALTER COLUMN snapshot_timestamp DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='device_health_snapshots' AND column_name='health_score' AND is_nullable='NO') THEN
+    ALTER TABLE device_health_snapshots ALTER COLUMN health_score DROP NOT NULL;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='device_health_snapshots' AND column_name='metrics' AND is_nullable='NO') THEN
+    ALTER TABLE device_health_snapshots ALTER COLUMN metrics DROP NOT NULL;
+  END IF;
+END $$;
+
+ALTER TABLE device_health_snapshots DROP CONSTRAINT IF EXISTS device_health_snapshots_unique;
+ALTER TABLE device_health_snapshots DROP CONSTRAINT IF EXISTS device_health_snapshots_device_type_check;
+ALTER TABLE device_health_snapshots DROP CONSTRAINT IF EXISTS device_health_snapshots_health_score_check;
+
+CREATE INDEX IF NOT EXISTS idx_device_health_tenant ON device_health_snapshots(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_device_health_branch ON device_health_snapshots(branch_id);
+CREATE INDEX IF NOT EXISTS idx_device_health_time ON device_health_snapshots(snapshot_time DESC);
+CREATE INDEX IF NOT EXISTS idx_device_health_overall ON device_health_snapshots(overall_health);
 
 -- Critical device issues
 CREATE TABLE IF NOT EXISTS device_critical_issues (
