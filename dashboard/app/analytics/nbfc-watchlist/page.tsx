@@ -87,73 +87,36 @@ export default function NbfcWatchlistPage() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // TODO: Replace with real API endpoint
-      // const response = await fetch(`/v1/watchlist/nbfc?branchId=${branchId !== "ALL" ? branchId : ""}`);
-      // const data = await response.json();
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (branchId !== "ALL") params.set("branchId", branchId);
+      if (filter !== "all") params.set("type", filter);
 
-      // Mock data for demonstration - replace with real API
-      const mockEntries: WatchlistEntry[] = [
-        {
-          id: "entry-1",
-          personId: "person-1",
-          fullName: "Rajesh Kumar",
-          employeeCode: "EMP001",
-          designation: "Branch Manager",
-          watchlistType: "authorized",
-          status: "active",
-          branchIds: branches.slice(0, 1).map(b => b.id),
-          areaAccess: ["vault", "cash_counter", "locker"],
-          validFrom: new Date(Date.now() - 30 * 86400000).toISOString(),
-          addedBy: "Admin",
-          addedAt: new Date(Date.now() - 30 * 86400000).toISOString(),
-          reason: "Branch management authorization",
-          faceEnrolled: true,
-          lastDetected: {
-            timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
-            cameraName: "Main Entrance",
-            branchName: branches[0]?.name || "Main Branch",
-            confidence: 0.96,
-          },
-          detectionCount24h: 8,
-        },
-        {
-          id: "entry-2",
-          personId: "person-2",
-          fullName: "Unknown Individual",
-          watchlistType: "blacklist",
-          status: "active",
-          branchIds: branches.map(b => b.id),
-          areaAccess: [],
-          validFrom: new Date(Date.now() - 7 * 86400000).toISOString(),
-          addedBy: "Security Team",
-          addedAt: new Date(Date.now() - 7 * 86400000).toISOString(),
-          reason: "Security incident - unauthorized access attempt",
-          faceEnrolled: true,
-          detectionCount24h: 0,
-          notes: "Alert all branches immediately if detected",
-        },
-      ];
+      // Fetch watchlist entries from real API
+      const response = await fetch(`/v1/watchlist/nbfc?${params}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || "Failed to load watchlist data");
+      }
 
-      const mockSummary: WatchlistSummary = {
-        totalEntries: mockEntries.length,
-        authorizedPersons: mockEntries.filter(e => e.watchlistType === "authorized").length,
-        blacklistedPersons: mockEntries.filter(e => e.watchlistType === "blacklist").length,
-        vipPersons: mockEntries.filter(e => e.watchlistType === "vip").length,
-        visitors: mockEntries.filter(e => e.watchlistType === "visitor").length,
-        activeEntries: mockEntries.filter(e => e.status === "active").length,
-        expiredEntries: mockEntries.filter(e => e.status === "expired").length,
-        recentDetections24h: mockEntries.reduce((sum, e) => sum + e.detectionCount24h, 0),
-      };
-
-      setEntries(mockEntries);
-      setSummary(mockSummary);
+      // Set entries and summary from API response
+      setEntries(data.data || []);
+      setSummary(data.summary || emptySummary);
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: error instanceof Error ? error.message : "Failed to load watchlist data" });
+      // Set empty data on error
+      setEntries([]);
+      setSummary(emptySummary);
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [branchId, branches]);
+  }, [branchId, filter]);
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("analytics:view")

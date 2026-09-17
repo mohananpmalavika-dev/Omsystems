@@ -355,12 +355,12 @@ Write-Host "================================================================" -F
     const a = document.createElement("a");
     const safeName = (branchName || "Branch").replace(/[^a-zA-Z0-9_-]/g, "_");
     a.href = url;
-    a.download = `Install_SentinelGrid_${safeName}.bat`;
+    a.download = `Install_KryptonVision_${safeName}.bat`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    setToastMsg({ type: "success", text: `Installer "Install_SentinelGrid_${safeName}.bat" downloaded.` });
+    setToastMsg({ type: "success", text: `Installer "Install_KryptonVision_${safeName}.bat" downloaded.` });
     */
   }, []);
 

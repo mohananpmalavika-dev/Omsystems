@@ -1627,7 +1627,7 @@ export function DeviceManager() {
           activationCode: activation.activationCode,
           agentName: activation.agentName,
         }, reportInstallerProgress);
-        setNotice("Installer downloaded. Extract the ZIP, then run Install Sentinel Grid Edge Agent.bat.");
+        setNotice("Installer downloaded. Extract the ZIP, then run the KryptonVision Edge Agent installer.");
       } else {
         setNotice(activation.bootstrap.media.managed
           ? `Gateway and named media tunnel created. ${activation.bootstrap.media.publicUrl ?? "The stable hostname"} is delivered automatically on first boot.`
@@ -1659,7 +1659,7 @@ export function DeviceManager() {
         activationCode: gatewayActivation.activationCode,
         agentName: gatewayActivation.agentName,
       }, reportInstallerProgress);
-      setNotice("Installer package downloaded. Extract it, then run Install Sentinel Grid Edge Agent.bat and approve the Windows administrator prompt.");
+      setNotice("Installer package downloaded. Extract it, then run the KryptonVision Edge Agent installer and approve the Windows administrator prompt.");
     } catch (reason) {
       setError(messageOf(reason, "Unable to download the scanner installer."));
     } finally {

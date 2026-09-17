@@ -3,7 +3,7 @@ import { ColdCloudArchiveWorkspace } from "@/components/cold-cloud-archive-works
 import { Suspense } from "react";
 
 export const metadata = {
-  title: "Cold Cloud Archive Export | SentinelGrid VMS",
+  title: "Cold Cloud Archive Export | KryptonVision VMS",
   description: "Long-term automated archival of marked incident video to S3/Glacier object storage with cryptographic SHA-256 verification.",
 };
 

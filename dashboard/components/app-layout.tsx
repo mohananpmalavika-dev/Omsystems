@@ -226,7 +226,10 @@ export const navigation: NavGroup[] = [
       { label: "Worker & Elderly Fall", href: "/analytics/fall", icon: HeartPulse },
       { label: "Abandoned & Unattended Objects", href: "/analytics/abandoned-objects", icon: Package },
       { label: "Banking & Cash Counters", href: "/analytics/banking", icon: Landmark },
+      { label: "ANPR Logistics Tracking", href: "/analytics/anpr-logistics", icon: Truck },
       { label: "Authorized Counter & Locker Persons", href: "/analytics/banking/authorized-persons", icon: Users },
+      { label: "NBFC Watchlist Management", href: "/analytics/nbfc-watchlist", icon: Users },
+      { label: "Branch Performance Comparison", href: "/analytics/branch-comparison", icon: BarChart3 },
       { label: "Industrial Safety & PPE", href: "/analytics/industrial", icon: Factory },
       { label: "Digital Twin (Spatial 3D)", href: "/digital-twin", icon: Boxes },
       { label: "Infrastructure Twin", href: "/infrastructure-twin", icon: Network },
@@ -238,6 +241,7 @@ export const navigation: NavGroup[] = [
     icon: Wrench,
     items: [
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
+      { label: "Correlated Device Health", href: "/security/device-health", icon: Shield },
       { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
       { label: "Asset Replacement & Lineage", href: "/operations/assets", icon: Boxes },

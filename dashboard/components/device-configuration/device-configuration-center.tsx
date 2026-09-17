@@ -200,7 +200,7 @@ export function DeviceConfigurationCenter() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1.5">
-              <span>Sentinel Surveillance</span>
+              <span>KryptonVision Surveillance</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
               <span>Fleet Maintenance</span>
               <ChevronRight className="w-3.5 h-3.5 text-slate-600" />

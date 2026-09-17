@@ -1,7 +1,7 @@
 import { AudioStreamMonitoringWorkspace } from "@/components/audio-stream-monitoring-workspace";
 
 export const metadata = {
-  title: "Audio Stream Monitoring | Sentinel Grid",
+  title: "Audio Stream Monitoring | KryptonVision",
   description: "Hardware channel audio decoding, ITU-R BS.1770 level metering, and acoustic anomaly detection.",
 };
 

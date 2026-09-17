@@ -105,7 +105,7 @@ export function VmsObservabilityView() {
           {!error && <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/30 px-3 py-1 text-[11px] font-medium text-emerald-200"><span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" /> Prometheus metrics active</div>}
         </div>
         <p className="mt-2 text-xs text-slate-300">
-          Real-time performance data from Sentinel Grid and VMS infrastructure. Use these metrics to monitor system health, capacity, and operational stress under live conditions.
+          Real-time performance data from KryptonVision and VMS infrastructure. Use these metrics to monitor system health, capacity, and operational stress under live conditions.
         </p>
       </div>
 

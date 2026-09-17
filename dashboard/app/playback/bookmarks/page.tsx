@@ -3,7 +3,7 @@ import { VideoBookmarksWorkspace } from "@/components/video-bookmarks-workspace"
 import { Suspense } from "react";
 
 export const metadata = {
-  title: "Video Timeline Bookmarks | Sentinel Grid VMS",
+  title: "Video Timeline Bookmarks | KryptonVision VMS",
   description: "Operator tagged timestamps with notes, priority levels, and incident associations.",
 };
 

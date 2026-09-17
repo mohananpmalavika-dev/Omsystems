@@ -159,7 +159,7 @@ export function RecordingSettingsPanel({
                 <ShieldCheck size={20} />
                 <div>
                   <strong>DVR/NVR is the primary recorder</strong>
-                  <p>Continuous footage stays at the branch. Sentinel transfers only selected incident snapshots and clips off-site.</p>
+                  <p>Continuous footage stays at the branch. KryptonVision transfers only selected incident snapshots and clips off-site.</p>
                 </div>
               </div>
             )}
@@ -174,7 +174,7 @@ export function RecordingSettingsPanel({
               </div>
               <div>
                 <small>Primary storage</small>
-                <strong>{recording?.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "Sentinel recorder"}</strong>
+                <strong>{recording?.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "KryptonVision recorder"}</strong>
               </div>
             </div>
 

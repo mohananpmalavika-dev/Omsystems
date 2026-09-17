@@ -85,66 +85,35 @@ export default function BranchComparisonPage() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // TODO: Replace with real API endpoint
-      // const response = await fetch('/v1/analytics/branch-comparison');
-      // const data = await response.json();
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (sortBy) params.set("sortBy", sortBy);
 
-      // Mock data for demonstration - replace with real API
-      const mockMetrics: BranchMetrics[] = branches.slice(0, 5).map((branch, idx) => ({
-        branchId: branch.id,
-        branchName: branch.name,
-        branchCode: branch.code,
-        cameras: {
-          total: 12 + idx,
-          online: 11 + idx - (idx === 4 ? 3 : 0),
-          healthy: 10 + idx - (idx === 4 ? 4 : 0),
-          healthScore: idx === 4 ? 65 : 90 + idx,
-        },
-        compliance: {
-          overallScore: idx === 4 ? 72 : 88 + idx,
-          recordingCompliance: idx === 4 ? 75 : 90 + idx,
-          storageHealth: idx === 4 ? 68 : 85 + idx,
-          maintenanceScore: idx === 4 ? 70 : 92 + idx,
-        },
-        security: {
-          activeRules: 37,
-          todayAlerts: idx === 4 ? 15 : 3 + idx,
-          criticalAlerts: idx === 4 ? 3 : idx === 0 ? 0 : 1,
-          violationRate: idx === 4 ? 12.5 : 2.5 + idx * 0.5,
-        },
-        banking: {
-          cashVanSessions: 4 + idx,
-          compliantSessions: idx === 4 ? 2 : 4 + idx,
-          violations: idx === 4 ? 2 : 0,
-          complianceRate: idx === 4 ? 50 : 100,
-        },
-        performance: {
-          avgResponseTimeMs: idx === 4 ? 850 : 150 + idx * 50,
-          uptime: idx === 4 ? 95.2 : 99.5 + idx * 0.1,
-          lastIncidentDays: idx === 4 ? 2 : 15 + idx * 5,
-        },
-        rank: idx + 1,
-        trend: idx === 0 ? "up" : idx === 4 ? "down" : "stable",
-      }));
+      // Fetch branch comparison metrics from real API
+      const response = await fetch(`/v1/analytics/branch-comparison?${params}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || "Failed to load comparison data");
+      }
 
-      const mockSummary: ComparisonSummary = {
-        totalBranches: mockMetrics.length,
-        avgComplianceScore: mockMetrics.reduce((sum, m) => sum + m.compliance.overallScore, 0) / mockMetrics.length,
-        topPerformer: mockMetrics[0]?.branchName || "—",
-        needsAttention: mockMetrics.filter(m => m.compliance.overallScore < 80).length,
-        totalAlerts24h: mockMetrics.reduce((sum, m) => sum + m.security.todayAlerts, 0),
-        avgCameraHealth: mockMetrics.reduce((sum, m) => sum + m.cameras.healthScore, 0) / mockMetrics.length,
-      };
-
-      setMetrics(mockMetrics);
-      setSummary(mockSummary);
+      // Set metrics and summary from API response
+      setMetrics(data.data || []);
+      setSummary(data.summary || emptySummary);
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: error instanceof Error ? error.message : "Failed to load comparison data" });
+      // Set empty data on error
+      setMetrics([]);
+      setSummary(emptySummary);
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [branches]);
+  }, [sortBy]);
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("analytics:view")

@@ -2701,6 +2701,264 @@ export const cameraPermissionApi = {
     ),
 };
 
+// ANPR Logistics API
+export const anprLogisticsApi = {
+  listSessions: (filters: { branchId?: string; status?: string; from?: string; to?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters.branchId) params.set('branchId', filters.branchId);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(
+      `/v1/logistics/anpr-sessions?${params}`
+    );
+  },
+
+  getSummary: (branchId?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{ success: boolean; data: any }>(`/v1/logistics/anpr-sessions/summary?${params}`);
+  },
+
+  createSession: (data: {
+    branchId: string;
+    vehiclePlate: string;
+    vehicleType?: string;
+    scheduledArrival: string;
+    authorized?: boolean;
+    provider?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/logistics/anpr-sessions', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateSession: (id: string, data: {
+    status?: string;
+    routeCompliance?: string;
+    actualArrival?: string;
+    departureTime?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/logistics/anpr-sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  addDetection: (data: {
+    sessionId: string;
+    cameraId: string;
+    cameraName: string;
+    location: string;
+    confidence: number;
+    snapshotPath?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/logistics/anpr-detections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  reportViolation: (data: {
+    sessionId: string;
+    violationCode: string;
+    violationName?: string;
+    severity?: string;
+    message: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/logistics/anpr-violations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// Device Health Correlation API
+export const deviceHealthApi = {
+  getHealthData: (branchId?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{ success: boolean; data: any[]; summary: any }>(
+      `/v1/security/device-health?${params}`
+    );
+  },
+
+  captureSnapshot: (data: {
+    branchId: string;
+    cameras: any;
+    recorders: any;
+    network: any;
+    power: any;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/security/device-health/snapshot', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  reportIssue: (data: {
+    branchId: string;
+    deviceType: string;
+    deviceId?: string;
+    severity: string;
+    message: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/security/device-health/issues', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  resolveIssue: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/security/device-health/issues/${id}/resolve`, {
+      method: 'PATCH',
+    }),
+};
+
+// NBFC Watchlist API
+export const nbfcWatchlistApi = {
+  listEntries: (filters: { branchId?: string; type?: string; status?: string; search?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters.branchId) params.set('branchId', filters.branchId);
+    if (filters.type) params.set('type', filters.type);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.search) params.set('search', filters.search);
+    if (filters.limit) params.set('limit', String(filters.limit));
+    return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(
+      `/v1/watchlist/nbfc?${params}`
+    );
+  },
+
+  getEntry: (id: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/watchlist/nbfc/${id}`),
+
+  createEntry: (data: {
+    personId?: string;
+    fullName: string;
+    employeeCode?: string;
+    designation?: string;
+    watchlistType: string;
+    status?: string;
+    branchIds?: string[];
+    areaAccess?: string[];
+    validFrom: string;
+    validUntil?: string;
+    reason: string;
+    faceEnrolled?: boolean;
+    notes?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>('/v1/watchlist/nbfc', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateEntry: (id: string, data: {
+    status?: string;
+    branchIds?: string[];
+    areaAccess?: string[];
+    validUntil?: string;
+    notes?: string;
+    faceEnrolled?: boolean;
+  }) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/watchlist/nbfc/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  deleteEntry: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/v1/watchlist/nbfc/${id}`, {
+      method: 'DELETE',
+    }),
+
+  getDetections: (id: string, limit?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    return fetchApi<{ success: boolean; data: any[]; count: number }>(
+      `/v1/watchlist/nbfc/${id}/detections?${params}`
+    );
+  },
+
+  recordDetection: (data: {
+    watchlistEntryId: string;
+    cameraId: string;
+    cameraName: string;
+    branchId?: string;
+    branchName?: string;
+    confidence: number;
+    snapshotPath?: string;
+  }) =>
+    fetchApi<{ success: boolean; data: any; alert: boolean }>('/v1/watchlist/nbfc/detections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+};
+
+// Branch Comparison API
+export const branchComparisonApi = {
+  getMetrics: (filters?: { date?: string; sortBy?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.date) params.set('date', filters.date);
+    if (filters?.sortBy) params.set('sortBy', filters.sortBy);
+    return fetchApi<{ success: boolean; data: any[]; summary: any; computedAt: string }>(
+      `/v1/analytics/branch-comparison?${params}`
+    );
+  },
+
+  getBranchMetrics: (branchId: string, days?: number) => {
+    const params = new URLSearchParams();
+    if (days) params.set('days', String(days));
+    return fetchApi<{ success: boolean; data: any }>(
+      `/v1/analytics/branch-comparison/${branchId}?${params}`
+    );
+  },
+
+  computeMetrics: (date?: string) =>
+    fetchApi<{ success: boolean; message: string; date: string }>('/v1/analytics/branch-comparison/compute', {
+      method: 'POST',
+      body: JSON.stringify({ date }),
+    }),
+};
+
+export const cameraPermissionApi = {
+  listUserGrants: (userId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),
+
+  listCameraGrants: (cameraId: string) =>
+    fetchApi<{ data: any[] }>(`/v1/cameras/${cameraId}/grants`),
+
+  createGrant: (data: any) =>
+    fetchApi<any>('/v1/camera-grants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  deleteGrant: (id: string) =>
+    fetchApi<void>(`/v1/camera-grants/${id}`, { method: 'DELETE' }),
+
+  listAccessRequests: (filters?: any) => {
+    const params = new URLSearchParams();
+    if (filters) {
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined) params.append(key, String(value));
+      });
+    }
+    return fetchApi<{ data: any[] }>(`/v1/camera-access-requests?${params}`);
+  },
+
+  createAccessRequest: (data: any) =>
+    fetchApi<any>('/v1/camera-access-requests', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  reviewAccessRequest: (id: string, status: 'approved' | 'rejected', reviewNotes?: string) =>
+    fetchApi<any>(`/v1/camera-access-requests/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ status, reviewNotes }),
+    }),
+
+  checkCameraAccess: (cameraId: string, action = 'live:view') =>
+    fetchApi<{ allowed: boolean; reason: string; requiresApproval: boolean }>(
+      `/v1/cameras/${cameraId}/check-access?action=${action}`
+    ),
+};
+
 export const videoSearchApi = {
   searchRecordings: (query: { cameraId?: string; from: string; to: string; eventType?: string; minConfidence?: number; limit?: number; offset?: number }) => {
     const params = new URLSearchParams();

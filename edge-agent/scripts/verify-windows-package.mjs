@@ -5,9 +5,22 @@ import { fileURLToPath } from "node:url";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const executable = process.argv[2] || join(edgeRoot, "release", "edge-agent.exe");
+const nativeSharpBinary = join(
+  dirname(executable),
+  "node_modules",
+  "@img",
+  "sharp-win32-x64",
+  "lib",
+  "sharp-win32-x64-0.35.4.node",
+);
 
 if (!existsSync(executable)) {
   throw new Error(`Windows package verification failed: ${executable} was not created.`);
+}
+if (!existsSync(nativeSharpBinary)) {
+  throw new Error(
+    `Windows package verification failed: sharp native runtime is missing (${nativeSharpBinary}).`,
+  );
 }
 
 // pkg can cross-compile a Windows executable on the Linux control-plane image,

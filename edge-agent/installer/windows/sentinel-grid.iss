@@ -33,6 +33,7 @@ Name: "startservice"; Description: "Start KryptonVision service after installati
 ; Main executable
 Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "open-dashboard-scan.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\release\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Runtime dependencies
 Source: "..\..\release\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -45,7 +46,7 @@ Source: "scripts\*"; DestDir: "{app}\scripts"; Flags: ignoreversion recursesubdi
 
 ; Documentation
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
-Source: "..\..\GETTING_STARTED.txt"; DestDir: "{app}"; Flags: ignoreversion; Check: FileExists(ExpandConstant('{app}\..\..\GETTING_STARTED.txt'))
+Source: "..\..\GETTING_STARTED.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Dirs]
 Name: "{app}\data"

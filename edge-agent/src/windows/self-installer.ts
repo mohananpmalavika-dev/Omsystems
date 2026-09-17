@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +9,7 @@ const moduleDirectory = typeof __dirname !== "undefined"
 
 const ASSET_ROOT = join(moduleDirectory, "..", "vendor", "windows");
 const INSTALLER_ROOT = join(moduleDirectory, "..", "installer", "windows");
+const NATIVE_MODULES_ROOT = join(moduleDirectory, "..", "release", "node_modules");
 
 const REQUIRED_BUNDLE_ASSETS = [
   ["ffmpeg.zip", join(ASSET_ROOT, "ffmpeg.zip")],
@@ -17,12 +18,17 @@ const REQUIRED_BUNDLE_ASSETS = [
   ["install-edge-agent.ps1", join(INSTALLER_ROOT, "install-edge-agent.ps1")],
   ["uninstall-edge-agent.ps1", join(INSTALLER_ROOT, "uninstall-edge-agent.ps1")],
   ["open-dashboard-scan.ps1", join(INSTALLER_ROOT, "open-dashboard-scan.ps1")],
+  ["Windows native module runtime", NATIVE_MODULES_ROOT],
 ] as const;
 
 export function inspectBundledWindowsRuntime() {
   return REQUIRED_BUNDLE_ASSETS.map(([name, path]) => {
     if (!existsSync(path)) throw new Error(`The all-in-one installer is missing ${name}`);
-    const sizeBytes = statSync(path).size;
+    const metadata = statSync(path);
+    const nativeBinary = join(path, "@img", "sharp-win32-x64", "lib", "sharp-win32-x64-0.35.4.node");
+    const sizeBytes = metadata.isDirectory()
+      ? (existsSync(nativeBinary) ? statSync(nativeBinary).size : 0)
+      : metadata.size;
     if (sizeBytes <= 0) throw new Error(`The bundled ${name} is empty`);
     return { name, sizeBytes };
   });
@@ -44,6 +50,7 @@ export function launchWindowsSelfInstaller(environmentFile: string) {
     copyAsset(join(INSTALLER_ROOT, "install-edge-agent.ps1"), join(stage, "install-edge-agent.ps1"));
     copyAsset(join(INSTALLER_ROOT, "uninstall-edge-agent.ps1"), join(stage, "uninstall-edge-agent.ps1"));
     copyAsset(join(INSTALLER_ROOT, "open-dashboard-scan.ps1"), join(stage, "open-dashboard-scan.ps1"));
+    copyBundledDirectory(NATIVE_MODULES_ROOT, join(stage, "node_modules"));
     copyOptionalAsset(join(ASSET_ROOT, "THIRD_PARTY_NOTICES.txt"), join(stage, "THIRD_PARTY_NOTICES.txt"));
 
     const installerPath = join(stage, "install-edge-agent.ps1");
@@ -67,6 +74,17 @@ function copyAsset(source: string, destination: string) {
 
 function copyOptionalAsset(source: string, destination: string) {
   if (existsSync(source)) writeFileSync(destination, readFileSync(source));
+}
+
+function copyBundledDirectory(source: string, destination: string) {
+  if (!existsSync(source)) throw new Error(`The all-in-one installer is missing ${source.split(/[\\/]/).at(-1)}`);
+  mkdirSync(destination, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const sourcePath = join(source, entry.name);
+    const destinationPath = join(destination, entry.name);
+    if (entry.isDirectory()) copyBundledDirectory(sourcePath, destinationPath);
+    else if (entry.isFile()) copyFileSync(sourcePath, destinationPath);
+  }
 }
 
 function powerShellLiteral(value: string) {

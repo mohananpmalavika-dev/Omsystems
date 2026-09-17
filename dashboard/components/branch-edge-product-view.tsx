@@ -104,7 +104,7 @@ export function BranchEdgeProductView() {
           </div>
           <div className="flex items-start gap-2 text-slate-300">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-slate-200">3</span>
-            <div><strong className="text-slate-200">Install:</strong> Run <code>Install Sentinel Grid Edge Agent.bat</code> and approve elevation.</div>
+            <div><strong className="text-slate-200">Install:</strong> Run the KryptonVision Edge Agent installer and approve elevation.</div>
           </div>
         </div>
       </div>

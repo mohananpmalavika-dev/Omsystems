@@ -112,93 +112,35 @@ export default function SecurityDeviceHealthPage() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // TODO: Replace with real API endpoint
-      // const response = await fetch(`/v1/security/device-health?branchId=${branchId !== "ALL" ? branchId : ""}`);
-      // const data = await response.json();
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (branchId !== "ALL") params.set("branchId", branchId);
 
-      // Mock data for demonstration - replace with real API
-      const mockData: CorrelatedDeviceHealth[] = branches.slice(0, 3).map((branch, idx) => ({
-        branchId: branch.id,
-        branchName: branch.name,
-        cameras: {
-          total: 12,
-          online: idx === 0 ? 11 : 12,
-          recording: idx === 0 ? 10 : 12,
-          healthy: idx === 0 ? 9 : 11,
-          warning: idx === 0 ? 2 : 1,
-          critical: idx === 0 ? 1 : 0,
-          offline: idx === 0 ? 1 : 0,
-        },
-        recorders: {
-          total: 2,
-          online: 2,
-          healthy: idx === 0 ? 1 : 2,
-          degraded: idx === 0 ? 1 : 0,
-          full: 0,
-          offline: 0,
-        },
-        network: {
-          status: idx === 0 ? "warning" : "healthy",
-          latencyMs: idx === 0 ? 85 : 25,
-          packetLoss: idx === 0 ? 2.5 : 0.1,
-          bandwidth: 950,
-          issues: idx === 0 ? ["High latency detected"] : [],
-        },
-        power: {
-          status: idx === 0 ? "critical" : "healthy",
-          upsOnline: true,
-          batteryPercent: idx === 0 ? 45 : 92,
-          powerOutages24h: idx === 0 ? 1 : 0,
-          issues: idx === 0 ? ["UPS battery below 50%"] : [],
-        },
-        overallHealth: idx === 0 ? "critical" : idx === 1 ? "warning" : "healthy",
-        criticalIssues: idx === 0 ? [
-          {
-            type: "camera",
-            severity: "critical",
-            message: "Camera CAM-05 offline for 2 hours",
-            deviceId: "CAM-05",
-            timestamp: new Date(Date.now() - 2 * 3600000).toISOString(),
-          },
-          {
-            type: "power",
-            severity: "high",
-            message: "UPS battery critically low - 45% remaining",
-            timestamp: new Date(Date.now() - 30 * 60000).toISOString(),
-          },
-        ] : [],
-        correlatedEvents: idx === 0 ? [
-          {
-            id: "corr-1",
-            type: "power_camera_correlation",
-            message: "Power fluctuation detected 5 minutes before camera offline event",
-            affectedDevices: ["UPS-01", "CAM-05"],
-            timestamp: new Date(Date.now() - 2.1 * 3600000).toISOString(),
-            resolved: false,
-          },
-        ] : [],
-      }));
+      // Fetch device health from real API
+      const response = await fetch(`/v1/security/device-health?${params}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || "Failed to load device health data");
+      }
 
-      const mockSummary: DeviceSummary = {
-        totalBranches: mockData.length,
-        healthyBranches: mockData.filter(d => d.overallHealth === "healthy").length,
-        warningBranches: mockData.filter(d => d.overallHealth === "warning").length,
-        criticalBranches: mockData.filter(d => d.overallHealth === "critical").length,
-        totalCriticalIssues: mockData.reduce((sum, d) => sum + d.criticalIssues.length, 0),
-        totalCorrelatedEvents: mockData.reduce((sum, d) => sum + d.correlatedEvents.length, 0),
-        avgCameraHealth: 92,
-        avgRecorderHealth: 98,
-      };
-
-      setHealthData(mockData);
-      setSummary(mockSummary);
+      // Set health data and summary from API response
+      setHealthData(data.data || []);
+      setSummary(data.summary || emptySummary);
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: error instanceof Error ? error.message : "Failed to load device health data" });
+      // Set empty data on error
+      setHealthData([]);
+      setSummary(emptySummary);
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [branchId, branches]);
+  }, [branchId]);
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("analytics:view")

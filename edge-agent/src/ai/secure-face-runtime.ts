@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import * as ort from "onnxruntime-node";
-import sharp from "sharp";
+import sharp from "./sharp-runtime.js";
 
 type Artifact = {
   id: "detector" | "recognizer" | "liveness";

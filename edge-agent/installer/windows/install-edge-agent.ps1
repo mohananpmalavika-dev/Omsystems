@@ -12,6 +12,7 @@ $SourceConfig = Join-Path $SourceDirectory "config\edge-agent.env"
 $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
 $SourceDashboardLauncher = Join-Path $SourceDirectory "open-dashboard-scan.ps1"
 $SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
+$SourceNativeModules = Join-Path $SourceDirectory "node_modules"
 $RestoreExistingTaskOnFailure = $false
 
 # The self-extracting EXE launches this script in a separate elevated PowerShell
@@ -138,6 +139,12 @@ if ($existingTask) {
 Stop-InstalledAgentProcesses $InstallDirectory
 Copy-Item -LiteralPath $SourceExecutable -Destination $Executable -Force
 Copy-Item -LiteralPath $SourceConfig -Destination $ConfigPath -Force
+if (-not (Test-Path -LiteralPath (Join-Path $SourceNativeModules "sharp") -PathType Container) -or
+    -not (Test-Path -LiteralPath (Join-Path $SourceNativeModules "@img\sharp-win32-x64\lib\sharp-win32-x64-0.35.4.node") -PathType Leaf)) {
+  throw "The installer is missing the required Windows image-processing runtime. Download a fresh installer package."
+}
+Copy-Item -LiteralPath $SourceNativeModules -Destination (Join-Path $InstallDirectory "node_modules") -Recurse -Force
+Get-ChildItem -LiteralPath (Join-Path $InstallDirectory "node_modules") -File -Recurse | Unblock-File -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
   Copy-Item -LiteralPath $SourceUninstaller -Destination (Join-Path $InstallDirectory "uninstall-edge-agent.ps1") -Force
 }

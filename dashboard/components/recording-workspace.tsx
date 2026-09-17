@@ -133,14 +133,14 @@ export function RecordingWorkspace() {
 
       {error && <div className="error-banner"><AlertTriangle size={17} />{error}</div>}
       {job && <section className="recording-summary">
-        <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "Sentinel"}</strong><small>{job.mode} recording at source</small></article>
+        <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "KryptonVision"}</strong><small>{job.mode} recording at source</small></article>
         <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Recorder evidence" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? recordingState : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? (archiveSummary?.newestPlayableAt ? `Latest archive ${formatTime(archiveSummary.newestPlayableAt)}` : availabilityMessage(vms?.recordingSearch)) : `${segments.length} indexed segments in selected range`}</small></article>
         <article><span>Off-site archive</span><strong>{job.cloudArchivePolicy === "incident-evidence-only" ? "Incidents only" : "Disabled"}</strong><small>Snapshots and selected clips only</small></article>
-        <article><span>Playback capability</span><strong className={playbackCapability?.support === "UNSUPPORTED" ? "fault" : "healthy"}>{playbackCapability?.support ?? "Unverified"}</strong><small>{playbackCapability?.reason ?? "Browser delivery is normalized by Sentinel"}</small></article>
+        <article><span>Playback capability</span><strong className={playbackCapability?.support === "UNSUPPORTED" ? "fault" : "healthy"}>{playbackCapability?.support ?? "Unverified"}</strong><small>{playbackCapability?.reason ?? "Browser delivery is normalized by KryptonVision"}</small></article>
       </section>}
 
       {vms && <section className="vms-truth-panel" aria-label="Recorder evidence state">
-        <div><strong>{vms.source === "RECORDER" ? `Recorder ${vms.recorderId ?? "unmapped"}` : "Sentinel recording index"}</strong><span>{availabilityMessage(vms.recordingStatus)}</span></div>
+        <div><strong>{vms.source === "RECORDER" ? `Recorder ${vms.recorderId ?? "unmapped"}` : "KryptonVision recording index"}</strong><span>{availabilityMessage(vms.recordingStatus)}</span></div>
         <div className="vms-timeline" aria-label="Recording availability timeline">
           {timelineIntervals.map((interval, index) => <span key={`${interval.start}-${index}`} className={`vms-interval ${interval.state.toLowerCase()}`} style={timelineStyle(interval.start, interval.end, from, to)} title={`${interval.state}: ${formatTime(interval.start)} – ${formatTime(interval.end)}${interval.reason ? ` · ${interval.reason}` : ""}`} />)}
         </div>

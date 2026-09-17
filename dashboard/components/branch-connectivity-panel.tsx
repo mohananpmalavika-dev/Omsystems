@@ -124,7 +124,7 @@ export function BranchConnectivityPanel({
         <Cable size={18} />
         <div>
           <h3>Camera connection method</h3>
-          <p>Choose how Sentinel reaches this branch. The same method supports IP cameras and analog cameras through a DVR/NVR channel.</p>
+          <p>Choose how KryptonVision reaches this branch. The same method supports IP cameras and analog cameras through a DVR/NVR channel.</p>
         </div>
         {profile ? <span className={`connectivity-status ${profile.status}`}>{statusLabel}</span> : null}
       </div>
@@ -135,7 +135,7 @@ export function BranchConnectivityPanel({
             <label className={`connectivity-option ${form.primaryTransport === "vpn" ? "selected" : ""}`}>
               <input type="radio" name="connection-method" value="vpn" checked={form.primaryTransport === "vpn"} onChange={() => setForm((current) => ({ ...current, primaryTransport: "vpn", fallbackTransport: current.fallbackTransport === "vpn" ? "none" : current.fallbackTransport }))} />
               <ShieldCheck size={18} />
-              <span><strong>Existing branch VPN</strong><small>Direct private-network access through your router VPN. No Sentinel edge box is needed.</small></span>
+              <span><strong>Existing branch VPN</strong><small>Direct private-network access through your router VPN. No KryptonVision edge box is needed.</small></span>
             </label>
             <label className={`connectivity-option ${form.primaryTransport === "cloudflare-tunnel" ? "selected" : ""}`}>
               <input type="radio" name="connection-method" value="cloudflare-tunnel" checked={form.primaryTransport === "cloudflare-tunnel"} onChange={() => setForm((current) => ({ ...current, primaryTransport: "cloudflare-tunnel", fallbackTransport: current.fallbackTransport === "cloudflare-tunnel" ? "none" : current.fallbackTransport }))} />
@@ -171,8 +171,8 @@ export function BranchConnectivityPanel({
           </div>
 
           <div className="connectivity-guidance">
-            {activeTransport === "vpn" || form.primaryTransport === "vpn" ? <p><ShieldCheck size={14} /> Sentinel uses the router’s existing site-to-site VPN route. Configure the routers separately; never enter VPN or camera passwords here.</p> : null}
-            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Secure internet mode needs the Sentinel scanner running at the branch. {managedTunnel ? `Internet endpoint: ${managedTunnel.hostname} (${managedTunnel.status}).` : managedInternetAvailable === false ? "Saving asks scanner version 0.1.7 to create a temporary test endpoint." : "Saving provisions the endpoint automatically."}</p> : null}
+            {activeTransport === "vpn" || form.primaryTransport === "vpn" ? <p><ShieldCheck size={14} /> KryptonVision uses the router’s existing site-to-site VPN route. Configure the routers separately; never enter VPN or camera passwords here.</p> : null}
+            {activeTransport === "cloudflare-tunnel" || form.primaryTransport === "cloudflare-tunnel" ? <p><Cloud size={14} /> Secure internet mode needs the KryptonVision scanner running at the branch. {managedTunnel ? `Internet endpoint: ${managedTunnel.hostname} (${managedTunnel.status}).` : managedInternetAvailable === false ? "Saving asks scanner version 0.1.7 to create a temporary test endpoint." : "Saving provisions the endpoint automatically."}</p> : null}
             <p><CheckCircle2 size={14} /> IP cameras use their private IP. Analog cameras are added as a DVR/NVR private IP plus channel number; their continuous video stays on the recorder.</p>
           </div>
 

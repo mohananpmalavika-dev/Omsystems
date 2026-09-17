@@ -89,85 +89,37 @@ export default function AnprLogisticsPage() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // TODO: Replace with real API endpoint
-      // const response = await fetch(`/v1/logistics/anpr-sessions?branchId=${branchId !== "ALL" ? branchId : ""}`);
-      // const data = await response.json();
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (branchId !== "ALL") params.set("branchId", branchId);
+      if (filter === "active") params.set("status", "on_route");
+      else if (filter === "violations") params.set("hasViolations", "true");
+
+      // Fetch sessions from real API
+      const response = await fetch(`/v1/logistics/anpr-sessions?${params}`);
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status} ${response.statusText}`);
+      }
       
-      // Mock data for demonstration - replace with real API
-      const mockSessions: AnprLogisticsSession[] = [
-        {
-          id: "session-1",
-          vehiclePlate: "KA 01 AB 1234",
-          vehicleType: "cash_van",
-          branchId: branches[0]?.id || "branch-1",
-          branchName: branches[0]?.name || "Main Branch",
-          status: "on_route",
-          routeCompliance: "compliant",
-          scheduledArrival: new Date(Date.now() + 30 * 60000).toISOString(),
-          authorized: true,
-          provider: "Secure Logistics Ltd",
-          detectionPoints: [
-            {
-              cameraId: "cam-1",
-              cameraName: "Entry Gate",
-              timestamp: new Date(Date.now() - 15 * 60000).toISOString(),
-              confidence: 0.95,
-              location: "Checkpoint A",
-            },
-          ],
-          violations: [],
-        },
-        {
-          id: "session-2",
-          vehiclePlate: "KA 02 CD 5678",
-          vehicleType: "armored",
-          branchId: branches[0]?.id || "branch-1",
-          branchName: branches[0]?.name || "Main Branch",
-          status: "overdue",
-          routeCompliance: "delayed",
-          scheduledArrival: new Date(Date.now() - 45 * 60000).toISOString(),
-          authorized: true,
-          provider: "SecureTransit Inc",
-          detectionPoints: [
-            {
-              cameraId: "cam-2",
-              cameraName: "Highway Checkpoint",
-              timestamp: new Date(Date.now() - 120 * 60000).toISOString(),
-              confidence: 0.92,
-              location: "Checkpoint B",
-            },
-          ],
-          violations: [
-            {
-              code: "SCHEDULE_DELAY",
-              severity: "high",
-              message: "Vehicle is 45 minutes past scheduled arrival",
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        },
-      ];
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || "Failed to load logistics data");
+      }
 
-      const mockSummary: LogisticsSummary = {
-        totalVehicles: mockSessions.length,
-        onRoute: mockSessions.filter(s => s.status === "on_route").length,
-        arrived: mockSessions.filter(s => s.status === "arrived").length,
-        overdue: mockSessions.filter(s => s.status === "overdue").length,
-        compliantRoutes: mockSessions.filter(s => s.routeCompliance === "compliant").length,
-        routeDeviations: mockSessions.filter(s => s.routeCompliance === "route_deviation").length,
-        unauthorizedStops: mockSessions.filter(s => s.routeCompliance === "unauthorized_stop").length,
-        avgDwellTimeMinutes: 0,
-      };
-
-      setSessions(mockSessions);
-      setSummary(mockSummary);
+      // Set sessions and summary from API response
+      setSessions(data.data || []);
+      setSummary(data.summary || emptySummary);
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: error instanceof Error ? error.message : "Failed to load logistics data" });
+      // Set empty data on error
+      setSessions([]);
+      setSummary(emptySummary);
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [branchId, branches]);
+  }, [branchId, filter]);
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("analytics:view")

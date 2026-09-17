@@ -408,7 +408,7 @@ export function CommandCenterView() {
         </div>
       )}
 
-      {/* Global "Ask KryptoVision" AI Command Bar */}
+      {/* Global "Ask KryptonVision" AI Command Bar */}
       <div className="command-center-ai-bar p-3 bg-slate-900/90 border border-indigo-900/50 rounded-xl shadow-md">
         <form onSubmit={handleAskSentinel} className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400">
@@ -418,14 +418,14 @@ export function CommandCenterView() {
             type="text"
             value={askSentinelQuery}
             onChange={(e) => setAskSentinelQuery(e.target.value)}
-            placeholder='Ask KryptoVision: "Show me branches likely to fail recording within 72 hours" or "Are all cameras recording?"'
+            placeholder='Ask KryptonVision: "Show me branches likely to fail recording within 72 hours" or "Are all cameras recording?"'
             className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
           />
           <button
             type="submit"
             className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all"
           >
-            Ask KryptoVision
+            Ask KryptonVision
           </button>
         </form>
 

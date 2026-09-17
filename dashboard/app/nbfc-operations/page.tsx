@@ -7,11 +7,15 @@ import { PageHero } from "@/components/page-hero";
 import { authApi } from "@/lib/api-client";
 import {
   ArrowRight,
+  BarChart3,
   Building2,
   FileCheck2,
   Landmark,
+  Shield,
   ShieldAlert,
   Siren,
+  Truck,
+  Users,
   Video,
   Wrench,
 } from "lucide-react";
@@ -42,12 +46,28 @@ const workflows = [
     iconClass: "bg-violet-500/10 text-violet-300",
   },
   {
+    title: "Track cash-van logistics",
+    description: "Monitor ANPR-based vehicle tracking, route compliance, and security verification for cash movements.",
+    href: "/analytics/anpr-logistics",
+    action: "Open logistics tracking",
+    icon: Truck,
+    iconClass: "bg-purple-500/10 text-purple-300",
+  },
+  {
     title: "Maintain branch uptime",
     description: "Find camera, recorder, storage, power, and connectivity issues before they affect oversight.",
     href: "/maintenance/health",
     action: "Open health checks",
     icon: Wrench,
     iconClass: "bg-sky-500/10 text-sky-300",
+  },
+  {
+    title: "Monitor device health",
+    description: "Correlated health monitoring across cameras, recorders, network, and power with root-cause analysis.",
+    href: "/security/device-health",
+    action: "Open device correlation",
+    icon: Shield,
+    iconClass: "bg-red-500/10 text-red-300",
   },
   {
     title: "Preserve evidence",
@@ -64,6 +84,22 @@ const workflows = [
     action: "Open branch audit",
     icon: Building2,
     iconClass: "bg-slate-700 text-slate-200",
+  },
+  {
+    title: "Manage watchlists",
+    description: "Control authorized personnel, VIP visitors, and security watchlists with consent-aware face recognition.",
+    href: "/analytics/nbfc-watchlist",
+    action: "Open watchlist manager",
+    icon: Users,
+    iconClass: "bg-indigo-500/10 text-indigo-300",
+  },
+  {
+    title: "Compare branch performance",
+    description: "Side-by-side metrics across all branches with compliance scoring and security analytics.",
+    href: "/analytics/branch-comparison",
+    action: "Open comparison view",
+    icon: BarChart3,
+    iconClass: "bg-cyan-500/10 text-cyan-300",
   },
 ];
 

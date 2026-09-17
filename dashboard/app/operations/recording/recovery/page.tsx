@@ -3,7 +3,7 @@ import { RecordingRecoveryWorkspace } from "@/components/recording-recovery-work
 import { Suspense } from "react";
 
 export const metadata = {
-  title: "Recording Gap Recovery & Edge Backfill | SentinelGrid VMS",
+  title: "Recording Gap Recovery & Edge Backfill | KryptonVision VMS",
   description: "Automated recording continuity verification, edge store-and-forward backfill, and zero-duplicate frame recovery.",
 };
 

@@ -3,7 +3,7 @@ import { PerformanceObservabilityDashboard } from '@/components/performance-obse
 import { AppLayout } from '@/components/app-layout';
 
 export const metadata: Metadata = {
-  title: 'Performance Observability - Sentinel Grid',
+  title: 'Performance Observability - KryptonVision',
   description: 'Real-time performance metrics, latency percentiles, and system health monitoring',
 };
 

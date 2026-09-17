@@ -3106,6 +3106,57 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register local AI analytics routes');
   }
 
+  // Register NBFC Enhancement Routes
+  try {
+    const { registerAnprLogisticsRoutes } = await import('./routes/anpr-logistics.routes.js');
+    await registerAnprLogisticsRoutes(app, { pool });
+    app.log.info('ANPR Logistics routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register ANPR logistics routes');
+  }
+
+  try {
+    const { registerDeviceHealthCorrelationRoutes } = await import('./routes/device-health-correlation.routes.js');
+    await registerDeviceHealthCorrelationRoutes(app, { pool });
+    app.log.info('Device Health Correlation routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register device health correlation routes');
+  }
+
+  try {
+    const { registerNbfcWatchlistRoutes } = await import('./routes/nbfc-watchlist.routes.js');
+    await registerNbfcWatchlistRoutes(app, { pool });
+    app.log.info('NBFC Watchlist routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register NBFC watchlist routes');
+  }
+
+  try {
+    const { registerBranchComparisonRoutes } = await import('./routes/branch-comparison.routes.js');
+    await registerBranchComparisonRoutes(app, { pool });
+    app.log.info('Branch Comparison routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register branch comparison routes');
+  }
+
+  // Initialize NBFC Background Jobs
+  try {
+    const { createNbfcBackgroundJobs } = await import('./services/nbfc-background-jobs.js');
+    const backgroundJobsEnabled = process.env.NBFC_BACKGROUND_JOBS_ENABLED !== 'false';
+    const nbfcJobs = createNbfcBackgroundJobs({ pool, app, enabled: backgroundJobsEnabled });
+    app.log.info(`NBFC background jobs initialized (enabled: ${backgroundJobsEnabled})`);
+    
+    // Graceful shutdown handler
+    const shutdownHandler = async () => {
+      app.log.info('Shutting down NBFC background jobs...');
+      nbfcJobs.stop();
+    };
+    process.on('SIGTERM', shutdownHandler);
+    process.on('SIGINT', shutdownHandler);
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to initialize NBFC background jobs');
+  }
+
   // Register banking analytics routes
   try {
     // The control plane is ESM; `require` silently left this entire feature
