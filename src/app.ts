@@ -2547,6 +2547,17 @@ export async function buildApp(options?: {
   });
   await registerAuthRoutes(app, (extendedStore ?? store) as any);
   await registerEnterpriseAuthRoutes(app, (extendedStore ?? store) as any);
+  if ((store as any).pool) {
+    try {
+      const { registerVoiceAuthenticationRoutes } = await import("./routes/voice-authentication.routes.js");
+      const { registerVoiceEnrollmentRoutes } = await import("./routes/voice-enrollment.routes.js");
+      await registerVoiceAuthenticationRoutes(app, (store as any).pool, (extendedStore ?? store) as any);
+      await registerVoiceEnrollmentRoutes(app, (store as any).pool);
+      app.log.info("Voice authentication and enrollment routes registered");
+    } catch (err: any) {
+      app.log.warn({ err }, "Could not register voice biometric routes");
+    }
+  }
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);
@@ -2699,10 +2710,7 @@ export async function buildApp(options?: {
         createComplianceScorecardRoutes(instance, pool);
         createMISUnifiedRoutes(instance, pool);
         createHistoricalTrendsRoutes(instance, pool);
-      // The dashboard control-plane BFF proxies /api/control/v1/* to /v1/*
-      // upstream. Keeping this route on /v1 makes the authenticated MIS API
-      // reachable in every deployment topology.
-      }, { prefix: '/v1/reports' });
+      }, { prefix: '/api/control/v1/reports' });
       
       app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');
     } catch (err: unknown) {

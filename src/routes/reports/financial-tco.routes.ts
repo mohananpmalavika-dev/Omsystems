@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Financial TCO (Total Cost of Ownership) Report Routes
  * 

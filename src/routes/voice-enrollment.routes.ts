@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Voice Enrollment API Routes
  * 

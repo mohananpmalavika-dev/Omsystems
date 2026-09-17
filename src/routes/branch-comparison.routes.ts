@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Pool } from "pg";

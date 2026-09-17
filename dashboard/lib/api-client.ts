@@ -78,6 +78,7 @@ function redirectToLogin() {
 function isPublicAuthEndpoint(endpoint: string): boolean {
   return endpoint.includes('/auth/login') ||
     endpoint.includes('/auth/face-login') ||
+    endpoint.includes('/auth/voice-login') ||
     endpoint.includes('/auth/refresh') ||
     endpoint.includes('/auth/forgot-password') ||
     endpoint.includes('/auth/request-password-reset') ||
@@ -372,6 +373,52 @@ export const authApi = {
     }>('/v1/auth/face-login', {
       method: 'POST',
       body: JSON.stringify({ faceScan, tenantSlug }),
+    });
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      sessionStorage.setItem('sentinel_browser_session', 'active');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+      loginRedirectInProgress = false;
+      if (response.accessToken) {
+        sessionStorage.setItem('accessToken', response.accessToken);
+      }
+      if (response.refreshToken) {
+        sessionStorage.setItem('refreshToken', response.refreshToken);
+      }
+      if (response.user) {
+        sessionStorage.setItem('user', JSON.stringify(response.user));
+        sessionStorage.setItem('sentinel_login_time', Date.now().toString());
+      }
+    }
+
+    return response;
+  },
+
+  voiceLogin: async (data: {
+    audioData: string;
+    audioFormat?: 'wav' | 'webm' | 'mp3' | 'pcm_f32le' | 'pcm_s16le';
+    authMethod?: 'speaker_identification' | 'speaker_verification' | 'voice_passphrase' | 'voice_mfa';
+    tenantSlug?: string;
+    username?: string;
+    passphrase?: string;
+  }) => {
+    const response = await fetchApi<{
+      accessToken?: string;
+      refreshToken?: string;
+      expiresIn: number;
+      user: any;
+      voiceAuth?: any;
+    }>('/v1/auth/voice-login', {
+      method: 'POST',
+      body: JSON.stringify({
+        authMethod: data.authMethod || 'speaker_identification',
+        audioFormat: data.audioFormat || 'wav',
+        ...data,
+      }),
     });
 
     if (typeof window !== 'undefined') {
@@ -2913,50 +2960,6 @@ export const branchComparisonApi = {
       method: 'POST',
       body: JSON.stringify({ date }),
     }),
-};
-
-export const cameraPermissionApi = {
-  listUserGrants: (userId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/users/${userId}/camera-grants`),
-
-  listCameraGrants: (cameraId: string) =>
-    fetchApi<{ data: any[] }>(`/v1/cameras/${cameraId}/grants`),
-
-  createGrant: (data: any) =>
-    fetchApi<any>('/v1/camera-grants', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  deleteGrant: (id: string) =>
-    fetchApi<void>(`/v1/camera-grants/${id}`, { method: 'DELETE' }),
-
-  listAccessRequests: (filters?: any) => {
-    const params = new URLSearchParams();
-    if (filters) {
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined) params.append(key, String(value));
-      });
-    }
-    return fetchApi<{ data: any[] }>(`/v1/camera-access-requests?${params}`);
-  },
-
-  createAccessRequest: (data: any) =>
-    fetchApi<any>('/v1/camera-access-requests', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
-  reviewAccessRequest: (id: string, status: 'approved' | 'rejected', reviewNotes?: string) =>
-    fetchApi<any>(`/v1/camera-access-requests/${id}/review`, {
-      method: 'POST',
-      body: JSON.stringify({ status, reviewNotes }),
-    }),
-
-  checkCameraAccess: (cameraId: string, action = 'live:view') =>
-    fetchApi<{ allowed: boolean; reason: string; requiresApproval: boolean }>(
-      `/v1/cameras/${cameraId}/check-access?action=${action}`
-    ),
 };
 
 export const videoSearchApi = {
