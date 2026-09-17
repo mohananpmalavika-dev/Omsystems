@@ -40,6 +40,7 @@ export default function CameraMapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [includeOffline, setIncludeOffline] = useState(true);
+  const [useIpGeolocation, setUseIpGeolocation] = useState(true);
 
   // Calculate map center from data
   const getMapCenter = (): [number, number] => {
@@ -62,6 +63,9 @@ export default function CameraMapPage() {
       const params = new URLSearchParams();
       if (!includeOffline) {
         params.append('includeOffline', 'false');
+      }
+      if (useIpGeolocation) {
+        params.append('useIpGeolocation', 'true');
       }
 
       const response = await fetch(`/api/control/v1/camera-locations?${params}`, {
@@ -120,7 +124,7 @@ export default function CameraMapPage() {
     } else {
       fetchBranchClusters();
     }
-  }, [viewMode, includeOffline]);
+  }, [viewMode, includeOffline, useIpGeolocation]);
 
   if (loading) {
     return (
@@ -191,15 +195,27 @@ export default function CameraMapPage() {
 
             {/* Offline Filter (only for camera view) */}
             {viewMode === 'cameras' && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={includeOffline}
-                  onChange={(e) => setIncludeOffline(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">Show Offline</span>
-              </label>
+              <>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeOffline}
+                    onChange={(e) => setIncludeOffline(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Show Offline</span>
+                </label>
+                
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useIpGeolocation}
+                    onChange={(e) => setUseIpGeolocation(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Use IP Location</span>
+                </label>
+              </>
             )}
 
             {/* Refresh Button */}
@@ -309,17 +325,46 @@ export default function CameraMapPage() {
 
       {/* Help Section */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-blue-900 mb-3">📍 GPS Configuration Guide</h3>
-        <div className="space-y-2 text-sm text-blue-800">
-          <p>
-            <strong>To add GPS coordinates to branches:</strong>
-          </p>
-          <ol className="list-decimal list-inside space-y-1 ml-4">
-            <li>Go to Organization Management → Branches</li>
-            <li>Edit a branch and add metadata field: <code className="bg-blue-100 px-2 py-1 rounded">location</code></li>
-            <li>Set coordinates: <code className="bg-blue-100 px-2 py-1 rounded">{`{"latitude": 12.9716, "longitude": 77.5946}`}</code></li>
-            <li>Save and refresh this page to see cameras on the map</li>
-          </ol>
+        <h3 className="text-lg font-semibold text-blue-900 mb-3">📍 Location Detection Methods</h3>
+        <div className="space-y-4 text-sm text-blue-800">
+          <div>
+            <p className="font-semibold mb-2">Three ways cameras get GPS coordinates:</p>
+            <ol className="list-decimal list-inside space-y-2 ml-4">
+              <li>
+                <strong>Camera Metadata</strong> (Highest Priority) - GPS set directly on camera
+                <code className="bg-blue-100 px-2 py-1 rounded ml-2 text-xs">camera.metadata.location</code>
+              </li>
+              <li>
+                <strong>IP Geolocation</strong> (Automatic) - Detect location from camera's public IP address
+                <span className="text-xs ml-2">(Enable "Use IP Location" checkbox)</span>
+              </li>
+              <li>
+                <strong>Branch Location</strong> (Fallback) - All cameras at branch share same GPS
+                <code className="bg-blue-100 px-2 py-1 rounded ml-2 text-xs">branch.metadata.location</code>
+              </li>
+            </ol>
+          </div>
+
+          <div className="border-t border-blue-300 pt-3">
+            <p className="font-semibold mb-2">🌐 IP Geolocation Features:</p>
+            <ul className="list-disc list-inside space-y-1 ml-4">
+              <li>Automatically detects camera location from its IP address</li>
+              <li>Works for cameras with public IPs (not 192.168.x.x or 10.x.x.x)</li>
+              <li>Shows actual city/country where camera is located</li>
+              <li>No configuration needed - just enable the checkbox!</li>
+              <li>Useful when cameras are spread across different locations</li>
+            </ul>
+          </div>
+
+          <div className="border-t border-blue-300 pt-3">
+            <p className="font-semibold mb-2">⚙️ Manual Configuration (Branch Location):</p>
+            <ol className="list-decimal list-inside space-y-1 ml-4">
+              <li>Go to Organization Management → Branches</li>
+              <li>Edit a branch and add metadata: <code className="bg-blue-100 px-2 py-1 rounded">location</code></li>
+              <li>Set coordinates: <code className="bg-blue-100 px-2 py-1 rounded">{`{"latitude": 12.9716, "longitude": 77.5946}`}</code></li>
+              <li>Save and refresh this page</li>
+            </ol>
+          </div>
         </div>
       </div>
     </div>
