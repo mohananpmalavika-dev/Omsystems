@@ -6,7 +6,12 @@
  * and anti-spoofing detection for voice biometric authentication.
  */
 
-import * as ort from "onnxruntime-node";
+let ort: any = null;
+try {
+  ort = await import("onnxruntime-node");
+} catch {
+  // onnxruntime-node is optional and not present in Alpine Linux container
+}
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
 import type {
@@ -20,9 +25,9 @@ import type {
 } from "../types/voice-biometric.types.js";
 
 export class VoiceProcessingService {
-  private embeddingSession: ort.InferenceSession | null = null;
-  private vadSession: ort.InferenceSession | null = null;
-  private antiSpoofingSession: ort.InferenceSession | null = null;
+  private embeddingSession: any = null;
+  private vadSession: any = null;
+  private antiSpoofingSession: any = null;
   private config: VoiceAuthConfig;
 
   constructor(config: Partial<VoiceAuthConfig> = {}) {
@@ -33,6 +38,10 @@ export class VoiceProcessingService {
    * Initialize the voice processing models
    */
   async initialize(): Promise<void> {
+    if (!ort) {
+      console.log("Voice processing running in acoustic feature mode (onnxruntime-node not present)");
+      return;
+    }
     try {
       // Load speaker embedding model
       if (await this.fileExists(this.config.embeddingModelPath)) {
