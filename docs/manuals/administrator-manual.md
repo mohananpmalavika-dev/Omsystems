@@ -172,7 +172,7 @@ Sentinel Grid supports heterogeneous camera and recorder hardware fleets:
 
 High-efficiency streaming requires dual-stream orchestration:
 
-### Stream Settings (`/admin/stream-settings`)
+### Stream Settings (`/admin/system`)
 * **Main Stream (High Resolution):**
   * **Resolution:** 1080p (1920x1080) to 4K (3840x2160).
   * **Framerate:** 15–25 FPS.

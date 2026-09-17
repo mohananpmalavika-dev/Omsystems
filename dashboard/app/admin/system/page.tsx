@@ -200,7 +200,7 @@ export default function SystemManagementPage() {
               <span><Server size={22} /></span>
               <div>
                 <h1>System Management</h1>
-                <p>Manage gateways, cameras, and branches</p>
+                <p>Manage gateways, cameras, branches, and stream quality</p>
               </div>
             </div>
           </div>

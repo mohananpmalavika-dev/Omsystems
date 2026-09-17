@@ -374,7 +374,7 @@ export const APP_ROUTES: AppRouteItem[] = [
   { label: "Third-Party Integrations", href: "/integrations", category: "ADMINISTRATION", keywords: ["integrations", "third party", "webhooks", "hikvision ax pro", "third party integrations"] },
   { label: "Notification Policies", href: "/operations/alert-notification-policy", category: "ADMINISTRATION", keywords: ["notification policies", "notifications", "alert policies"] },
   { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", category: "ADMINISTRATION", keywords: ["camera import", "camera export", "excel import"] },
-  { label: "Stream Quality Settings", href: "/admin/stream-settings", category: "ADMINISTRATION", keywords: ["stream quality", "main stream", "sub stream"] },
+  { label: "Stream Quality Settings", href: "/admin/system", category: "ADMINISTRATION", keywords: ["stream quality", "main stream", "sub stream"] },
   { label: "System Settings", href: "/settings", category: "ADMINISTRATION", keywords: ["settings", "system settings", "preferences", "config", "configuration"] },
   { label: "Users & RBAC", href: "/admin/users", category: "ADMINISTRATION", keywords: ["users", "rbac", "user management", "accounts", "permissions", "user list"] },
   { label: "Account & Security Settings", href: "/account/security", category: "ADMINISTRATION", keywords: ["account settings", "profile", "change password", "my account", "security settings"] },

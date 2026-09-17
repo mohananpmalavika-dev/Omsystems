@@ -312,7 +312,6 @@ export const navigation: NavGroup[] = [
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Notification Policies", href: "/operations/alert-notification-policy", icon: Bell },
       { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", icon: FileSpreadsheet },
-      { label: "Stream Quality (Main/Sub Stream)", href: "/admin/stream-settings", icon: Video },
       { label: "System Management & OTA", href: "/admin/system", icon: Settings },
 
 
