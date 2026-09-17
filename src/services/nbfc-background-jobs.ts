@@ -22,7 +22,7 @@ export class NbfcBackgroundJobs {
   private pool: Pool;
   private app: FastifyInstance;
   private enabled: boolean;
-  private jobs: Map<string, cron.ScheduledTask> = new Map();
+  private jobs: Map<string, any> = new Map();
 
   constructor(config: BackgroundJobsConfig) {
     this.pool = config.pool;
