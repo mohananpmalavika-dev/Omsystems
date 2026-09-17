@@ -255,6 +255,9 @@ export function NbfcRulesWorkspace() {
   const [zoneName, setZoneName] = useState("Locker Interior");
   const [zoneType, setZoneType] = useState("LOCKER");
   const [drawnPoints, setDrawnPoints] = useState<{ x: number; y: number }[]>([]);
+  const [zoneMode, setZoneMode] = useState<"POLYGON" | "TRIPWIRE">("POLYGON");
+  const [tripwireDirection, setTripwireDirection] = useState<"A_TO_B" | "B_TO_A" | "BIDIRECTIONAL">("A_TO_B");
+  const [lensTamperDetected, setLensTamperDetected] = useState(false);
   const [isDrawingZone, setIsDrawingZone] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -619,27 +622,40 @@ export function NbfcRulesWorkspace() {
 
     if (points.length === 0) return;
 
-    // Draw polygon path
-    ctx.beginPath();
-    ctx.moveTo(points[0]!.x * canvas.width, points[0]!.y * canvas.height);
-    for (let i = 1; i < points.length; i++) {
-      ctx.lineTo(points[i]!.x * canvas.width, points[i]!.y * canvas.height);
-    }
-    if (points.length >= 3) {
-      ctx.closePath();
-      ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
-      ctx.fill();
-    }
+    if (zoneMode === "TRIPWIRE") {
+      ctx.strokeStyle = "#38bdf8";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([8, 4]);
+      ctx.beginPath();
+      ctx.moveTo(points[0]!.x * canvas.width, points[0]!.y * canvas.height);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i]!.x * canvas.width, points[i]!.y * canvas.height);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // Draw polygon path
+      ctx.beginPath();
+      ctx.moveTo(points[0]!.x * canvas.width, points[0]!.y * canvas.height);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i]!.x * canvas.width, points[i]!.y * canvas.height);
+      }
+      if (points.length >= 3) {
+        ctx.closePath();
+        ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
+        ctx.fill();
+      }
 
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = 2;
-    ctx.stroke();
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
 
     // Draw vertices
     points.forEach((p, idx) => {
       ctx.beginPath();
-      ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
-      ctx.fillStyle = idx === 0 ? "#10b981" : "#3b82f6";
+      ctx.arc(p.x * canvas.width, p.y * canvas.height, 6, 0, Math.PI * 2);
+      ctx.fillStyle = idx === 0 ? "#10b981" : idx === 1 && zoneMode === "TRIPWIRE" ? "#38bdf8" : "#f59e0b";
       ctx.fill();
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
@@ -647,9 +663,37 @@ export function NbfcRulesWorkspace() {
     });
   };
 
+  const applyPresetVault = () => {
+    setZoneMode("POLYGON");
+    setZoneName("Gold Locker Cage Boundary");
+    setZoneType("LOCKER");
+    const pts = [{ x: 0.25, y: 0.25 }, { x: 0.75, y: 0.25 }, { x: 0.75, y: 0.8 }, { x: 0.25, y: 0.8 }];
+    setDrawnPoints(pts);
+    setTimeout(() => drawCanvas(pts), 50);
+  };
+
+  const applyPresetCounter = () => {
+    setZoneMode("POLYGON");
+    setZoneName("Teller Cash Drawer Exclusion Box");
+    setZoneType("CASH_COUNTER");
+    const pts = [{ x: 0.35, y: 0.55 }, { x: 0.65, y: 0.55 }, { x: 0.65, y: 0.85 }, { x: 0.35, y: 0.85 }];
+    setDrawnPoints(pts);
+    setTimeout(() => drawCanvas(pts), 50);
+  };
+
+  const applyPresetTripwire = () => {
+    setZoneMode("TRIPWIRE");
+    setZoneName("Main Ingress Doorway Tripwire");
+    setZoneType("PERIMETER");
+    const pts = [{ x: 0.15, y: 0.65 }, { x: 0.85, y: 0.65 }];
+    setDrawnPoints(pts);
+    setTimeout(() => drawCanvas(pts), 50);
+  };
+
   const handleSaveZone = async () => {
-    if (drawnPoints.length < 3) {
-      alert("Please draw at least 3 points to complete the polygon zone.");
+    const minPoints = zoneMode === "TRIPWIRE" ? 2 : 3;
+    if (drawnPoints.length < minPoints) {
+      alert(`Please draw at least ${minPoints} points to complete the ${zoneMode.toLowerCase()}.`);
       return;
     }
     const inferredBranchId = selectedBranch !== "ALL"
@@ -1124,14 +1168,52 @@ export function NbfcRulesWorkspace() {
       {activeTab === "zones" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3">
               <div>
-                <h3 className="text-base font-bold text-white">Visual Zone Perimeter Designer</h3>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>Visual Zone & Virtual Tripwire Designer</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                    {zoneMode === "TRIPWIRE" ? "VIRTUAL TRIPWIRE" : "POLYGON ZONE"}
+                  </span>
+                </h3>
                 <p className="text-xs text-gray-400 mt-0.5">
-                  Click on the video canvas to draw polygon vertices. Coordinates normalize from 0.0 to 1.0.
+                  {zoneMode === "TRIPWIRE"
+                    ? "Click 2 points to establish virtual tripwire line & directional ingress boundary."
+                    : "Click on the video canvas to draw polygon vertices (min 3 points)."}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+
+              {/* Mode Toggle & Presets */}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center bg-gray-950 p-1 rounded-lg border border-gray-800">
+                  <button
+                    onClick={() => {
+                      setZoneMode("POLYGON");
+                      setDrawnPoints([]);
+                    }}
+                    className={`px-3 py-1 text-xs rounded font-medium transition ${
+                      zoneMode === "POLYGON"
+                        ? "bg-red-600 text-white shadow"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Polygon Zone
+                  </button>
+                  <button
+                    onClick={() => {
+                      setZoneMode("TRIPWIRE");
+                      setDrawnPoints([]);
+                    }}
+                    className={`px-3 py-1 text-xs rounded font-medium transition ${
+                      zoneMode === "TRIPWIRE"
+                        ? "bg-amber-600 text-white shadow"
+                        : "text-gray-400 hover:text-white"
+                    }`}
+                  >
+                    Virtual Tripwire
+                  </button>
+                </div>
+
                 <button
                   onClick={() => {
                     setDrawnPoints([]);
@@ -1148,6 +1230,50 @@ export function NbfcRulesWorkspace() {
               </div>
             </div>
 
+            {/* Quick Presets & Tripwire Direction Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-950/60 rounded-lg border border-gray-800 text-xs">
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-400 font-semibold uppercase text-[10px] tracking-wider mr-1">Quick Presets:</span>
+                <button
+                  onClick={applyPresetVault}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-amber-600/30 hover:border-amber-500/50 text-amber-300 border border-gray-700 rounded text-xs transition"
+                >
+                  🔒 Gold Vault Cage
+                </button>
+                <button
+                  onClick={applyPresetCounter}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-blue-600/30 hover:border-blue-500/50 text-blue-300 border border-gray-700 rounded text-xs transition"
+                >
+                  💵 Cash Counter
+                </button>
+                <button
+                  onClick={applyPresetTripwire}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-emerald-600/30 hover:border-emerald-500/50 text-emerald-300 border border-gray-700 rounded text-xs transition"
+                >
+                  ⚡ Door Ingress Tripwire
+                </button>
+              </div>
+
+              {zoneMode === "TRIPWIRE" && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-gray-400 text-[10px] uppercase font-semibold">Direction:</span>
+                  {(["A_TO_B", "B_TO_A", "BIDIRECTIONAL"] as const).map((dir) => (
+                    <button
+                      key={dir}
+                      onClick={() => setTripwireDirection(dir)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono border transition ${
+                        tripwireDirection === dir
+                          ? "bg-amber-500/20 text-amber-300 border-amber-500"
+                          : "bg-gray-900 text-gray-400 border-gray-800 hover:text-white"
+                      }`}
+                    >
+                      {dir === "A_TO_B" ? "A ➔ B" : dir === "B_TO_A" ? "B ➔ A" : "A ⇄ B"}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Canvas Container */}
             <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-gray-800 shadow-inner flex items-center justify-center">
               <canvas
@@ -1159,8 +1285,10 @@ export function NbfcRulesWorkspace() {
               />
               {drawnPoints.length === 0 && (
                 <div className="absolute pointer-events-none text-center text-gray-500 text-xs">
-                  <p>Click anywhere inside to plot points</p>
-                  <p className="text-[10px] text-gray-600 mt-1">Point 1 (Green) closes the polygon at point 3+</p>
+                  <p>{zoneMode === "TRIPWIRE" ? "Click 2 points to draw Tripwire Line (A to B)" : "Click anywhere inside to plot points"}</p>
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    {zoneMode === "TRIPWIRE" ? "Vector direction determines alarm trigger orientation" : "Point 1 (Green) closes polygon at point 3+"}
+                  </p>
                 </div>
               )}
             </div>
@@ -1169,19 +1297,24 @@ export function NbfcRulesWorkspace() {
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
               <div className="flex items-center gap-3 text-xs text-gray-400">
                 <span>Vertices Plotted: <strong className="text-white">{drawnPoints.length}</strong></span>
-                {drawnPoints.length >= 3 && (
+                {zoneMode === "POLYGON" && drawnPoints.length >= 3 && (
                   <span className="text-emerald-400 flex items-center gap-1">
                     <CheckCircle className="w-3.5 h-3.5" /> Valid Closed Polygon
+                  </span>
+                )}
+                {zoneMode === "TRIPWIRE" && drawnPoints.length === 2 && (
+                  <span className="text-amber-400 flex items-center gap-1 font-mono">
+                    <ShieldAlert className="w-3.5 h-3.5" /> Armed Tripwire ({tripwireDirection})
                   </span>
                 )}
               </div>
 
               <button
                 onClick={handleSaveZone}
-                disabled={drawnPoints.length < 3}
+                disabled={zoneMode === "TRIPWIRE" ? drawnPoints.length < 2 : drawnPoints.length < 3}
                 className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-xs font-semibold shadow transition"
               >
-                Save Zone Definition
+                Save {zoneMode === "TRIPWIRE" ? "Tripwire" : "Zone"} Definition
               </button>
             </div>
           </div>

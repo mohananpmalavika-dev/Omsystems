@@ -8,14 +8,19 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock3,
+  Crown,
   FileCheck2,
   Landmark,
   MapPin,
+  MessageCircle,
   Plus,
   RefreshCw,
   Settings2,
   ShieldCheck,
+  Timer,
+  TrendingDown,
   Truck,
+  UserCheck,
   UsersRound,
   XCircle,
 } from "lucide-react";
@@ -49,7 +54,7 @@ type BankingSummary = {
 };
 type Monitor = { id: string; name: string; description?: string; enabled?: boolean; arrivalZoneId?: string; unloadingZoneId?: string };
 type Visit = { id: string; expectedPlate?: string; providerName?: string; expectedArrivalStart: string; expectedArrivalEnd: string; status?: string; notes?: string };
-type Tab = "sessions" | "visits" | "monitors";
+type Tab = "sessions" | "visits" | "monitors" | "vip_intelligence";
 
 const emptySummary: BankingSummary = {
   activeSessions: 0, completedSessions: 0, compliantSessions: 0,
@@ -72,6 +77,7 @@ export function BankingAnalyticsDashboard() {
   const [saving, setSaving] = useState(false);
   const [evidenceMessage, setEvidenceMessage] = useState<string>();
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
+  const [vipNotified, setVipNotified] = useState(false);
 
   const refresh = useCallback(async (quiet = false) => {
     if (!branchId) return;
@@ -161,6 +167,7 @@ export function BankingAnalyticsDashboard() {
       <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")} icon={<Activity size={15} />} label="Cash-van sessions" count={sessions.length} />
       <TabButton active={tab === "visits"} onClick={() => setTab("visits")} icon={<CalendarClock size={15} />} label="Expected visits" count={visits.length} />
       <TabButton active={tab === "monitors"} onClick={() => setTab("monitors")} icon={<Settings2 size={15} />} label="Monitor policy" count={monitors.length} />
+      <TabButton active={tab === "vip_intelligence"} onClick={() => setTab("vip_intelligence")} icon={<Crown size={15} />} label="HNI VIP & Queue Intelligence" count={2} />
     </nav>
 
     {tab === "sessions" && <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
@@ -172,6 +179,8 @@ export function BankingAnalyticsDashboard() {
 
     {tab === "visits" && <VisitsPanel visits={visits} tenantId={tenantId} branchId={branchId} saving={saving} setSaving={setSaving} onChanged={() => refresh()} setMessage={setMessage} />}
     {tab === "monitors" && <MonitorsPanel monitors={monitors} tenantId={tenantId} branchId={branchId} saving={saving} setSaving={setSaving} onChanged={() => refresh()} setMessage={setMessage} />}
+    {tab === "vip_intelligence" && <VipIntelligencePanel vipNotified={vipNotified} setVipNotified={setVipNotified} />}
+
   </main>;
 }
 
@@ -203,3 +212,183 @@ function Field({ label, value, setValue, placeholder, type = "text", required = 
 function formatDate(value: string) { return new Date(value).toLocaleDateString(undefined, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }); }
 function formatTime(value: string) { return new Date(value).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
 function readable(error: unknown) { return error instanceof Error ? error.message : "Unable to load banking analytics"; }
+
+function VipIntelligencePanel({
+  vipNotified,
+  setVipNotified,
+}: {
+  vipNotified: boolean;
+  setVipNotified: (val: boolean) => void;
+}) {
+  const [activeTellerAlert, setActiveTellerAlert] = useState(false);
+
+  return (
+    <div className="space-y-6">
+      {/* 1. HNI VIP CUSTOMER INGRESS COCKPIT */}
+      <section className="relative overflow-hidden rounded-2xl border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900 to-black p-6 shadow-2xl">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 pb-5 border-b border-slate-800">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                <Crown size={14} /> VIP HNI Ingress Detected
+              </span>
+              <span className="text-xs text-slate-400 font-mono">Camera: Main Branch Entrance PTZ #01</span>
+            </div>
+            <h2 className="text-2xl font-black text-white flex items-center gap-3">
+              Mr. P.K. Thomas (Chairman, Thomas Global)
+            </h2>
+            <p className="text-sm text-slate-300 max-w-2xl">
+              Facial Biometric Match (98.4% Confidence). Tier: <strong className="text-amber-300">Titanium Ultra HNI</strong>. Current AUM Portfolio: <strong className="text-white font-mono">₹4.82 Cr</strong>.
+            </p>
+          </div>
+
+          {/* Action Trigger Card */}
+          <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 min-w-[300px]">
+            <div className="text-xs text-slate-400 mb-2">
+              Assigned RM: <strong className="text-slate-200">Anjali V. (Cabin 2 • Ext: 402)</strong>
+            </div>
+            {!vipNotified ? (
+              <button
+                onClick={() => setVipNotified(true)}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg text-xs shadow-lg transition flex items-center justify-center gap-2"
+              >
+                <MessageCircle size={15} /> Dispatch WhatsApp Alert to BM & RM
+              </button>
+            ) : (
+              <div className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 p-2.5 text-center space-y-1">
+                <div className="text-xs font-bold text-emerald-300 flex items-center justify-center gap-1.5">
+                  <CheckCircle2 size={14} /> WhatsApp Dispatched
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Branch Manager & RM notified at {new Date().toLocaleTimeString()}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Client Fast Details */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-5 text-xs">
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3">
+            <span className="text-[10px] uppercase text-slate-500 block">Lounge Escort Status</span>
+            <span className="text-sm font-bold text-amber-300 mt-1 block">Security Escort Dispatched</span>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3">
+            <span className="text-[10px] uppercase text-slate-500 block">Preferred Service</span>
+            <span className="text-sm font-bold text-slate-200 mt-1 block">Gold Locker & Foreign Exchange</span>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3">
+            <span className="text-[10px] uppercase text-slate-500 block">Ingress Timestamp</span>
+            <span className="text-sm font-bold font-mono text-slate-200 mt-1 block">11:42:09 AM IST</span>
+          </div>
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3">
+            <span className="text-[10px] uppercase text-slate-500 block">KYC / AML Flag</span>
+            <span className="text-sm font-bold text-emerald-400 mt-1 block">Clear (Low Risk PEP Clear)</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 2. TELLER COUNTER QUEUE ABANDONMENT TELEMETRY */}
+      <section className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold tracking-[.18em] text-blue-300 uppercase">
+                Customer Experience Intelligence
+              </span>
+            </div>
+            <h3 className="text-lg font-bold text-white mt-1 flex items-center gap-2">
+              <UsersRound size={20} className="text-blue-400" />
+              Teller Counter Queue Abandonment & Service SLA Telemetry
+            </h3>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono">
+              <TrendingDown size={14} className="text-emerald-400" />
+              <span>Abandonment Rate: <strong className="text-emerald-400">1.8%</strong> (Target &lt; 3.0%)</span>
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs font-mono">
+              <Timer size={14} className="text-blue-400" />
+              <span>Avg Wait: <strong className="text-white">3m 42s</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* Counters Grid */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white">Counter #1 (Cash In/Out)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300">ACTIVE</span>
+            </div>
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-2xl font-black text-white">3</span>
+              <span className="text-xs text-slate-400">waiting</span>
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
+              <span>Avg Handling: <strong>2.8 min</strong></span>
+              <span className="text-emerald-400">0% drop</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-950/60 border-2 border-amber-500/40 p-4 space-y-2 relative">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-amber-300">Counter #2 (Gold Appraisal)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 animate-pulse">HIGH DEMAND</span>
+            </div>
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-2xl font-black text-amber-300">7</span>
+              <span className="text-xs text-slate-400">waiting</span>
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
+              <span>Avg Handling: <strong>6.5 min</strong></span>
+              <span className="text-amber-400">4.2% drop</span>
+            </div>
+            {!activeTellerAlert ? (
+              <button
+                onClick={() => setActiveTellerAlert(true)}
+                className="w-full mt-2 py-1 px-2 bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-500/50 rounded text-[11px] font-semibold transition"
+              >
+                Open Reserve Counter #5
+              </button>
+            ) : (
+              <div className="w-full mt-2 py-1 px-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 rounded text-[10px] text-center font-bold">
+                Reserve Counter #5 Dispatched
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white">Counter #3 (Forex / DD)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/15 text-emerald-300">ACTIVE</span>
+            </div>
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-2xl font-black text-white">1</span>
+              <span className="text-xs text-slate-400">waiting</span>
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
+              <span>Avg Handling: <strong>3.1 min</strong></span>
+              <span className="text-emerald-400">0% drop</span>
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-400">Counter #4 (Priority / Senior)</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/15 text-blue-300">IDLE</span>
+            </div>
+            <div className="flex items-baseline justify-between pt-1">
+              <span className="text-2xl font-black text-slate-400">0</span>
+              <span className="text-xs text-slate-500">waiting</span>
+            </div>
+            <div className="text-[11px] text-slate-400 flex items-center justify-between border-t border-slate-800/80 pt-2">
+              <span>Status: <strong>Ready for Influx</strong></span>
+              <span className="text-slate-400">0% drop</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}

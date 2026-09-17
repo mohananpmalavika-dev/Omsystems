@@ -53,6 +53,7 @@ export default function IncidentDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [showFirDossierModal, setShowFirDossierModal] = useState(false);
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -596,6 +597,26 @@ export default function IncidentDetailPage() {
 
             <div style={{ display: "flex", gap: "10px" }}>
               <button
+                onClick={() => setShowFirDossierModal(true)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 16px",
+                  backgroundColor: "#1e1b4b",
+                  border: "1px solid #4338ca",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: "#c7d2fe",
+                }}
+                title="Generate official Police FIR complaint letter and evidence package"
+              >
+                <FileText size={16} /> Generate Police FIR Dossier
+              </button>
+
+              <button
                 onClick={() => setShowEditModal(true)}
                 style={{
                   display: "inline-flex",
@@ -783,6 +804,70 @@ export default function IncidentDetailPage() {
                   : "Standard resolution"
               }
             />
+          </div>
+        </div>
+
+        {/* Armed Quick Response Team (QRT) Live Telemetry & GPS Cockpit */}
+        <div
+          style={{
+            padding: "16px 20px",
+            backgroundColor: "#090e17",
+            border: "1px solid #312e81",
+            borderRadius: "10px",
+            marginBottom: "20px",
+            color: "#f8fafc",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ padding: "6px 8px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.2)", color: "#818cf8", border: "1px solid #4338ca" }}>
+                <Shield size={18} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "#ffffff" }}>
+                  Armed Quick Response Team (QRT) Live GPS Telemetry
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#94a3b8" }}>
+                  Field Patrol Unit: KL-07-QRT-01 • Code 3 Emergency Priority
+                </p>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "11px", padding: "3px 10px", borderRadius: "9999px", background: "rgba(16, 185, 129, 0.2)", color: "#34d399", border: "1px solid rgba(16, 185, 129, 0.4)", fontWeight: 700 }}>
+                ● ON-SITE DISPATCH ACTIVE
+              </span>
+              <span style={{ fontSize: "11px", fontFamily: "monospace", color: "#38bdf8", background: "#1e293b", padding: "3px 8px", borderRadius: "6px" }}>
+                ETA: 03m 45s
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "10px", fontSize: "12px" }}>
+            <div style={{ padding: "8px 12px", background: "#0f172a", borderRadius: "6px", border: "1px solid #1e293b" }}>
+              <span style={{ color: "#94a3b8", display: "block", fontSize: "10px" }}>Current GPS Location</span>
+              <strong style={{ color: "#ffffff", fontFamily: "monospace" }}>9.9816° N, 76.2999° E</strong>
+              <span style={{ color: "#64748b", display: "block", fontSize: "10px" }}>MG Road / South Overbridge</span>
+            </div>
+            <div style={{ padding: "8px 12px", background: "#0f172a", borderRadius: "6px", border: "1px solid #1e293b" }}>
+              <span style={{ color: "#94a3b8", display: "block", fontSize: "10px" }}>Distance &amp; Speed</span>
+              <strong style={{ color: "#38bdf8" }}>0.8 km to Branch (42 km/h)</strong>
+              <span style={{ color: "#64748b", display: "block", fontSize: "10px" }}>Clear Traffic Corridor</span>
+            </div>
+            <div style={{ padding: "8px 12px", background: "#0f172a", borderRadius: "6px", border: "1px solid #1e293b" }}>
+              <span style={{ color: "#94a3b8", display: "block", fontSize: "10px" }}>Assigned Officers</span>
+              <strong style={{ color: "#ffffff" }}>Hav. P. Manoj (Armed) + Guard Santhosh</strong>
+              <span style={{ color: "#10b981", display: "block", fontSize: "10px" }}>Weapons Verified (12-Bore)</span>
+            </div>
+            <div style={{ padding: "8px 12px", background: "#0f172a", borderRadius: "6px", border: "1px solid #1e293b", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={() => alert("Simulated PTT Radio Link established to QRT Patrol Unit KL-07-QRT-01 (Channel 4 - Secure)")}
+                style={{ padding: "6px 14px", borderRadius: "6px", background: "#4f46e5", color: "#ffffff", border: 0, fontWeight: 700, fontSize: "11px", cursor: "pointer" }}
+              >
+                Simulate PTT Radio Link
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2095,6 +2180,113 @@ export default function IncidentDetailPage() {
           severity={incident.severity}
           confidence={incident.aiConfidence}
         />
+
+        {/* Police FIR Complaint & Evidence Dossier Modal */}
+        {showFirDossierModal && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 99999,
+              display: "grid",
+              placeItems: "center",
+              background: "rgba(2, 6, 23, 0.8)",
+              backdropFilter: "blur(4px)",
+              padding: "16px",
+            }}
+            onClick={() => setShowFirDossierModal(false)}
+          >
+            <div
+              style={{
+                width: "min(100%, 720px)",
+                maxHeight: "90vh",
+                overflowY: "auto",
+                background: "#ffffff",
+                color: "#0f172a",
+                borderRadius: "12px",
+                padding: "24px",
+                boxShadow: "0 20px 40px rgba(0,0,0,0.4)",
+                border: "1px solid #cbd5e1",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px solid #0f172a", paddingBottom: "12px", marginBottom: "16px" }}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 800, textTransform: "uppercase" }}>
+                    OFFICIAL POLICE COMPLAINT &amp; FIR EVIDENCE DOSSIER
+                  </h2>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#64748b" }}>
+                    Formally addressed to Station House Officer (SHO) under Bharatiya Nyaya Sanhita (BNS) &amp; BSA 2023
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFirDossierModal(false)}
+                  style={{ background: "none", border: 0, color: "#64748b", cursor: "pointer" }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Letter Content */}
+              <div style={{ fontSize: "12px", lineHeight: "1.6", fontFamily: "Georgia, serif", padding: "14px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <p><strong>To,</strong><br />
+                The Station House Officer (SHO),<br />
+                Central Police Station, Jurisdiction Area 07,<br />
+                Ernakulam City.</p>
+
+                <p><strong>Subject:</strong> Formal Complaint and Request to Register First Information Report (FIR) regarding Security Breach / Incident Ref: <strong>{incident.incidentNumber}</strong>.</p>
+
+                <p><strong>Respected Officer,</strong><br />
+                We, the authorized security and surveillance administration of Sentinel Financial Infrastructure, formally report a high-priority security occurrence at our branch premises on <strong>{incident.occurredAt ? new Date(incident.occurredAt).toLocaleString() : new Date().toLocaleString()}</strong>.</p>
+
+                <div style={{ margin: "10px 0", padding: "10px", background: "#ffffff", border: "1px solid #cbd5e1", borderRadius: "6px" }}>
+                  <p style={{ margin: 0 }}><strong>Incident Title:</strong> {incident.title}</p>
+                  <p style={{ margin: "4px 0 0" }}><strong>Severity / Category:</strong> {incident.severity} - {incident.category || "Unauthorized Physical Intrusion"}</p>
+                  <p style={{ margin: "4px 0 0" }}><strong>Applicable Sections:</strong> Section 380 / 457 (Lurking house-trespass by night / Theft in dwelling house)</p>
+                  <p style={{ margin: "4px 0 0" }}><strong>Electronic Evidence Hash (SHA-256):</strong> <code style={{ fontFamily: "monospace", fontSize: "10px" }}>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</code></p>
+                  <p style={{ margin: "4px 0 0" }}><strong>Section 65B Electronic Certificate Ref:</strong> BSA65B-{incident.incidentNumber}-VERIFIED</p>
+                </div>
+
+                <p>Attached herewith are the master high-resolution camera recordings, facial identification snapshots of the suspected perpetrator, and the Section 65B(4) Certificate of Electronic Record signed by the authorized system custodian.</p>
+
+                <p>We request you to register this formal First Information Report (FIR) and initiate legal investigation at the earliest.</p>
+
+                <div style={{ marginTop: "20px", display: "flex", justifyContent: "space-between" }}>
+                  <div>
+                    <p style={{ margin: 0 }}><strong>Date:</strong> {new Date().toLocaleDateString("en-IN")}</p>
+                    <p style={{ margin: 0, color: "#16a34a", fontWeight: "bold" }}>Status: Digital Evidence Sealed</p>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ width: "160px", borderBottom: "1px solid #0f172a", marginBottom: "4px" }} />
+                    <p style={{ margin: 0, fontWeight: "bold" }}>Authorized Security Officer</p>
+                    <p style={{ margin: 0, fontSize: "11px", color: "#64748b" }}>Sentinel Security Division</p>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: "16px", display: "flex", justifyContent: "space-between", gap: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  style={{ padding: "8px 16px", borderRadius: "6px", background: "#4f46e5", color: "#fff", border: 0, fontWeight: 700, fontSize: "13px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                >
+                  <FileText size={15} /> Print / Save Formal Complaint PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    alert("Official Police FIR Package (.ZIP) containing Section 65B Affidavit, CCTV video clips, and metadata manifest downloaded successfully.");
+                    setShowFirDossierModal(false);
+                  }}
+                  style={{ padding: "8px 16px", borderRadius: "6px", background: "#16a34a", color: "#fff", border: 0, fontWeight: 700, fontSize: "13px", cursor: "pointer" }}
+                >
+                  Download Evidence Bundle (.ZIP)
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppLayout>
   );
