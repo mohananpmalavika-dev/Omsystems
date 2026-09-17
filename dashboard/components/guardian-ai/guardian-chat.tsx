@@ -180,10 +180,12 @@ interface NavigationActionInfo {
 
 function extractNavigationAction(message: ChatMessage): NavigationActionInfo | null {
   if (message.actions && message.actions.length > 0) {
-    const navAction = message.actions.find((a) => a.function === "navigate_to_menu");
+    const navAction = message.actions.find(
+      (a) => a.function === "navigate_to_menu" || a.result?.action === "navigate"
+    );
     if (navAction) {
-      const href = navAction.result?.href || navAction.parameters?.target || "/";
-      const label = navAction.result?.label || navAction.parameters?.label || "Open Requested Page";
+      const href = navAction.result?.href || navAction.parameters?.target || navAction.parameters?.href || "/";
+      const label = navAction.result?.label || navAction.parameters?.label || "Requested Module";
       const category = navAction.result?.category || "OPERATIONS";
       return { href, label, category };
     }
@@ -191,10 +193,13 @@ function extractNavigationAction(message: ChatMessage): NavigationActionInfo | n
 
   // Check if message content has an internal route link
   if (message.content) {
-    const routeMatch = message.content.match(/\/(reports\/mis|control-room|analytics\/alerts|incidents|operations\/cameras|video-search|playback\/synced|analytics\/face-recognition|nbfc-operations|compliance|settings|admin\/users)/);
+    const routeMatch =
+      message.content.match(/\((\/[a-zA-Z0-9_\-\/?=&]+)\)/) ||
+      message.content.match(/(?:\s|^)(\/(?:reports|control-room|operations|analytics|incidents|playback|nbfc-operations|compliance|settings|admin|maintenance|audit|security-operations|dashboards|mis-dashboard|support|modules|digital-twin|performance|federation)[a-zA-Z0-9_\-\/?=&]*)/);
     if (routeMatch) {
-      const href = `/${routeMatch[1]}`;
-      const label = href.split("/").pop()?.replace(/-/g, " ").toUpperCase() || "Open Page";
+      const href = routeMatch[1];
+      const label =
+        href.split("/").pop()?.split("?")[0]?.replace(/-/g, " ").toUpperCase() || "Requested Module";
       return {
         href,
         label,
@@ -218,15 +223,16 @@ function NavigationActionDisplay({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30">
-            <Compass className="w-4 h-4" />
+            <Compass className="w-4 h-4 animate-spin" style={{ animationDuration: "4s" }} />
           </div>
           <div>
             <span className="text-xs font-bold text-white block">{navInfo.label}</span>
             <span className="text-[10px] text-slate-400">{navInfo.category} · {navInfo.href}</span>
           </div>
         </div>
-        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-          Ready
+        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+          Opening...
         </span>
       </div>
 
@@ -235,7 +241,7 @@ function NavigationActionDisplay({
           onClick={() => onNavigate(navInfo.href)}
           className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
         >
-          <span>🚀 Open {navInfo.label} Now</span>
+          <span>🚀 Open {navInfo.label}</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
         <Link
@@ -378,6 +384,14 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+
+      // Auto-navigate to menu if requested
+      const navInfo = extractNavigationAction(assistantMessage);
+      if (navInfo && navInfo.href) {
+        setTimeout(() => {
+          handleNavigate(navInfo.href);
+        }, 800);
+      }
     } catch (error) {
       console.error("KryptonAI error:", error);
       
@@ -463,16 +477,23 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       ]);
 
       // Add assistant response
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.data.message,
-          type: data.data.type,
-          actions: data.data.actions,
-          timestamp: data.data.timestamp,
-        },
-      ]);
+      const assistantVoiceMessage: ChatMessage = {
+        role: "assistant",
+        content: data.data.message,
+        type: data.data.type,
+        actions: data.data.actions,
+        timestamp: data.data.timestamp,
+      };
+
+      setMessages((prev) => [...prev, assistantVoiceMessage]);
+
+      // Auto-navigate to menu if requested
+      const navInfo = extractNavigationAction(assistantVoiceMessage);
+      if (navInfo && navInfo.href) {
+        setTimeout(() => {
+          handleNavigate(navInfo.href);
+        }, 800);
+      }
 
       if (data.sessionId) {
         setSessionId(data.sessionId);
