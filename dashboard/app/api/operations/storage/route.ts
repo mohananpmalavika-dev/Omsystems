@@ -266,6 +266,17 @@ export async function GET(request: NextRequest) {
   const tier2Count = cameras.filter((c) => c.activeStorageTier === "dvr_hdd").length;
   const tier3Count = cameras.filter((c) => c.activeStorageTier === "online_cloud").length;
 
+  // Filter active storage nodes: local disks are unmounted if no corresponding device exists
+  const activeStorageNodes = rawStorageNodes.filter((node) => {
+    if (cameras.length === 0) {
+      // When all cameras/devices are removed, local disks are completely unmounted
+      return node.storage_type !== "local-disk" || node.external_id?.includes("cloud");
+    }
+    if (node.external_id === "cam-sdcard-primary" && tier1Count === 0) return false;
+    if (node.external_id === "dvr-hdd-primary" && tier2Count === 0) return false;
+    return true;
+  });
+
   const response: StorageOverviewResponse = {
     success: true,
     cameras,
@@ -278,13 +289,13 @@ export async function GET(request: NextRequest) {
         name: sdCardNode.name,
         capacity: formatBytes(sdCardNode.capacity_bytes),
         used: formatBytes(sdCardNode.used_bytes),
-        status: sdCardNode.status || "healthy",
+        status: tier1Count > 0 ? (sdCardNode.status || "healthy") : "not_present",
       },
       dvrHddNode: {
         name: dvrNode.name,
         capacity: formatBytes(dvrNode.capacity_bytes),
         used: formatBytes(dvrNode.used_bytes),
-        status: dvrNode.status || "healthy",
+        status: tier2Count > 0 ? (dvrNode.status || "healthy") : "not_present",
       },
       cloudNode: {
         name: cloudNode.name,
@@ -293,7 +304,7 @@ export async function GET(request: NextRequest) {
         status: cloudNode.status || "healthy",
       },
     },
-    storageNodes: rawStorageNodes,
+    storageNodes: activeStorageNodes,
     scannedAt: new Date().toISOString(),
   };
 
