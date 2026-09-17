@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText } from "lucide-react";
+import Link from "next/link";
+import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 
@@ -136,6 +137,32 @@ export default function ReportsPage(){
       actions={<button className="btn-secondary" onClick={()=>void load()}><RefreshCw size={16}/>Refresh data</button>}
     />
     
+    <div className="bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/30 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg backdrop-blur">
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+          <BarChart3 size={24} />
+        </div>
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-bold text-white">Executive MIS Reports & Graphical Analytics Hub</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
+              <Sparkles size={10} /> Live Graphs
+            </span>
+          </div>
+          <p className="text-xs text-slate-300">
+            Interactive multi-branch charts for Threat Trends, System Health Uptime %, Footfall, Staff Attendance, and SLA Response.
+          </p>
+        </div>
+      </div>
+      <Link
+        href="/reports/mis"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-semibold shadow-md shadow-sky-500/20 transition-all shrink-0"
+      >
+        <span>Open MIS Dashboard</span>
+        <ArrowRight size={14} />
+      </Link>
+    </div>
+
     {message&&<div className="card py-3 text-sm" role="status">{message}</div>}
     {error&&<div className="card border-red-500/50 py-3 text-sm text-red-300" role="alert">{error}</div>}
     
