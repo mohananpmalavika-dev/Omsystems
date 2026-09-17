@@ -18,6 +18,9 @@ import {
   KeyRound,
   ExternalLink,
   Sparkles,
+  Mic,
+  MicOff,
+  Volume2,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { authApi } from "@/lib/api-client";
@@ -56,13 +59,122 @@ function downloadDesktopShortcut(appName = "KryptonVision", targetUrl?: string) 
   URL.revokeObjectURL(blobUrl);
 }
 
+/**
+ * Encodes Float32Array PCM samples (at sampleRate) to a 16-bit mono WAV ArrayBuffer
+ */
+function encodeWav16Bit(samples: Float32Array, sampleRate = 16000): ArrayBuffer {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  // RIFF identifier 'RIFF'
+  writeWavString(view, 0, "RIFF");
+  // file length minus RIFF identifier and length = 36 + data size
+  view.setUint32(4, 36 + samples.length * 2, true);
+  // RIFF type 'WAVE'
+  writeWavString(view, 8, "WAVE");
+  // format chunk identifier 'fmt '
+  writeWavString(view, 12, "fmt ");
+  // format chunk length 16
+  view.setUint32(16, 16, true);
+  // sample format (raw 1 = PCM)
+  view.setUint16(20, 1, true);
+  // channel count (1 = mono)
+  view.setUint16(22, 1, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sample rate * block align) = sampleRate * 2
+  view.setUint32(28, sampleRate * 2, true);
+  // block align (channel count * bytes per sample) = 2
+  view.setUint16(32, 2, true);
+  // bits per sample = 16
+  view.setUint16(34, 16, true);
+  // data chunk identifier 'data'
+  writeWavString(view, 36, "data");
+  // data chunk length
+  view.setUint32(40, samples.length * 2, true);
+
+  // Write PCM samples
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, samples[i] || 0));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+
+  return buffer;
+}
+
+function writeWavString(view: DataView, offset: number, string: string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+}
+
+/**
+ * Resamples an AudioBuffer's channel data to 16,000 Hz mono Float32Array
+ */
+function resampleTo16kHz(audioBuffer: AudioBuffer): Float32Array {
+  const sourceRate = audioBuffer.sampleRate;
+  const targetRate = 16000;
+  const channelData = audioBuffer.getChannelData(0);
+
+  if (sourceRate === targetRate) {
+    return channelData;
+  }
+
+  const ratio = sourceRate / targetRate;
+  const targetLength = Math.round(channelData.length / ratio);
+  const result = new Float32Array(targetLength);
+
+  for (let i = 0; i < targetLength; i++) {
+    const srcIndex = i * ratio;
+    const lower = Math.floor(srcIndex);
+    const upper = Math.min(lower + 1, channelData.length - 1);
+    const fraction = srcIndex - lower;
+    result[i] = (channelData[lower] || 0) * (1 - fraction) + (channelData[upper] || 0) * fraction;
+  }
+
+  return result;
+}
+
+/**
+ * Converts ArrayBuffer to Base64 string safely
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]!);
+  }
+  return window.btoa(binary);
+}
+
 function LoginFormInner({ onSuccess }: LoginFormProps) {
   const { branding } = useOrgBranding();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // Authentication mode: zero-touch face recognition or traditional username & password
-  const [authMode, setAuthMode] = useState<"face" | "credentials">("credentials");
+  // Authentication mode: face recognition, credentials, or voice biometrics
+  const [authMode, setAuthMode] = useState<"face" | "credentials" | "voice">("credentials");
+
+  // Voice Biometric state
+  const [voiceScanState, setVoiceScanState] = useState<
+    "idle" | "listening" | "processing" | "matched" | "not_found" | "mic_error"
+  >("idle");
+  const [voiceAudioLevel, setVoiceAudioLevel] = useState(0);
+  const [voiceCountdown, setVoiceCountdown] = useState(4);
+  const [voiceErrorMessage, setVoiceErrorMessage] = useState<string | null>(null);
+  const [voiceMatchedUser, setVoiceMatchedUser] = useState<any>(null);
+  const [voiceUsername, setVoiceUsername] = useState("");
+
+  const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceAudioContextRef = useRef<AudioContext | null>(null);
+  const voiceMediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceAudioChunksRef = useRef<Blob[]>([]);
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null);
+  const voiceAnimFrameRef = useRef<number | null>(null);
+  const voiceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const voiceCountdownTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Zero-touch Face Recognition state
   const faceVideoRef = useRef<HTMLVideoElement>(null);
@@ -120,10 +232,11 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
     }
   }, []);
 
-  // Cleanup active camera streams on unmount
+  // Cleanup active camera and microphone streams on unmount
   useEffect(() => {
     return () => {
       stopFaceCamera();
+      stopVoiceRecording();
     };
   }, []);
 
@@ -542,13 +655,272 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
   };
 
   /**
+   * Stop voice recording and cleanup audio resources
+   */
+  const stopVoiceRecording = useCallback(() => {
+    if (voiceTimerRef.current) {
+      clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    if (voiceCountdownTimerRef.current) {
+      clearInterval(voiceCountdownTimerRef.current);
+      voiceCountdownTimerRef.current = null;
+    }
+    if (voiceAnimFrameRef.current) {
+      cancelAnimationFrame(voiceAnimFrameRef.current);
+      voiceAnimFrameRef.current = null;
+    }
+    if (voiceMediaRecorderRef.current && voiceMediaRecorderRef.current.state !== "inactive") {
+      try {
+        voiceMediaRecorderRef.current.stop();
+      } catch {}
+      voiceMediaRecorderRef.current = null;
+    }
+    if (voiceStreamRef.current) {
+      voiceStreamRef.current.getTracks().forEach((track) => track.stop());
+      voiceStreamRef.current = null;
+    }
+    if (voiceAudioContextRef.current && voiceAudioContextRef.current.state !== "closed") {
+      voiceAudioContextRef.current.close().catch(() => {});
+      voiceAudioContextRef.current = null;
+    }
+    setVoiceAudioLevel(0);
+  }, []);
+
+  /**
+   * Process recorded voice audio and verify biometric signature
+   */
+  const processVoiceAudio = useCallback(async (audioBlob: Blob) => {
+    setVoiceScanState("processing");
+    stopVoiceRecording();
+
+    try {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      let base64Audio = "";
+      let audioFormat: "wav" | "webm" = "wav";
+
+      if (AudioCtx) {
+        try {
+          const decodeCtx = new AudioCtx();
+          const decodedBuffer = await decodeCtx.decodeAudioData(arrayBuffer);
+          const pcm16k = resampleTo16kHz(decodedBuffer);
+          const wavBuffer = encodeWav16Bit(pcm16k, 16000);
+          base64Audio = arrayBufferToBase64(wavBuffer);
+          audioFormat = "wav";
+          decodeCtx.close().catch(() => {});
+        } catch (decodeErr) {
+          console.warn("Web Audio decode error, falling back to blob base64:", decodeErr);
+          base64Audio = arrayBufferToBase64(arrayBuffer);
+          audioFormat = "webm";
+        }
+      } else {
+        base64Audio = arrayBufferToBase64(arrayBuffer);
+        audioFormat = "webm";
+      }
+
+      const response = await authApi.voiceLogin({
+        audioData: base64Audio,
+        audioFormat,
+        authMethod: voiceUsername.trim() ? "speaker_verification" : "speaker_identification",
+        username: voiceUsername.trim() || undefined,
+        tenantSlug: formData.tenantSlug.trim() || undefined,
+      });
+
+      // Biometric Voice Match Verified!
+      setVoiceMatchedUser(response.user);
+      setVoiceScanState("matched");
+
+      // Complete login and navigate
+      setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          const destination = safeReturnPath(searchParams?.get("next"));
+          if (destination !== "/") {
+            window.location.href = destination;
+          } else {
+            const userObj = response.user;
+            const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
+            if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
+              window.location.href = allowedMenus[0];
+            } else {
+              window.location.href = "/";
+            }
+          }
+        }
+      }, 850);
+    } catch (err: any) {
+      console.warn("Voice login failed:", err);
+      setVoiceScanState("not_found");
+      const apiCode = err?.details?.error ?? err?.details?.code;
+      const customMsg =
+        apiCode === "quality_failed"
+          ? "Audio was too quiet or unclear. Please speak more loudly and closer to the microphone."
+          : apiCode === "poor_audio_quality"
+          ? "Audio quality was insufficient. Please reduce background noise and speak clearly."
+          : err?.message || "Voice biometric authentication failed. Please try again or sign in with your password.";
+      setVoiceErrorMessage(customMsg);
+    }
+  }, [formData.tenantSlug, onSuccess, searchParams, stopVoiceRecording, voiceUsername]);
+
+  /**
+   * Request microphone access and begin live voice recording
+   */
+  const startVoiceRecording = useCallback(async () => {
+    stopVoiceRecording();
+    stopFaceCamera();
+    setVoiceErrorMessage(null);
+    setVoiceScanState("listening");
+    setVoiceCountdown(4);
+    voiceAudioChunksRef.current = [];
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error(
+          "Microphone access is not supported by your browser or requires HTTPS. Please sign in with your password."
+        );
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      voiceStreamRef.current = stream;
+
+      // Initialize AudioContext & AnalyserNode for reactive visualizer
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        try {
+          const audioCtx = new AudioCtx();
+          voiceAudioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          voiceAnalyserRef.current = analyser;
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const updateAudioLevel = () => {
+            if (!voiceAnalyserRef.current) return;
+            voiceAnalyserRef.current.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i]!;
+            }
+            const avg = sum / (dataArray.length * 255);
+            setVoiceAudioLevel(avg);
+            voiceAnimFrameRef.current = requestAnimationFrame(updateAudioLevel);
+          };
+          voiceAnimFrameRef.current = requestAnimationFrame(updateAudioLevel);
+        } catch (e) {
+          console.warn("AudioContext visualizer init skipped:", e);
+        }
+      }
+
+      // Initialize MediaRecorder
+      let mimeType = "";
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        }
+      }
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      voiceMediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          voiceAudioChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(voiceAudioChunksRef.current, {
+          type: recorder.mimeType || "audio/webm",
+        });
+        processVoiceAudio(audioBlob);
+      };
+
+      recorder.start(250);
+
+      // 4-second countdown
+      let remaining = 4;
+      voiceCountdownTimerRef.current = setInterval(() => {
+        remaining -= 1;
+        setVoiceCountdown(remaining);
+        if (remaining <= 0) {
+          if (voiceCountdownTimerRef.current) {
+            clearInterval(voiceCountdownTimerRef.current);
+            voiceCountdownTimerRef.current = null;
+          }
+        }
+      }, 1000);
+
+      // Auto-stop after 4 seconds
+      voiceTimerRef.current = setTimeout(() => {
+        if (recorder.state === "recording") {
+          recorder.stop();
+        }
+      }, 4000);
+    } catch (err: any) {
+      console.warn("Microphone start failed:", err);
+      const isDenied = err.name === "NotAllowedError" || err.name === "PermissionDeniedError";
+      const msg = isDenied
+        ? "Microphone access was denied. Please allow microphone permissions in your browser or sign in with your password."
+        : err.message || "Unable to access microphone. Please check permissions.";
+      setVoiceErrorMessage(msg);
+      setVoiceScanState("mic_error");
+      stopVoiceRecording();
+    }
+  }, [processVoiceAudio, stopFaceCamera, stopVoiceRecording]);
+
+  const handleStopAndVerify = () => {
+    if (voiceTimerRef.current) {
+      clearTimeout(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    if (voiceCountdownTimerRef.current) {
+      clearInterval(voiceCountdownTimerRef.current);
+      voiceCountdownTimerRef.current = null;
+    }
+    if (voiceMediaRecorderRef.current && voiceMediaRecorderRef.current.state === "recording") {
+      voiceMediaRecorderRef.current.stop();
+    }
+  };
+
+  /**
+   * Switch to voice authentication mode
+   */
+  const handleSwitchToVoice = () => {
+    stopFaceCamera();
+    stopVoiceRecording();
+    setAuthMode("voice");
+    setError(null);
+    setVoiceErrorMessage(null);
+    setVoiceScanState("idle");
+  };
+
+  /**
    * Switch to traditional password mode
    */
   const handleSwitchToCredentials = () => {
     stopFaceCamera();
+    stopVoiceRecording();
     setAuthMode("credentials");
     setFaceErrorMessage(null);
     setFacePromptMessage(null);
+    setVoiceErrorMessage(null);
     setError(null);
   };
 
@@ -780,6 +1152,7 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           <button
             type="button"
             onClick={() => {
+              stopVoiceRecording();
               setAuthMode("face");
               setError(null);
               setFaceErrorMessage(null);
@@ -791,7 +1164,17 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             title="Zero-Touch Facial Recognition (For enrolled users)"
           >
             <ScanFace size={16} />
-            <span>Face Recognition</span>
+            <span>Face ID</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSwitchToVoice}
+            className={`auth-mode-btn ${authMode === "voice" ? "active" : ""}`}
+            aria-pressed={authMode === "voice"}
+            title="Voice Biometric Authentication (For enrolled users)"
+          >
+            <Mic size={16} />
+            <span>Voice ID</span>
           </button>
         </div>
 
@@ -938,6 +1321,183 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                 </div>
 
                 <div className="face-quick-switch-link">
+                  <button type="button" onClick={handleSwitchToCredentials}>
+                    Sign in with username &amp; password instead &rarr;
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* MODE 3: VOICE BIOMETRIC AUTHENTICATION */}
+        {authMode === "voice" && (
+          <div className="voice-auth-section">
+            {voiceScanState === "matched" ? (
+              <div className="voice-success-panel">
+                <div className="voice-success-icon-wrap">
+                  <CheckCircle2 size={44} className="text-emerald-500" />
+                </div>
+                <h3>Voice Authenticated!</h3>
+                <p className="voice-user-name">
+                  Welcome back, <strong>{voiceMatchedUser?.displayName || voiceMatchedUser?.username}</strong>
+                </p>
+                <div className="voice-logging-in-badge">
+                  <span className="pulse-dot-green" />
+                  <span>Access Granted &bull; Launching Operations...</span>
+                </div>
+              </div>
+            ) : voiceScanState === "not_found" ? (
+              <div className="voice-error-panel">
+                <div className="voice-error-icon-wrap">
+                  <AlertCircle size={36} className="text-amber-500" />
+                </div>
+                <h3>Voice Not Recognized</h3>
+                <p className="voice-error-msg">
+                  {voiceErrorMessage ||
+                    "We could not verify your voice profile. Please ensure minimal background noise, speak clearly, and try again."}
+                </p>
+                <div className="voice-fallback-actions">
+                  <button
+                    type="button"
+                    onClick={startVoiceRecording}
+                    className="btn-retry-voice"
+                  >
+                    <RotateCcw size={14} /> Try Voice ID Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchToCredentials}
+                    className="btn-switch-credentials"
+                  >
+                    <KeyRound size={14} /> Sign In with Password
+                  </button>
+                </div>
+              </div>
+            ) : voiceScanState === "mic_error" ? (
+              <div className="voice-error-panel">
+                <AlertCircle size={32} className="text-red-500" />
+                <h3>Microphone Unavailable</h3>
+                <p>
+                  {voiceErrorMessage ||
+                    "Microphone access was denied or is unavailable. Please grant microphone permissions in your browser or sign in with your password."}
+                </p>
+                <div className="voice-fallback-actions">
+                  <button
+                    type="button"
+                    onClick={startVoiceRecording}
+                    className="btn-retry-voice"
+                  >
+                    <RotateCcw size={14} /> Retry Microphone
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSwitchToCredentials}
+                    className="btn-switch-credentials"
+                  >
+                    <KeyRound size={14} /> Sign In with Password
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="voice-scanner-view">
+                <div className={`voice-mic-container ${voiceScanState === "listening" ? "is-listening" : ""}`}>
+                  <div
+                    className="voice-pulse-ring"
+                    style={{
+                      transform: `scale(${1 + voiceAudioLevel * 0.5})`,
+                      opacity: voiceScanState === "listening" ? 0.3 + voiceAudioLevel * 0.7 : 0.2,
+                    }}
+                  />
+                  <div
+                    className="voice-pulse-ring second"
+                    style={{
+                      transform: `scale(${1 + voiceAudioLevel * 0.9})`,
+                      opacity: voiceScanState === "listening" ? 0.2 + voiceAudioLevel * 0.5 : 0,
+                    }}
+                  />
+                  <div className="voice-mic-button-wrapper">
+                    <button
+                      type="button"
+                      onClick={voiceScanState === "listening" ? handleStopAndVerify : startVoiceRecording}
+                      disabled={voiceScanState === "processing"}
+                      className={`voice-mic-action-btn ${voiceScanState === "listening" ? "recording" : ""}`}
+                      aria-label={voiceScanState === "listening" ? "Stop recording and verify" : "Start voice authentication"}
+                    >
+                      {voiceScanState === "processing" ? (
+                        <div className="voice-spinner" />
+                      ) : voiceScanState === "listening" ? (
+                        <Mic size={38} className="animate-pulse text-red-500" />
+                      ) : (
+                        <Mic size={38} />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Animated Waveform Bars */}
+                {voiceScanState === "listening" && (
+                  <div className="voice-waveform-bars">
+                    {[0.6, 1.2, 0.8, 1.5, 0.9, 1.3, 0.7, 1.4, 1.0, 0.5].map((factor, idx) => (
+                      <span
+                        key={idx}
+                        className="waveform-bar"
+                        style={{
+                          height: `${Math.max(6, Math.min(42, 8 + voiceAudioLevel * 60 * factor))}px`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <div className="voice-scan-guidance">
+                  <h4>
+                    {voiceScanState === "processing"
+                      ? "Analyzing Voice Biometrics..."
+                      : voiceScanState === "listening"
+                      ? `Listening... Speak now (${voiceCountdown}s remaining)`
+                      : "Voice Biometric Authentication"}
+                  </h4>
+                  <p>
+                    {voiceScanState === "processing"
+                      ? "Verifying speaker acoustic features with biometric security..."
+                      : voiceScanState === "listening"
+                      ? "Say your passphrase or speak normally into your microphone."
+                      : "Click the microphone button and speak for 2-3 seconds to verify your identity."}
+                  </p>
+
+                  {voiceScanState === "listening" && (
+                    <button
+                      type="button"
+                      onClick={handleStopAndVerify}
+                      className="btn-stop-verify"
+                    >
+                      Verify Voice Now &rarr;
+                    </button>
+                  )}
+                </div>
+
+                {/* Optional Username Filter (1-to-1 Verification) */}
+                {voiceScanState === "idle" && (
+                  <div className="voice-optional-user">
+                    <label htmlFor="voiceUsername" className="voice-user-label">
+                      Username <span className="optional-tag">(Optional)</span>
+                    </label>
+                    <input
+                      id="voiceUsername"
+                      type="text"
+                      value={voiceUsername}
+                      onChange={(e) => setVoiceUsername(e.target.value)}
+                      placeholder="e.g. admin or employee ID"
+                      className="voice-username-input"
+                    />
+                    <span className="voice-user-hint">
+                      Leave blank for zero-touch automatic speaker identification.
+                    </span>
+                  </div>
+                )}
+
+                <div className="voice-quick-switch-link">
                   <button type="button" onClick={handleSwitchToCredentials}>
                     Sign in with username &amp; password instead &rarr;
                   </button>

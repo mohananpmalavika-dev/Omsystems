@@ -2547,6 +2547,17 @@ export async function buildApp(options?: {
   });
   await registerAuthRoutes(app, (extendedStore ?? store) as any);
   await registerEnterpriseAuthRoutes(app, (extendedStore ?? store) as any);
+  if ((store as any).pool) {
+    try {
+      const { registerVoiceAuthenticationRoutes } = await import("./routes/voice-authentication.routes.js");
+      const { registerVoiceEnrollmentRoutes } = await import("./routes/voice-enrollment.routes.js");
+      await registerVoiceAuthenticationRoutes(app, (store as any).pool, (extendedStore ?? store) as any);
+      await registerVoiceEnrollmentRoutes(app, (store as any).pool);
+      app.log.info("Voice authentication and enrollment routes registered");
+    } catch (err: any) {
+      app.log.warn({ err }, "Could not register voice biometric routes");
+    }
+  }
   if (extendedStore) {
     await registerDeviceManagementRoutes(app, extendedStore);
     await registerOrganizationRoutes(app, extendedStore);

@@ -78,6 +78,7 @@ function redirectToLogin() {
 function isPublicAuthEndpoint(endpoint: string): boolean {
   return endpoint.includes('/auth/login') ||
     endpoint.includes('/auth/face-login') ||
+    endpoint.includes('/auth/voice-login') ||
     endpoint.includes('/auth/refresh') ||
     endpoint.includes('/auth/forgot-password') ||
     endpoint.includes('/auth/request-password-reset') ||
@@ -372,6 +373,52 @@ export const authApi = {
     }>('/v1/auth/face-login', {
       method: 'POST',
       body: JSON.stringify({ faceScan, tenantSlug }),
+    });
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.clear();
+      sessionStorage.setItem('sentinel_browser_session', 'active');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      localStorage.removeItem('sentinel_login_time');
+      loginRedirectInProgress = false;
+      if (response.accessToken) {
+        sessionStorage.setItem('accessToken', response.accessToken);
+      }
+      if (response.refreshToken) {
+        sessionStorage.setItem('refreshToken', response.refreshToken);
+      }
+      if (response.user) {
+        sessionStorage.setItem('user', JSON.stringify(response.user));
+        sessionStorage.setItem('sentinel_login_time', Date.now().toString());
+      }
+    }
+
+    return response;
+  },
+
+  voiceLogin: async (data: {
+    audioData: string;
+    audioFormat?: 'wav' | 'webm' | 'mp3' | 'pcm_f32le' | 'pcm_s16le';
+    authMethod?: 'speaker_identification' | 'speaker_verification' | 'voice_passphrase' | 'voice_mfa';
+    tenantSlug?: string;
+    username?: string;
+    passphrase?: string;
+  }) => {
+    const response = await fetchApi<{
+      accessToken?: string;
+      refreshToken?: string;
+      expiresIn: number;
+      user: any;
+      voiceAuth?: any;
+    }>('/v1/auth/voice-login', {
+      method: 'POST',
+      body: JSON.stringify({
+        authMethod: data.authMethod || 'speaker_identification',
+        audioFormat: data.audioFormat || 'wav',
+        ...data,
+      }),
     });
 
     if (typeof window !== 'undefined') {
