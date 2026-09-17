@@ -22,6 +22,8 @@ import {
   Lock,
   MapPin,
   Maximize2,
+  Megaphone,
+  Mic,
   Pause,
   Play,
   Radio,
@@ -347,6 +349,12 @@ function ControlRoomContent() {
   const [policeDispatchNotified, setPoliceDispatchNotified] = useState(true);
   const [disarmCode, setDisarmCode] = useState("");
   const [lockdownLog, setLockdownLog] = useState<string[]>([]);
+
+  // Two-Way Audio Deterrence States
+  const [audioDeterrenceOpen, setAudioDeterrenceOpen] = useState(false);
+  const [audioTargetCamera, setAudioTargetCamera] = useState("CAM-01 Entrance IP Horn");
+  const [pttActive, setPttActive] = useState(false);
+  const [voiceStrobePlaying, setVoiceStrobePlaying] = useState<string | null>(null);
   
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
@@ -799,6 +807,16 @@ function ControlRoomContent() {
           >
             <Siren size={14} className={lockdownState === "triggered" ? "pulse-siren" : ""} />
             <span>{lockdownState === "triggered" ? "LOCKDOWN ACTIVE" : "Panic / Lockdown"}</span>
+          </button>
+          <button
+            type="button"
+            className="lockdown-btn"
+            style={{ borderColor: "rgba(14, 165, 233, 0.4)", color: "#38bdf8", background: voiceStrobePlaying || pttActive ? "rgba(14, 165, 233, 0.25)" : "rgba(14, 165, 233, 0.1)" }}
+            onClick={() => setAudioDeterrenceOpen(true)}
+            title="Two-Way Audio Deterrence & Auto-Voice Prompts"
+          >
+            <Megaphone size={14} className={voiceStrobePlaying || pttActive ? "pulse-siren" : ""} />
+            <span>{voiceStrobePlaying ? "BROADCASTING" : pttActive ? "MIC LIVE" : "2-Way Audio"}</span>
           </button>
           <button
             type="button"
@@ -1447,6 +1465,155 @@ function ControlRoomContent() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TWO-WAY AUDIO DETERRENCE & LIVE VOICE STROBE MODAL */}
+      {audioDeterrenceOpen && (
+        <div className="lockdown-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="lockdown-modal-card" style={{ borderColor: "#0ea5e9", boxShadow: "0 25px 50px -12px rgba(14, 165, 233, 0.35)" }}>
+            <div className="lockdown-modal-header" style={{ background: "rgba(14, 165, 233, 0.1)", borderColor: "rgba(14, 165, 233, 0.3)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Megaphone size={20} style={{ color: "#38bdf8" }} />
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 800, color: "#fff" }}>
+                    Two-Way Audio Deterrence &amp; Live Voice Strobe
+                  </h2>
+                  <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>
+                    Broadcast automated voice prompts or speak live to branch IP horn speakers
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAudioDeterrenceOpen(false);
+                  setVoiceStrobePlaying(null);
+                  setPttActive(false);
+                }}
+                style={{ background: "transparent", border: 0, color: "#94a3b8", cursor: "pointer" }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="lockdown-body" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {/* Target Speaker */}
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: "6px" }}>
+                  Target Camera / IP Horn:
+                </label>
+                <select
+                  value={audioTargetCamera}
+                  onChange={(e) => setAudioTargetCamera(e.target.value)}
+                  className="branch-select"
+                >
+                  <option value="CAM-01 Entrance IP Horn">CAM-01 Branch Main Entrance IP Horn (Exterior 30W)</option>
+                  <option value="CAM-03 Cash Counter Speaker">CAM-03 Teller Counter Two-Way Speaker (Interior)</option>
+                  <option value="CAM-04 Strong Room Intercom">CAM-04 Gold Vault Lobby Intercom (High-Security Zone)</option>
+                  <option value="ALL Branch IP Speakers">ALL Branch IP Horns (Simultaneous Broadcast)</option>
+                </select>
+              </div>
+
+              {/* Pre-recorded Voice Strobe Prompts */}
+              <div>
+                <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: "6px" }}>
+                  Automated Voice Strobe Warnings (1-Click Broadcast):
+                </label>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoiceStrobePlaying("HELMET_MASK");
+                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                    }}
+                    style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "HELMET_MASK" ? "rgba(14, 165, 233, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>
+                        🎭 Helmet &amp; Face Mask Removal Warning (Bilingual)
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        &quot;Please remove helmet/mask before approaching counter&quot; (English + മലയാളം)
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: voiceStrobePlaying === "HELMET_MASK" ? "#0ea5e9" : "#1e293b", color: "#fff" }}>
+                      {voiceStrobePlaying === "HELMET_MASK" ? "PLAYING..." : "BROADCAST"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoiceStrobePlaying("PERIMETER_BREACH");
+                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                    }}
+                    style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "PERIMETER_BREACH" ? "rgba(245, 158, 11, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>
+                        ⚠️ Restricted Vault Perimeter Breach Deterrence
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        &quot;Warning: You have entered a restricted zone. Security personnel are alerted.&quot;
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: voiceStrobePlaying === "PERIMETER_BREACH" ? "#f59e0b" : "#1e293b", color: "#fff" }}>
+                      {voiceStrobePlaying === "PERIMETER_BREACH" ? "PLAYING..." : "BROADCAST"}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoiceStrobePlaying("POLICE_ALERT");
+                      setTimeout(() => setVoiceStrobePlaying(null), 5000);
+                    }}
+                    style={{ padding: "10px", borderRadius: "8px", background: voiceStrobePlaying === "POLICE_ALERT" ? "rgba(239, 68, 68, 0.25)" : "#0f172a", border: "1px solid #1e293b", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "12px", fontWeight: 700, color: "#fff" }}>
+                        🚔 Police &amp; Armed QRT Mobilization Announcement
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>
+                        &quot;Law enforcement has been notified. Armed response team is en route.&quot;
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", background: voiceStrobePlaying === "POLICE_ALERT" ? "#ef4444" : "#1e293b", color: "#fff" }}>
+                      {voiceStrobePlaying === "POLICE_ALERT" ? "PLAYING..." : "BROADCAST"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Push-to-Talk (PTT) Live Mic */}
+              <div style={{ padding: "14px", borderRadius: "10px", background: "#020617", border: "1px solid #1e293b", textAlign: "center" }}>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", marginBottom: "8px" }}>
+                  Live Operator Push-To-Talk (PTT) Transmission
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={() => setPttActive(true)}
+                  onMouseUp={() => setPttActive(false)}
+                  onTouchStart={() => setPttActive(true)}
+                  onTouchEnd={() => setPttActive(false)}
+                  style={{
+                    width: "100%", padding: "12px", borderRadius: "8px",
+                    background: pttActive ? "#ef4444" : "#0284c7", color: "#fff",
+                    fontWeight: 800, fontSize: "13px", border: 0, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                    transition: "all .15s ease"
+                  }}
+                >
+                  <Mic size={16} className={pttActive ? "animate-pulse" : ""} />
+                  <span>{pttActive ? "TRANSMITTING LIVE (RELEASE TO STOP)" : "HOLD TO TALK TO BRANCH HORN"}</span>
+                </button>
+                <div style={{ marginTop: "6px", fontSize: "10px", color: "#64748b" }}>
+                  {pttActive ? "Microphone active • Live PCM 16kHz audio streaming to edge horn" : "Press and hold button to broadcast your microphone to the branch horn"}
+                </div>
+              </div>
             </div>
           </div>
         </div>

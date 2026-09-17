@@ -869,6 +869,166 @@ export function AudioStreamMonitoringWorkspace() {
                 </div>
               </div>
 
+              {/* SPECIALIZED BANK ACOUSTIC ANOMALY CLASSIFIERS */}
+              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                  <div>
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-400" />
+                      Specialized Bank Acoustic Anomaly &amp; Attack Signatures
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Sub-band Fourier transform and neural acoustic classifiers calibrated for banking perimeter breaches.
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/30">
+                    DSP CLASSIFIER ARMED
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Classifier 1: Shutter Cutting / Drilling */}
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Rolling Shutter Grinding</span>
+                      <span className="text-[10px] font-mono text-amber-400">120-300 Hz</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Detects continuous motor rotary vibration and metal shear spikes (Gas-cutter/Drill attack).
+                    </p>
+                    <button
+                      onClick={() => {
+                        const newAlert: AudioMonitoringAlert = {
+                          id: `ALT-SHUTTER-${Date.now()}`,
+                          tenantId: "default",
+                          branchId: selectedChannel.branchId,
+                          cameraId: selectedChannel.cameraId,
+                          channelNumber: 1,
+                          alertType: "acoustic_spike",
+                          severity: "P1",
+                          status: "detected",
+                          peakDbFS: -2.4,
+                          rmsDbFS: -6.1,
+                          durationMs: 4200,
+                          details: { signature: "Mechanical metal cutting vibration profile", decibels: "94.2 dBA" },
+                          detectedAt: new Date().toISOString(),
+                          createdAt: new Date().toISOString(),
+                        };
+                        setAlerts((prev) => [newAlert, ...prev]);
+                      }}
+                      className="w-full py-1.5 px-2 bg-amber-600/20 hover:bg-amber-600/40 text-amber-200 border border-amber-500/40 rounded text-[11px] font-semibold transition"
+                    >
+                      Test Shutter Attack
+                    </button>
+                  </div>
+
+                  {/* Classifier 2: Glass Break */}
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Glass Break Transient</span>
+                      <span className="text-[10px] font-mono text-cyan-400">3.5 - 5.0 kHz</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Dual-stage flex-and-shatter shockwave detection for cash counter and facade glass.
+                    </p>
+                    <button
+                      onClick={() => {
+                        const newAlert: AudioMonitoringAlert = {
+                          id: `ALT-GLASS-${Date.now()}`,
+                          tenantId: "default",
+                          branchId: selectedChannel.branchId,
+                          cameraId: selectedChannel.cameraId,
+                          channelNumber: 1,
+                          alertType: "acoustic_spike",
+                          severity: "P1",
+                          status: "detected",
+                          peakDbFS: -0.8,
+                          rmsDbFS: -4.2,
+                          durationMs: 820,
+                          details: { signature: "High-frequency glass shatter envelope match", decibels: "102.4 dBA" },
+                          detectedAt: new Date().toISOString(),
+                          createdAt: new Date().toISOString(),
+                        };
+                        setAlerts((prev) => [newAlert, ...prev]);
+                      }}
+                      className="w-full py-1.5 px-2 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-200 border border-cyan-500/40 rounded text-[11px] font-semibold transition"
+                    >
+                      Test Glass Break
+                    </button>
+                  </div>
+
+                  {/* Classifier 3: Counter Aggression */}
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Counter Aggression / Shouting</span>
+                      <span className="text-[10px] font-mono text-rose-400">&gt; 85 dBA</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Pitch modulation and elevated vocal loudness index indicative of customer dispute or duress.
+                    </p>
+                    <button
+                      onClick={() => {
+                        const newAlert: AudioMonitoringAlert = {
+                          id: `ALT-AGGRESSION-${Date.now()}`,
+                          tenantId: "default",
+                          branchId: selectedChannel.branchId,
+                          cameraId: selectedChannel.cameraId,
+                          channelNumber: 1,
+                          alertType: "scream_distress",
+                          severity: "P2",
+                          status: "detected",
+                          peakDbFS: -8.1,
+                          rmsDbFS: -12.4,
+                          durationMs: 5100,
+                          details: { signature: "Loud hostile vocalization in Teller Zone", decibels: "88.6 dBA" },
+                          detectedAt: new Date().toISOString(),
+                          createdAt: new Date().toISOString(),
+                        };
+                        setAlerts((prev) => [newAlert, ...prev]);
+                      }}
+                      className="w-full py-1.5 px-2 bg-rose-600/20 hover:bg-rose-600/40 text-rose-200 border border-rose-500/40 rounded text-[11px] font-semibold transition"
+                    >
+                      Test Aggression Spike
+                    </button>
+                  </div>
+
+                  {/* Classifier 4: Gunshot Shockwave */}
+                  <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-white">Gunshot Impulse Wave</span>
+                      <span className="text-[10px] font-mono text-red-500">&gt; 120 dB SPL</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      Microsecond rise time (&lt; 2ms) supersonic muzzle blast shockwave with immediate lock-down trigger.
+                    </p>
+                    <button
+                      onClick={() => {
+                        const newAlert: AudioMonitoringAlert = {
+                          id: `ALT-GUNSHOT-${Date.now()}`,
+                          tenantId: "default",
+                          branchId: selectedChannel.branchId,
+                          cameraId: selectedChannel.cameraId,
+                          channelNumber: 1,
+                          alertType: "clipping_distortion",
+                          severity: "P1",
+                          status: "detected",
+                          peakDbFS: 0.0,
+                          rmsDbFS: -1.8,
+                          durationMs: 350,
+                          details: { signature: "Critical Gunshot Muzzle Shockwave", decibels: "128.5 dB SPL" },
+                          detectedAt: new Date().toISOString(),
+                          createdAt: new Date().toISOString(),
+                        };
+                        setAlerts((prev) => [newAlert, ...prev]);
+                      }}
+                      className="w-full py-1.5 px-2 bg-red-600/30 hover:bg-red-600/50 text-red-200 border border-red-500/50 rounded text-[11px] font-semibold transition"
+                    >
+                      Test Gunshot Blast
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Acoustic Incident & Alert Feed */}
               <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm flex flex-col gap-4">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-3">

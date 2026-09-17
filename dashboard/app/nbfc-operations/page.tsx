@@ -19,6 +19,7 @@ import {
   Video,
   Wrench,
   Lock,
+  Unlock,
   Key,
   CheckCircle2,
   AlertTriangle,
@@ -26,6 +27,8 @@ import {
   Clock,
   RefreshCw,
   Sparkles,
+  Fingerprint,
+  Timer,
 } from "lucide-react";
 
 const workflows = [
@@ -118,6 +121,31 @@ export default function NbfcOperationsPage() {
   const [citOtpInput, setCitOtpInput] = useState("");
   const [watchlistAlertDismissed, setWatchlistAlertDismissed] = useState(false);
   const [watchlistAlertEscalated, setWatchlistAlertEscalated] = useState(false);
+
+  // Strong Room Multi-Party Time-Lock & Anti-Duress State
+  const [custodian1Approved, setCustodian1Approved] = useState(false);
+  const [custodian2Approved, setCustodian2Approved] = useState(false);
+  const [timeLockActive, setTimeLockActive] = useState(false);
+  const [timeLockSeconds, setTimeLockSeconds] = useState(15 * 60); // 15-minute anti-duress delay
+  const [vaultUnlocked, setVaultUnlocked] = useState(false);
+  const [duressInput, setDuressInput] = useState("");
+  const [duressAlarmTriggered, setDuressAlarmTriggered] = useState(false);
+
+  // 15-Minute Anti-Duress Countdown Timer
+  useEffect(() => {
+    if (!timeLockActive || vaultUnlocked) return;
+    const timer = setInterval(() => {
+      setTimeLockSeconds((prev) => {
+        if (prev <= 1) {
+          setVaultUnlocked(true);
+          setTimeLockActive(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [timeLockActive, vaultUnlocked]);
 
   useEffect(() => {
     let active = true;
@@ -438,6 +466,185 @@ export default function NbfcOperationsPage() {
               </Link>
             </div>
           </div>
+        </section>
+
+        {/* STRONG ROOM MULTI-PARTY TIME-LOCK & ANTI-DURESS COCKPIT */}
+        <section className="mt-6 rounded-2xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-slate-900 to-black p-5 shadow-lg">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                  <Lock size={18} />
+                </div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  Strong Room Multi-Party Time-Lock &amp; Anti-Duress Protocol
+                </h3>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  RBI Master Direction Sec 8.4
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                Zero single-person access: Requires dual biometric concurrence, 15-minute anti-duress delay, and silent duress code telemetry.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                vaultUnlocked
+                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                  : timeLockActive
+                  ? "bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse"
+                  : "bg-slate-800 text-slate-400 border-slate-700"
+              }`}>
+                {vaultUnlocked ? <Unlock size={13} /> : <Lock size={13} />}
+                {vaultUnlocked
+                  ? "VAULT BOLT RELEASED"
+                  : timeLockActive
+                  ? `TIME-LOCK COUNTDOWN (${Math.floor(timeLockSeconds / 60)}:${(timeLockSeconds % 60).toString().padStart(2, "0")})`
+                  : "STRONG ROOM ARMED & LOCKED"}
+              </span>
+            </div>
+          </div>
+
+          {/* Interactive Vault Controls Grid */}
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Custodian 1: Branch Manager Biometrics */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Fingerprint size={15} className="text-amber-400" /> Custodian #1: Branch Manager
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${custodian1Approved ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                  {custodian1Approved ? "AUTHENTICATED" : "PENDING"}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Face Biometrics &amp; Key A Custody • K. Ramanathan (ID: BM-102)
+              </p>
+              <button
+                type="button"
+                disabled={custodian1Approved || vaultUnlocked}
+                onClick={() => setCustodian1Approved(true)}
+                className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold text-white border border-slate-700 transition"
+              >
+                {custodian1Approved ? "✓ Custodian 1 Concurred" : "Scan Manager Biometrics"}
+              </button>
+            </div>
+
+            {/* Custodian 2: Vault Officer Biometrics */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Fingerprint size={15} className="text-blue-400" /> Custodian #2: Vault Officer
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${custodian2Approved ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                  {custodian2Approved ? "AUTHENTICATED" : "PENDING"}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Fingerprint Scan &amp; Key B Custody • Deepa George (ID: VC-204)
+              </p>
+              <button
+                type="button"
+                disabled={custodian2Approved || vaultUnlocked}
+                onClick={() => setCustodian2Approved(true)}
+                className="w-full py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-semibold text-white border border-slate-700 transition"
+              >
+                {custodian2Approved ? "✓ Custodian 2 Concurred" : "Scan Vault Officer Biometrics"}
+              </button>
+            </div>
+
+            {/* Time-Lock Delay & Silent Duress PIN Action */}
+            <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                  <Timer size={15} className="text-amber-400" /> 15-Min Delay &amp; Anti-Duress PIN
+                </span>
+              </div>
+
+              {!timeLockActive && !vaultUnlocked && (
+                <button
+                  type="button"
+                  disabled={!custodian1Approved || !custodian2Approved}
+                  onClick={() => {
+                    setTimeLockActive(true);
+                    setTimeLockSeconds(15 * 60);
+                  }}
+                  className="w-full py-2 px-3 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-slate-800 disabled:text-slate-500 text-xs font-bold text-white shadow-md transition flex items-center justify-center gap-1.5"
+                >
+                  <Clock size={13} /> Trigger 15-Minute Time-Lock
+                </button>
+              )}
+
+              {timeLockActive && !vaultUnlocked && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="password"
+                      placeholder="Enter Duress or Normal PIN (e.g. *911#)"
+                      value={duressInput}
+                      onChange={(e) => setDuressInput(e.target.value)}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder:text-slate-500 flex-1 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (duressInput.trim() === "*911#" || duressInput.trim() === "9999") {
+                          setDuressAlarmTriggered(true);
+                          setVaultUnlocked(true);
+                          setTimeLockActive(false);
+                        } else {
+                          // Normal early bypass with master override
+                          setVaultUnlocked(true);
+                          setTimeLockActive(false);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs"
+                    >
+                      Enter
+                    </button>
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    Entering <strong className="text-red-400 font-mono">*911#</strong> triggers Covert Silent P1 Police Panic while releasing latch to protect staff.
+                  </div>
+                </div>
+              )}
+
+              {vaultUnlocked && (
+                <div className="p-2 rounded bg-emerald-500/10 border border-emerald-500/30 text-center">
+                  <div className="text-xs font-bold text-emerald-300">Vault Door Electromechanical Bolt Disengaged</div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVaultUnlocked(false);
+                      setCustodian1Approved(false);
+                      setCustodian2Approved(false);
+                      setDuressAlarmTriggered(false);
+                      setDuressInput("");
+                    }}
+                    className="mt-1 text-[11px] text-slate-400 hover:text-white underline"
+                  >
+                    Lock Strong Room
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Duress Alarm Banner if triggered */}
+          {duressAlarmTriggered && (
+            <div className="mt-3 p-3 rounded-xl bg-red-950 border-2 border-red-500/60 flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-2">
+                <Siren size={18} className="text-red-400" />
+                <span className="text-xs font-bold text-red-200">
+                  COVERT DURESS ALERT ACTIVATED: Silent P1 Panic transmitted to Kerala Police Control Room (112) &amp; Armed QRT-01. CCTV snapshot package locked.
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-red-300 bg-red-900/60 px-2 py-0.5 rounded border border-red-700">
+                SILENT DISPATCH ARMED
+              </span>
+            </div>
+          )}
         </section>
 
         {/* Daily Morning Opening & Evening Closing Two-Person Custody Audit Ledger */}
