@@ -2569,24 +2569,6 @@ export function DeviceManager() {
                 )}
               </div>
 
-              {/* Multi-Branch 400 Branches Enterprise Callout */}
-              <div className="mt-4 p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
-                <Server size={18} className="text-indigo-400 shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1">
-                  <strong className="text-indigo-200">Deploying Across 400 Client Branches?</strong>
-                  <p className="text-slate-300">
-                    Each branch has its own unique 1-line activation command and pre-configured installer package. You can monitor the live discovery status and rollout progress across all 400 branches from the centralized Zero-Touch Provisioning Hub.
-                  </p>
-                  <Link
-                    href="/admin/zero-touch"
-                    className="inline-flex items-center text-indigo-400 hover:text-indigo-300 font-semibold gap-1 pt-1"
-                    onClick={() => setShowGatewayForm(false)}
-                  >
-                    Open Zero-Touch Fleet Hub <ExternalLink size={12} />
-                  </Link>
-                </div>
-              </div>
-
               <div className="modal-actions pt-2 border-t border-slate-800">
                 <button type="button" className="secondary-button" onClick={() => setShowGatewayForm(false)}>
                   Close
