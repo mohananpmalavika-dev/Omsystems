@@ -282,16 +282,26 @@ async function computeBranchMetrics(pool: Pool, tenantId: string, date: string) 
     // Performance metrics
     const performance = await pool.query(
       `SELECT 
-        COALESCE(AVG(response_time_ms), 0) as avg_response_time,
-        COALESCE(AVG(uptime_percent), 99.5) as uptime,
-        COALESCE(MIN(EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400), 999) as last_incident_days
-       FROM (
-         SELECT 100 as response_time_ms, 99.9 as uptime_percent, NOW() - INTERVAL '30 days' as created_at
-       ) dummy`,
-      [branchId]
+        COALESCE((
+          SELECT AVG(EXTRACT(EPOCH FROM (acknowledged_at - detected_at)) * 1000)
+          FROM incidents
+          WHERE tenant_id = $1 AND branch_id = $2
+            AND acknowledged_at IS NOT NULL AND detected_at IS NOT NULL
+        ), 0) AS avg_response_time,
+        COALESCE((
+          SELECT 100.0 * COUNT(*) FILTER (WHERE status <> 'offline') / NULLIF(COUNT(*), 0)
+          FROM cameras
+          WHERE tenant_id = $1 AND branch_id = $2 AND deleted_at IS NULL
+        ), 0) AS uptime,
+        COALESCE((
+          SELECT EXTRACT(EPOCH FROM (NOW() - MAX(detected_at))) / 86400
+          FROM incidents
+          WHERE tenant_id = $1 AND branch_id = $2 AND detected_at IS NOT NULL
+        ), 0) AS last_incident_days`,
+      [tenantId, branchId]
     );
 
-    const perfRow = performance.rows[0] || { avg_response_time: 0, uptime: 99.5, last_incident_days: 999 };
+    const perfRow = performance.rows[0] || { avg_response_time: 0, uptime: 0, last_incident_days: 0 };
 
     metricsData.push({
       branchId,

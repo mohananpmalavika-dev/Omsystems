@@ -30,19 +30,17 @@ Your MIS reporting system has made **excellent progress** with Phase 1 complete.
 ### Issue #1: MIS Unified Report Has No Backend ⚠️ CRITICAL
 
 **File:** `dashboard/app/reports/mis/page.tsx`  
-**Problem:** This 1000+ line report page has NO backend API endpoint
+**Resolution:** The report reads tenant-scoped, authenticated data from the control plane.
 
 ```typescript
-// Current code tries to fetch from:
-const res = await fetch(`/api/reports/mis?${params.toString()}`);
-// This endpoint DOES NOT EXIST!
+const res = await fetch(`/api/control/v1/reports/mis?${params.toString()}`);
+// Proxied to the authenticated control-plane endpoint: GET /v1/reports/mis
 ```
 
 **Impact:**
-- Page loads but shows no data
-- All charts and tables remain empty
-- Multi-dimensional grouping doesn't work
-- Filters have no effect
+- No local demo branch directory or generated metric values are used.
+- Filters are evaluated against the authenticated tenant's persisted data.
+- Unmeasured metrics are returned as `null` and displayed as unavailable.
 
 **Scope:** The page implements:
 - Organization/Zone/Region/Area/Branch hierarchical filtering
@@ -147,7 +145,7 @@ const exportReport = async (format: 'pdf' | 'excel') => {
 
 **Required API Endpoint:**
 ```typescript
-GET /api/reports/mis
+GET /v1/reports/mis
 Query Parameters:
   - timeRange: today|7d|30d|90d
   - groupBy: organization|zone|region|area|branch|date|time
@@ -1232,4 +1230,3 @@ import { Tooltip } from '@/components/ui/tooltip';
 - 🔴 **CRITICAL** (This Week): Routes, Indexes, MIS Backend
 - 🟡 **HIGH** (Next 2 Weeks): Export, UX Improvements
 - 🟢 **MEDIUM** (Next Month): Analytics, Mobile, Docs
-

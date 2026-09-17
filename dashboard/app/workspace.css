@@ -175,8 +175,10 @@ button:disabled { cursor: not-allowed; }
 }
 @media (max-width: 680px) {
   .app-shell .topbar { padding: 12px; gap: 8px; }
-  .app-shell .topbar-title { font-size: 15px; max-width: 46vw; }
+  .app-shell .topbar-title { font-size: 15px; max-width: 38vw; }
   .topbar-actions .theme-switcher-trigger, .topbar-actions .create-menu, .topbar-actions .top-avatar { display: none; }
+  .app-shell .topbar-actions .topbar-icon,
+  .app-shell .topbar-actions .notification { display: inline-flex; }
   .app-shell .page-hero, .app-shell .module-hero { padding: 20px 16px; }
   .app-shell .page-hero-copy { gap: 12px; }
   .app-shell .page-hero-actions, .app-shell .module-hero-actions { flex-wrap: wrap; justify-content: flex-start; }

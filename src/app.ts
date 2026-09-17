@@ -2699,7 +2699,10 @@ export async function buildApp(options?: {
         createComplianceScorecardRoutes(instance, pool);
         createMISUnifiedRoutes(instance, pool);
         createHistoricalTrendsRoutes(instance, pool);
-      }, { prefix: '/api/control/v1/reports' });
+      // The dashboard control-plane BFF proxies /api/control/v1/* to /v1/*
+      // upstream. Keeping this route on /v1 makes the authenticated MIS API
+      // reachable in every deployment topology.
+      }, { prefix: '/v1/reports' });
       
       app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');
     } catch (err: unknown) {

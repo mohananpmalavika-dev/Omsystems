@@ -18,6 +18,11 @@ import type { Pool } from 'pg';
 // REQUEST VALIDATION SCHEMAS
 // ============================================================================
 
+const reportFilter = z.preprocess(
+  (value) => value === 'all' || value === '' ? undefined : value,
+  z.string().trim().min(1).max(160).optional(),
+);
+
 const misReportQuerySchema = z.object({
   // Time filtering
   timeRange: z.enum(['today', '7d', '30d', '90d', 'custom']).default('30d'),
@@ -25,11 +30,11 @@ const misReportQuerySchema = z.object({
   endDate: z.string().optional(),   // ISO date string
   
   // Hierarchical filtering
-  organization: z.string().optional(),
-  zone: z.string().optional(),
-  region: z.string().optional(),
-  area: z.string().optional(),
-  branchId: z.string().optional(),
+  organization: reportFilter,
+  zone: reportFilter,
+  region: reportFilter,
+  area: reportFilter,
+  branchId: reportFilter,
   
   // Grouping dimension
   groupBy: z.enum([
@@ -55,6 +60,16 @@ const misReportQuerySchema = z.object({
     'sla',
     'compliance'
   ]).default('all'),
+}).superRefine((query, context) => {
+  if (query.timeRange !== 'custom') return;
+  if (!query.startDate || !query.endDate ||
+      !Number.isFinite(Date.parse(query.startDate)) || !Number.isFinite(Date.parse(query.endDate))) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'custom reports require valid startDate and endDate' });
+    return;
+  }
+  if (Date.parse(query.startDate) > Date.parse(query.endDate)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['endDate'], message: 'endDate must not precede startDate' });
+  }
 });
 
 type MISReportQuery = z.infer<typeof misReportQuerySchema>;
@@ -134,6 +149,12 @@ function buildHierarchicalFilter(query: MISReportQuery): { whereClause: string; 
   }
   
   return { whereClause: conditions.join(' AND '), params };
+}
+
+function metricNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) return Number(value);
+  return null;
 }
 
 // ============================================================================
@@ -252,8 +273,23 @@ async function generateMISReport(
         ) AS total_alerts,
         COUNT(DISTINCT i.id) FILTER (
           WHERE i.detected_at BETWEEN $1 AND $2 
-            AND i.severity IN ('critical', 'high')
+            AND i.severity = 'P1'
+            AND COALESCE(i.status, 'new') NOT IN ('resolved', 'closed', 'false_alarm')
         ) AS p1_threats,
+
+        -- P1 acknowledgement SLA: real incidents acknowledged within five minutes.
+        -- NULL means there were no P1 incidents in the period, not an assumed pass.
+        ROUND(
+          100.0 * COUNT(DISTINCT i.id) FILTER (
+            WHERE i.detected_at BETWEEN $1 AND $2
+              AND i.severity = 'P1'
+              AND i.acknowledged_at IS NOT NULL
+              AND i.acknowledged_at <= i.detected_at + interval '5 minutes'
+          ) / NULLIF(COUNT(DISTINCT i.id) FILTER (
+            WHERE i.detected_at BETWEEN $1 AND $2 AND i.severity = 'P1'
+          ), 0),
+          2
+        ) AS sla_percent,
         
         -- Maintenance metrics
         COUNT(DISTINCT m.id) FILTER (
@@ -278,8 +314,36 @@ async function generateMISReport(
       WHERE c.tenant_id = $3
         AND c.branch_id = ANY($4::text[])
       GROUP BY c.branch_id
+    ),
+    footfall_metrics AS (
+      SELECT
+        c.branch_id,
+        COUNT(*) AS measurement_count,
+        SUM(
+          CASE
+            WHEN jsonb_typeof(e.metadata->'totalCrossings') = 'number'
+              THEN GREATEST(0, (e.metadata->>'totalCrossings')::numeric)
+            WHEN jsonb_typeof(e.metadata->'crossings') = 'number'
+              THEN GREATEST(0, (e.metadata->>'crossings')::numeric)
+            WHEN jsonb_typeof(e.metadata->'entries') = 'number'
+              THEN GREATEST(0, (e.metadata->>'entries')::numeric)
+                 + CASE WHEN jsonb_typeof(e.metadata->'exits') = 'number'
+                   THEN GREATEST(0, (e.metadata->>'exits')::numeric) ELSE 0 END
+            WHEN e.detection_type = 'footfall' THEN 1
+            ELSE 0
+          END
+        ) AS footfall
+      FROM analytics_events e
+      JOIN cameras c ON c.id = e.camera_id AND c.tenant_id = $3
+      WHERE e.tenant_id = $3
+        AND c.branch_id = ANY($4::text[])
+        AND e.occurred_at BETWEEN $1 AND $2
+        AND e.detection_type IN ('line-crossing', 'footfall', 'customer-counting', 'person-counting')
+      GROUP BY c.branch_id
     )
-    SELECT * FROM branch_metrics
+    SELECT branch_metrics.*, footfall_metrics.measurement_count, footfall_metrics.footfall
+    FROM branch_metrics
+    LEFT JOIN footfall_metrics ON footfall_metrics.branch_id = branch_metrics.branch_id
   `;
   
   const metricsResult = await pool.query(metricsQuery, [
@@ -330,21 +394,8 @@ async function generateMISReport(
   // STEP 4: Aggregate by Requested Dimension
   // =========================================================================
   
-  const matrix = await aggregateByDimension(
-    query.groupBy,
-    filteredBranches,
-    metricsByBranch,
-    attendanceByBranch
-  );
-  
   // =========================================================================
-  // STEP 5: Generate Summary
-  // =========================================================================
-  
-  const summary = calculateSummary(matrix);
-  
-  // =========================================================================
-  // STEP 6: Generate Date-wise and Time-wise Breakdowns
+  // STEP 5: Generate Date-wise and Time-wise Breakdowns
   // =========================================================================
   
   const dateWiseBreakdown = await getDateWiseBreakdown(
@@ -362,6 +413,19 @@ async function generateMISReport(
     startDate,
     endDate
   );
+
+  const matrix = query.groupBy === 'date'
+    ? dateWiseBreakdown
+    : query.groupBy === 'time'
+      ? timeWiseBreakdown
+      : await aggregateByDimension(query.groupBy, filteredBranches, metricsByBranch, attendanceByBranch);
+
+  // =========================================================================
+  // STEP 6: Generate Summary from branch-level measurements, never time buckets.
+  // =========================================================================
+  const summary = calculateSummary(await aggregateByDimension(
+    'branch', filteredBranches, metricsByBranch, attendanceByBranch,
+  ));
   
   // =========================================================================
   // STEP 7: Get All Branches (for compliance grid)
@@ -373,10 +437,10 @@ async function generateMISReport(
     
     return {
       name: branch.branch_name,
-      uptime: metrics.uptime_percent || 0,
-      attendancePercent: attendance.attendance_percent || 0,
-      slaPercent: 95, // Placeholder - calculate from actual SLA data
-      retentionDays: metrics.avg_retention_days || 0,
+      uptime: metricNumber(metrics.uptime_percent) ?? 0,
+      attendancePercent: metricNumber(attendance.attendance_percent),
+      slaPercent: metricNumber(metrics.sla_percent),
+      retentionDays: metricNumber(metrics.avg_retention_days),
     };
   });
   
@@ -434,37 +498,51 @@ async function aggregateByDimension(
     let p1Threats = 0;
     let maintenanceCount = 0;
     let totalRetentionDays = 0;
+    let retentionMeasurements = 0;
     let totalAttendance = 0;
-    let branchCount = groupBranches.length;
+    let attendanceMeasurements = 0;
+    let totalSla = 0;
+    let slaMeasurements = 0;
+    let totalFootfall = 0;
+    let footfallMeasurements = 0;
+    const branchCount = groupBranches.length;
     
     groupBranches.forEach((branch: any) => {
       const metrics = metricsByBranch.get(branch.branch_id) || {};
       const attendance = attendanceByBranch.get(branch.branch_id) || {};
       
-      totalCameras += metrics.total_cameras || 0;
-      onlineCameras += metrics.online_cameras || 0;
-      totalAlerts += metrics.total_alerts || 0;
-      p1Threats += metrics.p1_threats || 0;
-      maintenanceCount += metrics.maintenance_count || 0;
-      totalRetentionDays += metrics.avg_retention_days || 0;
-      totalAttendance += attendance.attendance_percent || 0;
+      totalCameras += metricNumber(metrics.total_cameras) ?? 0;
+      onlineCameras += metricNumber(metrics.online_cameras) ?? 0;
+      totalAlerts += metricNumber(metrics.total_alerts) ?? 0;
+      p1Threats += metricNumber(metrics.p1_threats) ?? 0;
+      maintenanceCount += metricNumber(metrics.maintenance_count) ?? 0;
+      const retentionDays = metricNumber(metrics.avg_retention_days);
+      const attendancePercent = metricNumber(attendance.attendance_percent);
+      const slaPercent = metricNumber(metrics.sla_percent);
+      const footfall = metricNumber(metrics.footfall);
+      if (retentionDays !== null) { totalRetentionDays += retentionDays; retentionMeasurements += 1; }
+      if (attendancePercent !== null) { totalAttendance += attendancePercent; attendanceMeasurements += 1; }
+      if (slaPercent !== null) { totalSla += slaPercent; slaMeasurements += 1; }
+      if (footfall !== null) { totalFootfall += footfall; footfallMeasurements += 1; }
     });
     
     const uptimePercent = totalCameras > 0 
       ? Math.round((onlineCameras / totalCameras) * 100) 
       : 0;
     
-    const avgRetentionDays = branchCount > 0
-      ? Math.round(totalRetentionDays / branchCount)
-      : 0;
+    const avgRetentionDays = retentionMeasurements > 0
+      ? Math.round(totalRetentionDays / retentionMeasurements)
+      : null;
     
-    const avgAttendance = branchCount > 0
-      ? Math.round(totalAttendance / branchCount)
-      : 0;
+    const avgAttendance = attendanceMeasurements > 0
+      ? Math.round(totalAttendance / attendanceMeasurements)
+      : null;
+    const avgSla = slaMeasurements > 0 ? Math.round(totalSla / slaMeasurements) : null;
     
     // Compliance status logic
     let complianceStatus = 'Compliant';
-    if (avgRetentionDays < 90) complianceStatus = 'Non-Compliant';
+    if (avgRetentionDays === null) complianceStatus = 'Not Measured';
+    else if (avgRetentionDays < 90) complianceStatus = 'Non-Compliant';
     else if (avgRetentionDays < 120) complianceStatus = 'Warning';
     
     matrix.push({
@@ -475,10 +553,10 @@ async function aggregateByDimension(
       uptimePercent,
       p1Threats,
       totalAlerts,
-      footfall: 0, // Placeholder - would need footfall table
-      avgWaitMin: 0, // Placeholder - would need queue analysis
+      footfall: footfallMeasurements > 0 ? totalFootfall : null,
+      avgWaitMin: null,
       attendancePercent: avgAttendance,
-      slaPercent: 95, // Placeholder - calculate from actual SLA
+      slaPercent: avgSla,
       retentionDays: avgRetentionDays,
       complianceStatus,
       
@@ -492,28 +570,26 @@ async function aggregateByDimension(
 }
 
 function calculateSummary(matrix: any[]): any {
+  const average = (key: string): number | null => {
+    const values = matrix.map((row) => metricNumber(row[key])).filter((value): value is number => value !== null);
+    return values.length > 0 ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+  };
+  const measuredTotal = (key: string): number | null => {
+    const values = matrix.map((row) => metricNumber(row[key])).filter((value): value is number => value !== null);
+    return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) : null;
+  };
   return {
     totalBranches: matrix.reduce((sum, row) => sum + (row.branchCount || 1), 0),
     onlineCameras: matrix.reduce((sum, row) => sum + row.onlineCameras, 0),
     totalCameras: matrix.reduce((sum, row) => sum + row.totalCameras, 0),
-    avgUptime: matrix.length > 0
-      ? Math.round(matrix.reduce((sum, row) => sum + row.uptimePercent, 0) / matrix.length)
-      : 0,
+    avgUptime: average('uptimePercent') ?? 0,
     totalP1Threats: matrix.reduce((sum, row) => sum + row.p1Threats, 0),
     totalAlerts: matrix.reduce((sum, row) => sum + row.totalAlerts, 0),
-    totalFootfall: matrix.reduce((sum, row) => sum + row.footfall, 0),
-    avgWaitMin: matrix.length > 0
-      ? Math.round(matrix.reduce((sum, row) => sum + row.avgWaitMin, 0) / matrix.length)
-      : 0,
-    avgAttendance: matrix.length > 0
-      ? Math.round(matrix.reduce((sum, row) => sum + row.attendancePercent, 0) / matrix.length)
-      : 0,
-    avgSla: matrix.length > 0
-      ? Math.round(matrix.reduce((sum, row) => sum + row.slaPercent, 0) / matrix.length)
-      : 0,
-    avgRetentionDays: matrix.length > 0
-      ? Math.round(matrix.reduce((sum, row) => sum + row.retentionDays, 0) / matrix.length)
-      : 0,
+    totalFootfall: measuredTotal('footfall'),
+    avgWaitMin: null,
+    avgAttendance: average('attendancePercent'),
+    avgSla: average('slaPercent'),
+    avgRetentionDays: average('retentionDays'),
   };
 }
 
@@ -525,11 +601,11 @@ function createEmptySummary(): any {
     avgUptime: 0,
     totalP1Threats: 0,
     totalAlerts: 0,
-    totalFootfall: 0,
-    avgWaitMin: 0,
-    avgAttendance: 0,
-    avgSla: 0,
-    avgRetentionDays: 0,
+    totalFootfall: null,
+    avgWaitMin: null,
+    avgAttendance: null,
+    avgSla: null,
+    avgRetentionDays: null,
   };
 }
 
@@ -545,18 +621,50 @@ async function getDateWiseBreakdown(
   endDate: Date
 ): Promise<any[]> {
   const query = `
-    SELECT 
-      DATE(detected_at) AS dimension,
-      COUNT(*) AS alerts,
-      COUNT(*) FILTER (WHERE severity IN ('critical', 'high')) AS p1_threats,
-      0 AS footfall
-    FROM incidents
-    WHERE tenant_id = $1
-      AND branch_id = ANY($2::text[])
-      AND detected_at BETWEEN $3 AND $4
-      AND deleted_at IS NULL
-    GROUP BY DATE(detected_at)
-    ORDER BY DATE(detected_at)
+    WITH incidents_by_day AS (
+      SELECT
+        DATE(detected_at) AS dimension,
+        COUNT(*) AS alerts,
+        COUNT(*) FILTER (WHERE severity = 'P1') AS p1_threats
+      FROM incidents
+      WHERE tenant_id = $1
+        AND branch_id = ANY($2::text[])
+        AND detected_at BETWEEN $3 AND $4
+        AND deleted_at IS NULL
+      GROUP BY DATE(detected_at)
+    ), footfall_by_day AS (
+      SELECT
+        DATE(e.occurred_at) AS dimension,
+        SUM(
+          CASE
+            WHEN jsonb_typeof(e.metadata->'totalCrossings') = 'number'
+              THEN GREATEST(0, (e.metadata->>'totalCrossings')::numeric)
+            WHEN jsonb_typeof(e.metadata->'crossings') = 'number'
+              THEN GREATEST(0, (e.metadata->>'crossings')::numeric)
+            WHEN jsonb_typeof(e.metadata->'entries') = 'number'
+              THEN GREATEST(0, (e.metadata->>'entries')::numeric)
+                 + CASE WHEN jsonb_typeof(e.metadata->'exits') = 'number'
+                   THEN GREATEST(0, (e.metadata->>'exits')::numeric) ELSE 0 END
+            WHEN e.detection_type = 'footfall' THEN 1
+            ELSE 0
+          END
+        ) AS footfall
+      FROM analytics_events e
+      JOIN cameras c ON c.id = e.camera_id AND c.tenant_id = $1
+      WHERE e.tenant_id = $1
+        AND c.branch_id = ANY($2::text[])
+        AND e.occurred_at BETWEEN $3 AND $4
+        AND e.detection_type IN ('line-crossing', 'footfall', 'customer-counting', 'person-counting')
+      GROUP BY DATE(e.occurred_at)
+    )
+    SELECT
+      COALESCE(i.dimension, f.dimension) AS dimension,
+      COALESCE(i.alerts, 0) AS alerts,
+      COALESCE(i.p1_threats, 0) AS p1_threats,
+      f.footfall
+    FROM incidents_by_day i
+    FULL OUTER JOIN footfall_by_day f ON f.dimension = i.dimension
+    ORDER BY dimension
   `;
   
   const result = await pool.query(query, [
@@ -569,7 +677,7 @@ async function getDateWiseBreakdown(
   return result.rows.map((row: any) => ({
     dimension: row.dimension.toISOString().slice(0, 10),
     alerts: row.alerts,
-    footfall: row.footfall,
+    footfall: metricNumber(row.footfall),
   }));
 }
 
@@ -657,7 +765,7 @@ async function getFilterOptions(
 
 export function createMISUnifiedRoutes(instance: FastifyInstance, pool: Pool) {
   /**
-   * GET /api/control/v1/reports/mis
+   * GET /v1/reports/mis
    * 
    * Generate MIS Unified Report with multi-dimensional analysis
    */

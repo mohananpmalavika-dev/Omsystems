@@ -231,45 +231,47 @@ async function calculateSecurityPostureScore(
     const prevTotal = parseInt(prevIncidents.rows[0]?.count || '0', 10);
     const incidentTrendScore = prevTotal > 0 
       ? Math.max(0, 100 - ((currentTotal - prevTotal) / prevTotal * 100))
-      : 100;
+      : null;
 
     // Camera availability
     const cameras = await pool.query(
-      'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status = $1) as active FROM cameras WHERE tenant_id = $2',
-      ['active', tenantId]
+      "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE status <> 'offline') as active FROM cameras WHERE tenant_id = $1",
+      [tenantId]
     );
     const cameraAvailability = cameras.rows[0]?.total > 0
       ? (parseInt(cameras.rows[0].active, 10) / parseInt(cameras.rows[0].total, 10)) * 100
-      : 0;
+      : null;
 
     // Response time (incidents acknowledged within SLA)
     const responseMetrics = await pool.query(
       `SELECT 
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE 
-          EXTRACT(EPOCH FROM (acknowledged_at - detected_at)) < 300 AND severity = 'critical'
+          EXTRACT(EPOCH FROM (acknowledged_at - detected_at)) < 300 AND severity = 'P1'
         ) as sla_met_p1,
-        COUNT(*) FILTER (WHERE severity = 'critical') as total_p1
+        COUNT(*) FILTER (WHERE severity = 'P1') as total_p1
       FROM incidents 
       WHERE tenant_id = $1 
         AND detected_at >= $2 
-        AND detected_at < $3
-        AND acknowledged_at IS NOT NULL`,
+        AND detected_at < $3`,
       [tenantId, start, end]
     );
     
     const responseScore = responseMetrics.rows[0]?.total_p1 > 0
       ? (parseInt(responseMetrics.rows[0].sla_met_p1, 10) / parseInt(responseMetrics.rows[0].total_p1, 10)) * 100
-      : 100;
+      : null;
 
-    // Weighted score
-    const score = Math.round(
-      incidentTrendScore * 0.30 +
-      cameraAvailability * 0.15 +
-      responseScore * 0.20 +
-      95 * 0.15 + // Coverage compliance (default 95%)
-      98 * 0.20   // Audit readiness (default 98%)
-    );
+    // Only observed metrics contribute. A missing measurement is not treated
+    // as a passing score and the weights are rebalanced across available data.
+    const measuredComponents = [
+      { value: incidentTrendScore, weight: 0.30 },
+      { value: cameraAvailability, weight: 0.30 },
+      { value: responseScore, weight: 0.40 },
+    ].filter((component): component is { value: number; weight: number } => component.value !== null);
+    const score = measuredComponents.length > 0
+      ? Math.round(measuredComponents.reduce((total, component) => total + component.value * component.weight, 0) /
+          measuredComponents.reduce((total, component) => total + component.weight, 0))
+      : 0;
 
     const change = prevTotal > 0 ? ((currentTotal - prevTotal) / prevTotal * 100) : 0;
 
@@ -279,29 +281,17 @@ async function calculateSecurityPostureScore(
       trend: score > 90 ? 'stable' : score > 80 ? 'warning' : 'critical',
       status: score > 90 ? 'good' : score > 80 ? 'warning' : 'critical',
       components: {
-        incidentTrend: Math.round(incidentTrendScore),
-        cameraAvailability: Math.round(cameraAvailability),
-        responseTime: Math.round(responseScore),
-        coverageCompliance: 95,
-        auditReadiness: 98
+        incidentTrend: incidentTrendScore === null ? null : Math.round(incidentTrendScore),
+        cameraAvailability: cameraAvailability === null ? null : Math.round(cameraAvailability),
+        responseTime: responseScore === null ? null : Math.round(responseScore),
+        coverageCompliance: null,
+        auditReadiness: null,
       }
     };
 
   } catch (error) {
     console.error('[SecurityPosture] Calculation error:', error);
-    return {
-      score: 85,
-      change: 0,
-      trend: 'stable',
-      status: 'warning',
-      components: {
-        incidentTrend: 85,
-        cameraAvailability: 85,
-        responseTime: 85,
-        coverageCompliance: 85,
-        auditReadiness: 85
-      }
-    };
+    throw error;
   }
 }
 

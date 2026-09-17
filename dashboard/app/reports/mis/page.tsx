@@ -71,28 +71,36 @@ export default function MisReportsPage() {
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [data, setData] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchMisData = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
-        timeRange,
-        groupBy,
+      const params = new URLSearchParams({ timeRange, groupBy });
+      for (const [key, value] of Object.entries({
         organization: selectedOrg,
         zone: selectedZone,
         region: selectedRegion,
         area: selectedArea,
         branchId: selectedBranch,
         shift: selectedShift,
-      });
-
-      const res = await fetch(`/api/reports/mis?${params.toString()}`);
-      if (res.ok) {
-        const json = await res.json();
-        setData(json.data);
+      })) {
+        if (value !== "all") params.set(key, value);
       }
+
+      const res = await fetch(`/api/control/v1/reports/mis?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.message || json?.error || "MIS data is currently unavailable.");
+      }
+      setData(json);
+      setError(null);
     } catch (err) {
       console.error("Failed to load MIS data", err);
+      setData(null);
+      setError(err instanceof Error ? err.message : "MIS data is currently unavailable.");
     } finally {
       setLoading(false);
     }
@@ -226,6 +234,12 @@ export default function MisReportsPage() {
           </div>
         </div>
 
+        {error && (
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error} <button onClick={fetchMisData} className="ml-2 font-semibold text-rose-100 underline">Try again</button>
+          </div>
+        )}
+
         {/* Global Multi-Tier Filter Bar (Organization, Zone, Region, Area, Branch, Shift) */}
         <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 flex flex-wrap items-center gap-3 print:hidden">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mr-2">
@@ -349,18 +363,18 @@ export default function MisReportsPage() {
               <div className="absolute top-0 left-0 h-1 w-full bg-amber-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Total Footfall</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-amber-400">{summary.totalFootfall.toLocaleString()}</span>
+                <span className="text-2xl font-bold text-amber-400">{summary.totalFootfall?.toLocaleString?.() ?? "—"}</span>
                 <span className="text-xs text-slate-400">Visitors</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Avg Wait: {summary.avgWaitMin} mins</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">Avg wait: {summary.avgWaitMin ?? "not measured"}</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-sky-500" />
-              <span className="text-xs font-medium text-slate-400 block mb-1">Staff Attendance</span>
+              <span className="text-xs font-medium text-slate-400 block mb-1">Active Staff</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-sky-400">{summary.avgAttendance}%</span>
-                <span className="text-xs text-emerald-400">Face Verified</span>
+                <span className="text-2xl font-bold text-sky-400">{summary.avgAttendance ?? "—"}{summary.avgAttendance === null ? "" : "%"}</span>
+                <span className="text-xs text-slate-400">Session activity</span>
               </div>
               <span className="text-[11px] text-slate-500 mt-1 block">Shift compliance</span>
             </div>
@@ -369,20 +383,20 @@ export default function MisReportsPage() {
               <div className="absolute top-0 left-0 h-1 w-full bg-indigo-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">SLA Compliance</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-indigo-400">{summary.avgSla}%</span>
-                <span className="text-xs text-emerald-400 font-semibold">MTTA 1.8m</span>
+                <span className="text-2xl font-bold text-indigo-400">{summary.avgSla ?? "—"}{summary.avgSla === null ? "" : "%"}</span>
+                <span className="text-xs text-slate-400 font-semibold">P1 acknowledgement</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">Response target met</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">Measured against the configured target</span>
             </div>
 
             <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 left-0 h-1 w-full bg-teal-500" />
               <span className="text-xs font-medium text-slate-400 block mb-1">Retention Compliance</span>
               <div className="flex items-baseline justify-between">
-                <span className="text-2xl font-bold text-teal-400">{summary.avgRetentionDays}d</span>
-                <span className="text-xs text-emerald-400 font-semibold">90d Rule</span>
+                <span className="text-2xl font-bold text-teal-400">{summary.avgRetentionDays ?? "—"}{summary.avgRetentionDays === null ? "" : "d"}</span>
+                <span className="text-xs text-slate-400 font-semibold">Measured policy</span>
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block">100% Statutory passed</span>
+              <span className="text-[11px] text-slate-500 mt-1 block">Based on configured recording jobs</span>
             </div>
           </div>
         )}
@@ -565,19 +579,19 @@ export default function MisReportsPage() {
                           {row.totalAlerts ?? row.alerts ?? 0}
                         </td>
                         <td className="p-3 text-center font-medium">
-                          {(row.footfall ?? 0).toLocaleString()}
+                          {row.footfall == null ? "—" : Number(row.footfall).toLocaleString()}
                         </td>
                         <td className="p-3 text-center text-slate-400">
-                          {row.avgWaitMin ?? "-"}m
+                          {row.avgWaitMin == null ? "—" : `${row.avgWaitMin}m`}
                         </td>
                         <td className="p-3 text-center text-sky-400 font-medium">
-                          {row.attendancePercent ?? "-"}%
+                          {row.attendancePercent == null ? "—" : `${row.attendancePercent}%`}
                         </td>
                         <td className="p-3 text-center text-emerald-400 font-semibold">
-                          {row.slaPercent ?? "-"}%
+                          {row.slaPercent == null ? "—" : `${row.slaPercent}%`}
                         </td>
                         <td className="p-3 text-center text-teal-400 font-medium">
-                          {row.retentionDays ?? "-"}d
+                          {row.retentionDays == null ? "—" : `${row.retentionDays}d`}
                         </td>
                         <td className="p-3 text-center">
                           <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${(row.complianceStatus === "Compliant" || row.status === "Optimal") ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-amber-500/10 text-amber-400 border border-amber-500/20"}`}>

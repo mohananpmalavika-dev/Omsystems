@@ -46,6 +46,7 @@ export function PersonReIdWorkspace({
   const [loading, setLoading] = useState<boolean>(true);
   const [journeyLoading, setJourneyLoading] = useState<boolean>(false);
   const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Probe search state
   const [probeThreshold, setProbeThreshold] = useState<number>(0.72);
@@ -77,8 +78,10 @@ export function PersonReIdWorkspace({
       }
       if (statsRes.success && statsRes.data) setStats(statsRes.data);
       if (topRes.success && topRes.data) setTopology(topRes.data);
+      setError(null);
     } catch (err) {
       console.error("Failed to load Re-ID core data:", err);
+      setError("Live Re-ID telemetry is temporarily unavailable. Check the connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -95,6 +98,7 @@ export function PersonReIdWorkspace({
       }
     } catch (err) {
       console.error("Failed to load journey:", err);
+      setError("The selected journey could not be loaded. Please try again.");
     } finally {
       setJourneyLoading(false);
     }
@@ -134,6 +138,7 @@ export function PersonReIdWorkspace({
       }
     } catch (err) {
       console.error("Probe search failed:", err);
+      setError("Probe search could not be completed. Please try again.");
     } finally {
       setProbeSearching(false);
     }
@@ -142,10 +147,14 @@ export function PersonReIdWorkspace({
   // Add or update topology rule
   const handleSaveTopologyRule = async () => {
     if (!newFromCam.trim() || !newToCam.trim()) return;
+    if (!branchId) {
+      setError("Select a branch before saving a camera topology rule.");
+      return;
+    }
     setSavingRule(true);
     try {
       const res = await reidApi.updateTopology({
-        branchId: branchId || "00000000-0000-0000-0000-000000000001",
+        branchId,
         fromCameraId: newFromCam.trim(),
         toCameraId: newToCam.trim(),
         minTransitSeconds: newMinSec,
@@ -158,16 +167,18 @@ export function PersonReIdWorkspace({
         setTopology((prev) => [...prev.filter((p) => !(p.from_camera_id === newFromCam && p.to_camera_id === newToCam)), res.data]);
         setNewFromCam("");
         setNewToCam("");
+        setError(null);
       }
     } catch (err) {
       console.error("Failed to save topology rule:", err);
+      setError("The topology rule could not be saved. Please review the connection and try again.");
     } finally {
       setSavingRule(false);
     }
   };
 
   return (
-    <div className="space-y-6 text-slate-100">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7">
       {/* Header & Telemetry Stat Cards */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
@@ -211,6 +222,25 @@ export function PersonReIdWorkspace({
         </div>
       </div>
 
+      {error && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              void loadCoreData();
+            }}
+            className="shrink-0 rounded-lg border border-amber-400/40 px-3 py-1.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-400/10"
+          >
+            Retry live data
+          </button>
+        </div>
+      )}
+
       {/* KPI Metric Strip */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 shadow-sm">
@@ -252,17 +282,23 @@ export function PersonReIdWorkspace({
             <ShieldCheck size={16} className="text-emerald-400" />
           </div>
           <div className="mt-2 text-2xl font-bold text-white">
-            {stats ? `${(stats.averageConfidence * 100).toFixed(1)}%` : "88.5%"}
+            {stats ? `${(stats.averageConfidence * 100).toFixed(1)}%` : "—"}
           </div>
-          <div className="mt-1 text-xs text-slate-500">Cosine similarity threshold: 0.72</div>
+          <div className="mt-1 text-xs text-slate-500">Measured from live matching telemetry</div>
         </div>
       </div>
 
       {/* Main Tab Navigation */}
-      <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
+      <div
+        className="flex items-center gap-2 overflow-x-auto border-b border-slate-800 pb-3"
+        role="tablist"
+        aria-label="Re-identification workspace views"
+      >
         <button
           onClick={() => setActiveTab("journey")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+          role="tab"
+          aria-selected={activeTab === "journey"}
+          className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
             activeTab === "journey"
               ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
               : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -273,7 +309,9 @@ export function PersonReIdWorkspace({
         </button>
         <button
           onClick={() => setActiveTab("probe")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+          role="tab"
+          aria-selected={activeTab === "probe"}
+          className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
             activeTab === "probe"
               ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
               : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -284,7 +322,9 @@ export function PersonReIdWorkspace({
         </button>
         <button
           onClick={() => setActiveTab("identities")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+          role="tab"
+          aria-selected={activeTab === "identities"}
+          className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
             activeTab === "identities"
               ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
               : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
@@ -295,7 +335,9 @@ export function PersonReIdWorkspace({
         </button>
         <button
           onClick={() => setActiveTab("topology")}
-          className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
+          role="tab"
+          aria-selected={activeTab === "topology"}
+          className={`shrink-0 flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition ${
             activeTab === "topology"
               ? "bg-cyan-500 text-white shadow-lg shadow-cyan-500/20"
               : "bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white"
