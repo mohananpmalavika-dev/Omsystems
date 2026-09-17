@@ -66,6 +66,7 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  ShoppingBag,
   Siren,
   SlidersHorizontal,
   Snowflake,
@@ -167,6 +168,10 @@ export const navigation: NavGroup[] = [
       { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
       { label: "AI Rules & Automation", href: "/analytics/rules", icon: SlidersHorizontal },
+      { label: "AI Investigation Tools", href: "/analytics/investigation", icon: Route },
+      { label: "AI Prediction Dashboard", href: "/analytics/predictions", icon: TrendingUp },
+      { label: "Retail Analytics", href: "/analytics/retail", icon: ShoppingBag },
+      { label: "BFSI Security Analytics", href: "/analytics/banking", icon: Landmark },
     ],
   },
   {
@@ -392,6 +397,8 @@ function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<strin
 
 export const quickActions: NavItem[] = [
   { label: "AI Alerts Graphical Visualizer", href: "/analytics/alerts", icon: BarChart3 },
+  { label: "AI Prediction Dashboard", href: "/analytics/predictions", icon: TrendingUp },
+  { label: "AI Investigation Tools", href: "/analytics/investigation", icon: Route },
   { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
   { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
   { label: "Role vs Menu Permissions", href: "/admin/organization?tab=roles", icon: Shield },
