@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
+import { VoiceEnrollmentCard } from "@/components/voice/voice-enrollment-card";
 import { authApi } from "@/lib/api-client";
 import { logout, logoutAllSessions } from "@/lib/auth-manager";
 import { useUserAlertPreferences } from "@/services/user-alert-preferences";
@@ -851,6 +852,9 @@ export default function AccountSecurityPage() {
             </form>
           </div>
         </section>
+
+        {/* Voice ID Biometrics Enrollment Card */}
+        <VoiceEnrollmentCard />
 
         {/* Alert & Notification Preferences Card */}
         <section

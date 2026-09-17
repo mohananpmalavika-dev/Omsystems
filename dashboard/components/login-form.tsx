@@ -1502,6 +1502,9 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
                     Sign in with username &amp; password instead &rarr;
                   </button>
                 </div>
+                <p className="text-center text-[11px] text-slate-400 dark:text-slate-500 mt-2">
+                  Haven&apos;t enrolled your Voice ID yet? Sign in with your credentials and enroll under <strong>Account &amp; Security Settings</strong>.
+                </p>
               </div>
             )}
           </div>

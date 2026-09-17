@@ -38,6 +38,32 @@ const revokeProfileSchema = z.object({
   reason: z.string().optional(),
 });
 
+function getDefaultSettings(tenantId: string) {
+  return {
+    tenantId,
+    enabled: true,
+    requireLivenessCheck: false,
+    requireAntiSpoofing: false,
+    allowVoiceOnlyLogin: true,
+    requireMfa: false,
+    similarityThreshold: 0.70,
+    livenessThreshold: 0.75,
+    qualityThreshold: 0.50,
+    minimumEnrollmentSamples: 3,
+    maximumEnrollmentSamples: 5,
+    enrollmentExpiryDays: 365,
+    maxFailedAttempts: 5,
+    lockoutDurationMinutes: 15,
+    sessionTimeoutMinutes: 60,
+    embeddingModelName: "ecapa-tdnn-512",
+    embeddingDimension: 512,
+    retainAudioSamples: false,
+    requireConsent: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
 export async function registerVoiceEnrollmentRoutes(
   app: FastifyInstance,
   pool: Pool
@@ -48,7 +74,7 @@ export async function registerVoiceEnrollmentRoutes(
    * POST /v1/voice/enrollment/start
    * Start voice enrollment process for current user
    */
-  app.post("/v1/voice/enrollment/start", async (request, reply) => {
+  const handleStart = async (request: any, reply: any) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -74,8 +100,8 @@ export async function registerVoiceEnrollmentRoutes(
         });
       }
 
-      // Get tenant settings
-      const settings = await repository.getSettings(user.tenantId);
+      // Get tenant settings with default fallback
+      const settings = (await repository.getSettings(user.tenantId)) || getDefaultSettings(user.tenantId);
       if (!settings?.enabled) {
         return reply.code(403).send({
           error: "feature_disabled",
@@ -156,13 +182,13 @@ export async function registerVoiceEnrollmentRoutes(
         message: error.message || "Failed to start voice enrollment",
       });
     }
-  });
+  };
 
   /**
    * POST /v1/voice/enrollment/sample
    * Submit a voice sample for enrollment
    */
-  app.post("/v1/voice/enrollment/sample", async (request, reply) => {
+  const handleSample = async (request: any, reply: any) => {
     const startTime = Date.now();
 
     try {
@@ -199,8 +225,8 @@ export async function registerVoiceEnrollmentRoutes(
         });
       }
 
-      // Get tenant settings
-      const settings = await repository.getSettings(user.tenantId);
+      // Get tenant settings with fallback
+      const settings = (await repository.getSettings(user.tenantId)) || getDefaultSettings(user.tenantId);
       if (!settings?.enabled) {
         return reply.code(403).send({
           error: "feature_disabled",
@@ -264,7 +290,7 @@ export async function registerVoiceEnrollmentRoutes(
         audioDurationSeconds: body.durationSeconds,
         sampleRateHz: body.sampleRateHz,
         audioFormat: body.audioFormat,
-        audioBlobUri: undefined, // TODO: Upload to blob storage if configured
+        audioBlobUri: undefined,
         audioBlobSizeBytes: audioBuffer.length,
         audioHash,
         snrDb: audioFeatures.snr,
@@ -275,7 +301,7 @@ export async function registerVoiceEnrollmentRoutes(
         embeddingConfidence,
         qualityPassed: qualityCheck.passed,
         qualityScore: qualityCheck.score,
-        qualityFailureReasons: qualityCheck.issues.map(i => i.message),
+        qualityFailureReasons: qualityCheck.issues.map((i: any) => i.message),
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"],
       });
@@ -314,7 +340,7 @@ export async function registerVoiceEnrollmentRoutes(
         sampleSequence: sample.sampleSequence,
         qualityPassed: qualityCheck.passed,
         qualityScore: qualityCheck.score,
-        qualityIssues: qualityCheck.issues.map(i => i.message),
+        qualityIssues: qualityCheck.issues.map((i: any) => i.message),
         snrDb: audioFeatures.snr,
         samplesCompleted,
         samplesRequired,
@@ -333,13 +359,13 @@ export async function registerVoiceEnrollmentRoutes(
         message: error.message || "Failed to process voice sample",
       });
     }
-  });
+  };
 
   /**
    * POST /v1/voice/enrollment/complete
    * Complete voice enrollment by aggregating samples into final profile
    */
-  app.post("/v1/voice/enrollment/complete", async (request, reply) => {
+  const handleComplete = async (request: any, reply: any) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -421,9 +447,13 @@ export async function registerVoiceEnrollmentRoutes(
 
       // Normalize final embedding
       const voiceService = await getVoiceProcessingService();
-      const normalizedEmbedding = voiceService.isReady()
+      const normalize = (v: number[]) => {
+        const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+        return norm > 0 ? v.map((x) => x / norm) : v;
+      };
+      const normalizedEmbedding = typeof (voiceService as any).normalizeVector === "function"
         ? (voiceService as any).normalizeVector(aggregatedEmbedding)
-        : aggregatedEmbedding;
+        : normalize(aggregatedEmbedding);
 
       // Calculate enrollment quality score (0-1)
       const qualityScore = Math.min(1.0, (averageSnr / 30.0) * averageConfidence);
@@ -471,13 +501,13 @@ export async function registerVoiceEnrollmentRoutes(
         message: error.message || "Failed to complete voice enrollment",
       });
     }
-  });
+  };
 
   /**
    * GET /v1/voice/enrollment/status
    * Get current user's voice enrollment status
    */
-  app.get("/v1/voice/enrollment/status", async (request, reply) => {
+  const handleStatus = async (request: any, reply: any) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -529,13 +559,13 @@ export async function registerVoiceEnrollmentRoutes(
         message: "Failed to retrieve enrollment status",
       });
     }
-  });
+  };
 
   /**
    * DELETE /v1/voice/enrollment/profile
    * Revoke current user's voice profile
    */
-  app.delete("/v1/voice/enrollment/profile", async (request, reply) => {
+  const handleRevoke = async (request: any, reply: any) => {
     try {
       const user = request.currentUser;
       if (!user) {
@@ -586,5 +616,15 @@ export async function registerVoiceEnrollmentRoutes(
         message: "Failed to revoke voice profile",
       });
     }
-  });
+  };
+
+  // Register routes for both standard and proxy-prefixed endpoints
+  const routePrefixes = ["/v1/voice/enrollment", "/api/control/v1/voice/enrollment"];
+  for (const prefix of routePrefixes) {
+    app.post(`${prefix}/start`, handleStart);
+    app.post(`${prefix}/sample`, handleSample);
+    app.post(`${prefix}/complete`, handleComplete);
+    app.get(`${prefix}/status`, handleStatus);
+    app.delete(`${prefix}/profile`, handleRevoke);
+  }
 }

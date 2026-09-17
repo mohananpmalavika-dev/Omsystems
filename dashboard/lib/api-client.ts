@@ -550,6 +550,95 @@ export const authApi = {
   },
 };
 
+export type VoiceProfileStatus = {
+  enrolled: boolean;
+  profile?: {
+    id: string;
+    enrollmentStatus: string;
+    samplesCount: number;
+    minimumSamplesRequired: number;
+    enrollmentQualityScore?: number;
+    enrollmentCompletedAt?: string;
+    expiresAt?: string;
+    lastUsedAt?: string;
+    successfulAuthCount?: number;
+    failedAuthCount?: number;
+  };
+  isActive?: boolean;
+  needsReEnrollment?: boolean;
+  message?: string;
+};
+
+export const voiceEnrollmentApi = {
+  getStatus: () => fetchApi<VoiceProfileStatus>('/v1/voice/enrollment/status'),
+
+  startEnrollment: (data?: { consentGiven?: boolean; passphraseRequired?: boolean; passphrase?: string }) =>
+    fetchApi<{
+      success: boolean;
+      voiceProfileId: string;
+      minimumSamplesRequired: number;
+      maximumSamplesAllowed: number;
+      message: string;
+    }>('/v1/voice/enrollment/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        consentGiven: data?.consentGiven ?? true,
+        passphraseRequired: data?.passphraseRequired ?? false,
+        passphrase: data?.passphrase,
+      }),
+    }),
+
+  submitSample: (data: {
+    voiceProfileId: string;
+    audioData: string;
+    audioFormat?: 'wav' | 'webm' | 'mp3';
+    sampleRateHz?: number;
+    durationSeconds: number;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      sampleId: string;
+      sampleSequence: number;
+      qualityPassed: boolean;
+      qualityScore: number;
+      qualityIssues?: string[];
+      snrDb?: number;
+      samplesCompleted: number;
+      samplesRequired: number;
+      enrollmentComplete: boolean;
+      message: string;
+    }>('/v1/voice/enrollment/sample', {
+      method: 'POST',
+      body: JSON.stringify({
+        voiceProfileId: data.voiceProfileId,
+        audioData: data.audioData,
+        audioFormat: data.audioFormat || 'wav',
+        sampleRateHz: data.sampleRateHz || 16000,
+        durationSeconds: data.durationSeconds,
+      }),
+    }),
+
+  completeEnrollment: (voiceProfileId: string) =>
+    fetchApi<{
+      success: boolean;
+      voiceProfileId: string;
+      enrollmentQualityScore?: number;
+      message: string;
+    }>('/v1/voice/enrollment/complete', {
+      method: 'POST',
+      body: JSON.stringify({ voiceProfileId }),
+    }),
+
+  revokeProfile: (reason?: string) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+    }>('/v1/voice/enrollment/profile', {
+      method: 'DELETE',
+      body: JSON.stringify({ reason: reason || 'User requested revocation' }),
+    }),
+};
+
 export type OrganizationTreeResponse = {
   data: any[];
   meta: {
