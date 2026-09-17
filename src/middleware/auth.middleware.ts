@@ -103,8 +103,10 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     request: FastifyRequest,
     reply: FastifyReply,
   ) {
-    // Skip authentication for routes marked with noAuth
-    if ((request.routeOptions.config as any)?.noAuth) {
+    const isOptionalAuth = Boolean((request.routeOptions.config as any)?.optionalAuth);
+
+    // Skip authentication for routes marked with noAuth (unless optionalAuth is enabled)
+    if ((request.routeOptions.config as any)?.noAuth && !isOptionalAuth) {
       return;
     }
 
@@ -115,19 +117,12 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     // Development & Dashboard proxy mode: use x-user-id or x-development-user-id header
     const userId = (request.headers["x-user-id"] || request.headers["x-development-user-id"]) as string | undefined;
-    if (developmentMode && typeof userId === "string" && userId) {
+    if ((developmentMode || isOptionalAuth) && typeof userId === "string" && userId) {
       const user = await store.getUser(userId);
-      if (!user || user.status !== "active") {
-        return reply.code(401).send({ error: "invalid_identity" });
+      if (user && user.status === "active") {
+        request.currentUser = sanitizeCurrentUser(user);
+        return;
       }
-      request.currentUser = sanitizeCurrentUser(user);
-      if (requiresPasswordChangeOnly(request, user)) {
-        return reply.code(403).send({
-          error: "password_change_required",
-          message: "Change your password before continuing.",
-        });
-      }
-      return;
     }
 
     // Extract bearer token from Authorization header, x-sentinel-session, or session cookies
@@ -152,6 +147,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     }
 
     if (!token) {
+      if (isOptionalAuth) return;
       return reply.code(401).send({
         error: "unauthenticated",
         message: "Missing or invalid authorization header or session cookie",
@@ -167,6 +163,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
 
     if (!session) {
       activeInMemorySessions.delete(tokenHash);
+      if (isOptionalAuth) return;
       return reply.code(401).send({
         error: "invalid_token",
         message: "Invalid or expired access token",
@@ -176,6 +173,7 @@ export function createAuthMiddleware(options: AuthMiddlewareOptions) {
     // Check if session has expired
     const expiresAt = new Date(session.accessExpiresAt ?? session.expiresAt).getTime();
     if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+      if (isOptionalAuth) return;
       return reply.code(401).send({
         error: "token_expired",
         message: "Access token has expired. Please refresh your token.",
