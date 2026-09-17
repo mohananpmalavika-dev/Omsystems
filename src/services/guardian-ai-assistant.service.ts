@@ -352,6 +352,7 @@ export interface GuardianMessage {
 export interface GuardianContext {
   userId: string;
   tenantId: string;
+  isGuest?: boolean;
   currentBranchId?: string;
   recentAlerts?: any[];
   recentActivity?: any[];
@@ -457,15 +458,17 @@ export class GuardianAIAssistant {
         max_tokens: 500,
       };
 
-      if (isGroq) {
-        payload.tools = GUARDIAN_FUNCTIONS.map((f) => ({
-          type: "function",
-          function: f,
-        }));
-        payload.tool_choice = "auto";
-      } else {
-        payload.functions = GUARDIAN_FUNCTIONS;
-        payload.function_call = "auto";
+      if (!context.isGuest) {
+        if (isGroq) {
+          payload.tools = GUARDIAN_FUNCTIONS.map((f) => ({
+            type: "function",
+            function: f,
+          }));
+          payload.tool_choice = "auto";
+        } else {
+          payload.functions = GUARDIAN_FUNCTIONS;
+          payload.function_call = "auto";
+        }
       }
 
       // Call AI endpoint
@@ -659,6 +662,15 @@ export class GuardianAIAssistant {
 
     console.log(`[KryptonAI] Tool called: ${functionName}`, functionArgs);
 
+    if (context.isGuest) {
+      return {
+        message: "🔒 **Authentication Required**\n\nTo view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page.",
+        type: "text",
+        suggestions: ["How do I sign in?", "What is KryptonVision?", "Supported CCTV cameras"],
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     history.push({
       role: "assistant",
       content: null,
@@ -771,6 +783,15 @@ export class GuardianAIAssistant {
 
     console.log(`[KryptonAI] Function called: ${functionName}`, functionArgs);
 
+    if (context.isGuest) {
+      return {
+        message: "🔒 **Authentication Required**\n\nTo view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page.",
+        type: "text",
+        suggestions: ["How do I sign in?", "What is KryptonVision?", "Supported CCTV cameras"],
+        timestamp: new Date().toISOString(),
+      };
+    }
+
     history.push({
       role: "assistant",
       content: "",
@@ -862,6 +883,30 @@ export class GuardianAIAssistant {
    * Build system prompt with context
    */
   private buildSystemPrompt(context: GuardianContext): GuardianMessage {
+    if (context.isGuest) {
+      return {
+        role: "system",
+        content: `You are KryptonAI, the intelligent assistant for the KryptonVision (Sentinel Grid) security and video analytics platform.
+
+IMPORTANT CONTEXT:
+The user is currently a GUEST (pre-login mode) and has not authenticated yet.
+
+YOUR RULES FOR GUEST MODE:
+1. GENERAL QUESTIONS (PERMITTED):
+   - You CAN freely answer questions about KryptonVision platform features, architecture, and system capabilities.
+   - You CAN explain AI video analytics (facial recognition, perimeter intrusion, crowd counting, loitering detection, vehicle ANPR).
+   - You CAN explain CCTV camera support: ONVIF (Profile S/G/T), RTSP, and native compatibility with vendors like Hikvision, Dahua, CP Plus, Axis, Uniview, and Hanwha.
+   - You CAN guide users on how to log in (Username/Password or Voice ID), how to reset passwords via OTP, and how to contact the administrator.
+
+2. ORGANIZATION & MODULE DATA (STRICTLY PROHIBITED FOR GUESTS):
+   - You do NOT have access to live camera streams, real-time alerts, incident logs, branch status, vault/banking monitoring, employee attendance, or any organization-specific operational data.
+   - If the user asks for ANY live cameras, video feeds, alerts, incidents, branch data, or module operations, you MUST politely refuse and instruct them to log in:
+     "To view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page."
+
+Personality: Professional, welcoming, concise, and helpful.`,
+      };
+    }
+
     return {
       role: "system",
       content: `You are KryptonAI, an intelligent AI security assistant similar to JARVIS.
@@ -1168,6 +1213,11 @@ When users give commands:
     const lower = message.toLowerCase().trim();
     const timestamp = new Date().toISOString();
 
+    // In pre-login guest mode, handle general questions and prompt login for module/operational data
+    if (context.isGuest) {
+      return this.processGuestFallbackMessage(message, timestamp);
+    }
+
     // 0. Navigation / Open Menu Command
     const navMatch = resolveAppRoute(lower);
     if (navMatch && (lower.includes("open") || lower.includes("go") || lower.includes("show") || lower.includes("menu") || lower.includes("navigate") || lower.includes("poku") || lower.includes("kaanik") || lower.includes("edukk") || lower.includes("view") || lower.includes("wall") || lower.includes("mis") || lower.includes("report") || lower.includes("face") || lower.includes("search") || lower.includes("playback"))) {
@@ -1323,6 +1373,234 @@ When users give commands:
     return {
       message: `KryptonAI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"${tip}`,
       type: "text",
+      timestamp,
+    };
+  }
+
+  /**
+   * Dedicated fallback handler for pre-login / guest interactions
+   */
+  private processGuestFallbackMessage(
+    message: string,
+    timestamp: string
+  ): GuardianResponse {
+    const lower = message.toLowerCase().trim();
+
+    // 1. General greetings
+    if (
+      lower === "hi" ||
+      lower === "hello" ||
+      lower === "hey" ||
+      lower.startsWith("hi ") ||
+      lower.startsWith("hello ") ||
+      lower.startsWith("hey ") ||
+      lower.includes("namaskaram") ||
+      lower.includes("good morning") ||
+      lower.includes("good evening") ||
+      lower.includes("good afternoon") ||
+      lower === "who are you" ||
+      lower === "kryptonai"
+    ) {
+      return {
+        message:
+          "Hello! I am KryptonAI, the intelligent security assistant for KryptonVision (Sentinel Grid).\n\nIn pre-login mode, I can help answer general questions about our surveillance platform, supported CCTV hardware, and AI video analytics.\n\nTo monitor live camera feeds, manage operational alerts, or access system modules, please sign in with your credentials or Voice ID.",
+        type: "text",
+        suggestions: [
+          "What is KryptonVision?",
+          "What AI features are available?",
+          "Which cameras are supported?",
+          "How do I sign in?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 2. Questions about how to sign in / login / reset password / voice login
+    if (
+      lower.includes("how to login") ||
+      lower.includes("how to sign in") ||
+      lower.includes("sign in") ||
+      lower.includes("login") ||
+      lower.includes("log in") ||
+      lower.includes("password") ||
+      lower.includes("otp") ||
+      lower.includes("voice login") ||
+      lower.includes("voice id") ||
+      lower.includes("voice auth") ||
+      lower.includes("credentials") ||
+      lower.includes("forgot")
+    ) {
+      return {
+        message:
+          "**How to Sign In to KryptonVision:**\n\n• **Standard Login:** Enter your Username and Password on the login screen and click **Sign In**.\n• **Voice ID Login:** If your profile has an enrolled voice passphrase, click the **Voice Login** button to authenticate by speaking your phrase.\n• **Forgot Password:** Click **Forgot Password** on the login form to receive a secure OTP for password reset.\n• **New Account:** Contact your organization's security administrator to get your account provisioned.",
+        type: "text",
+        suggestions: [
+          "What is KryptonVision?",
+          "What AI features are available?",
+          "Which cameras are supported?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 3. Supported camera brands / hardware / protocols
+    if (
+      lower.includes("supported camera") ||
+      lower.includes("camera support") ||
+      lower.includes("which camera") ||
+      lower.includes("camera brand") ||
+      lower.includes("vendor") ||
+      lower.includes("hardware") ||
+      lower.includes("rtsp") ||
+      lower.includes("onvif") ||
+      lower.includes("hikvision") ||
+      lower.includes("dahua") ||
+      lower.includes("cp plus") ||
+      lower.includes("axis") ||
+      lower.includes("uniview") ||
+      lower.includes("hanwha")
+    ) {
+      return {
+        message:
+          "**Supported CCTV Cameras & Protocols:**\n\n• **Standard Protocols:** Full support for standard RTSP streaming and ONVIF (Profiles S, G, and T).\n• **Supported Hardware Brands:** Hikvision, Dahua, CP Plus, Uniview, Axis Communications, Hanwha Vision, and any ONVIF-compliant IP cameras / NVRs / DVRs.\n• **Edge Gateways:** Works with local edge appliances (Jetson, Intel x86, Raspberry Pi 4/5) with automated offline video buffering and encrypted sync.",
+        type: "text",
+        suggestions: [
+          "What is KryptonVision?",
+          "What AI features are available?",
+          "How do I sign in?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 4. Platform overview / What is KryptonVision / Sentinel Grid
+    if (
+      lower.includes("what is kryptonvision") ||
+      lower.includes("what is sentinel") ||
+      lower.includes("what is this") ||
+      lower.includes("about kryptonvision") ||
+      lower.includes("about") ||
+      lower.includes("entha ith") ||
+      lower.includes("enthanu") ||
+      lower.includes("overview")
+    ) {
+      return {
+        message:
+          "**KryptonVision** (powered by Sentinel Grid) is an enterprise AI physical security and video surveillance management platform.\n\nKey capabilities include:\n1. **Edge AI Video Analytics:** Real-time facial recognition, intrusion detection, crowd density, and ANPR.\n2. **Multi-Branch Control Center:** Centralized live video walls, PTZ control, and unified alert escalation across all branches.\n3. **Banking & NBFC Compliance:** Vault dual-custody timers, cash counter security monitoring, and automated daily surveillance reports.\n4. **High Availability Edge Architecture:** Offline video recording and automatic synchronization when network resumes.",
+        type: "text",
+        suggestions: [
+          "What AI features are available?",
+          "Which cameras are supported?",
+          "How do I sign in?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 5. Features / AI analytics capabilities
+    if (
+      lower.includes("feature") ||
+      lower.includes("analytic") ||
+      lower.includes("capability") ||
+      lower.includes("face recognition") ||
+      lower.includes("facial") ||
+      lower.includes("anpr") ||
+      lower.includes("license plate") ||
+      lower.includes("intrusion") ||
+      lower.includes("crowd") ||
+      lower.includes("loitering") ||
+      lower.includes("ai") ||
+      lower.includes("enthellam")
+    ) {
+      return {
+        message:
+          "**KryptonVision AI & Security Capabilities:**\n\n• **Facial Recognition:** Instant identification of enrolled employees, VIP visitors, and blacklisted individuals.\n• **Perimeter & Intrusion Detection:** Virtual tripwires, sterile zone breach alarms, and boundary protection.\n• **Vehicle ANPR:** Automatic license plate recognition with allowlist/blocklist alerts.\n• **Crowd & Loitering Analytics:** Overcrowding alerts and suspicious loitering detection.\n• **NBFC/Banking Security:** Automated vault dual-custody monitoring, cash counter supervision, and guard presence audit.\n• **Incident Workflow:** Automated operator dispatches, audit trails, and daily executive MIS graphic reports.",
+        type: "text",
+        suggestions: [
+          "What is KryptonVision?",
+          "Which cameras are supported?",
+          "How do I sign in?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 6. NBFC / Banking explanation (informational)
+    if (
+      lower.includes("what is nbfc") ||
+      lower.includes("banking module") ||
+      lower.includes("vault monitoring")
+    ) {
+      return {
+        message:
+          "The **NBFC & Banking Operations Module** is designed for gold loan branches, banks, and secure commercial facilities. It enforces security compliance:\n• Automated vault opening/closing dual-custody verification\n• Real-time cash counter camera coverage\n• Strong-room security checks and teller area monitoring\n• Automated daily surveillance health MIS reports\n\n*Note: To view live vault cameras, branch audit logs, or branch operational reports, please log in to your account.*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "What is KryptonVision?",
+          "Supported CCTV cameras",
+        ],
+        timestamp,
+      };
+    }
+
+    // 7. Request for module data, operational records, cameras, alerts, reports (Requires Login)
+    const isModuleOrOperationalRequest =
+      lower.includes("camera") ||
+      lower.includes("feed") ||
+      lower.includes("stream") ||
+      lower.includes("video wall") ||
+      lower.includes("live video") ||
+      lower.includes("alert") ||
+      lower.includes("incident") ||
+      lower.includes("branch") ||
+      lower.includes("vault") ||
+      lower.includes("teller") ||
+      lower.includes("cash") ||
+      lower.includes("nbfc") ||
+      lower.includes("attendance") ||
+      lower.includes("employee") ||
+      lower.includes("visitor") ||
+      lower.includes("report") ||
+      lower.includes("mis") ||
+      lower.includes("guard") ||
+      lower.includes("door") ||
+      lower.includes("lock") ||
+      lower.includes("dispatch") ||
+      lower.includes("show me") ||
+      lower.includes("open ") ||
+      lower.includes("poku") ||
+      lower.includes("kaanik") ||
+      lower.includes("edukk") ||
+      lower.includes("navigate") ||
+      lower.includes("dashboard") ||
+      lower.includes("module");
+
+    if (isModuleOrOperationalRequest) {
+      return {
+        message:
+          "🔒 **Authentication Required**\n\nTo view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page.\n\nOnce logged in, you will have secure access to your organization's monitoring modules, active surveillance streams, and analytics reports.",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "What is KryptonVision?",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // 8. General fallback for unauthenticated guest
+    return {
+      message:
+        "I am KryptonAI, your security operations assistant. In pre-login mode, I can answer general questions about KryptonVision platform features, supported camera hardware, and signing in.\n\nTo view organization-specific module data, live camera streams, or incident queues, please sign in with your account credentials or Voice ID.",
+      type: "text",
+      suggestions: [
+        "What is KryptonVision?",
+        "What AI features are available?",
+        "Which cameras are supported?",
+        "How do I sign in?",
+      ],
       timestamp,
     };
   }

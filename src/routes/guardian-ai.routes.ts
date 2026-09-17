@@ -25,24 +25,25 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Send message to KryptonAI assistant
    */
-  app.post("/api/v1/guardian/chat", async (request, reply) => {
+  app.post("/api/v1/guardian/chat", {
+    config: { noAuth: true }
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
-      if (!user) {
-        return reply.code(401).send({ error: "unauthorized", message: "Please sign in to access KryptonAI assistant." });
-      }
+      const isGuest = !user;
 
       const body = messageSchema.parse(request.body);
       
       // Generate session ID if not provided
-      const sessionId = body.sessionId || `guardian-${user.id}-${Date.now()}`;
+      const sessionId = body.sessionId || `guardian-${user ? user.id : "guest"}-${Date.now()}`;
 
       // Build context
       const context = {
-        userId: user.id,
-        tenantId: user.tenantId,
-        currentBranchId: body.context?.currentBranchId,
-        permissions: (user as any).permissions || [],
+        userId: user?.id || "guest",
+        tenantId: user?.tenantId || "public",
+        isGuest,
+        currentBranchId: user ? body.context?.currentBranchId : undefined,
+        permissions: (user as any)?.permissions || [],
       };
 
       // Process message
@@ -59,11 +60,14 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
       };
     } catch (error) {
       app.log.error({ error }, "[KryptonAI] Chat processing encountered an error, returning fallback response");
+      const isGuest = !request.currentUser;
       return {
         success: true,
         sessionId: (request.body as any)?.sessionId || `guardian-${Date.now()}`,
         data: {
-          message: "KryptonAI operational assistant is active. How can I assist you with checking alerts, camera status, or branch health?",
+          message: isGuest
+            ? "I am KryptonAI. In pre-login mode, I can answer general questions about platform capabilities, supported CCTV cameras, and signing in. To view live feeds or branch security data, please log in."
+            : "KryptonAI operational assistant is active. How can I assist you with checking alerts, camera status, or branch health?",
           type: "text",
           timestamp: new Date().toISOString(),
         },
@@ -76,12 +80,12 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
    * 
    * Process voice command using Whisper + KryptonAI
    */
-  app.post("/api/v1/guardian/voice", async (request, reply) => {
+  app.post("/api/v1/guardian/voice", {
+    config: { noAuth: true }
+  }, async (request, reply) => {
     try {
       const user = request.currentUser;
-      if (!user) {
-        return reply.code(401).send({ error: "unauthorized" });
-      }
+      const isGuest = !user;
 
       // Get audio buffer
       const audioBuffer = await request.body as Buffer;
@@ -100,11 +104,12 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
       const transcription = await videoSearch.transcribeVoiceQuery(audioBuffer);
 
       // Process with KryptonAI
-      const sessionId = `krypton-voice-${user.id}-${Date.now()}`;
+      const sessionId = `krypton-voice-${user ? user.id : "guest"}-${Date.now()}`;
       const context = {
-        userId: user.id,
-        tenantId: user.tenantId,
-        permissions: (user as any).permissions || [],
+        userId: user?.id || "guest",
+        tenantId: user?.tenantId || "public",
+        isGuest,
+        permissions: (user as any)?.permissions || [],
       };
 
       const response = await guardianAI.processMessage(
@@ -143,9 +148,10 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         return {
           success: true,
           suggestions: [
-            "Check all cameras across active branches",
-            "Review open operational security alerts",
-            "Show system operational health overview",
+            "What is KryptonVision?",
+            "What security features and analytics are available?",
+            "Which camera hardware and protocols are supported?",
+            "How do I sign in or reset my password?",
           ],
           timestamp: new Date().toISOString(),
         };

@@ -261,7 +261,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "KryptonAI online. How can I assist you with security operations? You can ask me to open any menu or view live cameras.",
+      content: "KryptonAI online. How can I assist you? I can answer questions about KryptonVision security capabilities, supported camera hardware, or guide you with signing in.",
       type: "text",
       timestamp: new Date().toISOString(),
     },
@@ -309,9 +309,9 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
     } catch {}
     // Safe default suggestions
     setSuggestions([
-      "Check all cameras status",
-      "Review open operational alerts",
-      "Show system operational health overview",
+      "What is KryptonVision?",
+      "What security features are available?",
+      "How do I sign in?",
     ]);
   };
 
@@ -345,6 +345,19 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        if (errorData?.message) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: errorData.message,
+              type: "warning",
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          return;
+        }
         throw new Error(`KryptonAI error: ${response.status}`);
       }
 
@@ -372,7 +385,7 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
         ...prev,
         {
           role: "assistant",
-          content: "I apologize, but I encountered an error processing your request. Please try again.",
+          content: "I apologize, but I encountered an error processing your request. Please check your network connection or try again shortly.",
           type: "error",
           timestamp: new Date().toISOString(),
         },

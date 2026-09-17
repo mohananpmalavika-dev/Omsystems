@@ -18,6 +18,12 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     "auth/verify-otp",
     "auth/reset-password",
     "auth/reset-password-otp",
+  ]).has(pathString);
+
+  // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions)
+  const isOptionalAuthPath = new Set([
+    "guardian/chat",
+    "guardian/voice",
     "guardian/suggestions",
   ]).has(pathString);
 
@@ -69,7 +75,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
   } else if (headers.get("authorization")?.toLowerCase().startsWith("basic ")) {
     headers.delete("authorization");
   }
-  if (!employeeSession && !isPublicAuthPath) {
+  if (!employeeSession && !isPublicAuthPath && !isOptionalAuthPath) {
     const devUserId = process.env.DASHBOARD_DEV_USER_ID;
     if (devUserId) {
       headers.set("x-user-id", devUserId);
