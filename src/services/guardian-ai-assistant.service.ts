@@ -49,8 +49,8 @@ const GUARDIAN_FUNCTIONS = [
           description: "Array of camera IDs to display",
         },
         layout: {
-          type: "string",
-          enum: ["single", "grid", "mosaic"],
+          type: ["string", "null"],
+          enum: ["single", "grid", "mosaic", null],
           description: "Display layout for multiple cameras",
         },
       },
@@ -69,7 +69,7 @@ const GUARDIAN_FUNCTIONS = [
           description: "Locations where doors should be locked (e.g., 'floor 3', 'main entrance')",
         },
         reason: {
-          type: "string",
+          type: ["string", "null"],
           description: "Reason for locking doors",
         },
       },
@@ -92,7 +92,7 @@ const GUARDIAN_FUNCTIONS = [
           description: "Priority level of dispatch",
         },
         reason: {
-          type: "string",
+          type: ["string", "null"],
           description: "Reason for dispatch",
         },
       },
@@ -106,13 +106,13 @@ const GUARDIAN_FUNCTIONS = [
       type: "object",
       properties: {
         timeRange: {
-          type: "string",
-          enum: ["1h", "4h", "24h", "7d"],
+          type: ["string", "null"],
+          enum: ["1h", "4h", "24h", "7d", null],
           description: "Time range for alert summary",
         },
         severity: {
-          type: "string",
-          enum: ["low", "medium", "high", "critical"],
+          type: ["string", "null"],
+          enum: ["low", "medium", "high", "critical", null],
           description: "Filter by severity level",
         },
       },
@@ -129,7 +129,7 @@ const GUARDIAN_FUNCTIONS = [
           description: "Description of the person (e.g., 'man in red shirt')",
         },
         timeRange: {
-          type: "string",
+          type: ["string", "null"],
           description: "Time range to search (e.g., 'last 2 hours')",
         },
       },
@@ -143,7 +143,7 @@ const GUARDIAN_FUNCTIONS = [
       type: "object",
       properties: {
         branchIds: {
-          type: "array",
+          type: ["array", "null"],
           items: { type: "string" },
           description: "Specific branch IDs, or empty for all branches",
         },
@@ -166,7 +166,7 @@ const GUARDIAN_FUNCTIONS = [
           description: "Location where alarm should sound",
         },
         message: {
-          type: "string",
+          type: ["string", "null"],
           description: "Custom message for announcement",
         },
       },
@@ -184,7 +184,7 @@ const GUARDIAN_FUNCTIONS = [
           description: "ID of the incident to analyze",
         },
         includeContext: {
-          type: "boolean",
+          type: ["boolean", "null"],
           description: "Include surrounding context (before/after footage)",
         },
       },
@@ -198,12 +198,12 @@ const GUARDIAN_FUNCTIONS = [
       type: "object",
       properties: {
         nearLocation: {
-          type: "string",
+          type: ["string", "null"],
           description: "Find cameras near this location (e.g., 'parking lot', 'entrance')",
         },
         type: {
-          type: "string",
-          enum: ["all", "indoor", "outdoor", "ptz"],
+          type: ["string", "null"],
+          enum: ["all", "indoor", "outdoor", "ptz", null],
           description: "Filter by camera type",
         },
       },
@@ -909,19 +909,19 @@ When users give commands:
 
     const params: any[] = [context.tenantId];
 
-    if (type !== "all") {
-      query += ` AND type = $2`;
+    if (type && type !== "all") {
+      query += ` AND c.status = $${params.length + 1}`;
       params.push(type);
     }
 
     if (nearLocation) {
-      query += ` AND location ILIKE $${params.length + 1}`;
+      query += ` AND (rn.name ILIKE $${params.length + 1} OR rn.path::text ILIKE $${params.length + 1})`;
       params.push(`%${nearLocation}%`);
     }
 
-    query += ` ORDER BY name LIMIT 50`;
+    query += ` ORDER BY rn.name LIMIT 50`;
 
-    const { rows } = await this.pool.query(query, params);
+    const { rows } = await this.pool.query(query, params).catch(() => ({ rows: [] }));
 
     return {
       cameras: rows,
@@ -1042,8 +1042,11 @@ When users give commands:
     }
 
     // 4. Help / default response
+    const tip = this.openAIApiKey
+      ? ""
+      : "\n\n(Tip: Configure the GROQ_API_KEY or OPENAI_API_KEY environment variable to enable full generative conversational dialogue.)";
     return {
-      message: `KryptonAI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"\n\n(Tip: Configure the GROQ_API_KEY or OPENAI_API_KEY environment variable to enable full generative conversational dialogue.)`,
+      message: `KryptonAI operational assistant is online.\n\nQuick commands:\n• "How many alerts are open?"\n• "Show me camera status"\n• "What is the system health?"${tip}`,
       type: "text",
       timestamp,
     };
