@@ -2682,7 +2682,8 @@ export async function buildApp(options?: {
         createFinancialTcoRoutes,
         createBranchBenchmarkingRoutes,
         createComplianceScorecardRoutes,
-        createMISUnifiedRoutes
+        createMISUnifiedRoutes,
+        createHistoricalTrendsRoutes
       } = await import('./routes/reports/index.js');
       
       await app.register(async (instance) => {
@@ -2697,6 +2698,7 @@ export async function buildApp(options?: {
         createBranchBenchmarkingRoutes(instance, pool);
         createComplianceScorecardRoutes(instance, pool);
         createMISUnifiedRoutes(instance, pool);
+        createHistoricalTrendsRoutes(instance, pool);
       }, { prefix: '/api/control/v1/reports' });
       
       app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');

@@ -13,6 +13,9 @@ export { createComplianceScorecardRoutes } from './compliance-scorecard.routes.j
 // MIS Unified Report (Multi-dimensional Analysis)
 export { createMISUnifiedRoutes } from './mis-unified.routes.js';
 
+// Phase 2: Historical Trends & Analytics
+export { createHistoricalTrendsRoutes } from './historical-trends.routes.js';
+
 // AI & Analytics Reports
 export { createAiAnalyticsRoutes } from './ai-analytics.routes.js';
 export { createSocPerformanceRoutes } from './soc-performance.routes.js';
