@@ -113,6 +113,28 @@ export default function IncidentDetailPage() {
   // Report Generation State
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  // Digital Action Taken Report (ATR) & SOP Signoff State
+  const [atrForm, setAtrForm] = useState({
+    guardDispatched: true,
+    vaultSecured: true,
+    videoPreserved: true,
+    authoritiesInformed: false,
+    officerBadge: "SEC-OPS-410",
+    actionSummary: "Physical premises verified and perimeter secured according to RBI Standard Operating Procedure.",
+  });
+  const [atrSigned, setAtrSigned] = useState<null | { timestamp: string; hash: string; officer: string }>(null);
+
+  function handleSignAtr(e: React.FormEvent) {
+    e.preventDefault();
+    const pseudoHash = "SHA256:" + Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("") + "..." + Array.from({ length: 8 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    setAtrSigned({
+      timestamp: new Date().toISOString(),
+      hash: pseudoHash,
+      officer: atrForm.officerBadge,
+    });
+    showToast("success", "Digital SOP Action Taken Report (ATR) signed & tamper-proof sealed.");
+  }
+
   const incidentId = typeof params?.id === "string" ? params.id : "";
 
   async function loadWorkspace() {
@@ -1221,6 +1243,168 @@ export default function IncidentDetailPage() {
                     {generatingReport ? "Generating Report..." : "Auto-Generate Report"}
                   </button>
                 </div>
+              </div>
+
+              {/* Digital SOP Action Taken Report (ATR) Signoff Card */}
+              <div
+                style={{
+                  marginBottom: "24px",
+                  padding: "20px",
+                  borderRadius: "10px",
+                  backgroundColor: "#ffffff",
+                  border: atrSigned ? "1px solid #86efac" : "1px solid #cbd5e1",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "14px" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "16px", fontWeight: 700, color: "#0f172a" }}>
+                        Digital SOP Action Taken Report (ATR)
+                      </span>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          backgroundColor: atrSigned ? "#dcfce7" : "#fef3c7",
+                          color: atrSigned ? "#15803d" : "#b45309",
+                        }}
+                      >
+                        {atrSigned ? "✓ Signed & Sealed" : "Pending Signoff"}
+                      </span>
+                    </div>
+                    <p style={{ margin: "4px 0 0", fontSize: "13px", color: "#64748b" }}>
+                      RBI Mandated Physical & Technical Verification Checklist for Incident Resolution
+                    </p>
+                  </div>
+
+                  {atrSigned && (
+                    <div style={{ textAlign: "right", fontSize: "11px", color: "#166534", fontFamily: "monospace" }}>
+                      <div>Signed by: {atrSigned.officer}</div>
+                      <div>Hash: {atrSigned.hash}</div>
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleSignAtr} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "10px" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={atrForm.guardDispatched}
+                        disabled={!!atrSigned}
+                        onChange={(e) => setAtrForm({ ...atrForm, guardDispatched: e.target.checked })}
+                      />
+                      <span>Physical Security Guard Dispatched & On-Site</span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={atrForm.vaultSecured}
+                        disabled={!!atrSigned}
+                        onChange={(e) => setAtrForm({ ...atrForm, vaultSecured: e.target.checked })}
+                      />
+                      <span>Cash Counters & Vault Perimeter Restored</span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={atrForm.videoPreserved}
+                        disabled={!!atrSigned}
+                        onChange={(e) => setAtrForm({ ...atrForm, videoPreserved: e.target.checked })}
+                      />
+                      <span>Video Evidence Vault Hash Retained (90 Days)</span>
+                    </label>
+
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px", color: "#334155", cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={atrForm.authoritiesInformed}
+                        disabled={!!atrSigned}
+                        onChange={(e) => setAtrForm({ ...atrForm, authoritiesInformed: e.target.checked })}
+                      />
+                      <span>Branch Manager / Emergency Contact Alerted</span>
+                    </label>
+                  </div>
+
+                  <div style={{ marginTop: "8px" }}>
+                    <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
+                      Officer Action Summary / Forensic Notes:
+                    </label>
+                    <textarea
+                      value={atrForm.actionSummary}
+                      disabled={!!atrSigned}
+                      onChange={(e) => setAtrForm({ ...atrForm, actionSummary: e.target.value })}
+                      rows={2}
+                      style={{
+                        width: "100%",
+                        padding: "8px 12px",
+                        borderRadius: "6px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "13px",
+                        backgroundColor: atrSigned ? "#f8fafc" : "#ffffff",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>Officer Badge ID:</span>
+                      <input
+                        type="text"
+                        value={atrForm.officerBadge}
+                        disabled={!!atrSigned}
+                        onChange={(e) => setAtrForm({ ...atrForm, officerBadge: e.target.value })}
+                        style={{
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          border: "1px solid #cbd5e1",
+                          fontSize: "12px",
+                          fontFamily: "monospace",
+                        }}
+                      />
+                    </div>
+
+                    {!atrSigned ? (
+                      <button
+                        type="submit"
+                        style={{
+                          padding: "6px 14px",
+                          backgroundColor: "#16a34a",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "6px",
+                          fontSize: "13px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        Sign & Seal ATR (SHA-256)
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setAtrSigned(null)}
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: "transparent",
+                          color: "#64748b",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "4px",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit Signoff
+                      </button>
+                    )}
+                  </div>
+                </form>
               </div>
 
               {reports.length === 0 ? (

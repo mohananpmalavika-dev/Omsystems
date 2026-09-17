@@ -1089,6 +1089,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <p className="topbar-title">{currentPage.title}</p>
           </div>
           <div className="topbar-actions">
+            {/* Dynamic RBAC Scope Indicator */}
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border border-cyan-500/30 bg-cyan-500/10 text-cyan-300">
+              <Building2 size={13} className="text-cyan-400" />
+              <span>
+                {hasUnrestrictedMenuAccess(operator) || operatorRole.toLowerCase().includes("admin")
+                  ? "Scope: Global (All Branches)"
+                  : "Scope: Assigned Branch (Locked)"}
+              </span>
+            </div>
             <div className="workspace-context-label"><ShieldCheck size={14} /> Security workspace</div>
             <ThemeSwitcher />
             <AlertAudioIndicator />

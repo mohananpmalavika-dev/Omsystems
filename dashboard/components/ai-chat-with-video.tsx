@@ -18,6 +18,8 @@ import {
   Sparkles,
   TrendingUp,
   Filter,
+  AlertTriangle,
+  Siren,
 } from "lucide-react";
 
 interface SearchResult {
@@ -210,11 +212,11 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
   };
 
   const quickSearches = [
-    "Show person entering with red shirt",
+    "Show vault room entries in last 2 hours",
+    "Cash counter loitering over 5 mins",
     "Find white car near ATM",
-    "Show all people after closing time",
-    "Find person carrying black bag",
-    "Show last person in vault corridor",
+    "Watchlist & Defaulter matches",
+    "Show person carrying black bag after hours",
   ];
 
   return (
@@ -510,15 +512,25 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                     )}
 
                   {/* Actions */}
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" size="sm">
-                      <MapPin className="h-4 w-4 mr-2" />
-                      Show on Map
-                    </Button>
-                    <Button variant="outline" className="flex-1" size="sm">
-                      <TrendingUp className="h-4 w-4 mr-2" />
-                      Track Journey
-                    </Button>
+                  <div className="space-y-2 pt-2">
+                    <div className="flex gap-2">
+                      <Button variant="outline" className="flex-1" size="sm">
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Show on Map
+                      </Button>
+                      <Button variant="outline" className="flex-1" size="sm">
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        Track Journey
+                      </Button>
+                    </div>
+
+                    <a
+                      href={`/incidents/create?cameraId=${encodeURIComponent(selectedResult.cameraId)}&timestamp=${encodeURIComponent(selectedResult.timestamp)}&title=${encodeURIComponent(`Forensic Alert: ${selectedResult.object.objectType} on ${selectedResult.cameraName || selectedResult.cameraId}`)}`}
+                      className="inline-flex items-center justify-center rounded-md text-xs font-semibold bg-red-600 hover:bg-red-700 text-white px-3 py-2 transition-colors w-full gap-2 shadow-sm"
+                    >
+                      <AlertTriangle className="h-4 w-4" />
+                      Escalate to Security Incident
+                    </a>
                   </div>
                 </div>
               </div>

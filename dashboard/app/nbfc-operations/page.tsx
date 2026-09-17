@@ -18,6 +18,14 @@ import {
   Users,
   Video,
   Wrench,
+  Lock,
+  Key,
+  CheckCircle2,
+  AlertTriangle,
+  Radio,
+  Clock,
+  RefreshCw,
+  Sparkles,
 } from "lucide-react";
 
 const workflows = [
@@ -132,6 +140,94 @@ export default function NbfcOperationsPage() {
           icon={Landmark}
           actions={<div className="page-hero-status"><Video size={17} /><div><span>Start with the event</span><strong>Verify before you act</strong></div></div>}
         />
+
+        {/* Live Banking Security & Vault Cockpit */}
+        <section className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Locker Room 2-Person Rule */}
+          <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                  <Lock size={15} className="text-amber-400" />
+                  Locker Vault 2-Person Rule
+                </span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Compliant
+                </span>
+              </div>
+              <div className="mt-3">
+                <div className="text-xl font-bold text-white">2 Authorized Staff</div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Dual custodian session active inside Strong Room (CAM-04)
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-500 flex items-center gap-1">
+                <Clock size={12} />
+                Session: 14m 20s
+              </span>
+              <Link href="/analytics/banking" className="text-cyan-400 hover:text-cyan-300 font-medium">
+                Live Vault Stream &rarr;
+              </Link>
+            </div>
+          </div>
+
+          {/* Cash Counter Loitering & Queues */}
+          <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                  <Users size={15} className="text-violet-400" />
+                  Counter Loitering & Queue
+                </span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  Normal
+                </span>
+              </div>
+              <div className="mt-3">
+                <div className="text-xl font-bold text-white">3.4m Avg Dwell</div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Counters 1 & 2 dwell times within 5-min RBI security threshold
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Loitering Flags: 0 Active</span>
+              <Link href="/analytics/banking" className="text-violet-400 hover:text-violet-300 font-medium">
+                Counter Analytics &rarr;
+              </Link>
+            </div>
+          </div>
+
+          {/* Background Jobs Sync */}
+          <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
+                  <Radio size={15} className="text-cyan-400" />
+                  Background Surveillance Jobs
+                </span>
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
+                  Auto-Polling
+                </span>
+              </div>
+              <div className="mt-3">
+                <div className="text-xl font-bold text-white">100% Synced</div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  ANPR Overdue & Watchlist Expiry background cron jobs active
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-500">Interval: 5m / 60m</span>
+              <Link href="/analytics/nbfc-watchlist" className="text-cyan-400 hover:text-cyan-300 font-medium">
+                Manage Watchlists &rarr;
+              </Link>
+            </div>
+          </div>
+        </section>
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5 shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">
