@@ -209,7 +209,126 @@ const GUARDIAN_FUNCTIONS = [
       },
     },
   },
+  {
+    name: "navigate_to_menu",
+    description: "Open, navigate to, or display any menu, module, dashboard, or page in the application (e.g., Live Video Wall, Executive MIS Reports, Incident Response, Camera Health, Face Recognition, NBFC Operations, Settings, etc.)",
+    parameters: {
+      type: "object",
+      properties: {
+        target: {
+          type: "string",
+          description: "Name, label, or path of the target menu/page to open (e.g., 'Live Video Wall', 'Executive MIS Reports', 'Face Recognition', 'Camera Health', '/control-room', '/reports/mis', '/incidents')",
+        },
+      },
+      required: ["target"],
+    },
+  },
 ];
+
+export interface AppRouteItem {
+  label: string;
+  href: string;
+  category: string;
+  keywords: string[];
+}
+
+export const APP_ROUTES: AppRouteItem[] = [
+  // WORKSPACE
+  { label: "NBFC Operations", href: "/nbfc-operations", category: "WORKSPACE", keywords: ["nbfc", "banking", "finance", "loan", "vault operations"] },
+  { label: "My Operations Dashboard", href: "/role-dashboard", category: "WORKSPACE", keywords: ["role", "my operations", "role dashboard"] },
+  { label: "Module Directory", href: "/modules", category: "WORKSPACE", keywords: ["module", "directory", "modules", "app list"] },
+  { label: "Support Center", href: "/support", category: "WORKSPACE", keywords: ["support", "help", "contact"] },
+
+  // OPERATIONS
+  { label: "Command Center", href: "/", category: "OPERATIONS", keywords: ["command center", "home", "main", "overview", "dashboard"] },
+  { label: "Executive Dashboard", href: "/dashboards", category: "OPERATIONS", keywords: ["executive dashboard", "executive overview"] },
+  { label: "Branch Overview", href: "/operations/branches", category: "OPERATIONS", keywords: ["branches", "branch overview", "branch list"] },
+  { label: "Live Video Wall", href: "/control-room", category: "OPERATIONS", keywords: ["video wall", "live video", "control room", "cameras live", "live stream", "video stream"] },
+  { label: "AI Alerts & Incident Hub", href: "/analytics/alerts", category: "OPERATIONS", keywords: ["alerts", "ai alerts", "incident hub", "alert hub", "threats"] },
+  { label: "Alert Queue", href: "/operations/alerts", category: "OPERATIONS", keywords: ["alert queue", "active alerts", "pending alerts"] },
+  { label: "Incident Response", href: "/incidents", category: "OPERATIONS", keywords: ["incidents", "incident response", "dispatch", "emergency"] },
+  { label: "Security Operations", href: "/security-operations", category: "OPERATIONS", keywords: ["security operations", "soc", "sec ops"] },
+  { label: "Video Processing", href: "/operations/media-pipeline", category: "OPERATIONS", keywords: ["video processing", "media pipeline", "transcoding"] },
+  { label: "High Availability", href: "/operations/ha-failover", category: "OPERATIONS", keywords: ["high availability", "ha", "failover", "redundancy"] },
+  { label: "Edge Agent Management", href: "/operations/edge-fleet", category: "OPERATIONS", keywords: ["edge agent", "fleet", "gateways"] },
+  { label: "Infrastructure Operations", href: "/operations/infrastructure", category: "OPERATIONS", keywords: ["infrastructure", "infra", "topology"] },
+  { label: "Fleet Maintenance Command", href: "/operations/maintenance", category: "OPERATIONS", keywords: ["fleet maintenance", "maintenance command"] },
+  { label: "Fleet Observability & SLO", href: "/operations/observability", category: "OPERATIONS", keywords: ["observability", "slo", "metrics"] },
+  { label: "Performance Observability", href: "/performance", category: "OPERATIONS", keywords: ["performance", "latency", "system load"] },
+
+  // DEVICE HEALTH & MAINTENANCE
+  { label: "Camera Health", href: "/operations/cameras", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["camera health", "cameras", "camera status", "camera uptime"] },
+  { label: "Recorder Health", href: "/maintenance/dvr-nvr-monitor", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recorder", "dvr", "nvr", "recorder health"] },
+  { label: "Hardware Compatibility Lab", href: "/maintenance/compatibility", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["compatibility", "hardware"] },
+  { label: "Storage & SATA HDDs", href: "/operations/storage", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["storage", "hdd", "hard disk", "sata", "disk", "smart"] },
+  { label: "Recording Health", href: "/operations/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording health", "recording status"] },
+  { label: "Recover Recording Gaps", href: "/operations/recording/recovery", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording recovery", "gaps", "missing recording"] },
+  { label: "Archive Storage", href: "/operations/recording/archive", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["archive", "cold storage"] },
+  { label: "Retention Compliance (90d)", href: "/compliance/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["retention compliance", "90 days", "retention"] },
+  { label: "Network & WAN Links", href: "/operations/network", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["network", "wan", "internet", "bandwidth"] },
+  { label: "Power & UPS Telemetry", href: "/operations/ups", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["ups", "power", "battery"] },
+  { label: "Security Device Inventory", href: "/security-devices", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["devices", "inventory", "device list"] },
+  { label: "Connection Diagnostics", href: "/diagnostics", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["diagnostics", "ping", "test connection"] },
+
+  // INVESTIGATE & PLAYBACK
+  { label: "AI Smart Video Search", href: "/video-search", category: "INVESTIGATE & PLAYBACK", keywords: ["search", "video search", "ai search", "find person"] },
+  { label: "Multi-Camera Synced Playback", href: "/playback/synced", category: "INVESTIGATE & PLAYBACK", keywords: ["playback", "synced playback", "replay", "video playback"] },
+  { label: "Audio Stream Monitoring", href: "/video/audio", category: "INVESTIGATE & PLAYBACK", keywords: ["audio", "listen", "microphone", "sound"] },
+  { label: "Video Recordings Vault", href: "/recordings", category: "INVESTIGATE & PLAYBACK", keywords: ["recordings", "video recordings", "vault"] },
+  { label: "Evidence & Chain of Custody", href: "/evidence", category: "INVESTIGATE & PLAYBACK", keywords: ["evidence", "custody", "export video"] },
+  { label: "Root-Cause Analysis (RCA)", href: "/operations/rca-analysis", category: "INVESTIGATE & PLAYBACK", keywords: ["rca", "root cause", "analysis"] },
+
+  // INTELLIGENCE & AI
+  { label: "AI Command Center", href: "/operations/ai-command-center", category: "INTELLIGENCE & AI", keywords: ["ai command center", "ai command"] },
+  { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", category: "INTELLIGENCE & AI", keywords: ["predictive", "forecast"] },
+  { label: "Video Analytics Hub", href: "/analytics", category: "INTELLIGENCE & AI", keywords: ["video analytics", "analytics"] },
+  { label: "Analytics Performance Dashboard", href: "/analytics/dashboard", category: "INTELLIGENCE & AI", keywords: ["analytics dashboard"] },
+  { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", category: "INTELLIGENCE & AI", keywords: ["face", "face recognition", "watchlist", "face id", "blacklist"] },
+  { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", category: "INTELLIGENCE & AI", keywords: ["anpr", "vehicle", "license plate", "cars"] },
+  { label: "People Counting & Heatmaps", href: "/analytics/people", category: "INTELLIGENCE & AI", keywords: ["people", "people counting", "heatmap", "footfall"] },
+  { label: "Crowd & Counter Queue", href: "/analytics/crowd", category: "INTELLIGENCE & AI", keywords: ["crowd", "queue", "congestion", "waiting"] },
+  { label: "Multi-Camera Person Re-ID", href: "/analytics/reid", category: "INTELLIGENCE & AI", keywords: ["reid", "person reid", "tracking"] },
+  { label: "Access Tailgating & Airlocks", href: "/analytics/tailgating", category: "INTELLIGENCE & AI", keywords: ["tailgating", "airlock", "piggybacking"] },
+  { label: "Camera Tamper & Defocus", href: "/analytics/camera-tamper", category: "INTELLIGENCE & AI", keywords: ["tamper", "camera tamper", "defocus", "blind"] },
+  { label: "Camera Obstruction & Dark Frame", href: "/analytics/camera-obstruction", category: "INTELLIGENCE & AI", keywords: ["obstruction", "dark frame"] },
+  { label: "Worker & Elderly Fall", href: "/analytics/fall", category: "INTELLIGENCE & AI", keywords: ["fall", "fall detection"] },
+  { label: "Abandoned & Unattended Objects", href: "/analytics/abandoned-objects", category: "INTELLIGENCE & AI", keywords: ["abandoned", "unattended", "bag"] },
+  { label: "Banking & Cash Counters", href: "/analytics/banking", category: "INTELLIGENCE & AI", keywords: ["banking counters", "cash counter"] },
+  { label: "Digital Twin (Spatial 3D)", href: "/digital-twin", category: "INTELLIGENCE & AI", keywords: ["digital twin", "3d", "spatial"] },
+
+  // AUDIT & REPORTING
+  { label: "Executive MIS Reports & Graphs", href: "/reports/mis", category: "AUDIT & REPORTING", keywords: ["mis", "mis reports", "executive reports", "graphs", "charts", "management report", "all in one report"] },
+  { label: "Daily Surveillance Digest", href: "/reports", category: "AUDIT & REPORTING", keywords: ["daily digest", "surveillance digest", "reports", "export report"] },
+  { label: "Branch Compliance Audit", href: "/audit/branch-compliance", category: "AUDIT & REPORTING", keywords: ["branch compliance", "audit"] },
+  { label: "Camera Health Audit", href: "/audit/health", category: "AUDIT & REPORTING", keywords: ["health audit", "camera audit"] },
+  { label: "Activity & Access Logs", href: "/activity-report", category: "AUDIT & REPORTING", keywords: ["activity report", "access logs", "audit log"] },
+
+  // ADMINISTRATION
+  { label: "Users & RBAC", href: "/admin/users", category: "ADMINISTRATION", keywords: ["users", "rbac", "permissions", "roles"] },
+  { label: "Tenant Organization Tree", href: "/admin/organization", category: "ADMINISTRATION", keywords: ["organization", "tenant", "company"] },
+  { label: "System Settings", href: "/settings", category: "ADMINISTRATION", keywords: ["settings", "preferences", "config"] },
+];
+
+export function resolveAppRoute(query: string): AppRouteItem | null {
+  if (!query) return null;
+  const q = query.toLowerCase().trim();
+
+  // Direct href match
+  const hrefMatch = APP_ROUTES.find((r) => r.href.toLowerCase() === q);
+  if (hrefMatch) return hrefMatch;
+
+  // Direct label match
+  const labelMatch = APP_ROUTES.find((r) => r.label.toLowerCase() === q || q.includes(r.label.toLowerCase()));
+  if (labelMatch) return labelMatch;
+
+  // Keyword match
+  const keywordMatch = APP_ROUTES.find((r) =>
+    r.keywords.some((k) => q.includes(k) || k.includes(q))
+  );
+  if (keywordMatch) return keywordMatch;
+
+  return null;
+}
 
 export interface GuardianMessage {
   role: "system" | "user" | "assistant" | "function" | "tool";
@@ -391,6 +510,38 @@ export class GuardianAIAssistant {
         );
       }
 
+      // Check if model returned function call as plain text (e.g. show_camera_feed { ... } or navigate_to_menu { ... })
+      const rawContent = (choice.message.content || "").trim();
+      const fnCallTextMatch = rawContent.match(
+        /(?:```(?:json)?\s*)?(show_camera_feed|navigate_to_menu|lock_doors|dispatch_guard|trigger_alarm|get_alert_summary|get_branch_status|get_camera_locations)\s*(\{[\s\S]*?\})(?:\s*```)?/i
+      );
+
+      if (fnCallTextMatch) {
+        const fnName = fnCallTextMatch[1];
+        let fnArgs: any = {};
+        try {
+          fnArgs = JSON.parse(fnCallTextMatch[2]);
+        } catch {
+          fnArgs = {};
+        }
+
+        console.log(`[KryptonAI] Intercepted text-based function call: ${fnName}`, fnArgs);
+
+        return await this.handleModernToolCall(
+          sessionId,
+          {
+            id: `call_${Date.now()}`,
+            type: "function",
+            function: {
+              name: fnName,
+              arguments: JSON.stringify(fnArgs),
+            },
+          },
+          context,
+          history
+        );
+      }
+
       // Regular text response
       const assistantMessage = choice.message.content || "";
       history.push({
@@ -469,6 +620,11 @@ export class GuardianAIAssistant {
 
         case "get_camera_locations":
           functionResult = await this.getCameraLocations(functionArgs, context);
+          executed = true;
+          break;
+
+        case "navigate_to_menu":
+          functionResult = this.navigateToMenu(functionArgs);
           executed = true;
           break;
 
@@ -551,8 +707,15 @@ export class GuardianAIAssistant {
       console.warn("[KryptonAI] Followup tool call failed:", err);
     }
 
-    if (!assistantMessage) {
-      assistantMessage = `Command executed: ${functionName}. Result: ${JSON.stringify(functionResult)}`;
+    if (functionName === "show_camera_feed") {
+      const count = functionArgs.cameraIds?.length || functionResult.cameras?.length || 0;
+      const layout = functionArgs.layout || functionResult.layout || "grid";
+      assistantMessage = `Displaying live feed for ${count} camera(s) in ${layout} view. You can monitor the live streams directly below.`;
+    } else if (functionName === "navigate_to_menu") {
+      const label = functionResult.label || functionArgs.target || "requested page";
+      assistantMessage = `Opening ${label}. Click below to navigate directly:`;
+    } else if (!assistantMessage || assistantMessage.includes("Command executed:") || assistantMessage.includes(functionName)) {
+      assistantMessage = functionResult.message || `Action executed: ${functionName.replace(/_/g, " ")}.`;
     }
 
     history.push({
@@ -565,6 +728,7 @@ export class GuardianAIAssistant {
       "dispatch_guard",
       "trigger_alarm",
       "show_camera_feed",
+      "navigate_to_menu",
     ].includes(functionName);
 
     return {
@@ -649,8 +813,15 @@ export class GuardianAIAssistant {
       console.warn("[KryptonAI] Followup function call failed:", err);
     }
 
-    if (!assistantMessage) {
-      assistantMessage = `Command executed: ${functionName}. Result: ${JSON.stringify(functionResult)}`;
+    if (functionName === "show_camera_feed") {
+      const count = functionArgs.cameraIds?.length || functionResult.cameras?.length || 0;
+      const layout = functionArgs.layout || functionResult.layout || "grid";
+      assistantMessage = `Displaying live feed for ${count} camera(s) in ${layout} view. You can monitor the live streams directly below.`;
+    } else if (functionName === "navigate_to_menu") {
+      const label = functionResult.label || functionArgs.target || "requested page";
+      assistantMessage = `Opening ${label}. Click below to navigate directly:`;
+    } else if (!assistantMessage || assistantMessage.includes("Command executed:") || assistantMessage.includes(functionName)) {
+      assistantMessage = functionResult.message || `Action executed: ${functionName.replace(/_/g, " ")}.`;
     }
 
     history.push({
@@ -663,6 +834,7 @@ export class GuardianAIAssistant {
       "dispatch_guard",
       "trigger_alarm",
       "show_camera_feed",
+      "navigate_to_menu",
     ].includes(functionName);
 
     return {
@@ -723,29 +895,59 @@ When users give commands:
     };
   }
 
-  /**
-   * Function implementations
-   */
+  private navigateToMenu(args: any) {
+    const target = args?.target || "";
+    const resolved = resolveAppRoute(target);
+    if (!resolved) {
+      return {
+        action: "navigate",
+        success: false,
+        message: `Could not find menu matching "${target}". Opening Command Center.`,
+        href: "/",
+        label: "Command Center",
+        category: "OPERATIONS",
+      };
+    }
+    return {
+      action: "navigate",
+      success: true,
+      href: resolved.href,
+      label: resolved.label,
+      category: resolved.category,
+      message: `Opening ${resolved.label} (${resolved.href})`,
+    };
+  }
 
   private async showCameraFeed(args: any, context: GuardianContext) {
-    const { cameraIds, layout = "grid" } = args;
+    const { cameraIds = [], layout = "grid" } = args;
 
-    // Get camera details
-    const { rows: cameras } = await this.pool.query(
-      `SELECT id, name, status FROM cameras 
-       WHERE id = ANY($1) AND tenant_id = $2`,
-      [cameraIds, context.tenantId]
-    );
+    // Get camera details from DB if available
+    let cameras: any[] = [];
+    try {
+      const { rows } = await this.pool.query(
+        `SELECT id, name, status FROM cameras 
+         WHERE id = ANY($1) AND tenant_id = $2`,
+        [cameraIds, context.tenantId]
+      );
+      cameras = rows;
+    } catch {
+      cameras = [];
+    }
+
+    const cameraList = (cameraIds || []).map((id: string, idx: number) => {
+      const found = cameras.find((c: any) => c.id === id);
+      return {
+        id,
+        name: found?.name || `Camera ${idx + 1} (${id.slice(0, 8)})`,
+        status: found?.status || "online",
+      };
+    });
 
     return {
       action: "show_cameras",
-      cameras: cameras.map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        status: c.status,
-      })),
+      cameras: cameraList,
       layout,
-      message: `Displaying ${cameras.length} camera feed(s) in ${layout} layout`,
+      message: `Displaying ${cameraList.length} camera feed(s) in ${layout} layout`,
     };
   }
 
@@ -965,6 +1167,53 @@ When users give commands:
   ): Promise<GuardianResponse> {
     const lower = message.toLowerCase().trim();
     const timestamp = new Date().toISOString();
+
+    // 0. Navigation / Open Menu Command
+    const navMatch = resolveAppRoute(lower);
+    if (navMatch && (lower.includes("open") || lower.includes("go") || lower.includes("show") || lower.includes("menu") || lower.includes("navigate") || lower.includes("poku") || lower.includes("kaanik") || lower.includes("edukk") || lower.includes("view") || lower.includes("wall") || lower.includes("mis") || lower.includes("report") || lower.includes("face") || lower.includes("search") || lower.includes("playback"))) {
+      return {
+        message: `Opening ${navMatch.label}. Click below to navigate directly:`,
+        type: "action",
+        actions: [
+          {
+            function: "navigate_to_menu",
+            parameters: { target: navMatch.href, label: navMatch.label },
+            executed: true,
+            result: {
+              href: navMatch.href,
+              label: navMatch.label,
+              category: navMatch.category,
+              action: "navigate",
+            },
+          },
+        ],
+        suggestions: ["Executive MIS Reports", "Live Video Wall", "Incident Response"],
+        timestamp,
+      };
+    }
+
+    // List all menus command
+    if (lower.includes("all menu") || lower.includes("list menu") || lower.includes("all pages") || lower.includes("navigation") || lower.includes("ella menu")) {
+      return {
+        message: "You can navigate to any of the following system modules using KryptonAI:",
+        type: "action",
+        actions: [
+          {
+            function: "navigate_to_menu",
+            parameters: { target: "/reports/mis", label: "Executive MIS Reports" },
+            executed: true,
+            result: {
+              href: "/reports/mis",
+              label: "Executive MIS Reports & Graphs",
+              category: "AUDIT & REPORTING",
+              action: "navigate",
+            },
+          },
+        ],
+        suggestions: ["Open Live Video Wall", "Open Executive MIS Reports", "Open Face Recognition", "Open Camera Health"],
+        timestamp,
+      };
+    }
 
     // 1. Alerts query
     if (lower.includes("alert")) {

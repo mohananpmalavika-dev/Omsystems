@@ -7,7 +7,9 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { Send, Mic, MicOff, Sparkles, AlertCircle, CheckCircle2, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Send, Mic, MicOff, Sparkles, AlertCircle, CheckCircle2, Loader2, X, MonitorPlay, Camera, Play, ExternalLink, ArrowRight, Compass, LayoutGrid } from "lucide-react";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -22,16 +24,244 @@ interface ChatMessage {
   timestamp: string;
 }
 
+interface CameraInfo {
+  id: string;
+  name: string;
+  status: string;
+}
+
+function extractCameraAction(message: ChatMessage): { cameraIds: string[]; layout: string; cameras: CameraInfo[] } | null {
+  // 1. From structured actions
+  if (message.actions && message.actions.length > 0) {
+    const action = message.actions.find((a) => a.function === "show_camera_feed" || a.function === "show_cameras");
+    if (action) {
+      const cameraIds: string[] = action.parameters?.cameraIds || [];
+      const layout = action.parameters?.layout || "grid";
+      const resultCameras: CameraInfo[] = action.result?.cameras || [];
+      const cameras = cameraIds.map((id, idx) => {
+        const found = resultCameras.find((c) => c.id === id);
+        return {
+          id,
+          name: found?.name || `Camera ${idx + 1} (${id.slice(0, 8)})`,
+          status: found?.status || "online",
+        };
+      });
+      return { cameraIds, layout, cameras };
+    }
+  }
+
+  // 2. Fallback: Parse raw JSON pattern from message content if model dumped raw function call
+  if (message.content) {
+    const jsonMatch = message.content.match(/(?:show_camera_feed\s*)?\{[\s\S]*?"cameraIds"\s*:\s*\[([\s\S]*?)\][\s\S]*?\}/i);
+    if (jsonMatch) {
+      try {
+        const fullJsonStr = jsonMatch[0].replace(/^show_camera_feed\s*/i, "").trim();
+        const parsed = JSON.parse(fullJsonStr);
+        if (Array.isArray(parsed.cameraIds) && parsed.cameraIds.length > 0) {
+          const layout = parsed.layout || "grid";
+          const cameras: CameraInfo[] = parsed.cameraIds.map((id: string, idx: number) => ({
+            id: String(id),
+            name: `Camera ${idx + 1} (${String(id).slice(0, 8)})`,
+            status: "online",
+          }));
+          return { cameraIds: parsed.cameraIds, layout, cameras };
+        }
+      } catch {}
+    }
+  }
+
+  return null;
+}
+
+function cleanMessageContent(content: string): string {
+  if (!content) return "";
+  const cleaned = content.replace(/(?:```(?:json)?\s*)?(?:show_camera_feed\s*)?\{[\s\S]*?"cameraIds"\s*:\s*\[[\s\S]*?\][\s\S]*?\}(?:\s*```)?/gi, "").trim();
+  if (!cleaned) {
+    return "Displaying requested camera feeds in live monitor:";
+  }
+  return cleaned;
+}
+
+function CameraFeedDisplay({ cameraInfo }: { cameraInfo: { cameraIds: string[]; layout: string; cameras: CameraInfo[] } }) {
+  const { cameras, layout } = cameraInfo;
+  return (
+    <div className="mt-3 p-3 bg-slate-950/80 border border-indigo-500/30 rounded-xl space-y-3 text-left">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <MonitorPlay className="w-4 h-4 text-indigo-400" />
+          <span className="text-xs font-semibold text-white">Live Camera Feeds</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-mono">
+            {cameras.length} Cameras • {layout}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-[10px] font-bold text-green-400 tracking-wider">LIVE</span>
+        </div>
+      </div>
+
+      <div className={`grid gap-2 ${cameras.length > 1 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
+        {cameras.map((cam, idx) => (
+          <div
+            key={cam.id || idx}
+            className="group relative bg-slate-900/90 border border-slate-700/80 hover:border-indigo-500/50 rounded-lg p-2.5 transition-all overflow-hidden"
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Camera className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                <span className="text-xs font-medium text-white truncate" title={cam.name}>
+                  {cam.name}
+                </span>
+              </div>
+              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-green-500/10 text-green-400 border border-green-500/20">
+                Online
+              </span>
+            </div>
+
+            <div className="relative aspect-video bg-black/80 rounded border border-slate-800 flex flex-col items-center justify-center p-2 group-hover:border-slate-700 transition-colors">
+              <div className="absolute top-1.5 left-1.5 flex items-center gap-1 px-1 py-0.5 rounded bg-black/60 text-[9px] font-mono text-slate-400">
+                <span>CAM {idx + 1}</span>
+              </div>
+              <div className="absolute top-1.5 right-1.5 flex items-center gap-1 px-1 py-0.5 rounded bg-red-950/80 text-[9px] font-bold text-red-400 border border-red-500/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                <span>REC</span>
+              </div>
+
+              <div className="p-2 rounded-full bg-slate-800/80 text-indigo-400 mb-1 group-hover:scale-110 transition-transform">
+                <Play className="w-4 h-4 fill-current" />
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono truncate max-w-full px-2">
+                {cam.id}
+              </span>
+            </div>
+
+            <div className="mt-2 flex items-center gap-1.5">
+              <Link
+                href={`/control-room?camera=${encodeURIComponent(cam.id)}`}
+                target="_blank"
+                className="flex-1 text-center py-1 px-2 rounded bg-indigo-600/80 hover:bg-indigo-500 text-white text-[11px] font-medium flex items-center justify-center gap-1 transition-colors"
+              >
+                <span>Watch Stream</span>
+                <ExternalLink className="w-2.5 h-2.5" />
+              </Link>
+              <Link
+                href={`/playback/synced?camera=${encodeURIComponent(cam.id)}`}
+                target="_blank"
+                className="py-1 px-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium transition-colors"
+                title="Synced Playback"
+              >
+                Playback
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+        <span className="text-[11px] text-slate-400">Security Video Control</span>
+        <Link
+          href="/control-room"
+          target="_blank"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
+        >
+          <span>Open Full Live Video Wall</span>
+          <ArrowRight className="w-3 h-3" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+interface NavigationActionInfo {
+  label: string;
+  href: string;
+  category: string;
+}
+
+function extractNavigationAction(message: ChatMessage): NavigationActionInfo | null {
+  if (message.actions && message.actions.length > 0) {
+    const navAction = message.actions.find((a) => a.function === "navigate_to_menu");
+    if (navAction) {
+      const href = navAction.result?.href || navAction.parameters?.target || "/";
+      const label = navAction.result?.label || navAction.parameters?.label || "Open Requested Page";
+      const category = navAction.result?.category || "OPERATIONS";
+      return { href, label, category };
+    }
+  }
+
+  // Check if message content has an internal route link
+  if (message.content) {
+    const routeMatch = message.content.match(/\/(reports\/mis|control-room|analytics\/alerts|incidents|operations\/cameras|video-search|playback\/synced|analytics\/face-recognition|nbfc-operations|compliance|settings|admin\/users)/);
+    if (routeMatch) {
+      const href = `/${routeMatch[1]}`;
+      const label = href.split("/").pop()?.replace(/-/g, " ").toUpperCase() || "Open Page";
+      return {
+        href,
+        label,
+        category: "NAVIGATION",
+      };
+    }
+  }
+
+  return null;
+}
+
+function NavigationActionDisplay({
+  navInfo,
+  onNavigate,
+}: {
+  navInfo: NavigationActionInfo;
+  onNavigate: (href: string) => void;
+}) {
+  return (
+    <div className="mt-3 p-3.5 bg-gradient-to-r from-sky-950/70 via-slate-900 to-indigo-950/70 border border-sky-500/40 rounded-xl space-y-2.5 shadow-lg text-left">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 rounded-lg bg-sky-500/20 text-sky-400 border border-sky-500/30">
+            <Compass className="w-4 h-4" />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-white block">{navInfo.label}</span>
+            <span className="text-[10px] text-slate-400">{navInfo.category} · {navInfo.href}</span>
+          </div>
+        </div>
+        <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+          Ready
+        </span>
+      </div>
+
+      <div className="pt-1 flex items-center gap-2">
+        <button
+          onClick={() => onNavigate(navInfo.href)}
+          className="flex-1 py-2 px-3 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-sky-500/20 transition-all cursor-pointer"
+        >
+          <span>🚀 Open {navInfo.label} Now</span>
+          <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+        <Link
+          href={navInfo.href}
+          target="_blank"
+          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs transition-colors"
+          title="Open in new tab"
+        >
+          <ExternalLink className="w-4 h-4" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 interface GuardianChatProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
+  const router = useRouter();
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
-      content: "KryptonAI online. How can I assist you with security operations?",
+      content: "KryptonAI online. How can I assist you with security operations? You can ask me to open any menu or view live cameras.",
       type: "text",
       timestamp: new Date().toISOString(),
     },
@@ -41,6 +271,11 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [sessionId, setSessionId] = useState<string>("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
+
+  const handleNavigate = (href: string) => {
+    onClose();
+    router.push(href);
+  };
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -282,6 +517,31 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
           </button>
         </div>
 
+        {/* Quick Menu Launcher Bar */}
+        <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto text-[11px] shrink-0">
+          <span className="text-slate-400 font-medium flex items-center gap-1 shrink-0 mr-1">
+            <Compass className="w-3.5 h-3.5 text-sky-400" /> Quick Open:
+          </span>
+          {[
+            { label: "📊 MIS Reports", href: "/reports/mis" },
+            { label: "🖥️ Video Wall", href: "/control-room" },
+            { label: "🚨 AI Alerts", href: "/analytics/alerts" },
+            { label: "🔍 Video Search", href: "/video-search" },
+            { label: "👤 Face Recognition", href: "/analytics/face-recognition" },
+            { label: "📷 Camera Health", href: "/operations/cameras" },
+            { label: "🏛️ NBFC Ops", href: "/nbfc-operations" },
+            { label: "⚙️ Settings", href: "/settings" },
+          ].map((m) => (
+            <button
+              key={m.href}
+              onClick={() => handleNavigate(m.href)}
+              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-all shrink-0 font-medium cursor-pointer"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+
         {/* Suggestions Banner */}
         {suggestions.length > 0 && (
           <div className="p-4 bg-indigo-500/10 border-b border-indigo-500/20">
@@ -340,7 +600,19 @@ export function GuardianChat({ isOpen, onClose }: GuardianChatProps) {
                       <span className="text-xs font-medium uppercase">{message.type}</span>
                     </div>
                   )}
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  {(() => {
+                    const cameraAction = extractCameraAction(message);
+                    const navAction = extractNavigationAction(message);
+                    const cleanText = cameraAction ? cleanMessageContent(message.content) : message.content;
+
+                    return (
+                      <>
+                        {cleanText && <p className="text-sm whitespace-pre-wrap">{cleanText}</p>}
+                        {cameraAction && <CameraFeedDisplay cameraInfo={cameraAction} />}
+                        {navAction && <NavigationActionDisplay navInfo={navAction} onNavigate={handleNavigate} />}
+                      </>
+                    );
+                  })()}
                   
                   {/* Executed Action Indicators */}
                   {message.actions && message.actions.length > 0 && (

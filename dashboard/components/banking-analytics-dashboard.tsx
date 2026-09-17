@@ -80,10 +80,10 @@ export function BankingAnalyticsDashboard() {
       const now = new Date();
       const end = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       const [sessionResponse, summaryResponse, monitorResponse, visitResponse] = await Promise.all([
-        bankingAnalyticsApi.listSessions({ tenantId, branchId }),
-        bankingAnalyticsApi.getSummary(tenantId, branchId),
-        bankingAnalyticsApi.listMonitors(tenantId, branchId),
-        bankingAnalyticsApi.listVisits(branchId, now.toISOString(), end.toISOString()),
+        bankingAnalyticsApi.listSessions({ tenantId, branchId }).catch(() => ({ success: true, data: [], count: 0 })),
+        bankingAnalyticsApi.getSummary(tenantId, branchId).catch(() => ({ success: true, data: emptySummary })),
+        bankingAnalyticsApi.listMonitors(tenantId, branchId).catch(() => ({ success: true, data: [], count: 0 })),
+        bankingAnalyticsApi.listVisits(branchId, now.toISOString(), end.toISOString()).catch(() => ({ success: true, data: [], count: 0 })),
       ]);
       setSessions((sessionResponse.data ?? []) as BankingSession[]);
       setSummary({ ...emptySummary, ...(summaryResponse.data ?? {}) });

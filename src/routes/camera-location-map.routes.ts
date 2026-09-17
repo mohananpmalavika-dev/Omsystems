@@ -104,10 +104,10 @@ function isPrivateIp(ip: string): boolean {
   if (parts[0] === 10) return true;
   
   // 172.16.0.0 – 172.31.255.255
-  if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+  if (parts[0] === 172 && (parts[1] ?? 0) >= 16 && (parts[1] ?? 0) <= 31) return true;
   
   // 192.168.0.0 – 192.168.255.255
-  if (parts[0] === 192 && parts[1] === 168) return true;
+  if (parts[0] === 192 && (parts[1] ?? 0) === 168) return true;
   
   // Localhost
   if (parts[0] === 127) return true;
