@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import {
   HardDrive,
   Cloud,
@@ -23,6 +24,7 @@ import { HddFleetWidget } from "@/components/operational-health/hdd-fleet-widget
 
 interface CameraStorageMapping {
   cameraId: string;
+  branchId?: string;
   cameraName: string;
   ipAddress: string;
   activeStorageTier: "sd_card" | "dvr_hdd" | "online_cloud";
@@ -131,7 +133,23 @@ export default function StoragePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Link
+              href="/recordings"
+              className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 flex items-center gap-1.5 transition-all font-medium"
+              title="Open recording player & footage timeline"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              Watch Recordings
+            </Link>
+            <Link
+              href="/playback/synced"
+              className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5 transition-all font-medium"
+              title="Synchronized multi-camera playback"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              Multi-Cam Playback
+            </Link>
             <button
               onClick={() => void loadStorageData()}
               disabled={refreshing}
@@ -302,20 +320,30 @@ export default function StoragePage() {
                       </td>
 
                       <td className="px-4 py-3 text-right">
-                        {cam.activeStorageTier !== "online_cloud" ? (
-                          <button
-                            onClick={() => void switchCameraToCloud(cam.cameraId)}
-                            className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
-                            title="Failover to online cloud recording"
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={cam.branchId ? `/recordings?branchId=${encodeURIComponent(cam.branchId)}&cameraId=${encodeURIComponent(cam.cameraId)}` : `/recordings?cameraId=${encodeURIComponent(cam.cameraId)}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 text-[11px] font-medium border border-blue-500/30 transition-all"
+                            title="Play and scrub stored footage for this camera"
                           >
-                            Enable Cloud Fallback
-                          </button>
-                        ) : (
-                          <span className="text-[11px] text-emerald-400 font-mono flex items-center justify-end gap-1">
-                            <CheckCircle2 className="w-3.5 h-3.5" />
-                            Cloud Active
-                          </span>
-                        )}
+                            <Play className="w-3 h-3 fill-current" />
+                            View Footage
+                          </Link>
+                          {cam.activeStorageTier !== "online_cloud" ? (
+                            <button
+                              onClick={() => void switchCameraToCloud(cam.cameraId)}
+                              className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
+                              title="Failover to online cloud recording"
+                            >
+                              Enable Cloud Fallback
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-emerald-400 font-mono flex items-center justify-end gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              Cloud Active
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

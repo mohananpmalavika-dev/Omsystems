@@ -23,6 +23,7 @@ const runtimeFailoverOverrides = new Map<string, "sd_card" | "dvr_hdd" | "online
 
 export interface CameraStorageMapping {
   cameraId: string;
+  branchId?: string;
   cameraName: string;
   ipAddress: string;
   activeStorageTier: "sd_card" | "dvr_hdd" | "online_cloud";
@@ -86,6 +87,7 @@ export async function GET(request: NextRequest) {
         pool.query(`
           SELECT 
             c.id, 
+            c.branch_id,
             COALESCE(rn.name, c.vendor || ' ' || c.model, 'Camera ' || c.id) as name, 
             host(c.ip_address) as ip_address, 
             c.status, 
@@ -249,6 +251,7 @@ export async function GET(request: NextRequest) {
 
     return {
       cameraId: camId,
+      branchId: cam.branch_id || "",
       cameraName: name,
       ipAddress: ip,
       activeStorageTier: activeTier,
