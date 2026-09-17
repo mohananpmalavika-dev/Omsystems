@@ -2704,12 +2704,12 @@ export async function buildApp(options?: {
           }
         });
         
-        createExecutiveKpiRoutes(instance, pool);
-        createFinancialTcoRoutes(instance, pool);
-        createBranchBenchmarkingRoutes(instance, pool);
-        createComplianceScorecardRoutes(instance, pool);
-        createMISUnifiedRoutes(instance, pool);
-        createHistoricalTrendsRoutes(instance, pool);
+        (createExecutiveKpiRoutes as any)(instance, pool);
+        (createFinancialTcoRoutes as any)(instance, pool);
+        (createBranchBenchmarkingRoutes as any)(instance, pool);
+        (createComplianceScorecardRoutes as any)(instance, pool);
+        (createMISUnifiedRoutes as any)(instance, pool);
+        (createHistoricalTrendsRoutes as any)(instance, pool);
       }, { prefix: '/api/control/v1/reports' });
       
       app.log.info('✅ Phase 1 MIS Reports registered (Executive Dashboard, Financial TCO, Branch Benchmarking, Compliance Scorecard, MIS Unified)');
