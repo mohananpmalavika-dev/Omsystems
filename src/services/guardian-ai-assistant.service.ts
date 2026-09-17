@@ -234,98 +234,344 @@ export interface AppRouteItem {
 
 export const APP_ROUTES: AppRouteItem[] = [
   // WORKSPACE
-  { label: "NBFC Operations", href: "/nbfc-operations", category: "WORKSPACE", keywords: ["nbfc", "banking", "finance", "loan", "vault operations"] },
-  { label: "My Operations Dashboard", href: "/role-dashboard", category: "WORKSPACE", keywords: ["role", "my operations", "role dashboard"] },
-  { label: "Module Directory", href: "/modules", category: "WORKSPACE", keywords: ["module", "directory", "modules", "app list"] },
-  { label: "Support Center", href: "/support", category: "WORKSPACE", keywords: ["support", "help", "contact"] },
+  { label: "NBFC Operations", href: "/nbfc-operations", category: "WORKSPACE", keywords: ["nbfc", "nbfc operations", "gold loan", "vault", "vault operations", "banking", "finance", "loan", "dual custody", "nbfc module"] },
+  { label: "My Operations Dashboard", href: "/role-dashboard", category: "WORKSPACE", keywords: ["role", "my operations", "role dashboard", "my dashboard"] },
+  { label: "Module Directory", href: "/modules", category: "WORKSPACE", keywords: ["module", "directory", "modules", "app list", "module directory", "all modules"] },
+  { label: "Support Center", href: "/support", category: "WORKSPACE", keywords: ["support", "help", "contact", "support center", "helpdesk"] },
 
   // OPERATIONS
-  { label: "Command Center", href: "/", category: "OPERATIONS", keywords: ["command center", "home", "main", "overview", "dashboard"] },
-  { label: "Executive Dashboard", href: "/dashboards", category: "OPERATIONS", keywords: ["executive dashboard", "executive overview"] },
-  { label: "Branch Overview", href: "/operations/branches", category: "OPERATIONS", keywords: ["branches", "branch overview", "branch list"] },
-  { label: "Live Video Wall", href: "/control-room", category: "OPERATIONS", keywords: ["video wall", "live video", "control room", "cameras live", "live stream", "video stream"] },
-  { label: "AI Alerts & Incident Hub", href: "/analytics/alerts", category: "OPERATIONS", keywords: ["alerts", "ai alerts", "incident hub", "alert hub", "threats"] },
-  { label: "Alert Queue", href: "/operations/alerts", category: "OPERATIONS", keywords: ["alert queue", "active alerts", "pending alerts"] },
-  { label: "Incident Response", href: "/incidents", category: "OPERATIONS", keywords: ["incidents", "incident response", "dispatch", "emergency"] },
-  { label: "Security Operations", href: "/security-operations", category: "OPERATIONS", keywords: ["security operations", "soc", "sec ops"] },
-  { label: "Video Processing", href: "/operations/media-pipeline", category: "OPERATIONS", keywords: ["video processing", "media pipeline", "transcoding"] },
-  { label: "High Availability", href: "/operations/ha-failover", category: "OPERATIONS", keywords: ["high availability", "ha", "failover", "redundancy"] },
-  { label: "Edge Agent Management", href: "/operations/edge-fleet", category: "OPERATIONS", keywords: ["edge agent", "fleet", "gateways"] },
-  { label: "Infrastructure Operations", href: "/operations/infrastructure", category: "OPERATIONS", keywords: ["infrastructure", "infra", "topology"] },
+  { label: "Command Center", href: "/", category: "OPERATIONS", keywords: ["command center", "home", "main", "overview", "dashboard", "main dashboard"] },
+  { label: "Executive Dashboard", href: "/dashboards", category: "OPERATIONS", keywords: ["executive dashboard", "executive overview", "kpi dashboard"] },
+  { label: "Branch Overview", href: "/operations/branches", category: "OPERATIONS", keywords: ["branches", "branch overview", "branch list", "all branches", "branch management"] },
+  { label: "Live Video Wall", href: "/control-room", category: "OPERATIONS", keywords: ["video wall", "live video", "live video wall", "control room", "cameras live", "live stream", "video stream", "wall", "live wall", "live cctv", "grid view", "live view", "cctv wall"] },
+  { label: "AI Alerts & Incident Hub", href: "/analytics/alerts", category: "OPERATIONS", keywords: ["alerts", "ai alerts", "incident hub", "alert hub", "threats", "alert analytics", "open alerts", "alerts hub"] },
+  { label: "Alert Queue", href: "/operations/alerts", category: "OPERATIONS", keywords: ["alert queue", "active alerts", "pending alerts", "queue", "operator queue"] },
+  { label: "Incident Response", href: "/incidents", category: "OPERATIONS", keywords: ["incidents", "incident response", "dispatch", "emergency", "incident list", "guard dispatch"] },
+  { label: "Security Operations", href: "/security-operations", category: "OPERATIONS", keywords: ["security operations", "soc", "sec ops", "soc command", "soc console"] },
+  { label: "Video Processing", href: "/operations/media-pipeline", category: "OPERATIONS", keywords: ["video processing", "media pipeline", "transcoding", "streams", "pipeline"] },
+  { label: "High Availability", href: "/operations/ha-failover", category: "OPERATIONS", keywords: ["high availability", "ha", "failover", "redundancy", "cluster"] },
+  { label: "Edge Agent Management", href: "/operations/edge-fleet", category: "OPERATIONS", keywords: ["edge agent", "fleet", "gateways", "edge fleet"] },
+  { label: "Infrastructure Operations", href: "/operations/infrastructure", category: "OPERATIONS", keywords: ["infrastructure", "infra", "topology", "hardware topology"] },
   { label: "Fleet Maintenance Command", href: "/operations/maintenance", category: "OPERATIONS", keywords: ["fleet maintenance", "maintenance command"] },
-  { label: "Fleet Observability & SLO", href: "/operations/observability", category: "OPERATIONS", keywords: ["observability", "slo", "metrics"] },
-  { label: "Performance Observability", href: "/performance", category: "OPERATIONS", keywords: ["performance", "latency", "system load"] },
+  { label: "Fleet Observability & SLO", href: "/operations/observability", category: "OPERATIONS", keywords: ["observability", "slo", "metrics", "fleet slo"] },
+  { label: "Performance Observability", href: "/performance", category: "OPERATIONS", keywords: ["performance", "latency", "system load", "cpu", "memory"] },
 
   // DEVICE HEALTH & MAINTENANCE
-  { label: "Camera Health", href: "/operations/cameras", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["camera health", "cameras", "camera status", "camera uptime"] },
-  { label: "Recorder Health", href: "/maintenance/dvr-nvr-monitor", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recorder", "dvr", "nvr", "recorder health"] },
-  { label: "Hardware Compatibility Lab", href: "/maintenance/compatibility", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["compatibility", "hardware"] },
-  { label: "Storage & SATA HDDs", href: "/operations/storage", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["storage", "hdd", "hard disk", "sata", "disk", "smart"] },
-  { label: "Recording Health", href: "/operations/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording health", "recording status"] },
-  { label: "Recover Recording Gaps", href: "/operations/recording/recovery", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording recovery", "gaps", "missing recording"] },
-  { label: "Archive Storage", href: "/operations/recording/archive", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["archive", "cold storage"] },
-  { label: "Retention Compliance (90d)", href: "/compliance/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["retention compliance", "90 days", "retention"] },
-  { label: "Network & WAN Links", href: "/operations/network", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["network", "wan", "internet", "bandwidth"] },
-  { label: "Power & UPS Telemetry", href: "/operations/ups", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["ups", "power", "battery"] },
-  { label: "Security Device Inventory", href: "/security-devices", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["devices", "inventory", "device list"] },
-  { label: "Connection Diagnostics", href: "/diagnostics", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["diagnostics", "ping", "test connection"] },
+  { label: "Camera Health", href: "/operations/cameras", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["camera health", "cameras", "camera status", "camera uptime", "all cameras", "camera list", "cctv health", "cameras offline", "camera monitoring"] },
+  { label: "Recorder Health", href: "/maintenance/dvr-nvr-monitor", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recorder", "dvr", "nvr", "recorder health", "dvr status", "nvr status", "recorders"] },
+  { label: "Hardware Compatibility Lab", href: "/maintenance/compatibility", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["compatibility", "hardware compatibility", "lab"] },
+  { label: "Storage & SATA HDDs", href: "/operations/storage", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["storage", "hdd", "hard disk", "sata", "disk", "smart", "sata hdd", "hdd health", "drive health"] },
+  { label: "Recording Health", href: "/operations/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording health", "recording status", "recording check"] },
+  { label: "Recover Recording Gaps", href: "/operations/recording/recovery", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["recording recovery", "gaps", "missing recording", "recovery"] },
+  { label: "Archive Storage", href: "/operations/recording/archive", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["archive", "cold storage", "archive storage"] },
+  { label: "Retention Compliance (90d)", href: "/compliance/recording", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["retention compliance", "90 days", "retention", "90d"] },
+  { label: "Network & WAN Links", href: "/operations/network", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["network", "wan", "internet", "bandwidth", "connectivity", "internet health"] },
+  { label: "Power & UPS Telemetry", href: "/operations/ups", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["ups", "power", "battery", "inverter", "ups telemetry"] },
+  { label: "Edge Gateways", href: "/operations/edge-agents", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["edge gateways", "edge agents", "gateways"] },
+  { label: "Device Connectivity", href: "/operations/device-connectivity", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["device connectivity", "connectivity status"] },
+  { label: "Run Health Checks", href: "/maintenance/health", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["run health checks", "health checks", "system health check"] },
+  { label: "Maintenance Alerts", href: "/maintenance/alerts", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["maintenance alerts", "hardware alerts"] },
+  { label: "Connection Diagnostics", href: "/diagnostics", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["diagnostics", "ping", "test connection", "network diagnostics"] },
+  { label: "Security Device Inventory", href: "/security-devices", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["security devices", "device inventory", "devices", "inventory", "device list", "iot devices"] },
+  { label: "Network Device Discovery", href: "/security-devices/discovery", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["network device discovery", "discovery", "discover devices", "radar", "scan network"] },
+  { label: "Branch Security Posture", href: "/security-devices/branch-posture", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["branch posture", "security posture", "branch security posture"] },
+  { label: "Security Device Integrations", href: "/security-devices/integrations", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["security device integrations", "device integrations", "device workflow"] },
+  { label: "Portable Camera Enrollment", href: "/portable-camera/enroll", category: "DEVICE HEALTH & MAINTENANCE", keywords: ["portable camera", "portable camera enrollment", "body cam"] },
 
   // INVESTIGATE & PLAYBACK
-  { label: "AI Smart Video Search", href: "/video-search", category: "INVESTIGATE & PLAYBACK", keywords: ["search", "video search", "ai search", "find person"] },
-  { label: "Multi-Camera Synced Playback", href: "/playback/synced", category: "INVESTIGATE & PLAYBACK", keywords: ["playback", "synced playback", "replay", "video playback"] },
-  { label: "Audio Stream Monitoring", href: "/video/audio", category: "INVESTIGATE & PLAYBACK", keywords: ["audio", "listen", "microphone", "sound"] },
-  { label: "Video Recordings Vault", href: "/recordings", category: "INVESTIGATE & PLAYBACK", keywords: ["recordings", "video recordings", "vault"] },
-  { label: "Evidence & Chain of Custody", href: "/evidence", category: "INVESTIGATE & PLAYBACK", keywords: ["evidence", "custody", "export video"] },
-  { label: "Root-Cause Analysis (RCA)", href: "/operations/rca-analysis", category: "INVESTIGATE & PLAYBACK", keywords: ["rca", "root cause", "analysis"] },
+  { label: "AI Smart Video Search", href: "/video-search", category: "INVESTIGATE & PLAYBACK", keywords: ["search", "video search", "ai search", "find person", "smart search", "ai video search", "search footage"] },
+  { label: "Multi-Camera Synced Playback", href: "/playback/synced", category: "INVESTIGATE & PLAYBACK", keywords: ["playback", "synced playback", "replay", "video playback", "multi camera playback", "camera playback"] },
+  { label: "Audio Stream Monitoring", href: "/video/audio", category: "INVESTIGATE & PLAYBACK", keywords: ["audio", "listen", "microphone", "sound", "audio stream", "audio monitoring"] },
+  { label: "Video Timeline Bookmarks", href: "/playback/bookmarks", category: "INVESTIGATE & PLAYBACK", keywords: ["bookmarks", "video bookmarks", "timeline bookmarks"] },
+  { label: "Video Recordings Vault", href: "/recordings", category: "INVESTIGATE & PLAYBACK", keywords: ["recordings", "video recordings", "recordings vault", "cctv footage", "recorded videos", "vault footage"] },
+  { label: "Evidence & Chain of Custody", href: "/evidence", category: "INVESTIGATE & PLAYBACK", keywords: ["evidence", "custody", "export video", "chain of custody"] },
+  { label: "Root-Cause Analysis (RCA)", href: "/operations/rca-analysis", category: "INVESTIGATE & PLAYBACK", keywords: ["rca", "root cause", "root cause analysis", "analysis"] },
 
   // INTELLIGENCE & AI
-  { label: "AI Command Center", href: "/operations/ai-command-center", category: "INTELLIGENCE & AI", keywords: ["ai command center", "ai command"] },
-  { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", category: "INTELLIGENCE & AI", keywords: ["predictive", "forecast"] },
-  { label: "Video Analytics Hub", href: "/analytics", category: "INTELLIGENCE & AI", keywords: ["video analytics", "analytics"] },
-  { label: "Analytics Performance Dashboard", href: "/analytics/dashboard", category: "INTELLIGENCE & AI", keywords: ["analytics dashboard"] },
-  { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", category: "INTELLIGENCE & AI", keywords: ["face", "face recognition", "watchlist", "face id", "blacklist"] },
-  { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", category: "INTELLIGENCE & AI", keywords: ["anpr", "vehicle", "license plate", "cars"] },
-  { label: "People Counting & Heatmaps", href: "/analytics/people", category: "INTELLIGENCE & AI", keywords: ["people", "people counting", "heatmap", "footfall"] },
-  { label: "Crowd & Counter Queue", href: "/analytics/crowd", category: "INTELLIGENCE & AI", keywords: ["crowd", "queue", "congestion", "waiting"] },
-  { label: "Multi-Camera Person Re-ID", href: "/analytics/reid", category: "INTELLIGENCE & AI", keywords: ["reid", "person reid", "tracking"] },
-  { label: "Access Tailgating & Airlocks", href: "/analytics/tailgating", category: "INTELLIGENCE & AI", keywords: ["tailgating", "airlock", "piggybacking"] },
-  { label: "Camera Tamper & Defocus", href: "/analytics/camera-tamper", category: "INTELLIGENCE & AI", keywords: ["tamper", "camera tamper", "defocus", "blind"] },
-  { label: "Camera Obstruction & Dark Frame", href: "/analytics/camera-obstruction", category: "INTELLIGENCE & AI", keywords: ["obstruction", "dark frame"] },
-  { label: "Worker & Elderly Fall", href: "/analytics/fall", category: "INTELLIGENCE & AI", keywords: ["fall", "fall detection"] },
-  { label: "Abandoned & Unattended Objects", href: "/analytics/abandoned-objects", category: "INTELLIGENCE & AI", keywords: ["abandoned", "unattended", "bag"] },
-  { label: "Banking & Cash Counters", href: "/analytics/banking", category: "INTELLIGENCE & AI", keywords: ["banking counters", "cash counter"] },
-  { label: "Digital Twin (Spatial 3D)", href: "/digital-twin", category: "INTELLIGENCE & AI", keywords: ["digital twin", "3d", "spatial"] },
+  { label: "AI Command Center", href: "/operations/ai-command-center", category: "INTELLIGENCE & AI", keywords: ["ai command center", "ai command", "ai center"] },
+  { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", category: "INTELLIGENCE & AI", keywords: ["predictive", "forecast", "predictive health", "failure forecast"] },
+  { label: "Video Analytics Hub", href: "/analytics", category: "INTELLIGENCE & AI", keywords: ["video analytics", "analytics", "analytics hub"] },
+  { label: "Analytics Performance Dashboard", href: "/analytics/dashboard", category: "INTELLIGENCE & AI", keywords: ["analytics dashboard", "analytics performance"] },
+  { label: "AI Rules & Automation", href: "/analytics/rules", category: "INTELLIGENCE & AI", keywords: ["ai rules", "rules", "automation", "alert rules"] },
+  { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", category: "INTELLIGENCE & AI", keywords: ["face", "face recognition", "watchlist", "face id", "blacklist", "whitelist", "vip", "facial", "face recognition open", "faces"] },
+  { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", category: "INTELLIGENCE & AI", keywords: ["anpr", "vehicle", "license plate", "cars", "number plate", "vehicle telemetry", "anpr tracking"] },
+  { label: "Vehicle Analytics", href: "/analytics/vehicles", category: "INTELLIGENCE & AI", keywords: ["vehicles", "vehicle analytics", "parking"] },
+  { label: "People Counting & Heatmaps", href: "/analytics/people", category: "INTELLIGENCE & AI", keywords: ["people", "people counting", "heatmap", "footfall", "person counting", "heatmaps"] },
+  { label: "Crowd & Counter Queue", href: "/analytics/crowd", category: "INTELLIGENCE & AI", keywords: ["crowd", "queue", "congestion", "waiting", "crowd density", "queue length"] },
+  { label: "Multi-Camera Person Re-ID", href: "/analytics/reid", category: "INTELLIGENCE & AI", keywords: ["reid", "person reid", "tracking", "re-identification"] },
+  { label: "Access Tailgating & Airlocks", href: "/analytics/tailgating", category: "INTELLIGENCE & AI", keywords: ["tailgating", "airlock", "piggybacking", "access breach"] },
+  { label: "Camera Tamper & Defocus", href: "/analytics/camera-tamper", category: "INTELLIGENCE & AI", keywords: ["tamper", "camera tamper", "defocus", "blind", "tampering"] },
+  { label: "Camera Obstruction & Dark Frame", href: "/analytics/camera-obstruction", category: "INTELLIGENCE & AI", keywords: ["obstruction", "dark frame", "camera obstruction"] },
+  { label: "Worker & Elderly Fall", href: "/analytics/fall", category: "INTELLIGENCE & AI", keywords: ["fall", "fall detection", "worker fall", "elderly fall"] },
+  { label: "Abandoned & Unattended Objects", href: "/analytics/abandoned-objects", category: "INTELLIGENCE & AI", keywords: ["abandoned", "unattended", "bag", "unattended object", "bomb threat"] },
+  { label: "Banking & Cash Counters", href: "/analytics/banking", category: "INTELLIGENCE & AI", keywords: ["banking counters", "cash counter", "teller camera", "cash area"] },
+  { label: "ANPR Logistics Tracking", href: "/analytics/anpr-logistics", category: "INTELLIGENCE & AI", keywords: ["anpr logistics", "logistics tracking", "truck tracking"] },
+  { label: "Authorized Counter & Locker Persons", href: "/analytics/banking/authorized-persons", category: "INTELLIGENCE & AI", keywords: ["authorized persons", "locker persons", "counter persons"] },
+  { label: "NBFC Watchlist Management", href: "/analytics/nbfc-watchlist", category: "INTELLIGENCE & AI", keywords: ["nbfc watchlist", "gold loan watchlist"] },
+  { label: "Branch Performance Comparison", href: "/analytics/branch-comparison", category: "INTELLIGENCE & AI", keywords: ["branch comparison", "branch performance"] },
+  { label: "Industrial Safety & PPE", href: "/analytics/industrial", category: "INTELLIGENCE & AI", keywords: ["industrial safety", "ppe", "helmet", "safety vest"] },
+  { label: "Digital Twin (Spatial 3D)", href: "/digital-twin", category: "INTELLIGENCE & AI", keywords: ["digital twin", "3d", "spatial", "3d map", "twin", "spatial 3d"] },
+  { label: "Infrastructure Twin", href: "/infrastructure-twin", category: "INTELLIGENCE & AI", keywords: ["infrastructure twin", "infra twin"] },
+  { label: "Multi-Site Federation", href: "/federation", category: "INTELLIGENCE & AI", keywords: ["federation", "multi site", "cross organization"] },
+
+  // FLEET MAINTENANCE
+  { label: "Device Configuration Center", href: "/maintenance/device-configuration", category: "FLEET MAINTENANCE", keywords: ["device configuration", "device config"] },
+  { label: "Correlated Device Health", href: "/security/device-health", category: "FLEET MAINTENANCE", keywords: ["device health", "correlated health"] },
+  { label: "Camera Location Map", href: "/maintenance/camera-map", category: "FLEET MAINTENANCE", keywords: ["camera map", "location map", "map"] },
+  { label: "Hardware Asset Registry", href: "/maintenance/assets", category: "FLEET MAINTENANCE", keywords: ["assets", "asset registry", "hardware assets"] },
+  { label: "Asset Replacement & Lineage", href: "/operations/assets", category: "FLEET MAINTENANCE", keywords: ["asset replacement", "lineage"] },
+  { label: "Maintenance Work Orders", href: "/maintenance/workorders", category: "FLEET MAINTENANCE", keywords: ["work orders", "maintenance work orders", "tickets"] },
+  { label: "Vendor & Service Directory", href: "/maintenance/vendors", category: "FLEET MAINTENANCE", keywords: ["vendors", "service directory", "vendor list"] },
+  { label: "AMC & Warranty Contracts", href: "/maintenance/amc", category: "FLEET MAINTENANCE", keywords: ["amc", "warranty", "contracts", "amc contracts"] },
+  { label: "Maintenance Reports & SLA", href: "/maintenance/reports", category: "FLEET MAINTENANCE", keywords: ["maintenance reports", "sla reports"] },
+
+  // COMPLIANCE & GOVERNANCE
+  { label: "Assurance Hub", href: "/compliance/overview", category: "COMPLIANCE & GOVERNANCE", keywords: ["assurance hub", "compliance overview", "assurance"] },
+  { label: "Compliance Frameworks", href: "/compliance", category: "COMPLIANCE & GOVERNANCE", keywords: ["compliance", "frameworks", "compliance frameworks", "rbi compliance"] },
+  { label: "Compliance Dashboard", href: "/compliance/dashboard", category: "COMPLIANCE & GOVERNANCE", keywords: ["compliance dashboard"] },
+  { label: "Assessments & Audits", href: "/compliance/assessments", category: "COMPLIANCE & GOVERNANCE", keywords: ["assessments", "audits", "compliance assessments"] },
+  { label: "Controls & Remediation", href: "/compliance/controls", category: "COMPLIANCE & GOVERNANCE", keywords: ["controls", "remediation", "compliance controls"] },
+  { label: "Compliance Risk Register", href: "/compliance/risks", category: "COMPLIANCE & GOVERNANCE", keywords: ["risks", "risk register", "compliance risks"] },
+  { label: "Compliance Policies", href: "/compliance/policies", category: "COMPLIANCE & GOVERNANCE", keywords: ["policies", "compliance policies"] },
+  { label: "Compliance Evidence", href: "/compliance/evidence", category: "COMPLIANCE & GOVERNANCE", keywords: ["compliance evidence"] },
+  { label: "Compliance Findings", href: "/compliance/findings", category: "COMPLIANCE & GOVERNANCE", keywords: ["findings", "compliance findings"] },
+  { label: "Compliance Certificates", href: "/compliance/certificates", category: "COMPLIANCE & GOVERNANCE", keywords: ["certificates", "compliance certificates"] },
+  { label: "Privacy Governance (DPIA)", href: "/maintenance/privacy", category: "COMPLIANCE & GOVERNANCE", keywords: ["privacy", "dpia", "privacy governance"] },
+  { label: "Privacy Processing Purposes", href: "/maintenance/privacy/purposes", category: "COMPLIANCE & GOVERNANCE", keywords: ["privacy purposes", "purposes"] },
+  { label: "Privacy Control Policies", href: "/maintenance/privacy/controls", category: "COMPLIANCE & GOVERNANCE", keywords: ["privacy controls", "privacy policies"] },
+  { label: "Privacy Breach Incident Log", href: "/maintenance/privacy/breaches", category: "COMPLIANCE & GOVERNANCE", keywords: ["privacy breaches", "breach log"] },
+  { label: "Camera Privacy Controls", href: "/maintenance/privacy/cameras", category: "COMPLIANCE & GOVERNANCE", keywords: ["camera privacy"] },
 
   // AUDIT & REPORTING
-  { label: "Executive MIS Reports & Graphs", href: "/reports/mis", category: "AUDIT & REPORTING", keywords: ["mis", "mis reports", "executive reports", "graphs", "charts", "management report", "all in one report"] },
-  { label: "Daily Surveillance Digest", href: "/reports", category: "AUDIT & REPORTING", keywords: ["daily digest", "surveillance digest", "reports", "export report"] },
-  { label: "Branch Compliance Audit", href: "/audit/branch-compliance", category: "AUDIT & REPORTING", keywords: ["branch compliance", "audit"] },
-  { label: "Camera Health Audit", href: "/audit/health", category: "AUDIT & REPORTING", keywords: ["health audit", "camera audit"] },
-  { label: "Activity & Access Logs", href: "/activity-report", category: "AUDIT & REPORTING", keywords: ["activity report", "access logs", "audit log"] },
+  { label: "Executive Dashboard (NEW)", href: "/mis-dashboard", category: "AUDIT & REPORTING", keywords: ["mis dashboard", "executive dashboard new", "mis overview", "executive kpi"] },
+  { label: "Financial TCO & ROI", href: "/reports/financial", category: "AUDIT & REPORTING", keywords: ["financial", "financial tco", "roi", "tco", "cost analysis", "roi report"] },
+  { label: "Branch Benchmarking", href: "/reports/benchmarking", category: "AUDIT & REPORTING", keywords: ["benchmarking", "branch benchmarking", "benchmark"] },
+  { label: "Compliance Scorecard", href: "/reports/compliance", category: "AUDIT & REPORTING", keywords: ["compliance scorecard", "scorecard", "compliance report"] },
+  { label: "Executive MIS Reports & Graphs", href: "/reports/mis", category: "AUDIT & REPORTING", keywords: ["mis", "mis reports", "mis report", "executive reports", "graphs", "charts", "management report", "all in one report", "mis graph", "mis chart", "graphic reports", "mis reports open"] },
+  { label: "Daily Surveillance Digest", href: "/reports", category: "AUDIT & REPORTING", keywords: ["daily digest", "surveillance digest", "reports", "export report", "daily report", "surveillance report"] },
+  { label: "Branch Compliance Audit", href: "/audit/branch-compliance", category: "AUDIT & REPORTING", keywords: ["branch compliance", "compliance audit", "branch audit"] },
+  { label: "Camera Health Audit", href: "/audit/health", category: "AUDIT & REPORTING", keywords: ["camera audit", "health audit", "camera compliance"] },
+  { label: "Maintenance & SLA Audit", href: "/audit/maintenance", category: "AUDIT & REPORTING", keywords: ["sla audit", "maintenance audit"] },
+  { label: "Activity & Access Logs", href: "/activity-report", category: "AUDIT & REPORTING", keywords: ["activity logs", "activity report", "access logs", "audit log", "user activity", "audit trail", "logs", "activity"] },
 
   // ADMINISTRATION
-  { label: "Users & RBAC", href: "/admin/users", category: "ADMINISTRATION", keywords: ["users", "rbac", "permissions", "roles"] },
-  { label: "Tenant Organization Tree", href: "/admin/organization", category: "ADMINISTRATION", keywords: ["organization", "tenant", "company"] },
-  { label: "System Settings", href: "/settings", category: "ADMINISTRATION", keywords: ["settings", "preferences", "config"] },
+  { label: "Organization & Locations", href: "/admin/organization?tab=hierarchy", category: "ADMINISTRATION", keywords: ["organization", "hierarchy", "branches organization", "locations", "company tree", "org hierarchy"] },
+  { label: "Employees & Location Access", href: "/admin/organization?tab=employees", category: "ADMINISTRATION", keywords: ["employees", "employee access", "staff"] },
+  { label: "Roles & Menu Access", href: "/admin/organization?tab=roles", category: "ADMINISTRATION", keywords: ["roles", "role management", "menu access", "permissions"] },
+  { label: "Platform Capability Matrix", href: "/admin/platform/capabilities", category: "ADMINISTRATION", keywords: ["capability matrix", "platform capabilities"] },
+  { label: "Feature Management", href: "/admin/features", category: "ADMINISTRATION", keywords: ["features", "feature management", "feature flags", "modules toggle"] },
+  { label: "Branch Onboarding Wizard", href: "/admin/branch-onboarding", category: "ADMINISTRATION", keywords: ["branch onboarding", "onboarding", "new branch", "onboarding wizard", "add branch"] },
+  { label: "Zero-Touch Provisioning (ZTP)", href: "/admin/zero-touch", category: "ADMINISTRATION", keywords: ["zero touch", "ztp", "ztp provisioning"] },
+  { label: "ZTP Fleet Diagnostics", href: "/admin/zero-touch/diagnostics", category: "ADMINISTRATION", keywords: ["ztp diagnostics", "fleet diagnostics"] },
+  { label: "AI Quality & Model Registry", href: "/admin/ai-quality", category: "ADMINISTRATION", keywords: ["ai quality", "model registry"] },
+  { label: "HA Topology & Chaos Lab", href: "/admin/ha-topology", category: "ADMINISTRATION", keywords: ["ha topology", "chaos lab"] },
+  { label: "Media Gateway Failover", href: "/admin/media-gateway-failover", category: "ADMINISTRATION", keywords: ["media gateway failover", "gateway failover"] },
+  { label: "Storage Failover Console", href: "/admin/storage-failover", category: "ADMINISTRATION", keywords: ["storage failover"] },
+  { label: "Recording N+1 Failover", href: "/admin/recording-failover", category: "ADMINISTRATION", keywords: ["recording failover", "n+1 failover"] },
+  { label: "Signed Edge Config Bundles", href: "/admin/signed-configuration", category: "ADMINISTRATION", keywords: ["signed config", "edge config bundles"] },
+  { label: "Database Manager", href: "/admin/database", category: "ADMINISTRATION", keywords: ["database", "db manager", "database manager"] },
+  { label: "Device Registry & ONVIF", href: "/maintenance/device-management", category: "ADMINISTRATION", keywords: ["device registry", "onvif registry"] },
+  { label: "Third-Party Integrations", href: "/integrations", category: "ADMINISTRATION", keywords: ["integrations", "third party", "webhooks", "hikvision ax pro", "third party integrations"] },
+  { label: "Notification Policies", href: "/operations/alert-notification-policy", category: "ADMINISTRATION", keywords: ["notification policies", "notifications", "alert policies"] },
+  { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", category: "ADMINISTRATION", keywords: ["camera import", "camera export", "excel import"] },
+  { label: "Stream Quality Settings", href: "/admin/stream-settings", category: "ADMINISTRATION", keywords: ["stream quality", "main stream", "sub stream"] },
+  { label: "System Settings", href: "/settings", category: "ADMINISTRATION", keywords: ["settings", "system settings", "preferences", "config", "configuration"] },
+  { label: "Users & RBAC", href: "/admin/users", category: "ADMINISTRATION", keywords: ["users", "rbac", "user management", "accounts", "permissions", "user list"] },
+  { label: "Account & Security Settings", href: "/account/security", category: "ADMINISTRATION", keywords: ["account settings", "profile", "change password", "my account", "security settings"] },
+  { label: "Mobile Operations View", href: "/mobile", category: "ADMINISTRATION", keywords: ["mobile", "mobile view", "mobile operations"] },
 ];
+
+/**
+ * Strips conversational command prefixes/suffixes in English, Malayalam & Manglish
+ */
+export function cleanNavQuery(rawQuery: string): string {
+  let q = rawQuery.toLowerCase().trim();
+
+  // Strip common navigation prefix/suffix phrases in English, Malayalam & Manglish
+  const removePhrases = [
+    "after login",
+    "ethu menu open aakan paranjalum",
+    "open aakan paranjalum",
+    "open cheyyan paranjalum",
+    "open aakanamennu",
+    "open cheyyanamennu",
+    "open aaki tharaamo",
+    "open aakki tharaamo",
+    "open aaki tharu",
+    "open aakki tharu",
+    "open cheythu tharu",
+    "open cheythu tharaamo",
+    "open cheyyanam",
+    "open cheyyaamo",
+    "open cheyyumo",
+    "open cheyyuka",
+    "open cheyyaan",
+    "open cheyyu",
+    "open cheyy",
+    "open chey",
+    "open aakkanam",
+    "open aakanam",
+    "open aakkamo",
+    "open aakamo",
+    "open aakkumo",
+    "open aakumo",
+    "open aakkuka",
+    "open aakuka",
+    "open aakkan",
+    "open aakan",
+    "open aakku",
+    "open aaku",
+    "open aakk",
+    "open aak",
+    "open",
+    "kaanichu tharaamo",
+    "kaanichu tharu",
+    "kaanich tharaamo",
+    "kaanich tharu",
+    "kaanikkaamo",
+    "kaanikkumo",
+    "kaanikkanam",
+    "kaanikkuka",
+    "kaanikkan",
+    "kaanikku",
+    "kaanikk",
+    "eduthu tharaamo",
+    "eduthu tharu",
+    "eduth tharaamo",
+    "eduth tharu",
+    "edukkaamo",
+    "edukkumo",
+    "edukkanam",
+    "edukkuka",
+    "edukkan",
+    "edukku",
+    "edukk",
+    "thuranu tharaamo",
+    "thuranu tharu",
+    "thurannu tharaamo",
+    "thurannu tharu",
+    "thurakkaamo",
+    "thurakkumo",
+    "thurakkanam",
+    "thurakkuka",
+    "thurakkan",
+    "thurakku",
+    "navigate to",
+    "navigate",
+    "go to",
+    "goto",
+    "pokanam",
+    "pokaamo",
+    "pokumo",
+    "pokaan",
+    "pokaam",
+    "pokuka",
+    "poku",
+    "show me",
+    "show",
+    "view",
+    "launch",
+    "start",
+    "load",
+    "display",
+    "paranjalum",
+    "paranjal",
+    "ethu menu",
+    "ethu page",
+    "ethu",
+    "please",
+    "can you",
+    "could you",
+    "kryptonai",
+    "krypton",
+    "onnu",
+    "enikku",
+    "njan",
+    "page",
+    "menu",
+    "screen",
+    "module",
+    "dashboard",
+    "section",
+    "window",
+  ];
+
+  // Sort phrases by descending length so multi-word phrases match first
+  removePhrases.sort((a, b) => b.length - a.length);
+
+  for (const phrase of removePhrases) {
+    const regex = new RegExp(`\\b${phrase}\\b`, "gi");
+    q = q.replace(regex, " ");
+  }
+
+  return q.replace(/\s+/g, " ").trim();
+}
 
 export function resolveAppRoute(query: string): AppRouteItem | null {
   if (!query) return null;
-  const q = query.toLowerCase().trim();
+  const raw = query.toLowerCase().trim();
+  const cleaned = cleanNavQuery(query);
 
-  // Direct href match
-  const hrefMatch = APP_ROUTES.find((r) => r.href.toLowerCase() === q);
-  if (hrefMatch) return hrefMatch;
-
-  // Direct label match
-  const labelMatch = APP_ROUTES.find((r) => r.label.toLowerCase() === q || q.includes(r.label.toLowerCase()));
-  if (labelMatch) return labelMatch;
-
-  // Keyword match
-  const keywordMatch = APP_ROUTES.find((r) =>
-    r.keywords.some((k) => q.includes(k) || k.includes(q))
+  // 1. Direct href match with raw or cleaned
+  let match = APP_ROUTES.find(
+    (r) =>
+      r.href.toLowerCase() === raw ||
+      r.href.toLowerCase() === cleaned ||
+      r.href.toLowerCase() === `/${cleaned}` ||
+      (cleaned.length >= 3 && r.href.toLowerCase().endsWith(`/${cleaned}`))
   );
-  if (keywordMatch) return keywordMatch;
+  if (match) return match;
+
+  // 2. Exact label match with raw or cleaned
+  match = APP_ROUTES.find(
+    (r) =>
+      r.label.toLowerCase() === raw ||
+      r.label.toLowerCase() === cleaned
+  );
+  if (match) return match;
+
+  // 3. Label contains cleaned, or cleaned contains label
+  if (cleaned.length >= 3) {
+    match = APP_ROUTES.find(
+      (r) =>
+        r.label.toLowerCase().includes(cleaned) ||
+        cleaned.includes(r.label.toLowerCase())
+    );
+    if (match) return match;
+
+    // 3b. All words in cleaned query match inside label or keyword
+    const words = cleaned.split(" ").filter((w) => w.length >= 3);
+    if (words.length >= 2) {
+      match = APP_ROUTES.find(
+        (r) =>
+          words.every((w) => r.label.toLowerCase().includes(w)) ||
+          r.keywords.some((k) => words.every((w) => k.includes(w)))
+      );
+      if (match) return match;
+    }
+  }
+
+  // 4. Keyword exact match with cleaned
+  if (cleaned.length >= 2) {
+    match = APP_ROUTES.find((r) =>
+      r.keywords.some((k) => k === cleaned)
+    );
+    if (match) return match;
+  }
+
+  // 5. Keyword substring match with cleaned
+  if (cleaned.length >= 3) {
+    match = APP_ROUTES.find((r) =>
+      r.keywords.some((k) => cleaned.includes(k) || k.includes(cleaned))
+    );
+    if (match) return match;
+  }
+
+  // 6. Keyword match against raw query as fallback
+  match = APP_ROUTES.find((r) =>
+    r.keywords.some((k) => raw.includes(k) && k.length >= 3)
+  );
+  if (match) return match;
 
   return null;
 }
@@ -426,6 +672,71 @@ export class GuardianAIAssistant {
     message: string,
     context: GuardianContext
   ): Promise<GuardianResponse> {
+    // In authenticated session, if user asks to open/navigate to ANY menu/page or names a menu, resolve immediately!
+    if (!context.isGuest) {
+      const lower = message.toLowerCase().trim();
+      const navMatch = resolveAppRoute(lower);
+      const cleaned = cleanNavQuery(lower);
+      const isNavIntent =
+        lower.includes("open") ||
+        lower.includes("go") ||
+        lower.includes("show") ||
+        lower.includes("view") ||
+        lower.includes("menu") ||
+        lower.includes("navigate") ||
+        lower.includes("poku") ||
+        lower.includes("pokanam") ||
+        lower.includes("pokaam") ||
+        lower.includes("pokaan") ||
+        lower.includes("kaanik") ||
+        lower.includes("kaanikkanam") ||
+        lower.includes("kaanich") ||
+        lower.includes("edukk") ||
+        lower.includes("edukkanam") ||
+        lower.includes("eduth") ||
+        lower.includes("aak") ||
+        lower.includes("aakanam") ||
+        lower.includes("aakk") ||
+        lower.includes("aakkanam") ||
+        lower.includes("cheyy") ||
+        lower.includes("cheyyanam") ||
+        lower.includes("thurak") ||
+        lower.includes("thurann") ||
+        lower.includes("launch") ||
+        lower.includes("load") ||
+        lower.includes("display") ||
+        lower.includes("start");
+
+      const isDirectMatch = Boolean(
+        navMatch &&
+        (cleaned === navMatch.label.toLowerCase() ||
+         navMatch.keywords.some((k) => cleaned === k) ||
+         cleaned.length >= 3)
+      );
+
+      if (navMatch && (isNavIntent || isDirectMatch)) {
+        return {
+          message: `Opening **${navMatch.label}** (${navMatch.href}). Navigating now...`,
+          type: "action",
+          actions: [
+            {
+              function: "navigate_to_menu",
+              parameters: { target: navMatch.href, label: navMatch.label },
+              executed: true,
+              result: {
+                href: navMatch.href,
+                label: navMatch.label,
+                category: navMatch.category,
+                action: "navigate",
+              },
+            },
+          ],
+          suggestions: ["Executive MIS Reports", "Live Video Wall", "Incident Response", "System Settings"],
+          timestamp: new Date().toISOString(),
+        };
+      }
+    }
+
     if (!this.openAIApiKey) {
       return await this.processFallbackMessage(message, context);
     }
@@ -1220,9 +1531,40 @@ When users give commands:
 
     // 0. Navigation / Open Menu Command
     const navMatch = resolveAppRoute(lower);
-    if (navMatch && (lower.includes("open") || lower.includes("go") || lower.includes("show") || lower.includes("menu") || lower.includes("navigate") || lower.includes("poku") || lower.includes("kaanik") || lower.includes("edukk") || lower.includes("view") || lower.includes("wall") || lower.includes("mis") || lower.includes("report") || lower.includes("face") || lower.includes("search") || lower.includes("playback"))) {
+    const cleaned = cleanNavQuery(lower);
+    const isNavIntent =
+      lower.includes("open") ||
+      lower.includes("go") ||
+      lower.includes("show") ||
+      lower.includes("view") ||
+      lower.includes("menu") ||
+      lower.includes("navigate") ||
+      lower.includes("poku") ||
+      lower.includes("pokanam") ||
+      lower.includes("kaanik") ||
+      lower.includes("kaanikkanam") ||
+      lower.includes("edukk") ||
+      lower.includes("edukkanam") ||
+      lower.includes("aak") ||
+      lower.includes("aakanam") ||
+      lower.includes("cheyy") ||
+      lower.includes("cheyyanam") ||
+      lower.includes("thurak") ||
+      lower.includes("launch") ||
+      lower.includes("load") ||
+      lower.includes("display") ||
+      lower.includes("start");
+
+    const isDirectMatch = Boolean(
+      navMatch &&
+      (cleaned === navMatch.label.toLowerCase() ||
+       navMatch.keywords.some((k) => cleaned === k) ||
+       cleaned.length >= 3)
+    );
+
+    if (navMatch && (isNavIntent || isDirectMatch)) {
       return {
-        message: `Opening ${navMatch.label}. Click below to navigate directly:`,
+        message: `Opening **${navMatch.label}** (${navMatch.href}). Navigating now...`,
         type: "action",
         actions: [
           {
@@ -1237,7 +1579,7 @@ When users give commands:
             },
           },
         ],
-        suggestions: ["Executive MIS Reports", "Live Video Wall", "Incident Response"],
+        suggestions: ["Executive MIS Reports", "Live Video Wall", "Incident Response", "System Settings"],
         timestamp,
       };
     }
