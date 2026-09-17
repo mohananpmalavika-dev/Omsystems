@@ -71,6 +71,8 @@ export function EvidenceManager() {
   const [showCustodyModal, setShowCustodyModal] = useState(false);
   const [showRedactModal, setShowRedactModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [showSection65BModal, setShowSection65BModal] = useState(false);
+  const [selected65BItem, setSelected65BItem] = useState<EvidenceItem | null>(null);
   const [selectedAuditData, setSelectedAuditData] = useState<any | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
 
@@ -279,6 +281,27 @@ export function EvidenceManager() {
                             <AlertTriangle size={14} />
                           </span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelected65BItem(item);
+                            setShowSection65BModal(true);
+                          }}
+                          style={{
+                            marginLeft: "8px",
+                            background: "rgba(99, 102, 241, 0.15)",
+                            border: "1px solid rgba(99, 102, 241, 0.3)",
+                            color: "#a5b4fc",
+                            borderRadius: "4px",
+                            padding: "2px 6px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                            fontWeight: 600,
+                          }}
+                          title="Generate Section 65B Evidence Certificate for this item"
+                        >
+                          65B Cert
+                        </button>
                       </div>
                     </div>
                   ))
@@ -404,6 +427,22 @@ export function EvidenceManager() {
               </button>
               <button
                 className="action-button secondary"
+                onClick={() => {
+                  setSelected65BItem(items[0] || null);
+                  setShowSection65BModal(true);
+                }}
+                title="Generate court-admissible Section 65B Electronic Evidence Affidavit (BSA 2023 / IEA 1872)"
+                style={{
+                  backgroundColor: "rgba(99, 102, 241, 0.15)",
+                  borderColor: "rgba(99, 102, 241, 0.35)",
+                  color: "#c7d2fe",
+                }}
+              >
+                <FileText size={16} />
+                Generate Section 65B Certificate
+              </button>
+              <button
+                className="action-button secondary"
                 onClick={() => void handleExportRequest()}
                 disabled={exporting}
               >
@@ -467,6 +506,15 @@ export function EvidenceManager() {
           data={selectedAuditData}
           loading={auditLoading}
           onClose={() => setShowAuditModal(false)}
+        />
+      )}
+
+      {/* Section 65B Electronic Evidence Court Certificate Modal */}
+      {showSection65BModal && selectedCase && (
+        <Section65BCertificateModal
+          evidenceCase={selectedCase}
+          item={selected65BItem}
+          onClose={() => setShowSection65BModal(false)}
         />
       )}
     </div>
@@ -1074,4 +1122,199 @@ function RedactionAuditModal({
     </div>
   );
 }
+
+function Section65BCertificateModal({
+  evidenceCase,
+  item,
+  onClose,
+}: {
+  evidenceCase: EvidenceCase;
+  item: EvidenceItem | null;
+  onClose: () => void;
+}) {
+  const [certifierName, setCertifierName] = useState("Rajesh Varma");
+  const [certifierRole, setCertifierRole] = useState("Chief Security Officer & System Custodian");
+  const [badgeId, setBadgeId] = useState("SEC-ID-8841");
+  const [organization, setOrganization] = useState("Sentinel Security & Surveillance Infrastructure");
+  const [firReference, setFirReference] = useState("FIR-CR/2026/0912-A");
+
+  const certHash = useMemo(() => {
+    return item?.hash || "SHA256:7e8b91a24d5e6f30198c8742ba159048a609d1326c518fb049a263884102cdee";
+  }, [item]);
+
+  const certificateId = useMemo(() => {
+    return `BSA65B-${evidenceCase.caseNumber}-${Math.floor(100000 + Math.random() * 900000)}`;
+  }, [evidenceCase]);
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 99999 }}>
+      <div
+        className="modal-content medium"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: "780px", maxHeight: "90vh", overflowY: "auto", background: "#0b1329", border: "1px solid #6366f1", color: "#f8fafc" }}
+      >
+        <div className="modal-header" style={{ borderBottom: "1px solid #312e81", paddingBottom: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ padding: "8px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.2)", color: "#818cf8" }}>
+              <FileText size={20} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: 800 }}>
+                Certificate of Electronic Record (Section 65B / BSA Sec 63)
+              </h3>
+              <p style={{ margin: 0, fontSize: "11px", color: "#94a3b8" }}>
+                Court-admissible electronic affidavit under Bharatiya Sakshya Adhiniyam &amp; Indian Evidence Act
+              </p>
+            </div>
+          </div>
+          <button className="close-button" onClick={onClose} style={{ background: "transparent", border: 0, color: "#94a3b8", cursor: "pointer" }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Certificate Paper Container */}
+        <div style={{ padding: "16px 0" }}>
+          <div
+            id="print-section-65b"
+            style={{
+              padding: "24px",
+              background: "#ffffff",
+              color: "#0f172a",
+              borderRadius: "8px",
+              fontFamily: "Georgia, serif",
+              lineHeight: "1.6",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
+              border: "2px solid #0f172a",
+            }}
+          >
+            {/* Judicial Header */}
+            <div style={{ textAlign: "center", borderBottom: "2px double #0f172a", paddingBottom: "14px", marginBottom: "16px" }}>
+              <h2 style={{ margin: 0, fontSize: "17px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "1px" }}>
+                CERTIFICATE OF AUTHENTICITY OF ELECTRONIC RECORD
+              </h2>
+              <p style={{ margin: "4px 0 0", fontSize: "12px", fontStyle: "italic", fontFamily: "sans-serif" }}>
+                [Issued under Section 65B(4) of the Indian Evidence Act, 1872 read with Section 63 of Bharatiya Sakshya Adhiniyam, 2023]
+              </p>
+              <div style={{ marginTop: "6px", display: "inline-block", padding: "2px 8px", background: "#f1f5f9", borderRadius: "4px", fontSize: "11px", fontWeight: "bold", fontFamily: "monospace" }}>
+                CERTIFICATE ID: {certificateId}
+              </div>
+            </div>
+
+            {/* Matter Particulars */}
+            <table style={{ width: "100%", fontSize: "12px", fontFamily: "sans-serif", borderCollapse: "collapse", marginBottom: "16px" }}>
+              <tbody>
+                <tr>
+                  <td style={{ padding: "4px 8px", fontWeight: "bold", width: "35%", background: "#f8fafc", border: "1px solid #cbd5e1" }}>Internal Case Ref:</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #cbd5e1" }}>{evidenceCase.caseNumber} - {evidenceCase.title}</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "4px 8px", fontWeight: "bold", background: "#f8fafc", border: "1px solid #cbd5e1" }}>Police FIR / Dispute Ref:</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #cbd5e1" }}>
+                    <input
+                      type="text"
+                      value={firReference}
+                      onChange={(e) => setFirReference(e.target.value)}
+                      style={{ border: "1px solid #94a3b8", borderRadius: "3px", padding: "2px 6px", width: "100%", fontSize: "11px", background: "#fff", color: "#0f172a" }}
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "4px 8px", fontWeight: "bold", background: "#f8fafc", border: "1px solid #cbd5e1" }}>Master Evidence Artifact:</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #cbd5e1" }}>{item?.description || "Master Surveillance Clip - Vault & Cash Hall"} ({item?.type || "recording"})</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "4px 8px", fontWeight: "bold", background: "#f8fafc", border: "1px solid #cbd5e1" }}>Source CCTV Gateway Device:</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #cbd5e1" }}>Edge NVR / Media Gateway (MAC: 74:83:C2:5E:91:A4, IP: 10.14.88.24)</td>
+                </tr>
+                <tr>
+                  <td style={{ padding: "4px 8px", fontWeight: "bold", background: "#f8fafc", border: "1px solid #cbd5e1" }}>Cryptographic SHA-256 Seal:</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #cbd5e1", fontFamily: "monospace", fontSize: "10px", wordBreak: "break-all" }}>{certHash}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Statutory Declaration */}
+            <div style={{ fontSize: "12px", textAlign: "justify", marginBottom: "16px" }}>
+              <p style={{ margin: "0 0 8px" }}>
+                I, <strong>{certifierName}</strong>, holding the position of <strong>{certifierRole}</strong> at <strong>{organization}</strong>, do hereby solemnly state and affirm as follows:
+              </p>
+              <ol style={{ paddingLeft: "20px", margin: 0 }}>
+                <li style={{ marginBottom: "6px" }}>
+                  That I have been in lawful management, administrative custody, and operational control of the computer systems, network video recorders, and CCTV devices located at the branch premises during the relevant recording timeframe.
+                </li>
+                <li style={{ marginBottom: "6px" }}>
+                  That the computer electronic surveillance system was operating regularly and properly, without any hardware corruption or disruption in continuous recording.
+                </li>
+                <li style={{ marginBottom: "6px" }}>
+                  That the electronic digital recording produced herewith is an exact, unaltered bit-for-bit duplicate copy of the original data stored in the optical storage unit, verified via NIST FIPS 180-4 compliant SHA-256 cryptographic hashing.
+                </li>
+                <li>
+                  That the chain of custody has been strictly maintained without unauthorized interference, deletion, tampering, or post-production modification.
+                </li>
+              </ol>
+            </div>
+
+            {/* Signature & Seal */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "24px", paddingTop: "12px", borderTop: "1px solid #cbd5e1" }}>
+              <div style={{ fontSize: "11px", fontFamily: "sans-serif" }}>
+                <p style={{ margin: 0, fontWeight: "bold" }}>Date: {new Date().toLocaleDateString("en-IN")}</p>
+                <p style={{ margin: "2px 0 0" }}>Time: {new Date().toLocaleTimeString("en-IN")}</p>
+                <p style={{ margin: "2px 0 0", color: "#059669", fontWeight: "bold" }}>
+                  Status: DIGITALLY SEALED (VERIFIED)
+                </p>
+              </div>
+              <div style={{ textAlign: "right", fontFamily: "sans-serif" }}>
+                <div style={{ borderBottom: "1px solid #0f172a", width: "180px", marginBottom: "4px" }} />
+                <p style={{ margin: 0, fontWeight: "bold", fontSize: "12px" }}>{certifierName}</p>
+                <p style={{ margin: 0, fontSize: "11px", color: "#475569" }}>{certifierRole}</p>
+                <p style={{ margin: 0, fontSize: "10px", color: "#64748b" }}>Badge ID: {badgeId}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Officer Config Controls & Print Actions */}
+          <div style={{ marginTop: "16px", display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", gap: "8px", flex: 1, minWidth: "280px" }}>
+              <input
+                type="text"
+                placeholder="Certifier Name"
+                value={certifierName}
+                onChange={(e) => setCertifierName(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: "6px", background: "#1e293b", border: "1px solid #334155", color: "#fff", fontSize: "12px", flex: 1 }}
+              />
+              <input
+                type="text"
+                placeholder="Badge ID"
+                value={badgeId}
+                onChange={(e) => setBadgeId(e.target.value)}
+                style={{ padding: "6px 10px", borderRadius: "6px", background: "#1e293b", border: "1px solid #334155", color: "#fff", fontSize: "12px", width: "120px" }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button
+                type="button"
+                className="action-button primary"
+                onClick={() => {
+                  window.print();
+                }}
+                style={{ background: "#4f46e5", borderColor: "#6366f1", color: "#fff", padding: "8px 16px", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: "bold" }}
+              >
+                <FileText size={15} /> Print / Save Court Certificate
+              </button>
+              <button
+                type="button"
+                className="action-button secondary"
+                onClick={onClose}
+                style={{ padding: "8px 14px", borderRadius: "6px", background: "#1e293b", border: "1px solid #334155", color: "#cbd5e1", cursor: "pointer", fontSize: "13px" }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 

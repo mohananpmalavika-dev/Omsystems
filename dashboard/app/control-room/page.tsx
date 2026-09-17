@@ -13,19 +13,27 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  Compass,
   Filter,
   Globe2,
   HardDrive,
   LayoutDashboard,
   Layers,
+  Lock,
   MapPin,
   Maximize2,
+  Pause,
   Play,
+  Radio,
   RefreshCw,
   Search,
+  ShieldAlert,
+  Siren,
   Sparkles,
   SlidersHorizontal,
+  Unlock,
   Video,
+  Volume2,
   X,
   XCircle,
 } from "lucide-react";
@@ -293,6 +301,13 @@ function HeaderClock() {
   );
 }
 
+const PATROL_STAGES = [
+  { id: "ingress", name: "Stage 1: Main Ingress & Outer Perimeter", keywords: ["entrance", "gate", "door", "front", "ingress", "entry", "perimeter"] },
+  { id: "counter", name: "Stage 2: Cash Counter & Teller Enclosure", keywords: ["counter", "teller", "cash", "hall", "desk", "lobby"] },
+  { id: "vault", name: "Stage 3: Strongroom & Gold Vault Perimeter", keywords: ["vault", "strong", "locker", "safe", "room", "gold"] },
+  { id: "atm", name: "Stage 4: 24/7 ATM Vestibule & Backdoor", keywords: ["atm", "kiosk", "back", "rear", "exit", "vestibule"] },
+];
+
 function ControlRoomContent() {
   const searchParams = useSearchParams();
   const urlBranchId = searchParams?.get("branchId") || searchParams?.get("branch") || null;
@@ -315,6 +330,23 @@ function ControlRoomContent() {
   const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [selectedAiCameraId, setSelectedAiCameraId] = useState<string>();
   const [focusCameraId, setFocusCameraId] = useState<string>();
+
+  // Virtual Patrol Tour States
+  const [isPatrolActive, setIsPatrolActive] = useState(false);
+  const [patrolIntervalSec, setPatrolIntervalSec] = useState(15);
+  const [patrolStageIndex, setPatrolStageIndex] = useState(0);
+  const [patrolSecondsLeft, setPatrolSecondsLeft] = useState(15);
+
+  // Emergency Lockdown Cockpit States
+  const [emergencyLockdownOpen, setEmergencyLockdownOpen] = useState(false);
+  const [lockdownState, setLockdownState] = useState<"idle" | "triggered" | "disarmed">("idle");
+  const [lockdownTargetBranch, setLockdownTargetBranch] = useState("ALL");
+  const [sirenActive, setSirenActive] = useState(true);
+  const [audioBroadcastActive, setAudioBroadcastActive] = useState(true);
+  const [doorInterlockActive, setDoorInterlockActive] = useState(true);
+  const [policeDispatchNotified, setPoliceDispatchNotified] = useState(true);
+  const [disarmCode, setDisarmCode] = useState("");
+  const [lockdownLog, setLockdownLog] = useState<string[]>([]);
   
   // Hierarchy & Filter States
   const [selectedZone, setSelectedZone] = useState<string>("ALL");
@@ -509,7 +541,39 @@ function ControlRoomContent() {
     },
   ), [cameras, branchesList, combinedPriorityCameraIds, selectedZone, selectedRegion,
     selectedArea, selectedBranchId, searchQuery, statusFilter, hideUnavailableChannels]);
-  const filteredCameras = wallSelection.cameras;
+
+  // Virtual Patrol Timer Effect
+  useEffect(() => {
+    if (!isPatrolActive) {
+      setPatrolSecondsLeft(patrolIntervalSec);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setPatrolSecondsLeft((prev) => {
+        if (prev <= 1) {
+          setPatrolStageIndex((curr) => (curr + 1) % PATROL_STAGES.length);
+          return patrolIntervalSec;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isPatrolActive, patrolIntervalSec]);
+
+  // If patrol is active, prioritize cameras matching current stage keywords
+  const filteredCameras = useMemo(() => {
+    if (!isPatrolActive) return wallSelection.cameras;
+    const currentKeywords = PATROL_STAGES[patrolStageIndex].keywords;
+    return [...wallSelection.cameras].sort((a, b) => {
+      const aText = `${a.name} ${a.zone || ""} ${a.location || ""}`.toLowerCase();
+      const bText = `${b.name} ${b.zone || ""} ${b.location || ""}`.toLowerCase();
+      const aMatches = currentKeywords.some((k) => aText.includes(k));
+      const bMatches = currentKeywords.some((k) => bText.includes(k));
+      if (aMatches && !bMatches) return -1;
+      if (!aMatches && bMatches) return 1;
+      return 0;
+    });
+  }, [wallSelection.cameras, isPatrolActive, patrolStageIndex]);
 
   useEffect(() => {
     if (filteredCameras.length === 0) {
@@ -727,6 +791,15 @@ function ControlRoomContent() {
             {dataMode === "live" ? "System Live" : dataMode === "partial" ? "Partial Sync" : "Offline Mode"}
           </span>
           <span className="wall-clock"><HeaderClock /></span>
+          <button
+            type="button"
+            className="lockdown-btn"
+            onClick={() => setEmergencyLockdownOpen(true)}
+            title="Emergency Panic & Branch Lockdown Cockpit"
+          >
+            <Siren size={14} className={lockdownState === "triggered" ? "pulse-siren" : ""} />
+            <span>{lockdownState === "triggered" ? "LOCKDOWN ACTIVE" : "Panic / Lockdown"}</span>
+          </button>
           <button
             type="button"
             className="refresh-btn"
@@ -961,6 +1034,58 @@ function ControlRoomContent() {
         </div>
       </section>
 
+      {/* 2.5 Virtual Guard Patrol Tour Bar */}
+      <section className="patrol-tour-bar" aria-label="Virtual Guard Patrol Tour Mode">
+        <div className="patrol-meta">
+          <div className="patrol-brand">
+            <Compass size={16} className={isPatrolActive ? "spin-slow text-indigo-400" : "text-slate-400"} />
+            <strong>Virtual Guard Patrol Tour</strong>
+            <span className={`patrol-badge ${isPatrolActive ? "active" : ""}`}>
+              {isPatrolActive ? "AUTOPILOT PATROL ON" : "PATROL STANDBY"}
+            </span>
+          </div>
+          {isPatrolActive && (
+            <div className="patrol-current-stage">
+              <span className="stage-tag">{PATROL_STAGES[patrolStageIndex].name}</span>
+              <span className="countdown-tag">Next Zone in {patrolSecondsLeft}s</span>
+            </div>
+          )}
+        </div>
+        <div className="patrol-controls">
+          <div className="interval-pills">
+            <span>Cycle:</span>
+            {[10, 15, 30].map((sec) => (
+              <button
+                key={sec}
+                type="button"
+                className={`interval-btn ${patrolIntervalSec === sec ? "active" : ""}`}
+                onClick={() => {
+                  setPatrolIntervalSec(sec);
+                  setPatrolSecondsLeft(sec);
+                }}
+              >
+                {sec}s
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            className={`patrol-toggle-btn ${isPatrolActive ? "pause" : "start"}`}
+            onClick={() => setIsPatrolActive((prev) => !prev)}
+          >
+            {isPatrolActive ? (
+              <>
+                <Pause size={13} /> Pause Patrol
+              </>
+            ) : (
+              <>
+                <Play size={13} /> Start Auto-Patrol Tour
+              </>
+            )}
+          </button>
+        </div>
+      </section>
+
       {/* 3. Single Branch Hero Banner (if a single branch is selected) */}
       {activeSingleBranch && (
         <div className="single-branch-banner">
@@ -1146,6 +1271,187 @@ function ControlRoomContent() {
         />
       )}
 
+      {/* Emergency Lockdown Cockpit Modal */}
+      {emergencyLockdownOpen && (
+        <div className="lockdown-modal-backdrop" onClick={() => setEmergencyLockdownOpen(false)}>
+          <div className="lockdown-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="lockdown-modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div style={{ padding: "8px", borderRadius: "10px", background: "rgba(225, 29, 72, 0.2)", border: "1px solid rgba(225, 29, 72, 0.4)", color: "#f43f5e" }}>
+                  <Siren size={24} className="pulse-siren" />
+                </div>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: "16px", fontWeight: 800, color: "#ffffff" }}>
+                    Emergency Panic &amp; Branch Lockdown Cockpit
+                  </h2>
+                  <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#fda4af", fontFamily: "monospace" }}>
+                    DEFCON-1 CENTRAL DISPATCH • 112 POLICE INTEGRATION
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                style={{ background: "transparent", border: 0, color: "#94a3b8", cursor: "pointer", padding: "4px" }}
+                onClick={() => setEmergencyLockdownOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="lockdown-body">
+              {lockdownState === "triggered" ? (
+                <div className="triggered-alert-box">
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", background: "rgba(225, 29, 72, 0.15)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(225, 29, 72, 0.4)" }}>
+                    <ShieldAlert size={32} style={{ color: "#f43f5e", flexShrink: 0 }} />
+                    <div>
+                      <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 800, color: "#ffffff" }}>EMERGENCY LOCKDOWN ACTIVE</h3>
+                      <p style={{ margin: "2px 0 0", fontSize: "12px", color: "#fecdd3" }}>
+                        High-decibel edge strobes active. Doors interlocked. Law enforcement dispatched.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="status-grid">
+                    <div className="status-item ok">
+                      <Volume2 size={14} /> 110dB Audio Strobe: Actively Broadcasting
+                    </div>
+                    <div className="status-item ok">
+                      <Lock size={14} /> Magnetic Vault &amp; Ingress Access Doors: Interlocked &amp; Locked
+                    </div>
+                    <div className="status-item ok">
+                      <Radio size={14} /> Police Control (112) &amp; Regional Security Officer: Alert Dispatched
+                    </div>
+                    <div className="status-item ok">
+                      <Camera size={14} /> NVR Stream: Locked to 4K Evidence Vault Retained
+                    </div>
+                  </div>
+
+                  {/* Disarm Section */}
+                  <div className="disarm-section">
+                    <label style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", display: "block", marginBottom: "6px" }}>
+                      Enter Operator Authorization Code to Disarm &amp; Unlock:
+                    </label>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <input
+                        type="password"
+                        placeholder="e.g. SEC-9021 or Master PIN"
+                        value={disarmCode}
+                        onChange={(e) => setDisarmCode(e.target.value)}
+                        className="disarm-input"
+                      />
+                      <button
+                        type="button"
+                        className="disarm-btn"
+                        onClick={() => {
+                          if (disarmCode.trim().length >= 4) {
+                            setLockdownState("disarmed");
+                            setLockdownLog((prev) => [
+                              `[${new Date().toLocaleTimeString()}] Stand Down & Disarm authorized by operator (Code Verified).`,
+                              ...prev,
+                            ]);
+                            setDisarmCode("");
+                          } else {
+                            alert("Please enter a valid 4+ digit authorization code.");
+                          }
+                        }}
+                      >
+                        <Unlock size={14} /> Disarm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="standby-config">
+                  <div className="target-selector">
+                    <label style={{ fontSize: "12px", fontWeight: 700, color: "#cbd5e1" }}>
+                      Target Branch for Lockdown:
+                    </label>
+                    <select
+                      value={lockdownTargetBranch}
+                      onChange={(e) => setLockdownTargetBranch(e.target.value)}
+                      className="branch-select"
+                    >
+                      <option value="ALL">All Operational Branches (PANIC BROADCAST)</option>
+                      {branchesList.map((b) => (
+                        <option key={b.branchId} value={b.branchId}>
+                          {b.branchName} ({b.branchId})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="toggles-list">
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={sirenActive}
+                        onChange={(e) => setSirenActive(e.target.checked)}
+                      />
+                      <span>Trigger 110dB Edge Strobe Siren at branch</span>
+                    </label>
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={audioBroadcastActive}
+                        onChange={(e) => setAudioBroadcastActive(e.target.checked)}
+                      />
+                      <span>Broadcast Two-Way IP Speaker Deterrence Warning ("Police dispatched")</span>
+                    </label>
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={doorInterlockActive}
+                        onChange={(e) => setDoorInterlockActive(e.target.checked)}
+                      />
+                      <span>Engage Magnetic Access Control Door Lock Interlocks</span>
+                    </label>
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={policeDispatchNotified}
+                        onChange={(e) => setPoliceDispatchNotified(e.target.checked)}
+                      />
+                      <span>Dispatch Instant SOS to Police Control Room (112) &amp; Branch RSO</span>
+                    </label>
+                  </div>
+
+                  <div className="warning-note">
+                    <AlertTriangle size={14} style={{ color: "#f59e0b", flexShrink: 0 }} />
+                    <span>
+                      Triggering lockdown will immediately engage physical security hardware and notify law enforcement. Every activation is permanently recorded in the immutable audit vault.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="trigger-panic-btn"
+                    onClick={() => {
+                      setLockdownState("triggered");
+                      setLockdownLog((prev) => [
+                        `[${new Date().toLocaleTimeString()}] EMERGENCY LOCKDOWN TRIGGERED by operator for ${lockdownTargetBranch}.`,
+                        ...prev,
+                      ]);
+                    }}
+                  >
+                    <Siren size={18} />
+                    <span>ENGAGE EMERGENCY LOCKDOWN NOW</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Event Trail */}
+              {lockdownLog.length > 0 && (
+                <div style={{ marginTop: "14px", padding: "10px", borderRadius: "8px", background: "#020617", border: "1px solid #1e293b", fontSize: "11px", fontFamily: "monospace", color: "#94a3b8", maxHeight: "90px", overflowY: "auto" }}>
+                  {lockdownLog.map((log, idx) => (
+                    <div key={idx}>{log}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .control-room {
           width: min(100%, 1680px); min-width: 0; min-height: calc(100dvh - 80px);
@@ -1176,6 +1482,67 @@ function ControlRoomContent() {
           transition: background .15s ease, border-color .15s ease;
         }
         .refresh-btn { color: var(--blue-dark); }
+        .lockdown-btn {
+          display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+          padding: 7px 12px; border: 1px solid #e11d48; border-radius: 7px;
+          background: rgba(225, 29, 72, 0.15); color: #f43f5e; font-size: 12px;
+          font-weight: 700; cursor: pointer; transition: all .15s ease;
+        }
+        .lockdown-btn:hover { background: rgba(225, 29, 72, 0.25); border-color: #f43f5e; color: #fff; }
+        .pulse-siren { animation: siren-pulse 0.9s infinite alternate; }
+        @keyframes siren-pulse { 0% { transform: scale(1); } 100% { transform: scale(1.25); } }
+
+        .patrol-tour-bar {
+          display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+          padding: 10px 16px; background: #0b1528; border: 1px solid #1e3a8a; border-radius: 10px;
+        }
+        .patrol-meta { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .patrol-brand { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #f8fafc; }
+        .patrol-badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 9999px; background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+        .patrol-badge.active { background: rgba(99, 102, 241, 0.25); color: #a5b4fc; border-color: #6366f1; }
+        .patrol-current-stage { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+        .stage-tag { padding: 3px 8px; border-radius: 6px; background: #1e1b4b; color: #c7d2fe; border: 1px solid #4338ca; font-weight: 600; }
+        .countdown-tag { color: #38bdf8; font-family: monospace; font-size: 11px; }
+        .patrol-controls { display: flex; align-items: center; gap: 10px; }
+        .interval-pills { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #94a3b8; }
+        .interval-btn { padding: 3px 7px; border-radius: 5px; border: 1px solid #334155; background: #1e293b; color: #cbd5e1; font-size: 11px; font-weight: 600; cursor: pointer; }
+        .interval-btn.active { background: #3b82f6; color: #fff; border-color: #2563eb; }
+        .patrol-toggle-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; border: 0; }
+        .patrol-toggle-btn.start { background: #4f46e5; color: #fff; }
+        .patrol-toggle-btn.start:hover { background: #4338ca; }
+        .patrol-toggle-btn.pause { background: #f59e0b; color: #000; }
+        .spin-slow { animation: spin 5s linear infinite; }
+
+        .lockdown-modal-backdrop {
+          position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center;
+          background: rgba(2, 6, 23, 0.85); backdrop-filter: blur(6px); padding: 16px;
+        }
+        .lockdown-modal-card {
+          width: min(100%, 560px); background: #090e17; border: 1px solid #e11d48;
+          border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(225, 29, 72, 0.35); overflow: hidden;
+        }
+        .lockdown-modal-header {
+          display: flex; align-items: center; justify-content: space-between; padding: 16px 20px;
+          border-bottom: 1px solid rgba(225, 29, 72, 0.3); background: rgba(225, 29, 72, 0.08);
+        }
+        .lockdown-body { padding: 20px; }
+        .triggered-alert-box { display: flex; flex-direction: column; gap: 14px; }
+        .status-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin: 8px 0; }
+        .status-item { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; padding: 8px 12px; border-radius: 8px; }
+        .status-item.ok { background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+        .disarm-section { margin-top: 10px; padding: 12px; border-radius: 8px; background: #0f172a; border: 1px solid #1e293b; }
+        .disarm-input { flex: 1; padding: 7px 12px; border-radius: 6px; background: #020617; border: 1px solid #334155; color: #fff; font-size: 12px; }
+        .disarm-btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 6px; background: #10b981; color: #fff; font-weight: 700; font-size: 12px; border: 0; cursor: pointer; }
+        .standby-config { display: flex; flex-direction: column; gap: 14px; }
+        .target-selector { display: flex; flex-direction: column; gap: 6px; }
+        .branch-select { padding: 8px 12px; border-radius: 8px; background: #0f172a; border: 1px solid #334155; color: #fff; font-size: 13px; }
+        .toggles-list { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; background: #0f172a; border: 1px solid #1e293b; }
+        .toggle-label { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #cbd5e1; cursor: pointer; }
+        .toggle-label input { width: 16px; height: 16px; accent-color: #e11d48; }
+        .warning-note { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: #fbbf24; background: rgba(245, 158, 11, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); }
+        .trigger-panic-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 8px; background: #e11d48; color: #fff; font-weight: 800; font-size: 14px; border: 0; cursor: pointer; box-shadow: 0 10px 25px -5px rgba(225, 29, 72, 0.5); transition: background .15s ease; }
+        .trigger-panic-btn:hover { background: #be123c; }
+
         .nav-link:hover, .refresh-btn:hover:not(:disabled) { color: var(--blue-dark); background: var(--blue-soft); border-color: var(--blue); }
         .refresh-btn:disabled { opacity: .6; cursor: wait; }
         .nav-hub-right { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; grid-column: 2; grid-row: 1; justify-content: flex-end; }
