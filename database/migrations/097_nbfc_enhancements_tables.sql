@@ -399,20 +399,25 @@ ORDER BY branch_id, snapshot_time DESC;
 -- Sample Data for Development (Optional - Remove in Production)
 -- ============================================================================
 
--- Grant permissions
-GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_logistics_sessions TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_detection_points TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_logistics_violations TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON device_health_snapshots TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON device_critical_issues TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON device_correlated_events TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON nbfc_watchlist_entries TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON nbfc_watchlist_detections TO sentinel_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON branch_comparison_metrics TO sentinel_app;
+-- Grant permissions conditionally if sentinel_app role exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'sentinel_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_logistics_sessions TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_detection_points TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON anpr_logistics_violations TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON device_health_snapshots TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON device_critical_issues TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON device_correlated_events TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON nbfc_watchlist_entries TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON nbfc_watchlist_detections TO sentinel_app;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON branch_comparison_metrics TO sentinel_app;
 
-GRANT SELECT ON v_active_anpr_sessions TO sentinel_app;
-GRANT SELECT ON v_watchlist_with_detections TO sentinel_app;
-GRANT SELECT ON v_current_device_health TO sentinel_app;
+    GRANT SELECT ON v_active_anpr_sessions TO sentinel_app;
+    GRANT SELECT ON v_watchlist_with_detections TO sentinel_app;
+    GRANT SELECT ON v_current_device_health TO sentinel_app;
+  END IF;
+END $$;
 
 -- Comments for documentation
 COMMENT ON TABLE anpr_logistics_sessions IS 'Cash-van tracking via ANPR for NBFC branch security';
