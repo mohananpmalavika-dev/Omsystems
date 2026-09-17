@@ -62,6 +62,7 @@ export default function AiAlertsIncidentHubPage() {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [conversionFilter, setConversionFilter] = useState<"all" | "unconverted" | "converted" | "false_alarm">("all");
+  const [quickFilter, setQuickFilter] = useState<"all" | "critical" | "active">("all");
   const [convertingId, setConvertingId] = useState<string | null>(null);
   const [markingFalseAlert, setMarkingFalseAlert] = useState<AnalyticsAlert | null>(null);
   const [falseAlarmReasonChoice, setFalseAlarmReasonChoice] = useState("False detection / algorithm misclassification");
@@ -186,6 +187,7 @@ export default function AiAlertsIncidentHubPage() {
     setSeverityFilter("all");
     setStatusFilter("all");
     setConversionFilter("all");
+    setQuickFilter("all");
     setSearchQuery("");
   }, []);
 
@@ -200,6 +202,8 @@ export default function AiAlertsIncidentHubPage() {
       if (dateFilter !== "all" && normalizeAlertDate(alert) !== dateFilter) return false;
       if (severityFilter !== "all" && alert.severity !== severityFilter) return false;
       if (statusFilter !== "all" && alert.status !== statusFilter) return false;
+      if (quickFilter === "critical" && alert.severity !== "P1" && alert.severity !== "P2") return false;
+      if (quickFilter === "active" && ["resolved", "false_alarm", "suppressed"].includes(alert.status)) return false;
       if (conversionFilter === "unconverted" && (alert.incidentId || alert.incidentNumber || ["resolved", "false_alarm", "suppressed"].includes(alert.status))) return false;
       if (conversionFilter === "converted" && !alert.incidentId && !alert.incidentNumber) return false;
       if (conversionFilter === "false_alarm" && alert.status !== "false_alarm") return false;
@@ -220,7 +224,7 @@ export default function AiAlertsIncidentHubPage() {
 
       return true;
     });
-  }, [alerts, branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, searchQuery]);
+  }, [alerts, branchFilter, zoneFilter, regionFilter, areaFilter, alertTypeFilter, dateFilter, severityFilter, statusFilter, conversionFilter, quickFilter, searchQuery]);
 
   const isFiltered =
     branchFilter !== "all" ||
@@ -232,6 +236,7 @@ export default function AiAlertsIncidentHubPage() {
     severityFilter !== "all" ||
     statusFilter !== "all" ||
     conversionFilter !== "all" ||
+    quickFilter !== "all" ||
     Boolean(searchQuery.trim());
 
   // Summary counts - uses accurate PostgreSQL aggregate counts when unfiltered, and filtered slice when filters are applied
@@ -593,23 +598,37 @@ export default function AiAlertsIncidentHubPage() {
             <div className="text-[11px] text-rose-400/70 mt-0.5">Dismissed & audited</div>
           </button>
 
-          <div className="p-4 rounded-xl border bg-slate-900/60 border-slate-800">
+          <button
+            onClick={() => setQuickFilter((current) => current === "critical" ? "all" : "critical")}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              quickFilter === "critical"
+                ? "bg-rose-950/50 border-rose-500/60 shadow-md ring-1 ring-rose-500/40"
+                : "bg-slate-900/60 border-slate-800 hover:bg-slate-800/50"
+            }`}
+          >
             <div className="text-xs font-medium text-rose-400 flex items-center justify-between">
               <span>Critical Alerts (P1/P2)</span>
               <ShieldAlert className="h-3.5 w-3.5" />
             </div>
             <div className="text-2xl font-bold text-rose-300 mt-1">{stats.critical}</div>
             <div className="text-[11px] text-slate-500 mt-0.5">Immediate operator priority</div>
-          </div>
+          </button>
 
-          <div className="p-4 rounded-xl border bg-slate-900/60 border-slate-800">
+          <button
+            onClick={() => setQuickFilter((current) => current === "active" ? "all" : "active")}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              quickFilter === "active"
+                ? "bg-emerald-950/50 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/40"
+                : "bg-slate-900/60 border-slate-800 hover:bg-slate-800/50"
+            }`}
+          >
             <div className="text-xs font-medium text-emerald-400 flex items-center justify-between">
               <span>Active Alerts</span>
               <ShieldCheck className="h-3.5 w-3.5" />
             </div>
             <div className="text-2xl font-bold text-emerald-300 mt-1">{stats.active}</div>
             <div className="text-[11px] text-slate-500 mt-0.5">Unresolved monitoring items</div>
-          </div>
+          </button>
         </div>
 
         {/* Filter and Search Bar */}

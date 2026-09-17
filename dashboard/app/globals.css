@@ -3637,6 +3637,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .page-hero-light .page-hero-description { color: var(--muted); }
 .page-hero-actions { position: relative; z-index: 1; display: flex; align-items: center; justify-content: flex-end; gap: 9px; flex: 0 0 auto; }
 .page-hero-actions :where(a, button) { min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 14px; border-radius: 10px; font-size: 9px; font-weight: 720; text-decoration: none; }
+.page-hero-back { color: #dce7f4; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.07); transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.page-hero-back:hover { border-color: rgba(109,226,217,.5); background: rgba(109,226,217,.12); transform: translateX(-2px); }
 .page-hero-navy .page-hero-actions .btn-secondary { color: #dce7f4; border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.07); box-shadow: none; }
 .page-hero-status { min-height: 42px; display: flex; align-items: center; gap: 9px; padding: 7px 12px; color: #dce7f4; border: 1px solid rgba(255,255,255,.14); border-radius: 11px; background: rgba(255,255,255,.06); }
 .page-hero-status > i { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(22,167,118,.14); }

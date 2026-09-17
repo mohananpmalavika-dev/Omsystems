@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -7,6 +9,8 @@ type PageHeroProps = {
   description: string;
   icon: LucideIcon;
   actions?: ReactNode;
+  backHref?: string;
+  backLabel?: string;
   tone?: "navy" | "light";
 };
 
@@ -16,6 +20,8 @@ export function PageHero({
   description,
   icon: Icon,
   actions,
+  backHref = "/",
+  backLabel = "Back to workspace",
   tone = "navy",
 }: PageHeroProps) {
   return (
@@ -28,7 +34,13 @@ export function PageHero({
           <p className="page-hero-description">{description}</p>
         </div>
       </div>
-      {actions && <div className="page-hero-actions">{actions}</div>}
+      <div className="page-hero-actions">
+        <Link href={backHref} className="page-hero-back">
+          <ArrowLeft size={16} />
+          <span>{backLabel}</span>
+        </Link>
+        {actions}
+      </div>
     </header>
   );
 }
