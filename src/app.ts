@@ -6,8 +6,9 @@ import Fastify, {
 } from "fastify";
 import { z } from "zod";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { SESClient } from "@aws-sdk/client-ses";
 import {
   hasExtendedInfrastructure,
@@ -129,6 +130,7 @@ import { PortableCameraRepository } from "./portable-camera/portable-camera-repo
 import { PortableCameraLeaseManager } from "./ha/services/portable-camera-lease-manager.service.js";
 import { registerNbfcAnalyticsRoutes } from "./routes/nbfc-analytics.routes.js";
 import { registerSecureAreaAuthorizationRoutes } from "./routes/secure-area-authorizations.routes.js";
+import { registerBankingAnalyticsRoutes } from "./routes/banking-analytics.routes.js";
 import { NbfcRuleRepository } from "./analytics/nbfc-rule-repository.js";
 import { NbfcRuleEngineService } from "./analytics/nbfc-rule-engine.service.js";
 import {
@@ -2523,6 +2525,7 @@ export async function buildApp(options?: {
     engineService: nbfcRuleEngine,
   });
   registerSecureAreaAuthorizationRoutes(app, store);
+  registerBankingAnalyticsRoutes(app, { pool: (store as any).pool });
 
   // Security operations is intentionally based on data that the control plane
   // already observes.  Do not let optional external collectors (EDR, TPM,
@@ -3106,36 +3109,56 @@ export async function buildApp(options?: {
     app.log.error({ err }, 'failed to register local AI analytics routes');
   }
 
-  // Register banking analytics routes
+  // Register banking analytics routes (analytics-engine integration)
   try {
-    // The control plane is ESM; `require` silently left this entire feature
-    // unavailable in production. Resolve the independently-built workspace
-    // from the deployment root instead of relying on a source-relative path.
-    const bankingModule = await import(pathToFileURL(resolve(
-      process.env.BANKING_ANALYTICS_MODULE_PATH ?? "analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js",
-    )).href);
-    await bankingModule.registerBankingAnalyticsApiRoutes(app, {
-      authorize: async (request: FastifyRequest, reply: FastifyReply) => {
-        const user = request.currentUser;
-        if (!user) {
-          await reply.code(401).send({ success: false, error: "unauthenticated" });
-          return false;
+    const candidates = [
+      process.env.BANKING_ANALYTICS_MODULE_PATH,
+      resolve(process.cwd(), "analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js"),
+      resolve(process.cwd(), "analytics-engine/dist/src/routes/banking-analytics-api.js"),
+      fileURLToPath(new URL("../analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js", import.meta.url)),
+      fileURLToPath(new URL("../../analytics-engine/dist/analytics-engine/src/routes/banking-analytics-api.js", import.meta.url)),
+      fileURLToPath(new URL("../analytics-engine/src/routes/banking-analytics-api.ts", import.meta.url)),
+      fileURLToPath(new URL("../../analytics-engine/src/routes/banking-analytics-api.ts", import.meta.url)),
+    ].filter(Boolean) as string[];
+
+    let bankingModule: any = null;
+    for (const candidate of candidates) {
+      try {
+        if (existsSync(candidate)) {
+          bankingModule = await import(pathToFileURL(candidate).href);
+          if (bankingModule?.registerBankingAnalyticsApiRoutes) {
+            break;
+          }
         }
-        const query = request.query as { tenantId?: unknown; branchId?: unknown };
-        const body = request.body as { tenantId?: unknown; branchId?: unknown } | undefined;
-        const tenantId = typeof body?.tenantId === "string" ? body.tenantId : query.tenantId;
-        const branchId = typeof body?.branchId === "string" ? body.branchId : query.branchId;
-        if (typeof tenantId === "string" && tenantId !== user.tenantId) return false;
-        if (typeof branchId !== "string") return true;
-        const branch = await store.getNode(branchId);
-        if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId) return false;
-        const action: Action = ["GET", "HEAD"].includes(request.method) ? "analytics:view" : "analytics:configure";
-        return Boolean((await store.checkAccess(user, action, branch.id))?.allowed);
-      },
-    });
-    app.log.info('Banking analytics routes registered');
+      } catch {
+        // try next candidate
+      }
+    }
+
+    if (bankingModule?.registerBankingAnalyticsApiRoutes) {
+      await bankingModule.registerBankingAnalyticsApiRoutes(app, {
+        authorize: async (request: FastifyRequest, reply: FastifyReply) => {
+          const user = request.currentUser;
+          if (!user) {
+            await reply.code(401).send({ success: false, error: "unauthenticated" });
+            return false;
+          }
+          const query = request.query as { tenantId?: unknown; branchId?: unknown };
+          const body = request.body as { tenantId?: unknown; branchId?: unknown } | undefined;
+          const tenantId = typeof body?.tenantId === "string" ? body.tenantId : query.tenantId;
+          const branchId = typeof body?.branchId === "string" ? body.branchId : query.branchId;
+          if (typeof tenantId === "string" && tenantId !== user.tenantId) return false;
+          if (typeof branchId !== "string") return true;
+          const branch = await store.getNode(branchId);
+          if (!branch || branch.type !== "branch" || branch.tenantId !== user.tenantId) return false;
+          const action: Action = ["GET", "HEAD"].includes(request.method) ? "analytics:view" : "analytics:configure";
+          return Boolean((await store.checkAccess(user, action, branch.id))?.allowed);
+        },
+      });
+      app.log.info('Banking analytics routes registered from analytics-engine');
+    }
   } catch (err: unknown) {
-    app.log.error({ err }, 'failed to register banking analytics routes');
+    app.log.error({ err }, 'failed to register banking analytics routes from analytics-engine');
   }
 
   // Register Distributed Media Orchestrator & Stream Scheduler routes

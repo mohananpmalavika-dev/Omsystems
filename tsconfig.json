@@ -57,6 +57,7 @@
     "src/**/legacy/**",
     "src/security-devices/**",
     "src/edge-management/**",
+    "src/services/voice-processing.service.ts",
 
     // Example files (not needed for production)
     "**/*.example.ts",
