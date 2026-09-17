@@ -276,7 +276,11 @@ export const navigation: NavGroup[] = [
     label: "AUDIT & REPORTING",
     icon: FileText,
     items: [
-      { label: "Executive MIS Reports & Graphs", href: "/reports/mis", icon: BarChart3 },
+      { label: "Executive Dashboard (NEW)", href: "/mis-dashboard", icon: LayoutDashboard },
+      { label: "Financial TCO & ROI (NEW)", href: "/reports/financial", icon: TrendingUp },
+      { label: "Branch Benchmarking (NEW)", href: "/reports/benchmarking", icon: BarChart3 },
+      { label: "Compliance Scorecard (NEW)", href: "/reports/compliance", icon: ShieldCheck },
+      { label: "Executive MIS Reports & Graphs", href: "/reports/mis", icon: FileSpreadsheet },
       { label: "Daily Surveillance Digest", href: "/reports", icon: FileSearch },
       { label: "Branch Compliance Audit", href: "/audit/branch-compliance", icon: Building2 },
       { label: "Camera Health Audit", href: "/audit/health", icon: Gauge },
