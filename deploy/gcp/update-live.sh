@@ -19,6 +19,11 @@ if [ ! -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
   fi
 fi
 
+if [ -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
+  echo "--> Ensuring pre-deflated edge agent cache..."
+  node /opt/sentinel-grid/edge-agent/scripts/cache-deflated.mjs /opt/sentinel-grid/edge-agent/release || true
+fi
+
 cd /opt/sentinel-grid/deploy/gcp
 echo "--> Building control-plane and dashboard images..."
 docker compose -f docker-compose.gcp.yml build control-plane dashboard
