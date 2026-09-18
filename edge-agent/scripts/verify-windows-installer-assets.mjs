@@ -7,9 +7,7 @@ const requiredAssets = [
   "vendor/windows/ffmpeg.zip",
   "vendor/windows/mediamtx.zip",
   "vendor/windows/cloudflared.exe",
-  "installer/windows/install-edge-agent.ps1",
-  "installer/windows/uninstall-edge-agent.ps1",
-  "installer/windows/open-dashboard-scan.ps1",
+  "installer/windows/sentinel-grid.iss",
   "models/secure-face/manifest.json",
   "models/secure-face/detector.onnx",
   "models/secure-face/recognizer.onnx",
@@ -28,9 +26,9 @@ for (const relativePath of requiredAssets) {
 
 if (missing.length) {
   throw new Error(
-    `Windows self-installer cannot be built because required assets are missing or empty: ${missing.join(", ")}. ` +
-    "Run npm.cmd run fetch:windows-runtime and restore the installer scripts before building.",
+    `Native Windows installer cannot be built because required assets are missing or empty: ${missing.join(", ")}. ` +
+    "Run npm.cmd run fetch:windows-runtime and restore the native installer definition before building.",
   );
 }
 
-process.stdout.write(`Verified ${requiredAssets.length} Windows self-installer assets.\n`);
+process.stdout.write(`Verified ${requiredAssets.length} native Windows installer assets.\n`);

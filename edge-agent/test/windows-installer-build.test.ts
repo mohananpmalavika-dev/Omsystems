@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-describe("Windows self-installer release build", () => {
+describe("Native Windows installer release build", () => {
   it("verifies bundled runtime assets before and after packaging", async () => {
     const packageJson = JSON.parse(await readFile("edge-agent/package.json", "utf8"));
     const script = packageJson.scripts["build:exe"] as string;
@@ -10,16 +10,14 @@ describe("Windows self-installer release build", () => {
     expect(script).toContain("verify:windows-package");
   });
 
-  it("requires every asset copied by the self-installer", async () => {
+  it("requires every asset consumed by the native installer", async () => {
     const script = await readFile("edge-agent/scripts/verify-windows-installer-assets.mjs", "utf8");
 
     for (const asset of [
       "vendor/windows/ffmpeg.zip",
       "vendor/windows/mediamtx.zip",
       "vendor/windows/cloudflared.exe",
-      "installer/windows/install-edge-agent.ps1",
-      "installer/windows/uninstall-edge-agent.ps1",
-      "installer/windows/open-dashboard-scan.ps1",
+      "installer/windows/sentinel-grid.iss",
       "models/secure-face/manifest.json",
       "models/secure-face/detector.onnx",
       "models/secure-face/recognizer.onnx",
@@ -27,6 +25,16 @@ describe("Windows self-installer release build", () => {
     ]) {
       expect(script).toContain(asset);
     }
+  });
+
+  it("does not invoke PowerShell for install, upgrade, or uninstall", async () => {
+    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+
+    expect(installer.toLowerCase()).not.toContain("powershell");
+    expect(installer).toContain("schtasks.exe");
+    expect(installer).toContain("netsh.exe");
+    expect(installer).toContain("StopOldAgent");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')");
   });
 
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {
