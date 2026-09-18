@@ -479,31 +479,15 @@ function missingWindowsReleaseError(executablePath: string) {
   );
 }
 
-function windowsInstallLauncher() {
-  return [
-    "@echo off",
-    "setlocal",
-    "cd /d \"%~dp0\"",
-    "if not exist \"%~dp0edge-agent.exe\" (",
-    "  echo Edge Agent executable is missing. Download a fresh package from Sentinel Grid.",
-    "  pause",
-    "  exit /b 1",
-    ")",
-    "if not exist \"%~dp0edge-agent.env\" (",
-    "  echo Branch configuration is missing. Download a fresh package from Sentinel Grid.",
-    "  pause",
-    "  exit /b 1",
-    ")",
-    "echo Starting Sentinel Grid Edge Agent installation...",
-    "echo Approve the Windows administrator prompt to install the branch service.",
-    "\"%~dp0edge-agent.exe\" --install --config \"%~dp0edge-agent.env\"",
-    "set RESULT=%ERRORLEVEL%",
-    "if not \"%RESULT%\"==\"0\" (",
-    "  echo Installation did not complete. See the installer message above.",
-    "  pause",
-    ")",
-    "exit /b %RESULT%",
-  ].join("\r\n");
+function nativeWindowsInstallerPath(root: string, version: string) {
+  return join(root, "installer", "windows", "output", `KryptonVisionInstaller-v${version}-windows.exe`);
+}
+
+function missingNativeWindowsInstallerError(installerPath: string) {
+  return Object.assign(
+    new Error(`The native Windows Edge Agent installer is unavailable on this control plane (${installerPath}). Deploy the matching KryptonVisionInstaller Windows release, then rebuild and restart the control plane.`),
+    { code: "edge_agent_native_installer_not_built" },
+  );
 }
 
 export async function registerEdgeAgentPackageRoutes(
@@ -583,11 +567,22 @@ export async function registerEdgeAgentPackageRoutes(
         throw missingWindowsReleaseError(executablePath);
       }
       await verifyProductionWindowsRelease(releaseDir, executablePath);
+      const installerPath = nativeWindowsInstallerPath(root, version);
+      let installerSize: number;
+      let installerMtime: number;
+      try {
+        const metadata = await stat(installerPath);
+        if (!metadata.isFile() || metadata.size === 0) throw new Error("not a file");
+        installerSize = metadata.size;
+        installerMtime = metadata.mtimeMs;
+      } catch {
+        throw missingNativeWindowsInstallerError(installerPath);
+      }
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8");
 
       if (format === "zip") {
-        const exeEntry = await getCachedExecutableEntry(executablePath, { size: executableSize, mtimeMs: executableMtime });
+        const installerEntry = await getCachedExecutableEntry(installerPath, { size: installerSize, mtimeMs: installerMtime });
 
         const readmeText = [
           "==============================================================================",
@@ -596,13 +591,13 @@ export async function registerEdgeAgentPackageRoutes(
           "==============================================================================",
           "",
           "1. Extract this ZIP to a local folder.",
-          '2. Double-click "Install Sentinel Grid Edge Agent.bat".',
+          `2. Double-click "KryptonVisionInstaller-v${version}-windows.exe".`,
           "3. Approve the Windows administrator prompt.",
           "4. Wait for the installer to validate the configuration and enroll the gateway.",
           "",
           "The installer copies the agent to Program Files, protects its configuration,",
-          "installs the media runtime, and creates a SYSTEM startup task. Do not run the",
-          "EXE directly from this extracted folder. Endpoint-security policies must be",
+          "installs the media runtime, and creates a SYSTEM startup task. Keep edge-agent.env",
+          "beside the installer while running it; the installer reads it automatically. Endpoint-security policies must be",
           "deployed by your organization through Intune or Group Policy; this package does",
           "not add Defender exclusions or trust certificates.",
           "==============================================================================",
@@ -610,13 +605,12 @@ export async function registerEdgeAgentPackageRoutes(
 
         const entries: Array<ZipEntry> = [
           {
-            name: "edge-agent.exe",
-            compressedData: exeEntry.compressedData,
-            uncompressedLength: exeEntry.uncompressedLength,
-            crc: exeEntry.crc,
+            name: `KryptonVisionInstaller-v${version}-windows.exe`,
+            compressedData: installerEntry.compressedData,
+            uncompressedLength: installerEntry.uncompressedLength,
+            crc: installerEntry.crc,
           },
           { name: "edge-agent.env", data: envConfig },
-          { name: "Install Sentinel Grid Edge Agent.bat", data: Buffer.from(windowsInstallLauncher(), "utf8") },
           { name: "README.txt", data: Buffer.from(readmeText, "utf8") },
         ];
 
@@ -822,18 +816,28 @@ export async function registerEdgeAgentPackageRoutes(
           outcome: "success", sourceIp: request.ip,
           details: { edgeAgentId, platform, version, format: "zip-package", mode },
         });
-        const exeEntry = await getCachedExecutableEntry(executablePath, { size: executableSize, mtimeMs: executableMtime });
+        const installerPath = nativeWindowsInstallerPath(root, version);
+        let installerSize: number;
+        let installerMtime: number;
+        try {
+          const metadata = await stat(installerPath);
+          if (!metadata.isFile() || metadata.size <= 0) throw new Error("not a file");
+          installerSize = metadata.size;
+          installerMtime = metadata.mtimeMs;
+        } catch {
+          throw missingNativeWindowsInstallerError(installerPath);
+        }
+        const installerEntry = await getCachedExecutableEntry(installerPath, { size: installerSize, mtimeMs: installerMtime });
         const zipData = makeZip([
           {
-            name: "edge-agent.exe",
-            compressedData: exeEntry.compressedData,
-            uncompressedLength: exeEntry.uncompressedLength,
-            crc: exeEntry.crc,
+            name: `KryptonVisionInstaller-v${version}-windows.exe`,
+            compressedData: installerEntry.compressedData,
+            uncompressedLength: installerEntry.uncompressedLength,
+            crc: installerEntry.crc,
           },
           { name: "edge-agent.env", data: config },
-          { name: "Install Sentinel Grid Edge Agent.bat", data: Buffer.from(windowsInstallLauncher(), "utf8") },
           { name: "README.txt", data: Buffer.from(
-            "Extract this ZIP to a local folder, then run Install Sentinel Grid Edge Agent.bat as directed. The installer validates the configuration, installs the media runtime, and creates the protected SYSTEM startup task. Do not run edge-agent.exe directly from the extracted folder.\r\n",
+            `Extract this ZIP to a local folder, then run KryptonVisionInstaller-v${version}-windows.exe. Keep edge-agent.env beside the installer so it can install the protected branch configuration, media runtime, and SYSTEM startup task.\r\n`,
             "utf8",
           ) },
         ]);

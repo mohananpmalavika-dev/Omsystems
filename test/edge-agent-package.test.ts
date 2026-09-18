@@ -35,6 +35,12 @@ function activationTokenHash(activationCode: string) {
   return createHash("sha256").update(activationCode).digest("hex");
 }
 
+async function writeNativeInstaller(root: string, version = "9.8.7") {
+  const output = join(root, "installer", "windows", "output");
+  await mkdir(output, { recursive: true });
+  await writeFile(join(output, `KryptonVisionInstaller-v${version}-windows.exe`), Buffer.from("MZ-native-installer"));
+}
+
 function zipEntry(zip: Buffer, expectedName: string) {
   let offset = 0;
   while (offset + 30 <= zip.length && zip.readUInt32LE(offset) === 0x04034b50) {
@@ -82,6 +88,7 @@ describe("branch edge-agent package", () => {
     await mkdir(join(artifactRoot, "release"), { recursive: true });
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+    await writeNativeInstaller(artifactRoot);
 
     const store = new MemoryStore();
     addTestBranch(store);
@@ -105,7 +112,7 @@ describe("branch edge-agent package", () => {
       expect(response.headers["content-disposition"]).toContain("edge-agent-setup.zip");
       expect(response.headers["cache-control"]).toBe("no-store, private");
       expect(response.rawPayload.subarray(0, 2).toString()).toBe("PK");
-      expect(zipEntry(response.rawPayload, "edge-agent.exe").toString("utf8")).toBe("MZ-test-executable");
+      expect(zipEntry(response.rawPayload, "KryptonVisionInstaller-v9.8.7-windows.exe").toString("utf8")).toBe("MZ-native-installer");
       const config = zipEntry(response.rawPayload, "edge-agent.env").toString("utf8");
       expect(config).toContain('CONTROL_PLANE_URL="https://control.example.com"');
       expect(config).toContain(`EDGE_AGENT_ID="${agent.id}"`);
@@ -119,8 +126,7 @@ describe("branch edge-agent package", () => {
       expect(config).toContain('PUBLIC_MEDIA_GATEWAY_URL="auto"');
       expect(config).not.toContain('CAMERA_USERNAME="admin"');
       expect(config).not.toContain('REPLACE_WITH_CAMERA_PASSWORD');
-      expect(zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat").toString("utf8"))
-        .toContain("--install --config");
+      expect(() => zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat")).toThrow();
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.package_downloaded");
     } finally {
       await app.close();
@@ -133,6 +139,7 @@ describe("branch edge-agent package", () => {
     await mkdir(join(artifactRoot, "release"), { recursive: true });
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+    await writeNativeInstaller(artifactRoot);
 
     const store = new MemoryStore();
     addTestBranch(store);
@@ -177,6 +184,7 @@ describe("branch edge-agent package", () => {
     await mkdir(join(artifactRoot, "release"), { recursive: true });
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+    await writeNativeInstaller(artifactRoot);
 
     const store = new MemoryStore();
     addTestBranch(store);
@@ -211,9 +219,9 @@ describe("branch edge-agent package", () => {
       expect(config).toContain(`EDGE_ACTIVATION_CODE=${JSON.stringify(activationCode)}`);
       expect(config).toContain('EDGE_BRIDGE_SHARED_KEY=""');
       expect(config).toContain('EDGE_AGENT_NAME="Bengaluru Scanner"');
-      const launcher = zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat").toString("utf8");
-      expect(launcher).toContain("--install --config");
-      expect(launcher).not.toContain("taskkill");
+      expect(zipEntry(response.rawPayload, "KryptonVisionInstaller-v9.8.7-windows.exe").toString("utf8"))
+        .toBe("MZ-native-installer");
+      expect(() => zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat")).toThrow();
       expect(() => zipEntry(response.rawPayload, "Allow-In-Defender.bat")).toThrow();
       expect(() => zipEntry(response.rawPayload, "Install-Certificate.bat")).toThrow();
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.installer_downloaded");
@@ -228,6 +236,7 @@ describe("branch edge-agent package", () => {
     await mkdir(join(artifactRoot, "release"), { recursive: true });
     await writeFile(join(artifactRoot, "package.json"), JSON.stringify({ version: "9.8.7" }));
     await writeFile(join(artifactRoot, "release", "edge-agent.exe"), Buffer.from("MZ-test-executable"));
+    await writeNativeInstaller(artifactRoot);
 
     const store = new MemoryStore();
     addTestBranch(store);

@@ -34,7 +34,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\release\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\models\secure-face\*"; DestDir: "{app}\models\secure-face"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\..\release\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\vendor\windows\ffmpeg.zip"; DestName: "edge-agent-ffmpeg.zip"; Flags: dontcopy
+Source: "..\..\vendor\windows\mediamtx.zip"; DestName: "edge-agent-mediamtx.zip"; Flags: dontcopy
 Source: "..\..\vendor\windows\cloudflared.exe"; DestDir: "{app}\vendor"; Flags: ignoreversion
 Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion isreadme
 Source: "..\..\GETTING_STARTED.txt"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
@@ -52,6 +53,9 @@ Name: "{group}\Uninstall KryptonVision"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\KryptonVision Edge Agent"; Filename: "{app}\edge-agent.exe"; Tasks: desktopicon
 
 [Code]
+function GetTickCount: Cardinal;
+  external 'GetTickCount@kernel32.dll stdcall';
+
 const
   TaskName = 'Sentinel Grid Edge Agent';
   LegacyServiceName = 'SentinelGridEdgeAgent';
@@ -62,6 +66,8 @@ var
   BranchNamePage: TInputQueryWizardPage;
   ActivationPage: TInputQueryWizardPage;
   ExistingInstall: Boolean;
+  UsePackageConfiguration: Boolean;
+  PackageControlPlaneUrl: String;
 
 function AppPath: String;
 begin
@@ -82,6 +88,49 @@ end;
 function HasUnsafeConfigText(const Value: String): Boolean;
 begin
   Result := (Pos('"', Value) > 0) or (Pos(#13, Value) > 0) or (Pos(#10, Value) > 0);
+end;
+
+function PackageConfigPath: String;
+begin
+  Result := AddBackslash(ExpandConstant('{src}')) + 'edge-agent.env';
+end;
+
+function PackageConfigValue(const Key: String): String;
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+  Prefix: String;
+begin
+  Result := '';
+  if not LoadStringsFromFile(PackageConfigPath, Lines) then Exit;
+  Prefix := Key + '=';
+  for Index := 0 to GetArrayLength(Lines) - 1 do begin
+    if Pos(Prefix, Lines[Index]) = 1 then begin
+      Result := Trim(Copy(Lines[Index], Length(Prefix) + 1, MaxInt));
+      if (Length(Result) >= 2) and (Result[1] = '"') and (Result[Length(Result)] = '"') then
+        Result := Copy(Result, 2, Length(Result) - 2);
+      Exit;
+    end;
+  end;
+end;
+
+procedure LoadPackageDefaults;
+var
+  Value: String;
+begin
+  if not FileExists(PackageConfigPath) then Exit;
+
+  Value := PackageConfigValue('EDGE_AGENT_NAME');
+  if (Value <> '') and not HasUnsafeConfigText(Value) then
+    BranchNamePage.Values[0] := Value;
+
+  Value := PackageConfigValue('EDGE_ACTIVATION_CODE');
+  if (Value <> '') and not HasUnsafeConfigText(Value) then
+    ActivationPage.Values[0] := Value;
+
+  Value := PackageConfigValue('CONTROL_PLANE_URL');
+  if (Value <> '') and not HasUnsafeConfigText(Value) then
+    PackageControlPlaneUrl := Value;
 end;
 
 function FindRuntimeExecutable(const Directory, Filename: String): String;
@@ -110,9 +159,45 @@ begin
   end;
 end;
 
+procedure UnpackRuntimeArchive(const ArchiveName, Destination: String);
+var
+  Shell: Variant;
+  Archive: Variant;
+  Target: Variant;
+begin
+  ExtractTemporaryFile(ArchiveName);
+  Shell := CreateOleObject('Shell.Application');
+  Archive := Shell.NameSpace(ExpandConstant('{tmp}\') + ArchiveName);
+  Target := Shell.NameSpace(Destination);
+  if VarIsNull(Archive) or VarIsNull(Target) then
+    RaiseException('The bundled Windows runtime archive could not be opened.');
+  Target.CopyHere(Archive.Items, 16);
+end;
+
+procedure UnpackRuntime;
+var
+  RuntimePath: String;
+  Deadline: Cardinal;
+begin
+  RuntimePath := AddBackslash(AppPath) + 'runtime';
+  ForceDirectories(RuntimePath);
+  UnpackRuntimeArchive('edge-agent-ffmpeg.zip', RuntimePath);
+  UnpackRuntimeArchive('edge-agent-mediamtx.zip', RuntimePath);
+  Deadline := GetTickCount + 60000;
+  while (FindRuntimeExecutable(RuntimePath, 'ffmpeg.exe') = '') or
+        (FindRuntimeExecutable(RuntimePath, 'ffprobe.exe') = '') or
+        (FindRuntimeExecutable(RuntimePath, 'mediamtx.exe') = '') do begin
+    if GetTickCount > Deadline then
+      RaiseException('The bundled camera runtime did not unpack correctly. Download a new signed installer.');
+    Sleep(500);
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   ExistingInstall := FileExists(ConfigPath);
+  UsePackageConfiguration := FileExists(PackageConfigPath);
+  PackageControlPlaneUrl := ControlPlaneUrl;
   BranchNamePage := CreateInputQueryPage(wpWelcome,
     'Branch Information',
     'Enter your branch details',
@@ -125,11 +210,13 @@ begin
     'Enter the one-time activation code',
     'Create a gateway activation in KryptonVision and paste the code here. It is consumed on first start.');
   ActivationPage.Add('Activation Code:', False);
+  if UsePackageConfiguration then
+    LoadPackageDefaults;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := ExistingInstall and ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
+  Result := (ExistingInstall or UsePackageConfiguration) and ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -138,7 +225,7 @@ var
   ActivationCode: String;
 begin
   Result := True;
-  if ExistingInstall then Exit;
+  if ExistingInstall or UsePackageConfiguration then Exit;
 
   if CurPageID = BranchNamePage.ID then begin
     BranchName := Trim(BranchNamePage.Values[0]);
@@ -197,8 +284,19 @@ begin
   MediaMtxPath := FindRuntimeExecutable(AddBackslash(AppPath) + 'runtime', 'mediamtx.exe');
   if (FfmpegPath = '') or (FfprobePath = '') or (MediaMtxPath = '') then
     RaiseException('The installed camera runtime is incomplete. Download a new signed installer.');
+  if UsePackageConfiguration then begin
+    if not CopyFile(PackageConfigPath, ConfigPath, False) then
+      RaiseException('The branch configuration from the installer package could not be saved.');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21');
+    UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
+    UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
+    UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
+    UpdateConfigSetting('MEDIAMTX_PATH', DotenvPath(MediaMtxPath));
+    UpdateConfigSetting('CLOUDFLARED_PATH', DotenvPath(AddBackslash(AppPath) + 'vendor\cloudflared.exe'));
+    Exit;
+  end;
   Config :=
-    'CONTROL_PLANE_URL="' + ControlPlaneUrl + '"' + #13#10 +
+    'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_VERSION="0.1.21"' + #13#10 +
@@ -283,6 +381,7 @@ begin
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
+  UnpackRuntime;
   if ExistingInstall then
     UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')
   else

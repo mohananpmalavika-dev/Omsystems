@@ -24,10 +24,12 @@ async function fixture(manifestText?: string, binary?: Buffer) {
   roots.push(root);
   await mkdir(join(root, "scripts"));
   await mkdir(join(root, "release"));
+  await mkdir(join(root, "installer", "windows", "output"), { recursive: true });
   const script = join(root, "scripts", "verify-windows-production-release.mjs");
   await copyFile(new URL("../edge-agent/scripts/verify-windows-production-release.mjs", import.meta.url), script);
   if (manifestText !== undefined) await writeFile(join(root, "release", "windows-release.json"), manifestText);
   if (binary !== undefined) await writeFile(join(root, "release", "edge-agent.exe"), binary);
+  await writeFile(join(root, "installer", "windows", "output", "KryptonVisionInstaller-v1.0.0-windows.exe"), Buffer.from("MZ-native-installer"));
   return script;
 }
 
