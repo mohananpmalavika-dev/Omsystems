@@ -47,7 +47,7 @@ import {
 import Link from "next/link";
 
 // Pre-packaged high-fidelity investigation subjects if live backend has zero sightings
-const FALLBACK_IDENTITIES: ReidGlobalIdentity[] = [
+const FALLBACK_IDENTITIES: any[] = [
   {
     global_id: "TGT-8841-KRYPTON",
     tenant_id: "00000000-0000-4000-8000-000000000001",
@@ -707,7 +707,7 @@ export default function AIInvestigationPage() {
                 </h2>
                 <p className="text-xs text-slate-400">
                   Target: <span className="font-mono text-cyan-300 font-semibold">{selectedSubjectId}</span> • Facility:{" "}
-                  {currentSubject.primary_branch_name || "Calicut Main Facility"}
+                  {(currentSubject as any)?.primary_branch_name || currentSubject?.primary_branch_id || "Calicut Main Facility"}
                 </p>
               </div>
             </div>
