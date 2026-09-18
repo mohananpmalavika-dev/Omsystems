@@ -289,13 +289,13 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                 className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg p-4 ${
+                  className={`max-w-[80%] rounded-lg p-4 border shadow-sm ${
                     message.role === "user"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-900"
+                      ? "bg-blue-600 text-white border-blue-500"
+                      : "bg-white text-slate-900 border-slate-200"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{message.content}</div>
+                  <div className="whitespace-pre-wrap leading-relaxed text-current">{message.content}</div>
 
                   {/* Search Results */}
                   {message.results && message.results.length > 0 && (
@@ -316,7 +316,7 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
-                                <span className="font-medium text-sm text-gray-900">
+                                <span className="font-medium text-sm text-slate-900">
                                   {result.cameraName || result.cameraId}
                                 </span>
                                 <Badge
@@ -325,17 +325,17 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                                   {Math.round(result.score * 100)}%
                                 </Badge>
                               </div>
-                              <div className="text-xs text-gray-600 flex items-center gap-2">
+                              <div className="text-xs text-slate-700 flex items-center gap-2">
                                 <Clock className="h-3 w-3" />
                                 {new Date(result.timestamp).toLocaleString()}
                               </div>
                               {result.matchReason && (
-                                <div className="text-xs text-gray-500 mt-1">
+                                <div className="text-xs text-slate-600 mt-1">
                                   {result.matchReason}
                                 </div>
                               )}
                               {result.relatedDetections && result.relatedDetections.length > 0 && (
-                                <div className="text-xs text-blue-600 mt-1">
+                                <div className="text-xs text-blue-700 mt-1">
                                   <TrendingUp className="h-3 w-3 inline mr-1" />
                                   Also seen on {result.relatedDetections.length} other cameras
                                 </div>
@@ -363,10 +363,10 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
 
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-gray-100 rounded-lg p-4">
+                <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-sm">
                   <div className="flex items-center gap-2">
                     <div className="animate-pulse">🔍</div>
-                    <span className="text-gray-600">Searching videos...</span>
+                    <span className="text-slate-800 font-medium">Searching videos...</span>
                   </div>
                 </div>
               </div>

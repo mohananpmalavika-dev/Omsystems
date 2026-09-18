@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout, getVisibleNavigation, type MenuAccessUser } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
-import { authApi } from "@/lib/api-client";
+import { anprLogisticsApi, authApi, cameraInventoryApi, nbfcWatchlistApi } from "@/lib/api-client";
+import type { Branch } from "@/lib/types";
 import {
   ArrowRight,
   BarChart3,
@@ -117,6 +118,10 @@ const workflows = [
 export default function NbfcOperationsPage() {
   const [user, setUser] = useState<MenuAccessUser | null>(null);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [logistics, setLogistics] = useState<{ data: any[]; summary: any } | null>(null);
+  const [watchlist, setWatchlist] = useState<{ data: any[]; summary: any } | null>(null);
+  const [liveDataError, setLiveDataError] = useState<string | null>(null);
   const [citGateState, setCitGateState] = useState<"pending" | "authorizing" | "open" | "secured">("pending");
   const [citOtpInput, setCitOtpInput] = useState("");
   const [watchlistAlertDismissed, setWatchlistAlertDismissed] = useState(false);
@@ -156,11 +161,45 @@ export default function NbfcOperationsPage() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadLiveData = async () => {
+      try {
+        const [{ data: branchData }, logisticsResponse, watchlistResponse] = await Promise.all([
+          cameraInventoryApi.listBranches("analytics:view"),
+          anprLogisticsApi.listSessions({ limit: 20 }),
+          nbfcWatchlistApi.listEntries({ status: "active", limit: 20 }),
+        ]);
+        if (!active) return;
+        setBranches(branchData as Branch[]);
+        setLogistics({ data: logisticsResponse.data ?? [], summary: logisticsResponse.summary ?? {} });
+        setWatchlist({ data: watchlistResponse.data ?? [], summary: watchlistResponse.summary ?? {} });
+        setLiveDataError(null);
+      } catch (error) {
+        if (!active) return;
+        setLiveDataError(error instanceof Error ? error.message : "Live operations data is unavailable");
+        setLogistics(null);
+        setWatchlist(null);
+      }
+    };
+
+    void loadLiveData();
+    const timer = window.setInterval(() => void loadLiveData(), 30_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const availableWorkflows = useMemo(() => {
     if (!user) return [];
     const allowed = new Set(getVisibleNavigation(user).flatMap((group) => group.items.map((item) => item.href)));
     return workflows.filter((workflow) => allowed.has(workflow.href));
   }, [user]);
+
+  const activeVehicle = logistics?.data.find((session) => ["on_route", "arrived", "overdue"].includes(session.status));
+  const activeWatchlistDetection = watchlist?.data.find((entry) => entry.lastDetected);
+  const branchCount = branches.length;
 
   return (
     <AppLayout>
@@ -173,6 +212,12 @@ export default function NbfcOperationsPage() {
           actions={<div className="page-hero-status"><Video size={17} /><div><span>Start with the event</span><strong>Verify before you act</strong></div></div>}
         />
 
+        {liveDataError && (
+          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200">
+            Live operations data is unavailable. No operational status is being inferred or displayed.
+          </div>
+        )}
+
         {/* Live Banking Security & Vault Cockpit */}
         <section className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Locker Room 2-Person Rule */}
@@ -183,22 +228,21 @@ export default function NbfcOperationsPage() {
                   <Lock size={15} className="text-amber-400" />
                   Locker Vault 2-Person Rule
                 </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Compliant
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
+                  Telemetry unavailable
                 </span>
               </div>
               <div className="mt-3">
-                <div className="text-xl font-bold text-white">2 Authorized Staff</div>
+                <div className="text-xl font-bold text-white">No live custody telemetry</div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Dual custodian session active inside Strong Room (CAM-04)
+                  Connect a custody telemetry source before showing vault authorization state.
                 </p>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
               <span className="text-slate-500 flex items-center gap-1">
                 <Clock size={12} />
-                Session: 14m 20s
+                No live session
               </span>
               <Link href="/analytics/banking" className="text-cyan-400 hover:text-cyan-300 font-medium">
                 Live Vault Stream &rarr;
@@ -214,19 +258,19 @@ export default function NbfcOperationsPage() {
                   <Users size={15} className="text-violet-400" />
                   Counter Loitering & Queue
                 </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Normal
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
+                  Backend only
                 </span>
               </div>
               <div className="mt-3">
-                <div className="text-xl font-bold text-white">3.4m Avg Dwell</div>
+                <div className="text-xl font-bold text-white">{logistics ? `${Number(logistics.summary?.avgDwellTimeMinutes ?? 0).toFixed(1)}m Avg Dwell` : "Live analytics unavailable"}</div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Counters 1 & 2 dwell times within 5-min RBI security threshold
+                  {logistics ? "Calculated from recorded logistics sessions." : "Connect an analytics source to show counter dwell telemetry."}
                 </p>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Loitering Flags: 0 Active</span>
+              <span className="text-slate-500">No live loitering telemetry</span>
               <Link href="/analytics/banking" className="text-violet-400 hover:text-violet-300 font-medium">
                 Counter Analytics &rarr;
               </Link>
@@ -241,19 +285,19 @@ export default function NbfcOperationsPage() {
                   <Radio size={15} className="text-cyan-400" />
                   Background Surveillance Jobs
                 </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-                  Auto-Polling
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
+                  Backend status
                 </span>
               </div>
               <div className="mt-3">
-                <div className="text-xl font-bold text-white">100% Synced</div>
+                <div className="text-xl font-bold text-white">{logistics || watchlist ? `${branchCount} Branches Reporting` : "Live job status unavailable"}</div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  ANPR Overdue & Watchlist Expiry background cron jobs active
+                  Background job health is shown only when reported by the backend.
                 </p>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Interval: 5m / 60m</span>
+              <span className="text-slate-500">Refresh: 30s</span>
               <Link href="/analytics/nbfc-watchlist" className="text-cyan-400 hover:text-cyan-300 font-medium">
                 Manage Watchlists &rarr;
               </Link>
@@ -287,7 +331,7 @@ export default function NbfcOperationsPage() {
                     ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                     : "bg-purple-500/20 text-purple-300 border-purple-500/40"
                 }`}>
-                  {citGateState === "open" ? "GATE OPEN (VAN INGRESS)" : citGateState === "secured" ? "GATE SECURED" : "VAN AT GATE"}
+                  {activeVehicle ? activeVehicle.status.replaceAll("_", " ").toUpperCase() : "NO LIVE SESSION"}
                 </span>
               </div>
 
@@ -296,80 +340,29 @@ export default function NbfcOperationsPage() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">Detected Armored Vehicle:</span>
                   <span className="font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                    KL-07-CG-9021 (Brinks Logistics)
+                    {activeVehicle ? `${activeVehicle.vehiclePlate} (${activeVehicle.provider ?? "Provider unavailable"})` : "No active vehicle session"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">Scheduled Route Manifest:</span>
                   <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <CheckCircle2 size={12} /> ROUTE-KOC-09 (Verified Match)
+                    {activeVehicle ? <><CheckCircle2 size={12} /> {activeVehicle.routeCompliance.replaceAll("_", " ")}</> : "No route record"}
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-400">Armed Escort Protocol:</span>
                   <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <CheckCircle2 size={12} /> 2 Authorized Gunmen Present (CAM-01)
+                    {activeVehicle ? <><CheckCircle2 size={12} /> {activeVehicle.authorized ? "Authorized session" : "Authorization not verified"}</> : "No escort telemetry"}
                   </span>
                 </div>
               </div>
 
-              {/* Clearance Action */}
-              <div className="mt-4 flex flex-col gap-2">
-                {citGateState === "pending" && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Branch Manager OTP (e.g. 8492)"
-                      value={citOtpInput}
-                      onChange={(e) => setCitOtpInput(e.target.value)}
-                      className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder:text-slate-500 flex-1 focus:outline-none focus:border-purple-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (citOtpInput.trim() === "8492" || citOtpInput.trim().length >= 4) {
-                          setCitGateState("open");
-                        } else {
-                          alert("Enter valid 4-digit Manager OTP (Default: 8492)");
-                        }
-                      }}
-                      className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition"
-                    >
-                      <Key size={14} /> Authorize &amp; Open Gate
-                    </button>
-                  </div>
-                )}
-                {citGateState === "open" && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
-                    <span className="text-amber-200 font-medium">Van entering transfer bay. Gate timer active.</span>
-                    <button
-                      type="button"
-                      onClick={() => setCitGateState("secured")}
-                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1"
-                    >
-                      <Lock size={12} /> Lock &amp; Secure Gate
-                    </button>
-                  </div>
-                )}
-                {citGateState === "secured" && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs">
-                    <span className="text-emerald-300 font-medium">Transfer completed. Perimeter secured.</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCitGateState("pending");
-                        setCitOtpInput("");
-                      }}
-                      className="text-xs text-slate-400 hover:text-white underline"
-                    >
-                      Reset Protocol
-                    </button>
-                  </div>
-                )}
+              <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-400">
+                Gate authorization is unavailable until a backend command and audit endpoint is configured. No local or simulated unlock action is exposed.
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Outer Gate CAM-01 • Ingress Log #9812</span>
+              <span className="text-slate-500">{activeVehicle ? `Branch: ${activeVehicle.branchName}` : "No live ingress record"}</span>
               <Link href="/analytics/anpr-logistics" className="text-purple-400 hover:text-purple-300 font-medium">
                 Logistics Telemetry &rarr;
               </Link>
@@ -398,69 +391,44 @@ export default function NbfcOperationsPage() {
                 </span>
               </div>
 
-              {!watchlistAlertDismissed ? (
+              {activeWatchlistDetection && !watchlistAlertDismissed ? (
                 <div className="mt-4 p-3.5 rounded-xl bg-rose-950/40 border border-rose-800/60 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-rose-200">Watchlist Record:</span>
                     <span className="font-bold text-white bg-rose-900/60 px-2 py-0.5 rounded border border-rose-700">
-                      Vikram Menon (ID: WL-8829)
+                      {activeWatchlistDetection.fullName} ({activeWatchlistDetection.employeeCode ?? activeWatchlistDetection.id})
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-rose-200">Category / Reason:</span>
                     <span className="text-rose-300 font-medium">
-                      Multi-Branch Loan Defaulter &amp; Fake Collateral Flag
+                      {activeWatchlistDetection.reason || "Watchlist reason unavailable"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-rose-200">Location &amp; Match Confidence:</span>
                     <span className="text-white font-mono font-bold">
-                      CAM-03 (Teller Hall) • 98.4% Confidence
+                      {activeWatchlistDetection.lastDetected.cameraName} • {(Number(activeWatchlistDetection.lastDetected.confidence) * 100).toFixed(1)}% Confidence
                     </span>
                   </div>
 
                   <div className="mt-2 pt-2 border-t border-rose-800/40 flex items-center justify-between gap-2">
-                    {watchlistAlertEscalated ? (
-                      <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                        <CheckCircle2 size={13} /> Escalated to Branch Manager &amp; SOC Dispatched
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setWatchlistAlertEscalated(true)}
-                        className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1 transition"
-                      >
-                        <Siren size={13} /> Escalate to Branch Security
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setWatchlistAlertDismissed(true)}
-                      className="text-xs text-slate-400 hover:text-slate-200"
-                    >
-                      Dismiss Alert
-                    </button>
+                    <span className="text-xs text-amber-300">Operator action requires the alert workflow.</span>
+                    <Link href="/operations/alerts" className="text-xs font-semibold text-rose-300 hover:text-rose-200">
+                      Open alert queue
+                    </Link>
                   </div>
                 </div>
               ) : (
                 <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 text-center">
                   <p className="text-xs text-slate-400">Watchlist threat cleared by operator.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setWatchlistAlertDismissed(false);
-                      setWatchlistAlertEscalated(false);
-                    }}
-                    className="mt-2 text-xs text-cyan-400 hover:underline"
-                  >
-                    Simulate Next Detection
-                  </button>
+                  <p className="mt-2 text-xs text-slate-500">Awaiting the next live detection.</p>
                 </div>
               )}
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Live Face Scanner Engine • 12 Branches Synced</span>
+              <span className="text-slate-500">Live face scanner telemetry • {branchCount} branches reporting</span>
               <Link href="/analytics/nbfc-watchlist" className="text-rose-400 hover:text-rose-300 font-medium">
                 Open Watchlist Center &rarr;
               </Link>
@@ -468,7 +436,8 @@ export default function NbfcOperationsPage() {
           </div>
         </section>
 
-        {/* STRONG ROOM MULTI-PARTY TIME-LOCK & ANTI-DURESS COCKPIT */}
+        {false && <>
+        {/* Strong-room controls require a backend custody-control contract. */}
         <section className="mt-6 rounded-2xl border-2 border-amber-500/30 bg-gradient-to-br from-amber-950/20 via-slate-900 to-black p-5 shadow-lg">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-800 pb-4">
             <div>
@@ -761,6 +730,7 @@ export default function NbfcOperationsPage() {
             </table>
           </div>
         </section>
+        </>}
 
         <section className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/50 p-5 shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-800 pb-4 sm:flex-row sm:items-end sm:justify-between">

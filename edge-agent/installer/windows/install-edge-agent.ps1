@@ -13,6 +13,7 @@ $SourceUninstaller = Join-Path $SourceDirectory "uninstall-edge-agent.ps1"
 $SourceDashboardLauncher = Join-Path $SourceDirectory "open-dashboard-scan.ps1"
 $SourceRuntimePackages = Join-Path $SourceDirectory "runtime-packages"
 $SourceNativeModules = Join-Path $SourceDirectory "node_modules"
+$SourceSecureFaceModels = Join-Path $SourceDirectory "models\secure-face"
 $RestoreExistingTaskOnFailure = $false
 
 # The self-extracting EXE launches this script in a separate elevated PowerShell
@@ -145,6 +146,13 @@ if (-not (Test-Path -LiteralPath (Join-Path $SourceNativeModules "sharp") -PathT
 }
 Copy-Item -LiteralPath $SourceNativeModules -Destination (Join-Path $InstallDirectory "node_modules") -Recurse -Force
 Get-ChildItem -LiteralPath (Join-Path $InstallDirectory "node_modules") -File -Recurse | Unblock-File -ErrorAction SilentlyContinue
+if (-not (Test-Path -LiteralPath (Join-Path $SourceSecureFaceModels "manifest.json") -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $SourceSecureFaceModels "detector.onnx") -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $SourceSecureFaceModels "recognizer.onnx") -PathType Leaf) -or
+    -not (Test-Path -LiteralPath (Join-Path $SourceSecureFaceModels "liveness.onnx") -PathType Leaf)) {
+  throw "The installer is missing the required local secure-face models. Download a fresh installer package."
+}
+Copy-Item -LiteralPath $SourceSecureFaceModels -Destination (Join-Path $InstallDirectory "models\secure-face") -Recurse -Force
 if (Test-Path -LiteralPath $SourceUninstaller -PathType Leaf) {
   Copy-Item -LiteralPath $SourceUninstaller -Destination (Join-Path $InstallDirectory "uninstall-edge-agent.ps1") -Force
 }
@@ -219,6 +227,18 @@ if ($LASTEXITCODE -ne 0) { throw "Failed to protect the edge-agent configuration
 Write-Host "Validating edge-agent configuration..." -ForegroundColor Cyan
 & $Executable --config $ConfigPath --check-config
 if ($LASTEXITCODE -ne 0) { throw "Edge-agent configuration validation failed." }
+
+$secureFaceEnabled = ([string](Get-ConfigValue $ConfigPath "SECURE_FACE_AI_ENABLED")).Trim().ToLowerInvariant() -eq "true"
+if ($secureFaceEnabled) {
+  Write-Host "Validating local secure-face detector, recognizer, and liveness models..." -ForegroundColor Cyan
+  Push-Location $InstallDirectory
+  try {
+    & $Executable --config $ConfigPath --verify-secure-face
+    if ($LASTEXITCODE -ne 0) { throw "Secure-face model validation failed. CCTV identity alerts remain disabled." }
+  } finally {
+    Pop-Location
+  }
+}
 
 foreach ($setting in @("FFPROBE_PATH", "FFMPEG_PATH", "MEDIAMTX_PATH", "CLOUDFLARED_PATH")) {
   $dependency = Get-ConfigValue $ConfigPath $setting

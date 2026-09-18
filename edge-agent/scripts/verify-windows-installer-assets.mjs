@@ -10,6 +10,10 @@ const requiredAssets = [
   "installer/windows/install-edge-agent.ps1",
   "installer/windows/uninstall-edge-agent.ps1",
   "installer/windows/open-dashboard-scan.ps1",
+  "models/secure-face/manifest.json",
+  "models/secure-face/detector.onnx",
+  "models/secure-face/recognizer.onnx",
+  "models/secure-face/liveness.onnx",
 ];
 
 const missing = [];

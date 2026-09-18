@@ -1,10 +1,10 @@
-import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SecureFaceRuntime } from "../src/ai/secure-face-runtime.js";
 
 describe("SecureFaceRuntime End-to-End ONNX Test", () => {
   it("initializes successfully with audited manifest and verified ONNX models", async () => {
-    const manifestPath = resolve("./models/secure-face/manifest.json");
+    const manifestPath = fileURLToPath(new URL("../models/secure-face/manifest.json", import.meta.url));
     const runtime = new SecureFaceRuntime({
       manifestPath,
       minLivenessScore: 0.95,
@@ -36,7 +36,7 @@ describe("SecureFaceRuntime End-to-End ONNX Test", () => {
 
   it("fails closed when manifest is invalid or checksum mismatches", async () => {
     const runtime = new SecureFaceRuntime({
-      manifestPath: resolve("./models/secure-face/manifest.example.json"),
+      manifestPath: fileURLToPath(new URL("../models/secure-face/manifest.example.json", import.meta.url)),
       minLivenessScore: 0.95,
     });
     await expect(runtime.initialize()).rejects.toThrow();
