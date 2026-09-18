@@ -69,18 +69,19 @@ export function registerBranchComplianceRoutes(
         ),
         camera_coverage AS (
           SELECT 
-            c.branch_id,
+            c.branch_node_id as branch_id,
             COUNT(*) as total_cameras,
             COUNT(*) FILTER (WHERE c.status = 'online') as online_cameras,
             COUNT(*) FILTER (WHERE c.status = 'offline') as offline_cameras,
             COUNT(*) FILTER (WHERE c.last_seen_at >= NOW() - INTERVAL '5 minutes') as recently_active,
-            COUNT(*) FILTER (WHERE c.recording_status = 'recording') as recording_cameras,
-            COUNT(*) FILTER (WHERE c.name ~* 'locker|vault|cash|counter') as critical_zone_cameras,
-            COUNT(*) FILTER (WHERE c.name ~* 'locker|vault|cash|counter' AND c.status = 'online') as critical_zone_online
+            COUNT(*) FILTER (WHERE c.status = 'recording') as recording_cameras,
+            COUNT(*) FILTER (WHERE cnode.name ~* 'locker|vault|cash|counter') as critical_zone_cameras,
+            COUNT(*) FILTER (WHERE cnode.name ~* 'locker|vault|cash|counter' AND c.status = 'online') as critical_zone_online
           FROM cameras c
-          WHERE c.tenant_id = $1
-            ${query.branchId ? "AND c.branch_id = $2" : ""}
-          GROUP BY c.branch_id
+          JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
+          WHERE cnode.tenant_id = $1::uuid
+            ${query.branchId ? "AND c.branch_node_id = $2::uuid" : ""}
+          GROUP BY c.branch_node_id
         ),
         recording_health AS (
           SELECT 
@@ -158,8 +159,8 @@ export function registerBranchComplianceRoutes(
             COUNT(*) FILTER (WHERE severity = 'CRITICAL') as critical_rules,
             COUNT(DISTINCT detector_type) as unique_detectors
           FROM nbfc_analytics_rules
-          WHERE tenant_id = $1
-            ${query.branchId ? "AND ($2 = ANY(branch_ids) OR branch_ids = '[]'::jsonb)" : ""}
+          WHERE tenant_id = $1::uuid
+            ${query.branchId ? "AND (branch_ids IS NULL OR branch_ids = '[]'::jsonb OR branch_ids @> '[\"*\"]'::jsonb OR branch_ids @> '[\"ALL\"]'::jsonb OR branch_ids @> jsonb_build_array($2::text))" : ""}
           GROUP BY branch_id
         )
         SELECT * FROM branch_rules
@@ -500,14 +501,15 @@ export function registerBranchComplianceRoutes(
           e.created_by,
           e.exported_at,
           b.name as branch_name,
-          c.name as camera_name,
+          COALESCE(cnode.name, c.model, c.id::text) as camera_name,
           i.title as incident_title,
           i.severity as incident_severity
         FROM evidence e
         JOIN branches b ON b.id = e.branch_id AND b.tenant_id = e.tenant_id
-        LEFT JOIN cameras c ON c.id = e.camera_id AND c.tenant_id = e.tenant_id
+        LEFT JOIN cameras c ON c.id = e.camera_id
+        LEFT JOIN resource_nodes cnode ON cnode.id = c.resource_node_id
         LEFT JOIN incidents i ON i.id = e.incident_id AND i.tenant_id = e.tenant_id
-        WHERE e.tenant_id = $1
+        WHERE e.tenant_id = $1::uuid
           AND e.created_at BETWEEN $2 AND $3
           ${query.branchId ? "AND e.branch_id = $4" : ""}
         ORDER BY e.created_at DESC
