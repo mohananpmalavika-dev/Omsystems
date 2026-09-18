@@ -70,6 +70,21 @@ export default function OperationalAlertsPage() {
     fetchAlerts();
   }, [severity, status, component, offset]);
 
+  // Handle alertId in URL to automatically select/highlight operational alert
+  useEffect(() => {
+    if (typeof window === "undefined" || !alerts.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetAlertId = params.get("alertId");
+    if (!targetAlertId) return;
+
+    const matched = alerts.find((a) => a.id === targetAlertId);
+    if (matched) {
+      setSelectedAlert(matched);
+      setModalAction("acknowledge");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [alerts]);
+
   const handleAcknowledge = async (alertId: string) => {
     const alert = alerts.find(a => a.id === alertId);
     if (alert) {

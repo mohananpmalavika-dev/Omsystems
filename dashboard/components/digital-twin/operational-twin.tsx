@@ -32,11 +32,20 @@ export default function OperationalTwin({ branchId, editor = false }: { branchId
   const [newFloorName,setNewFloorName]=useState("");const [newFloorNumber,setNewFloorNumber]=useState(1);
   const [dragging,setDragging]=useState<string>();const [liveSession,setLiveSession]=useState<LiveSessionResponse>();const mapRef=useRef<HTMLDivElement>(null);const fileRef=useRef<HTMLInputElement>(null);
 
-  const bankBlindSpots = useMemo(() => [
-    { id: "bs-1", label: "Cash Counter #02 Under-Desk Blind Spot", x: 0.32, y: 0.38, zone: "Cash Counter", risk: "P2 High", remedy: "Tilt CAM-04 downwards +15° or install under-counter pinhole sensor" },
-    { id: "bs-2", label: "Gold Vault Outer Corridor Alcove", x: 0.76, y: 0.65, zone: "Strong Room Perimeter", risk: "P1 Critical", remedy: "Deploy supplementary 180° fisheye camera CAM-09" },
-    { id: "bs-3", label: "ATM Lobby Left Behind Door Obstruction", x: 0.15, y: 0.22, zone: "ATM Ingress", risk: "P2 High", remedy: "Relocate ATM-01 ceiling dome 60cm towards entrance" }
-  ], []);
+  const blindSpots = useMemo(() => {
+    if (!state) return [];
+    return state.alerts
+      .filter((a) => a.alertType === "blind_spot" || a.alertType === "coverage_gap" || a.title.toLowerCase().includes("blind spot"))
+      .map((a) => ({
+        id: a.id,
+        label: a.title,
+        x: a.positionX ?? 0.5,
+        y: a.positionY ?? 0.5,
+        zone: (a.metadata?.zone as string) ?? "Coverage Perimeter",
+        risk: a.severity === "critical" ? "P1 Critical" : "P2 High",
+        remedy: a.description ?? "Inspect camera angle and field-of-view coverage",
+      }));
+  }, [state]);
 
   const loadBranch=useCallback(async(focusAlertId?:string)=>{setLoading(true);setError(undefined);try{const response=await fetch(`${API}/branches/${branchId}/live`,{cache:"no-store",credentials:"include"});const body=await json(response);setLive(body);const focused=focusAlertId?body.floors.find((item:FloorState)=>item.alerts.some((alert)=>alert.id===focusAlertId||alert.sourceAlertId===focusAlertId)):undefined;const desired=focused?.floor.id??(floorId&&body.floors.some((item:FloorState)=>item.floor.id===floorId)?floorId:body.floors.find((item:FloorState)=>item.alerts.some((alert)=>alert.severity==="critical"))?.floor.id??body.floors[0]?.floor.id);setFloorId(desired);const floor=body.floors.find((item:FloorState)=>item.floor.id===desired);setState(floor);if(focused&&floor){const alert=floor.alerts.find((item:TwinAlert)=>item.id===focusAlertId||item.sourceAlertId===focusAlertId);setSelectedAlert(alert);setSelected(floor.objects.find((item:TwinObject)=>item.id===alert?.twinObjectId));}if(floor&&editor)void loadInventory(floor.floor.id);}catch(reason){setError(message(reason));}finally{setLoading(false);}},[branchId,editor,floorId]);
   const loadFloor=useCallback(async(idValue:string,overlay:HeatmapType=heatmap)=>{try{const query=overlay!=="none"?`?heatmap=${overlay}`:"";const response=await fetch(`${API}/floors/${idValue}/state${query}`,{cache:"no-store",credentials:"include"});setState(await json(response));if(editor)await loadInventory(idValue);}catch(reason){setError(message(reason));}},[editor,heatmap]);
@@ -87,8 +96,8 @@ export default function OperationalTwin({ branchId, editor = false }: { branchId
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             <Metric label="Objects" value={state.summary.totalObjects}/>
-            <Metric label="Coverage" value={94} tone="green"/>
-            <Metric label="Blind Spots" value={bankBlindSpots.length} tone={showBlindSpots ? "red" : "amber"}/>
+            <Metric label="Coverage" value={state.summary.totalObjects > 0 ? Math.round((state.summary.online / state.summary.totalObjects) * 100) : 0} tone={state.summary.totalObjects > 0 && state.summary.online === state.summary.totalObjects ? "green" : "amber"}/>
+            <Metric label="Blind Spots" value={blindSpots.length} tone={blindSpots.length > 0 ? (showBlindSpots ? "red" : "amber") : "slate"}/>
             <Metric label="Healthy" value={state.summary.online} tone="green"/>
             <Metric label="Alerts" value={state.summary.activeAlerts} tone="purple"/>
           </div>
@@ -101,7 +110,7 @@ export default function OperationalTwin({ branchId, editor = false }: { branchId
             {showZones&&<svg className="pointer-events-none absolute inset-0 h-full w-full">{state.zones.map((zone)=><polygon key={zone.id} points={zone.vertices.map((point)=>`${point.x*1000},${point.y*625}`).join(" ")} viewBox="0 0 1000 625" fill={zone.fillColor} fillOpacity={zone.fillOpacity} stroke={zone.strokeColor} strokeWidth={zone.strokeWidth}/>) }{zonePoints.length>0&&<polyline points={zonePoints.map((point)=>`${point.x*1000},${point.y*625}`).join(" ")} viewBox="0 0 1000 625" fill={zonePoints.length>2?"rgba(239,68,68,.15)":"none"} stroke="#ef4444" strokeWidth="3" strokeDasharray="8 5"/>}</svg>}
             {state.heatmap?.points.map((point,index)=><div key={`${point.x}-${point.y}-${index}`} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-lg" style={{left:`${point.x*100}%`,top:`${point.y*100}%`,width:`${70+point.intensity*150}px`,height:`${70+point.intensity*150}px`,background:`radial-gradient(circle,rgba(239,68,68,${.28+point.intensity*.42}),rgba(249,115,22,.12) 50%,transparent 72%)`}} title={point.label}/>) }
             {state.objects.map((object)=><MapObject key={object.id} object={object} selected={selected?.id===object.id} alert={state.alerts.some((item)=>item.twinObjectId===object.id)} showFov={showFov} editor={editor} onSelect={()=>{setSelected(object);setSelectedAlert(state.alerts.find((item)=>item.twinObjectId===object.id));setSelectedBlindSpot(null);setLiveSession(undefined);}} onDrag={(event)=>{if(!editor)return;event.stopPropagation();setDragging(object.id);(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);}}/>)}
-            {showBlindSpots && bankBlindSpots.map((bs) => (
+            {showBlindSpots && blindSpots.map((bs) => (
               <button
                 key={bs.id}
                 onClick={(event) => {

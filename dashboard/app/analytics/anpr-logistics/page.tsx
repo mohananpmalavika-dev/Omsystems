@@ -24,7 +24,7 @@ import {
   PhoneCall,
   Car,
 } from "lucide-react";
-import { cameraInventoryApi } from "@/lib/api-client";
+import { cameraInventoryApi, anprLogisticsApi } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
 
 type VehicleStatus = "on_route" | "arrived" | "departed" | "overdue" | "unknown";
@@ -99,23 +99,13 @@ export default function AnprLogisticsPage() {
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (branchId !== "ALL") params.set("branchId", branchId);
-      if (filter === "active") params.set("status", "on_route");
-      else if (filter === "violations") params.set("hasViolations", "true");
+      const response = await anprLogisticsApi.listSessions({
+        branchId: branchId !== "ALL" ? branchId : undefined,
+        status: filter === "active" ? "on_route" : undefined,
+        hasViolations: filter === "violations" ? true : undefined,
+      });
 
-      // Fetch sessions from real API
-      const response = await fetch(`/v1/logistics/anpr-sessions?${params}`);
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      if (!data.success) {
-        throw new Error(data.error || "Failed to load logistics data");
-      }
+      const data = response.data;
 
       // Set sessions and summary from API response
       setSessions(data.data || []);

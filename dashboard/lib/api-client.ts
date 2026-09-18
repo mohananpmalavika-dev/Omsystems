@@ -2755,6 +2755,130 @@ export const bankingAnalyticsApi = {
       `/v1/banking/sessions/${encodeURIComponent(sessionId)}/evidence`,
       { method: 'POST', body: JSON.stringify({}) },
     ),
+  getCashCountersRealtime: (branchId?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{
+      counters: Array<{
+        cameraId: string;
+        cameraName: string;
+        branchId: string;
+        branchName: string;
+        status: string;
+        lastSeenAt?: string;
+        ruleStatus: string;
+        currentMetrics: Record<string, any>;
+        lastEvaluatedAt?: string;
+        lastTriggeredAt?: string;
+      }>;
+      totalCounters: number;
+      activeCounters: number;
+      generatedAt: string;
+    }>(`/api/banking/cash-counters/realtime?${params}`);
+  },
+  getAnalytics: (filters?: { branchId?: string; period?: string; startDate?: string; endDate?: string }) => {
+    const params = new URLSearchParams();
+    if (filters?.branchId) params.set('branchId', filters.branchId);
+    if (filters?.period) params.set('period', filters.period);
+    if (filters?.startDate) params.set('startDate', filters.startDate);
+    if (filters?.endDate) params.set('endDate', filters.endDate);
+    return fetchApi<{
+      period: string;
+      startDate: string;
+      endDate: string;
+      branchId: string | null;
+      cashCounterAnalytics: {
+        activeCounters: number;
+        countersWithAlerts: number;
+        criticalAlertsToday: number;
+        alertsLastHour: number;
+      };
+      vaultSecurity: {
+        totalVaultZones: number;
+        activeVaultRules: number;
+        zonesInAlert: number;
+        criticalVaultAlerts: number;
+        vaultAlertsLastHour: number;
+        lastVaultTrigger: string | null;
+      };
+      queueAnalytics: {
+        camerasWithQueues: number;
+        queueSlaBreaches: number;
+        activeQueueAlerts: number;
+        avgQueueLength: number;
+        avgWaitSeconds: number;
+        peakQueueLength: number;
+      };
+      atmAnalytics: {
+        totalAtmCameras: number;
+        onlineAtmCameras: number;
+        criticalAtmAlerts: number;
+        tamperingIncidents: number;
+        loiteringIncidents: number;
+      };
+      securityPosture: {
+        totalCameras: number;
+        onlineCameras: number;
+        offlineCameras: number;
+        criticalAlerts: number;
+        highAlerts: number;
+        totalAlertsInPeriod: number;
+        avgCameraAvailability: number;
+      };
+      activeRules: Array<{
+        id: string;
+        name: string;
+        detectorType: string;
+        state: string;
+        severity: string;
+        actions: any;
+        activeAlerts: number;
+        triggersInPeriod: number;
+      }>;
+      generatedAt: string;
+    }>(`/api/banking/analytics?${params}`);
+  },
+  listVipWatchlist: (branchId?: string) => {
+    const params = new URLSearchParams({ type: 'vip' });
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(
+      `/v1/watchlist/nbfc?${params}`
+    );
+  },
+};
+
+export const enterpriseInfrastructureApi = {
+  getTenantSummary: () =>
+    fetchApi<{ success: boolean; data: any }>('/v1/infrastructure/health/tenant/summary'),
+  getBranchHealth: (branchId: string) =>
+    fetchApi<{ success: boolean; data: any }>(`/v1/infrastructure/health/${encodeURIComponent(branchId)}`),
+  getActiveIncidents: (branchId?: string) => {
+    const params = new URLSearchParams();
+    if (branchId) params.set('branchId', branchId);
+    return fetchApi<{ success: boolean; data: any[] }>(`/v1/infrastructure/rca/incidents/active?${params}`);
+  },
+  getPredictedFailures: (branchId: string) =>
+    fetchApi<{ success: boolean; data: any[] }>(`/v1/infrastructure/predicted-failures/${encodeURIComponent(branchId)}`),
+};
+
+export const anprLogisticsApi = {
+  listSessions: (filters?: { branchId?: string; status?: string; hasViolations?: boolean }) => {
+    const params = new URLSearchParams();
+    if (filters?.branchId && filters.branchId !== 'ALL') params.set('branchId', filters.branchId);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.hasViolations) params.set('hasViolations', 'true');
+    return fetchApi<{ success: boolean; data: any[]; summary: any }>(`/v1/logistics/anpr-sessions?${params}`);
+  },
+};
+
+export const nbfcWatchlistApi = {
+  list: (filters?: { branchId?: string; type?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (filters?.branchId && filters.branchId !== 'ALL') params.set('branchId', filters.branchId);
+    if (filters?.type && filters.type !== 'all') params.set('type', filters.type);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(`/v1/watchlist/nbfc?${params}`);
+  },
 };
 
 export const secureAreaAuthorizationApi = {

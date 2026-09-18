@@ -124,6 +124,20 @@ export default function AiAlertsIncidentHubPage() {
     return () => clearInterval(interval);
   }, [loadAlerts]);
 
+  // Handle alertId in URL to automatically select/open incident media modal
+  useEffect(() => {
+    if (typeof window === "undefined" || !alerts.length) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetAlertId = params.get("alertId");
+    if (!targetAlertId) return;
+
+    const matched = alerts.find((a) => a.id === targetAlertId);
+    if (matched) {
+      setActiveMediaAlert(matched);
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [alerts]);
+
   // Distinct filter options across all 5 dimensions
   const uniqueBranches = useMemo(() => {
     const set = new Set<string>();

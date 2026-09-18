@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, BellRing, BrainCircuit, Check, X } from "lucide-react";
 import { analyticsApi } from "@/lib/api-client";
@@ -8,21 +9,55 @@ import { acknowledgeAlert, fetchOperationalAlerts } from "@/lib/api/operational-
 import type { AnalyticsAlert } from "@/lib/types";
 import type { OperationalAlert } from "@/lib/types/operational-health";
 import { useUserAlertPreferences } from "@/services/user-alert-preferences";
+import { markInAppNavigation } from "@/lib/session-guard";
 
 type TrayAlert = { id: string; source: "AI" | "Operational"; severity: string; status: string; title: string; detail?: string; occurredAt: string; href: string };
 const POLL_INTERVAL_MS = 30_000;
 const MAX_VISIBLE_NOTIFICATIONS = 4;
 
 export function AlertNotificationTray() {
+  const router = useRouter();
   const { alertToastEnabled } = useUserAlertPreferences();
   const [notifications, setNotifications] = useState<TrayAlert[]>([]);
   const [acknowledging, setAcknowledging] = useState<string | null>(null);
   const initialized = useRef(false);
   const seen = useRef(new Set<string>());
+
+  const handleNavigate = (e: React.MouseEvent, href: string) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || (e.button && e.button !== 0)) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    markInAppNavigation();
+
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "";
+    if (currentPath === "/control-room") {
+      window.location.assign(href);
+      return;
+    }
+
+    try {
+      router.push(href);
+      const fallbackTimer = window.setTimeout(() => {
+        const expectedPath = href.split("?")[0];
+        if (typeof window !== "undefined" && window.location.pathname !== expectedPath) {
+          markInAppNavigation();
+          window.location.assign(href);
+        }
+      }, 400);
+      const cleanup = () => window.clearTimeout(fallbackTimer);
+      window.addEventListener("popstate", cleanup, { once: true });
+    } catch {
+      window.location.assign(href);
+    }
+  };
+
   const remember = useCallback((keys: string[]) => {
     for (const key of keys) seen.current.add(key);
     if (seen.current.size > 500) seen.current = new Set([...seen.current].slice(-500));
   }, []);
+
   const poll = useCallback(async () => {
     if (document.visibilityState === "hidden") return;
     const [aiResult, operationalResult] = await Promise.allSettled([
@@ -53,6 +88,7 @@ export function AlertNotificationTray() {
     remember(keys);
     if (fresh.length) setNotifications((existing) => [...fresh, ...existing].slice(0, MAX_VISIBLE_NOTIFICATIONS));
   }, [remember]);
+
   useEffect(() => {
     void poll();
     const interval = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
@@ -60,7 +96,9 @@ export function AlertNotificationTray() {
     document.addEventListener("visibilitychange", onVisibilityChange);
     return () => { window.clearInterval(interval); document.removeEventListener("visibilitychange", onVisibilityChange); };
   }, [poll]);
-  const acknowledge = async (alert: TrayAlert) => {
+
+  const acknowledge = async (e: React.MouseEvent, alert: TrayAlert) => {
+    e.stopPropagation();
     setAcknowledging(notificationKey(alert));
     try {
       if (alert.source === "AI") await analyticsApi.acknowledge(alert.id, "Acknowledged from HO alert popup");
@@ -70,12 +108,106 @@ export function AlertNotificationTray() {
       setAcknowledging(null);
     }
   };
+
   if (!alertToastEnabled || !notifications.length) return null;
-  return <aside className="alert-notification-tray" aria-live="assertive" aria-label="New critical and operational alerts">{notifications.map((alert) => <article className={`alert-notification-card severity-${(alert.severity || "info").toLowerCase()}`} key={notificationKey(alert)}><span className="alert-notification-icon" aria-hidden="true">{alert.source === "AI" ? <BrainCircuit size={17} /> : <AlertTriangle size={17} />}</span><div className="alert-notification-content"><div><b>{alert.source} alert</b><time dateTime={alert.occurredAt}>{formatTime(alert.occurredAt)}</time></div><strong>{alert.title}</strong>{alert.detail && <p>{alert.detail}</p>}<div className="flex gap-2"><Link href={alert.href}><BellRing size={13} /> Open alert queue</Link><button type="button" disabled={acknowledging === notificationKey(alert)} onClick={() => void acknowledge(alert)}><Check size={13} />Acknowledge</button></div></div><button type="button" aria-label={`Dismiss ${alert.title}`} onClick={() => setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)))}><X size={15} /></button></article>)}</aside>;
+  return (
+    <aside className="alert-notification-tray" aria-live="assertive" aria-label="New critical and operational alerts">
+      {notifications.map((alert) => (
+        <article
+          className={`alert-notification-card severity-${(alert.severity || "info").toLowerCase()}`}
+          key={notificationKey(alert)}
+        >
+          <span
+            className="alert-notification-icon cursor-pointer"
+            aria-hidden="true"
+            onClick={(e) => handleNavigate(e, alert.href)}
+          >
+            {alert.source === "AI" ? <BrainCircuit size={17} /> : <AlertTriangle size={17} />}
+          </span>
+          <div className="alert-notification-content">
+            <div className="cursor-pointer" onClick={(e) => handleNavigate(e, alert.href)}>
+              <b>{alert.source} alert</b>
+              <time dateTime={alert.occurredAt}>{formatTime(alert.occurredAt)}</time>
+            </div>
+            <strong
+              className="cursor-pointer hover:underline"
+              onClick={(e) => handleNavigate(e, alert.href)}
+              title="Click to open alert"
+            >
+              {alert.title}
+            </strong>
+            {alert.detail && (
+              <p
+                className="cursor-pointer"
+                onClick={(e) => handleNavigate(e, alert.href)}
+              >
+                {alert.detail}
+              </p>
+            )}
+            <div className="flex gap-2 items-center mt-1">
+              <Link
+                href={alert.href}
+                onClick={(e) => handleNavigate(e, alert.href)}
+                className="alert-queue-link"
+              >
+                <BellRing size={13} /> Open alert queue
+              </Link>
+              <button
+                type="button"
+                className="alert-acknowledge-btn"
+                disabled={acknowledging === notificationKey(alert)}
+                onClick={(e) => void acknowledge(e, alert)}
+              >
+                <Check size={13} />Acknowledge
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="alert-dismiss-btn"
+            aria-label={`Dismiss ${alert.title}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)));
+            }}
+          >
+            <X size={15} />
+          </button>
+        </article>
+      ))}
+    </aside>
+  );
 }
 
-function toAiNotification(alert: AnalyticsAlert): TrayAlert { return { id: alert.id, source: "AI", severity: alert.severity || "info", status: alert.status, title: alert.title || "AI Alert", detail: [alert.cameraName, alert.branchName].filter(Boolean).join(" · ") || alert.description, occurredAt: alert.lastDetectedAt || alert.createdAt || new Date().toISOString(), href: "/analytics/alerts" }; }
-function toOperationalNotification(alert: OperationalAlert): TrayAlert { return { id: alert.id, source: "Operational", severity: alert.severity || "warning", status: alert.status, title: alert.title || "Operational Alert", detail: alert.branchName || alert.componentType, occurredAt: alert.detectedAt || new Date().toISOString(), href: "/operations/alerts" }; }
+function toAiNotification(alert: AnalyticsAlert): TrayAlert {
+  const query = alert.id ? `?alertId=${encodeURIComponent(alert.id)}` : "";
+  return {
+    id: alert.id,
+    source: "AI",
+    severity: alert.severity || "info",
+    status: alert.status,
+    title: alert.title || "AI Alert",
+    detail: [alert.cameraName, alert.branchName].filter(Boolean).join(" · ") || alert.description,
+    occurredAt: alert.lastDetectedAt || alert.createdAt || new Date().toISOString(),
+    href: `/analytics/alerts${query}`,
+  };
+}
+
+function toOperationalNotification(alert: OperationalAlert): TrayAlert {
+  const query = alert.id ? `?alertId=${encodeURIComponent(alert.id)}` : "";
+  return {
+    id: alert.id,
+    source: "Operational",
+    severity: alert.severity || "warning",
+    status: alert.status,
+    title: alert.title || "Operational Alert",
+    detail: alert.branchName || alert.componentType,
+    occurredAt: alert.detectedAt || new Date().toISOString(),
+    href: `/operations/alerts${query}`,
+  };
+}
+
 function notificationKey(alert: TrayAlert) { return `${alert.source}:${alert.id}:${alert.status}`; }
 function formatTime(value?: string) { if (!value) return "Just now"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "Just now" : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+
 
