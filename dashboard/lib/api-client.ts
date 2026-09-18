@@ -1364,6 +1364,34 @@ export const maintenanceApi = {
   }),
 };
 
+export const predictiveAnalyticsApi = {
+  getDashboardSummary: () => fetchApi<any>('/v1/maintenance/predictive/dashboard'),
+  listHighRiskAssets: (riskThreshold = 70, limit = 20) =>
+    fetchApi<{ predictions: any[]; count: number; threshold: number }>(
+      `/v1/maintenance/predictive/high-risk-assets?riskThreshold=${riskThreshold}&limit=${limit}`
+    ),
+  predictAllFailures: () =>
+    fetchApi<{ predictions: any[]; total: number; summary: any }>('/v1/maintenance/predictive/failure/all'),
+  getAnomalies: () =>
+    fetchApi<{ anomalies: any[]; total: number; byType: any }>('/v1/maintenance/predictive/anomalies'),
+  getStorageForecast: (branchNodeId?: string) =>
+    fetchApi<{ forecasts: any[]; count: number }>(
+      `/v1/maintenance/predictive/forecast/storage-capacity${branchNodeId ? `?branchNodeId=${encodeURIComponent(branchNodeId)}` : ''}`
+    ),
+  getAllHealthScores: () =>
+    fetchApi<{ healthScores: any[]; total: number; average: number }>('/v1/maintenance/predictive/health-score/all'),
+  trainFailureModel: (historicalDays = 365) =>
+    fetchApi<any>('/v1/maintenance/predictive/train/failure-model', {
+      method: 'POST',
+      body: JSON.stringify({ historicalDays }),
+    }),
+  updateBaseline: (assetCategory?: string) =>
+    fetchApi<any>('/v1/maintenance/predictive/update-baseline', {
+      method: 'POST',
+      body: JSON.stringify({ assetCategory }),
+    }),
+};
+
 export const reportsApi = {
   getOperationsSummary: () => fetchApi<any>('/v1/reports/summary/operations'),
   getPrivacySummary: () => fetchApi<any>('/v1/reports/summary/privacy'),
