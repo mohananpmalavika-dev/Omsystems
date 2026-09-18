@@ -53,9 +53,9 @@ export default function StoragePage() {
     tier1SdCardCount: 0,
     tier2DvrHddCount: 0,
     tier3OnlineCloudCount: 0,
-    sdCardNode: { name: "Onboard MicroSD Card (SanDisk 128GB)", capacity: "128 GB", used: "45 GB", status: "healthy" },
-    dvrHddNode: { name: "WD Purple 8TB SATA Surveillance Drive", capacity: "8,000 GB", used: "6,420 GB", status: "healthy" },
-    cloudNode: { name: "Sentinel Online Cloud Recording Pool (S3)", capacity: "500 GB", used: "42 GB", status: "healthy" },
+    sdCardNode: { name: "Waiting for camera SD-card telemetry", capacity: "Unavailable", used: "Unavailable", status: "unknown" },
+    dvrHddNode: { name: "Waiting for recorder HDD telemetry", capacity: "Unavailable", used: "Unavailable", status: "unknown" },
+    cloudNode: { name: "Waiting for cloud-storage telemetry", capacity: "Unavailable", used: "Unavailable", status: "unknown" },
   });
 
   const loadStorageData = async () => {

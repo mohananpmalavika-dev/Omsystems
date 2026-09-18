@@ -69,17 +69,57 @@ export interface StorageOverviewResponse {
 
 function formatBytes(bytes: number | string): string {
   const num = Number(bytes);
-  if (isNaN(num) || num <= 0) return "0 GB";
+  if (isNaN(num) || num <= 0) return "Unavailable";
   if (num >= 1e12) return `${(num / 1e12).toFixed(1)} TB`;
   if (num >= 1e9) return `${(num / 1e9).toFixed(1)} GB`;
   if (num >= 1e6) return `${(num / 1e6).toFixed(1)} MB`;
   return `${num} B`;
 }
 
+type DiskTelemetry = {
+  id?: string;
+  deviceId?: string;
+  devicePath?: string;
+  model?: string;
+  operationalStatus?: string;
+  smartStatus?: string;
+  capacityBytes?: number;
+  usedBytes?: number;
+  availableBytes?: number;
+  usagePercent?: number;
+};
+
+function diskId(disk: DiskTelemetry) {
+  return String(disk.id ?? disk.deviceId ?? "");
+}
+
+function isCameraSdCard(disk: DiskTelemetry) {
+  const identity = `${diskId(disk)} ${disk.devicePath ?? ""} ${disk.model ?? ""}`.toLowerCase();
+  return /(?:sdcard|sd-card|micro\s*sd|\bsd\b)/.test(identity);
+}
+
+function diskStatus(disk: DiskTelemetry | undefined) {
+  const status = String(disk?.operationalStatus ?? "unknown").toLowerCase();
+  return ["healthy", "warning", "critical", "offline"].includes(status) ? status : "unknown";
+}
+
+function aggregateDisks(disks: DiskTelemetry[], name: string) {
+  const capacityBytes = disks.reduce((total, disk) => total + Math.max(0, Number(disk.capacityBytes) || 0), 0);
+  const usedBytes = disks.reduce((total, disk) => total + Math.max(0, Number(disk.usedBytes) || 0), 0);
+  const availableBytes = disks.reduce((total, disk) => total + Math.max(0, Number(disk.availableBytes) || 0), 0);
+  const statuses = disks.map((disk) => diskStatus(disk));
+  const status = statuses.includes("critical") ? "critical"
+    : statuses.includes("offline") ? "offline"
+      : statuses.includes("warning") ? "warning"
+        : statuses.includes("healthy") ? "healthy" : "unknown";
+  return { name, capacity_bytes: capacityBytes, used_bytes: usedBytes, available_bytes: availableBytes, status };
+}
+
 export async function GET(request: NextRequest) {
   const pool = getPool();
   let rawCameras: any[] = [];
   let rawStorageNodes: any[] = [];
+  let rawDisks: DiskTelemetry[] = [];
 
   if (pool) {
     try {
@@ -125,8 +165,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // If DB query was unavailable or returned empty, query upstream control plane
-  if (rawCameras.length === 0) {
+  // The operational-health endpoint is the source of truth for recorder HDD
+  // and camera SD-card observations.  Storage nodes alone are not sufficient:
+  // recorders submit per-disk telemetry through the edge agent.
+  try {
+    const upstreamBase = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL || "http://control-plane:8080";
+    const incomingAuth = request.headers.get("authorization") || request.headers.get("x-sentinel-session");
+    const headers: Record<string, string> = {};
+    if (incomingAuth) headers["authorization"] = incomingAuth.startsWith("Bearer ") ? incomingAuth : `Bearer ${incomingAuth}`;
+    const diskRes = await fetch(`${upstreamBase}/v1/operations/health/disks`, { headers, cache: "no-store" }).catch(() => null);
+    if (diskRes?.ok) {
+      const diskData = await diskRes.json();
+      rawDisks = Array.isArray(diskData) ? diskData : (Array.isArray(diskData?.data) ? diskData.data : []);
+    }
+  } catch (err) {
+    console.warn("Operational storage telemetry fetch failed:", err);
+  }
+
+  // If DB query was unavailable or returned empty, query upstream control plane.
+  if (rawCameras.length === 0 || rawStorageNodes.length === 0) {
     try {
       const upstreamBase = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL || "http://control-plane:8080";
       const incomingAuth = request.headers.get("authorization") || request.headers.get("x-sentinel-session");
@@ -138,11 +195,11 @@ export async function GET(request: NextRequest) {
         fetch(`${upstreamBase}/api/v1/storage/nodes`, { headers, cache: "no-store" }).catch(() => null),
       ]);
 
-      if (camRes && camRes.ok) {
+      if (rawCameras.length === 0 && camRes && camRes.ok) {
         const camData = await camRes.json();
         rawCameras = Array.isArray(camData) ? camData : (camData.data || []);
       }
-      if (nodeRes && nodeRes.ok) {
+      if (rawStorageNodes.length === 0 && nodeRes && nodeRes.ok) {
         const nodeData = await nodeRes.json();
         rawStorageNodes = Array.isArray(nodeData) ? nodeData : (nodeData.data || []);
       }
@@ -151,27 +208,14 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Find the primary storage nodes from the database / node list
-  const dvrNode = rawStorageNodes.find((n) => n.external_id === "dvr-hdd-primary" || n.name?.toLowerCase().includes("hdd")) || {
-    name: "WD Purple 8TB Surveillance HDD (NVR Slot 1 - SATA)",
-    capacity_bytes: 8000000000000,
-    used_bytes: 6420000000000,
-    status: "healthy",
-  };
-
-  const sdCardNode = rawStorageNodes.find((n) => n.external_id === "cam-sdcard-primary" || n.name?.toLowerCase().includes("microsd") || n.name?.toLowerCase().includes("sd")) || {
-    name: "Onboard MicroSD Card (SanDisk High Endurance 128GB)",
-    capacity_bytes: 128000000000,
-    used_bytes: 45000000000,
-    status: "healthy",
-  };
-
-  const cloudNode = rawStorageNodes.find((n) => n.external_id === "cloud-node-primary" || n.name?.toLowerCase().includes("cloud")) || {
-    name: "Sentinel Online Cloud Recording (Media Gateway S3 Target)",
-    capacity_bytes: 500000000000,
-    used_bytes: 42000000000,
-    status: "healthy",
-  };
+  const sdCardDisks = rawDisks.filter(isCameraSdCard);
+  const recorderDisks = rawDisks.filter((disk) => !isCameraSdCard(disk));
+  const dvrNode = rawStorageNodes.find((node) => node.external_id === "dvr-hdd-primary" || node.name?.toLowerCase().includes("hdd"))
+    ?? aggregateDisks(recorderDisks, "Recorder HDD telemetry");
+  const sdCardNode = rawStorageNodes.find((node) => node.external_id === "cam-sdcard-primary" || /micro\s*sd|sd.?card/i.test(node.name ?? ""))
+    ?? aggregateDisks(sdCardDisks, "Camera SD-card telemetry");
+  const cloudNode = rawStorageNodes.find((node) => node.external_id === "cloud-node-primary" || node.name?.toLowerCase().includes("cloud"))
+    ?? { name: "Cloud recording telemetry unavailable", capacity_bytes: 0, used_bytes: 0, available_bytes: 0, status: "unknown" };
 
   // Map each real camera to its active storage tier
   const cameras: CameraStorageMapping[] = rawCameras.map((cam, idx) => {
@@ -180,21 +224,15 @@ export async function GET(request: NextRequest) {
     const ip = cam.ip_address || "192.168.29.58";
     const override = runtimeFailoverOverrides.get(camId);
 
-    // Check if camera is a standalone IP camera with onboard MicroSD capability
-    const isStandaloneIpCamera = !cam.recorder_id && (
-      name.toLowerCase().includes("ipc") ||
-      name.toLowerCase().includes("h264") ||
-      ip.endsWith(".58") ||
-      cam.vendor?.toLowerCase().includes("hikvision") ||
-      Boolean(cam.capabilities?.onboard_storage)
-    );
-
-    // Check if camera is mapped through a DVR / NVR (like CP PLUS DVR at 192.168.29.171)
-    const isDvrMapped = Boolean(cam.recorder_id) ||
-      name.toLowerCase().includes("dvr") ||
-      name.toLowerCase().includes("nvr") ||
-      name.toLowerCase().includes("channel") ||
-      ip.endsWith(".171");
+    const cameraSdCard = sdCardDisks.find((disk) => {
+      const id = diskId(disk);
+      return id === `${camId}:sdcard` || id === `camera:${camId}:sdcard` || id.includes(`:${camId}:sdcard`);
+    });
+    const recorderDisk = cam.recorder_id
+      ? recorderDisks.find((disk) => diskId(disk).startsWith(`${cam.recorder_id}:disk:`))
+      : undefined;
+    const hasVerifiedSdCard = Boolean(cameraSdCard && Number(cameraSdCard.capacityBytes) > 0);
+    const hasVerifiedRecorderStorage = Boolean(recorderDisk && Number(recorderDisk.capacityBytes) > 0);
 
     let activeTier: "sd_card" | "dvr_hdd" | "online_cloud" = "online_cloud";
     let sdCardStatus: "detected" | "not_present" | "unformatted" = "not_present";
@@ -207,13 +245,10 @@ export async function GET(request: NextRequest) {
 
     if (override) {
       activeTier = override;
-    } else if (isStandaloneIpCamera) {
-      // Tier 1: On-Camera MicroSD Card detected
+    } else if (hasVerifiedSdCard) {
       activeTier = "sd_card";
       sdCardStatus = "detected";
-      dvrStatus = isDvrMapped ? "mapped" : "unmapped";
-    } else if (isDvrMapped) {
-      // Tier 2: DVR / NVR Hard Disk mapped
+    } else if (hasVerifiedRecorderStorage) {
       activeTier = "dvr_hdd";
       sdCardStatus = "not_present";
       dvrStatus = "mapped";
@@ -227,26 +262,31 @@ export async function GET(request: NextRequest) {
     if (activeTier === "sd_card") {
       sdCardStatus = "detected";
       cloudStatus = "standby";
-      storageDetails = sdCardNode.name || "Onboard SanDisk High Endurance MicroSD 128GB";
-      capacity = formatBytes(sdCardNode.capacity_bytes);
-      const usedPct = ((Number(sdCardNode.used_bytes) / Number(sdCardNode.capacity_bytes)) * 100).toFixed(0);
-      used = `${formatBytes(sdCardNode.used_bytes)} (${usedPct}%)`;
-      retentionDays = 14;
+      storageDetails = cameraSdCard?.model || cameraSdCard?.devicePath || sdCardNode.name;
+      capacity = formatBytes(cameraSdCard?.capacityBytes ?? sdCardNode.capacity_bytes);
+      const sdCapacity = Number(cameraSdCard?.capacityBytes ?? sdCardNode.capacity_bytes);
+      const sdUsed = Number(cameraSdCard?.usedBytes ?? sdCardNode.used_bytes);
+      used = sdCapacity > 0 ? `${formatBytes(sdUsed)} (${((sdUsed / sdCapacity) * 100).toFixed(0)}%)` : "Usage unavailable";
+      retentionDays = 0;
     } else if (activeTier === "dvr_hdd") {
       dvrStatus = "mapped";
       cloudStatus = "standby";
-      storageDetails = `${dvrNode.name || "WD Purple 8TB Surveillance HDD"} (Channel ${cam.recorder_channel || idx + 1})`;
-      capacity = formatBytes(dvrNode.capacity_bytes);
-      const usedPct = ((Number(dvrNode.used_bytes) / Number(dvrNode.capacity_bytes)) * 100).toFixed(0);
-      used = `${formatBytes(dvrNode.used_bytes)} (${usedPct}%)`;
-      retentionDays = 90;
+      storageDetails = `${recorderDisk?.model || recorderDisk?.devicePath || dvrNode.name} (Channel ${cam.recorder_channel || idx + 1})`;
+      capacity = formatBytes(recorderDisk?.capacityBytes ?? dvrNode.capacity_bytes);
+      const diskCapacity = Number(recorderDisk?.capacityBytes ?? dvrNode.capacity_bytes);
+      const diskUsed = Number(recorderDisk?.usedBytes ?? dvrNode.used_bytes);
+      used = diskCapacity > 0 ? `${formatBytes(diskUsed)} (${((diskUsed / diskCapacity) * 100).toFixed(0)}%)` : "Usage unavailable";
+      retentionDays = 0;
     } else {
-      cloudStatus = "active";
-      storageDetails = "Online Cloud Storage (Sentinel Media Gateway S3 Target - Zero Downtime)";
-      capacity = `${formatBytes(cloudNode.capacity_bytes)} Cloud Pool`;
-      const usedPct = ((Number(cloudNode.used_bytes) / Number(cloudNode.capacity_bytes)) * 100).toFixed(1);
-      used = `${formatBytes(cloudNode.used_bytes)} (${usedPct}%)`;
-      retentionDays = 30;
+      cloudStatus = cloudNode.status === "healthy" ? "active" : "standby";
+      storageDetails = recorderDisk
+        ? "Recorder storage telemetry is unavailable; no capacity was reported."
+        : "No verified camera SD-card or recorder-HDD telemetry has been received yet.";
+      capacity = cloudNode.capacity_bytes > 0 ? `${formatBytes(cloudNode.capacity_bytes)} Cloud Pool` : "Unavailable";
+      const cloudCapacity = Number(cloudNode.capacity_bytes);
+      const cloudUsed = Number(cloudNode.used_bytes);
+      used = cloudCapacity > 0 ? `${formatBytes(cloudUsed)} (${((cloudUsed / cloudCapacity) * 100).toFixed(1)}%)` : "Waiting for storage telemetry";
+      retentionDays = 0;
     }
 
     return {
@@ -267,7 +307,7 @@ export async function GET(request: NextRequest) {
 
   const tier1Count = cameras.filter((c) => c.activeStorageTier === "sd_card").length;
   const tier2Count = cameras.filter((c) => c.activeStorageTier === "dvr_hdd").length;
-  const tier3Count = cameras.filter((c) => c.activeStorageTier === "online_cloud").length;
+  const tier3Count = cameras.filter((c) => c.activeStorageTier === "online_cloud" && c.cloudStatus === "active").length;
 
   // Filter active storage nodes: local disks are unmounted if no corresponding device exists
   const activeStorageNodes = rawStorageNodes.filter((node) => {
@@ -292,19 +332,19 @@ export async function GET(request: NextRequest) {
         name: sdCardNode.name,
         capacity: formatBytes(sdCardNode.capacity_bytes),
         used: formatBytes(sdCardNode.used_bytes),
-        status: tier1Count > 0 ? (sdCardNode.status || "healthy") : "not_present",
+        status: tier1Count > 0 ? (sdCardNode.status || "unknown") : "not_present",
       },
       dvrHddNode: {
         name: dvrNode.name,
         capacity: formatBytes(dvrNode.capacity_bytes),
         used: formatBytes(dvrNode.used_bytes),
-        status: tier2Count > 0 ? (dvrNode.status || "healthy") : "not_present",
+        status: tier2Count > 0 ? (dvrNode.status || "unknown") : "not_present",
       },
       cloudNode: {
         name: cloudNode.name,
         capacity: formatBytes(cloudNode.capacity_bytes),
         used: formatBytes(cloudNode.used_bytes),
-        status: cloudNode.status || "healthy",
+        status: cloudNode.status || "unknown",
       },
     },
     storageNodes: activeStorageNodes,

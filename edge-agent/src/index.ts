@@ -1223,10 +1223,24 @@ async function heartbeatAndReport() {
         },
         reasonCodes: channel.reasonCodes,
       })));
-      if (probe.hddStatus.length) submissions.push(control.submitRecorderHdd(agentId, {
+      // Always publish a storage observation.  Previously an unsupported,
+      // unauthenticated, or newly changed recorder storage API resulted in no
+      // disk telemetry at all, which made the dashboard look as if storage did
+      // not exist.  An explicit unknown state is truthful and remains visible
+      // until a vendor probe supplies physical-disk evidence.
+      const storageTelemetryAvailable = probe.hddStatus.length > 0;
+      const hddStatus = storageTelemetryAvailable ? probe.hddStatus : [{
+        id: "storage-telemetry",
+        devicePath: "Recorder storage telemetry",
+        model: recorder.name,
+        state: "unknown",
+        storageKind: "recorder-hdd",
+        telemetryCapability: "unavailable",
+      }];
+      submissions.push(control.submitRecorderHdd(agentId, {
         branchId, recorderId: recorder.id, observedAt, source,
-        quality: "verified", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
-        hddStatus: probe.hddStatus,
+        quality: storageTelemetryAvailable ? "verified" : "unavailable", idempotencyKey: `${agentId}:recorder-hdd:${recorder.id}:${observedAt}`,
+        hddStatus,
       }));
       if (probe.archiveEvidence.length) submissions.push(control.submitRecorderArchive(agentId, {
         branchId, recorderId: recorder.id, observedAt, source,
