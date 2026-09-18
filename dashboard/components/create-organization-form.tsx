@@ -1,8 +1,8 @@
 "use client";
 
-import { Building2, CheckCircle, Upload, Image as ImageIcon, X } from "lucide-react";
+import { Building2, CheckCircle, Upload, Image as ImageIcon, X, Mic } from "lucide-react";
 import { useState, useEffect, FormEvent, useRef } from "react";
-import { organizationApi } from "@/lib/api-client";
+import { organizationApi, voiceEnrollmentApi } from "@/lib/api-client";
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
 import { isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
@@ -15,6 +15,7 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isPermitted, setIsPermitted] = useState(true);
+  const [enableVoiceAuth, setEnableVoiceAuth] = useState(true);
 
   useEffect(() => {
     const permitted = isSuperAdminOrgCreator();
@@ -136,6 +137,15 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
       }
 
       await organizationApi.createNode(payload);
+
+      // Enable or configure voice authentication for the newly created organization
+      try {
+        await voiceEnrollmentApi.updateSettings({
+          enabled: enableVoiceAuth,
+        });
+      } catch (voiceErr) {
+        console.warn("Could not save voice authentication setting for organization:", voiceErr);
+      }
 
       // Sync global branding across all pages immediately
       updateBranding({
@@ -453,6 +463,36 @@ export function CreateOrganizationForm({ onSuccess }: CreateOrganizationFormProp
                 placeholder="+1 (555) 123-4567"
                 disabled={isSubmitting}
               />
+            </div>
+          </div>
+
+          <div className="form-section">
+            <h3 className="form-section-title">Biometric &amp; Security Settings</h3>
+            <div className="p-4 rounded-xl border border-slate-700 bg-slate-900/60 flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Mic size={18} className="text-cyan-400" />
+                  <span className="text-sm font-semibold text-slate-100">Voice Biometric Authentication</span>
+                  {enableVoiceAuth && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">
+                      Enabled
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Allow organization employees to enroll voice biometrics, perform voice-based identification, and log in with multi-factor voice verification.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={enableVoiceAuth}
+                  onChange={(e) => setEnableVoiceAuth(e.target.checked)}
+                  disabled={isSubmitting}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+              </label>
             </div>
           </div>
 

@@ -637,6 +637,33 @@ export const voiceEnrollmentApi = {
       method: 'DELETE',
       body: JSON.stringify({ reason: reason || 'User requested revocation' }),
     }),
+
+  getSettings: () =>
+    fetchApi<{
+      success: boolean;
+      settings: {
+        enabled: boolean;
+        requireLivenessCheck?: boolean;
+        requireAntiSpoofing?: boolean;
+        similarityThreshold?: number;
+        [key: string]: any;
+      };
+    }>('/v1/voice/settings'),
+
+  updateSettings: (settings: {
+    enabled: boolean;
+    requireLivenessCheck?: boolean;
+    requireAntiSpoofing?: boolean;
+    similarityThreshold?: number;
+    [key: string]: any;
+  }) =>
+    fetchApi<{
+      success: boolean;
+      message: string;
+    }>('/v1/voice/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    }),
 };
 
 export type OrganizationTreeResponse = {

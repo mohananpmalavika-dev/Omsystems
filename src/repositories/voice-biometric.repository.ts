@@ -437,6 +437,14 @@ export class VoiceBiometricRepository {
    * Update voice authentication settings
    */
   async updateSettings(tenantId: string, settings: Partial<VoiceAuthenticationSettings>): Promise<void> {
+    // Ensure row exists for this tenant before updating
+    await this.pool.query(
+      `INSERT INTO voice_authentication_settings (tenant_id, enabled, require_liveness_check, require_consent)
+       VALUES ($1, false, true, true)
+       ON CONFLICT (tenant_id) DO NOTHING`,
+      [tenantId]
+    );
+
     const fields: string[] = [];
     const values: any[] = [tenantId];
     let paramCount = 1;
