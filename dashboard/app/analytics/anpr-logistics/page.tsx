@@ -105,11 +105,9 @@ export default function AnprLogisticsPage() {
         hasViolations: filter === "violations" ? true : undefined,
       });
 
-      const data = response.data;
-
       // Set sessions and summary from API response
-      setSessions(data.data || []);
-      setSummary(data.summary || emptySummary);
+      setSessions(response.data || []);
+      setSummary(response.summary || emptySummary);
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: error instanceof Error ? error.message : "Failed to load logistics data" });

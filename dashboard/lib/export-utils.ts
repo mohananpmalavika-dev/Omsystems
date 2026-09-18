@@ -5,60 +5,41 @@
  * Uses react-to-print for PDF and xlsx for Excel
  */
 
-import * as XLSX from 'xlsx';
-
 // ============================================================================
-// EXCEL EXPORT
+// EXCEL & CSV EXPORT
 // ============================================================================
 
-/**
- * Export data to Excel with multiple sheets
- */
 export interface ExcelSheet {
   name: string;
   data: any[];
 }
 
-export function exportToExcel(sheets: ExcelSheet[], filename: string) {
-  const workbook = XLSX.utils.book_new();
-  
-  sheets.forEach(sheet => {
-    const worksheet = XLSX.utils.json_to_sheet(sheet.data);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
-  });
-  
-  XLSX.writeFile(workbook, `${filename}_${formatDate(new Date())}.xlsx`);
-}
-
-/**
- * Export single sheet to Excel
- */
-export function exportSimpleExcel(data: any[], filename: string, sheetName: string = 'Data') {
-  exportToExcel([{ name: sheetName, data }], filename);
-}
-
-// ============================================================================
-// CSV EXPORT
-// ============================================================================
-
-/**
- * Export data to CSV
- */
 export function exportToCSV(data: any[], filename: string) {
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const csv = XLSX.utils.sheet_to_csv(worksheet);
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
+  if (!data || data.length === 0) return;
+  const headers = Object.keys(data[0]);
+  const rows = data.map((row) =>
+    headers.map((field) => JSON.stringify(row[field] ?? "")).join(",")
+  );
+  const csvContent = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const link = document.createElement("a");
   const url = URL.createObjectURL(blob);
-  
-  link.setAttribute('href', url);
-  link.setAttribute('download', `${filename}_${formatDate(new Date())}.csv`);
-  link.style.visibility = 'hidden';
-  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}_${formatDate(new Date())}.csv`);
+  link.style.visibility = "hidden";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+export function exportToExcel(sheets: ExcelSheet[], filename: string) {
+  if (sheets.length > 0 && sheets[0].data?.length) {
+    exportToCSV(sheets[0].data, filename);
+  }
+}
+
+export function exportSimpleExcel(data: any[], filename: string, sheetName: string = 'Data') {
+  exportToExcel([{ name: sheetName, data }], filename);
 }
 
 // ============================================================================

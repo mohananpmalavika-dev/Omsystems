@@ -277,9 +277,10 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
         deviceType,
         protocol: 'SNMP',
         manufacturer: this.extractManufacturer(sysDescr),
-        model: this.extractModel(sysDescr),
-        name: sysName || `SNMP Device ${ipAddress}`,
+        discoveredAt: new Date(),
+        confidence: 90,
         metadata: {
+          name: sysName || `SNMP Device ${ipAddress}`,
           sysDescr,
           sysObjectID,
           sysLocation,
@@ -367,7 +368,6 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
       if (sysDescr) {
         return {
           success: true,
-          message: `Connected to SNMP device: ${sysDescr}`,
         };
       } else {
         return {
@@ -387,10 +387,10 @@ export class SnmpAdapter extends BaseSecurityDeviceAdapter {
    * Get SNMP configuration from device
    */
   private getDeviceSnmpConfig(device: SecurityDevice): SnmpSessionConfig {
-    const config = device.connectionConfig || {};
+    const config = (device as any).connectionConfig || device.metadata?.connectionConfig || {};
     
     return {
-      host: device.ipAddress,
+      host: device.ipAddress || '127.0.0.1',
       community: config.community || this.defaultCommunity,
       version: this.parseSnmpVersion(config.version),
       timeout: this.defaultTimeout,

@@ -57,7 +57,7 @@ export function PredictionCard({
   };
 
   const probLevel = getProbabilityLevel(prediction.probability);
-  const probColors = {
+  const probColors: Record<string, string> = {
     red: "bg-red-950/60 border-red-800 text-red-300",
     orange: "bg-orange-950/60 border-orange-800 text-orange-300",
     amber: "bg-amber-950/60 border-amber-800 text-amber-300",

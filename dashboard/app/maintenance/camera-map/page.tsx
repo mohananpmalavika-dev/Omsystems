@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { CameraMapView, BranchClusterMap } from '@/components/maintenance/map-view';
-import { apiClient } from '@/lib/api-client';
 
 interface CameraLocation {
   id: string;

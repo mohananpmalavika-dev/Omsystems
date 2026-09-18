@@ -7,12 +7,11 @@
 'use client';
 
 import { Download, FileSpreadsheet } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
 import { RefObject } from 'react';
 
 interface ExportButtonsProps {
   /** Reference to the component to print/export */
-  contentRef: RefObject<HTMLElement>;
+  contentRef?: RefObject<any>;
   
   /** Filename for exports (without extension) */
   filename: string;
@@ -39,25 +38,11 @@ export function ExportButtons({
   showCSV = false,
 }: ExportButtonsProps) {
   
-  const handlePrint = useReactToPrint({
-    content: () => contentRef.current,
-    documentTitle: documentTitle || filename,
-    pageStyle: `
-      @page {
-        size: A4;
-        margin: 1cm;
-      }
-      @media print {
-        body {
-          -webkit-print-color-adjust: exact;
-          print-color-adjust: exact;
-        }
-        .no-print {
-          display: none !important;
-        }
-      }
-    `,
-  });
+  const handlePrint = () => {
+    if (typeof window !== 'undefined') {
+      window.print();
+    }
+  };
   
   return (
     <div className="flex items-center gap-2">
