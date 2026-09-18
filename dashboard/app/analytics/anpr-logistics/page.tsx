@@ -147,6 +147,10 @@ export default function AnprLogisticsPage() {
     });
   }, [sessions, filter]);
 
+  const suspiciousSessions = useMemo(() => {
+    return sessions.filter(session => session.violations.length > 0 || session.routeCompliance !== "compliant");
+  }, [sessions]);
+
   return (
     <main className="min-h-[calc(100vh-5rem)] bg-slate-950 p-4 text-slate-100 xl:p-6">
       <header className="relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6">
@@ -212,108 +216,99 @@ export default function AnprLogisticsPage() {
         <MetricCard label="Violations" value={summary.unauthorizedStops} icon={<XCircle />} tone="red" />
       </section>
 
-      {/* Reconnaissance Casing Alert & Police Hotlist Card */}
+      {/* Reconnaissance & Route Deviation Security Alerts */}
       <section className="mb-5 space-y-3">
-        <div className="rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 p-5 shadow-xl">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
-                <Car size={24} />
+        {suspiciousSessions.length > 0 ? (
+          suspiciousSessions.map((session) => (
+            <div key={session.id} className="rounded-2xl border border-rose-500/40 bg-gradient-to-r from-rose-950/40 via-slate-900 to-slate-900 p-5 shadow-xl">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse">
+                    <Car size={24} />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300 uppercase tracking-widest border border-rose-500/40">
+                        {session.routeCompliance === "unauthorized_stop" ? "UNAUTHORIZED STOP" : "ROUTE DEVIATION / VIOLATION"}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-rose-200">PLATE: {session.vehiclePlate} ({session.provider || session.vehicleType})</span>
+                      <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                        {session.detectionPoints.length} DETECTIONS
+                      </span>
+                    </div>
+                    <h3 className="mt-1 text-base font-bold text-white">
+                      {session.violations[0]?.message || `Vehicle ${session.vehiclePlate} flagged for ${session.routeCompliance.replaceAll("_", " ")}`}
+                    </h3>
+                    <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
+                      Branch: {session.branchName} · Scheduled: {new Date(session.scheduledArrival).toLocaleTimeString()}
+                      {session.actualArrival ? ` · Arrived: ${new Date(session.actualArrival).toLocaleTimeString()}` : ""}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setCasingDispatched(true);
+                      setCasingFeedback(`✓ Perimeter Guard Dispatched to ${session.branchName} Ingress.`);
+                      setTimeout(() => setCasingFeedback(null), 5000);
+                    }}
+                    disabled={casingDispatched}
+                    className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
+                  >
+                    <Radio size={14} />
+                    {casingDispatched ? "Guard Dispatched" : "Dispatch Perimeter Guard"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHotlistDispatched(true);
+                      setCasingFeedback(`🚨 Telemetry for ${session.vehiclePlate} transmitted to Police Control Room 112.`);
+                      setTimeout(() => setCasingFeedback(null), 6000);
+                    }}
+                    disabled={hotlistDispatched}
+                    className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-950/50 hover:bg-rose-900/60 px-3.5 py-2 text-xs font-bold text-rose-200 transition disabled:opacity-50"
+                  >
+                    <PhoneCall size={14} />
+                    {hotlistDispatched ? "Police 112 Notified" : "Alert Police (112)"}
+                  </button>
+                </div>
+              </div>
+
+              {casingFeedback && (
+                <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-200 font-semibold flex items-center justify-between">
+                  <span>{casingFeedback}</span>
+                  <span className="text-[10px] text-slate-400 font-mono">ANPR SENSOR: {session.detectionPoints[0]?.cameraName || "Ingress CAM"}</span>
+                </div>
+              )}
+
+              {session.detectionPoints.length > 0 && (
+                <div className="mt-4 grid gap-2 sm:grid-cols-4 text-xs">
+                  {session.detectionPoints.slice(0, 4).map((pt, idx) => (
+                    <div key={idx} className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
+                      <span className="text-[10px] text-slate-400">{new Date(pt.timestamp).toLocaleTimeString()}</span>
+                      <p className="font-semibold text-slate-200">{pt.cameraName}</p>
+                      <span className="text-[10px] text-slate-400">Confidence: {(pt.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        ) : (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-xs text-slate-400 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Shield size={20} />
               </div>
               <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-bold text-rose-300 uppercase tracking-widest border border-rose-500/40">
-                    P1 RECONNAISSANCE ALERT
-                  </span>
-                  <span className="text-xs font-mono font-bold text-rose-200">PLATE: KL-07-BW-4819 (White Maruti Swift)</span>
-                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">4 LAPS DETECTED</span>
-                </div>
-                <h3 className="mt-1 text-base font-bold text-white">Pre-Closing Vehicle Casing Pattern Detected</h3>
-                <p className="text-xs text-slate-300 max-w-3xl leading-relaxed">
-                  Target vehicle has circled the branch perimeter 4 times within 90 minutes before branch closing (04:12 PM - 05:32 PM), slowing down to 12 km/h adjacent to Cash-Van Bay #1.
-                </p>
+                <p className="font-semibold text-slate-200">Perimeter & Ingress Clean</p>
+                <p className="text-slate-400">Zero active casing patterns or route deviations detected across active ANPR sensors.</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  setCasingDispatched(true);
-                  setCasingFeedback("✓ Perimeter Guard Dispatched to Main Gate Ingress. Guard radio confirmed acknowledgment.");
-                  setTimeout(() => setCasingFeedback(null), 5000);
-                }}
-                disabled={casingDispatched}
-                className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
-              >
-                <Radio size={14} />
-                {casingDispatched ? "Guard Dispatched" : "Dispatch Perimeter Guard"}
-              </button>
-              <button
-                onClick={() => {
-                  setHotlistDispatched(true);
-                  setCasingFeedback("🚨 Emergency Casing Report & Vehicle Telemetry transmitted to Police Control Room 112.");
-                  setTimeout(() => setCasingFeedback(null), 6000);
-                }}
-                disabled={hotlistDispatched}
-                className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-950/50 hover:bg-rose-900/60 px-3.5 py-2 text-xs font-bold text-rose-200 transition disabled:opacity-50"
-              >
-                <PhoneCall size={14} />
-                {hotlistDispatched ? "Police 112 Notified" : "Alert Police (112)"}
-              </button>
-            </div>
+            <span className="rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 text-[10px] font-semibold text-emerald-400 shrink-0">
+              PERIMETER CLEAR
+            </span>
           </div>
-
-          {casingFeedback && (
-            <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-200 font-semibold flex items-center justify-between">
-              <span>{casingFeedback}</span>
-              <span className="text-[10px] text-slate-400 font-mono">ANPR DSP: Kaloor Main Ingress CAM-01</span>
-            </div>
-          )}
-
-          {/* Trajectory Footprint */}
-          <div className="mt-4 grid gap-2 sm:grid-cols-4 text-xs">
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-              <span className="text-[10px] text-slate-400">Lap 1 · 04:12 PM</span>
-              <p className="font-semibold text-slate-200">Main Gate CAM-01</p>
-              <span className="text-[10px] text-slate-400">Speed: 18 km/h</span>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-              <span className="text-[10px] text-slate-400">Lap 2 · 04:38 PM</span>
-              <p className="font-semibold text-slate-200">South Wall CAM-08</p>
-              <span className="text-[10px] text-amber-400 font-bold">Slowed to 12 km/h</span>
-            </div>
-            <div className="rounded-xl border border-slate-800 bg-slate-950/70 p-2.5">
-              <span className="text-[10px] text-slate-400">Lap 3 · 05:05 PM</span>
-              <p className="font-semibold text-slate-200">Main Gate CAM-01</p>
-              <span className="text-[10px] text-slate-400">Speed: 15 km/h</span>
-            </div>
-            <div className="rounded-xl border border-rose-500/30 bg-rose-950/30 p-2.5">
-              <span className="text-[10px] text-rose-300">Lap 4 · 05:32 PM</span>
-              <p className="font-semibold text-rose-200">Cash-Van Bay CAM-04</p>
-              <span className="text-[10px] text-rose-300 font-bold">Stationary (3m 40s)</span>
-            </div>
-          </div>
-        </div>
-
-        {/* State Police Hotlist Match */}
-        <div className="rounded-2xl border border-amber-500/40 bg-amber-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30">
-              <ShieldAlert size={20} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-amber-500/20 text-amber-300 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider">
-                  STATE POLICE VAHAN HOTLIST MATCH
-                </span>
-                <span className="font-mono font-bold text-amber-200">KL-01-CB-9002 (Black Bajaj Pulsar 220)</span>
-              </div>
-              <p className="text-slate-300 mt-0.5">Matched Stolen Vehicle Record: FIR #402/2026, Palarivattom Police Station (IPC Sec 379 / BNS Sec 303)</p>
-            </div>
-          </div>
-          <span className="rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-3 py-1 font-semibold text-[10px] shrink-0">
-            AUTO-DISPATCHED TO CONTROL ROOM
-          </span>
-        </div>
+        )}
       </section>
 
       <nav className="mb-5 flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-2" aria-label="Filter logistics view">
