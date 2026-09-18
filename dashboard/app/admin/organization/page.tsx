@@ -36,6 +36,7 @@ import {
   Check,
   RotateCcw,
   Key,
+  Mic,
 } from "lucide-react";
 import { AppLayout, defaultMenuAccessForRole, menuKey, navigation } from "@/components/app-layout";
 import { useOrgBranding } from "@/components/ui/org-branding-provider";
@@ -173,6 +174,8 @@ export default function OrganizationHierarchyPage() {
   const [newNodeName, setNewNodeName] = useState("");
   const [newNodeCode, setNewNodeCode] = useState("");
   const [newNodeDesc, setNewNodeDesc] = useState("");
+  const [newNodeVoiceAuth, setNewNodeVoiceAuth] = useState(true);
+  const [editNodeVoiceAuth, setEditNodeVoiceAuth] = useState(true);
 
   // Employee Form state with Photo & Face Capture
   const [showAddEmpModal, setShowAddEmpModal] = useState(false);
@@ -550,12 +553,24 @@ export default function OrganizationHierarchyPage() {
     reader.readAsDataURL(file);
   }
 
-  function openEditNode(node: OrgNode) {
+  async function openEditNode(node: OrgNode) {
     setEditingNode(node);
     setEditNodeName(node.name || "");
     setEditNodeCode(node.code || "");
     setEditNodeDesc(node.description || "");
     setShowEditNodeModal(true);
+
+    if (node.type === "company") {
+      try {
+        const settingsRes = await fetchWithAuth("/api/control/v1/voice/settings");
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          setEditNodeVoiceAuth(Boolean(data?.settings?.enabled));
+        }
+      } catch {
+        // fallback
+      }
+    }
   }
 
   async function handleUpdateNode(e: React.FormEvent) {
@@ -579,6 +594,18 @@ export default function OrganizationHierarchyPage() {
       if (!res.ok) {
         const errJson = await res.json();
         throw new Error(errJson.message || errJson.error || "Failed to update organization node");
+      }
+
+      if (editingNode.type === "company") {
+        try {
+          await fetchWithAuth("/api/control/v1/voice/settings", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: editNodeVoiceAuth }),
+          });
+        } catch (vErr) {
+          console.warn("Could not update voice settings:", vErr);
+        }
       }
 
       setNotice(`Successfully updated ${editingNode.type} "${editNodeName}"!`);
@@ -674,6 +701,7 @@ export default function OrganizationHierarchyPage() {
     setNewNodeName("");
     setNewNodeCode("");
     setNewNodeDesc("");
+    setNewNodeVoiceAuth(true);
     setShowAddNodeModal(true);
   }
 
@@ -705,6 +733,18 @@ export default function OrganizationHierarchyPage() {
       if (!res.ok) {
         const errJson = await res.json();
         throw new Error(errJson.message || errJson.error || "Failed to create organization node");
+      }
+
+      if (targetType === "company" || !selectedParentNode) {
+        try {
+          await fetchWithAuth("/api/control/v1/voice/settings", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: newNodeVoiceAuth }),
+          });
+        } catch (vErr) {
+          console.warn("Could not set voice authentication settings:", vErr);
+        }
       }
 
       setNotice(`Successfully created ${newNodeType} "${newNodeName}"!`);
@@ -2366,6 +2406,34 @@ export default function OrganizationHierarchyPage() {
                   />
                 </div>
 
+                {(!selectedParentNode || newNodeType === "company") && (
+                  <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mic size={16} className="text-cyan-400" />
+                        <span className="text-xs font-semibold text-slate-200">Voice Biometric Authentication</span>
+                        {newNodeVoiceAuth && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">
+                            Enabled
+                          </span>
+                        )}
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={newNodeVoiceAuth}
+                          onChange={(e) => setNewNodeVoiceAuth(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      Enable AI voice biometric enrollment, liveness checks, and speaker verification for members of this organization.
+                    </p>
+                  </div>
+                )}
+
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
                   <button
                     type="button"
@@ -2445,6 +2513,34 @@ export default function OrganizationHierarchyPage() {
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-slate-200 text-xs"
                   />
                 </div>
+
+                {editingNode.type === "company" && (
+                  <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mic size={16} className="text-cyan-400" />
+                        <span className="text-xs font-semibold text-slate-200">Voice Biometric Authentication</span>
+                        {editNodeVoiceAuth && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 font-mono">
+                            Enabled
+                          </span>
+                        )}
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editNodeVoiceAuth}
+                          onChange={(e) => setEditNodeVoiceAuth(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-tight">
+                      Enable AI voice biometric enrollment, liveness checks, and speaker verification for members of this organization.
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-800">
                   <button

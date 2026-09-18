@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Building2, MapPin, Layers, Globe, Shield } from "lucide-react";
-import { organizationApi } from "@/lib/api-client";
+import { X, Building2, MapPin, Layers, Globe, Shield, Mic } from "lucide-react";
+import { organizationApi, voiceEnrollmentApi } from "@/lib/api-client";
 import { isSuperAdminOrgCreator } from "@/lib/auth-manager";
 
 interface OrgNodeFormProps {
@@ -51,6 +51,7 @@ export function OrgNodeForm({
   const [validNodeTypes, setValidNodeTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [enableVoiceAuth, setEnableVoiceAuth] = useState(true);
 
   useEffect(() => {
     if (editNode) {
@@ -68,6 +69,15 @@ export function OrgNodeForm({
         email: editNode.contactInfo?.email || "",
         contactPerson: editNode.contactInfo?.contactPerson || "",
       });
+
+      if (editNode.type === "company") {
+        voiceEnrollmentApi
+          .getSettings()
+          .then((res) => {
+            if (res?.settings) setEnableVoiceAuth(Boolean(res.settings.enabled));
+          })
+          .catch(() => {});
+      }
     }
   }, [editNode]);
 
@@ -187,6 +197,14 @@ export function OrgNodeForm({
           return;
         }
         await organizationApi.createNode(payload);
+      }
+
+      if (formData.nodeType === "company" || !parentNode) {
+        try {
+          await voiceEnrollmentApi.updateSettings({ enabled: enableVoiceAuth });
+        } catch (vErr) {
+          console.warn("Could not save voice settings:", vErr);
+        }
       }
 
       onSuccess();
@@ -393,6 +411,60 @@ export function OrgNodeForm({
                 </div>
               </div>
             </div>
+
+            {(formData.nodeType === "company" || !parentNode) && (
+              <div style={{ marginTop: "1rem", padding: "1rem", background: "#f8fafc", borderRadius: "0.5rem", border: "1px solid #cbd5e1" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600, fontSize: "0.875rem", color: "#0f172a" }}>
+                      <Mic size={16} color="#0284c7" />
+                      <span>Voice Biometric Authentication</span>
+                      {enableVoiceAuth && (
+                        <span style={{ fontSize: "0.625rem", padding: "0.125rem 0.375rem", borderRadius: "9999px", background: "#e0f2fe", color: "#0369a1", fontWeight: 700 }}>
+                          ENABLED
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                      Allow staff in this organization to enroll voice biometric profiles and authenticate using speaker verification.
+                    </p>
+                  </div>
+                  <label style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", cursor: "pointer", flexShrink: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={enableVoiceAuth}
+                      onChange={(e) => setEnableVoiceAuth(e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: enableVoiceAuth ? "#0284c7" : "#cbd5e1",
+                        borderRadius: "24px",
+                        transition: "0.2s",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          height: "18px",
+                          width: "18px",
+                          left: enableVoiceAuth ? "22px" : "3px",
+                          bottom: "3px",
+                          backgroundColor: "white",
+                          borderRadius: "50%",
+                          transition: "0.2s",
+                        }}
+                      />
+                    </span>
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", padding: "1rem 1.5rem", borderTop: "1px solid #e2e8f0", background: "#f8fafc" }}>
