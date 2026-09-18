@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { AppLayout, getVisibleNavigation, type MenuAccessUser } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { authApi, cameraInventoryApi, anprLogisticsApi, nbfcWatchlistApi, secureAreaAuthorizationApi } from "@/lib/api-client";
@@ -30,6 +30,8 @@ import {
   Sparkles,
   Fingerprint,
   Timer,
+  Plus,
+  X,
 } from "lucide-react";
 
 const workflows = [
@@ -120,6 +122,10 @@ export default function NbfcOperationsPage() {
   const [sessionChecked, setSessionChecked] = useState(false);
   const [citGateState, setCitGateState] = useState<"pending" | "authorizing" | "open" | "secured">("pending");
   const [citOtpInput, setCitOtpInput] = useState("");
+  const [citActionLoading, setCitActionLoading] = useState(false);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchPlate, setDispatchPlate] = useState("KL-07-CG-9021");
+  const [dispatchProvider, setDispatchProvider] = useState("Brinks Logistics");
   const [watchlistAlertDismissed, setWatchlistAlertDismissed] = useState(false);
   const [watchlistAlertEscalated, setWatchlistAlertEscalated] = useState(false);
 
@@ -187,10 +193,24 @@ export default function NbfcOperationsPage() {
             : Promise.resolve({ data: [] }),
         ]);
 
-        setLogistics((logisticsRes as any)?.data || { data: [], summary: {} });
-        const wData = Array.isArray((watchlistRes as any)?.data) ? (watchlistRes as any).data : (watchlistRes as any)?.data?.data || [];
-        setWatchlist({ data: wData, summary: (watchlistRes as any)?.summary || {} });
-        setWatchlistThreats(wData);
+        const rawLogistics = (logisticsRes as any)?.data ?? logisticsRes;
+        const logisticsItems = Array.isArray(rawLogistics)
+          ? rawLogistics
+          : Array.isArray((rawLogistics as any)?.data)
+            ? (rawLogistics as any).data
+            : [];
+        const logisticsSummary = (logisticsRes as any)?.summary ?? (rawLogistics as any)?.summary ?? {};
+        setLogistics({ data: logisticsItems, summary: logisticsSummary });
+
+        const rawWatchlist = (watchlistRes as any)?.data ?? watchlistRes;
+        const watchlistItems = Array.isArray(rawWatchlist)
+          ? rawWatchlist
+          : Array.isArray((rawWatchlist as any)?.data)
+            ? (rawWatchlist as any).data
+            : [];
+        const watchlistSummary = (watchlistRes as any)?.summary ?? (rawWatchlist as any)?.summary ?? {};
+        setWatchlist({ data: watchlistItems, summary: watchlistSummary });
+        setWatchlistThreats(watchlistItems);
         setSecureStaff((staffRes as any)?.data || []);
         setCustodyAssignments((custodyRes as any)?.data || []);
       } catch (err) {
@@ -200,14 +220,101 @@ export default function NbfcOperationsPage() {
     void loadLiveData();
   }, []);
 
+  const reloadLogisticsData = useCallback(async () => {
+    try {
+      const logisticsRes = await anprLogisticsApi.listSessions().catch(() => ({ data: [], summary: {} }));
+      const rawLogistics = (logisticsRes as any)?.data ?? logisticsRes;
+      const logisticsItems = Array.isArray(rawLogistics)
+        ? rawLogistics
+        : Array.isArray((rawLogistics as any)?.data)
+          ? (rawLogistics as any).data
+          : [];
+      const logisticsSummary = (logisticsRes as any)?.summary ?? (rawLogistics as any)?.summary ?? {};
+      setLogistics({ data: logisticsItems, summary: logisticsSummary });
+    } catch {}
+  }, []);
+
+  const handleAuthorizeGate = async () => {
+    if (!citOtpInput.trim() || citOtpInput.trim().length < 4) {
+      alert("Please enter a valid 4-digit Manager OTP authorization code.");
+      return;
+    }
+    setCitActionLoading(true);
+    try {
+      if (activeVehicle?.id) {
+        await anprLogisticsApi.updateSession(activeVehicle.id, {
+          status: "arrived",
+          routeCompliance: "compliant",
+          actualArrival: new Date().toISOString(),
+        });
+        await reloadLogisticsData();
+      }
+      setCitGateState("open");
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : "Failed to authorize gate clearance");
+    } finally {
+      setCitActionLoading(false);
+    }
+  };
+
+  const handleSecureGate = async () => {
+    setCitActionLoading(true);
+    try {
+      if (activeVehicle?.id) {
+        await anprLogisticsApi.updateSession(activeVehicle.id, {
+          status: "departed",
+          departureTime: new Date().toISOString(),
+        });
+        await reloadLogisticsData();
+      }
+      setCitGateState("secured");
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : "Failed to secure gate");
+    } finally {
+      setCitActionLoading(false);
+    }
+  };
+
+  const handleRegisterDispatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetBranchId = activeBranch?.id || branches[0]?.id;
+    if (!targetBranchId) {
+      alert("No active branch node found to register transfer.");
+      return;
+    }
+    setCitActionLoading(true);
+    try {
+      await anprLogisticsApi.createSession({
+        branchId: targetBranchId,
+        vehiclePlate: dispatchPlate.trim().toUpperCase() || "KL-07-CG-9021",
+        vehicleType: "armored",
+        scheduledArrival: new Date().toISOString(),
+        authorized: true,
+        provider: dispatchProvider.trim() || "Brinks Logistics",
+      });
+      setDispatchModalOpen(false);
+      setCitGateState("pending");
+      setCitOtpInput("");
+      await reloadLogisticsData();
+    } catch (err: any) {
+      alert(err instanceof Error ? err.message : "Failed to register CIT vehicle");
+    } finally {
+      setCitActionLoading(false);
+    }
+  };
+
   const availableWorkflows = useMemo(() => {
     if (!user) return [];
     const allowed = new Set(getVisibleNavigation(user).flatMap((group) => group.items.map((item) => item.href)));
     return workflows.filter((workflow) => allowed.has(workflow.href));
   }, [user]);
 
-  const activeVehicle = logistics?.data.find((session) => ["on_route", "arrived", "overdue"].includes(session.status));
-  const activeWatchlistDetection = watchlist?.data.find((entry) => entry.lastDetected);
+  const activeVehicle = Array.isArray(logistics?.data)
+    ? logistics.data.find((session) => ["on_route", "arrived", "overdue"].includes(session?.status))
+    : undefined;
+  const activeWatchlistDetection = Array.isArray(watchlist?.data)
+    ? watchlist.data.find((entry) => entry?.lastDetected)
+    : undefined;
   const branchCount = branches.length;
 
   return (
@@ -333,90 +440,192 @@ export default function NbfcOperationsPage() {
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold uppercase tracking-wider">
-                  {activeVehicle ? activeVehicle.status.replaceAll("_", " ").toUpperCase() : "NO LIVE SESSION"}
+                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                  activeVehicle
+                    ? activeVehicle.status === "arrived"
+                      ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                      : activeVehicle.status === "overdue"
+                      ? "bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse"
+                      : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                    : "bg-slate-800 text-slate-400 border-slate-700"
+                }`}>
+                  {activeVehicle ? activeVehicle.status.replaceAll("_", " ").toUpperCase() : "NO ACTIVE TRANSFER"}
                 </span>
               </div>
 
-              {/* Detected Van Details */}
-              <div className="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-2.5">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Detected Armored Vehicle:</span>
-                  <span className="font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                    KL-07-CG-9021 (Brinks Logistics)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Scheduled Route Manifest:</span>
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <CheckCircle2 size={12} /> ROUTE-KOC-09 (Verified Match)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Armed Escort Protocol:</span>
-                  <span className="text-emerald-400 font-medium flex items-center gap-1">
-                    <CheckCircle2 size={12} /> 2 Authorized Gunmen Present (CAM-01)
-                  </span>
-                </div>
-              </div>
+              {activeVehicle ? (
+                <>
+                  {/* Live Detected Van Details */}
+                  <div className="mt-4 p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-col gap-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Detected Armored Vehicle:</span>
+                      <span className="font-mono font-bold text-white bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                        {activeVehicle.vehiclePlate} ({activeVehicle.provider || "Authorized Logistics"})
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Scheduled Route Manifest:</span>
+                      <span className={`font-medium flex items-center gap-1 ${
+                        activeVehicle.routeCompliance === "compliant" ? "text-emerald-400" : "text-amber-400"
+                      }`}>
+                        <CheckCircle2 size={12} /> {activeVehicle.routeCompliance === "compliant" ? "Verified Manifest Match" : (activeVehicle.routeCompliance ? activeVehicle.routeCompliance.replaceAll("_", " ").toUpperCase() : "Route Monitored")}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Ingress Telemetry &amp; Timing:</span>
+                      <span className="text-slate-300 font-mono text-[11px]">
+                        Scheduled: {new Date(activeVehicle.scheduledArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {activeVehicle.actualArrival ? ` • Arrived: ${new Date(activeVehicle.actualArrival).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : " • Approaching Bay"}
+                      </span>
+                    </div>
+                  </div>
 
-              {/* Clearance Action */}
-              <div className="mt-4 flex flex-col gap-2">
-                {citGateState === "pending" && (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Branch Manager OTP (e.g. 8492)"
-                      value={citOtpInput}
-                      onChange={(e) => setCitOtpInput(e.target.value)}
-                      className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder:text-slate-500 flex-1 focus:outline-none focus:border-purple-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (citOtpInput.trim() === "8492" || citOtpInput.trim().length >= 4) {
-                          setCitGateState("open");
-                        } else {
-                          alert("Enter valid 4-digit Manager OTP (Default: 8492)");
-                        }
-                      }}
-                      className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs flex items-center gap-1.5 transition"
-                    >
-                      <Key size={14} /> Authorize &amp; Open Gate
-                    </button>
+                  {/* Clearance Action */}
+                  <div className="mt-4 flex flex-col gap-2">
+                    {(citGateState === "pending" || activeVehicle.status === "on_route" || activeVehicle.status === "overdue") && citGateState !== "open" && citGateState !== "secured" && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Branch Manager OTP (e.g. 8492)"
+                          value={citOtpInput}
+                          onChange={(e) => setCitOtpInput(e.target.value)}
+                          className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white placeholder:text-slate-500 flex-1 focus:outline-none focus:border-purple-500"
+                        />
+                        <button
+                          type="button"
+                          disabled={citActionLoading}
+                          onClick={handleAuthorizeGate}
+                          className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1.5 transition"
+                        >
+                          <Key size={14} /> {citActionLoading ? "Authorizing..." : "Authorize & Open Gate"}
+                        </button>
+                      </div>
+                    )}
+                    {(citGateState === "open" || activeVehicle.status === "arrived") && citGateState !== "secured" && (
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
+                        <span className="text-amber-200 font-medium">Van docked in transfer bay. Gate timer active.</span>
+                        <button
+                          type="button"
+                          disabled={citActionLoading}
+                          onClick={handleSecureGate}
+                          className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1"
+                        >
+                          <Lock size={12} /> {citActionLoading ? "Securing..." : "Lock & Complete"}
+                        </button>
+                      </div>
+                    )}
+                    {(citGateState === "secured" || activeVehicle.status === "departed") && (
+                      <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs">
+                        <span className="text-emerald-300 font-medium">Transfer completed. Perimeter secured.</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCitGateState("pending");
+                            setCitOtpInput("");
+                            setDispatchModalOpen(true);
+                          }}
+                          className="text-xs text-slate-400 hover:text-white underline"
+                        >
+                          Register Next Van
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-                {citGateState === "open" && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs">
-                    <span className="text-amber-200 font-medium">Van entering transfer bay. Gate timer active.</span>
-                    <button
-                      type="button"
-                      onClick={() => setCitGateState("secured")}
-                      className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-1"
-                    >
-                      <Lock size={12} /> Lock &amp; Secure Gate
-                    </button>
-                  </div>
-                )}
-                {citGateState === "secured" && (
-                  <div className="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs">
-                    <span className="text-emerald-300 font-medium">Transfer completed. Perimeter secured.</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCitGateState("pending");
-                        setCitOtpInput("");
-                      }}
-                      className="text-xs text-slate-400 hover:text-white underline"
-                    >
-                      Reset Protocol
-                    </button>
-                  </div>
-                )}
-              </div>
+                </>
+              ) : (
+                <>
+                  {dispatchModalOpen ? (
+                    <form onSubmit={handleRegisterDispatch} className="mt-4 p-3.5 rounded-xl bg-slate-950/80 border border-purple-500/40 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                          <Truck size={14} /> Register Approaching Cash Van
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setDispatchModalOpen(false)}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-medium block mb-1">Plate Number</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. KL-07-CG-9021"
+                            value={dispatchPlate}
+                            onChange={(e) => setDispatchPlate(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded bg-slate-900 border border-slate-700 text-xs text-white font-mono uppercase focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-medium block mb-1">CIT Provider</label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Brinks Logistics"
+                            value={dispatchProvider}
+                            onChange={(e) => setDispatchProvider(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-purple-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setDispatchModalOpen(false)}
+                          className="px-2.5 py-1 text-xs text-slate-400 hover:text-slate-200"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={citActionLoading}
+                          className="px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs flex items-center gap-1 transition"
+                        >
+                          {citActionLoading ? "Registering..." : "Transmit to Gate ANPR"}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="mt-4 p-4 rounded-xl bg-slate-950/70 border border-slate-800 text-center flex flex-col items-center justify-center gap-2">
+                      <div className="text-xs font-semibold text-slate-300">
+                        No armored cash vehicle currently at branch perimeter
+                      </div>
+                      <p className="text-[11px] text-slate-400 max-w-sm">
+                        Ingress gate is locked and perimeter ANPR cameras are active.
+                        {logistics?.data && logistics.data.length > 0
+                          ? ` (Last logged transfer: ${logistics.data[0].vehiclePlate})`
+                          : " No cash transfers recorded for this session yet."}
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDispatchModalOpen(true)}
+                          className="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs flex items-center gap-1.5 transition shadow"
+                        >
+                          <Plus size={13} /> Register Approaching Van
+                        </button>
+                        <Link
+                          href="/analytics/anpr-logistics"
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition border border-slate-700"
+                        >
+                          Fleet Hub &rarr;
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">Outer Gate CAM-01 • Ingress Log #9812</span>
+              <span className="text-slate-500">
+                {activeVehicle
+                  ? `Gate CAM-01 • Ingress Session #${activeVehicle.id.slice(0, 8)}`
+                  : "Outer Gate CAM-01 • Standby"}
+              </span>
               <Link href="/analytics/anpr-logistics" className="text-purple-400 hover:text-purple-300 font-medium">
                 Logistics Telemetry &rarr;
               </Link>
@@ -426,7 +635,9 @@ export default function NbfcOperationsPage() {
           {/* Real-time Watchlist & Threat Interception */}
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
             {(() => {
-              const activeThreat = watchlistThreats.find((w) => (w.detectionCount24h ?? 0) > 0 || w.lastDetected);
+              const activeThreat = (Array.isArray(watchlistThreats) ? watchlistThreats : []).find(
+                (w) => (w?.detectionCount24h ?? 0) > 0 || w?.lastDetected
+              );
               return (
                 <div>
                   <div className="flex items-center justify-between">
