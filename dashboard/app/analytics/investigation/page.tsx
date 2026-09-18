@@ -283,7 +283,7 @@ export default function AIInvestigationPage() {
         setJourney(res.data);
         return;
       }
-    } catch {}
+    } catch { }
     // If specific ID has no API journey, generate adaptive journey
     setJourney({
       ...FALLBACK_JOURNEY,
@@ -459,11 +459,10 @@ export default function AIInvestigationPage() {
           {/* Tool 1: Cross-Camera Timeline */}
           <Card
             onClick={() => setActiveTool("timeline")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "timeline"
-                ? "bg-slate-900 border-cyan-500 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "timeline"
+              ? "bg-slate-900 border-cyan-500 shadow-lg shadow-cyan-950/40 ring-1 ring-cyan-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
@@ -498,11 +497,10 @@ export default function AIInvestigationPage() {
           {/* Tool 2: Route Reconstruction */}
           <Card
             onClick={() => setActiveTool("route")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "route"
-                ? "bg-slate-900 border-purple-500 shadow-lg shadow-purple-950/40 ring-1 ring-purple-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "route"
+              ? "bg-slate-900 border-purple-500 shadow-lg shadow-purple-950/40 ring-1 ring-purple-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
@@ -537,11 +535,10 @@ export default function AIInvestigationPage() {
           {/* Tool 3: Last Seen Location */}
           <Card
             onClick={() => setActiveTool("last_seen")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "last_seen"
-                ? "bg-slate-900 border-rose-500 shadow-lg shadow-rose-950/40 ring-1 ring-rose-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "last_seen"
+              ? "bg-slate-900 border-rose-500 shadow-lg shadow-rose-950/40 ring-1 ring-rose-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-rose-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
@@ -576,11 +573,10 @@ export default function AIInvestigationPage() {
           {/* Tool 4: Object Origin Tracing */}
           <Card
             onClick={() => setActiveTool("origin")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "origin"
-                ? "bg-slate-900 border-amber-500 shadow-lg shadow-amber-950/40 ring-1 ring-amber-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "origin"
+              ? "bg-slate-900 border-amber-500 shadow-lg shadow-amber-950/40 ring-1 ring-amber-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
@@ -615,11 +611,10 @@ export default function AIInvestigationPage() {
           {/* Tool 5: Evidence Collection */}
           <Card
             onClick={() => setActiveTool("evidence")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "evidence"
-                ? "bg-slate-900 border-emerald-500 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "evidence"
+              ? "bg-slate-900 border-emerald-500 shadow-lg shadow-emerald-950/40 ring-1 ring-emerald-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
@@ -654,11 +649,10 @@ export default function AIInvestigationPage() {
           {/* Tool 6: Multi-Camera Correlation */}
           <Card
             onClick={() => setActiveTool("correlation")}
-            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${
-              activeTool === "correlation"
-                ? "bg-slate-900 border-indigo-500 shadow-lg shadow-indigo-950/40 ring-1 ring-indigo-500/50"
-                : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
-            }`}
+            className={`cursor-pointer transition-all duration-200 border relative overflow-hidden ${activeTool === "correlation"
+              ? "bg-slate-900 border-indigo-500 shadow-lg shadow-indigo-950/40 ring-1 ring-indigo-500/50"
+              : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-slate-900"
+              }`}
           >
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-bl-full pointer-events-none" />
             <CardHeader className="pb-2">
