@@ -83,6 +83,7 @@ Set-Content -LiteralPath $checksumPath -Value $hashes -Encoding ascii
 $releaseManifestPath = Join-Path $projectRoot 'release\windows-release.json'
 $releaseManifest = [ordered]@{
   sha256 = (Get-FileHash -LiteralPath $agentPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  installerFile = $installer.Name
   signedAt = [DateTime]::UtcNow.ToString('o')
   signerThumbprint = $CertificateThumbprint
   installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()

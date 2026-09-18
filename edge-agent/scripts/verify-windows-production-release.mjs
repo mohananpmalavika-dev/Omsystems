@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,4 +28,29 @@ if (digest !== manifest.sha256.toLowerCase()) {
   throw new Error("The Windows Edge Agent executable does not match its checksum manifest.");
 }
 
-process.stdout.write("Verified Windows Edge Agent release checksum.\n");
+const hasInstallerFile = typeof manifest.installerFile === "string";
+const hasInstallerHash = typeof manifest.installerSha256 === "string";
+if (!hasInstallerFile && !hasInstallerHash) {
+  process.stdout.write("Verified Windows Edge Agent release checksum.\n");
+  process.exit(0);
+}
+if (!hasInstallerFile || !/^KryptonVisionInstaller-v[0-9A-Za-z.-]+-windows\.exe$/.test(manifest.installerFile)) {
+  throw new Error("The Windows Edge Agent release manifest is missing a valid native installer filename.");
+}
+if (typeof manifest.installerSha256 !== "string" || !/^[a-f0-9]{64}$/i.test(manifest.installerSha256)) {
+  throw new Error("The Windows Edge Agent release manifest is missing a valid native installer checksum.");
+}
+const installerPath = join(edgeRoot, "installer", "windows", "output", manifest.installerFile);
+if (basename(installerPath) !== manifest.installerFile) {
+  throw new Error("The Windows Edge Agent installer filename is unsafe.");
+}
+const installer = await readFile(installerPath).catch(() => undefined);
+if (!installer?.length) {
+  throw new Error(`The native Windows Edge Agent installer is missing from ${installerPath}.`);
+}
+const installerDigest = createHash("sha256").update(installer).digest("hex");
+if (installerDigest !== manifest.installerSha256.toLowerCase()) {
+  throw new Error("The native Windows Edge Agent installer does not match its checksum manifest.");
+}
+
+process.stdout.write("Verified Windows Edge Agent release and native installer checksums.\n");

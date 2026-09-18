@@ -3,7 +3,7 @@ import { z } from "zod";
 import { deflateRaw, deflateRawSync } from "node:zlib";
 import { promisify } from "node:util";
 import { createHash, randomBytes } from "node:crypto";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFile, stat, writeFile } from "node:fs/promises";
 import { createReadStream } from "node:fs";
@@ -448,10 +448,10 @@ function localDiscoveryReadme(branchName: string) {
   ].join("\r\n");
 }
 
-async function verifyProductionWindowsRelease(releaseDirectory: string, executablePath: string) {
+async function verifyProductionWindowsRelease(releaseDirectory: string, executablePath: string, installerPath?: string) {
   if (process.env.NODE_ENV !== "production") return;
   const manifestPath = join(releaseDirectory, "windows-release.json");
-  let manifest: { sha256?: unknown };
+  let manifest: { sha256?: unknown; installerFile?: unknown; installerSha256?: unknown };
   try {
     manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, "")) as { sha256?: unknown };
   } catch {
@@ -468,6 +468,29 @@ async function verifyProductionWindowsRelease(releaseDirectory: string, executab
   if (executableHash !== manifest.sha256.toLowerCase()) {
     throw Object.assign(new Error("The Windows Edge Agent executable does not match its checksum manifest. Deploy matching release artifacts, then rebuild and restart the control plane."), {
       code: "edge_agent_windows_release_unavailable",
+    });
+  }
+  if (!installerPath) return;
+  const hasInstallerFile = typeof manifest.installerFile === "string";
+  const hasInstallerHash = typeof manifest.installerSha256 === "string";
+  // Older signed releases only recorded the agent checksum. Keep those
+  // packages available, while new releases bind the native installer too.
+  if (!hasInstallerFile && !hasInstallerHash) return;
+  if (
+    typeof manifest.installerFile !== "string"
+    || basename(installerPath) !== manifest.installerFile
+    || !/^KryptonVisionInstaller-v[0-9A-Za-z.-]+-windows\.exe$/.test(manifest.installerFile)
+    || typeof manifest.installerSha256 !== "string"
+    || !/^[a-f0-9]{64}$/i.test(manifest.installerSha256)
+  ) {
+    throw Object.assign(new Error("The native Windows Edge Agent installer manifest is invalid. Deploy matching release artifacts, then rebuild and restart the control plane."), {
+      code: "edge_agent_native_installer_not_built",
+    });
+  }
+  const installerHash = createHash("sha256").update(await readFile(installerPath)).digest("hex");
+  if (installerHash !== manifest.installerSha256.toLowerCase()) {
+    throw Object.assign(new Error("The native Windows Edge Agent installer does not match its checksum manifest. Deploy matching release artifacts, then rebuild and restart the control plane."), {
+      code: "edge_agent_native_installer_not_built",
     });
   }
 }
@@ -566,7 +589,6 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw missingWindowsReleaseError(executablePath);
       }
-      await verifyProductionWindowsRelease(releaseDir, executablePath);
       const installerPath = nativeWindowsInstallerPath(root, version);
       let installerSize: number;
       let installerMtime: number;
@@ -578,6 +600,7 @@ export async function registerEdgeAgentPackageRoutes(
       } catch {
         throw missingNativeWindowsInstallerError(installerPath);
       }
+      await verifyProductionWindowsRelease(releaseDir, executablePath, installerPath);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8");
 
