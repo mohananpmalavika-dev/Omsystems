@@ -19,6 +19,44 @@ import { FeatureManagementService } from "../services/feature-management.service
 
 const featureKeySchema = z.string().regex(/^[a-z0-9-]+$/, "Invalid feature key format");
 
+export function isFeatureAdmin(user?: any): boolean {
+  if (!user) return false;
+  const role = String(user.role ?? "").toLowerCase();
+  const isSuper =
+    role === "super_admin" ||
+    role === "superadmin" ||
+    user.isSuperAdmin === true;
+  const isAdmin =
+    role === "admin" ||
+    role === "company_admin" ||
+    role === "hq_admin" ||
+    role === "platform_admin" ||
+    role === "global-admin" ||
+    role === "global_admin";
+  const hasArrayRole =
+    Array.isArray(user.roles) &&
+    user.roles.some((r: string) => {
+      const lower = String(r).toLowerCase();
+      return (
+        lower === "super_admin" ||
+        lower === "superadmin" ||
+        lower === "admin" ||
+        lower === "company_admin" ||
+        lower === "hq_admin" ||
+        lower === "platform_admin" ||
+        lower === "global_admin" ||
+        lower === "global-admin"
+      );
+    });
+  const hasPermission =
+    Array.isArray(user.permissions) &&
+    (user.permissions.includes("features:manage") ||
+     user.permissions.includes("admin") ||
+     user.permissions.includes("*"));
+
+  return isSuper || isAdmin || hasArrayRole || hasPermission;
+}
+
 export async function registerFeatureManagementRoutes(app: FastifyInstance, pool: any) {
   const featureService = new FeatureManagementService(pool);
 
@@ -171,13 +209,112 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   });
 
   // ============================================================================
-  // Tenant Admin Endpoints (Requires tenant admin role)
+  // Tenant Admin Endpoints (Admins and Super Admins)
   // ============================================================================
+
+  /**
+   * PATCH /api/v1/features/:featureKey
+   * 
+   * Enable/disable feature for current tenant (admins & super admins)
+   */
+  app.patch("/api/v1/features/:featureKey", async (request, reply) => {
+    try {
+      const user = request.currentUser;
+      if (!user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+
+      if (!isFeatureAdmin(user)) {
+        return reply.code(403).send({
+          success: false,
+          error: "insufficient_permissions",
+          message: "Admin or Super Admin access required",
+        });
+      }
+
+      const params = z.object({
+        featureKey: featureKeySchema,
+      }).parse(request.params);
+
+      const body = z.object({
+        enabled: z.boolean(),
+        usageLimit: z.number().int().positive().nullable().optional(),
+        expiresAt: z.string().datetime().nullable().optional(),
+        config: z.record(z.any()).optional(),
+        notes: z.string().max(1000).optional(),
+      }).parse(request.body);
+
+      await featureService.setTenantFeatureStatus(
+        user.tenantId,
+        params.featureKey,
+        body.enabled,
+        {
+          usageLimit: body.usageLimit ?? undefined,
+          expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
+          config: body.config,
+          notes: body.notes,
+        }
+      );
+
+      return {
+        success: true,
+        message: `Feature ${body.enabled ? "enabled" : "disabled"} successfully for tenant`,
+      };
+    } catch (error) {
+      app.log.error({ error }, "[Features] Failed to update tenant feature");
+      return reply.code(500).send({
+        success: false,
+        error: "failed_to_update_tenant_feature",
+      });
+    }
+  });
+
+  /**
+   * DELETE /api/v1/features/:featureKey/override
+   * 
+   * Remove tenant-specific override and revert to global default
+   */
+  app.delete("/api/v1/features/:featureKey/override", async (request, reply) => {
+    try {
+      const user = request.currentUser;
+      if (!user) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+
+      if (!isFeatureAdmin(user)) {
+        return reply.code(403).send({
+          success: false,
+          error: "insufficient_permissions",
+          message: "Admin or Super Admin access required",
+        });
+      }
+
+      const params = z.object({
+        featureKey: featureKeySchema,
+      }).parse(request.params);
+
+      await featureService.removeTenantFeatureOverride(
+        user.tenantId,
+        params.featureKey
+      );
+
+      return {
+        success: true,
+        message: "Tenant feature override removed successfully",
+      };
+    } catch (error) {
+      app.log.error({ error }, "[Features] Failed to remove tenant override");
+      return reply.code(500).send({
+        success: false,
+        error: "failed_to_remove_tenant_override",
+      });
+    }
+  });
 
   /**
    * POST /api/v1/features/:featureKey/request
    * 
-   * Request access to a feature (tenant admin only)
+   * Request access to a feature (admins & super admins)
    */
   app.post("/api/v1/features/:featureKey/request", async (request, reply) => {
     try {
@@ -186,15 +323,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      // Check if user is tenant admin
-      const hasPermission = (user as any).role === "admin" || 
-                           (user as any).permissions?.includes("features:manage");
-
-      if (!hasPermission) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
-          message: "Only tenant administrators can request features",
+          message: "Only administrators can request features",
         });
       }
 
@@ -207,8 +340,6 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         requestedLimit: z.number().int().positive().optional(),
       }).parse(request.body);
 
-      // Create feature request (you can implement a feature_requests table)
-      // For now, just log it
       await pool.query(
         `INSERT INTO audit_log (tenant_id, user_id, action, details, timestamp)
          VALUES ($1, $2, 'feature_request', $3, NOW())`,
@@ -237,13 +368,13 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   });
 
   // ============================================================================
-  // Platform Admin Endpoints (Requires platform_admin role)
+  // Platform & Global Admin Endpoints (Admins and Super Admins)
   // ============================================================================
 
   /**
    * GET /api/v1/admin/features/global
    * 
-   * Get all global features (platform admin only)
+   * Get all global features (admins and super admins)
    */
   app.get("/api/v1/admin/features/global", async (request, reply) => {
     try {
@@ -252,13 +383,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      // Check platform admin
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
-          message: "Platform administrator access required",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -285,7 +414,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * PATCH /api/v1/admin/features/global/:featureKey
    * 
-   * Enable/disable feature globally (platform admin only)
+   * Enable/disable feature globally (admins and super admins)
    */
   app.patch("/api/v1/admin/features/global/:featureKey", async (request, reply) => {
     try {
@@ -294,11 +423,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -342,7 +471,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * POST /api/v1/admin/features/global
    * 
-   * Create new global feature (platform admin only)
+   * Create new global feature (admins and super admins)
    */
   app.post("/api/v1/admin/features/global", async (request, reply) => {
     try {
@@ -351,11 +480,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -368,7 +497,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         config: z.record(z.any()).optional(),
       }).parse(request.body);
 
-      const feature = await featureService.createGlobalFeature(body);
+      const feature = await featureService.createGlobalFeature(body as any);
 
       return {
         success: true,
@@ -388,7 +517,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * DELETE /api/v1/admin/features/global/:featureKey
    * 
-   * Delete global feature (platform admin only, use with caution!)
+   * Delete global feature (admins and super admins, use with caution!)
    */
   app.delete("/api/v1/admin/features/global/:featureKey", async (request, reply) => {
     try {
@@ -397,11 +526,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -439,7 +568,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * PUT /api/v1/admin/features/tenant/:tenantId/:featureKey
    * 
-   * Enable/disable feature for specific tenant (platform admin only)
+   * Enable/disable feature for specific tenant (admins and super admins)
    */
   app.put("/api/v1/admin/features/tenant/:tenantId/:featureKey", async (request, reply) => {
     try {
@@ -448,11 +577,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -506,11 +635,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -540,7 +669,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * GET /api/v1/admin/features/usage/:featureKey
    * 
-   * Get usage statistics for a feature (platform admin only)
+   * Get usage statistics for a feature (admins and super admins)
    */
   app.get("/api/v1/admin/features/usage/:featureKey", async (request, reply) => {
     try {
@@ -549,11 +678,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -581,7 +710,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * GET /api/v1/admin/features/usage
    * 
-   * Get usage statistics for all features (platform admin only)
+   * Get usage statistics for all features (admins and super admins)
    */
   app.get("/api/v1/admin/features/usage", async (request, reply) => {
     try {
@@ -590,11 +719,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -616,7 +745,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * GET /api/v1/admin/features/audit/:featureKey
    * 
-   * Get audit log for a feature (platform admin only)
+   * Get audit log for a feature (admins and super admins)
    */
   app.get("/api/v1/admin/features/audit/:featureKey", async (request, reply) => {
     try {
@@ -625,11 +754,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -664,7 +793,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * POST /api/v1/admin/features/cleanup-expired
    * 
-   * Cleanup expired features (platform admin only)
+   * Cleanup expired features (admins and super admins)
    */
   app.post("/api/v1/admin/features/cleanup-expired", async (request, reply) => {
     try {
@@ -673,11 +802,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
@@ -700,7 +829,7 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
   /**
    * POST /api/v1/admin/features/tenant/:tenantId/:featureKey/reset-usage
    * 
-   * Reset usage counter for a tenant (platform admin only)
+   * Reset usage counter for a tenant (admins and super admins)
    */
   app.post("/api/v1/admin/features/tenant/:tenantId/:featureKey/reset-usage", async (request, reply) => {
     try {
@@ -709,11 +838,11 @@ export async function registerFeatureManagementRoutes(app: FastifyInstance, pool
         return reply.code(401).send({ error: "unauthorized" });
       }
 
-      const isPlatformAdmin = (user as any).role === "platform_admin";
-      if (!isPlatformAdmin) {
+      if (!isFeatureAdmin(user)) {
         return reply.code(403).send({
           success: false,
           error: "insufficient_permissions",
+          message: "Administrator or Super Administrator access required",
         });
       }
 
