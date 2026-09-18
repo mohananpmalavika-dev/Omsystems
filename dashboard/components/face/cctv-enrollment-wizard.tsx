@@ -200,7 +200,7 @@ export function CCTVEnrollmentWizard({
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
           {step === "select-frame" && (
             <SelectFrameStep
-              onFrameSelected={(frame, bbox) => {
+              onFrameSelected={(frame: string, bbox?: any) => {
                 setSelectedFrame(frame);
                 setFaceBoundingBox(bbox);
               }}

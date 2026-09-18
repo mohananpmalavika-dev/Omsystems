@@ -1005,10 +1005,10 @@ export function AbandonedObjectWorkspace({ cameraId }: { cameraId?: string }) {
                   Threat Risk Index
                 </span>
                 <div className="text-2xl font-black font-mono text-rose-400 mt-1">
-                  {selectedEvent.severity === "critical" ? "94 / 100" : selectedEvent.severity === "high" ? "78 / 100" : "42 / 100"}
+                  {selectedEvent.severity === "P1" ? "94 / 100" : selectedEvent.severity === "P2" ? "78 / 100" : "42 / 100"}
                 </div>
                 <span className="text-[11px] text-rose-300/80 mt-0.5 block">
-                  {selectedEvent.severity === "critical" ? "P1 Bomb Squad Advisory Warranted" : "Active Perimeter Watch"}
+                  {selectedEvent.severity === "P1" ? "P1 Bomb Squad Advisory Warranted" : "Active Perimeter Watch"}
                 </span>
               </div>
 

@@ -81,7 +81,7 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
             ? secureAreaAuthorizationApi.listPersons({ branchId: activePortal.branch_id }).catch(() => ({ data: [] }))
             : Promise.resolve({ data: [] }),
         ]);
-        setCitSessions(sessionsRes.data?.data || []);
+        setCitSessions(sessionsRes.data || []);
         setCitGuards(personsRes.data || []);
       } catch {
         setCitSessions([]);

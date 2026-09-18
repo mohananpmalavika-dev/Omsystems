@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 type PageHeroProps = {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
   description: string;
   icon: LucideIcon;
@@ -15,7 +15,7 @@ type PageHeroProps = {
 };
 
 export function PageHero({
-  eyebrow,
+  eyebrow = "Operations workspace",
   title,
   description,
   icon: Icon,

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppLayout, getVisibleNavigation, type MenuAccessUser } from "@/components/app-layout";
+import { PageHero } from "@/components/page-hero";
 import { authApi, cameraInventoryApi, anprLogisticsApi, nbfcWatchlistApi, secureAreaAuthorizationApi } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
 import {
@@ -752,7 +753,7 @@ export default function NbfcOperationsPage() {
                           <span className="text-[11px] text-slate-400">{row.areaName || "Strong Room Vault"}</span>
                         </td>
                         <td className="py-3 px-3">
-                          <span>{activeBranch || "Branch Node"}</span>
+                          <span>{activeBranch?.name || "Branch Node"}</span>
                         </td>
                         <td className="py-3 px-3 text-emerald-300">
                           {row.authorizedPersonName || secureStaff[0]?.fullName || "Authorized Custodian 1"}

@@ -6,3 +6,5 @@ declare module "react" {
     global?: boolean;
   }
 }
+
+declare module "net-snmp";

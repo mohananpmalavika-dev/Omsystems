@@ -125,7 +125,7 @@ export function FeatureManagementDashboard() {
 
     if (data.success) {
       setFeatures(data.features);
-      const cats = [...new Set(data.features.map((f: Feature) => f.featureCategory))];
+      const cats = Array.from(new Set(data.features.map((f: Feature) => f.featureCategory))) as string[];
       setCategories(cats);
     }
   };
@@ -153,7 +153,7 @@ export function FeatureManagementDashboard() {
         config: f.config,
       }));
       setFeatures(transformedFeatures);
-      const cats = [...new Set(transformedFeatures.map((f: Feature) => f.featureCategory))];
+      const cats = Array.from(new Set(transformedFeatures.map((f: Feature) => f.featureCategory))) as string[];
       setCategories(cats);
     }
   };
