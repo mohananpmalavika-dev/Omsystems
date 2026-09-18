@@ -1,9 +1,9 @@
 [CmdletBinding()]
 param(
   [string]$SourceDirectory = 'C:\Users\Dhanya\Downloads\edge-agent-setup (3)',
-  [string]$SourceExecutable = 'C:\Omsystems\edge-agent\release\edge-agent-0.1.20.exe',
+  [string]$SourceExecutable = 'C:\Omsystems\edge-agent\release\edge-agent-0.1.21.exe',
   [Parameter(Mandatory)][string]$ExpectedSha256,
-  [string]$StatusPath = 'C:\Omsystems\reports\edge-agent-0.1.20-install-status.json'
+  [string]$StatusPath = 'C:\Omsystems\reports\edge-agent-0.1.21-install-status.json'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,7 +13,7 @@ $stage = "$install.stage-$stamp"
 $backup = "$install.backup-$stamp"
 $failed = "$install.failed-$stamp"
 $taskName = 'Sentinel Grid Edge Agent'
-$status = [ordered]@{ success = $false; version = '0.1.20'; startedAt = [DateTime]::UtcNow.ToString('o'); backupPath = $backup }
+$status = [ordered]@{ success = $false; version = '0.1.21'; startedAt = [DateTime]::UtcNow.ToString('o'); backupPath = $backup }
 $oldMoved = $false
 $taskChanged = $false
 $oldTaskXml = $null
@@ -60,7 +60,7 @@ try {
   if ($signature.Status -ne 'Valid' -and -not $localUntrustedChain) { throw "Replacement signature is not valid: $($signature.Status)" }
   $status.signatureStatus = [string]$signature.Status
   $version = @(& $SourceExecutable --version 2>&1) -join ' '
-  if ($LASTEXITCODE -ne 0 -or $version.Trim() -ne 'Sentinel Grid Edge Agent 0.1.20') { throw 'Replacement executable version check failed.' }
+  if ($LASTEXITCODE -ne 0 -or $version.Trim() -ne 'Sentinel Grid Edge Agent 0.1.21') { throw 'Replacement executable version check failed.' }
 
   New-Item -ItemType Directory -Path $stage, (Join-Path $stage 'config'), (Join-Path $stage 'data'), (Join-Path $stage 'logs') | Out-Null
   Copy-Item -LiteralPath $SourceExecutable -Destination (Join-Path $stage 'edge-agent.exe')
@@ -73,7 +73,7 @@ try {
     Copy-Item -LiteralPath (Join-Path 'C:\Omsystems\edge-agent\installer\windows' $helper) -Destination (Join-Path $stage $helper)
   }
   $config = Join-Path $stage 'config\edge-agent.env'
-  Set-Setting $config 'EDGE_AGENT_VERSION' '0.1.20'
+  Set-Setting $config 'EDGE_AGENT_VERSION' '0.1.21'
   Set-Setting $config 'LIVE_MEDIA_ENABLED' 'true'
   Set-Setting $config 'EDGE_LIVE_GATEWAY_HOST' '0.0.0.0'
   Set-Setting $config 'EDGE_LIVE_GATEWAY_PORT' '8090'
@@ -120,7 +120,7 @@ try {
     try {
       $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8090/health' -TimeoutSec 3
       $log = Join-Path $install 'logs\edge-agent.log'
-      $registration = Select-String -LiteralPath $log -Pattern 'registered;.*"version":"0.1.20"' -ErrorAction SilentlyContinue | Select-Object -Last 1
+      $registration = Select-String -LiteralPath $log -Pattern 'registered;.*"version":"0.1.21"' -ErrorAction SilentlyContinue | Select-Object -Last 1
       if ($health.service -eq 'sentinel-edge-media-gateway' -and $health.status -eq 'ok' -and $registration) {
         $status.pid = $owner.OwningProcess
         $status.registration = $registration.Line

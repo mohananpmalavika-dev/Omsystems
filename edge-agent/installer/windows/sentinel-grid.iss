@@ -3,14 +3,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.20
+AppVersion=0.1.21
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.20-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.21-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -34,6 +34,7 @@ Name: "startservice"; Description: "Start KryptonVision service after installati
 Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "open-dashboard-scan.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\release\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\models\secure-face\*"; DestDir: "{app}\models\secure-face"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 ; Runtime dependencies
 Source: "..\..\release\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -140,7 +141,7 @@ begin
       'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
       'Branch Name: ' + BranchName + #13#10 +
       'Installation Path: ' + ExpandConstant('{app}') + #13#10 +
-      'Version: 0.1.20',
+      'Version: 0.1.21',
       False);
   end;
 end;

@@ -60,7 +60,7 @@ const MEDIA_RUNTIME_RETRY_INTERVAL_MS = 30_000;
 export async function runEdgeAgent() {
 const argv = process.argv.slice(2);
 const scanOnce = hasArgument(argv, "--scan-once");
-const isDiagnostic = hasArgument(argv, "--diagnose") || hasArgument(argv, "--check-config") || hasArgument(argv, "--version") || hasArgument(argv, "--verify-bundle");
+const isDiagnostic = hasArgument(argv, "--diagnose") || hasArgument(argv, "--check-config") || hasArgument(argv, "--version") || hasArgument(argv, "--verify-bundle") || hasArgument(argv, "--verify-secure-face");
 
 if (hasArgument(argv, "--verify-bundle")) {
   process.stdout.write(`${JSON.stringify({ valid: true, assets: inspectBundledWindowsRuntime() }, null, 2)}\n`);
@@ -84,11 +84,29 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.20\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.21\n");
   process.exit(0);
 }
 
 const config = loadConfigOrExit();
+if (hasArgument(argv, "--verify-secure-face")) {
+  if (!config.SECURE_FACE_AI_ENABLED) {
+    process.stderr.write("Secure face AI is disabled. Set SECURE_FACE_AI_ENABLED=true before verifying local models.\n");
+    process.exit(1);
+  }
+  const secureFaceRuntime = new SecureFaceRuntime({
+    manifestPath: config.SECURE_FACE_MODEL_MANIFEST,
+    minLivenessScore: config.SECURE_FACE_MIN_LIVENESS,
+  });
+  try {
+    await secureFaceRuntime.initialize();
+    process.stdout.write(`${JSON.stringify({ valid: true, secureFace: secureFaceRuntime.status() }, null, 2)}\n`);
+    process.exit(0);
+  } catch (error) {
+    process.stderr.write(`Secure face model validation failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
+}
 const physicalSiren = new PhysicalSirenController({
   enabled: config.PHYSICAL_SIREN_ENABLED,
   onUrl: config.PHYSICAL_SIREN_ON_URL,

@@ -118,7 +118,7 @@ try {
         Write-Host "======================================"
         Write-Host ""
         
-        $outputFile = "output\KryptonVisionInstaller-v0.1.20-windows.exe"
+        $outputFile = "output\KryptonVisionInstaller-v0.1.21-windows.exe"
         if (Test-Path $outputFile) {
             $installerInfo = Get-Item $outputFile
             Write-Host "Installer created:"

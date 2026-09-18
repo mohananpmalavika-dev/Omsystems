@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   ShieldAlert,
@@ -25,7 +26,6 @@ import {
   Activity,
   ChevronRight,
   Radio,
-  MapPin,
   Flame,
   ShieldCheck,
   TrendingUp,
@@ -43,6 +43,11 @@ import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
 import { getTelemetryFreshness } from "@/lib/telemetry-freshness";
+
+const FleetCameraMap = dynamic(
+  () => import("./fleet-camera-map").then((module) => module.FleetCameraMap),
+  { ssr: false, loading: () => <div className="grid h-[430px] place-items-center rounded-xl border border-slate-800 bg-slate-900 text-sm text-slate-400">Loading map…</div> },
+);
 
 export function CommandCenterView() {
   const [summary, setSummary] = useState<any | null>(null);
@@ -907,14 +912,10 @@ export function CommandCenterView() {
             </div>
           </div>
         ) : (
-          <div className="p-6 rounded-xl border border-slate-800 bg-slate-900 text-center space-y-4 shadow-xl">
-            <div className="h-64 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-center relative overflow-hidden">
-              <div className="text-slate-500 text-sm space-y-2">
-                <MapPin className="w-8 h-8 text-blue-400 mx-auto" />
-                <p>{totalBranchesCount === 0 ? "No branches currently enrolled on map." : `${totalBranchesCount} branch(es) monitored on map.`}</p>
-              </div>
-            </div>
-          </div>
+          <FleetCameraMap
+            visibleBranchIds={filteredBranches.map((branch) => branch.branchId)}
+            onOpenBranch={(branchId) => setSelectedBranchWorkspace(branches.find((branch) => branch.branchId === branchId) ?? null)}
+          />
         )}
       </div>
 

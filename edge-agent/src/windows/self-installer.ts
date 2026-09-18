@@ -10,6 +10,7 @@ const moduleDirectory = typeof __dirname !== "undefined"
 const ASSET_ROOT = join(moduleDirectory, "..", "vendor", "windows");
 const INSTALLER_ROOT = join(moduleDirectory, "..", "installer", "windows");
 const NATIVE_MODULES_ROOT = join(moduleDirectory, "..", "release", "node_modules");
+const SECURE_FACE_MODELS_ROOT = join(moduleDirectory, "..", "models", "secure-face");
 
 const REQUIRED_BUNDLE_ASSETS = [
   ["ffmpeg.zip", join(ASSET_ROOT, "ffmpeg.zip")],
@@ -18,6 +19,7 @@ const REQUIRED_BUNDLE_ASSETS = [
   ["install-edge-agent.ps1", join(INSTALLER_ROOT, "install-edge-agent.ps1")],
   ["uninstall-edge-agent.ps1", join(INSTALLER_ROOT, "uninstall-edge-agent.ps1")],
   ["open-dashboard-scan.ps1", join(INSTALLER_ROOT, "open-dashboard-scan.ps1")],
+  ["Secure face ONNX models", SECURE_FACE_MODELS_ROOT],
   ["Windows native module runtime", NATIVE_MODULES_ROOT],
 ] as const;
 
@@ -26,9 +28,22 @@ export function inspectBundledWindowsRuntime() {
     if (!existsSync(path)) throw new Error(`The all-in-one installer is missing ${name}`);
     const metadata = statSync(path);
     const nativeBinary = join(path, "@img", "sharp-win32-x64", "lib", "sharp-win32-x64-0.35.4.node");
-    const sizeBytes = metadata.isDirectory()
+    const requiredModels = ["manifest.json", "detector.onnx", "recognizer.onnx", "liveness.onnx"];
+    if (name === "Secure face ONNX models") {
+      const missingModels = requiredModels.filter((file) => {
+        const model = join(path, file);
+        return !existsSync(model) || statSync(model).size < 1024;
+      });
+      if (missingModels.length) throw new Error(`The bundled secure-face models are incomplete: ${missingModels.join(", ")}`);
+    }
+    const sizeBytes = name === "Windows native module runtime"
       ? (existsSync(nativeBinary) ? statSync(nativeBinary).size : 0)
-      : metadata.size;
+      : name === "Secure face ONNX models"
+        ? requiredModels.reduce((total, file) => {
+          const model = join(path, file);
+          return total + (existsSync(model) ? statSync(model).size : 0);
+        }, 0)
+        : metadata.size;
     if (sizeBytes <= 0) throw new Error(`The bundled ${name} is empty`);
     return { name, sizeBytes };
   });
@@ -51,6 +66,7 @@ export function launchWindowsSelfInstaller(environmentFile: string) {
     copyAsset(join(INSTALLER_ROOT, "uninstall-edge-agent.ps1"), join(stage, "uninstall-edge-agent.ps1"));
     copyAsset(join(INSTALLER_ROOT, "open-dashboard-scan.ps1"), join(stage, "open-dashboard-scan.ps1"));
     copyBundledDirectory(NATIVE_MODULES_ROOT, join(stage, "node_modules"));
+    copyBundledDirectory(SECURE_FACE_MODELS_ROOT, join(stage, "models", "secure-face"));
     copyOptionalAsset(join(ASSET_ROOT, "THIRD_PARTY_NOTICES.txt"), join(stage, "THIRD_PARTY_NOTICES.txt"));
 
     const installerPath = join(stage, "install-edge-agent.ps1");
