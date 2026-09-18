@@ -31,7 +31,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; Flags: ignoreversion
+; The v0.1.21 storage telemetry hotfix is built separately while the currently
+; installed agent may still hold edge-agent.exe open during an upgrade.
+Source: "..\..\release\edge-agent-v0.1.21-storagefix.exe"; DestDir: "{app}"; DestName: "edge-agent.exe"; Flags: ignoreversion
 Source: "..\..\release\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\models\secure-face\*"; DestDir: "{app}\models\secure-face"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\vendor\windows\ffmpeg.zip"; DestName: "edge-agent-ffmpeg.zip"; Flags: dontcopy
