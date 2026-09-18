@@ -48,7 +48,7 @@ export default function UPSPowerHealthPage() {
 
   // Load available branches
   useEffect(() => {
-    void cameraInventoryApi.listBranches("recording:view")
+    void cameraInventoryApi.listBranches("analytics:view")
       .then(({ data }) => {
         const list = data as Branch[];
         setBranches(list);
@@ -144,7 +144,7 @@ export default function UPSPowerHealthPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                {selectedBranch ? `${selectedBranch.name} • Location: ${selectedBranch.city || "Branch Node"}` : "Select branch to view power telemetry"}
+                {selectedBranch ? `${selectedBranch.name} • Location: ${(selectedBranch as any).city || selectedBranch.name || "Branch Node"}` : "Select branch to view power telemetry"}
               </p>
             </div>
           </div>

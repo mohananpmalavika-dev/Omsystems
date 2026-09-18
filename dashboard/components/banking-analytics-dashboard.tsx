@@ -80,6 +80,7 @@ export function BankingAnalyticsDashboard() {
   const [vipList, setVipList] = useState<any[]>([]);
   const [cashCounters, setCashCounters] = useState<any[]>([]);
   const [bankingAnalytics, setBankingAnalytics] = useState<any>(null);
+  const [vipNotified, setVipNotified] = useState(false);
 
   const refresh = useCallback(async (quiet = false) => {
     if (!branchId) return;

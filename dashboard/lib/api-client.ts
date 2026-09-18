@@ -2861,26 +2861,6 @@ export const enterpriseInfrastructureApi = {
     fetchApi<{ success: boolean; data: any[] }>(`/v1/infrastructure/predicted-failures/${encodeURIComponent(branchId)}`),
 };
 
-export const anprLogisticsApi = {
-  listSessions: (filters?: { branchId?: string; status?: string; hasViolations?: boolean }) => {
-    const params = new URLSearchParams();
-    if (filters?.branchId && filters.branchId !== 'ALL') params.set('branchId', filters.branchId);
-    if (filters?.status) params.set('status', filters.status);
-    if (filters?.hasViolations) params.set('hasViolations', 'true');
-    return fetchApi<{ success: boolean; data: any[]; summary: any }>(`/v1/logistics/anpr-sessions?${params}`);
-  },
-};
-
-export const nbfcWatchlistApi = {
-  list: (filters?: { branchId?: string; type?: string; limit?: number }) => {
-    const params = new URLSearchParams();
-    if (filters?.branchId && filters.branchId !== 'ALL') params.set('branchId', filters.branchId);
-    if (filters?.type && filters.type !== 'all') params.set('type', filters.type);
-    if (filters?.limit) params.set('limit', String(filters.limit));
-    return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(`/v1/watchlist/nbfc?${params}`);
-  },
-};
-
 export const secureAreaAuthorizationApi = {
   listPersons: (scope: { branchId: string; locationId?: string }) =>
     fetchApi<{ data: any[] }>(`/v1/secure-area-authorizations/persons?${new URLSearchParams(Object.entries(scope).filter(([, value]) => Boolean(value)) as [string, string][])}`),
@@ -2963,13 +2943,14 @@ export const cameraPermissionApi = {
 
 // ANPR Logistics API
 export const anprLogisticsApi = {
-  listSessions: (filters: { branchId?: string; status?: string; from?: string; to?: string; limit?: number }) => {
+  listSessions: (filters?: { branchId?: string; status?: string; from?: string; to?: string; limit?: number; hasViolations?: boolean }) => {
     const params = new URLSearchParams();
-    if (filters.branchId) params.set('branchId', filters.branchId);
-    if (filters.status) params.set('status', filters.status);
-    if (filters.from) params.set('from', filters.from);
-    if (filters.to) params.set('to', filters.to);
-    if (filters.limit) params.set('limit', String(filters.limit));
+    if (filters?.branchId && filters.branchId !== 'ALL') params.set('branchId', filters.branchId);
+    if (filters?.status) params.set('status', filters.status);
+    if (filters?.from) params.set('from', filters.from);
+    if (filters?.to) params.set('to', filters.to);
+    if (filters?.limit) params.set('limit', String(filters.limit));
+    if (filters?.hasViolations) params.set('hasViolations', 'true');
     return fetchApi<{ success: boolean; data: any[]; count: number; summary: any }>(
       `/v1/logistics/anpr-sessions?${params}`
     );
@@ -3073,6 +3054,9 @@ export const deviceHealthApi = {
 
 // NBFC Watchlist API
 export const nbfcWatchlistApi = {
+  list: (filters?: { branchId?: string; type?: string; status?: string; search?: string; limit?: number }) => {
+    return nbfcWatchlistApi.listEntries(filters || {});
+  },
   listEntries: (filters: { branchId?: string; type?: string; status?: string; search?: string; limit?: number }) => {
     const params = new URLSearchParams();
     if (filters.branchId) params.set('branchId', filters.branchId);

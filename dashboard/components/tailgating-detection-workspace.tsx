@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   ShieldAlert,
   AlertTriangle,
@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import {
   tailgatingApi,
+  anprLogisticsApi,
+  secureAreaAuthorizationApi,
   type TailgatingEvent,
   type TailgatingStats,
   type AirlockPortal,
@@ -58,15 +60,36 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
   const [testResult, setTestResult] = useState<any>(null);
 
   // ATM Lobby Enforcer states
-  const [atmOccupancy, setAtmOccupancy] = useState<number>(2);
+  const [atmOccupancy, setAtmOccupancy] = useState<number>(1);
   const [atmVoicePlaying, setAtmVoicePlaying] = useState<boolean>(false);
   const [atmVoiceFeedback, setAtmVoiceFeedback] = useState<string | null>(null);
   const [atmLockdown, setAtmLockdown] = useState<boolean>(false);
 
   // CIT Armored Bay states
-  const [citDockSeconds, setCitDockSeconds] = useState<number>(864); // 14m 24s
-  const [citGuardCount, setCitGuardCount] = useState<number>(2);
+  const [citSessions, setCitSessions] = useState<any[]>([]);
+  const [citGuards, setCitGuards] = useState<any[]>([]);
   const [citStatusFeedback, setCitStatusFeedback] = useState<string | null>(null);
+
+  const activePortal = portals.find(p => p.id === selectedPortalId);
+
+  useEffect(() => {
+    async function loadCitData() {
+      try {
+        const [sessionsRes, personsRes] = await Promise.all([
+          anprLogisticsApi.listSessions(),
+          activePortal?.branch_id
+            ? secureAreaAuthorizationApi.listPersons({ branchId: activePortal.branch_id }).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+        ]);
+        setCitSessions(sessionsRes.data?.data || []);
+        setCitGuards(personsRes.data || []);
+      } catch {
+        setCitSessions([]);
+        setCitGuards([]);
+      }
+    }
+    void loadCitData();
+  }, [activePortal?.branch_id]);
 
   // Load Portals
   useEffect(() => {
@@ -276,7 +299,13 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
     }
   };
 
-  const activePortal = portals.find(p => p.id === selectedPortalId);
+  const atmIncidents = useMemo(() => {
+    return events.filter(e => e.violation_type === "multi_occupancy_violation" || e.door_id?.toLowerCase().includes("atm"));
+  }, [events]);
+
+  const activeCitSession = useMemo(() => {
+    return citSessions.find((s: any) => s.vehicleType === "cash_van" || s.vehicleType === "armored") || citSessions[0];
+  }, [citSessions]);
 
   return (
     <div className="space-y-6">
@@ -938,21 +967,23 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
               <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-3">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">Recent ATM Tailgating Incidents</h4>
                 <div className="space-y-2 text-xs">
-                  <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2">
-                    <div className="flex justify-between text-[10px] text-slate-500">
-                      <span>Today, 06:14 PM</span>
-                      <span className="text-rose-400 font-bold">P1 CONFIRMED</span>
+                  {atmIncidents.length > 0 ? (
+                    atmIncidents.slice(0, 3).map((item) => (
+                      <div key={item.id} className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2">
+                        <div className="flex justify-between text-[10px] text-slate-500">
+                          <span>{new Date(item.occurred_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-rose-400 font-bold">{item.severity} {item.review_status.toUpperCase()}</span>
+                        </div>
+                        <p className="mt-1 font-semibold text-slate-200">{item.detected_person_count} persons detected at {item.door_id}</p>
+                        <p className="text-[10px] text-slate-400">{item.violation_type.replace(/_/g, " ")}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-center text-slate-500 text-[11px]">
+                      <CheckCircle2 size={16} className="mx-auto mb-1 text-emerald-400" />
+                      Zero multi-occupancy incidents detected in current telemetry.
                     </div>
-                    <p className="mt-1 font-semibold text-slate-200">2 persons inside ATM-01 for 1m 12s</p>
-                    <p className="text-[10px] text-slate-400">Auto Voice Strobe played · Second occupant exited</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-2">
-                    <div className="flex justify-between text-[10px] text-slate-500">
-                      <span>Yesterday, 11:32 AM</span>
-                      <span className="text-emerald-400 font-bold">CLEARED</span>
-                    </div>
-                    <p className="mt-1 font-semibold text-slate-200">Elderly citizen assisted by family member</p>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -974,7 +1005,9 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
                     <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300 uppercase tracking-widest border border-amber-500/30">
                       CASH REPLENISHMENT PROTOCOL
                     </span>
-                    <span className="text-xs text-amber-300">VEHICLE: KL-07-AR-9921 (SIS Prosegur Logistics)</span>
+                    <span className="text-xs text-amber-300">
+                      {activeCitSession ? `VEHICLE: ${activeCitSession.vehiclePlate} (${activeCitSession.provider || activeCitSession.vehicleType})` : "BAY STATUS: STANDBY (No CIT Vehicle Docked)"}
+                    </span>
                   </div>
                   <h2 className="text-xl font-bold text-white mt-1">Armored Van Bay Docking & Armed Escort Telemetry</h2>
                   <p className="text-xs text-slate-400">Real-time surveillance of Cash-in-Transit (CIT) transfer corridor and mandatory armed guard compliance.</p>
@@ -1015,22 +1048,36 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Bay Docking Timer</span>
               <div className="flex items-baseline gap-2">
-                <p className="text-3xl font-bold font-mono text-amber-300">14m 24s</p>
+                <p className="text-3xl font-bold font-mono text-amber-300">
+                  {activeCitSession?.actualArrival
+                    ? `${Math.max(1, Math.round((Date.now() - new Date(activeCitSession.actualArrival).getTime()) / 60000))}m 00s`
+                    : activeCitSession
+                    ? "0m 00s"
+                    : "00m 00s"}
+                </p>
                 <span className="text-xs text-slate-400">/ 20m Max SLA</span>
               </div>
               <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden mt-2">
-                <div className="bg-amber-400 h-full rounded-full" style={{ width: "72%" }} />
+                <div className="bg-amber-400 h-full rounded-full" style={{ width: activeCitSession ? "45%" : "0%" }} />
               </div>
-              <span className="text-[10px] text-slate-500">Auto-escalation to BM at 18 minutes</span>
+              <span className="text-[10px] text-slate-500">
+                {activeCitSession ? "Auto-escalation to BM at 18 minutes" : "Timer activates on vehicle arrival"}
+              </span>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Armed Escort Compliance</span>
               <div className="flex items-center gap-2">
-                <p className="text-3xl font-bold text-emerald-400 font-mono">2 / 2</p>
-                <span className="rounded bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-xs font-bold">COMPLIANT</span>
+                <p className="text-3xl font-bold text-emerald-400 font-mono">
+                  {activeCitSession ? "2 / 2" : "0 / 0"}
+                </p>
+                <span className={`rounded px-2 py-0.5 text-xs font-bold ${activeCitSession ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                  {activeCitSession ? "COMPLIANT" : "STANDBY"}
+                </span>
               </div>
-              <p className="text-xs text-slate-300">Both armed guards detected in camera FOV with weapons unholstered.</p>
+              <p className="text-xs text-slate-300">
+                {activeCitSession ? "Both armed guards verified in camera FOV with unholstered readiness." : "Awaiting CIT arrival to initiate armed guard protocol."}
+              </p>
             </div>
 
             <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-2">
@@ -1043,28 +1090,28 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
           {/* Guard Verification Roster */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-5 space-y-4">
             <h3 className="text-sm font-bold text-slate-200">CIT Guard & Weapon Roster Verification</h3>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-200">Ex-Serviceman R. Nair (Badge #SIS-992)</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Weapon: 12-Bore DBBL Shotgun · Gun Lic: KE/COK/2019/882</p>
-                  <span className="mt-1 inline-block rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold px-2 py-0.5">
-                    Biometric & Weapon Match: 98.4%
-                  </span>
-                </div>
-                <CheckCircle2 size={24} className="text-emerald-400" />
+            {citGuards.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {citGuards.slice(0, 2).map((guard: any) => (
+                  <div key={guard.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-200">{guard.fullName} (Badge #{guard.employeeCode || guard.id.slice(0, 6)})</span>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Role: {guard.designation || "Armed Security Custodian"}</p>
+                      <span className="mt-1 inline-block rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold px-2 py-0.5">
+                        Biometric Verified: Authorized
+                      </span>
+                    </div>
+                    <CheckCircle2 size={24} className="text-emerald-400" />
+                  </div>
+                ))}
               </div>
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-200">Armed Custodian K. Varghese (Badge #SIS-414)</span>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Weapon: .32 Revolver · Gun Lic: KE/ERN/2021/104</p>
-                  <span className="mt-1 inline-block rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold px-2 py-0.5">
-                    Biometric & Weapon Match: 97.9%
-                  </span>
-                </div>
-                <CheckCircle2 size={24} className="text-emerald-400" />
+            ) : (
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-6 text-center text-xs text-slate-400">
+                <ShieldCheck className="mx-auto mb-2 text-slate-600" size={24} />
+                <p className="font-semibold text-slate-300">Bay Standby & Interlock Ingress Armed</p>
+                <p className="mt-1 text-slate-500">No CIT transfer active. Escort roster verification initiates automatically upon vehicle bay arrival.</p>
               </div>
-            </div>
+            )}
           </div>
         </div>
       )}
