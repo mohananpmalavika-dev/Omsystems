@@ -122,10 +122,6 @@ export default function NbfcOperationsPage() {
   const [logistics, setLogistics] = useState<{ data: any[]; summary: any } | null>(null);
   const [watchlist, setWatchlist] = useState<{ data: any[]; summary: any } | null>(null);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
-  const [citGateState, setCitGateState] = useState<"pending" | "authorizing" | "open" | "secured">("pending");
-  const [citOtpInput, setCitOtpInput] = useState("");
-  const [watchlistAlertDismissed, setWatchlistAlertDismissed] = useState(false);
-  const [watchlistAlertEscalated, setWatchlistAlertEscalated] = useState(false);
 
   // Strong Room Multi-Party Time-Lock & Anti-Duress State
   const [custodian1Approved, setCustodian1Approved] = useState(false);
@@ -324,13 +320,7 @@ export default function NbfcOperationsPage() {
                     </p>
                   </div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                  citGateState === "open"
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse"
-                    : citGateState === "secured"
-                    ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                    : "bg-purple-500/20 text-purple-300 border-purple-500/40"
-                }`}>
+                <span className="px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-bold uppercase tracking-wider">
                   {activeVehicle ? activeVehicle.status.replaceAll("_", " ").toUpperCase() : "NO LIVE SESSION"}
                 </span>
               </div>
@@ -391,7 +381,7 @@ export default function NbfcOperationsPage() {
                 </span>
               </div>
 
-              {activeWatchlistDetection && !watchlistAlertDismissed ? (
+              {activeWatchlistDetection ? (
                 <div className="mt-4 p-3.5 rounded-xl bg-rose-950/40 border border-rose-800/60 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-rose-200">Watchlist Record:</span>
