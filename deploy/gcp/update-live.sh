@@ -6,9 +6,23 @@ echo "🚀 Sentinel Grid Live In-Place Updater"
 echo "========================================================"
 
 cd /opt/sentinel-grid
+RELEASE_MANIFEST_BACKUP=""
+if [ -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ] && [ -s /opt/sentinel-grid/edge-agent/release/windows-release.json ]; then
+  # Release artifacts are delivered outside Git. Keep the manifest that was
+  # checksum-verified with the executable; `git reset --hard` below would
+  # otherwise replace it with the repository placeholder before Docker builds.
+  RELEASE_MANIFEST_BACKUP=$(mktemp /tmp/sentinel-windows-release-manifest.XXXXXXXXXX)
+  cp /opt/sentinel-grid/edge-agent/release/windows-release.json "$RELEASE_MANIFEST_BACKUP"
+fi
 echo "--> Fetching latest updates from GitHub..."
 git fetch origin main
 git reset --hard origin/main
+
+if [ -n "$RELEASE_MANIFEST_BACKUP" ]; then
+  install -d /opt/sentinel-grid/edge-agent/release
+  install -m 0644 "$RELEASE_MANIFEST_BACKUP" /opt/sentinel-grid/edge-agent/release/windows-release.json
+  rm -f "$RELEASE_MANIFEST_BACKUP"
+fi
 
 mkdir -p /opt/sentinel-grid/edge-agent/release
 if [ ! -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
