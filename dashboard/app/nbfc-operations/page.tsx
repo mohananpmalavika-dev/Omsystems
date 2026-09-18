@@ -187,10 +187,24 @@ export default function NbfcOperationsPage() {
             : Promise.resolve({ data: [] }),
         ]);
 
-        setLogistics((logisticsRes as any)?.data || { data: [], summary: {} });
-        const wData = Array.isArray((watchlistRes as any)?.data) ? (watchlistRes as any).data : (watchlistRes as any)?.data?.data || [];
-        setWatchlist({ data: wData, summary: (watchlistRes as any)?.summary || {} });
-        setWatchlistThreats(wData);
+        const rawLogistics = (logisticsRes as any)?.data ?? logisticsRes;
+        const logisticsItems = Array.isArray(rawLogistics)
+          ? rawLogistics
+          : Array.isArray((rawLogistics as any)?.data)
+            ? (rawLogistics as any).data
+            : [];
+        const logisticsSummary = (logisticsRes as any)?.summary ?? (rawLogistics as any)?.summary ?? {};
+        setLogistics({ data: logisticsItems, summary: logisticsSummary });
+
+        const rawWatchlist = (watchlistRes as any)?.data ?? watchlistRes;
+        const watchlistItems = Array.isArray(rawWatchlist)
+          ? rawWatchlist
+          : Array.isArray((rawWatchlist as any)?.data)
+            ? (rawWatchlist as any).data
+            : [];
+        const watchlistSummary = (watchlistRes as any)?.summary ?? (rawWatchlist as any)?.summary ?? {};
+        setWatchlist({ data: watchlistItems, summary: watchlistSummary });
+        setWatchlistThreats(watchlistItems);
         setSecureStaff((staffRes as any)?.data || []);
         setCustodyAssignments((custodyRes as any)?.data || []);
       } catch (err) {
@@ -206,8 +220,12 @@ export default function NbfcOperationsPage() {
     return workflows.filter((workflow) => allowed.has(workflow.href));
   }, [user]);
 
-  const activeVehicle = logistics?.data.find((session) => ["on_route", "arrived", "overdue"].includes(session.status));
-  const activeWatchlistDetection = watchlist?.data.find((entry) => entry.lastDetected);
+  const activeVehicle = Array.isArray(logistics?.data)
+    ? logistics.data.find((session) => ["on_route", "arrived", "overdue"].includes(session?.status))
+    : undefined;
+  const activeWatchlistDetection = Array.isArray(watchlist?.data)
+    ? watchlist.data.find((entry) => entry?.lastDetected)
+    : undefined;
   const branchCount = branches.length;
 
   return (
@@ -426,7 +444,9 @@ export default function NbfcOperationsPage() {
           {/* Real-time Watchlist & Threat Interception */}
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
             {(() => {
-              const activeThreat = watchlistThreats.find((w) => (w.detectionCount24h ?? 0) > 0 || w.lastDetected);
+              const activeThreat = (Array.isArray(watchlistThreats) ? watchlistThreats : []).find(
+                (w) => (w?.detectionCount24h ?? 0) > 0 || w?.lastDetected
+              );
               return (
                 <div>
                   <div className="flex items-center justify-between">
