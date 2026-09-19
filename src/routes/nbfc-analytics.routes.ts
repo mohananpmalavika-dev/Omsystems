@@ -16,6 +16,7 @@ export function registerNbfcAnalyticsRoutes(
   const { repository, engineService } = options;
 
   function getUser(request: FastifyRequest) {
+    repository.assertProductionStorage();
     const user = request.currentUser;
     if (!user?.tenantId || !user.id) throw new Error("authenticated_user_required");
     return { tenantId: user.tenantId, userId: user.id, role: user.role, user };
@@ -359,10 +360,9 @@ export function registerNbfcAnalyticsRoutes(
 
     const body = z.object({
       days: z.number().int().min(1).max(30).default(7),
-      simulatedSamples: z.number().int().min(10).max(1000).default(100),
     }).parse(request.body || {});
 
-    const testResult = await repository.simulateRuleOnFootage(params.id, body.days, body.simulatedSamples);
+    const testResult = await repository.simulateRuleOnFootage(params.id, body.days);
     return reply.send(testResult);
   });
 
@@ -539,12 +539,15 @@ export function registerNbfcAnalyticsRoutes(
   app.get("/api/ai/health", async (request, reply) => {
     const { tenantId } = getUser(request);
     const stats = await repository.getLivePlatformStatistics(tenantId);
-    const models = engineService.getModelRegistry();
+    // Model health must come from an enrolled edge agent. Do not present a
+    // static capability catalogue as real runtime telemetry.
+    const models: unknown[] = [];
     const capacity = engineService.getHardwareCapacity(stats.totalAiCameras);
     return reply.send({
       models,
       capacity,
       systemStatus: "OPERATIONAL",
+      modelTelemetryAvailable: false,
       evaluatedAt: new Date().toISOString(),
     });
   });

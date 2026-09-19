@@ -13,6 +13,7 @@ import type {
 } from "../domain/nbfc-analytics.types.js";
 
 export class NbfcRuleRepository {
+  private readonly volatileTestStore: boolean;
   private readonly excludedTemplateIds = new Set([
     "tmpl-04-cash-counter-crowd",
     "tmpl-05-customer-queue-length",
@@ -31,7 +32,19 @@ export class NbfcRuleRepository {
   private inMemoryTestResults = new Map<string, RuleTestResult[]>();
 
   constructor(private readonly pool: Pool | null = null) {
-    this.seedDefaultTemplates();
+    // Volatile data exists only for isolated tests. Production changes must
+    // always be persisted by the PostgreSQL control plane.
+    this.volatileTestStore = process.env.NODE_ENV === "test" && !pool;
+    if (this.volatileTestStore) this.seedDefaultTemplates();
+  }
+
+  assertProductionStorage(): void {
+    if (!this.pool && !this.volatileTestStore) {
+      throw Object.assign(new Error("AI Rules & Automation requires the PostgreSQL control-plane store."), {
+        statusCode: 503,
+        code: "ai_rules_storage_unavailable",
+      });
+    }
   }
 
   // ==========================================
@@ -1035,16 +1048,16 @@ export class NbfcRuleRepository {
       nbfcMetrics,
       cashCounterAnalytics: {
         activeCounters,
-        unattendedCounters: nbfcMetrics.cashCounterCrowds > 0 ? Math.min(nbfcMetrics.cashCounterCrowds, 3) : 0,
-        averageWaitSeconds: nbfcMetrics.queueSlaBreaches > 0 ? 120 + nbfcMetrics.queueSlaBreaches * 5 : 0,
-        maxWaitSeconds: nbfcMetrics.queueSlaBreaches > 0 ? 240 + nbfcMetrics.queueSlaBreaches * 15 : 0,
+        unattendedCounters: 0,
+        averageWaitSeconds: 0,
+        maxWaitSeconds: 0,
         totalCustomersServedToday: 0,
       },
       lockerSecurity: {
         activeLockerSessions: activeLockers,
         todayLockerEntries: 0,
         maxOccupancyViolations: nbfcMetrics.lockerViolations,
-        dualControlCompliantPercent: 100.0,
+        dualControlCompliantPercent: 0,
       },
     };
   }
@@ -1091,68 +1104,39 @@ export class NbfcRuleRepository {
     return [];
   }
 
-  async simulateRuleOnFootage(ruleId: string, days = 7, simulatedSamples = 150): Promise<RuleTestResult> {
+  async simulateRuleOnFootage(ruleId: string, days = 7): Promise<RuleTestResult> {
     const rule = await this.getRule(ruleId);
     if (!rule) {
       throw new Error(`Rule with ID ${ruleId} not found`);
     }
 
-    let triggerCount = 0;
-    let longestEventSeconds = 0;
-    let potentialFalsePositives = 0;
-    let totalSamplesEvaluated = 0;
-
-    if (this.pool) {
-      try {
-        const cameraFilter = rule.cameraIds && rule.cameraIds.length > 0
-          ? `AND camera_id = ANY($2::uuid[])`
-          : "";
-        const params: any[] = [days];
-        if (rule.cameraIds && rule.cameraIds.length > 0) {
-          params.push(rule.cameraIds);
-        }
-
-        const eventsQuery = `
-          SELECT id, severity, created_at
-          FROM analytics_alerts
-          WHERE created_at >= NOW() - ($1::int || ' days')::interval
-          ${cameraFilter}
-          ORDER BY created_at DESC
-          LIMIT 200
-        `;
-        const res = await this.pool.query(eventsQuery, params);
-        totalSamplesEvaluated = res.rows.length;
-
-        if (totalSamplesEvaluated > 0) {
-          triggerCount = res.rows.length;
-          longestEventSeconds = Math.max(8, Math.min(60, rule.durationMs ? Math.round(rule.durationMs / 1000) * 2 : 12));
-          potentialFalsePositives = Math.floor(triggerCount * 0.05);
-        }
-      } catch (err) {
-        console.warn("NbfcRuleRepository: simulateRuleOnFootage query failed:", err);
-      }
-    }
-
-    if (totalSamplesEvaluated === 0) {
-      totalSamplesEvaluated = simulatedSamples || 150;
-      const cond = rule.condition || {};
-      const val = typeof cond.value === "number" ? cond.value : 2;
-      triggerCount = val > 5 ? 1 : val > 2 ? 3 : 6;
-      longestEventSeconds = Math.max(5, Math.round((rule.durationMs || 5000) / 1000) + 3);
-      potentialFalsePositives = Math.max(0, Math.floor(triggerCount * 0.1));
-    }
+    this.assertProductionStorage();
+    const cameraFilter = rule.cameraIds.length > 0 ? `AND camera_id = ANY($2::uuid[])` : "";
+    const params: unknown[] = [days];
+    if (rule.cameraIds.length > 0) params.push(rule.cameraIds);
+    const res = await this.pool!.query(`
+      SELECT id, created_at
+      FROM analytics_alerts
+      WHERE created_at >= NOW() - ($1::int || ' days')::interval
+      ${cameraFilter}
+      ORDER BY created_at DESC
+      LIMIT 200
+    `, params);
+    const observedAlerts = res.rows.length;
 
     const testResult = await this.saveTestResult({
       ruleId: rule.id,
-      testedBy: "system-simulation",
+      testedBy: "historical-alert-review",
       timeRangeStart: new Date(Date.now() - days * 86400000).toISOString(),
       timeRangeEnd: new Date().toISOString(),
-      triggerCount,
-      longestEventSeconds,
-      potentialFalsePositives,
+      triggerCount: observedAlerts,
+      longestEventSeconds: 0,
+      potentialFalsePositives: 0,
       details: {
-        averageDurationSec: Math.round(longestEventSeconds * 0.6),
-        notes: `Simulated against ${totalSamplesEvaluated} video inference frames over past ${days} days. Rule verified nominal.`,
+        observedAlertCount: observedAlerts,
+        notes: observedAlerts > 0
+          ? `Reviewed ${observedAlerts} recorded alert(s) from the past ${days} day(s). Raw inference-frame replay is not available on this control plane.`
+          : `No recorded alerts were available for the past ${days} day(s); no simulated result was created.`,
       },
     });
 

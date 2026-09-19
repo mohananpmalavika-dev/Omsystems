@@ -194,6 +194,7 @@ async function aiFetch<T = any>(url: string, options: RequestInit = {}): Promise
 export function NbfcRulesWorkspace() {
   const [activeTab, setActiveTab] = useState<TabType>("overview");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBranch, setSelectedBranch] = useState("ALL");
   const [selectedCamera, setSelectedCamera] = useState("ALL");
@@ -264,17 +265,16 @@ export function NbfcRulesWorkspace() {
   // Load initial data
   const fetchData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [rulesRes, zonesRes, tmplRes, healthRes, statsRes, branchRes, cameraRes] = await Promise.all([
-        aiFetch("/api/ai/rules").catch(() => ({ rules: [] })),
-        aiFetch("/api/ai/zones").catch(() => ({ zones: [] })),
-        aiFetch("/api/ai/rule-templates").catch(() => ({ templates: [] })),
-        aiFetch("/api/ai/health").catch(() => ({ models: [], capacity: null })),
-        aiFetch("/api/ai/statistics").catch(() => null),
-        fetch("/api/branches", { credentials: "include" })
-          .then((r) => (r.ok ? r.json() : { data: [] }))
-          .catch(() => ({ data: [] })),
-        aiFetch("/api/ai/cameras").catch(() => ({ cameras: [] })),
+        aiFetch("/api/ai/rules"),
+        aiFetch("/api/ai/zones"),
+        aiFetch("/api/ai/rule-templates"),
+        aiFetch("/api/ai/health"),
+        aiFetch("/api/ai/statistics"),
+        aiFetch("/api/branches"),
+        aiFetch("/api/ai/cameras"),
       ]);
 
       if (rulesRes?.rules && Array.isArray(rulesRes.rules)) {
@@ -300,6 +300,7 @@ export function NbfcRulesWorkspace() {
       }
     } catch (e) {
       console.error("Failed to load AI rules workspace data:", e);
+      setLoadError(e instanceof Error ? e.message : "Unable to load live AI Rules & Automation data.");
     } finally {
       setLoading(false);
     }
@@ -544,7 +545,7 @@ export function NbfcRulesWorkspace() {
     }
   };
 
-  // Run test simulation
+  // Review recorded alerts for this rule's scope; no synthetic replay data.
   const handleRunTest = async (r: RuleItem) => {
     setTestRuleTarget(r);
     setIsTestModalOpen(true);
@@ -552,7 +553,7 @@ export function NbfcRulesWorkspace() {
     try {
       const res = await aiFetch(`/api/ai/rules/${r.id}/test`, {
         method: "POST",
-        body: JSON.stringify({ days: 7, simulatedSamples: 150 }),
+        body: JSON.stringify({ days: 7 }),
       });
       setTestResults(res);
     } catch (e) {
@@ -745,7 +746,7 @@ export function NbfcRulesWorkspace() {
                 </span>
               </h1>
               <p className="text-sm text-gray-400 mt-0.5">
-                No-code visual rule engine, zone perimeter designer, and {templates.length || 37} pre-configured banking security templates
+                No-code visual rule engine, zone perimeter designer, and {templates.length} configured banking security templates
               </p>
             </div>
           </div>
@@ -779,15 +780,22 @@ export function NbfcRulesWorkspace() {
         </div>
       </div>
 
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <span>{loadError}</span>
+          <button onClick={fetchData} className="font-semibold text-red-100 underline">Retry</button>
+        </div>
+      )}
+
       {/* Navigation Sub-Tabs */}
       <div className="flex items-center gap-2 border-b border-gray-800 overflow-x-auto pb-1 text-sm font-medium">
         {[
           { id: "overview", label: "Overview & Analytics", icon: LayoutDashboard },
           { id: "rules", label: `AI Rules (${filteredRules.length})`, icon: SlidersHorizontal },
           { id: "zones", label: `Zone Manager (${zones.length})`, icon: Layers },
-          { id: "templates", label: `Rule Templates (${templates.length || 37})`, icon: Box },
+          { id: "templates", label: `Rule Templates (${templates.length})`, icon: Box },
           { id: "health", label: "AI Health & Capacity", icon: Cpu },
-          { id: "history", label: "Detection & Test Simulation", icon: History },
+          { id: "history", label: "Historical Alert Review", icon: History },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -885,7 +893,7 @@ export function NbfcRulesWorkspace() {
                 </div>
                 <div className="bg-gray-800/40 p-3 rounded-lg">
                   <span className="text-xs text-gray-400">Dual-Control Compliance</span>
-                  <p className="text-lg font-bold text-emerald-400 mt-1">{stats?.lockerSecurity?.dualControlCompliantPercent ?? 100}% Staffed</p>
+                  <p className="text-lg font-bold text-emerald-400 mt-1">{stats?.lockerSecurity?.dualControlCompliantPercent ?? 0}% Staffed</p>
                 </div>
               </div>
 
@@ -1024,7 +1032,7 @@ export function NbfcRulesWorkspace() {
               <div className="text-center py-12 bg-gray-900/40 border border-gray-800 rounded-xl text-gray-400">
                 <SlidersHorizontal className="w-10 h-10 mx-auto text-gray-600 mb-3" />
                 <p className="text-base font-medium text-gray-300">No matching AI rules found</p>
-                <p className="text-xs text-gray-500 mt-1">Try clearing your filters or create a rule from our {templates.length || 37} templates.</p>
+                <p className="text-xs text-gray-500 mt-1">Try clearing your filters or create a rule from the configured templates.</p>
                 <button
                   onClick={handleOpenCreateRule}
                   className="mt-4 px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-medium"
@@ -1101,7 +1109,7 @@ export function NbfcRulesWorkspace() {
                       <button
                         onClick={() => handleRunTest(rule)}
                         className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-xs font-medium transition"
-                        title="Simulate / Test Rule against Historical Footage"
+                        title="Review recorded alerts for this rule's historical scope"
                       >
                         Test Rule
                       </button>
@@ -1417,7 +1425,7 @@ export function NbfcRulesWorkspace() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-bold text-white">{templates.length || 37} Built-in NBFC Surveillance Templates</h2>
+              <h2 className="text-lg font-bold text-white">{templates.length} Configured NBFC Surveillance Templates</h2>
               <p className="text-xs text-gray-400 mt-0.5">
                 Standard banking & gold loan branch rules ready for 1-click instantiation and threshold tuning.
               </p>
@@ -1487,7 +1495,7 @@ export function NbfcRulesWorkspace() {
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">Total Stream Capacity</span>
               <p className="text-2xl font-bold text-white mt-1">
-                {capacity?.totalStreamsCapacity ?? (stats?.totalAiCameras ? Math.max(64, stats.totalAiCameras + 16) : 64)} Channels
+                {capacity?.totalStreamsCapacity ?? "Unavailable"}{capacity?.totalStreamsCapacity !== undefined ? " Channels" : ""}
               </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
                 <div
@@ -1496,10 +1504,10 @@ export function NbfcRulesWorkspace() {
                     width: `${Math.min(
                       100,
                       Math.max(
-                        5,
+                        0,
                         Math.round(
                           (((capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) + (capacity?.reservedStreams ?? 0)) /
-                            (capacity?.totalStreamsCapacity || 64)) *
+                            (capacity?.totalStreamsCapacity || 1)) *
                             100
                         )
                       )
@@ -1511,7 +1519,7 @@ export function NbfcRulesWorkspace() {
                 {capacity?.activeStreams ?? stats?.totalAiCameras ?? 0} active, {capacity?.reservedStreams ?? 0} reserved,{" "}
                 {Math.max(
                   0,
-                  (capacity?.totalStreamsCapacity ?? (stats?.totalAiCameras ? Math.max(64, stats.totalAiCameras + 16) : 64)) -
+                  (capacity?.totalStreamsCapacity ?? 0) -
                     (capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) -
                     (capacity?.reservedStreams ?? 0)
                 )}{" "}
@@ -1522,32 +1530,32 @@ export function NbfcRulesWorkspace() {
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">CPU Ingestion Utilization</span>
               <p className="text-2xl font-bold text-white mt-1">
-                {capacity?.cpuUsagePercent !== undefined ? `${capacity.cpuUsagePercent}%` : "14.2%"}
+                {capacity?.cpuUsagePercent !== undefined ? `${capacity.cpuUsagePercent}%` : "Unavailable"}
               </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
                 <div
                   className="bg-blue-500 h-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(5, capacity?.cpuUsagePercent ?? 14.2))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, capacity?.cpuUsagePercent ?? 0))}%` }}
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-2">
-                {capacity?.cpuUsagePercent && capacity.cpuUsagePercent > 80 ? "Elevated workload" : "Nominal thermal state"}
+                {capacity?.cpuUsagePercent === undefined ? "Telemetry unavailable" : capacity.cpuUsagePercent > 80 ? "Elevated workload" : "Normal workload"}
               </p>
             </div>
 
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">Memory & Hardware Allocation</span>
               <p className="text-2xl font-bold text-white mt-1">
-                {capacity?.gpuMemoryUsagePercent !== undefined ? `${capacity.gpuMemoryUsagePercent}%` : "28.5%"}
+                {capacity?.gpuMemoryUsagePercent !== undefined ? `${capacity.gpuMemoryUsagePercent}%` : "Unavailable"}
               </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
                 <div
                   className="bg-purple-500 h-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(5, capacity?.gpuMemoryUsagePercent ?? 28.5))}%` }}
+                  style={{ width: `${Math.min(100, Math.max(0, capacity?.gpuMemoryUsagePercent ?? 0))}%` }}
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-2">
-                {capacity?.gpuNodeId ? `Node: ${capacity.gpuNodeId}` : "Hardware acceleration active"}
+                {capacity?.gpuNodeId ? `Node: ${capacity.gpuNodeId}` : "Telemetry unavailable"}
               </p>
             </div>
           </div>
@@ -1617,7 +1625,7 @@ export function NbfcRulesWorkspace() {
       {activeTab === "history" && (
         <div className="space-y-6">
           <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-5 space-y-4">
-            <h3 className="text-base font-bold text-white">Rule Testing & Simulation Lab</h3>
+            <h3 className="text-base font-bold text-white">Historical Alert Review</h3>
             <p className="text-xs text-gray-400">
               Select any configured rule to test against recorded historical video frames. This estimates real-world trigger frequency and potential false alarm rates before promoting a rule to live alerting.
             </p>
@@ -1625,7 +1633,7 @@ export function NbfcRulesWorkspace() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
               {rules.length === 0 ? (
                 <div className="col-span-3 text-center py-8 text-gray-500 text-xs bg-gray-800/20 rounded-lg border border-dashed border-gray-800">
-                  No active rules configured yet. Create a rule or instantiate one from templates above to run simulations.
+                  No active rules configured yet. Create a scoped rule or instantiate one from templates above to review recorded alerts.
                 </div>
               ) : (
                 rules.map((r) => (
@@ -1638,7 +1646,7 @@ export function NbfcRulesWorkspace() {
                       onClick={() => handleRunTest(r)}
                       className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded font-medium transition"
                     >
-                      Run Simulation
+                      Review Alerts
                     </button>
                   </div>
                 ))
@@ -1959,13 +1967,13 @@ export function NbfcRulesWorkspace() {
         </div>
       )}
 
-      {/* HISTORICAL SIMULATION TEST MODAL */}
+      {/* HISTORICAL ALERT REVIEW MODAL */}
       {isTestModalOpen && testRuleTarget && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl w-full max-w-lg shadow-2xl p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div>
-                <h3 className="text-base font-bold text-white">Rule Simulation Results</h3>
+                <h3 className="text-base font-bold text-white">Historical Alert Review</h3>
                 <p className="text-xs text-gray-400 mt-0.5">{testRuleTarget.name}</p>
               </div>
               <button onClick={() => setIsTestModalOpen(false)} className="text-gray-400 hover:text-white">
@@ -1976,29 +1984,29 @@ export function NbfcRulesWorkspace() {
             {isTesting ? (
               <div className="text-center py-8 space-y-2">
                 <RefreshCw className="w-6 h-6 animate-spin mx-auto text-red-500" />
-                <p className="text-xs text-gray-400">Replaying historical vectors over last 7 days...</p>
+                <p className="text-xs text-gray-400">Reviewing recorded alerts from the last 7 days...</p>
               </div>
             ) : testResults ? (
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">Would Trigger</span>
-                    <p className="text-xl font-bold text-white mt-1">{testResults.triggerCount} times</p>
+                    <span className="text-gray-400">Recorded Alerts</span>
+                    <p className="text-xl font-bold text-white mt-1">{testResults.triggerCount}</p>
                   </div>
                   <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">Longest Event</span>
-                    <p className="text-xl font-bold text-amber-400 mt-1">{testResults.longestEventSeconds}s</p>
+                    <span className="text-gray-400">Duration</span>
+                    <p className="text-xl font-bold text-amber-400 mt-1">{testResults.longestEventSeconds ? `${testResults.longestEventSeconds}s` : "Unavailable"}</p>
                   </div>
                   <div className="bg-gray-800/40 p-3 rounded-lg text-center">
-                    <span className="text-gray-400">Est. Noise</span>
-                    <p className="text-xl font-bold text-blue-400 mt-1">{testResults.potentialFalsePositives} alerts</p>
+                    <span className="text-gray-400">False positives</span>
+                    <p className="text-xl font-bold text-blue-400 mt-1">Not calculated</p>
                   </div>
                 </div>
 
                 <div className="bg-gray-800/20 p-3 rounded-lg border border-gray-800 space-y-1">
-                  <p className="font-semibold text-gray-300">Simulation Summary</p>
-                  <p className="text-gray-400">{testResults.details?.notes || "Historical playback verification passed."}</p>
-                  <p className="text-[11px] text-gray-500">Average event duration: {testResults.details?.averageDurationSec ?? 4} seconds</p>
+                  <p className="font-semibold text-gray-300">Recorded Alert Summary</p>
+                  <p className="text-gray-400">{testResults.details?.notes || "No recorded alert data is available."}</p>
+                  <p className="text-[11px] text-gray-500">Average event duration: {testResults.details?.averageDurationSec ?? "Unavailable"}</p>
                 </div>
 
                 <button
