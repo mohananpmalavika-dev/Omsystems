@@ -32,23 +32,23 @@ $exeInfo = Get-Item $edgeAgentExe
 Write-Host "   Size: $([math]::Round($exeInfo.Length / 1MB, 2)) MB"
 Write-Host "   Modified: $($exeInfo.LastWriteTime)"
 
-# Step 2: Check runtime files
+# Step 2: Check runtime archives shipped by the installer
 Write-Host ""
 Write-Host "Step 2: Checking runtime dependencies..."
-$runtimePath = "..\..\release\runtime"
+$runtimePath = "..\..\vendor\windows"
 
 if (-not (Test-Path $runtimePath)) {
     Write-Host "❌ Runtime folder not found: $runtimePath"
     exit 1
 }
 
-$mediaMTX = Join-Path $runtimePath "mediamtx.exe"
+$mediaMTX = Join-Path $runtimePath "mediamtx.zip"
 if (-not (Test-Path $mediaMTX)) {
     Write-Host "❌ MediaMTX not found. Please extract from vendor\windows\mediamtx.zip"
     exit 1
 }
 
-$ffmpegDir = Get-ChildItem -Path $runtimePath -Filter "ffmpeg-*" -Directory | Select-Object -First 1
+$ffmpegDir = Get-ChildItem -Path $runtimePath -Filter "ffmpeg.zip" -File | Select-Object -First 1
 if (-not $ffmpegDir) {
     Write-Host "❌ FFmpeg not found. Please extract from vendor\windows\ffmpeg.zip"
     exit 1
@@ -109,9 +109,16 @@ Write-Host "   Compiler: $iscc"
 Write-Host ""
 
 try {
+    & node "..\..\scripts\verify-windows-installer-assets.mjs"
+    if ($LASTEXITCODE -ne 0) { throw 'Windows installer assets failed verification.' }
+    & "..\..\scripts\verify-windows-installer-startup.ps1" -Compiler $iscc
     & $iscc "sentinel-grid.iss"
     
     if ($LASTEXITCODE -eq 0) {
+        & node "..\..\scripts\write-windows-release-manifest.mjs"
+        if ($LASTEXITCODE -ne 0) { throw 'Release manifest generation failed.' }
+        & node "..\..\scripts\verify-windows-production-release.mjs"
+        if ($LASTEXITCODE -ne 0) { throw 'Built Windows release failed verification.' }
         Write-Host ""
         Write-Host "======================================"
         Write-Host "  ✅ Build Successful!"

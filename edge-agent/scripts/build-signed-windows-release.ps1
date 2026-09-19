@@ -59,9 +59,8 @@ if (-not $SkipInstallerBuild) {
 }
 
 $installerDirectory = Join-Path $projectRoot 'installer\windows\output'
-$installer = Get-ChildItem -LiteralPath $installerDirectory -Filter '*Installer*-windows.exe' -File -ErrorAction SilentlyContinue |
-  Sort-Object LastWriteTimeUtc -Descending |
-  Select-Object -First 1
+$version = (Get-Content -LiteralPath (Join-Path $projectRoot 'package.json') -Raw | ConvertFrom-Json).version
+$installer = Get-Item -LiteralPath (Join-Path $installerDirectory "KryptonVisionInstaller-v$version-windows.exe") -ErrorAction SilentlyContinue
 if (-not $installer) {
   throw "No Windows installer was found in $installerDirectory."
 }
@@ -87,6 +86,11 @@ $releaseManifest = [ordered]@{
   signedAt = [DateTime]::UtcNow.ToString('o')
   signerThumbprint = $CertificateThumbprint
   installerSha256 = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+  installerSourceSha256 = [Convert]::ToHexString(
+    [Security.Cryptography.SHA256]::HashData(
+      [Text.Encoding]::UTF8.GetBytes((Get-Content -LiteralPath (Join-Path $projectRoot 'installer\windows\sentinel-grid.iss') -Raw).Replace("`r`n", "`n"))
+    )
+  ).ToLowerInvariant()
 }
 [System.IO.File]::WriteAllText(
   $releaseManifestPath,

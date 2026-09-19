@@ -9,8 +9,13 @@ import { dirname, join } from "node:path";
 
 const roots: string[] = [];
 const executable = Buffer.from("MZ-release-test-fixture");
+const nativeInstaller = Buffer.from("MZ-native-installer");
+const installerSource = "; edge installer fixture\n";
 const manifest = {
   sha256: createHash("sha256").update(executable).digest("hex"),
+  installerFile: "KryptonVisionInstaller-v1.0.0-windows.exe",
+  installerSha256: createHash("sha256").update(nativeInstaller).digest("hex"),
+  installerSourceSha256: createHash("sha256").update(installerSource).digest("hex"),
   signedAt: "2026-09-13T00:00:00.000Z",
 };
 
@@ -29,13 +34,14 @@ async function fixture(manifestText?: string, binary?: Buffer) {
   await copyFile(new URL("../edge-agent/scripts/verify-windows-production-release.mjs", import.meta.url), script);
   if (manifestText !== undefined) await writeFile(join(root, "release", "windows-release.json"), manifestText);
   if (binary !== undefined) await writeFile(join(root, "release", "edge-agent.exe"), binary);
-  await writeFile(join(root, "installer", "windows", "output", "KryptonVisionInstaller-v1.0.0-windows.exe"), Buffer.from("MZ-native-installer"));
+  await writeFile(join(root, "installer", "windows", "sentinel-grid.iss"), installerSource);
+  await writeFile(join(root, "installer", "windows", "output", "KryptonVisionInstaller-v1.0.0-windows.exe"), nativeInstaller);
   return script;
 }
 
 describe("Windows production release build verification", () => {
   it("accepts an unsigned release with a matching checksum manifest", async () => {
-    const script = await fixture(JSON.stringify({ sha256: manifest.sha256, signing: "unsigned" }), executable);
+    const script = await fixture(JSON.stringify({ ...manifest, signing: "unsigned" }), executable);
     const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
     expect(result.status).toBe(0);
   });
@@ -79,7 +85,7 @@ describe("Windows production release build verification", () => {
 
   it.each([
     ["matching release", JSON.stringify(manifest), executable, 200, undefined],
-    ["unsigned release", JSON.stringify({ sha256: manifest.sha256 }), executable, 200, undefined],
+    ["release missing native-installer binding", JSON.stringify({ sha256: manifest.sha256 }), executable, 503, "edge_agent_native_installer_not_built"],
     ["empty executable", JSON.stringify(manifest), Buffer.alloc(0), 503, "edge_agent_executable_not_built"],
     ["missing executable", JSON.stringify(manifest), undefined, 503, "edge_agent_executable_not_built"],
     ["missing manifest", undefined, executable, 503, "edge_agent_windows_release_unavailable"],
@@ -150,6 +156,6 @@ describe("Windows production release build verification", () => {
     const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Verified Windows Edge Agent release checksum");
+    expect(result.stdout).toContain("Verified Windows Edge Agent release and native installer checksums");
   });
 });

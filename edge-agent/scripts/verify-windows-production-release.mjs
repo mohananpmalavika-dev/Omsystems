@@ -53,4 +53,11 @@ if (installerDigest !== manifest.installerSha256.toLowerCase()) {
   throw new Error("The native Windows Edge Agent installer does not match its checksum manifest.");
 }
 
+const sourcePath = join(edgeRoot, "installer", "windows", "sentinel-grid.iss");
+const source = (await readFile(sourcePath, "utf8")).replace(/\r\n/g, "\n");
+const sourceDigest = createHash("sha256").update(source).digest("hex");
+if (typeof manifest.installerSourceSha256 !== "string" || sourceDigest !== manifest.installerSourceSha256.toLowerCase()) {
+  throw new Error("The Windows installer was not built from the current installer source. Rebuild the Windows installer and publish its generated manifest together.");
+}
+
 process.stdout.write("Verified Windows Edge Agent release and native installer checksums.\n");

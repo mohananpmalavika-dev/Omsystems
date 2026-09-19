@@ -41,8 +41,9 @@ describe("Native Windows installer release build", () => {
     const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
 
     expect(installer).toContain("Result := WizardDirValue;");
-    expect(installer).not.toContain("ExpandConstant('{app}')");
+    expect(installer).toContain("if IsUninstaller then begin\n    Result := ExpandConstant('{app}');");
     expect(installer).not.toContain("UninstallDisplayIcon={app}");
+    expect(installer).toContain("if IsUninstaller then begin");
   });
 
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {
@@ -58,6 +59,7 @@ describe("Native Windows installer release build", () => {
     expect(script).toContain("windows-release.json");
     expect(script).toContain("signerThumbprint");
     expect(script).toContain("installerSha256");
+    expect(script).toContain("installerSourceSha256");
   });
 
   it("has a container-safe production release verifier", async () => {
@@ -66,6 +68,7 @@ describe("Native Windows installer release build", () => {
     expect(script).toContain("windows-release.json");
     expect(script).toContain("edge-agent.exe");
     expect(script).toContain("sha256");
+    expect(script).toContain("installerSourceSha256");
   });
 
   it("requires the checksum-verified Windows release while building the control-plane image", async () => {

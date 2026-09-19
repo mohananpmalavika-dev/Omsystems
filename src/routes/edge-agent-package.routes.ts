@@ -451,7 +451,7 @@ function localDiscoveryReadme(branchName: string) {
 async function verifyProductionWindowsRelease(releaseDirectory: string, executablePath: string, installerPath?: string) {
   if (process.env.NODE_ENV !== "production") return;
   const manifestPath = join(releaseDirectory, "windows-release.json");
-  let manifest: { sha256?: unknown; installerFile?: unknown; installerSha256?: unknown };
+  let manifest: { sha256?: unknown; installerFile?: unknown; installerSha256?: unknown; installerSourceSha256?: unknown };
   try {
     manifest = JSON.parse((await readFile(manifestPath, "utf8")).replace(/^\uFEFF/, "")) as { sha256?: unknown };
   } catch {
@@ -473,11 +473,9 @@ async function verifyProductionWindowsRelease(releaseDirectory: string, executab
   if (!installerPath) return;
   const hasInstallerFile = typeof manifest.installerFile === "string";
   const hasInstallerHash = typeof manifest.installerSha256 === "string";
-  // Older signed releases only recorded the agent checksum. Keep those
-  // packages available, while new releases bind the native installer too.
-  if (!hasInstallerFile && !hasInstallerHash) return;
   if (
-    typeof manifest.installerFile !== "string"
+    !hasInstallerFile || !hasInstallerHash
+    || typeof manifest.installerFile !== "string"
     || basename(installerPath) !== manifest.installerFile
     || !/^KryptonVisionInstaller-v[0-9A-Za-z.-]+-windows\.exe$/.test(manifest.installerFile)
     || typeof manifest.installerSha256 !== "string"
@@ -490,6 +488,13 @@ async function verifyProductionWindowsRelease(releaseDirectory: string, executab
   const installerHash = createHash("sha256").update(await readFile(installerPath)).digest("hex");
   if (installerHash !== manifest.installerSha256.toLowerCase()) {
     throw Object.assign(new Error("The native Windows Edge Agent installer does not match its checksum manifest. Deploy matching release artifacts, then rebuild and restart the control plane."), {
+      code: "edge_agent_native_installer_not_built",
+    });
+  }
+  const source = await readFile(join(dirname(installerPath), "..", "sentinel-grid.iss"), "utf8").catch(() => "");
+  const sourceHash = createHash("sha256").update(source.replace(/\r\n/g, "\n")).digest("hex");
+  if (!source || typeof manifest.installerSourceSha256 !== "string" || sourceHash !== manifest.installerSourceSha256.toLowerCase()) {
+    throw Object.assign(new Error("The Windows installer is stale. Rebuild it from the current source and publish the executable and generated release manifest together."), {
       code: "edge_agent_native_installer_not_built",
     });
   }
@@ -850,6 +855,7 @@ export async function registerEdgeAgentPackageRoutes(
         } catch {
           throw missingNativeWindowsInstallerError(installerPath);
         }
+        await verifyProductionWindowsRelease(join(root, "release"), executablePath, installerPath);
         const installerEntry = await getCachedExecutableEntry(installerPath, { size: installerSize, mtimeMs: installerMtime });
         const zipData = makeZip([
           {
