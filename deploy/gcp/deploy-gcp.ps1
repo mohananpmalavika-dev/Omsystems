@@ -5,7 +5,8 @@ param (
     [string]$Zone = "asia-south1-b",
     [string]$MachineType = "e2-standard-8",
     [string]$InstanceName = "kryptovision-server",
-    [int]$DiskSizeGb = 80
+    [int]$DiskSizeGb = 80,
+    [switch]$SkipEdgeUpload
 )
 
 $ErrorActionPreference = "Stop"
@@ -127,39 +128,44 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
         --project=$currentProject
 
     # Verify or upload authentic edge-agent.exe if needed
-    $localManifest = Join-Path $scriptDir "..\..\edge-agent\release\windows-release.json"
-    $localExe = Join-Path $scriptDir "..\..\edge-agent\release\edge-agent.exe"
-    if ((Test-Path $localExe) -and (Test-Path $localManifest)) {
-        $manifestJson = Get-Content $localManifest -Raw | ConvertFrom-Json
-        $expectedHash = $manifestJson.sha256.ToLower()
-        $installerFile = "$($manifestJson.installerFile)"
-        if ($installerFile -notmatch '^KryptonVisionInstaller-v[0-9A-Za-z.-]+-windows\.exe$' -or "$($manifestJson.installerSha256)" -notmatch '^[a-fA-F0-9]{64}$') {
-            throw "The Windows release manifest must include a valid native installer filename and checksum."
-        }
-        $localInstaller = Join-Path $scriptDir "..\..\edge-agent\installer\windows\output\$installerFile"
-        if (-not (Test-Path $localInstaller -PathType Leaf)) {
-            throw "Missing native Windows installer: $localInstaller"
-        }
-        $expectedInstallerHash = "$($manifestJson.installerSha256)".ToLower()
-        Write-Host "Verifying Edge Agent release integrity on $InstanceName..." -ForegroundColor Yellow
-        $remoteHash = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-            --command="sha256sum /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null | cut -d ' ' -f 1" 2>$null)
-        $remoteInstallerHash = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-            --command="sha256sum /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile 2>/dev/null | cut -d ' ' -f 1" 2>$null)
-        if ($remoteHash) { $remoteHash = "$remoteHash".Trim().ToLower() }
-        if ($remoteInstallerHash) { $remoteInstallerHash = "$remoteInstallerHash".Trim().ToLower() }
+    if (-not $SkipEdgeUpload) {
+        $localManifest = Join-Path $scriptDir "..\..\edge-agent\release\windows-release.json"
+        $localExe = Join-Path $scriptDir "..\..\edge-agent\release\edge-agent.exe"
+        if ((Test-Path $localExe) -and (Test-Path $localManifest)) {
+            $manifestJson = Get-Content $localManifest -Raw | ConvertFrom-Json
+            $expectedHash = $manifestJson.sha256.ToLower()
+            $installerFile = "$($manifestJson.installerFile)"
+            if ($installerFile -notmatch '^KryptonVisionInstaller-v[0-9A-Za-z.-]+-windows\.exe$' -or "$($manifestJson.installerSha256)" -notmatch '^[a-fA-F0-9]{64}$') {
+                throw "The Windows release manifest must include a valid native installer filename and checksum."
+            }
+            $localInstaller = Join-Path $scriptDir "..\..\edge-agent\installer\windows\output\$installerFile"
+            if (-not (Test-Path $localInstaller -PathType Leaf)) {
+                throw "Missing native Windows installer: $localInstaller"
+            }
+            $expectedInstallerHash = "$($manifestJson.installerSha256)".ToLower()
+            Write-Host "Verifying Edge Agent release integrity on $InstanceName..." -ForegroundColor Yellow
+            $remoteHash = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+                --command="sha256sum /opt/sentinel-grid/edge-agent/release/edge-agent.exe 2>/dev/null | cut -d ' ' -f 1" 2>$null)
+            $remoteInstallerHash = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+                --command="sha256sum /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile 2>/dev/null | cut -d ' ' -f 1" 2>$null)
+            if ($remoteHash) { $remoteHash = "$remoteHash".Trim().ToLower() }
+            if ($remoteInstallerHash) { $remoteInstallerHash = "$remoteInstallerHash".Trim().ToLower() }
 
-        if ($remoteHash -ne $expectedHash -or $remoteInstallerHash -ne $expectedInstallerHash) {
-            Write-Host "Uploading Edge Agent release binary, native installer, and manifest to $InstanceName..." -ForegroundColor Cyan
-            & gcloud compute scp --zone=$Zone --project=$currentProject --quiet `
-                "$localExe" "$localManifest" "$localInstaller" "${InstanceName}:/tmp/"
-            Assert-LastNativeCommandSucceeded "Uploading the Edge Agent release artifacts"
-            & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-                --command="test `$(sha256sum /tmp/edge-agent.exe | cut -d ' ' -f 1`) = '$expectedHash' && test `$(sha256sum /tmp/$installerFile | cut -d ' ' -f 1`) = '$expectedInstallerHash' && sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo mv /tmp/edge-agent.exe /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/ && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/ && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
-            Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
-            Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
-        } else {
-            Write-Host "✅ Edge Agent release already matches signed manifest on $InstanceName." -ForegroundColor Green
+            if ($remoteHash -ne $expectedHash -or $remoteInstallerHash -ne $expectedInstallerHash) {
+                Write-Host "Uploading Edge Agent release artifacts to $InstanceName..." -ForegroundColor Cyan
+                $filesToUpload = @("$localManifest")
+                if ($remoteHash -ne $expectedHash) { $filesToUpload += "$localExe" }
+                if ($remoteInstallerHash -ne $expectedInstallerHash) { $filesToUpload += "$localInstaller" }
+                & gcloud compute scp --compress --zone=$Zone --project=$currentProject --quiet `
+                    @filesToUpload "${InstanceName}:/tmp/"
+                Assert-LastNativeCommandSucceeded "Uploading the Edge Agent release artifacts"
+                & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+                    --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && ([ ! -f /tmp/edge-agent.exe ] || (test `$(sha256sum /tmp/edge-agent.exe | cut -d ' ' -f 1`) = '$expectedHash' && sudo mv /tmp/edge-agent.exe /opt/sentinel-grid/edge-agent/release/)) && ([ ! -f /tmp/$installerFile ] || (test `$(sha256sum /tmp/$installerFile | cut -d ' ' -f 1`) = '$expectedInstallerHash' && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/)) && ([ ! -f /tmp/windows-release.json ] || sudo mv /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/) && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
+                Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
+                Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
+            } else {
+                Write-Host "✅ Edge Agent release already matches signed manifest on $InstanceName." -ForegroundColor Green
+            }
         }
     }
 
