@@ -81,4 +81,25 @@ describe("AI prediction dashboard live telemetry mapping", () => {
     });
     expect(device).not.toHaveProperty("cycled");
   });
+
+  it("limits dashboard telemetry to branches accessible to the current user", async () => {
+    const store = {
+      listAccessibleNodes: async () => [{ id: "branch-a", tenantId: "tenant-a", parentId: null, type: "branch", name: "Branch A", path: ["branch-a"] }],
+      listCameras: async () => [],
+      listLatestOperationalTelemetry: async () => [
+        telemetry("disk", "allowed-disk", { totalBytes: 1000 }),
+        { ...telemetry("disk", "hidden-disk", { totalBytes: 2000 }), branchId: "branch-b" },
+      ],
+      listPredictiveAlerts: async () => [],
+      listMaintenanceAssets: async () => [],
+      listWorkOrders: async () => [],
+    } as any;
+    const predictionService = { getLatestPredictions: async () => [] } as any;
+    const user = { id: "user-a", displayName: "Operator", tenantId: "tenant-a" } as any;
+
+    const dashboard = await predictiveDashboardInternals.buildDashboard(store, predictionService, user, 48);
+
+    expect(dashboard.volumes.map((item) => item.id)).toEqual(["allowed-disk"]);
+    expect(dashboard.freshness.telemetryRecords).toBe(1);
+  });
 });

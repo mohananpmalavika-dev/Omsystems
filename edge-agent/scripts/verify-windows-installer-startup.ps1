@@ -17,10 +17,15 @@ if (-not $code.Contains('procedure InitializeWizard;') -or
     -not $code.Contains('procedure CurStepChanged(CurStep: TSetupStep);')) {
   throw 'Installer startup callbacks were not found; update the startup test before releasing.'
 }
+if ($code.Contains("ExpandConstant('{app}')")) {
+  throw 'Installer Pascal code must never expand {app}; use WizardDirValue during setup and {srcexe} during uninstall.'
+}
 $code = $code.Replace('procedure InitializeWizard;', 'procedure InitializeAgentWizard;')
 $code = $code.Replace('procedure CurStepChanged(CurStep: TSetupStep);', 'procedure DisabledInstallStep(CurStep: TSetupStep);')
 # Run the real startup callbacks without payload files, elevation, task changes,
-# or installation. Abort intentionally after the wizard initializes successfully.
+# or installation. Let InitializeWizard return normally, then abort from
+# PrepareToInstall. This exercises Inno's application-directory initialization;
+# aborting from InitializeWizard itself produced a false-positive smoke test.
 $header = @"
 [Setup]
 AppName=Edge Installer Startup Verification
@@ -39,8 +44,12 @@ $wrapper = @'
 procedure InitializeWizard;
 begin
   InitializeAgentWizard;
+end;
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
   Log('EDGE_INSTALLER_STARTUP_PASSED');
   Abort;
+  Result := '';
 end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
@@ -49,9 +58,15 @@ end;
 '@
 $probeScript = Join-Path $OutputDirectory 'startup-test.iss'
 $probeLog = Join-Path $OutputDirectory 'startup-test.log'
+$probeConfig = Join-Path $OutputDirectory 'edge-agent.env'
 [IO.File]::WriteAllText($probeScript, $header + "`r`n" + $code + "`r`n" + $wrapper)
 & $Compiler /Q $probeScript
 if ($LASTEXITCODE -ne 0) { throw 'Installer startup test failed to compile.' }
+[IO.File]::WriteAllText($probeConfig, @"
+CONTROL_PLANE_URL="https://startup-test.invalid"
+EDGE_AGENT_NAME="Installer Startup Test"
+EDGE_ACTIVATION_CODE="sgact_0000000000000000000000000000000000000000"
+"@)
 if (Test-Path -LiteralPath $probeLog) { Remove-Item -LiteralPath $probeLog }
 $probe = Start-Process -FilePath (Join-Path $OutputDirectory 'startup-test.exe') -WindowStyle Hidden -PassThru -ArgumentList @(
   '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG="{0}"' -f $probeLog)

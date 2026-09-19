@@ -285,13 +285,30 @@ async function buildDashboard(store: ControlPlaneStore, service: PredictionServi
     loadModelMetrics(store, user.tenantId), loadOutcomeCounts(store, user.tenantId),
   ]);
   const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+  const accessibleBranchIds = new Set(branchMap.keys());
+  const scopedCameras = cameras.filter((camera) => accessibleBranchIds.has(camera.branchId));
+  const scopedTelemetry = telemetry.filter((item) => accessibleBranchIds.has(item.branchId));
+  const assetBranchById = new Map<string, string>();
+  for (const camera of cameras) assetBranchById.set(camera.id, camera.branchId);
+  for (const asset of assets) if (asset.branchNodeId) assetBranchById.set(asset.id, asset.branchNodeId);
+  const alertRecords = alerts.map(record).filter((alert) => {
+    const details = alertDetails(alert);
+    const assetId = stringValue(alert.assetId ?? details.assetId ?? details.cameraId);
+    const branchId = stringValue(alert.branchNodeId ?? details.branchId)
+      ?? (assetId ? assetBranchById.get(assetId) ?? null : null);
+    return branchId !== null && accessibleBranchIds.has(branchId);
+  });
+  const scopedAssets = assets.filter((asset) => asset.branchNodeId && accessibleBranchIds.has(asset.branchNodeId));
+  const scopedWorkOrders = workOrders.filter((order) => {
+    const branchId = order.branchNodeId ?? (order.assetId ? assetBranchById.get(order.assetId) : undefined);
+    return branchId !== undefined && accessibleBranchIds.has(branchId);
+  });
   const predictionMap = await livePredictions(service, branches, user.tenantId);
   const predictions = [...predictionMap.values()].flat();
-  const alertRecords = alerts.map(record);
-  const camerasView = mapCameraRisks(cameras, telemetry, alertRecords, branchMap, workOrders);
-  const volumes = mapStorage(telemetry, branchMap);
-  const switches = mapNetwork(telemetry, branchMap);
-  const recordings = mapRecordings(telemetry, branchMap);
+  const camerasView = mapCameraRisks(scopedCameras, scopedTelemetry, alertRecords, branchMap, scopedWorkOrders);
+  const volumes = mapStorage(scopedTelemetry, branchMap);
+  const switches = mapNetwork(scopedTelemetry, branchMap);
+  const recordings = mapRecordings(scopedTelemetry, branchMap);
   const branchesView = mapBranches(branches, predictionMap, horizonHours);
   const incidents = mapIncidents(alertRecords, branchMap);
   const earliestVolume = volumes.filter((item) => item.daysRemaining !== null).sort((a, b) => a.daysRemaining! - b.daysRemaining!)[0];
@@ -302,7 +319,7 @@ async function buildDashboard(store: ControlPlaneStore, service: PredictionServi
   const evaluatedAccuracy = outcomes.outcomeCount && outcomes.correctCount !== null ? round(outcomes.correctCount / outcomes.outcomeCount * 100, 2) : null;
   return {
     generatedAt: new Date().toISOString(), horizonHours,
-    freshness: { latestTelemetryAt: sourceFreshness(telemetry), telemetryRecords: telemetry.length, activePredictions: predictions.length, predictiveAlerts: alertRecords.length },
+    freshness: { latestTelemetryAt: sourceFreshness(scopedTelemetry), telemetryRecords: scopedTelemetry.length, activePredictions: predictions.length, predictiveAlerts: alertRecords.length },
     kpis: {
       predictedFailuresCount: predictions.filter((item) => item.probability >= 0.7 && item.horizonHours <= horizonHours).length,
       fleetHealthScore: healthValues.length ? round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length, 1) : null,
@@ -315,10 +332,10 @@ async function buildDashboard(store: ControlPlaneStore, service: PredictionServi
       peakIncidentWindow: topIncident?.peakWindow ?? null, peakIncidentCategory: topIncident?.category ?? null,
     },
     cameras: camerasView, volumes, switches, recordings, branches: branchesView, incidents,
-    criticalDrives: mapSmartDrives(telemetry, branchMap),
+    criticalDrives: mapSmartDrives(scopedTelemetry, branchMap),
     modelMetrics: modelMetrics ? { ...modelMetrics, accuracy: evaluatedAccuracy ?? modelMetrics.accuracy, totalSamples: outcomes.outcomeCount } : null,
-    totalAssetsMonitored: assets.length || cameras.length + telemetry.length,
-    openWorkOrdersCount: workOrders.filter(isOpenWorkOrder).length,
+    totalAssetsMonitored: scopedAssets.length || scopedCameras.length + scopedTelemetry.length,
+    openWorkOrdersCount: scopedWorkOrders.filter(isOpenWorkOrder).length,
   };
 }
 
@@ -367,8 +384,10 @@ export async function registerPredictiveAnalyticsRoutes(app: FastifyInstance, st
   app.get('/v1/maintenance/predictive/smart-telemetry', async (request, reply) => {
     const user = currentUser(request, reply); if (!user) return;
     const [branches, telemetry] = await Promise.all([store.listAccessibleNodes(user, 'recording:view', 'branch'), store.listLatestOperationalTelemetry(user.tenantId)]);
-    const data = mapSmartDrives(telemetry, new Map(branches.map((branch) => [branch.id, branch])));
-    return { data, count: data.length, latestTelemetryAt: sourceFreshness(telemetry) };
+    const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+    const scopedTelemetry = telemetry.filter((item) => branchMap.has(item.branchId));
+    const data = mapSmartDrives(scopedTelemetry, branchMap);
+    return { data, count: data.length, latestTelemetryAt: sourceFreshness(scopedTelemetry) };
   });
 
   app.post('/v1/maintenance/predictive/train/failure-model', async (request, reply) => {

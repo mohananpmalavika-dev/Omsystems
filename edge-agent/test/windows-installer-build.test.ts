@@ -34,16 +34,25 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("schtasks.exe");
     expect(installer).toContain("netsh.exe");
     expect(installer).toContain("StopOldAgent");
-    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22')");
   });
 
   it("does not expand the app folder before Inno Setup initializes it", async () => {
     const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
 
     expect(installer).toContain("Result := WizardDirValue;");
-    expect(installer).toContain("if IsUninstaller then begin\n    Result := ExpandConstant('{app}');");
+    expect(installer).toContain("Result := ExtractFileDir(ExpandConstant('{srcexe}'));");
+    expect(installer).not.toContain("ExpandConstant('{app}')");
     expect(installer).not.toContain("UninstallDisplayIcon={app}");
-    expect(installer).toContain("if IsUninstaller then begin");
+    expect(installer).toContain("Result := WizardDirValue;");
+  });
+
+  it("runs the startup probe after InitializeWizard returns", async () => {
+    const script = await readFile("edge-agent/scripts/verify-windows-installer-startup.ps1", "utf8");
+
+    expect(script).toContain("function PrepareToInstall(var NeedsRestart: Boolean): String;");
+    expect(script).toContain("Installer Pascal code must never expand {app}");
+    expect(script).not.toContain("InitializeAgentWizard;\n  Log('EDGE_INSTALLER_STARTUP_PASSED');");
   });
 
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {

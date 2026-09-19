@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.21
+AppVersion=0.1.22
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.21-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.22-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -76,12 +76,15 @@ end;
 
 function AppPath: String;
 begin
-  // The uninstaller has no wizard; its saved application directory is ready.
+  // Never expand {app} from Pascal code. If setup aborts before Inno has
+  // initialized its application directory, even cleanup/error handling may run
+  // this helper and turn the original error into a fatal startup exception.
+  // The original uninstaller executable lives in the installed application
+  // directory; {srcexe} is available from process startup in both modes.
   if IsUninstaller then begin
-    Result := ExpandConstant('{app}');
+    Result := ExtractFileDir(ExpandConstant('{srcexe}'));
     Exit;
   end;
-  // Setup must not expand {app} while InitializeWizard is still running.
   Result := WizardDirValue;
   if Result = '' then
     Result := SafeDefaultInstallDir;
@@ -326,7 +329,7 @@ begin
   if UsePackageConfiguration then begin
     if not CopyFile(PackageConfigPath, ConfigPath, False) then
       RaiseException('The branch configuration from the installer package could not be saved.');
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22');
     UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
     UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
     UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
@@ -338,7 +341,7 @@ begin
     'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
-    'EDGE_AGENT_VERSION="0.1.21"' + #13#10 +
+    'EDGE_AGENT_VERSION="0.1.22"' + #13#10 +
     'EDGE_IDENTITY_PATH="' + DataPath + '/device-identity.enc"' + #13#10 +
     'EDGE_IDENTITY_KEY_PATH="' + DataPath + '/device-identity.key"' + #13#10 +
     'EDGE_OFFLINE_OUTBOX_PATH="' + DataPath + '/offline-outbox.enc"' + #13#10 +
@@ -422,7 +425,7 @@ begin
   StopOldAgent;
   UnpackRuntime;
   if ExistingInstall or FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22')
   else
     WriteFreshConfig;
   ProtectConfigFile;
@@ -431,7 +434,7 @@ begin
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.21' + #13#10 +
+    'Version: 0.1.22' + #13#10 +
     'Installer: Native Windows', False);
 end;
 

@@ -12,6 +12,7 @@ Write-Host ""
 # Check if running from correct directory
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $scriptPath
+$packageVersion = (Get-Content -LiteralPath '..\..\package.json' -Raw | ConvertFrom-Json).version
 
 # Step 1: Check if edge agent is built
 Write-Host "Step 1: Checking edge agent build..."
@@ -125,7 +126,7 @@ try {
         Write-Host "======================================"
         Write-Host ""
         
-        $outputFile = "output\KryptonVisionInstaller-v0.1.21-windows.exe"
+        $outputFile = "output\KryptonVisionInstaller-v$packageVersion-windows.exe"
         if (Test-Path $outputFile) {
             $installerInfo = Get-Item $outputFile
             Write-Host "Installer created:"
