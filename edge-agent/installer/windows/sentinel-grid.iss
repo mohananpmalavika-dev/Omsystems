@@ -70,15 +70,50 @@ var
   ExistingInstall: Boolean;
   UsePackageConfiguration: Boolean;
   PackageControlPlaneUrl: String;
+  AppDirInitialized: Boolean;
+
+function SafeDefaultInstallDir: String;
+begin
+  Result := ExpandConstant('{autopf}\Sentinel Grid\Edge Agent');
+end;
 
 function AppPath: String;
 begin
-  Result := ExpandConstant('{app}');
+  if AppDirInitialized then
+    Result := ExpandConstant('{app}')
+  else
+    Result := SafeDefaultInstallDir;
 end;
 
 function ConfigPath: String;
 begin
   Result := AddBackslash(AppPath) + 'config\edge-agent.env';
+end;
+
+function DetectExistingInstall: Boolean;
+var
+  InstalledDir: String;
+  DefaultDir: String;
+begin
+  Result := False;
+  InstalledDir := '';
+
+  if RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KryptonVision Edge Agent_is1', 'Inno Setup: App Path', InstalledDir) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KryptonVision Edge Agent_is1', 'InstallLocation', InstalledDir) or
+     RegQueryStringValue(HKCU, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KryptonVision Edge Agent_is1', 'Inno Setup: App Path', InstalledDir) or
+     RegQueryStringValue(HKCU, 'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\KryptonVision Edge Agent_is1', 'InstallLocation', InstalledDir) then
+  begin
+    if (InstalledDir <> '') and (FileExists(AddBackslash(InstalledDir) + 'config\edge-agent.env') or FileExists(AddBackslash(InstalledDir) + 'edge-agent.exe')) then begin
+      Result := True;
+      Exit;
+    end;
+  end;
+
+  DefaultDir := SafeDefaultInstallDir;
+  if FileExists(AddBackslash(DefaultDir) + 'config\edge-agent.env') or FileExists(AddBackslash(DefaultDir) + 'edge-agent.exe') then begin
+    Result := True;
+    Exit;
+  end;
 end;
 
 function DotenvPath(const Value: String): String;
@@ -197,7 +232,7 @@ end;
 
 procedure InitializeWizard;
 begin
-  ExistingInstall := FileExists(ConfigPath);
+  ExistingInstall := DetectExistingInstall;
   UsePackageConfiguration := FileExists(PackageConfigPath);
   PackageControlPlaneUrl := ControlPlaneUrl;
   BranchNamePage := CreateInputQueryPage(wpWelcome,
@@ -380,11 +415,12 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
+  AppDirInitialized := True;
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
   UnpackRuntime;
-  if ExistingInstall then
+  if ExistingInstall or FileExists(ConfigPath) then
     UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')
   else
     WriteFreshConfig;
