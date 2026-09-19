@@ -33,7 +33,10 @@ await build({
   outfile: bundlePath,
   minify: true,
   sourcemap: false,
-  external: ["pg-native", "fsevents"],
+  // onnxruntime-node and sharp ship prebuilt .node native binaries that
+  // esbuild cannot process. They are runtime-loaded by the packaged EXE so
+  // they must remain external from the delta bundle too.
+  external: ["pg-native", "fsevents", "onnxruntime-node", "sharp", "*.node"],
 });
 
 // Fail the release build if the output cannot be loaded by the stable packaged

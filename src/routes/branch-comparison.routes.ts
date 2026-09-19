@@ -253,10 +253,10 @@ async function computeBranchMetrics(pool: Pool, tenantId: string, date: string) 
     const security = await pool.query(
       `SELECT 
         (SELECT COUNT(*) FROM nbfc_analytics_rules 
-         WHERE $1 = ANY(branch_ids) AND enabled = true) as active_rules,
-        (SELECT COUNT(*) FROM analytics_alerts 
+         WHERE (branch_ids IS NULL OR branch_ids = '[]'::jsonb OR branch_ids @> '["*"]'::jsonb OR branch_ids @> '["ALL"]'::jsonb OR branch_ids @> jsonb_build_array($1::text)) AND enabled = true) as active_rules,
+        (SELECT COUNT(*) FROM alerts 
          WHERE branch_id = $1 AND created_at > CURRENT_DATE) as today_alerts,
-        (SELECT COUNT(*) FROM analytics_alerts 
+        (SELECT COUNT(*) FROM alerts 
          WHERE branch_id = $1 AND severity IN ('CRITICAL', 'HIGH') AND created_at > CURRENT_DATE) as critical_alerts
       `,
       [branchId]

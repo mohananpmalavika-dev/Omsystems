@@ -1390,6 +1390,13 @@ export const predictiveAnalyticsApi = {
       method: 'POST',
       body: JSON.stringify({ assetCategory }),
     }),
+  executeAction: (data: { action: string; targetId: string; payload?: Record<string, any> }) =>
+    fetchApi<any>('/v1/maintenance/predictive/action', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getSmartTelemetry: () =>
+    fetchApi<{ data: any[]; count: number }>('/v1/maintenance/predictive/smart-telemetry'),
 };
 
 export const reportsApi = {
