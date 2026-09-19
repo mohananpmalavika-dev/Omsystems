@@ -1,1104 +1,422 @@
 /**
- * Predictive Analytics API Routes
- * ML-based failure prediction, anomaly detection, trend forecasting, and live telemetry control
+ * Production predictive analytics routes.
+ *
+ * Values come from tenant-scoped persisted predictions, alerts, inventory, or
+ * operational telemetry. Missing evidence remains unavailable.
  */
-
-import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { ControlPlaneStore } from '../control-plane-store.js';
-import { initPredictiveAnalytics } from '../maintenance/predictive-analytics.js';
+import type { Camera, ResourceNode, User } from '../domain/models.js';
+import type { OperationalTelemetryEnvelope, TelemetryValue } from '../operational-health/types.js';
+import { PredictionService } from '../services/predictive-health/prediction.service.js';
+import type { BranchRiskPrediction } from '../services/predictive-health/types.js';
 
-// ============================================================================
-// Types
-// ============================================================================
+type JsonRecord = Record<string, unknown>;
+type Database = { query: (sql: string, values?: unknown[]) => Promise<{ rows: any[] }> };
 
-export interface LiveCameraRisk {
-  id: string;
-  name: string;
-  zone: string;
-  branch: string;
-  failureProbability: number;
-  timeToFailureHours: number;
-  healthScore: number;
-  mtbfRemainingHours: number;
-  primaryFactor: string;
-  factorImpact: number;
-  recommendedAction: string;
-  dispatched: boolean;
-  ticketId?: string;
-  heaterActive?: boolean;
-}
+const actionSchema = z.object({
+  action: z.enum(['dispatch_work_order', 'toggle_heater', 'cold_archive', 'toggle_dynamic_bitrate', 'cycle_poe', 'toggle_edge_fallback', 'toggle_patrol', 'toggle_geofence']),
+  targetId: z.string().min(1),
+  payload: z.record(z.unknown()).optional(),
+});
 
-export interface LiveStorageVolume {
-  id: string;
-  name: string;
-  branch: string;
-  tier: string;
-  totalTb: number;
-  usedTb: number;
-  dailyIngestGb: number;
-  daysRemaining: number;
-  trend: 'accelerated' | 'linear' | 'stable';
-  archived: boolean;
-  dynamicBitrate: boolean;
-}
-
-export interface LiveNetworkDevice {
-  id: string;
-  model: string;
-  branch: string;
-  role: string;
-  linkHealth: number;
-  packetLossPct: number;
-  crcErrorsPerHour: number;
-  poeWattageUsed: number;
-  poeWattageMax: number;
-  tempC: number;
-  failurePredictionHours: number;
-  portStatus: 'NORMAL' | 'OVERLOAD' | 'DEGRADING';
-  cycled: boolean;
-}
-
-export interface LiveRecordingStream {
-  id: string;
-  channelName: string;
-  nvrId: string;
-  branch: string;
-  writeQueueDepthMs: number;
-  targetFps: number;
-  measuredFps: number;
-  frameDropRiskPct: number;
-  gapRiskPct: number;
-  gapWindowHours: number;
-  edgeFallbackEngaged: boolean;
-}
-
-export interface LiveBranchVulnerability {
-  id: string;
-  name: string;
-  code: string;
-  vulnerabilityScore: number;
-  blindSpotsCount: number;
-  afterHoursLoiteringWeekly: number;
-  perimeterBreachRisk: number;
-  trend: 'increasing' | 'stable' | 'decreasing';
-  patrolActive: boolean;
-}
-
-export interface LiveIncidentForecast {
-  id: string;
-  category: string;
-  baselineRatePct: number;
-  peakRiskPct: number;
-  peakWindow: string;
-  peakDay: string;
-  hazardLevel: 'HIGH' | 'MODERATE' | 'ELEVATED';
-  primaryIndicator: string;
-  countermeasure: string;
-  geofenceArmed: boolean;
-}
-
-export interface LiveSmartTelemetry {
-  bay: string;
-  model: string;
-  serial: string;
-  capacity: string;
-  tempC: number;
-  reallocatedSectors: number;
-  pendingSectors: number;
-  hoursPowered: number;
-  estimatedCrashHours: number;
-  riskScore: number;
-  status: 'CRITICAL' | 'WARNING' | 'HEALTHY';
-  nvrId: string;
-  branch: string;
-}
-
-// In-memory persistent telemetry state across restarts / sessions
-class PredictiveTelemetryRegistry {
-  private cameras: Map<string, LiveCameraRisk> = new Map();
-  private volumes: Map<string, LiveStorageVolume> = new Map();
-  private switches: Map<string, LiveNetworkDevice> = new Map();
-  private recordings: Map<string, LiveRecordingStream> = new Map();
-  private branches: Map<string, LiveBranchVulnerability> = new Map();
-  private incidents: Map<string, LiveIncidentForecast> = new Map();
-  private smartDrives: Map<string, LiveSmartTelemetry> = new Map();
-  private modelMetrics = {
-    aucScore: 0.948,
-    accuracy: 97.2,
-    lastTrained: 'Today, 04:30 IST',
-    totalSamples: 148200,
-  };
-
-  constructor() {
-    this.seedDefaultTelemetry();
-  }
-
-  private seedDefaultTelemetry() {
-    // 1. Live Cameras
-    const initialCams: LiveCameraRisk[] = [
-      {
-        id: 'CAM-EXT-014',
-        name: 'North Gate Perimeter PTZ',
-        zone: 'Perimeter Outer Wall',
-        branch: 'Kochi Marine Drive Flagship',
-        failureProbability: 91,
-        timeToFailureHours: 28,
-        healthScore: 42,
-        mtbfRemainingHours: 110,
-        primaryFactor: 'PTZ gear resistance & optical sensor SNR degradation (-14dB)',
-        factorImpact: 88,
-        recommendedAction: 'Dispatch field technician for gear lubrication & defog heating',
-        dispatched: false,
-        heaterActive: false,
-      },
-      {
-        id: 'CAM-VAULT-003',
-        name: 'Cash Vault Corridor A',
-        zone: 'High-Security Vault',
-        branch: 'Thrissur Swaraj Round Branch',
-        failureProbability: 74,
-        timeToFailureHours: 49,
-        healthScore: 56,
-        mtbfRemainingHours: 230,
-        primaryFactor: 'RTSP stream jitter & packet drop burst (>14% retransmissions)',
-        factorImpact: 76,
-        recommendedAction: 'Re-negotiate RTSP socket buffer and switch to redundant sub-stream',
-        dispatched: false,
-        heaterActive: false,
-      },
-      {
-        id: 'CAM-ATM-002',
-        name: 'Vestibule Cash Dispenser Pin-Cam',
-        zone: '24/7 ATM Vestibule',
-        branch: 'Calicut Central Branch',
-        failureProbability: 62,
-        timeToFailureHours: 96,
-        healthScore: 68,
-        mtbfRemainingHours: 480,
-        primaryFactor: 'IR cut-filter solenoid actuator sticking on day/night switch',
-        factorImpact: 60,
-        recommendedAction: 'Schedule filter actuator cleaning during next branch off-hours',
-        dispatched: false,
-        heaterActive: false,
-      },
-      {
-        id: 'CAM-ENT-001',
-        name: 'Main Branch Ingress Turnstile',
-        zone: 'Customer Lobby',
-        branch: 'Kochi Marine Drive Flagship',
-        failureProbability: 24,
-        timeToFailureHours: 420,
-        healthScore: 89,
-        mtbfRemainingHours: 1250,
-        primaryFactor: 'Normal sensor degradation within acceptable MTBF threshold',
-        factorImpact: 22,
-        recommendedAction: 'Routine quarterly lens calibration',
-        dispatched: false,
-        heaterActive: false,
-      },
-    ];
-    for (const c of initialCams) this.cameras.set(c.id, c);
-
-    // 2. Live Storage Volumes
-    const initialVols: LiveStorageVolume[] = [
-      {
-        id: 'NVR-VOL-01',
-        name: 'NVR-KOCHI-01 (RAID 6)',
-        branch: 'Kochi Marine Drive Flagship',
-        tier: 'Tier-1 SAS NVMe Cache',
-        totalTb: 64,
-        usedTb: 58.6,
-        dailyIngestGb: 440,
-        daysRemaining: 11,
-        trend: 'accelerated',
-        archived: false,
-        dynamicBitrate: false,
-      },
-      {
-        id: 'SAN-CENTRAL-01',
-        name: 'SAN-CENTRAL-VAULT (ZFS)',
-        branch: 'Central Operations Center',
-        tier: 'Enterprise ZFS Storage Pool',
-        totalTb: 240,
-        usedTb: 182.4,
-        dailyIngestGb: 1250,
-        daysRemaining: 44,
-        trend: 'linear',
-        archived: false,
-        dynamicBitrate: false,
-      },
-      {
-        id: 'NVR-VOL-02',
-        name: 'NVR-THRISSUR-02 (RAID 5)',
-        branch: 'Thrissur Swaraj Round Branch',
-        tier: 'Tier-1 Surveillance HDD Array',
-        totalTb: 32,
-        usedTb: 21.1,
-        dailyIngestGb: 180,
-        daysRemaining: 58,
-        trend: 'stable',
-        archived: false,
-        dynamicBitrate: false,
-      },
-    ];
-    for (const v of initialVols) this.volumes.set(v.id, v);
-
-    // 3. Live Switches
-    const initialSwitches: LiveNetworkDevice[] = [
-      {
-        id: 'SW-POE-CISCO-04',
-        model: 'Cisco Catalyst 9300 48P',
-        branch: 'Kochi Marine Drive Flagship',
-        role: 'Perimeter & Outer Vault PoE+',
-        linkHealth: 64,
-        packetLossPct: 4.8,
-        crcErrorsPerHour: 4820,
-        poeWattageUsed: 395,
-        poeWattageMax: 450,
-        tempC: 58,
-        failurePredictionHours: 34,
-        portStatus: 'OVERLOAD',
-        cycled: false,
-      },
-      {
-        id: 'SW-CORE-ARUBA-01',
-        model: 'Aruba CX 6300M 24SFP+',
-        branch: 'Central Operations Center',
-        role: 'Core Aggregation & Fiber Spine',
-        linkHealth: 98,
-        packetLossPct: 0.01,
-        crcErrorsPerHour: 12,
-        poeWattageUsed: 0,
-        poeWattageMax: 0,
-        tempC: 38,
-        failurePredictionHours: 9999,
-        portStatus: 'NORMAL',
-        cycled: false,
-      },
-      {
-        id: 'SW-EDGE-UBIQ-02',
-        model: 'UniFi Pro Max 24 PoE',
-        branch: 'Calicut Central Branch',
-        role: 'Lobby & Teller Cash Counters',
-        linkHealth: 82,
-        packetLossPct: 0.8,
-        crcErrorsPerHour: 140,
-        poeWattageUsed: 190,
-        poeWattageMax: 400,
-        tempC: 44,
-        failurePredictionHours: 320,
-        portStatus: 'DEGRADING',
-        cycled: false,
-      },
-    ];
-    for (const s of initialSwitches) this.switches.set(s.id, s);
-
-    // 4. Live Recording Streams
-    const initialRecordings: LiveRecordingStream[] = [
-      {
-        id: 'REC-CH-04',
-        channelName: 'CH-04 Vault Door Heavy Ingress',
-        nvrId: 'NVR-KOCHI-01',
-        branch: 'Kochi Marine Drive Flagship',
-        writeQueueDepthMs: 94,
-        targetFps: 30,
-        measuredFps: 18,
-        frameDropRiskPct: 88,
-        gapRiskPct: 94,
-        gapWindowHours: 3.5,
-        edgeFallbackEngaged: false,
-      },
-      {
-        id: 'REC-CH-12',
-        channelName: 'CH-12 Teller Cash Dispenser',
-        nvrId: 'NVR-THRISSUR-02',
-        branch: 'Thrissur Swaraj Round Branch',
-        writeQueueDepthMs: 38,
-        targetFps: 25,
-        measuredFps: 23,
-        frameDropRiskPct: 24,
-        gapRiskPct: 28,
-        gapWindowHours: 42,
-        edgeFallbackEngaged: false,
-      },
-      {
-        id: 'REC-CH-01',
-        channelName: 'CH-01 Main Ingress Barrier Gate',
-        nvrId: 'NVR-KOCHI-01',
-        branch: 'Kochi Marine Drive Flagship',
-        writeQueueDepthMs: 22,
-        targetFps: 30,
-        measuredFps: 29.8,
-        frameDropRiskPct: 4,
-        gapRiskPct: 6,
-        gapWindowHours: 720,
-        edgeFallbackEngaged: false,
-      },
-    ];
-    for (const r of initialRecordings) this.recordings.set(r.id, r);
-
-    // 5. Live Branch Vulnerabilities
-    const initialBranches: LiveBranchVulnerability[] = [
-      {
-        id: 'BR-THRISSUR-01',
-        name: 'Thrissur Swaraj Round Branch',
-        code: 'KL-TSR-01',
-        vulnerabilityScore: 78,
-        blindSpotsCount: 2,
-        afterHoursLoiteringWeekly: 4,
-        perimeterBreachRisk: 82,
-        trend: 'increasing',
-        patrolActive: false,
-      },
-      {
-        id: 'BR-KOCHI-01',
-        name: 'Kochi Marine Drive Flagship',
-        code: 'KL-KOC-01',
-        vulnerabilityScore: 46,
-        blindSpotsCount: 1,
-        afterHoursLoiteringWeekly: 1,
-        perimeterBreachRisk: 38,
-        trend: 'stable',
-        patrolActive: true,
-      },
-      {
-        id: 'BR-CALICUT-01',
-        name: 'Calicut Central Branch',
-        code: 'KL-CLT-01',
-        vulnerabilityScore: 28,
-        blindSpotsCount: 0,
-        afterHoursLoiteringWeekly: 0,
-        perimeterBreachRisk: 22,
-        trend: 'decreasing',
-        patrolActive: false,
-      },
-    ];
-    for (const b of initialBranches) this.branches.set(b.id, b);
-
-    // 6. Live Incident Forecasts
-    const initialIncidents: LiveIncidentForecast[] = [
-      {
-        id: 'INC-CIT-01',
-        category: 'Cash-in-Transit (CIT) Ingress Ambush',
-        baselineRatePct: 4.2,
-        peakRiskPct: 18.8,
-        peakWindow: '18:00 - 20:30 IST',
-        peakDay: 'Friday (Closing Cash Sweep)',
-        hazardLevel: 'HIGH',
-        primaryIndicator: 'Historical congestion spikes, high transit volume, after-dark visibility drop',
-        countermeasure: 'Enforce multi-gunman perimeter cordon and activate rapid-response AI tracking',
-        geofenceArmed: false,
-      },
-      {
-        id: 'INC-ATM-02',
-        category: 'ATM Vestibule Skimming & Loitering',
-        baselineRatePct: 12.0,
-        peakRiskPct: 29.4,
-        peakWindow: '23:30 - 04:00 IST',
-        peakDay: 'Saturday Night / Sunday Early Morning',
-        hazardLevel: 'HIGH',
-        primaryIndicator: 'Unattended vestibule dwell times > 180s, facial occlusion patterns',
-        countermeasure: 'Enable two-way audio strobe deterrent and lock interior double-doors',
-        geofenceArmed: false,
-      },
-      {
-        id: 'INC-PER-03',
-        category: 'Perimeter Ingress Fence Tampering',
-        baselineRatePct: 6.5,
-        peakRiskPct: 14.2,
-        peakWindow: '01:00 - 03:45 IST',
-        peakDay: 'Sunday Early Hours',
-        hazardLevel: 'MODERATE',
-        primaryIndicator: 'Motion heat clustering at blind spots behind generator room',
-        countermeasure: 'Auto-slew thermal PTZ cameras and trigger virtual boundary warning sirens',
-        geofenceArmed: false,
-      },
-      {
-        id: 'INC-TAIL-04',
-        category: 'Tailgating at Vault Mantrap Door',
-        baselineRatePct: 3.1,
-        peakRiskPct: 8.6,
-        peakWindow: '09:15 - 10:30 IST',
-        peakDay: 'Monday Morning Opening',
-        hazardLevel: 'ELEVATED',
-        primaryIndicator: 'High employee arrival density, simultaneous dual-badge swipes',
-        countermeasure: 'Enforce anti-passback biometric facial confirmation at mantrap vestibule',
-        geofenceArmed: false,
-      },
-    ];
-    for (const inc of initialIncidents) this.incidents.set(inc.id, inc);
-
-    // 7. Live SMART Telemetry for Hard Drives
-    const initialDrives: LiveSmartTelemetry[] = [
-      {
-        bay: 'Bay 3 (RAID 5)',
-        model: 'WD Gold Enterprise 8TB',
-        serial: 'WD-WMC4N0K89211',
-        capacity: '8.0 TB',
-        tempC: 58,
-        reallocatedSectors: 84,
-        pendingSectors: 14,
-        hoursPowered: 42180,
-        estimatedCrashHours: 36,
-        riskScore: 94,
-        status: 'CRITICAL',
-        nvrId: 'NVR-MAIN-VAULT-01',
-        branch: 'Kochi Marine Drive Flagship',
-      },
-      {
-        bay: 'Bay 1 (RAID 1)',
-        model: 'Seagate SkyHawk AI 6TB',
-        serial: 'ST6000VE001-2AA101',
-        capacity: '6.0 TB',
-        tempC: 47,
-        reallocatedSectors: 16,
-        pendingSectors: 3,
-        hoursPowered: 28400,
-        estimatedCrashHours: 118,
-        riskScore: 68,
-        status: 'WARNING',
-        nvrId: 'NVR-TELLER-CASH-02',
-        branch: 'Thrissur Swaraj Round Branch',
-      },
-      {
-        bay: 'Bay 2 (RAID 5)',
-        model: 'WD Purple Pro 10TB',
-        serial: 'WD-WMC4N0P19002',
-        capacity: '10.0 TB',
-        tempC: 38,
-        reallocatedSectors: 0,
-        pendingSectors: 0,
-        hoursPowered: 12300,
-        estimatedCrashHours: 9999,
-        riskScore: 8,
-        status: 'HEALTHY',
-        nvrId: 'NVR-SURVEILLANCE-PERIMETER',
-        branch: 'Calicut Central Branch',
-      },
-    ];
-    for (const d of initialDrives) this.smartDrives.set(d.serial, d);
-  }
-
-  // Get all data
-  getAll() {
-    return {
-      cameras: Array.from(this.cameras.values()),
-      volumes: Array.from(this.volumes.values()),
-      switches: Array.from(this.switches.values()),
-      recordings: Array.from(this.recordings.values()),
-      branches: Array.from(this.branches.values()),
-      incidents: Array.from(this.incidents.values()),
-      criticalDrives: Array.from(this.smartDrives.values()),
-      modelMetrics: { ...this.modelMetrics },
-    };
-  }
-
-  // Mutations
-  dispatchCamera(id: string, ticketId: string) {
-    const cam = this.cameras.get(id);
-    if (cam) {
-      cam.dispatched = true;
-      cam.ticketId = ticketId;
-      return cam;
-    }
+function currentUser(request: FastifyRequest, reply: FastifyReply): User | null {
+  if (!request.currentUser?.tenantId) {
+    void reply.code(401).send({ error: 'unauthorized', message: 'Authentication is required.' });
     return null;
   }
-
-  toggleHeater(id: string) {
-    const cam = this.cameras.get(id);
-    if (cam) {
-      cam.heaterActive = !cam.heaterActive;
-      cam.failureProbability = cam.heaterActive ? Math.max(20, cam.failureProbability - 35) : cam.failureProbability + 35;
-      return cam;
-    }
-    return null;
-  }
-
-  archiveVolume(id: string) {
-    const vol = this.volumes.get(id);
-    if (vol) {
-      const freedTb = 14.2;
-      vol.archived = true;
-      vol.usedTb = Math.max(10, parseFloat((vol.usedTb - freedTb).toFixed(1)));
-      vol.daysRemaining = Math.round((vol.totalTb - vol.usedTb) / (vol.dailyIngestGb / 1024));
-      vol.trend = 'stable';
-      return vol;
-    }
-    return null;
-  }
-
-  toggleDynamicBitrate(id: string) {
-    const vol = this.volumes.get(id);
-    if (vol) {
-      vol.dynamicBitrate = !vol.dynamicBitrate;
-      const factor = vol.dynamicBitrate ? 0.72 : 1 / 0.72;
-      vol.dailyIngestGb = Math.round(vol.dailyIngestGb * factor);
-      vol.daysRemaining = Math.round((vol.totalTb - vol.usedTb) / (vol.dailyIngestGb / 1024));
-      return vol;
-    }
-    return null;
-  }
-
-  cyclePoePort(id: string) {
-    const sw = this.switches.get(id);
-    if (sw) {
-      sw.cycled = true;
-      sw.crcErrorsPerHour = 16;
-      sw.packetLossPct = 0.02;
-      sw.linkHealth = 98;
-      sw.portStatus = 'NORMAL';
-      sw.failurePredictionHours = 9999;
-      return sw;
-    }
-    return null;
-  }
-
-  toggleEdgeFallback(id: string) {
-    const rec = this.recordings.get(id);
-    if (rec) {
-      rec.edgeFallbackEngaged = !rec.edgeFallbackEngaged;
-      rec.writeQueueDepthMs = rec.edgeFallbackEngaged ? 14 : 94;
-      rec.gapRiskPct = rec.edgeFallbackEngaged ? 4 : 94;
-      rec.measuredFps = rec.edgeFallbackEngaged ? rec.targetFps : 18;
-      return rec;
-    }
-    return null;
-  }
-
-  togglePatrol(id: string) {
-    const br = this.branches.get(id);
-    if (br) {
-      br.patrolActive = !br.patrolActive;
-      br.vulnerabilityScore = br.patrolActive ? Math.max(15, br.vulnerabilityScore - 30) : br.vulnerabilityScore + 30;
-      return br;
-    }
-    return null;
-  }
-
-  toggleGeofence(id: string) {
-    const inc = this.incidents.get(id);
-    if (inc) {
-      inc.geofenceArmed = !inc.geofenceArmed;
-      inc.peakRiskPct = inc.geofenceArmed ? Math.max(5, inc.peakRiskPct - 15) : inc.peakRiskPct + 15;
-      return inc;
-    }
-    return null;
-  }
-
-  updateModelTraining(accuracy: number, aucScore: number) {
-    this.modelMetrics = {
-      aucScore,
-      accuracy,
-      lastTrained: 'Just Now',
-      totalSamples: this.modelMetrics.totalSamples + 6450,
-    };
-    return this.modelMetrics;
-  }
+  return request.currentUser;
 }
 
-const telemetryRegistry = new PredictiveTelemetryRegistry();
+function database(store: ControlPlaneStore): Database | undefined {
+  const candidate = store as unknown as { db?: Database; query?: Database['query'] };
+  if (candidate.db?.query) return candidate.db;
+  if (typeof candidate.query === 'function') return { query: candidate.query.bind(candidate) };
+  return undefined;
+}
 
-// ============================================================================
-// Route Registration
-// ============================================================================
+function record(value: unknown): JsonRecord {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
 
-export async function registerPredictiveAnalyticsRoutes(
-  app: FastifyInstance,
-  store: ControlPlaneStore
-) {
-  const predictiveService = initPredictiveAnalytics(store, app.log);
+function metric(metrics: Record<string, TelemetryValue>, ...names: string[]): TelemetryValue | undefined {
+  for (const name of names) if (metrics[name] !== undefined && metrics[name] !== null) return metrics[name];
+  return undefined;
+}
 
-  // ========================================================================
-  // Dashboard Summary & Live Telemetry
-  // ========================================================================
+function finite(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
 
-  /**
-   * GET /v1/maintenance/predictive/dashboard
-   * Main endpoint returning complete live datasets and computed KPIs
-   */
-  app.get('/v1/maintenance/predictive/dashboard', async (request, reply) => {
-    const tenantId = request.currentUser?.tenantId || 'tenant-default';
+function finiteMetric(metrics: Record<string, TelemetryValue>, ...names: string[]): number | null {
+  return finite(metric(metrics, ...names));
+}
 
-    // Fetch store records in parallel
-    const [alertsResult, assetsResult, workOrdersResult] = await Promise.allSettled([
-      store.listPredictiveAlerts(tenantId),
-      store.listMaintenanceAssets(tenantId),
-      store.listWorkOrders(tenantId),
-    ]);
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
 
-    const liveData = telemetryRegistry.getAll();
-    const alerts = alertsResult.status === 'fulfilled' ? alertsResult.value : [];
-    const assets = assetsResult.status === 'fulfilled' ? assetsResult.value : [];
-    const workOrders = workOrdersResult.status === 'fulfilled' ? workOrdersResult.value : [];
+function stringMetric(metrics: Record<string, TelemetryValue>, ...names: string[]): string | null {
+  return stringValue(metric(metrics, ...names));
+}
 
-    // Calculate live KPIs
-    const criticalFailures = liveData.cameras.filter((c) => c.failureProbability >= 70).length;
-    const earliestVolume = [...liveData.volumes].sort((a, b) => a.daysRemaining - b.daysRemaining)[0];
-    const avgNetworkHealth = Math.round(
-      liveData.switches.reduce((acc, s) => acc + s.linkHealth, 0) / (liveData.switches.length || 1)
+function booleanMetric(metrics: Record<string, TelemetryValue>, ...names: string[]): boolean | null {
+  const value = metric(metrics, ...names);
+  return typeof value === 'boolean' ? value : null;
+}
+
+function clamp(value: number, min = 0, max = 100) { return Math.min(max, Math.max(min, value)); }
+function round(value: number, digits = 1) { const factor = 10 ** digits; return Math.round(value * factor) / factor; }
+function percentage(value: unknown): number | null {
+  const number = finite(value);
+  return number === null ? null : clamp(number <= 1 ? number * 100 : number);
+}
+function branchName(branches: Map<string, ResourceNode>, branchId?: string | null) {
+  return branchId ? branches.get(branchId)?.name ?? branchId : 'Unassigned branch';
+}
+function closestPrediction(predictions: BranchRiskPrediction[], requested: number) {
+  return [...predictions].sort((a, b) => Math.abs(a.horizonHours - requested) - Math.abs(b.horizonHours - requested))[0];
+}
+function alertDetails(alert: JsonRecord) { return record(alert.details); }
+function alertScore(alert: JsonRecord) { return percentage(alert.score ?? alert.probability ?? alertDetails(alert).probability); }
+function isOpenWorkOrder(order: { status: string }) { return !['resolved', 'closed'].includes(order.status); }
+function sourceFreshness(telemetry: OperationalTelemetryEnvelope[]) {
+  const values = telemetry.map((item) => Date.parse(item.observedAt)).filter(Number.isFinite);
+  return values.length ? new Date(Math.max(...values)).toISOString() : null;
+}
+
+async function loadModelMetrics(store: ControlPlaneStore, tenantId: string) {
+  const db = database(store);
+  if (!db) return null;
+  try {
+    const result = await db.query(
+      `SELECT model_name, model_version, model_type, accuracy, deployed_at, updated_at
+       FROM prediction_models
+       WHERE is_active=true AND (tenant_id=$1 OR tenant_id IS NULL)
+       ORDER BY CASE WHEN tenant_id=$1 THEN 0 ELSE 1 END, COALESCE(deployed_at, updated_at) DESC LIMIT 1`,
+      [tenantId],
     );
-    const overloadSwitches = liveData.switches.filter((s) => s.portStatus === 'OVERLOAD').length;
-    const highestRiskBranch = [...liveData.branches].sort((a, b) => b.vulnerabilityScore - a.vulnerabilityScore)[0];
-    const topIncident = [...liveData.incidents].sort((a, b) => b.peakRiskPct - a.peakRiskPct)[0];
-
-    const kpis = {
-      predictedFailuresCount: criticalFailures,
-      fleetHealthScore: 92.4,
-      healthScoreDelta: '+1.8% vs last 7 days',
-      earliestDiskExhaustDays: earliestVolume ? earliestVolume.daysRemaining : 11,
-      earliestDiskExhaustAsset: earliestVolume ? earliestVolume.name : 'NVR-KOCHI-01',
-      earliestDiskUsagePct: earliestVolume ? Math.round((earliestVolume.usedTb / earliestVolume.totalTb) * 100) : 91,
-      networkHealthPct: 99.1,
-      networkWarningCount: overloadSwitches,
-      highestRiskBranch: highestRiskBranch ? highestRiskBranch.name.split(' ')[0] : 'Swaraj Round',
-      highestRiskBranchScore: highestRiskBranch ? highestRiskBranch.vulnerabilityScore : 78,
-      peakIncidentWindow: topIncident ? topIncident.peakWindow : 'Friday 18:30',
-      peakIncidentCategory: topIncident ? topIncident.category : 'CIT Ambush Forecast',
-    };
-
+    const row = result.rows[0];
+    if (!row) return null;
+    const accuracy = finite(row.accuracy);
     return {
-      kpis,
-      cameras: liveData.cameras,
-      volumes: liveData.volumes,
-      switches: liveData.switches,
-      recordings: liveData.recordings,
-      branches: liveData.branches,
-      incidents: liveData.incidents,
-      criticalDrives: liveData.criticalDrives,
-      modelMetrics: liveData.modelMetrics,
-      highRiskAssets: {
-        count: criticalFailures + alerts.filter((a: any) => a.score > 0.7).length,
-        critical: criticalFailures,
-        high: alerts.filter((a: any) => a.score > 0.7).length,
-      },
-      activeAnomalies: {
-        count: 12,
-        high: 3,
-        medium: 6,
-        low: 3,
-      },
-      capacityAlerts: {
-        storageNearFull: liveData.volumes.filter((v) => v.daysRemaining <= 15).length,
-        daysUntilFull: earliestVolume?.daysRemaining || 11,
-      },
-      healthScores: {
-        average: 92.4,
-        below70: 3,
-        below50: 1,
-      },
-      predictions: {
-        failuresNext30Days: criticalFailures,
-        failuresNext90Days: liveData.cameras.length,
-      },
-      recommendations: [
-        'Schedule immediate preventive maintenance for North Gate Perimeter PTZ (91% failure risk)',
-        'Storage pool NVR-KOCHI-01 will reach capacity within 11 days (Auto-tiering recommended)',
-        'Switch SW-POE-CISCO-04 exhibiting PoE overload and CRC errors (Power cycle recommended)',
-        'Activate AI Virtual Guard Sweeping on Thrissur Swaraj Round branch',
-      ],
-      totalAssetsMonitored: assets.length || (liveData.cameras.length + liveData.switches.length + liveData.volumes.length),
-      openWorkOrdersCount: workOrders.filter((w: any) => w.status !== 'closed').length,
+      name: row.model_name,
+      version: row.model_version,
+      type: row.model_type,
+      accuracy: accuracy === null ? null : round(accuracy * 100, 2),
+      aucScore: null,
+      totalSamples: null,
+      lastTrained: row.deployed_at ?? row.updated_at ?? null,
     };
+  } catch { return null; }
+}
+
+async function loadOutcomeCounts(store: ControlPlaneStore, tenantId: string) {
+  const db = database(store);
+  if (!db) return { outcomeCount: null, correctCount: null };
+  try {
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS outcome_count, COUNT(*) FILTER (WHERE outcome='correct')::int AS correct_count
+       FROM prediction_outcomes po JOIN failure_predictions fp ON fp.id=po.prediction_id WHERE fp.tenant_id=$1`,
+      [tenantId],
+    );
+    return { outcomeCount: finite(result.rows[0]?.outcome_count), correctCount: finite(result.rows[0]?.correct_count) };
+  } catch { return { outcomeCount: null, correctCount: null }; }
+}
+
+async function livePredictions(service: PredictionService, branches: ResourceNode[], tenantId: string) {
+  const results = await Promise.allSettled(branches.map((branch) => service.getLatestPredictions(branch.id, tenantId)));
+  const values = new Map<string, BranchRiskPrediction[]>();
+  results.forEach((result, index) => values.set(branches[index]!.id, result.status === 'fulfilled' ? result.value : []));
+  return values;
+}
+
+function mapCameraRisks(
+  cameras: Camera[], telemetry: OperationalTelemetryEnvelope[], alerts: JsonRecord[],
+  branches: Map<string, ResourceNode>, workOrders: Array<{ id: string; workOrderNumber: string; assetId?: string; status: string }>,
+) {
+  const cameraById = new Map(cameras.map((camera) => [camera.id, camera]));
+  const telemetryById = new Map(telemetry.filter((item) => item.deviceType === 'camera').map((item) => [item.deviceId, item]));
+  return alerts.flatMap((alert) => {
+    const details = alertDetails(alert);
+    const assetId = stringValue(alert.assetId ?? details.assetId ?? details.cameraId);
+    const camera = assetId ? cameraById.get(assetId) : undefined;
+    const kind = String(alert.type ?? alert.alertType ?? details.type ?? '').toLowerCase();
+    const probability = alertScore(alert);
+    if (!camera || probability === null || (!kind.includes('camera') && !kind.includes('failure'))) return [];
+    const observed = telemetryById.get(camera.id);
+    const health = percentage(details.healthScore ?? observed?.metrics.healthScore);
+    const failureAt = stringValue(alert.predictedFailureDate ?? details.predictedFailureDate);
+    const timeToFailureHours = failureAt ? Math.max(0, round((Date.parse(failureAt) - Date.now()) / 3_600_000, 0)) : finite(details.timeToFailureHours);
+    const order = workOrders.find((item) => item.assetId === camera.id && isOpenWorkOrder(item));
+    return [{
+      id: camera.id, name: camera.name, zone: camera.locationType ?? stringValue(details.zone) ?? 'Unspecified',
+      branch: branchName(branches, camera.branchId), failureProbability: round(probability, 1), timeToFailureHours,
+      healthScore: health === null ? null : round(health, 1), mtbfRemainingHours: finite(details.mtbfRemainingHours),
+      primaryFactor: stringValue(details.primaryFactor ?? details.reason ?? alert.type ?? alert.alertType) ?? 'Predictive alert',
+      factorImpact: percentage(details.factorImpact ?? alert.score),
+      recommendedAction: stringValue(details.recommendedAction ?? details.remediation) ?? 'Review the prediction evidence and inspect the asset.',
+      dispatched: Boolean(order), ticketId: order?.workOrderNumber,
+      observedAt: observed?.observedAt ?? stringValue(alert.detectedAt ?? alert.createdAt), dataQuality: observed?.quality ?? null,
+    }];
   });
+}
 
-  /**
-   * POST /v1/maintenance/predictive/action
-   * Interactive mitigations (Dispatch SLA, Heater trigger, Cold archive, PoE cycle, etc.)
-   */
-  app.post('/v1/maintenance/predictive/action', async (request, reply) => {
-    const body = z.object({
-      action: z.enum([
-        'dispatch_work_order',
-        'toggle_heater',
-        'cold_archive',
-        'toggle_dynamic_bitrate',
-        'cycle_poe',
-        'toggle_edge_fallback',
-        'toggle_patrol',
-        'toggle_geofence',
-      ]),
-      targetId: z.string(),
-      payload: z.record(z.any()).optional(),
-    }).parse(request.body);
-
-    const tenantId = request.currentUser?.tenantId || 'tenant-default';
-    const userId = request.currentUser?.id || 'system';
-
-    switch (body.action) {
-      case 'dispatch_work_order': {
-        const ticketId = `WO-PRD-${Math.floor(1000 + Math.random() * 9000)}`;
-        telemetryRegistry.dispatchCamera(body.targetId, ticketId);
-
-        // Attempt creating real work order in store if supported
-        try {
-          await store.createWorkOrder({
-            tenantId,
-            title: `Preventive Maintenance for ${body.targetId}`,
-            description: `Automated predictive maintenance dispatch for high failure probability asset ${body.targetId}`,
-            assetId: body.targetId,
-            assetCategory: 'camera',
-            priority: 'urgent',
-            status: 'open',
-            assignedTo: 'OEM-FIELD-TECH',
-            scheduledDate: new Date().toISOString(),
-            estimatedHours: 4,
-            checklist: [
-              { item: 'Inspect and clean optical sensor & lens', completed: false },
-              { item: 'Check PoE voltage & power budget', completed: false },
-              { item: 'Validate RTSP sub-stream latency', completed: false },
-            ],
-            notes: 'Dispatch triggered from AI Prediction Dashboard',
-            createdBy: userId,
-          } as any);
-        } catch {
-          // Fallback handled safely
-        }
-
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.predictive_workorder_dispatched',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { ticketId, action: body.action },
-        });
-
-        return {
-          success: true,
-          ticketId,
-          dispatchedAt: new Date().toISOString(),
-          slaHours: 4,
-          message: `Work order ${ticketId} dispatched to OEM Field Team (4h SLA active)`,
-        };
-      }
-
-      case 'toggle_heater': {
-        const updated = telemetryRegistry.toggleHeater(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.ptz_heater_toggled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { heaterActive: updated?.heaterActive },
-        });
-        return {
-          success: true,
-          heaterActive: updated?.heaterActive,
-          targetId: body.targetId,
-          message: updated?.heaterActive
-            ? 'Lens heating element activated. Condensation moisture evaporating.'
-            : 'Lens heating element deactivated.',
-        };
-      }
-
-      case 'cold_archive': {
-        const updated = telemetryRegistry.archiveVolume(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.storage_cold_archive',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { freedTb: 14.2, targetId: body.targetId },
-        });
-        return {
-          success: true,
-          archived: true,
-          freedTb: 14.2,
-          usedTb: updated?.usedTb,
-          daysRemaining: updated?.daysRemaining,
-          targetId: body.targetId,
-          message: 'Tier-2 cold archive executed: 14.2 TB migrated to encrypted cold vault.',
-        };
-      }
-
-      case 'toggle_dynamic_bitrate': {
-        const updated = telemetryRegistry.toggleDynamicBitrate(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.dynamic_bitrate_toggled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { dynamicBitrate: updated?.dynamicBitrate },
-        });
-        return {
-          success: true,
-          dynamicBitrate: updated?.dynamicBitrate,
-          dailyIngestGb: updated?.dailyIngestGb,
-          daysRemaining: updated?.daysRemaining,
-          targetId: body.targetId,
-          message: updated?.dynamicBitrate
-            ? 'AI dynamic H.265 bitrate adaptation enabled (-28% Ingest Rate).'
-            : 'Standard H.265 profile restored.',
-        };
-      }
-
-      case 'cycle_poe': {
-        const updated = telemetryRegistry.cyclePoePort(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.poe_port_power_cycled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { switchId: body.targetId },
-        });
-        return {
-          success: true,
-          cycled: true,
-          targetId: body.targetId,
-          message: `PoE power cycle executed on ${body.targetId}. Port stabilized and CRC reset.`,
-        };
-      }
-
-      case 'toggle_edge_fallback': {
-        const updated = telemetryRegistry.toggleEdgeFallback(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.edge_fallback_toggled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { edgeFallbackEngaged: updated?.edgeFallbackEngaged },
-        });
-        return {
-          success: true,
-          edgeFallbackEngaged: updated?.edgeFallbackEngaged,
-          targetId: body.targetId,
-          message: updated?.edgeFallbackEngaged
-            ? 'Edge Agent SD-card zero-loss ring buffer engaged.'
-            : 'Edge buffer returned to normal mode.',
-        };
-      }
-
-      case 'toggle_patrol': {
-        const updated = telemetryRegistry.togglePatrol(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.ai_patrol_toggled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { patrolActive: updated?.patrolActive },
-        });
-        return {
-          success: true,
-          patrolActive: updated?.patrolActive,
-          vulnerabilityScore: updated?.vulnerabilityScore,
-          targetId: body.targetId,
-          message: updated?.patrolActive
-            ? 'Autonomous AI PTZ guard patrol scheduled with 15-minute perimeter sweeping.'
-            : 'AI virtual guard routine paused.',
-        };
-      }
-
-      case 'toggle_geofence': {
-        const updated = telemetryRegistry.toggleGeofence(body.targetId);
-        await store.writeAudit({
-          tenantId,
-          actorUserId: userId,
-          action: 'maintenance.geofence_armed_toggled',
-          resourceNodeId: body.targetId,
-          outcome: 'success',
-          details: { geofenceArmed: updated?.geofenceArmed },
-        });
-        return {
-          success: true,
-          geofenceArmed: updated?.geofenceArmed,
-          peakRiskPct: updated?.peakRiskPct,
-          targetId: body.targetId,
-          message: updated?.geofenceArmed
-            ? 'High-sensitivity AI tripwire geofencing armed for forecast window.'
-            : 'Tripwire geofencing returned to standard threshold.',
-        };
-      }
-    }
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/smart-telemetry
-   * Returns live SMART telemetry for NVR storage drives
-   */
-  app.get('/v1/maintenance/predictive/smart-telemetry', async () => {
+function mapStorage(telemetry: OperationalTelemetryEnvelope[], branches: Map<string, ResourceNode>) {
+  return telemetry.filter((item) => item.deviceType === 'disk').map((item) => {
+    const totalBytes = finiteMetric(item.metrics, 'totalBytes', 'capacityBytes');
+    const usedBytes = finiteMetric(item.metrics, 'usedBytes');
+    const capacityGb = finiteMetric(item.metrics, 'capacityGB');
+    const usedGb = finiteMetric(item.metrics, 'usedGB');
+    const totalTb = totalBytes !== null ? totalBytes / 1e12 : capacityGb !== null ? capacityGb / 1000 : null;
+    const usedTb = usedBytes !== null ? usedBytes / 1e12 : usedGb !== null ? usedGb / 1000 : null;
+    const freeBytes = finiteMetric(item.metrics, 'freeBytes', 'availableBytes');
+    const dailyWriteBytes = finiteMetric(item.metrics, 'dailyWriteRateBytes', 'growthRatePerDay');
+    const daysRemaining = finiteMetric(item.metrics, 'estimatedDaysRemaining', 'daysRemaining')
+      ?? (freeBytes !== null && dailyWriteBytes !== null && dailyWriteBytes > 0 ? freeBytes / dailyWriteBytes : null);
+    const dailyIngestGb = dailyWriteBytes === null ? finiteMetric(item.metrics, 'dailyIngestGb') : dailyWriteBytes / 1e9;
+    const acceleration = finiteMetric(item.metrics, 'growthAcceleration');
     return {
-      data: telemetryRegistry.getAll().criticalDrives,
-      count: telemetryRegistry.getAll().criticalDrives.length,
-    };
-  });
-
-  // ========================================================================
-  // Model Training & Optimization
-  // ========================================================================
-
-  /**
-   * POST /v1/maintenance/predictive/train/failure-model
-   * Train failure prediction model
-   */
-  app.post('/v1/maintenance/predictive/train/failure-model', async (request, reply) => {
-    const body = z.object({
-      historicalDays: z.number().min(30).max(730).default(365),
-    }).parse(request.body || {});
-
-    const tenantId = request.currentUser?.tenantId || 'tenant-default';
-    const userId = request.currentUser?.id || 'system';
-
-    const metrics = telemetryRegistry.updateModelTraining(98.6, 0.965);
-
-    await store.writeAudit({
-      tenantId,
-      actorUserId: userId,
-      action: 'maintenance.ml_model_trained',
-      resourceNodeId: '',
-      outcome: 'success',
-      details: {
-        modelId: 'sentinel-xgboost-v2.4',
-        accuracy: metrics.accuracy,
-        aucScore: metrics.aucScore,
-        historicalDays: body.historicalDays,
-      },
-    });
-
-    return {
-      success: true,
-      modelId: 'sentinel-xgboost-v2.4',
-      accuracy: metrics.accuracy,
-      aucScore: metrics.aucScore,
-      totalSamples: metrics.totalSamples,
-      lastTrained: metrics.lastTrained,
-      message: 'AI Failure & Risk Models retrained successfully with latest edge telemetry.',
-    };
-  });
-
-  /**
-   * POST /v1/maintenance/predictive/update-baseline
-   */
-  app.post('/v1/maintenance/predictive/update-baseline', async (request, reply) => {
-    const body = z.object({
-      assetCategory: z.string().optional(),
-    }).parse(request.body || {});
-
-    const tenantId = request.currentUser?.tenantId || 'tenant-default';
-
-    await predictiveService.updateAnomalyBaseline({
-      tenantId,
-      assetCategory: body.assetCategory,
-    });
-
-    return { success: true, message: 'Anomaly detection baseline updated' };
-  });
-
-  // ========================================================================
-  // Granular Sub-endpoints
-  // ========================================================================
-
-  /**
-   * GET /v1/maintenance/predictive/failure/:assetId
-   */
-  app.get('/v1/maintenance/predictive/failure/:assetId', async (request, reply) => {
-    const params = z.object({
-      assetId: z.string(),
-    }).parse(request.params);
-
-    const prediction = await predictiveService.predictAssetFailure(params.assetId);
-
-    await store.writeAudit({
-      tenantId: request.currentUser?.tenantId || 'tenant-default',
-      actorUserId: request.currentUser?.id || 'system',
-      action: 'maintenance.failure_prediction_viewed',
-      resourceNodeId: params.assetId,
-      outcome: 'success',
-      details: {
-        failureProbability: prediction.failureProbability,
-        riskLevel: prediction.riskLevel,
-      },
-    });
-
-    return prediction;
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/high-risk-assets
-   */
-  app.get('/v1/maintenance/predictive/high-risk-assets', async (request, reply) => {
-    const query = z.object({
-      riskThreshold: z.coerce.number().min(0).max(100).default(70),
-      limit: z.coerce.number().min(1).max(100).default(20),
-    }).parse(request.query);
-
-    const highRiskCameras = telemetryRegistry.getAll().cameras.filter((c) => c.failureProbability >= query.riskThreshold);
-
-    return {
-      predictions: highRiskCameras,
-      count: highRiskCameras.length,
-      threshold: query.riskThreshold,
-    };
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/failure/all
-   */
-  app.get('/v1/maintenance/predictive/failure/all', async (request, reply) => {
-    const allCams = telemetryRegistry.getAll().cameras;
-    return {
-      predictions: allCams,
-      total: allCams.length,
-      summary: {
-        critical: allCams.filter((p) => p.failureProbability >= 70).length,
-        high: allCams.filter((p) => p.failureProbability >= 50 && p.failureProbability < 70).length,
-        medium: allCams.filter((p) => p.failureProbability >= 30 && p.failureProbability < 50).length,
-        low: allCams.filter((p) => p.failureProbability < 30).length,
-      },
-    };
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/anomalies
-   */
-  app.get('/v1/maintenance/predictive/anomalies', async (request, reply) => {
-    const tenantId = request.currentUser?.tenantId || 'tenant-default';
-    const anomalies = await predictiveService.monitorAnomalies(tenantId);
-
-    return {
-      anomalies,
-      total: anomalies.length,
-      byType: {
-        spike: anomalies.filter((a) => a.anomalyType === 'spike').length,
-        drop: anomalies.filter((a) => a.anomalyType === 'drop').length,
-        trendChange: anomalies.filter((a) => a.anomalyType === 'trend-change').length,
-        patternBreak: anomalies.filter((a) => a.anomalyType === 'pattern-break').length,
-      },
-    };
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/forecast/storage-capacity
-   */
-  app.get('/v1/maintenance/predictive/forecast/storage-capacity', async () => {
-    const volumes = telemetryRegistry.getAll().volumes;
-    return {
-      forecasts: volumes,
-      count: volumes.length,
-    };
-  });
-
-  /**
-   * GET /v1/maintenance/predictive/health-score/all
-   */
-  app.get('/v1/maintenance/predictive/health-score/all', async () => {
-    const cams = telemetryRegistry.getAll().cameras;
-    const avg = cams.reduce((sum, c) => sum + c.healthScore, 0) / (cams.length || 1);
-    return {
-      healthScores: cams.map((c) => ({
-        assetId: c.id,
-        assetName: c.name,
-        overallScore: c.healthScore,
-        status: c.failureProbability > 70 ? 'CRITICAL' : 'OPTIMAL',
-      })),
-      total: cams.length,
-      average: Math.round(avg),
+      id: item.deviceId, name: stringMetric(item.metrics, 'name', 'deviceName', 'model') ?? item.deviceId,
+      branch: branchName(branches, item.branchId), tier: stringMetric(item.metrics, 'tier', 'storageTier', 'mediaType') ?? 'Storage',
+      totalTb: totalTb === null ? null : round(totalTb, 2), usedTb: usedTb === null ? null : round(usedTb, 2),
+      dailyIngestGb: dailyIngestGb === null ? null : round(dailyIngestGb, 2), daysRemaining: daysRemaining === null ? null : round(daysRemaining, 1),
+      trend: acceleration !== null && acceleration > 0 ? 'accelerated' : dailyWriteBytes !== null ? 'linear' : 'unknown',
+      smartStatus: stringMetric(item.metrics, 'smartStatus'), observedAt: item.observedAt, dataQuality: item.quality,
     };
   });
 }
+
+function mapNetwork(telemetry: OperationalTelemetryEnvelope[], branches: Map<string, ResourceNode>) {
+  return telemetry.filter((item) => ['network', 'switch', 'router', 'sdwan'].includes(item.deviceType)).map((item) => {
+    const packetLoss = finiteMetric(item.metrics, 'packetLossPercent', 'packetLossPct');
+    const suppliedHealth = percentage(metric(item.metrics, 'healthScore'));
+    const linkHealth = suppliedHealth ?? (packetLoss === null ? null : clamp(100 - packetLoss * 8));
+    return {
+      id: item.deviceId, model: stringMetric(item.metrics, 'model', 'name') ?? item.deviceId,
+      branch: branchName(branches, item.branchId), role: stringMetric(item.metrics, 'role') ?? item.deviceType,
+      linkHealth: linkHealth === null ? null : round(linkHealth, 1), packetLossPct: packetLoss,
+      crcErrorsPerHour: finiteMetric(item.metrics, 'crcErrorsPerHour', 'crcErrorRate'),
+      poeWattageUsed: finiteMetric(item.metrics, 'poePowerUsageWatts', 'poeWattageUsed'),
+      poeWattageMax: finiteMetric(item.metrics, 'poePowerAvailableWatts', 'poeWattageMax'),
+      tempC: finiteMetric(item.metrics, 'temperatureCelsius', 'temperatureC', 'temperature'),
+      failurePredictionHours: finiteMetric(item.metrics, 'failurePredictionHours', 'estimatedFailureHours'),
+      portStatus: stringMetric(item.metrics, 'healthStatus', 'status')?.toUpperCase() ?? 'UNKNOWN',
+      observedAt: item.observedAt, dataQuality: item.quality,
+    };
+  });
+}
+
+function mapRecordings(telemetry: OperationalTelemetryEnvelope[], branches: Map<string, ResourceNode>) {
+  return telemetry.filter((item) => ['recorder-channel', 'archive'].includes(item.deviceType)).map((item) => {
+    const gapSeconds = finiteMetric(item.metrics, 'largestGapSeconds', 'continuityGapSeconds');
+    const gapRisk = percentage(metric(item.metrics, 'gapRiskPercent', 'gapRiskPct')) ?? (gapSeconds === null ? null : clamp(gapSeconds / 3));
+    return {
+      id: item.deviceId, channelName: stringMetric(item.metrics, 'name', 'channelName', 'cameraName') ?? item.deviceId,
+      nvrId: stringMetric(item.metrics, 'recorderId') ?? 'Unknown recorder', branch: branchName(branches, item.branchId),
+      writeQueueDepthMs: finiteMetric(item.metrics, 'writeQueueDepthMs'), targetFps: finiteMetric(item.metrics, 'targetFps', 'configuredFps'),
+      measuredFps: finiteMetric(item.metrics, 'measuredFps', 'fps'), frameDropRiskPct: percentage(metric(item.metrics, 'frameDropRiskPercent', 'frameDropRiskPct')),
+      gapRiskPct: gapRisk === null ? null : round(gapRisk, 1), gapWindowHours: gapSeconds === null ? null : round(gapSeconds / 3600, 2),
+      edgeFallbackEngaged: booleanMetric(item.metrics, 'edgeFallbackEngaged', 'localBufferActive'), observedAt: item.observedAt, dataQuality: item.quality,
+    };
+  });
+}
+
+function mapBranches(branches: ResourceNode[], predictions: Map<string, BranchRiskPrediction[]>, horizonHours: number) {
+  return branches.flatMap((branch) => {
+    const prediction = closestPrediction(predictions.get(branch.id) ?? [], horizonHours);
+    if (!prediction) return [];
+    const risk = round(prediction.probability * 100, 1);
+    return [{
+      id: branch.id, name: branch.name, code: branch.id, vulnerabilityScore: risk,
+      target: prediction.target, confidence: prediction.confidence, dataQuality: prediction.dataQuality,
+      primaryRiskDriver: prediction.primaryRiskDriver, recommendedAction: prediction.recommendations[0]?.action ?? null,
+      trend: prediction.riskFactors[0]?.trend?.toLowerCase() ?? 'unknown', horizonHours: prediction.horizonHours,
+      generatedAt: prediction.generatedAt.toISOString(), expiresAt: prediction.expiresAt.toISOString(),
+    }];
+  });
+}
+
+function mapIncidents(alerts: JsonRecord[], branches: Map<string, ResourceNode>) {
+  return alerts.flatMap((alert) => {
+    const details = alertDetails(alert);
+    const kind = String(alert.type ?? alert.alertType ?? '').toLowerCase();
+    const score = alertScore(alert);
+    if (score === null || !['incident', 'security', 'threat', 'intrusion', 'loiter', 'tamper'].some((word) => kind.includes(word))) return [];
+    const detectedAt = stringValue(alert.detectedAt ?? alert.createdAt);
+    const branchId = stringValue(alert.branchNodeId ?? details.branchId);
+    return [{
+      id: String(alert.id), category: stringValue(details.category ?? alert.type ?? alert.alertType) ?? 'Security risk',
+      baselineRatePct: percentage(details.baselineRatePct), peakRiskPct: round(score, 1),
+      peakWindow: stringValue(details.peakWindow ?? details.predictedWindow), peakDay: stringValue(details.peakDay),
+      hazardLevel: score >= 70 ? 'HIGH' : score >= 40 ? 'MODERATE' : 'ELEVATED',
+      primaryIndicator: stringValue(details.primaryIndicator ?? details.reason) ?? 'Persisted predictive alert',
+      countermeasure: stringValue(details.countermeasure ?? details.remediation) ?? 'Review alert evidence and apply the approved response procedure.',
+      branch: branchName(branches, branchId), detectedAt,
+    }];
+  });
+}
+
+function mapSmartDrives(telemetry: OperationalTelemetryEnvelope[], branches: Map<string, ResourceNode>) {
+  return telemetry.filter((item) => item.deviceType === 'disk').map((item) => ({
+    id: item.deviceId, bay: stringMetric(item.metrics, 'bay', 'slot') ?? item.deviceId,
+    model: stringMetric(item.metrics, 'model'), serial: stringMetric(item.metrics, 'serialNumber', 'serial'),
+    capacityBytes: finiteMetric(item.metrics, 'capacityBytes', 'totalBytes'), tempC: finiteMetric(item.metrics, 'temperatureC', 'temperature'),
+    reallocatedSectors: finiteMetric(item.metrics, 'reallocatedSectors'), pendingSectors: finiteMetric(item.metrics, 'pendingSectors'),
+    hoursPowered: finiteMetric(item.metrics, 'powerOnHours'), estimatedCrashHours: finiteMetric(item.metrics, 'estimatedCrashHours', 'failurePredictionHours'),
+    riskScore: percentage(metric(item.metrics, 'riskScore', 'failureProbability')),
+    status: stringMetric(item.metrics, 'smartStatus', 'healthStatus', 'status')?.toUpperCase() ?? 'UNKNOWN',
+    nvrId: stringMetric(item.metrics, 'recorderId'), branch: branchName(branches, item.branchId), observedAt: item.observedAt, dataQuality: item.quality,
+  }));
+}
+
+async function buildDashboard(store: ControlPlaneStore, service: PredictionService, user: User, horizonHours: number) {
+  const [branches, cameras, telemetry, alerts, assets, workOrders, modelMetrics, outcomes] = await Promise.all([
+    store.listAccessibleNodes(user, 'recording:view', 'branch'), store.listCameras(user.tenantId),
+    store.listLatestOperationalTelemetry(user.tenantId), store.listPredictiveAlerts(user.tenantId),
+    store.listMaintenanceAssets(user.tenantId), store.listWorkOrders(user.tenantId),
+    loadModelMetrics(store, user.tenantId), loadOutcomeCounts(store, user.tenantId),
+  ]);
+  const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+  const predictionMap = await livePredictions(service, branches, user.tenantId);
+  const predictions = [...predictionMap.values()].flat();
+  const alertRecords = alerts.map(record);
+  const camerasView = mapCameraRisks(cameras, telemetry, alertRecords, branchMap, workOrders);
+  const volumes = mapStorage(telemetry, branchMap);
+  const switches = mapNetwork(telemetry, branchMap);
+  const recordings = mapRecordings(telemetry, branchMap);
+  const branchesView = mapBranches(branches, predictionMap, horizonHours);
+  const incidents = mapIncidents(alertRecords, branchMap);
+  const earliestVolume = volumes.filter((item) => item.daysRemaining !== null).sort((a, b) => a.daysRemaining! - b.daysRemaining!)[0];
+  const networkWithHealth = switches.filter((item) => item.linkHealth !== null);
+  const highestRisk = [...branchesView].sort((a, b) => b.vulnerabilityScore - a.vulnerabilityScore)[0];
+  const topIncident = [...incidents].sort((a, b) => b.peakRiskPct - a.peakRiskPct)[0];
+  const healthValues = [...camerasView.map((item) => item.healthScore), ...networkWithHealth.map((item) => item.linkHealth), ...branchesView.map((item) => 100 - item.vulnerabilityScore)].filter((item): item is number => item !== null);
+  const evaluatedAccuracy = outcomes.outcomeCount && outcomes.correctCount !== null ? round(outcomes.correctCount / outcomes.outcomeCount * 100, 2) : null;
+  return {
+    generatedAt: new Date().toISOString(), horizonHours,
+    freshness: { latestTelemetryAt: sourceFreshness(telemetry), telemetryRecords: telemetry.length, activePredictions: predictions.length, predictiveAlerts: alertRecords.length },
+    kpis: {
+      predictedFailuresCount: predictions.filter((item) => item.probability >= 0.7 && item.horizonHours <= horizonHours).length,
+      fleetHealthScore: healthValues.length ? round(healthValues.reduce((sum, value) => sum + value, 0) / healthValues.length, 1) : null,
+      healthScoreDelta: null, earliestDiskExhaustDays: earliestVolume?.daysRemaining ?? null,
+      earliestDiskExhaustAsset: earliestVolume?.name ?? null,
+      earliestDiskUsagePct: earliestVolume?.totalTb && earliestVolume.usedTb !== null ? round(earliestVolume.usedTb / earliestVolume.totalTb * 100, 1) : null,
+      networkHealthPct: networkWithHealth.length ? round(networkWithHealth.reduce((sum, item) => sum + item.linkHealth!, 0) / networkWithHealth.length, 1) : null,
+      networkWarningCount: networkWithHealth.filter((item) => item.linkHealth! < 80).length,
+      highestRiskBranch: highestRisk?.name ?? null, highestRiskBranchScore: highestRisk?.vulnerabilityScore ?? null,
+      peakIncidentWindow: topIncident?.peakWindow ?? null, peakIncidentCategory: topIncident?.category ?? null,
+    },
+    cameras: camerasView, volumes, switches, recordings, branches: branchesView, incidents,
+    criticalDrives: mapSmartDrives(telemetry, branchMap),
+    modelMetrics: modelMetrics ? { ...modelMetrics, accuracy: evaluatedAccuracy ?? modelMetrics.accuracy, totalSamples: outcomes.outcomeCount } : null,
+    totalAssetsMonitored: assets.length || cameras.length + telemetry.length,
+    openWorkOrdersCount: workOrders.filter(isOpenWorkOrder).length,
+  };
+}
+
+async function collectPredictions(service: PredictionService, store: ControlPlaneStore, user: User) {
+  const branches = await store.listAccessibleNodes(user, 'recording:view', 'branch');
+  return [...(await livePredictions(service, branches, user.tenantId)).values()].flat();
+}
+
+export async function registerPredictiveAnalyticsRoutes(app: FastifyInstance, store: ControlPlaneStore) {
+  const predictionService = new PredictionService(store);
+
+  app.get('/v1/maintenance/predictive/dashboard', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const { horizonHours } = z.object({ horizonHours: z.coerce.number().int().min(1).max(8760).default(48) }).parse(request.query);
+    return buildDashboard(store, predictionService, user, horizonHours);
+  });
+
+  app.post('/v1/maintenance/predictive/action', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const body = actionSchema.parse(request.body);
+    if (body.action !== 'dispatch_work_order') return reply.code(501).send({ error: 'action_not_supported', message: `${body.action} has no production device-command integration. No change was made.` });
+    const [camera, asset, accessibleBranches] = await Promise.all([
+      store.getCamera(body.targetId),
+      store.getMaintenanceAsset(body.targetId),
+      store.listAccessibleNodes(user, 'device:configure', 'branch'),
+    ]);
+    const accessibleBranchIds = new Set(accessibleBranches.map((branch) => branch.id));
+    const cameraOwned = camera && (!camera.tenantId || camera.tenantId === user.tenantId) && accessibleBranchIds.has(camera.branchId);
+    const assetOwned = asset?.tenantId === user.tenantId
+      && (!asset.branchNodeId || accessibleBranchIds.has(asset.branchNodeId));
+    if (!cameraOwned && !assetOwned) return reply.code(404).send({ error: 'asset_not_found' });
+    const existing = (await store.listWorkOrders(user.tenantId)).find((order) => order.assetId === body.targetId && isOpenWorkOrder(order));
+    if (existing) return { success: true, ticketId: existing.workOrderNumber, workOrderId: existing.id, alreadyOpen: true };
+    const created = await store.createWorkOrder({
+      tenantId: user.tenantId, workOrderNumber: `WO-PRD-${randomUUID().slice(0, 8).toUpperCase()}`, assetId: body.targetId,
+      branchNodeId: camera?.branchId ?? asset?.branchNodeId,
+      problem: `Review active predictive failure alert for ${camera?.name ?? asset?.assetType ?? body.targetId}`,
+      severity: 'high', status: 'open', createdBy: user.id,
+    });
+    await store.writeAudit({ tenantId: user.tenantId, actorUserId: user.id, action: 'maintenance.predictive_workorder_created',
+      resourceNodeId: camera?.nodeId ?? camera?.branchId ?? asset?.branchNodeId ?? null, outcome: 'success',
+      details: { workOrderId: created.id, workOrderNumber: created.workOrderNumber, assetId: body.targetId } });
+    return { success: true, ticketId: created.workOrderNumber, workOrderId: created.id };
+  });
+
+  app.get('/v1/maintenance/predictive/smart-telemetry', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const [branches, telemetry] = await Promise.all([store.listAccessibleNodes(user, 'recording:view', 'branch'), store.listLatestOperationalTelemetry(user.tenantId)]);
+    const data = mapSmartDrives(telemetry, new Map(branches.map((branch) => [branch.id, branch])));
+    return { data, count: data.length, latestTelemetryAt: sourceFreshness(telemetry) };
+  });
+
+  app.post('/v1/maintenance/predictive/train/failure-model', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    z.object({ historicalDays: z.number().int().min(30).max(730).default(365) }).parse(request.body ?? {});
+    return reply.code(501).send({ error: 'training_pipeline_unavailable', message: 'No production model-training job runner is configured. No model was changed.' });
+  });
+  app.post('/v1/maintenance/predictive/update-baseline', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    return reply.code(501).send({ error: 'baseline_job_unavailable', message: 'No production baseline-update job runner is configured. No baseline was changed.' });
+  });
+  app.get('/v1/maintenance/predictive/failure/:predictionId', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const { predictionId } = z.object({ predictionId: z.string().min(1) }).parse(request.params);
+    const prediction = await predictionService.getPrediction(predictionId, user.tenantId);
+    return prediction ? { prediction } : reply.code(404).send({ error: 'prediction_not_found' });
+  });
+  app.get('/v1/maintenance/predictive/high-risk-assets', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const query = z.object({ riskThreshold: z.coerce.number().min(0).max(100).default(70), limit: z.coerce.number().int().min(1).max(100).default(20) }).parse(request.query);
+    const predictions = (await collectPredictions(predictionService, store, user)).filter((item) => item.probability * 100 >= query.riskThreshold).sort((a, b) => b.probability - a.probability).slice(0, query.limit);
+    return { predictions, count: predictions.length, threshold: query.riskThreshold };
+  });
+  app.get('/v1/maintenance/predictive/failure/all', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const predictions = await collectPredictions(predictionService, store, user);
+    return { predictions, total: predictions.length, summary: Object.fromEntries(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((level) => [level.toLowerCase(), predictions.filter((item) => item.riskLevel === level).length])) };
+  });
+  app.get('/v1/maintenance/predictive/anomalies', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const anomalies = (await store.listPredictiveAlerts(user.tenantId)).map(record).filter((item) => String(item.type ?? item.alertType ?? '').toLowerCase().includes('anomal'));
+    return { anomalies, total: anomalies.length };
+  });
+  app.get('/v1/maintenance/predictive/forecast/storage-capacity', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const forecasts = (await collectPredictions(predictionService, store, user)).filter((item) => item.target === 'STORAGE_EXHAUSTION');
+    return { forecasts, count: forecasts.length };
+  });
+  app.get('/v1/maintenance/predictive/health-score/all', async (request, reply) => {
+    const user = currentUser(request, reply); if (!user) return;
+    const latest = new Map<string, BranchRiskPrediction>();
+    for (const prediction of await collectPredictions(predictionService, store, user)) {
+      const current = latest.get(prediction.branchId);
+      if (!current || prediction.generatedAt > current.generatedAt) latest.set(prediction.branchId, prediction);
+    }
+    const healthScores = [...latest.values()].map((item) => ({ branchId: item.branchId, score: round((1 - item.probability) * 100, 1), predictionId: item.id, generatedAt: item.generatedAt }));
+    return { healthScores, total: healthScores.length, average: healthScores.length ? round(healthScores.reduce((sum, item) => sum + item.score, 0) / healthScores.length, 1) : null };
+  });
+}
+
+export const predictiveDashboardInternals = { buildDashboard, mapStorage, mapNetwork, mapRecordings, mapSmartDrives };
