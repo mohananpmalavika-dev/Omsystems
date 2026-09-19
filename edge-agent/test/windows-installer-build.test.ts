@@ -37,6 +37,14 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.21')");
   });
 
+  it("does not expand the app folder before Inno Setup initializes it", async () => {
+    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+
+    expect(installer).toContain("Result := WizardDirValue;");
+    expect(installer).not.toContain("ExpandConstant('{app}')");
+    expect(installer).not.toContain("UninstallDisplayIcon={app}");
+  });
+
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {
     const script = await readFile("edge-agent/scripts/verify-windows-package.mjs", "utf8");
 

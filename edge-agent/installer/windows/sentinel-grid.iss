@@ -20,7 +20,6 @@ ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 DisableProgramGroupPage=yes
 DisableWelcomePage=no
-UninstallDisplayIcon={app}\edge-agent.exe
 CloseApplications=yes
 RestartApplications=no
 
@@ -70,7 +69,6 @@ var
   ExistingInstall: Boolean;
   UsePackageConfiguration: Boolean;
   PackageControlPlaneUrl: String;
-  AppDirInitialized: Boolean;
 
 function SafeDefaultInstallDir: String;
 begin
@@ -79,9 +77,10 @@ end;
 
 function AppPath: String;
 begin
-  if AppDirInitialized then
-    Result := ExpandConstant('{app}')
-  else
+  // WizardDirValue is safe before the destination-directory setup finishes.
+  // It also lets upgrade detection run before the wizard starts.
+  Result := WizardDirValue;
+  if Result = '' then
     Result := SafeDefaultInstallDir;
 end;
 
@@ -415,7 +414,6 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
-  AppDirInitialized := True;
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
