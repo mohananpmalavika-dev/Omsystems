@@ -11,6 +11,12 @@ param (
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+function Assert-LastNativeCommandSucceeded([string]$Operation) {
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Operation failed with exit code $LASTEXITCODE. No deployment changes were applied."
+    }
+}
+
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "🚀 Sentinel Grid - Deploying to Google Cloud Platform" -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
@@ -147,8 +153,10 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
             Write-Host "Uploading Edge Agent release binary, native installer, and manifest to $InstanceName..." -ForegroundColor Cyan
             & gcloud compute scp --zone=$Zone --project=$currentProject --quiet `
                 "$localExe" "$localManifest" "$localInstaller" "${InstanceName}:/tmp/"
+            Assert-LastNativeCommandSucceeded "Uploading the Edge Agent release artifacts"
             & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
                 --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo mv /tmp/edge-agent.exe /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/ && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/ && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
+            Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
             Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
         } else {
             Write-Host "✅ Edge Agent release already matches signed manifest on $InstanceName." -ForegroundColor Green
@@ -158,6 +166,7 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
     Write-Host "Triggering live container rebuild and restart on $InstanceName ($Zone)..." -ForegroundColor Cyan
     & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
         --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'"
+    Assert-LastNativeCommandSucceeded "Rebuilding and restarting the live control plane"
 }
 
 # 8. Fetch Public External IP
