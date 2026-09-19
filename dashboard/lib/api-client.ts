@@ -6857,6 +6857,144 @@ export const signedConfigApi = {
   },
 };
 
+export interface BehavioralHealthResponse {
+  status: string;
+  tables?: {
+    baselines: number;
+    recentAnomalies: number;
+    activePredictions: number;
+  };
+  timestamp: string;
+}
+
+export interface BehavioralBaselineItem {
+  id: string;
+  camera_id: string;
+  camera_name?: string;
+  location?: string | null;
+  time_window: string;
+  avg_detections_per_hour?: number;
+  avg_occupancy?: number;
+  confidence_score?: number;
+  learned_from?: number;
+  last_updated?: string;
+  created_at?: string;
+}
+
+export interface BehavioralAnomalyItem {
+  id: string;
+  camera_id: string;
+  camera_name?: string;
+  timestamp: string;
+  anomaly_type: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  confidence: number;
+  description: string;
+  expected_behavior: string;
+  actual_behavior: string;
+  recommendation: string;
+  reviewed: boolean;
+  false_positive: boolean;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at?: string;
+}
+
+export interface BehavioralPredictionItem {
+  id: string;
+  location: string;
+  branch_id: string;
+  prediction_type: string;
+  probability: number;
+  time_window: string;
+  reasoning: string;
+  suggested_actions?: string[];
+  based_on_patterns?: string[];
+  status: 'active' | 'triggered' | 'dismissed' | 'expired';
+  created_at: string;
+  expires_at?: string | null;
+}
+
+export const behavioralApi = {
+  getHealth: () =>
+    fetchApi<BehavioralHealthResponse>('/v1/behavioral-analytics/health'),
+
+  listBaselines: (params?: { branchId?: string; minConfidence?: number; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.minConfidence !== undefined) q.set('minConfidence', String(params.minConfidence));
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return fetchApi<{ data: BehavioralBaselineItem[]; total: number }>(
+      `/v1/behavioral-analytics/baselines${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  listAnomalies: (params?: {
+    branchId?: string;
+    cameraId?: string;
+    anomalyType?: string;
+    severity?: string;
+    reviewed?: boolean;
+    falsePositive?: boolean;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.cameraId) q.set('cameraId', params.cameraId);
+    if (params?.anomalyType) q.set('anomalyType', params.anomalyType);
+    if (params?.severity && params.severity !== 'ALL') q.set('severity', params.severity);
+    if (params?.reviewed !== undefined) q.set('reviewed', String(params.reviewed));
+    if (params?.falsePositive !== undefined) q.set('falsePositive', String(params.falsePositive));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return fetchApi<{ data: BehavioralAnomalyItem[]; total: number; limit: number; offset: number }>(
+      `/v1/behavioral-analytics/anomalies${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  listPredictions: (params?: {
+    branchId?: string;
+    status?: string;
+    minProbability?: number;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.branchId) q.set('branchId', params.branchId);
+    if (params?.status && params.status !== 'ALL') q.set('status', params.status);
+    if (params?.minProbability !== undefined) q.set('minProbability', String(params.minProbability));
+    if (params?.limit) q.set('limit', String(params.limit));
+    if (params?.offset) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return fetchApi<{ data: BehavioralPredictionItem[]; total: number; limit: number; offset: number }>(
+      `/v1/behavioral-analytics/predictions${qs ? `?${qs}` : ''}`
+    );
+  },
+
+  updateAnomaly: (id: string, updates: { reviewed?: boolean; falsePositive?: boolean }) =>
+    fetchApi<{ success: boolean; data: BehavioralAnomalyItem }>(
+      `/v1/behavioral-analytics/anomalies/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      }
+    ),
+
+  dismissPrediction: (id: string, reason: string) =>
+    fetchApi<{ success: boolean }>(
+      `/v1/behavioral-analytics/predictions/${encodeURIComponent(id)}/dismiss`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      }
+    ),
+};
+
 export { ApiError };
 
 
