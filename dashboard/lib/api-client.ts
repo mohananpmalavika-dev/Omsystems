@@ -1365,7 +1365,8 @@ export const maintenanceApi = {
 };
 
 export const predictiveAnalyticsApi = {
-  getDashboardSummary: () => fetchApi<any>('/v1/maintenance/predictive/dashboard'),
+  getDashboardSummary: (horizonHours = 48) =>
+    fetchApi<any>(`/v1/maintenance/predictive/dashboard?horizonHours=${encodeURIComponent(horizonHours)}`),
   listHighRiskAssets: (riskThreshold = 70, limit = 20) =>
     fetchApi<{ predictions: any[]; count: number; threshold: number }>(
       `/v1/maintenance/predictive/high-risk-assets?riskThreshold=${riskThreshold}&limit=${limit}`
