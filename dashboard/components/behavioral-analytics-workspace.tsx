@@ -20,7 +20,8 @@ import {
   XCircle,
   Building2,
 } from "lucide-react";
-import { behavioralApi, cameraInventoryApi, type Branch } from "@/lib/api-client";
+import { behavioralApi, cameraInventoryApi } from "@/lib/api-client";
+import type { Branch } from "@/lib/types";
 
 interface BehaviorBaseline {
   id: string;
@@ -289,7 +290,23 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {branches.length > 0 && (
+            <div className="flex items-center gap-1.5 bg-zinc-800/80 border border-zinc-700 rounded-lg px-2.5 py-1">
+              <Building2 className="w-3.5 h-3.5 text-purple-400" />
+              <select
+                value={selectedBranchId}
+                onChange={(e) => setSelectedBranchId(e.target.value)}
+                className="bg-transparent text-zinc-200 text-xs focus:outline-none cursor-pointer"
+              >
+                <option value="" className="bg-zinc-800">All Branches ({branches.length})</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id} className="bg-zinc-800">{b.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors flex items-center gap-1.5 ${
@@ -647,6 +664,7 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
                     <th className="p-3">Confidence</th>
                     <th className="p-3">Explanation</th>
                     <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800/80">
@@ -667,11 +685,31 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
                           {anomaly.explanation}
                         </td>
                         <td className="p-3">{getStatusBadge(anomaly.status)}</td>
+                        <td className="p-3 text-right">
+                          {anomaly.status === "pending" && (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleUpdateAnomaly(anomaly.id, true, false)}
+                                className="px-2 py-0.5 text-[10px] rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-800 transition"
+                                title="Mark as Reviewed & Resolved"
+                              >
+                                Resolve
+                              </button>
+                              <button
+                                onClick={() => handleUpdateAnomaly(anomaly.id, false, true)}
+                                className="px-2 py-0.5 text-[10px] rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 border border-zinc-700 transition"
+                                title="Mark as False Positive"
+                              >
+                                False +
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-zinc-500">
+                      <td colSpan={7} className="p-8 text-center text-zinc-500">
                         No anomalies match the selected filters.
                       </td>
                     </tr>
@@ -733,7 +771,10 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
                   </div>
 
                   {!pred.acknowledged && (
-                    <button className="w-full px-3 py-2 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => handleAcknowledgePrediction(pred.id)}
+                      className="w-full px-3 py-2 text-xs bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                    >
                       <CheckCircle2 className="w-4 h-4" />
                       Acknowledge Prediction
                     </button>
