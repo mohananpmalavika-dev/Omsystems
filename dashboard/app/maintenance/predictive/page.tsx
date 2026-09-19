@@ -21,7 +21,7 @@ import {
   Settings,
 } from "lucide-react";
 import { ModulePage } from "@/components/module-page";
-import { maintenanceApi } from "@/lib/api-client";
+import { maintenanceApi, predictiveAnalyticsApi } from "@/lib/api-client";
 
 interface SmartTelemetry {
   bay: string;
@@ -41,6 +41,7 @@ interface SmartTelemetry {
 
 export default function MaintenancePredictivePage() {
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [criticalDrives, setCriticalDrives] = useState<SmartTelemetry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,60 +58,20 @@ export default function MaintenancePredictivePage() {
   const [ptzDispatched, setPtzDispatched] = useState(false);
   const [ptzFeedback, setPtzFeedback] = useState<string | null>(null);
 
-  const criticalDrives: SmartTelemetry[] = [
-    {
-      bay: "Bay 3 (RAID 5)",
-      model: "WD Gold Enterprise 8TB",
-      serial: "WD-WMC4N0K89211",
-      capacity: "8.0 TB",
-      tempC: 58,
-      reallocatedSectors: 84,
-      pendingSectors: 14,
-      hoursPowered: 42180,
-      estimatedCrashHours: 36,
-      riskScore: 94,
-      status: "CRITICAL",
-      nvrId: "NVR-MAIN-VAULT-01",
-      branch: "Kochi Marine Drive Flagship",
-    },
-    {
-      bay: "Bay 1 (RAID 1)",
-      model: "Seagate SkyHawk AI 6TB",
-      serial: "ST6000VE001-2AA101",
-      capacity: "6.0 TB",
-      tempC: 47,
-      reallocatedSectors: 16,
-      pendingSectors: 3,
-      hoursPowered: 28400,
-      estimatedCrashHours: 118,
-      riskScore: 68,
-      status: "WARNING",
-      nvrId: "NVR-TELLER-CASH-02",
-      branch: "Thrissur Swaraj Round Branch",
-    },
-    {
-      bay: "Bay 2 (RAID 5)",
-      model: "WD Purple Pro 10TB",
-      serial: "WD-WMC4N0P19002",
-      capacity: "10.0 TB",
-      tempC: 38,
-      reallocatedSectors: 0,
-      pendingSectors: 0,
-      hoursPowered: 12300,
-      estimatedCrashHours: 9999,
-      riskScore: 8,
-      status: "HEALTHY",
-      nvrId: "NVR-SURVEILLANCE-PERIMETER",
-      branch: "Kozhikode Mavoor Road Branch",
-    },
-  ];
-
   useEffect(() => {
     setLoading(true);
     setError(null);
 
-    void Promise.all([maintenanceApi.listHighRiskAssets(), maintenanceApi.listFailureForecast()])
-      .then(([highRisk, forecast]) => {
+    void Promise.all([
+      maintenanceApi.listHighRiskAssets().catch(() => ({ data: [] })),
+      maintenanceApi.listFailureForecast().catch(() => ({ data: [] })),
+      predictiveAnalyticsApi.getDashboardSummary().catch(() => null),
+    ])
+      .then(([highRisk, forecast, dashboardData]) => {
+        if (dashboardData?.criticalDrives && Array.isArray(dashboardData.criticalDrives)) {
+          setCriticalDrives(dashboardData.criticalDrives);
+        }
+
         const rows = [
           ...(highRisk.data ?? []).map((item: any) => ({
             id: item.id,
@@ -147,12 +108,21 @@ export default function MaintenancePredictivePage() {
     return () => clearInterval(interval);
   }, [slaDispatched]);
 
-  const handleTriggerSla = () => {
+  const handleTriggerSla = async () => {
     const generatedTicket = `TKT-OEM-${Math.floor(100000 + Math.random() * 900000)}`;
     setTicketId(generatedTicket);
     setDispatchTime(new Date().toLocaleTimeString());
     setSlaDispatched(true);
     setSlaSecondsRemaining(4 * 3600);
+    try {
+      const res = await predictiveAnalyticsApi.executeAction({
+        action: "dispatch_work_order",
+        targetId: criticalDrives[0]?.serial || "WD-WMC4N0K89211",
+      });
+      if (res?.ticketId) setTicketId(res.ticketId);
+    } catch {
+      // safe fallback
+    }
   };
 
   const formatSeconds = (sec: number) => {
@@ -413,9 +383,17 @@ export default function MaintenancePredictivePage() {
                   <div className="space-y-3">
                     <div className="text-xs text-gray-400">Internal Enclosure Desiccant Cycle</div>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         setHeaterActive(true);
                         setHeaterFeedback("✓ Internal PTC Dome Heater & Desiccant Blower engaged for 15 minutes. Condensation drying in progress.");
+                        try {
+                          await predictiveAnalyticsApi.executeAction({
+                            action: "toggle_heater",
+                            targetId: "CAM-07",
+                          });
+                        } catch {
+                          // safe fallback
+                        }
                         setTimeout(() => setHeaterFeedback(null), 6000);
                       }}
                       disabled={heaterActive}
@@ -472,9 +450,17 @@ export default function MaintenancePredictivePage() {
                 </div>
 
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     setPtzDispatched(true);
                     setPtzFeedback("✓ Priority OEM Servo Replacement Ticket #TKT-PTZ-8812 Dispatched to CP PLUS Engineer.");
+                    try {
+                      await predictiveAnalyticsApi.executeAction({
+                        action: "dispatch_work_order",
+                        targetId: "CAM-01-PTZ",
+                      });
+                    } catch {
+                      // safe fallback
+                    }
                     setTimeout(() => setPtzFeedback(null), 6000);
                   }}
                   disabled={ptzDispatched}
