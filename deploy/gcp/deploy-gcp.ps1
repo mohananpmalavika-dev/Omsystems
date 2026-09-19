@@ -155,7 +155,7 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
                 "$localExe" "$localManifest" "$localInstaller" "${InstanceName}:/tmp/"
             Assert-LastNativeCommandSucceeded "Uploading the Edge Agent release artifacts"
             & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-                --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo mv /tmp/edge-agent.exe /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/ && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/ && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
+                --command="test `$(sha256sum /tmp/edge-agent.exe | cut -d ' ' -f 1`) = '$expectedHash' && test `$(sha256sum /tmp/$installerFile | cut -d ' ' -f 1`) = '$expectedInstallerHash' && sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo mv /tmp/edge-agent.exe /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/ && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/ && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
             Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
             Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
         } else {
