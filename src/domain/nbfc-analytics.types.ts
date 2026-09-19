@@ -261,6 +261,8 @@ export interface RuleTestResult {
     eventTimes?: string[];
     averageDurationSec?: number;
     notes?: string;
+    observedAlertCount?: number;
+    [key: string]: unknown;
   };
   createdAt: string;
 }
