@@ -82,13 +82,30 @@ export interface ReidStats {
 }
 
 export class ReidRepository {
-  // In-memory backing store for local/CI/test execution when direct PG pool isn't available
+  // Volatile state is permitted only for isolated test execution. It must never
+  // become a silent substitute for the control-plane database in production.
+  private readonly volatileTestStore: boolean;
   private readonly memIdentities = new Map<string, ReidGlobalIdentity>();
   private readonly memSightings: ReidCameraSighting[] = [];
   private readonly memTopology = new Map<string, ReidCameraTopologyRecord>();
   private readonly memProbes: ReidProbeRecord[] = [];
 
-  constructor(private readonly pool?: Pool) {}
+  constructor(private readonly pool?: Pool) {
+    this.volatileTestStore = process.env.NODE_ENV === 'test' && !pool;
+  }
+
+  public assertProductionStorage(): void {
+    if (!this.pool && !this.volatileTestStore) {
+      throw Object.assign(new Error('Person Re-ID requires the PostgreSQL control-plane store.'), {
+        statusCode: 503,
+        code: 'reid_storage_unavailable',
+      });
+    }
+  }
+
+  private useTestStoreOrThrow(error: unknown): void {
+    if (!this.volatileTestStore) throw error;
+  }
 
   /**
    * Create a new global identity record
@@ -106,6 +123,7 @@ export class ReidRepository {
       metadata?: Record<string, any>;
     }
   ): Promise<ReidGlobalIdentity> {
+    this.assertProductionStorage();
     const now = new Date();
     const id = `id-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -145,7 +163,7 @@ export class ReidRepository {
           return this.mapIdentityRow(res.rows[0]);
         }
       } catch (err) {
-        // Fall back to memory store if database write fails in mock/test harness
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -181,6 +199,7 @@ export class ReidRepository {
       metadata?: Record<string, any>;
     }
   ): Promise<ReidGlobalIdentity | null> {
+    this.assertProductionStorage();
     const now = new Date();
 
     if (this.pool) {
@@ -221,7 +240,7 @@ export class ReidRepository {
           }
         }
       } catch (err) {
-        // Fall back to memory store
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -250,6 +269,7 @@ export class ReidRepository {
    * Retrieve a global identity by globalId
    */
   public async getGlobalIdentity(globalId: string, tenantId: string): Promise<ReidGlobalIdentity | null> {
+    this.assertProductionStorage();
     if (this.pool) {
       try {
         const query = `SELECT * FROM reid_global_identities WHERE global_id = $1 AND tenant_id = $2;`;
@@ -258,7 +278,7 @@ export class ReidRepository {
           return this.mapIdentityRow(res.rows[0]);
         }
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -279,6 +299,7 @@ export class ReidRepository {
     limit?: number;
     offset?: number;
   }): Promise<{ identities: ReidGlobalIdentity[]; total: number }> {
+    this.assertProductionStorage();
     const limit = filter.limit ?? 50;
     const offset = filter.offset ?? 0;
 
@@ -313,7 +334,7 @@ export class ReidRepository {
           total,
         };
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -350,6 +371,7 @@ export class ReidRepository {
       metrics?: Record<string, any>;
     }
   ): Promise<ReidCameraSighting> {
+    this.assertProductionStorage();
     const id = `sighting-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const now = new Date();
 
@@ -397,7 +419,7 @@ export class ReidRepository {
           return this.mapSightingRow(res.rows[0]);
         }
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -427,6 +449,7 @@ export class ReidRepository {
    * Get chronological sightings for an identity
    */
   public async getSightingsForIdentity(globalId: string, tenantId: string): Promise<ReidCameraSighting[]> {
+    this.assertProductionStorage();
     if (this.pool) {
       try {
         const query = `
@@ -439,7 +462,7 @@ export class ReidRepository {
         const res = await this.pool.query(query, [globalId, tenantId]);
         return res.rows.map((r: any) => this.mapSightingRow(r));
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -457,6 +480,7 @@ export class ReidRepository {
     minSimilarity: number = 0.70,
     limit: number = 10
   ): Promise<Array<{ identity: ReidGlobalIdentity; similarity: number }>> {
+    this.assertProductionStorage();
     // Exact mathematical cosine similarity across candidate gallery
     const candidates: ReidGlobalIdentity[] = [];
 
@@ -469,7 +493,7 @@ export class ReidRepository {
         );
         candidates.push(...res.rows.map((r: any) => this.mapIdentityRow(r)));
       } catch (err) {
-        // Fall back to memory
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -501,6 +525,7 @@ export class ReidRepository {
    * Get camera topology rules for a branch
    */
   public async getTopology(tenantId: string, branchId?: string): Promise<ReidCameraTopologyRecord[]> {
+    this.assertProductionStorage();
     if (this.pool) {
       try {
         let query = `SELECT * FROM reid_camera_topology WHERE tenant_id = $1`;
@@ -513,7 +538,7 @@ export class ReidRepository {
         const res = await this.pool.query(query, values);
         return res.rows.map((r: any) => this.mapTopologyRow(r));
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -538,6 +563,7 @@ export class ReidRepository {
       enabled?: boolean;
     }
   ): Promise<ReidCameraTopologyRecord> {
+    this.assertProductionStorage();
     const now = new Date();
     const id = `top-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
@@ -584,7 +610,7 @@ export class ReidRepository {
           return this.mapTopologyRow(res.rows[0]);
         }
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -623,6 +649,7 @@ export class ReidRepository {
       matchCount: number;
     }
   ): Promise<ReidProbeRecord> {
+    this.assertProductionStorage();
     const id = `probe-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     const now = new Date();
 
@@ -660,7 +687,7 @@ export class ReidRepository {
           return this.mapProbeRow(res.rows[0]);
         }
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -685,6 +712,7 @@ export class ReidRepository {
    * Get operational statistics for Re-ID system
    */
   public async getStats(tenantId: string): Promise<ReidStats> {
+    this.assertProductionStorage();
     if (this.pool) {
       try {
         const idCount = await this.pool.query(
@@ -695,7 +723,7 @@ export class ReidRepository {
           `SELECT 
              COUNT(*) as total_sightings,
              COUNT(DISTINCT camera_id) as active_cameras,
-             COALESCE(AVG(confidence), 0.85) as avg_confidence
+             COALESCE(AVG(confidence), 0) as avg_confidence
            FROM reid_camera_sightings 
            WHERE tenant_id = $1;`,
           [tenantId]
@@ -715,10 +743,10 @@ export class ReidRepository {
           totalSightings: parseInt(sightStats.rows[0]?.total_sightings || '0', 10),
           crossCameraTransitions: parseInt(crossCam.rows[0]?.transitions || '0', 10),
           activeCameras: parseInt(sightStats.rows[0]?.active_cameras || '0', 10),
-          averageConfidence: parseFloat(sightStats.rows[0]?.avg_confidence || '0.85'),
+          averageConfidence: parseFloat(sightStats.rows[0]?.avg_confidence || '0'),
         };
       } catch (err) {
-        // Fall back
+        this.useTestStoreOrThrow(err);
       }
     }
 
@@ -731,7 +759,7 @@ export class ReidRepository {
     const avgConf =
       sightings.length > 0
         ? sightings.reduce((acc, s) => acc + s.confidence, 0) / sightings.length
-        : 0.88;
+          : 0;
 
     return {
       totalIdentities: identities.length,

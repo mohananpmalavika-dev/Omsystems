@@ -242,6 +242,9 @@ describe("Investigation & Timeline Search Subsystem Suite", () => {
       } as any;
 
       const app = Fastify();
+      app.addHook("preHandler", async (request) => {
+        (request as any).currentUser = { id: "test-investigator", tenantId: "tenant-test" };
+      });
       await registerRecordingIndexRoutes(app, mockRecordingService);
       await registerInvestigationRoutes(app, mockSearchService);
       await app.ready();

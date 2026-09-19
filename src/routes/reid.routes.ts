@@ -17,14 +17,36 @@ export async function registerReIdRoutes(
   const pool = (store as any).pool || (store as any).db;
   const reidService = new ReidService(pool, store);
 
-  const getTenantId = (req: FastifyRequest): string => {
-    const user = (req as any).user;
-    return user?.tenantId || (req.headers['x-tenant-id'] as string) || '00000000-0000-4000-8000-000000000000';
+  const getAuthenticatedUser = (req: FastifyRequest) => {
+    const user = req.currentUser;
+    if (user?.tenantId && user?.id) return user;
+
+    // The isolated route tests register Fastify without the control-plane auth
+    // hook. Header identities are kept exclusively for that test adapter.
+    if (process.env.NODE_ENV === 'test') {
+      const tenantId = req.headers['x-tenant-id'];
+      const userId = req.headers['x-user-id'];
+      if (typeof tenantId === 'string' && tenantId) {
+        return { tenantId, id: typeof userId === 'string' && userId ? userId : 'test-route-user' };
+      }
+    }
+
+    throw Object.assign(new Error('Authentication is required for Person Re-ID.'), {
+      statusCode: 401,
+      code: 'unauthenticated',
+    });
   };
 
-  const getUserId = (req: FastifyRequest): string => {
-    const user = (req as any).user;
-    return user?.id || (req.headers['x-user-id'] as string) || '00000000-0000-4000-8000-000000000001';
+  const getTenantId = (req: FastifyRequest): string => getAuthenticatedUser(req).tenantId;
+  const getUserId = (req: FastifyRequest): string => getAuthenticatedUser(req).id;
+
+  const sendRouteError = (request: FastifyRequest, reply: FastifyReply, err: any, fallbackStatus: number, fallbackMessage: string) => {
+    request.log.error(err, fallbackMessage);
+    return reply.status(err?.statusCode || fallbackStatus).send({
+      success: false,
+      error: err?.message || fallbackMessage,
+      ...(err?.code ? { code: err.code } : {}),
+    });
   };
 
   // 1. Ingest Camera Tracklet Sighting & Embedding
@@ -35,13 +57,13 @@ export async function registerReIdRoutes(
     enteredAt: z.string().datetime(),
     exitedAt: z.string().datetime(),
     embedding: z.array(z.number()).length(512).optional(),
-    rawCropBase64: z.string().optional(),
+    rawCropBase64: z.string().max(8_000_000).optional(),
     confidence: z.number().min(0).max(1).default(0.85),
     boundingBox: z.object({
       x: z.number(),
       y: z.number(),
-      width: z.number().positive(),
-      height: z.number().positive(),
+      width: z.number().positive().max(4096),
+      height: z.number().positive().max(4096),
     }),
     snapshotUrl: z.string().optional().nullable(),
     metrics: z.record(z.any()).optional(),
@@ -56,6 +78,10 @@ export async function registerReIdRoutes(
       let rawCropRgb: { buffer: Uint8Array; width: number; height: number; channels: 3 } | undefined;
       if (body.rawCropBase64) {
         const buf = Buffer.from(body.rawCropBase64, 'base64');
+        const expectedBytes = Math.round(body.boundingBox.width) * Math.round(body.boundingBox.height) * 3;
+        if (buf.length !== expectedBytes) {
+          return reply.status(400).send({ success: false, error: 'rawCropBase64 byte length does not match boundingBox dimensions' });
+        }
         rawCropRgb = {
           buffer: new Uint8Array(buf),
           width: Math.round(body.boundingBox.width),
@@ -85,20 +111,16 @@ export async function registerReIdRoutes(
         data: result,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to ingest ReID sighting');
-      return reply.status(400).send({
-        success: false,
-        error: err.message || 'Invalid sighting payload',
-      });
+      return sendRouteError(request, reply, err, 400, 'Invalid sighting payload');
     }
   });
 
   // 2. Forensic Visual Probe Search Across All Cameras
   const probeBodySchema = z.object({
     probeEmbedding: z.array(z.number()).length(512).optional(),
-    probeCropBase64: z.string().optional(),
-    cropWidth: z.number().positive().optional(),
-    cropHeight: z.number().positive().optional(),
+    probeCropBase64: z.string().max(2_000_000).optional(),
+    cropWidth: z.number().positive().max(640).optional(),
+    cropHeight: z.number().positive().max(640).optional(),
     similarityThreshold: z.number().min(0.1).max(1.0).default(0.70),
     branchId: z.string().uuid().optional().nullable(),
     fromTime: z.string().datetime().optional(),
@@ -115,6 +137,10 @@ export async function registerReIdRoutes(
       let probeCropRgb: { buffer: Uint8Array; width: number; height: number; channels: 3 } | undefined;
       if (body.probeCropBase64 && body.cropWidth && body.cropHeight) {
         const buf = Buffer.from(body.probeCropBase64, 'base64');
+        const expectedBytes = Math.round(body.cropWidth) * Math.round(body.cropHeight) * 3;
+        if (buf.length !== expectedBytes) {
+          return reply.status(400).send({ success: false, error: 'probeCropBase64 byte length does not match crop dimensions' });
+        }
         probeCropRgb = {
           buffer: new Uint8Array(buf),
           width: body.cropWidth,
@@ -149,11 +175,7 @@ export async function registerReIdRoutes(
         probeId: result.probeId,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to perform ReID probe search');
-      return reply.status(400).send({
-        success: false,
-        error: err.message || 'Invalid probe search request',
-      });
+      return sendRouteError(request, reply, err, 400, 'Invalid probe search request');
     }
   });
 
@@ -188,11 +210,7 @@ export async function registerReIdRoutes(
         },
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to list ReID identities');
-      return reply.status(400).send({
-        success: false,
-        error: err.message || 'Invalid identity query parameters',
-      });
+      return sendRouteError(request, reply, err, 400, 'Invalid identity query parameters');
     }
   });
 
@@ -215,11 +233,7 @@ export async function registerReIdRoutes(
         data: identity,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to get ReID identity');
-      return reply.status(500).send({
-        success: false,
-        error: err.message || 'Internal server error',
-      });
+      return sendRouteError(request, reply, err, 500, 'Failed to get ReID identity');
     }
   });
 
@@ -242,11 +256,7 @@ export async function registerReIdRoutes(
         data: journey,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to reconstruct person journey');
-      return reply.status(500).send({
-        success: false,
-        error: err.message || 'Internal server error',
-      });
+      return sendRouteError(request, reply, err, 500, 'Failed to reconstruct person journey');
     }
   });
 
@@ -262,11 +272,7 @@ export async function registerReIdRoutes(
         data: topology,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to get ReID topology');
-      return reply.status(500).send({
-        success: false,
-        error: err.message || 'Internal server error',
-      });
+      return sendRouteError(request, reply, err, 500, 'Failed to get ReID topology');
     }
   });
 
@@ -292,11 +298,7 @@ export async function registerReIdRoutes(
         data: rule,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to update ReID topology rule');
-      return reply.status(400).send({
-        success: false,
-        error: err.message || 'Invalid topology payload',
-      });
+      return sendRouteError(request, reply, err, 400, 'Invalid topology payload');
     }
   });
 
@@ -310,11 +312,7 @@ export async function registerReIdRoutes(
         data: stats,
       });
     } catch (err: any) {
-      request.log.error(err, 'Failed to get ReID statistics');
-      return reply.status(500).send({
-        success: false,
-        error: err.message || 'Internal server error',
-      });
+      return sendRouteError(request, reply, err, 500, 'Failed to get ReID statistics');
     }
   });
 }

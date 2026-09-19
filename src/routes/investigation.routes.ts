@@ -4,7 +4,6 @@ import { investigationSearchService, InvestigationSearchService } from "../inves
 import type { InvestigationObjectType } from "../investigation/investigation.types.js";
 
 const investigationSearchSchema = z.object({
-  tenantId: z.string().uuid().default("00000000-0000-0000-0000-000000000000"),
   branchIds: z.array(z.string().uuid()).optional(),
   cameraIds: z.array(z.string().min(1)).optional(),
   zones: z.array(z.string().min(1)).optional(),
@@ -22,7 +21,6 @@ const investigationSearchSchema = z.object({
 
 const createEventSchema = z.object({
   id: z.string().uuid().optional(),
-  tenantId: z.string().uuid(),
   branchId: z.string().uuid().optional(),
   cameraId: z.string().min(1).optional(),
   deviceId: z.string().uuid().optional(),
@@ -45,14 +43,23 @@ export async function registerInvestigationRoutes(
   app: FastifyInstance,
   service: InvestigationSearchService = investigationSearchService,
 ): Promise<void> {
+  const requireTenantId = (request: FastifyRequest, reply: FastifyReply): string | null => {
+    const tenantId = request.currentUser?.tenantId;
+    if (tenantId) return tenantId;
+    void reply.code(401).send({ success: false, error: "unauthenticated" });
+    return null;
+  };
+
   /**
    * POST /api/v1/investigations/search
    * Unified forensic investigation search over video recordings, gaps, AI detections, access events, and alerts
    */
   app.post("/api/v1/investigations/search", async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = requireTenantId(request, reply);
+    if (!tenantId) return;
     const input = investigationSearchSchema.parse(request.body);
     const result = await service.search({
-      tenantId: input.tenantId,
+      tenantId,
       branchIds: input.branchIds,
       cameraIds: input.cameraIds,
       zones: input.zones,
@@ -79,8 +86,9 @@ export async function registerInvestigationRoutes(
    * Resolution-aware timeline query bucketed into N-second slices
    */
   app.get("/api/v1/investigations/timeline", async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = requireTenantId(request, reply);
+    if (!tenantId) return;
     const query = z.object({
-      tenantId: z.string().uuid().default("00000000-0000-0000-0000-000000000000"),
       cameraId: z.string().min(1).optional(),
       from: z.string().datetime(),
       to: z.string().datetime(),
@@ -88,7 +96,7 @@ export async function registerInvestigationRoutes(
     }).parse(request.query);
 
     const result = await service.search({
-      tenantId: query.tenantId,
+      tenantId,
       cameraIds: query.cameraId ? [query.cameraId] : undefined,
       from: new Date(query.from),
       to: new Date(query.to),
@@ -112,10 +120,12 @@ export async function registerInvestigationRoutes(
    * Records a new forensic investigation event
    */
   app.post("/api/v1/investigations/events", async (request: FastifyRequest, reply: FastifyReply) => {
+    const tenantId = requireTenantId(request, reply);
+    if (!tenantId) return;
     const input = createEventSchema.parse(request.body);
     const event = await service.recordEvent({
       id: input.id,
-      tenantId: input.tenantId,
+      tenantId,
       branchId: input.branchId,
       cameraId: input.cameraId,
       deviceId: input.deviceId,
