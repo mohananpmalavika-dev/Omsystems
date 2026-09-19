@@ -1,0 +1,316 @@
+[
+  {
+    "page": "abandoned-objects/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { AbandonedObjectWorkspace } from \"@/components/abandoned-object-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 481
+  },
+  {
+    "page": "alerts/page.tsx",
+    "totalLines": 1187,
+    "imports": [
+      "import React, { useEffect, useState, useMemo, useCallback } from \"react\";",
+      "import Link from \"next/link\";",
+      "import { PageHero } from \"@/components/page-hero\";",
+      "import { IncidentMediaModal } from \"@/components/incident-media-modal\";",
+      "import {",
+      "import type { AnalyticsAlert, AnalyticsAlertsAggregateSummary } from \"@/lib/types\";",
+      "import {"
+    ],
+    "mockMatches": [
+      {
+        "line": 658,
+        "content": "placeholder=\"Search Zone, Branch, Camera, Alert title, Incident #...\""
+      },
+      {
+        "line": 659,
+        "content": "className=\"w-full pl-10 pr-4 py-2 bg-slate-950/80 border border-slate-800 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500\""
+      },
+      {
+        "line": 1125,
+        "content": "placeholder=\"Add context on why this alert is considered a false alarm...\""
+      },
+      {
+        "line": 1126,
+        "content": "className=\"w-full px-3.5 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none\""
+      }
+    ],
+    "codeLength": 56653
+  },
+  {
+    "page": "anpr/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { AnprWorkspace } from \"@/components/anpr-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 444
+  },
+  {
+    "page": "anpr-logistics/page.tsx",
+    "totalLines": 529,
+    "imports": [
+      "import { useEffect, useState, useCallback, useMemo } from \"react\";",
+      "import Link from \"next/link\";",
+      "import {",
+      "import { cameraInventoryApi, anprLogisticsApi } from \"@/lib/api-client\";",
+      "import type { Branch } from \"@/lib/types\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 24439
+  },
+  {
+    "page": "banking/authorized-persons/page.tsx",
+    "totalLines": 552,
+    "imports": [
+      "import Link from \"next/link\";",
+      "import {",
+      "import { FormEvent, useCallback, useEffect, useMemo, useState } from \"react\";",
+      "import { cameraInventoryApi, organizationApi, secureAreaAuthorizationApi } from \"@/lib/api-client\";",
+      "import { CctvFaceIdentificationPanel } from \"@/components/banking/cctv-face-identification-panel\";",
+      "import type { Branch } from \"@/lib/types\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 20186
+  },
+  {
+    "page": "banking/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { BankingAnalyticsDashboard } from \"@/components/banking-analytics-dashboard\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 183
+  },
+  {
+    "page": "behavioral/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { BehavioralAnalyticsWorkspace } from \"@/components/behavioral-analytics-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 521
+  },
+  {
+    "page": "branch-comparison/page.tsx",
+    "totalLines": 380,
+    "imports": [
+      "import { useEffect, useState, useCallback } from \"react\";",
+      "import {",
+      "import Link from \"next/link\";",
+      "import { cameraInventoryApi } from \"@/lib/api-client\";",
+      "import type { Branch } from \"@/lib/types\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 16928
+  },
+  {
+    "page": "camera-obstruction/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { CameraObstructionWorkspace } from \"@/components/camera-obstruction-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 498
+  },
+  {
+    "page": "camera-tamper/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { CameraTamperWorkspace } from \"@/components/camera-tamper-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 460
+  },
+  {
+    "page": "crowd/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { CrowdAnalyticsWorkspace } from \"@/components/crowd-analytics-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 457
+  },
+  {
+    "page": "dashboard/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { AnalyticsDashboard } from \"@/components/analytics-dashboard\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 163
+  },
+  {
+    "page": "face/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { AnalyticsDomainWorkspace } from \"@/components/analytics-domain-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 188
+  },
+  {
+    "page": "face-recognition/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { IdentityWatchlistWorkspace } from \"@/components/identity-watchlist-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 204
+  },
+  {
+    "page": "fall/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { FallDetectionWorkspace } from \"@/components/fall-detection-workspace\";"
+    ],
+    "mockMatches": [
+      {
+        "line": 5,
+        "content": "description: \"Pose estimation and bounding box aspect ratio dynamics to detect sudden falls with zero mock data.\","
+      }
+    ],
+    "codeLength": 449
+  },
+  {
+    "page": "industrial/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { AnalyticsDomainWorkspace } from \"@/components/analytics-domain-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 205
+  },
+  {
+    "page": "investigation/page.tsx",
+    "totalLines": 351,
+    "imports": [
+      "import { useCallback, useEffect, useRef, useState } from \"react\";",
+      "import Link from \"next/link\";",
+      "import {",
+      "import { AppLayout } from \"@/components/app-layout\";",
+      "import { PageHero } from \"@/components/page-hero\";",
+      "import { Badge } from \"@/components/ui/badge\";",
+      "import { Card, CardContent, CardDescription, CardHeader, CardTitle } from \"@/components/ui/card\";",
+      "import {"
+    ],
+    "mockMatches": [],
+    "codeLength": 19607
+  },
+  {
+    "page": "nbfc-watchlist/page.tsx",
+    "totalLines": 567,
+    "imports": [
+      "import { useEffect, useState, useCallback } from \"react\";",
+      "import Link from \"next/link\";",
+      "import {",
+      "import { cameraInventoryApi } from \"@/lib/api-client\";",
+      "import type { Branch } from \"@/lib/types\";"
+    ],
+    "mockMatches": [
+      {
+        "line": 333,
+        "content": "placeholder=\"Search by name or code...\""
+      },
+      {
+        "line": 334,
+        "content": "className=\"w-64 rounded-xl border border-slate-700 bg-slate-950 py-2 pl-10 pr-3 text-sm text-slate-100 placeholder:text-slate-600\""
+      }
+    ],
+    "codeLength": 25212
+  },
+  {
+    "page": "page.tsx",
+    "totalLines": 10,
+    "imports": [
+      "import { AnalyticsConsole } from \"@/components/analytics-console\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 231
+  },
+  {
+    "page": "people/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { AnalyticsDomainWorkspace } from \"@/components/analytics-domain-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 196
+  },
+  {
+    "page": "predictions/page.tsx",
+    "totalLines": 253,
+    "imports": [
+      "import React, { useCallback, useEffect, useMemo, useState } from \"react\";",
+      "import {",
+      "import { AppLayout } from \"@/components/app-layout\";",
+      "import { PageHero } from \"@/components/page-hero\";",
+      "import { Badge } from \"@/components/ui/badge\";",
+      "import { Card, CardContent, CardDescription, CardHeader, CardTitle } from \"@/components/ui/card\";",
+      "import { predictiveAnalyticsApi } from \"@/lib/api-client\";"
+    ],
+    "mockMatches": [
+      {
+        "line": 59,
+        "content": "totalSamples: number | null; lastTrained: string | null;"
+      },
+      {
+        "line": 246,
+        "content": "<Card><CardHeader><CardTitle className=\"flex items-center gap-2 text-base\"><Database className=\"h-5 w-5 text-cyan-400\" />Prediction provenance</CardTitle><CardDescription>Model metadata is shown only when an active model record exists.</CardDescription></CardHeader><CardContent className=\"grid gap-4 text-sm md:grid-cols-4\"><div><span className=\"text-xs text-muted-foreground\">Model</span><div>{data.modelMetrics ? `${data.modelMetrics.name} ${data.modelMetrics.version}` : \"Unavailable\"}</div></div><div><span className=\"text-xs text-muted-foreground\">Evaluated accuracy</span><div>{showNumber(data.modelMetrics?.accuracy ?? null, \"%\")}</div></div><div><span className=\"text-xs text-muted-foreground\">Evaluated outcomes</span><div>{showNumber(data.modelMetrics?.totalSamples ?? null)}</div></div><div><span className=\"text-xs text-muted-foreground\">Last deployed</span><div>{showTime(data.modelMetrics?.lastTrained ?? null)}</div></div></CardContent></Card>"
+      }
+    ],
+    "codeLength": 25466
+  },
+  {
+    "page": "reid/page.tsx",
+    "totalLines": 11,
+    "imports": [
+      "import { PersonReIdWorkspace } from \"@/components/person-reid-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 364
+  },
+  {
+    "page": "retail/page.tsx",
+    "totalLines": 247,
+    "imports": [
+      "import { AppLayout } from \"@/components/app-layout\";",
+      "import { PageHero } from \"@/components/page-hero\";",
+      "import { Card, CardContent, CardDescription, CardHeader, CardTitle } from \"@/components/ui/card\";",
+      "import { Badge } from \"@/components/ui/badge\";",
+      "import { ShoppingBag, Users, Clock, TrendingUp, MapPin, Package, DoorOpen, BarChart3 } from \"lucide-react\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 11502
+  },
+  {
+    "page": "rules/page.tsx",
+    "totalLines": 11,
+    "imports": [
+      "import { NbfcRulesWorkspace } from \"@/components/nbfc-rules/nbfc-rules-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 343
+  },
+  {
+    "page": "tailgating/page.tsx",
+    "totalLines": 15,
+    "imports": [
+      "import { TailgatingDetectionWorkspace } from \"@/components/tailgating-detection-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 488
+  },
+  {
+    "page": "vehicles/page.tsx",
+    "totalLines": 6,
+    "imports": [
+      "import { AnalyticsDomainWorkspace } from \"@/components/analytics-domain-workspace\";"
+    ],
+    "mockMatches": [],
+    "codeLength": 199
+  }
+]

@@ -1,0 +1,315 @@
+[
+  {
+    "comp": "dashboard/components/abandoned-object-workspace.tsx",
+    "totalLines": 1126,
+    "matches": [
+      {
+        "lineNum": 611,
+        "text": "placeholder=\"Enter verification notes or security dispatch instructions...\""
+      },
+      {
+        "lineNum": 613,
+        "text": "className=\"w-full bg-slate-950 border border-slate-800 rounded-lg p-2 text-xs text-slate-200 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500\""
+      },
+      {
+        "lineNum": 824,
+        "text": "placeholder=\"e.g. Vault Ante-Room\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/incident-media-modal.tsx",
+    "totalLines": 551,
+    "matches": [
+      {
+        "lineNum": 504,
+        "text": "placeholder=\"Enter observation details, reason for dismissal, or environmental context...\""
+      },
+      {
+        "lineNum": 505,
+        "text": "className=\"w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500 resize-none\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/anpr-workspace.tsx",
+    "totalLines": 1357,
+    "matches": [
+      {
+        "lineNum": 450,
+        "text": "placeholder=\"Search plate number (e.g. DL01, 22BH)...\""
+      },
+      {
+        "lineNum": 657,
+        "text": "grammar rule matching, and watchlist alerts without mock code."
+      },
+      {
+        "lineNum": 669,
+        "text": "placeholder=\"Enter plate (e.g. DL01CA1234)...\""
+      },
+      {
+        "lineNum": 1185,
+        "text": "placeholder=\"Enter verification notes for security audit log...\""
+      },
+      {
+        "lineNum": 1249,
+        "text": "placeholder=\"e.g. DL01CA1234 or 22BH1234AB\""
+      },
+      {
+        "lineNum": 1261,
+        "text": "placeholder=\"e.g. Stolen vehicle report #8892/2026\""
+      },
+      {
+        "lineNum": 1273,
+        "text": "placeholder=\"e.g. Toyota\""
+      },
+      {
+        "lineNum": 1284,
+        "text": "placeholder=\"e.g. White\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/banking/cctv-face-identification-panel.tsx",
+    "totalLines": 769,
+    "matches": [
+      {
+        "lineNum": 234,
+        "text": "{/* Simulated CCTV Stream Canvas */}"
+      },
+      {
+        "lineNum": 262,
+        "text": "{/* Simulated Frame Background with Target Grids */}"
+      },
+      {
+        "lineNum": 304,
+        "text": "{/* Center Face Icon / Avatar Placeholder */}"
+      },
+      {
+        "lineNum": 365,
+        "text": "This screen records only signed observations produced by the configured edge face model. It cannot simulate a face match or authorize a person from the browser."
+      },
+      {
+        "lineNum": 432,
+        "text": "placeholder=\"e.g. Cash Counter 01, Strongroom 1\""
+      },
+      {
+        "lineNum": 442,
+        "text": "placeholder=\"e.g. Overhead Teller Tray View\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/banking-analytics-dashboard.tsx",
+    "totalLines": 474,
+    "matches": [
+      {
+        "lineNum": 222,
+        "text": "return <section className=\"overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80\"><header className=\"flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5\"><div><p className=\"text-[10px] font-bold tracking-[.18em] text-blue-300\">VISIT SCHEDULE</p><h2 className=\"mt-1 text-lg font-semibold\">Expected cash movements</h2></div><button onClick={() => setOpen(!open)} className=\"flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold\"><Plus size={14} /> Schedule visit</button></header>{open && <form onSubmit={submit} className=\"grid gap-3 border-b border-slate-800 bg-slate-950/40 p-5 md:grid-cols-2 xl:grid-cols-5\"><Field label=\"Vehicle plate\" value={plate} setValue={setPlate} placeholder=\"KA 01 AB 1234\" /><Field label=\"Provider\" value={provider} setValue={setProvider} placeholder=\"Cash logistics partner\" /><Field label=\"Arrival start\" type=\"datetime-local\" value={start} setValue={setStart} required /><Field label=\"Arrival end\" type=\"datetime-local\" value={end} setValue={setEnd} required /><button disabled={saving || !branchId} className=\"mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold disabled:opacity-40\">{saving ? \"Saving…\" : \"Save visit\"}</button></form>}{visits.length === 0 ? <Empty icon={<CalendarClock />} text=\"No expected visits in the next seven days.\" /> : <div className=\"divide-y divide-slate-800\">{visits.map((visit) => <article key={visit.id} className=\"grid gap-3 p-4 sm:grid-cols-[1fr_1fr_1.2fr_auto]\"><div><span className=\"text-[10px] uppercase text-slate-600\">Vehicle</span><strong className=\"mt-1 block text-sm\">{visit.expectedPlate || \"Any approved vehicle\"}</strong></div><div><span className=\"text-[10px] uppercase text-slate-600\">Provider</span><strong className=\"mt-1 block text-sm\">{visit.providerName || \"Not specified\"}</strong></div><div><span className=\"text-[10px] uppercase text-slate-600\">Arrival window</span><strong className=\"mt-1 block text-sm\">{formatDate(visit.expectedArrivalStart)} – {formatTime(visit.expectedArrivalEnd)}</strong></div><span className=\"self-center rounded-full bg-blue-500/10 px-3 py-1 text-[10px] font-bold capitalize text-blue-300\">{visit.status || \"expected\"}</span></article>)}</div>}</section>;"
+      },
+      {
+        "lineNum": 228,
+        "text": "return <section className=\"overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80\"><header className=\"flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-5\"><div><p className=\"text-[10px] font-bold tracking-[.18em] text-blue-300\">MONITOR POLICY</p><h2 className=\"mt-1 text-lg font-semibold\">Branch cash-van monitors</h2></div><div className=\"flex gap-2\"><Link href=\"/analytics\" className=\"flex items-center gap-2 rounded-xl border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300\">Camera rules <ArrowUpRight size={13} /></Link><button onClick={() => setOpen(!open)} className=\"flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-xs font-bold\"><Plus size={14} /> New monitor</button></div></header>{open && <form onSubmit={submit} className=\"grid gap-3 border-b border-slate-800 bg-slate-950/40 p-5 md:grid-cols-4\"><Field label=\"Monitor name\" value={name} setValue={setName} placeholder=\"Main branch cash entrance\" required /><Field label=\"Arrival zone ID\" value={arrival} setValue={setArrival} placeholder=\"cash-van-arrival\" required /><Field label=\"Unloading zone ID\" value={unloading} setValue={setUnloading} placeholder=\"secure-unloading\" required /><button disabled={saving || !branchId} className=\"mt-5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold disabled:opacity-40\">{saving ? \"Saving…\" : \"Create monitor\"}</button></form>}{monitors.length === 0 ? <Empty icon={<Settings2 />} text=\"No cash-van monitors are configured for this branch.\" /> : <div className=\"grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3\">{monitors.map((monitor) => <article key={monitor.id} className=\"rounded-xl border border-slate-800 bg-slate-950/50 p-4\"><div className=\"flex items-start justify-between gap-3\"><span className=\"grid h-9 w-9 place-items-center rounded-xl bg-blue-500/10 text-blue-300\"><MapPin size={17} /></span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${monitor.enabled === false ? \"bg-slate-800 text-slate-500\" : \"bg-emerald-500/10 text-emerald-300\"}`}>{monitor.enabled === false ? \"PAUSED\" : \"ACTIVE\"}</span></div><h3 className=\"mt-4 font-semibold\">{monitor.name}</h3><p className=\"mt-1 min-h-8 text-xs text-slate-500\">{monitor.description || \"Cash movement workflow monitor\"}</p><dl className=\"mt-4 grid grid-cols-2 gap-2 text-[10px]\"><Detail label=\"Arrival zone\" value={monitor.arrivalZoneId || \"—\"} /><Detail label=\"Unloading zone\" value={monitor.unloadingZoneId || \"—\"} /></dl></article>)}</div>}</section>;"
+      },
+      {
+        "lineNum": 236,
+        "text": "function Field({ label, value, setValue, placeholder, type = \"text\", required = false }: { label: string; value: string; setValue: (value: string) => void; placeholder?: string; type?: string; required?: boolean }) { return <label className=\"text-xs font-semibold text-slate-400\">{label}<input type={type} required={required} value={value} onChange={(event) => setValue(event.target.value)} placeholder={placeholder} className=\"mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm text-slate-100 outline-none focus:border-blue-500\" /></label>; }"
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/behavioral-analytics-workspace.tsx",
+    "totalLines": 738,
+    "matches": [
+      {
+        "lineNum": 23,
+        "text": "// Placeholder API - will be replaced with actual API client"
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/camera-obstruction-workspace.tsx",
+    "totalLines": 1012,
+    "matches": [
+      {
+        "lineNum": 176,
+        "text": "// Run Simulated Frame Analysis"
+      },
+      {
+        "lineNum": 837,
+        "text": "placeholder=\"Enter physical guard inspection notes or resolution details...\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/camera-tamper-workspace.tsx",
+    "totalLines": 1081,
+    "matches": [
+      {
+        "lineNum": 329,
+        "text": "Edge-based statistical frame analysis detecting camera movement, spotlight blinding, lens covering, optical defocus/blur, and spray paint with zero mock telemetry."
+      },
+      {
+        "lineNum": 445,
+        "text": "placeholder=\"cam-id\""
+      },
+      {
+        "lineNum": 644,
+        "text": "Evaluates discrete Laplacian variance, highlight/shadow histogram saturation, Sobel edge energy, and structural SSIM with zero simulation or mock data."
+      },
+      {
+        "lineNum": 891,
+        "text": "placeholder=\"Enter investigation / resolution notes (e.g. Guard dispatched to check camera dome)...\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/crowd-analytics-workspace.tsx",
+    "totalLines": 1280,
+    "matches": [
+      {
+        "lineNum": 1048,
+        "text": "placeholder=\"Enter actions taken or justification...\""
+      },
+      {
+        "lineNum": 1103,
+        "text": "placeholder=\"e.g. Main Banking Hall\""
+      },
+      {
+        "lineNum": 1202,
+        "text": "placeholder=\"e.g. C1\""
+      },
+      {
+        "lineNum": 1213,
+        "text": "placeholder=\"Cash Deposit Counter\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/analytics-dashboard.tsx",
+    "totalLines": 511,
+    "matches": []
+  },
+  {
+    "comp": "dashboard/components/analytics-domain-workspace.tsx",
+    "totalLines": 288,
+    "matches": []
+  },
+  {
+    "comp": "dashboard/components/identity-watchlist-workspace.tsx",
+    "totalLines": 772,
+    "matches": [
+      {
+        "lineNum": 394,
+        "text": "<span className=\"relative block\"><Search className=\"absolute left-3 top-[18px] text-slate-600\" size={14} /><input value={plateQuery} onChange={(event) => setPlateQuery(event.target.value.toUpperCase())} placeholder=\"KA01AB1234\" className={`${inputClass} pl-9 uppercase`} /></span>"
+      },
+      {
+        "lineNum": 623,
+        "text": "placeholder=\"1.0\""
+      },
+      {
+        "lineNum": 702,
+        "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Watchlist name<input required minLength={2} value={form.name} onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder=\"Restricted persons\" /></label><label className={labelClass}>List type<select value={form.listType} onChange={(event) => setValue((current) => ({ ...current, listType: event.target.value as typeof current.listType }))} className={inputClass}><option value=\"security\">Security</option><option value=\"vip\">VIP</option><option value=\"staff\">Staff</option><option value=\"blacklist\">Blacklist</option><option value=\"missing-person\">Missing person</option></select></label></div><label className={labelClass}>Description<textarea rows={3} value={form.description} onChange={(event) => setValue((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder=\"Document the approved operational purpose.\" /></label><PolicyFields severity={form.alertSeverity} enabled={form.alertOnMatch} setSeverity={(alertSeverity) => setValue((current) => ({ ...current, alertSeverity }))} setEnabled={(alertOnMatch) => setValue((current) => ({ ...current, alertOnMatch }))} /><SubmitButton saving={saving} label=\"Create face watchlist\" /></form>;"
+      },
+      {
+        "lineNum": 706,
+        "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs leading-5 text-amber-100\">This creates an identity record only. Face imagery and embeddings must come from an approved, consent-aware capture pipeline.</div><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Full name<input required value={form.fullName} onChange={(event) => setValue((current) => ({ ...current, fullName: event.target.value }))} className={inputClass} /></label><label className={labelClass}>External ID<input value={form.externalId} onChange={(event) => setValue((current) => ({ ...current, externalId: event.target.value }))} className={inputClass} placeholder=\"Employee or case ID\" /></label><label className={labelClass}>Date of birth<input type=\"date\" value={form.dateOfBirth} onChange={(event) => setValue((current) => ({ ...current, dateOfBirth: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Gender<select value={form.gender} onChange={(event) => setValue((current) => ({ ...current, gender: event.target.value as typeof current.gender }))} className={inputClass}><option value=\"unknown\">Not recorded</option><option value=\"female\">Female</option><option value=\"male\">Male</option><option value=\"other\">Other</option></select></label></div><label className={labelClass}>Notes<textarea rows={3} value={form.notes} onChange={(event) => setValue((current) => ({ ...current, notes: event.target.value }))} className={inputClass} /></label><SubmitButton saving={saving} label=\"Enrol identity record\" /></form>;"
+      },
+      {
+        "lineNum": 710,
+        "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Watchlist name<input required minLength={2} value={form.name} onChange={(event) => setValue((current) => ({ ...current, name: event.target.value }))} className={inputClass} placeholder=\"Vehicles of interest\" /></label><label className={labelClass}>List type<select value={form.listType} onChange={(event) => setValue((current) => ({ ...current, listType: event.target.value as typeof current.listType }))} className={inputClass}><option value=\"alert\">Alert</option><option value=\"stolen\">Stolen</option><option value=\"wanted\">Wanted</option><option value=\"vip\">VIP</option><option value=\"staff\">Staff</option><option value=\"blacklist\">Blacklist</option></select></label></div><label className={labelClass}>Description<textarea rows={3} value={form.description} onChange={(event) => setValue((current) => ({ ...current, description: event.target.value }))} className={inputClass} placeholder=\"Document the operational reason for this list.\" /></label><PolicyFields severity={form.alertSeverity} enabled={form.alertOnMatch} setSeverity={(alertSeverity) => setValue((current) => ({ ...current, alertSeverity }))} setEnabled={(alertOnMatch) => setValue((current) => ({ ...current, alertOnMatch }))} /><label className=\"flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400\"><input type=\"checkbox\" checked={form.alertAuthorities} onChange={(event) => setValue((current) => ({ ...current, alertAuthorities: event.target.checked }))} className=\"mt-0.5 accent-cyan-500\" /><span><strong className=\"block text-slate-200\">Mark for authority-notification workflow</strong><small className=\"mt-1 block leading-5 text-slate-500\">This records policy intent; external notification still requires its configured approval workflow.</small></span></label><SubmitButton saving={saving} label=\"Create ANPR watchlist\" /></form>;"
+      },
+      {
+        "lineNum": 714,
+        "text": "return <form className=\"space-y-4 p-5\" onSubmit={onSubmit}><div className=\"grid gap-4 sm:grid-cols-2\"><label className={labelClass}>Plate number<input required minLength={2} value={form.plateNumber} onChange={(event) => setValue((current) => ({ ...current, plateNumber: event.target.value.toUpperCase() }))} className={`${inputClass} uppercase`} placeholder=\"KA01AB1234\" /></label><label className={labelClass}>Country code<input required minLength={2} maxLength={2} value={form.countryCode} onChange={(event) => setValue((current) => ({ ...current, countryCode: event.target.value.toUpperCase() }))} className={`${inputClass} uppercase`} /></label><label className={labelClass}>Region code<input value={form.regionCode} onChange={(event) => setValue((current) => ({ ...current, regionCode: event.target.value }))} className={inputClass} placeholder=\"KA\" /></label><label className={labelClass}>Vehicle type<select value={form.vehicleType} onChange={(event) => setValue((current) => ({ ...current, vehicleType: event.target.value as typeof current.vehicleType }))} className={inputClass}><option value=\"car\">Car</option><option value=\"motorcycle\">Motorcycle</option><option value=\"bus\">Bus</option><option value=\"truck\">Truck</option><option value=\"other\">Other</option></select></label><label className={labelClass}>Make<input value={form.vehicleMake} onChange={(event) => setValue((current) => ({ ...current, vehicleMake: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Model<input value={form.vehicleModel} onChange={(event) => setValue((current) => ({ ...current, vehicleModel: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Colour<input value={form.vehicleColor} onChange={(event) => setValue((current) => ({ ...current, vehicleColor: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Owner / reference<input value={form.ownerName} onChange={(event) => setValue((current) => ({ ...current, ownerName: event.target.value }))} className={inputClass} /></label><label className={labelClass}>Expiry<input type=\"datetime-local\" value={form.expiresAt} onChange={(event) => setValue((current) => ({ ...current, expiresAt: event.target.value }))} className={inputClass} /></label></div><label className={labelClass}>Reason<input required value={form.reason} onChange={(event) => setValue((current) => ({ ...current, reason: event.target.value }))} className={inputClass} placeholder=\"Operational justification\" /></label><label className={labelClass}>Notes<textarea rows={3} value={form.notes} onChange={(event) => setValue((current) => ({ ...current, notes: event.target.value }))} className={inputClass} /></label><SubmitButton saving={saving} label=\"Register plate\" /></form>;"
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/fall-detection-workspace.tsx",
+    "totalLines": 810,
+    "matches": [
+      {
+        "lineNum": 648,
+        "text": "placeholder=\"Enter verification rationale or dispatch notes...\""
+      },
+      {
+        "lineNum": 650,
+        "text": "className=\"w-full bg-slate-900 border border-slate-800 rounded-lg p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/analytics-console.tsx",
+    "totalLines": 639,
+    "matches": [
+      {
+        "lineNum": 341,
+        "text": "<input value={assistantQuery} onChange={(event) => setAssistantQuery(event.target.value)} placeholder=\"Show cameras not recording, smoke alerts, or find black SUVs\" />"
+      },
+      {
+        "lineNum": 606,
+        "text": "<label className=\"wide\">Object classes (comma separated)<input value={classes} onChange={(event) => setClasses(event.target.value)} placeholder=\"person, vehicle\" /></label>"
+      },
+      {
+        "lineNum": 607,
+        "text": "<label className=\"wide\">Recipients (comma separated)<input value={recipients} onChange={(event) => setRecipients(event.target.value)} placeholder=\"soc@example.com, branch-manager\" /></label>"
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/person-reid-workspace.tsx",
+    "totalLines": 790,
+    "matches": [
+      {
+        "lineNum": 685,
+        "text": "placeholder=\"e.g. cam-entrance-01\""
+      },
+      {
+        "lineNum": 696,
+        "text": "placeholder=\"e.g. cam-hall-02\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/nbfc-rules/nbfc-rules-workspace.tsx",
+    "totalLines": 2086,
+    "matches": [
+      {
+        "lineNum": 959,
+        "text": "placeholder=\"Search rule name or description...\""
+      },
+      {
+        "lineNum": 962,
+        "text": "className=\"w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-500\""
+      },
+      {
+        "lineNum": 1689,
+        "text": "placeholder=\"e.g. Locker Maximum Occupancy\""
+      },
+      {
+        "lineNum": 2059,
+        "text": "placeholder=\"Describe what occurred and suggested tuning...\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/tailgating-detection-workspace.tsx",
+    "totalLines": 1228,
+    "matches": [
+      {
+        "lineNum": 781,
+        "text": "placeholder=\"Document guard dispatch, CCTV verification, or operator findings...\""
+      },
+      {
+        "lineNum": 783,
+        "text": "className=\"w-full rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500\""
+      }
+    ]
+  },
+  {
+    "comp": "dashboard/components/alerts/alerts-graphical-analytics.tsx",
+    "totalLines": 2304,
+    "matches": []
+  }
+]

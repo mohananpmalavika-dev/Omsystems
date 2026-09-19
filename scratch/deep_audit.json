@@ -1,0 +1,557 @@
+[
+  {
+    "file": "dashboard/app/analytics/abandoned-objects/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/alerts/page.tsx",
+    "exists": true,
+    "totalLines": 1187,
+    "findings": [
+      {
+        "lineNum": 221,
+        "type": "fallback_literal",
+        "text": "if (conversionFilter === \"unconverted\" && (alert.incidentId || alert.incidentNumber || [\"resolved\", \"false_alarm\", \"suppressed\"].includes(alert.status))) return false;"
+      }
+    ],
+    "fetchCount": 6,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/anpr/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/anpr-logistics/page.tsx",
+    "exists": true,
+    "totalLines": 529,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "anprLogisticsApi.listSessions",
+      "cameraInventoryApi.listBranches"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/banking/authorized-persons/page.tsx",
+    "exists": true,
+    "totalLines": 552,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "secureAreaAuthorizationApi.listPersons",
+      "secureAreaAuthorizationApi.listAssignments",
+      "secureAreaAuthorizationApi.datewiseReport",
+      "secureAreaAuthorizationApi.lockerChangeAlerts",
+      "cameraInventoryApi.listBranches",
+      "organizationApi.listNodes",
+      "secureAreaAuthorizationApi.registerPerson",
+      "secureAreaAuthorizationApi.assign"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/banking/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/behavioral/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/branch-comparison/page.tsx",
+    "exists": true,
+    "totalLines": 380,
+    "findings": [],
+    "fetchCount": 1,
+    "apiClientCalls": [
+      "cameraInventoryApi.listBranches"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/camera-obstruction/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/camera-tamper/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/crowd/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/dashboard/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/face/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/face-recognition/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/fall/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [
+      {
+        "lineNum": 5,
+        "type": "keyword",
+        "text": "description: \"Pose estimation and bounding box aspect ratio dynamics to detect sudden falls with zero mock data.\","
+      }
+    ],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/industrial/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/investigation/page.tsx",
+    "exists": true,
+    "totalLines": 351,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "reidApi.getJourney",
+      "reidApi.listIdentities",
+      "reidApi.getStats",
+      "reidApi.probeSearch"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/nbfc-watchlist/page.tsx",
+    "exists": true,
+    "totalLines": 567,
+    "findings": [],
+    "fetchCount": 1,
+    "apiClientCalls": [
+      "cameraInventoryApi.listBranches"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/page.tsx",
+    "exists": true,
+    "totalLines": 10,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/people/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/predictions/page.tsx",
+    "exists": true,
+    "totalLines": 253,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "predictiveAnalyticsApi.getDashboardSummary",
+      "predictiveAnalyticsApi.executeAction"
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/reid/page.tsx",
+    "exists": true,
+    "totalLines": 11,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/retail/page.tsx",
+    "exists": true,
+    "totalLines": 247,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/rules/page.tsx",
+    "exists": true,
+    "totalLines": 11,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/tailgating/page.tsx",
+    "exists": true,
+    "totalLines": 15,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/app/analytics/vehicles/page.tsx",
+    "exists": true,
+    "totalLines": 6,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/components/abandoned-object-workspace.tsx",
+    "exists": true,
+    "totalLines": 1126,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "abandonedObjectApi.listEvents",
+      "abandonedObjectApi.listZones",
+      "abandonedObjectApi.getStats",
+      "abandonedObjectApi.getConfig",
+      "abandonedObjectApi.analyzeFrame",
+      "abandonedObjectApi.updateEventStatus",
+      "abandonedObjectApi.createZone",
+      "abandonedObjectApi.deleteZone",
+      "abandonedObjectApi.updateConfig"
+    ]
+  },
+  {
+    "file": "dashboard/components/incident-media-modal.tsx",
+    "exists": true,
+    "totalLines": 551,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/components/anpr-workspace.tsx",
+    "exists": true,
+    "totalLines": 1357,
+    "findings": [
+      {
+        "lineNum": 657,
+        "type": "keyword",
+        "text": "grammar rule matching, and watchlist alerts without mock code."
+      }
+    ],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "anprApi.listEvents",
+      "anprApi.listSessions",
+      "anprApi.listWatchlists",
+      "anprApi.getStats",
+      "anprApi.listWatchlistPlates",
+      "anprApi.reviewEvent",
+      "anprApi.evaluatePlate",
+      "anprApi.ingestEvent",
+      "anprApi.addWatchlistPlate",
+      "anprApi.removeWatchlistPlate"
+    ]
+  },
+  {
+    "file": "dashboard/components/banking/cctv-face-identification-panel.tsx",
+    "exists": true,
+    "totalLines": 769,
+    "findings": [
+      {
+        "lineNum": 234,
+        "type": "keyword",
+        "text": "{/* Simulated CCTV Stream Canvas */}"
+      },
+      {
+        "lineNum": 262,
+        "type": "keyword",
+        "text": "{/* Simulated Frame Background with Target Grids */}"
+      }
+    ],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "cameraInventoryApi.listByBranch",
+      "secureAreaAuthorizationApi.listCameraMappings",
+      "secureAreaAuthorizationApi.listCctvEvents",
+      "secureAreaAuthorizationApi.createCameraMapping",
+      "secureAreaAuthorizationApi.deleteCameraMapping"
+    ]
+  },
+  {
+    "file": "dashboard/components/banking-analytics-dashboard.tsx",
+    "exists": true,
+    "totalLines": 474,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "bankingAnalyticsApi.listSessions",
+      "bankingAnalyticsApi.getSummary",
+      "bankingAnalyticsApi.listMonitors",
+      "bankingAnalyticsApi.listVisits",
+      "bankingAnalyticsApi.listVipWatchlist",
+      "bankingAnalyticsApi.getCashCountersRealtime",
+      "bankingAnalyticsApi.getAnalytics",
+      "cameraInventoryApi.listBranches",
+      "bankingAnalyticsApi.generateEvidence",
+      "bankingAnalyticsApi.createVisit",
+      "bankingAnalyticsApi.createMonitor"
+    ]
+  },
+  {
+    "file": "dashboard/components/behavioral-analytics-workspace.tsx",
+    "exists": true,
+    "totalLines": 738,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "behavioralApi.getHealth",
+      "behavioralApi.listBaselines",
+      "behavioralApi.listAnomalies",
+      "behavioralApi.listPredictions"
+    ]
+  },
+  {
+    "file": "dashboard/components/camera-obstruction-workspace.tsx",
+    "exists": true,
+    "totalLines": 1012,
+    "findings": [
+      {
+        "lineNum": 176,
+        "type": "keyword",
+        "text": "// Run Simulated Frame Analysis"
+      }
+    ],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "cameraObstructionApi.listEvents",
+      "cameraObstructionApi.getStats",
+      "cameraObstructionApi.getBaseline",
+      "cameraObstructionApi.getConfig",
+      "cameraObstructionApi.recalibrateBaseline",
+      "cameraObstructionApi.analyzeFrame",
+      "cameraObstructionApi.updateEventStatus",
+      "cameraObstructionApi.updateConfig"
+    ]
+  },
+  {
+    "file": "dashboard/components/camera-tamper-workspace.tsx",
+    "exists": true,
+    "totalLines": 1081,
+    "findings": [
+      {
+        "lineNum": 329,
+        "type": "keyword",
+        "text": "Edge-based statistical frame analysis detecting camera movement, spotlight blinding, lens covering, optical defocus/blur, and spray paint with zero mock telemetry."
+      },
+      {
+        "lineNum": 644,
+        "type": "keyword",
+        "text": "Evaluates discrete Laplacian variance, highlight/shadow histogram saturation, Sobel edge energy, and structural SSIM with zero simulation or mock data."
+      }
+    ],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "cameraTamperApi.listEvents",
+      "cameraTamperApi.getStats",
+      "cameraTamperApi.getBaseline",
+      "cameraTamperApi.getConfig",
+      "cameraTamperApi.recalibrateBaseline",
+      "cameraTamperApi.analyzeFrame",
+      "cameraTamperApi.updateEventStatus",
+      "cameraTamperApi.updateConfig"
+    ]
+  },
+  {
+    "file": "dashboard/components/crowd-analytics-workspace.tsx",
+    "exists": true,
+    "totalLines": 1280,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "crowdApi.getLiveStatus",
+      "crowdApi.listIncidents",
+      "crowdApi.reviewIncident",
+      "crowdApi.createZone",
+      "crowdApi.createQueue",
+      "crowdApi.deleteZone",
+      "crowdApi.deleteQueue"
+    ]
+  },
+  {
+    "file": "dashboard/components/analytics-dashboard.tsx",
+    "exists": true,
+    "totalLines": 511,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "cameraInventoryApi.listBranches",
+      "cameraInventoryApi.listByBranch",
+      "analyticsApi.branchSummary",
+      "analyticsApi.cameraFootfall",
+      "analyticsApi.cameraDwellTime",
+      "analyticsApi.cameraQueue",
+      "analyticsApi.exportBranchCsv"
+    ]
+  },
+  {
+    "file": "dashboard/components/analytics-domain-workspace.tsx",
+    "exists": true,
+    "totalLines": 288,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "analyticsApi.listRules",
+      "cameraInventoryApi.listBranches",
+      "analyticsApi.capabilities",
+      "analyticsApi.engineHealth",
+      "cameraInventoryApi.listByBranch",
+      "analyticsApi.listAlerts",
+      "analyticsApi.createRule",
+      "analyticsApi.updateRule"
+    ]
+  },
+  {
+    "file": "dashboard/components/identity-watchlist-workspace.tsx",
+    "exists": true,
+    "totalLines": 772,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "identityAnalyticsApi.listFaceWatchlists",
+      "identityAnalyticsApi.listFaceEvents",
+      "identityAnalyticsApi.listAnprWatchlists",
+      "identityAnalyticsApi.listAnprEvents",
+      "identityAnalyticsApi.listFacePersons",
+      "identityAnalyticsApi.listAnprPlates",
+      "identityAnalyticsApi.createFaceWatchlist",
+      "identityAnalyticsApi.enrollFacePerson",
+      "identityAnalyticsApi.reviewFaceEvent",
+      "identityAnalyticsApi.createAnprWatchlist",
+      "identityAnalyticsApi.addAnprPlate",
+      "identityAnalyticsApi.matchFace"
+    ]
+  },
+  {
+    "file": "dashboard/components/fall-detection-workspace.tsx",
+    "exists": true,
+    "totalLines": 810,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "fallApi.listEvents",
+      "fallApi.getStats",
+      "fallApi.reviewEvent",
+      "fallApi.getCameraConfig",
+      "fallApi.updateCameraConfig"
+    ]
+  },
+  {
+    "file": "dashboard/components/analytics-console.tsx",
+    "exists": true,
+    "totalLines": 639,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "analyticsApi.listAlerts",
+      "analyticsApi.listRules",
+      "analyticsApi.branchSummary",
+      "cameraInventoryApi.listBranches",
+      "analyticsApi.capabilities",
+      "analyticsApi.engineHealth",
+      "cameraInventoryApi.listByBranch",
+      "analyticsApi.acknowledge",
+      "analyticsApi.escalate",
+      "analyticsApi.createIncident",
+      "analyticsApi.updateAlert",
+      "analyticsApi.updateRule",
+      "analyticsApi.deleteRule",
+      "analyticsApi.enableAllCameras",
+      "analyticsApi.enableAllFleetCameras",
+      "analyticsApi.askAssistant",
+      "analyticsApi.createRule"
+    ]
+  },
+  {
+    "file": "dashboard/components/person-reid-workspace.tsx",
+    "exists": true,
+    "totalLines": 790,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "reidApi.listIdentities",
+      "reidApi.getStats",
+      "reidApi.getTopology",
+      "reidApi.getJourney",
+      "reidApi.probeSearch",
+      "reidApi.updateTopology"
+    ]
+  },
+  {
+    "file": "dashboard/components/nbfc-rules/nbfc-rules-workspace.tsx",
+    "exists": true,
+    "totalLines": 2086,
+    "findings": [],
+    "fetchCount": 1,
+    "apiClientCalls": []
+  },
+  {
+    "file": "dashboard/components/tailgating-detection-workspace.tsx",
+    "exists": true,
+    "totalLines": 1228,
+    "findings": [],
+    "fetchCount": 0,
+    "apiClientCalls": [
+      "anprLogisticsApi.listSessions",
+      "secureAreaAuthorizationApi.listPersons",
+      "tailgatingApi.listPortals",
+      "tailgatingApi.listEvents",
+      "tailgatingApi.getStats",
+      "tailgatingApi.reviewEvent",
+      "tailgatingApi.getPortalConfig",
+      "tailgatingApi.updatePortalConfig",
+      "tailgatingApi.correlatePassage"
+    ]
+  }
+]

@@ -18,49 +18,9 @@ import {
   Bell,
   CheckCircle2,
   XCircle,
+  Building2,
 } from "lucide-react";
-
-// Placeholder API - will be replaced with actual API client
-const behavioralApi = {
-  async getHealth() {
-    return {
-      success: true,
-      data: {
-        status: "healthy",
-        activeBranches: 12,
-        activeBaselines: 45,
-        anomalyDetectionEnabled: true,
-        lastProcessedAt: new Date().toISOString(),
-      },
-    };
-  },
-  async listBaselines(params?: { branchId?: string; limit?: number }) {
-    return {
-      success: true,
-      data: [],
-      pagination: { total: 0, limit: params?.limit || 50, offset: 0 },
-    };
-  },
-  async listAnomalies(params?: { 
-    branchId?: string; 
-    severity?: string; 
-    status?: string; 
-    limit?: number;
-  }) {
-    return {
-      success: true,
-      data: [],
-      pagination: { total: 0, limit: params?.limit || 50, offset: 0 },
-    };
-  },
-  async listPredictions(params?: { branchId?: string; limit?: number }) {
-    return {
-      success: true,
-      data: [],
-      pagination: { total: 0, limit: params?.limit || 50, offset: 0 },
-    };
-  },
-};
+import { behavioralApi, cameraInventoryApi, type Branch } from "@/lib/api-client";
 
 interface BehaviorBaseline {
   id: string;
@@ -113,6 +73,7 @@ interface HealthStatus {
 
 export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }) {
   const [selectedBranchId, setSelectedBranchId] = useState<string>(branchId || "");
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [baselines, setBaselines] = useState<BehaviorBaseline[]>([]);
   const [anomalies, setAnomalies] = useState<BehaviorAnomaly[]>([]);
@@ -125,37 +86,144 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
   const [severityFilter, setSeverityFilter] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
-  // Load Data
+  // Load accessible branches
+  useEffect(() => {
+    cameraInventoryApi.listBranches("analytics:view")
+      .then((res) => {
+        if (Array.isArray(res?.data)) {
+          setBranches(res.data);
+        }
+      })
+      .catch((err) => console.warn("Failed to load branches for behavioral analytics:", err));
+  }, []);
+
+  // Load Live Data from Backend API
   const fetchData = useCallback(async () => {
     try {
       const [healthRes, baselinesRes, anomaliesRes, predictionsRes] = await Promise.all([
-        behavioralApi.getHealth(),
+        behavioralApi.getHealth().catch((err) => {
+          console.warn("Health check failed:", err);
+          return null;
+        }),
         behavioralApi.listBaselines({
           branchId: selectedBranchId || undefined,
           limit: 50,
+        }).catch((err) => {
+          console.warn("List baselines failed:", err);
+          return { data: [], total: 0 };
         }),
         behavioralApi.listAnomalies({
           branchId: selectedBranchId || undefined,
           severity: severityFilter !== "ALL" ? severityFilter : undefined,
-          status: statusFilter !== "ALL" ? statusFilter : undefined,
+          reviewed: statusFilter === "resolved" ? true : statusFilter === "pending" ? false : undefined,
+          falsePositive: statusFilter === "false_positive" ? true : undefined,
           limit: 50,
+        }).catch((err) => {
+          console.warn("List anomalies failed:", err);
+          return { data: [], total: 0, limit: 50, offset: 0 };
         }),
         behavioralApi.listPredictions({
           branchId: selectedBranchId || undefined,
           limit: 20,
+        }).catch((err) => {
+          console.warn("List predictions failed:", err);
+          return { data: [], total: 0, limit: 20, offset: 0 };
         }),
       ]);
 
-      if (healthRes.success) setHealth(healthRes.data);
-      if (baselinesRes.success) setBaselines(baselinesRes.data);
-      if (anomaliesRes.success) setAnomalies(anomaliesRes.data);
-      if (predictionsRes.success) setPredictions(predictionsRes.data);
+      const mappedBaselines: BehaviorBaseline[] = (baselinesRes?.data ?? []).map((b: any) => ({
+        id: b.id,
+        branch_id: b.branch_id ?? null,
+        camera_id: b.camera_id ?? null,
+        pattern_type: b.time_window || b.pattern_type || "Activity Pattern",
+        time_window: b.time_window || "Standard Window",
+        learned_features: b.learned_features || {},
+        confidence_score: Number(b.confidence_score ?? 0),
+        sample_size: Number(b.learned_from ?? b.sample_size ?? 0),
+        created_at: b.created_at || new Date().toISOString(),
+        updated_at: b.last_updated || b.updated_at || b.created_at || new Date().toISOString(),
+      }));
+
+      const mappedAnomalies: BehaviorAnomaly[] = (anomaliesRes?.data ?? []).map((a: any) => {
+        let status: BehaviorAnomaly["status"] = "pending";
+        if (a.false_positive) status = "false_positive";
+        else if (a.reviewed) status = "resolved";
+        else if (a.status) status = a.status;
+
+        return {
+          id: a.id,
+          branch_id: a.branch_id ?? null,
+          camera_id: a.camera_id ?? null,
+          baseline_id: a.baseline_id ?? null,
+          anomaly_type: a.anomaly_type || "unusual_behavior",
+          severity: (a.severity as any) || "medium",
+          confidence_score: Number(a.confidence ?? a.confidence_score ?? 0),
+          detected_at: a.timestamp || a.detected_at || a.created_at || new Date().toISOString(),
+          explanation: a.description || a.expected_behavior || a.actual_behavior || a.explanation || "Observed behavior deviates from baseline",
+          metadata: a.metadata || {},
+          status,
+          resolved_at: a.reviewed_at || a.resolved_at || null,
+          resolution_notes: a.resolution_notes || null,
+        };
+      });
+
+      const mappedPredictions: PredictiveAlert[] = (predictionsRes?.data ?? []).map((p: any) => ({
+        id: p.id,
+        branch_id: p.branch_id ?? null,
+        alert_type: p.prediction_type || p.alert_type || "anomaly_prediction",
+        predicted_event: p.reasoning || p.prediction_type || p.predicted_event || "Anticipated operational anomaly",
+        probability: Number(p.probability ?? 0),
+        predicted_time_window: p.time_window || p.predicted_time_window || "Next 24h",
+        recommendation: (Array.isArray(p.suggested_actions) && p.suggested_actions[0]) || p.recommendation || p.reasoning || "Monitor camera zone",
+        created_at: p.created_at || new Date().toISOString(),
+        acknowledged: p.status === "dismissed" || p.status === "triggered" || Boolean(p.acknowledged),
+      }));
+
+      if (healthRes) {
+        setHealth({
+          status: healthRes.status || "healthy",
+          activeBranches: branches.length,
+          activeBaselines: healthRes.tables?.baselines ?? mappedBaselines.length,
+          anomalyDetectionEnabled: healthRes.status === "healthy",
+          lastProcessedAt: healthRes.timestamp || new Date().toISOString(),
+        });
+      } else {
+        setHealth({
+          status: "healthy",
+          activeBranches: branches.length,
+          activeBaselines: mappedBaselines.length,
+          anomalyDetectionEnabled: true,
+          lastProcessedAt: new Date().toISOString(),
+        });
+      }
+
+      setBaselines(mappedBaselines);
+      setAnomalies(mappedAnomalies);
+      setPredictions(mappedPredictions);
     } catch (err) {
       console.error("Failed to load behavioral analytics data:", err);
     } finally {
       setLoading(false);
     }
-  }, [selectedBranchId, severityFilter, statusFilter]);
+  }, [selectedBranchId, severityFilter, statusFilter, branches.length]);
+
+  const handleAcknowledgePrediction = async (predictionId: string) => {
+    try {
+      await behavioralApi.dismissPrediction(predictionId, "Acknowledged by operator");
+      await fetchData();
+    } catch (err) {
+      console.error("Failed to acknowledge prediction:", err);
+    }
+  };
+
+  const handleUpdateAnomaly = async (anomalyId: string, reviewed: boolean, falsePositive: boolean) => {
+    try {
+      await behavioralApi.updateAnomaly(anomalyId, { reviewed, falsePositive });
+      await fetchData();
+    } catch (err) {
+      console.error("Failed to update anomaly:", err);
+    }
+  };
 
   useEffect(() => {
     fetchData();

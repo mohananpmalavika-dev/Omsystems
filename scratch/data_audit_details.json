@@ -1,0 +1,173 @@
+[
+  {
+    "file": "abandoned-objects/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "alerts/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": [
+      "console.error(\"Incident conversion failed:\", err);\r\n      setActionMessage({\r\n        kind: \"error\",\r\n        text: `Conversion failed: ${err.message || \"Unknown error\"",
+      "console.error(\"Failed to mark false alarm:\", err);\r\n      setActionMessage({\r\n        kind: \"error\",\r\n        text: `Failed to mark false alarm: ${err.message || \"Unknown error\""
+    ]
+  },
+  {
+    "file": "anpr/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "anpr-logistics/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": [
+      "if (!quiet) setMessage({ kind: \"error\", text: error instanceof Error ? error.message : \"Failed to load logistics data\""
+    ]
+  },
+  {
+    "file": "banking/authorized-persons/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "banking/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "behavioral/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "branch-comparison/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": [
+      "if (!quiet) setMessage({ kind: \"error\", text: error instanceof Error ? error.message : \"Failed to load comparison data\""
+    ]
+  },
+  {
+    "file": "camera-obstruction/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "camera-tamper/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "crowd/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "dashboard/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "face/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "face-recognition/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "fall/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "industrial/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "investigation/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "layout.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "nbfc-watchlist/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": [
+      "if (!quiet) setMessage({ kind: \"error\", text: error instanceof Error ? error.message : \"Failed to load watchlist data\""
+    ]
+  },
+  {
+    "file": "page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "people/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "predictions/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "reid/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "retail/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "rules/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "tailgating/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  },
+  {
+    "file": "vehicles/page.tsx",
+    "hardcodedArrays": [],
+    "useStateNonEmpty": [],
+    "catchBlocksWithFallbacks": []
+  }
+]
