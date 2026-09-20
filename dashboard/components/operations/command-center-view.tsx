@@ -313,11 +313,11 @@ export function CommandCenterView() {
       {/* Top Banner & Header */}
       <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
         <div>
-          <p className="command-center-kicker"><Sparkles size={13} /> Operations intelligence</p>
+          <p className="command-center-kicker"><Sparkles size={13} /> Bank &amp; NBFC protection intelligence</p>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-blue-400" />
-              Surveillance Command Center
+              24×7 Branch Protection Command Center
             </h1>
             <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}>
               <span className="telemetry-truth-dot" />
@@ -376,33 +376,33 @@ export function CommandCenterView() {
 
       <nav className="command-center-workflow" aria-label="Security operations workflow">
         <div className="command-center-workflow-intro">
-          <span>OPERATOR PATH</span>
-          <strong>Move from signal to proof</strong>
+          <span>BRANCH PROTECTION PATH</span>
+          <strong>Keep every branch protected, 24×7.</strong>
         </div>
         <div className="command-center-workflow-steps">
           <Link href="/control-room" onClick={navigateTo("/control-room")} className="active">
             <span className="workflow-step-index">01</span>
-            <span><strong>Monitor</strong><small>See what is happening</small></span>
+            <span><strong>Protect 24×7</strong><small>See branch coverage and risk</small></span>
             <Play className="workflow-step-icon" />
           </Link>
           <Link href={`/video-search${workflowContext}`} onClick={navigateTo(`/video-search${workflowContext}`)}>
             <span className="workflow-step-index">02</span>
-            <span><strong>Investigate</strong><small>Find supporting video</small></span>
+            <span><strong>Investigate fast</strong><small>Find the supporting video</small></span>
             <Search className="workflow-step-icon" />
           </Link>
           <Link href={`/incidents${workflowContext}`} onClick={navigateTo(`/incidents${workflowContext}`)}>
             <span className="workflow-step-index">03</span>
-            <span><strong>Respond</strong><small>Assign and resolve</small></span>
+            <span><strong>Resolve risk</strong><small>Assign, control, and close</small></span>
             <Siren className="workflow-step-icon" />
           </Link>
           <Link href={`/maintenance/workorders${workflowContext}`} onClick={navigateTo(`/maintenance/workorders${workflowContext}`)}>
             <span className="workflow-step-index">04</span>
-            <span><strong>Maintain</strong><small>Prevent repeat failures</small></span>
+            <span><strong>Protect coverage</strong><small>Prevent repeat failures</small></span>
             <Wrench className="workflow-step-icon" />
           </Link>
           <Link href={`/evidence${workflowContext}`} onClick={navigateTo(`/evidence${workflowContext}`)}>
             <span className="workflow-step-index">05</span>
-            <span><strong>Prove</strong><small>Protect the audit trail</small></span>
+            <span><strong>Preserve proof</strong><small>Keep an auditable custody trail</small></span>
             <FileCheck2 className="workflow-step-icon" />
           </Link>
         </div>

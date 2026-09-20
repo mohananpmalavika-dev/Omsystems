@@ -12,20 +12,20 @@ export default function Page() {
         <header className="overview-heading mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="eyebrow-label">
-              Enterprise surveillance operations
+              Bank &amp; NBFC security operations
             </p>
             <h1 className="overview-title mt-1 text-2xl font-bold text-slate-100 sm:text-3xl">
-              Security intelligence, in one view
+              Keep every branch protected, 24×7.
             </h1>
             <p className="overview-subtitle mt-1 max-w-2xl text-sm text-slate-400">
-              Monitor branch health, prioritise response, and preserve the evidence trail without losing operational context.
+              Surface cash-area, sensitive-zone, and perimeter risk early; investigate quickly; preserve video with verifiable integrity and custody.
             </p>
           </div>
           <div className="overview-identity" aria-label="Operational workflow">
             <span className="overview-identity-icon"><ShieldCheck size={19} /></span>
             <span>
-              <small>Controlled operations</small>
-              <strong>Monitor · Investigate · Prove</strong>
+              <small>24×7 evidence-led protection</small>
+              <strong>Protect · Investigate fast · Preserve proof</strong>
             </span>
           </div>
         </header>

@@ -39,13 +39,13 @@ const groups = [
     ],
   },
   {
-    label: "BFSI intelligence",
+    label: "Bank & NBFC risk",
     items: [
-      { label: "BFSI security analytics", href: "/analytics/banking", permission: "/analytics/banking", icon: Landmark },
+      { label: "Cash, vault & perimeter risk", href: "/analytics/banking", permission: "/analytics/banking", icon: Landmark },
       { label: "Authorised persons", href: "/analytics/banking/authorized-persons", permission: "/analytics/banking", icon: UserRoundCheck },
       { label: "NBFC watchlist monitoring", href: "/analytics/nbfc-watchlist", permission: "/analytics/banking", icon: CircleUserRound },
       { label: "Cash logistics", href: "/analytics/anpr-logistics", permission: "/analytics/anpr", icon: CarFront },
-      { label: "Branch comparison", href: "/analytics/branch-comparison", permission: "/analytics/banking", icon: Building2 },
+      { label: "Branch risk comparison", href: "/analytics/branch-comparison", permission: "/analytics/banking", icon: Building2 },
     ],
   },
   {

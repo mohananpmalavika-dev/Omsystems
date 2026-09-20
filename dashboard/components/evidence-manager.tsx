@@ -121,9 +121,9 @@ export function EvidenceManager() {
   return (
     <div className="evidence-manager-container">
       <PageHero
-        eyebrow="Forensics & chain of custody"
-        title="Evidence management vault"
-        description="Preserve recordings, snapshots and case artifacts with verified integrity, legal holds and an auditable custody trail."
+        eyebrow="Evidence integrity & custody"
+        title="Preserve proof with confidence"
+        description="Preserve recordings, snapshots, and case artifacts with verifiable integrity, legal holds, and an auditable custody trail."
         icon={Shield}
         actions={<button className="btn-primary" onClick={() => setShowCreateModal(true)}><Plus size={16} />New evidence case</button>}
       />

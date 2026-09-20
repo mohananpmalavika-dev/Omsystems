@@ -125,11 +125,11 @@ export type NavGroup = {
 
 function sectionLabel(label: string) {
   const labels: Record<string, string> = {
-    "WORKSPACE": "Workspace",
-    "SURVEILLANCE & INVESTIGATION": "Surveillance & playback",
-    "DEVICE HEALTH & MAINTENANCE": "Devices & health",
-    "INTELLIGENCE & AI": "Analytics & intelligence",
-    "AUDIT, MIS & COMPLIANCE": "Audit, MIS & compliance",
+    "WORKSPACE": "Branch operations",
+    "SURVEILLANCE & INVESTIGATION": "Investigate & respond",
+    "DEVICE HEALTH & MAINTENANCE": "Branch uptime",
+    "INTELLIGENCE & AI": "Risk intelligence",
+    "AUDIT, MIS & COMPLIANCE": "Evidence & assurance",
     "ADMINISTRATION": "Administration",
   };
   return labels[label] || label.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -140,7 +140,7 @@ export const navigation: NavGroup[] = [
     label: "WORKSPACE",
     icon: LayoutGrid,
     items: [
-      { label: "NBFC Operations", href: "/nbfc-operations", icon: Landmark },
+      { label: "Bank & NBFC security operations", href: "/nbfc-operations", icon: Landmark },
       { label: "Command Center", href: "/", icon: LayoutDashboard },
       { label: "My workspace", href: "/role-dashboard", icon: BarChart3 },
       { label: "Module directory", href: "/modules", icon: LayoutGrid },
@@ -150,11 +150,11 @@ export const navigation: NavGroup[] = [
     label: "SURVEILLANCE & INVESTIGATION",
     icon: MonitorPlay,
     items: [
-      { label: "Live Video Wall", href: "/control-room", icon: MonitorPlay },
-      { label: "Video search", href: "/video-search", icon: Search },
+      { label: "Live branch coverage", href: "/control-room", icon: MonitorPlay },
+      { label: "Investigate video", href: "/video-search", icon: Search },
       { label: "Synchronized playback", href: "/playback/synced", icon: Play },
-      { label: "Recordings & Vault", href: "/recordings", icon: FileVideo2 },
-      { label: "Evidence & Chain of Custody", href: "/evidence", icon: FileCheck2 },
+      { label: "Recording continuity", href: "/recordings", icon: FileVideo2 },
+      { label: "Evidence integrity & custody", href: "/evidence", icon: FileCheck2 },
       { label: "Security alerts", href: "/analytics/alerts", icon: BellRing },
       { label: "Device health alerts", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
@@ -164,22 +164,22 @@ export const navigation: NavGroup[] = [
     label: "INTELLIGENCE & AI",
     icon: Sparkles,
     items: [
-      { label: "Video intelligence", href: "/analytics", icon: Activity },
+      { label: "Branch risk intelligence", href: "/analytics", icon: Activity },
       { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
       { label: "Rules & automation", href: "/analytics/rules", icon: SlidersHorizontal },
       { label: "Investigation workspace", href: "/analytics/investigation", icon: Route },
       { label: "Predictive operations", href: "/analytics/predictions", icon: TrendingUp },
       { label: "Retail Analytics", href: "/analytics/retail", icon: ShoppingBag },
-      { label: "BFSI Security Analytics", href: "/analytics/banking", icon: Landmark },
+      { label: "Cash, vault & perimeter risk", href: "/analytics/banking", icon: Landmark },
     ],
   },
   {
     label: "DEVICE HEALTH & MAINTENANCE",
     icon: HeartPulse,
     items: [
-      { label: "Camera & Device Health", href: "/operations/cameras", icon: Camera, badge: "cameras" },
-      { label: "Recording Health", href: "/operations/recording", icon: FileVideo2 },
+      { label: "Camera & device uptime", href: "/operations/cameras", icon: Camera, badge: "cameras" },
+      { label: "Recording continuity", href: "/operations/recording", icon: FileVideo2 },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
       { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
@@ -194,7 +194,7 @@ export const navigation: NavGroup[] = [
       { label: "Cost & value analysis", href: "/reports/financial", icon: TrendingUp },
       { label: "Compliance Frameworks", href: "/compliance", icon: ShieldCheck },
       { label: "Compliance Controls", href: "/compliance/controls", icon: SlidersHorizontal },
-      { label: "Compliance Evidence", href: "/compliance/evidence", icon: FileCheck2 },
+      { label: "Evidence assurance", href: "/compliance/evidence", icon: FileCheck2 },
       { label: "Branch Compliance Audit", href: "/audit/branch-compliance", icon: Building2 },
       { label: "Camera Health Audit", href: "/audit/health", icon: Gauge },
       { label: "Activity & Access Logs", href: "/activity-report", icon: UserRoundCog },
