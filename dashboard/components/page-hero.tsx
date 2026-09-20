@@ -21,7 +21,7 @@ export function PageHero({
   icon: Icon,
   actions,
   backHref = "/",
-  backLabel = "Back to workspace",
+  backLabel = "Command center",
   tone = "navy",
 }: PageHeroProps) {
   return (

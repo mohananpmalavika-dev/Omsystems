@@ -42,6 +42,7 @@ import {
 import { EnhancedCameraGrid, type GridLayout, type GridSize } from "@/components/enhanced-camera-grid";
 import { LiveAiWallPanel } from "@/components/live-ai-wall-panel";
 import { EmergencyAlarmPopup } from "@/components/emergency-alarm-popup";
+import { InvestigationFlowNav } from "@/components/investigation-flow-nav";
 import { useLiveAiWall } from "@/hooks/use-live-ai-wall";
 import type { Camera as CameraType } from "@/lib/types";
 import { normalizeCameraStreamProfiles } from "@/lib/camera-stream-profiles";
@@ -830,6 +831,8 @@ function ControlRoomContent() {
           </button>
         </div>
       </header>
+
+      <InvestigationFlowNav />
 
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
       <section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
