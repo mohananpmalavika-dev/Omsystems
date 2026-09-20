@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, stat } from "node:fs/promises";
+import { cp, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,4 +27,12 @@ for (const moduleName of requiredModules) {
   await cp(source, destination, { recursive: true });
 }
 
+// pkg's internal CJS loader does not support package.json subpath exports mappings,
+// so require("@img/sharp-win32-x64/sharp.node") in sharp.cjs fails unless this shim exists.
+await writeFile(
+  join(releaseModules, "@img", "sharp-win32-x64", "sharp.node.js"),
+  "module.exports = require('./lib/sharp-win32-x64-0.35.4.node');\n",
+);
+
 process.stdout.write(`Staged Windows native modules in ${releaseModules}\n`);
+
