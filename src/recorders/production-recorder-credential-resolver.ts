@@ -1,7 +1,7 @@
 import type { CredentialResolver } from "../../packages/recorder-sdk/src/transport/recorder-http-client.js";
 import { RecorderAuthenticationError } from "../../packages/recorder-sdk/src/core/recorder-driver.types.js";
 import { RecorderManager } from "../../packages/recorder-sdk/src/core/recorder-manager.js";
-import type { ControlPlaneStore } from "../control-plane-store.js";
+import type { ExtendedControlPlaneStore } from "../control-plane-store.js";
 import { DeviceCredentialService } from "../services/device-credential-service.js";
 
 export interface RecorderCredentialRecord {
@@ -75,7 +75,7 @@ export class ProductionRecorderCredentialResolver implements CredentialResolver 
   }
 }
 
-export function createProductionRecorderManager(store: ControlPlaneStore): RecorderManager {
+export function createProductionRecorderManager(store: ExtendedControlPlaneStore): RecorderManager {
   const credentialService = new DeviceCredentialService(store);
   const resolver = new ProductionRecorderCredentialResolver(
     store,

@@ -212,7 +212,7 @@ export class DahuaCGIDriver implements RecorderDriver {
     try {
       const resp = await this.httpClient.get(ctx, "/cgi-bin/mediaFileFind.cgi", {
         action: "findFile",
-        channel: request.channelNumber,
+        channel: request.channelNumber ?? 1,
         startTime: formatDahuaPlaybackTime(request.from),
         endTime: formatDahuaPlaybackTime(request.to),
       });

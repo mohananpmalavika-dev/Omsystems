@@ -238,7 +238,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     ctx: RecorderContext,
     request: StreamRequest
   ): Promise<StreamEndpoint> {
-    const channelId = parseInt(request.channelId);
+    const channelId = parseInt(request.channelId ?? String(request.channelNumber ?? 1));
     const trackId = this.hikvisionTrackId(channelId);
     
     // Hikvision RTSP format: rtsp://<ip>:<port>/Streaming/Channels/<trackId>
@@ -299,7 +299,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
       if (result.segments.length > 0) {
         const latest = result.segments.reduce((max, seg) => 
           seg.endTime > max ? seg.endTime : max, 
-          result.segments[0].endTime
+          result.segments[0]!.endTime
         );
         
         const ageSeconds = (now.getTime() - latest.getTime()) / 1000;
@@ -344,7 +344,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     ctx: RecorderContext,
     request: RecordingSearchRequest
   ): Promise<RecordingSearchResult> {
-    const channelIndex = parseInt(request.channelId);
+    const channelIndex = parseInt(request.channelId ?? String(request.channelNumber ?? 1));
     const trackId = this.hikvisionTrackId(channelIndex);
     
     const result = await this.searchRecordingsInternal(
@@ -515,7 +515,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     const matches = xml.matchAll(
       new RegExp(`<(?:[^:>]+:)?${tagName}>([^<]+)<\\/(?:[^:>]+:)?${tagName}>`, "gi")
     );
-    return Array.from(matches).map(m => m[1].trim());
+    return Array.from(matches).map(m => (m[1] ?? "").trim());
   }
   
   /**
@@ -545,6 +545,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     
     for (const block of channelBlocks) {
       const channelBody = block[1];
+      if (!channelBody) continue;
       const idStr = this.extractTag(channelBody, "id");
       if (!idStr) continue;
       
@@ -575,6 +576,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
       
       for (const block of statusBlocks) {
         const statusBody = block[1];
+        if (!statusBody) continue;
         const idStr = this.extractTag(statusBody, "id");
         const onlineStr = this.extractTag(statusBody, "online")?.toLowerCase();
         
@@ -585,7 +587,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
       
       // Update connection states
       for (const channel of channels) {
-        const online = statusMap.get(parseInt(channel.id));
+        const online = channel.id ? statusMap.get(parseInt(channel.id)) : undefined;
         if (online !== undefined) {
           channel.connectionState = online ? "ONLINE" : "OFFLINE";
         }
@@ -611,6 +613,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     let index = 0;
     for (const block of hddBlocks) {
       const hddBody = block[1];
+      if (!hddBody) continue;
       
       const id = this.extractTag(hddBody, "id") || String(index + 1);
       const name = this.extractTag(hddBody, "name") || `HDD ${index + 1}`;
@@ -685,6 +688,7 @@ export class HikvisionISAPIDriver implements RecorderDriver {
     
     for (const item of items) {
       const itemBody = item[1];
+      if (!itemBody) continue;
       
       const startTimeStr = this.extractTag(itemBody, "startTime");
       const endTimeStr = this.extractTag(itemBody, "endTime");
