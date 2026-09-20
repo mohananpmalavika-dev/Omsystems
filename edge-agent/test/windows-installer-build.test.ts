@@ -34,7 +34,7 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("schtasks.exe");
     expect(installer).toContain("netsh.exe");
     expect(installer).toContain("StopOldAgent");
-    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22')");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23')");
   });
 
   it("does not expand the app folder before Inno Setup initializes it", async () => {
@@ -53,6 +53,16 @@ describe("Native Windows installer release build", () => {
     expect(script).toContain("function PrepareToInstall(var NeedsRestart: Boolean): String;");
     expect(script).toContain("Installer Pascal code must never expand {app}");
     expect(script).not.toContain("InitializeAgentWizard;\n  Log('EDGE_INSTALLER_STARTUP_PASSED');");
+  });
+
+  it("registers the startup task from XML without nested command-line quoting", async () => {
+    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+
+    expect(installer).toContain("<Command>' + XmlText(ProgramPath) + '</Command>");
+    expect(installer).toContain("<Arguments>' + XmlText(Arguments) + '</Arguments>");
+    expect(installer).toContain("<WorkingDirectory>' + XmlText(AppPath) + '</WorkingDirectory>");
+    expect(installer).toContain("/XML \"' + TaskXmlPath + '\" /F");
+    expect(installer).not.toContain('/TR "');
   });
 
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {

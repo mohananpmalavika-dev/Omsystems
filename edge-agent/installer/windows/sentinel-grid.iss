@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.22
+AppVersion=0.1.23
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.22-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.23-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -125,6 +125,14 @@ function DotenvPath(const Value: String): String;
 begin
   Result := Value;
   StringChange(Result, '\', '/');
+end;
+
+function XmlText(const Value: String): String;
+begin
+  Result := Value;
+  StringChange(Result, '&', '&amp;');
+  StringChange(Result, '<', '&lt;');
+  StringChange(Result, '>', '&gt;');
 end;
 
 function HasUnsafeConfigText(const Value: String): Boolean;
@@ -329,7 +337,7 @@ begin
   if UsePackageConfiguration then begin
     if not CopyFile(PackageConfigPath, ConfigPath, False) then
       RaiseException('The branch configuration from the installer package could not be saved.');
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23');
     UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
     UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
     UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
@@ -341,7 +349,7 @@ begin
     'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
-    'EDGE_AGENT_VERSION="0.1.22"' + #13#10 +
+    'EDGE_AGENT_VERSION="0.1.23"' + #13#10 +
     'EDGE_IDENTITY_PATH="' + DataPath + '/device-identity.enc"' + #13#10 +
     'EDGE_IDENTITY_KEY_PATH="' + DataPath + '/device-identity.key"' + #13#10 +
     'EDGE_OFFLINE_OUTBOX_PATH="' + DataPath + '/offline-outbox.enc"' + #13#10 +
@@ -408,12 +416,29 @@ end;
 
 procedure RegisterAgentTask;
 var
-  Command: String;
+  TaskXmlPath: String;
+  ProgramPath: String;
+  Arguments: String;
+  TaskXml: String;
 begin
-  Command := '"' + AddBackslash(AppPath) + 'edge-agent.exe" --run --config "' + ConfigPath + '"';
+  TaskXmlPath := ExpandConstant('{tmp}\edge-agent-startup-task.xml');
+  ProgramPath := AddBackslash(AppPath) + 'edge-agent.exe';
+  Arguments := '--run --config "' + ConfigPath + '"';
+  TaskXml :=
+    '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 +
+    '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">' + #13#10 +
+    '  <RegistrationInfo><Description>KryptonVision branch edge agent</Description></RegistrationInfo>' + #13#10 +
+    '  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>' + #13#10 +
+    '  <Principals><Principal id="System"><UserId>S-1-5-18</UserId><LogonType>ServiceAccount</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>' + #13#10 +
+    '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure></Settings>' + #13#10 +
+    '  <Actions Context="System"><Exec><Command>' + XmlText(ProgramPath) + '</Command><Arguments>' + XmlText(Arguments) + '</Arguments><WorkingDirectory>' + XmlText(AppPath) + '</WorkingDirectory></Exec></Actions>' + #13#10 +
+    '</Task>' + #13#10;
+  if not SaveStringToFile(TaskXmlPath, TaskXml, False) then
+    RaiseException('Unable to prepare the Sentinel Grid startup task definition.');
   RunNative(ExpandConstant('{sys}\schtasks.exe'),
-    '/Create /TN "' + TaskName + '" /TR "' + Command + '" /SC ONSTART /RU SYSTEM /RL HIGHEST /F',
+    '/Create /TN "' + TaskName + '" /XML "' + TaskXmlPath + '" /F',
     'Unable to register the Sentinel Grid startup task', True);
+  DeleteFile(TaskXmlPath);
   RunNative(ExpandConstant('{sys}\schtasks.exe'), '/Run /TN "' + TaskName + '"',
     'Unable to start the Sentinel Grid Edge Agent', True);
 end;
@@ -425,7 +450,7 @@ begin
   StopOldAgent;
   UnpackRuntime;
   if ExistingInstall or FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.22')
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23')
   else
     WriteFreshConfig;
   ProtectConfigFile;
@@ -434,7 +459,7 @@ begin
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.22' + #13#10 +
+    'Version: 0.1.23' + #13#10 +
     'Installer: Native Windows', False);
 end;
 
