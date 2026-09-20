@@ -20,25 +20,20 @@ describe("website scanner launch flow", () => {
     expect(sessionProvider).not.toContain("requestLocalEdgeAutostart");
     expect(loginForm).not.toContain("requestLocalEdgeAutostart");
     expect(loginForm).not.toContain("requestInstalledEdgeStart");
-    expect(autostart).toContain('launcher.src = "sentinel-grid-scanner://start"');
+    expect(autostart).not.toContain("sentinel-grid-scanner://");
     expect(autostart).not.toContain("sessionStorage");
   });
 
-  it("reuses the installed edge agent from the activation button before offering repair", async () => {
+  it("checks for installed edge agent from the activation button before offering repair", async () => {
     const provisioningRun = await readFile("dashboard/components/provisioning-run.tsx", "utf8");
     const autostart = await readFile("dashboard/lib/local-edge-autostart.ts", "utf8");
-    const windowsLauncher = await readFile("edge-agent/installer/windows/open-dashboard-scan.ps1", "utf8");
 
-    expect(provisioningRun).toContain("requestInstalledEdgeStart()");
     expect(provisioningRun).toContain("cameraInventoryApi.listGateways(branchId)");
     expect(provisioningRun).toContain('res.status === "not-enrolled"');
-    expect(provisioningRun).toContain("Enable installed gateway");
-    expect(provisioningRun).toContain("Use Repair only if the installed task cannot start");
     expect(provisioningRun).not.toContain("downloadInstallerFromActivation");
+    expect(provisioningRun).not.toContain("sentinel-grid-scanner://");
     expect(autostart).toContain("export function requestInstalledEdgeStart()");
-    expect(windowsLauncher).toContain("Register-EdgeStartupTask");
-    expect(windowsLauncher).toContain("-RepairStartupTask");
-    expect(windowsLauncher).toContain("-Verb RunAs");
+    expect(autostart).not.toContain("sentinel-grid-scanner://");
   });
 
   it("downloads installer packages through the authenticated API path in an iframe", async () => {

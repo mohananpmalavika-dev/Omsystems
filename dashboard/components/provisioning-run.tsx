@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cameraInventoryApi, provisioningApi } from "@/lib/api-client";
-import { requestInstalledEdgeStart } from "@/lib/local-edge-autostart";
 import type { ProvisioningRun as ProvisioningRunModel, ProvisioningStepStatus } from "@/lib/types";
 
 const edgeActivationTimeoutMs = 15_000;
@@ -93,12 +92,6 @@ export function ProvisioningRun({
     setError(undefined);
     setNotice(undefined);
 
-    // This custom protocol is installed with the Windows edge agent. Invoke it
-    // directly from the click event so the browser can ask the operator for
-    // permission to start the existing scheduled task. It never downloads or
-    // changes the branch enrollment.
-    if (hasEnrolledAgent) requestInstalledEdgeStart();
-
     try {
       const res = await provisioningApi.activateEdgeOnline(branchId);
       if (!mountedRef.current) return;
@@ -131,7 +124,7 @@ export function ProvisioningRun({
       }
 
       if (!mountedRef.current) return;
-      throw new Error("The installed KryptonVision Edge Agent did not come online. Approve the browser's Open KryptonVision Scanner prompt, then retry. Use Repair only if the installed task cannot start.");
+      throw new Error("The installed KryptonVision Edge Agent did not come online. Verify that the agent process is running on the branch computer, then retry.");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Failed to activate Edge Agent online.");
     } finally {

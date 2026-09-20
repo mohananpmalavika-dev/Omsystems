@@ -166,11 +166,10 @@ describe("branch edge-agent package", () => {
       expect(embeddedConfig(scanner)).toContain('EDGE_MANAGED_MEDIA_BOOTSTRAP="false"');
       expect(embeddedConfig(scanner)).toContain('MEDIA_TUNNEL_MODE="disabled"');
       expect(embeddedConfig(scanner)).toContain('MEDIA_QUICK_TUNNEL_FALLBACK="false"');
-      expect(zipEntry(response.rawPayload, "Run Local Discovery.cmd").toString("utf8"))
-        .toContain('Run Local Discovery.ps1');
-      const runner = zipEntry(response.rawPayload, "Run Local Discovery.ps1").toString("utf8");
-      expect(runner).toContain("Bengaluru-Branch-001-local-network-scanner.exe') --scan-once");
-      expect(runner).not.toContain("Get-Credential");
+      const runCmd = zipEntry(response.rawPayload, "Run Local Discovery.cmd").toString("utf8");
+      expect(runCmd).toContain("Bengaluru-Branch-001-local-network-scanner.exe");
+      expect(runCmd).toContain("--scan-once");
+      expect(runCmd).not.toContain("powershell");
       expect(embeddedConfig(scanner)).not.toContain("CAMERA_PASSWORD=");
       expect(store.auditEvents.at(-1)?.action).toBe("edge_agent.local_scanner_downloaded");
     } finally {

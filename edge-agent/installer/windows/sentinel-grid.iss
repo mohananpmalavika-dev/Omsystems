@@ -394,6 +394,7 @@ begin
   RunNative(ExpandConstant('{sys}\sc.exe'), 'stop "' + LegacyServiceName + '"', '', False);
   Sleep(1500);
   RunNative(ExpandConstant('{sys}\sc.exe'), 'delete "' + LegacyServiceName + '"', '', False);
+  RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'SOFTWARE\Classes\sentinel-grid-scanner');
 end;
 
 procedure ConfigureFirewall;
@@ -477,5 +478,6 @@ begin
     RunNative(ExpandConstant('{sys}\sc.exe'), 'stop "' + LegacyServiceName + '"', '', False);
     RunNative(ExpandConstant('{sys}\sc.exe'), 'delete "' + LegacyServiceName + '"', '', False);
     RunNative(ExpandConstant('{sys}\netsh.exe'), 'advfirewall firewall delete rule name="' + FirewallRuleName + '"', '', False);
+    RegDeleteKeyIncludingSubkeys(HKEY_LOCAL_MACHINE, 'SOFTWARE\Classes\sentinel-grid-scanner');
   end;
 end;

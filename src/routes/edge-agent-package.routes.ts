@@ -802,18 +802,12 @@ export async function registerEdgeAgentPackageRoutes(
           const runner = [
             "@echo off",
             "setlocal",
-            "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"%~dp0Run Local Discovery.ps1\"",
+            `"%~dp0${scannerName}" --scan-once`,
             "set EXIT_CODE=%ERRORLEVEL%",
             "echo.",
             `if not "%EXIT_CODE%"=="0" echo Discovery failed. Check that this PC is on the branch camera network and can reach KryptoVision.`,
             "pause",
             "exit /b %EXIT_CODE%",
-            "",
-          ].join("\r\n");
-          const powerShellRunner = [
-            "$ErrorActionPreference = 'Stop'",
-            `& (Join-Path $PSScriptRoot '${scannerName}') --scan-once`,
-            "exit $LASTEXITCODE",
             "",
           ].join("\r\n");
           await store.writeAudit({
@@ -834,7 +828,6 @@ export async function registerEdgeAgentPackageRoutes(
           return reply.send(makeZip([
             { name: scannerName, data: scanner },
             { name: "Run Local Discovery.cmd", data: Buffer.from(runner, "utf8") },
-            { name: "Run Local Discovery.ps1", data: Buffer.from(powerShellRunner, "utf8") },
             { name: "README.txt", data: Buffer.from(localDiscoveryReadme(branch.name), "utf8") },
           ]));
         }
