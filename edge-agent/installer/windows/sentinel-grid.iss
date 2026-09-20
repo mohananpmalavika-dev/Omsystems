@@ -425,11 +425,10 @@ begin
   ProgramPath := AddBackslash(AppPath) + 'edge-agent.exe';
   Arguments := '--run --config "' + ConfigPath + '"';
   TaskXml :=
-    '<?xml version="1.0" encoding="UTF-8"?>' + #13#10 +
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">' + #13#10 +
     '  <RegistrationInfo><Description>KryptonVision branch edge agent</Description></RegistrationInfo>' + #13#10 +
     '  <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>' + #13#10 +
-    '  <Principals><Principal id="System"><UserId>S-1-5-18</UserId><LogonType>ServiceAccount</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>' + #13#10 +
+    '  <Principals><Principal id="System"><UserId>S-1-5-18</UserId><RunLevel>HighestAvailable</RunLevel></Principal></Principals>' + #13#10 +
     '  <Settings><MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries><StopIfGoingOnBatteries>false</StopIfGoingOnBatteries><AllowHardTerminate>true</AllowHardTerminate><StartWhenAvailable>true</StartWhenAvailable><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>true</Enabled><ExecutionTimeLimit>PT0S</ExecutionTimeLimit><RestartOnFailure><Interval>PT1M</Interval><Count>999</Count></RestartOnFailure></Settings>' + #13#10 +
     '  <Actions Context="System"><Exec><Command>' + XmlText(ProgramPath) + '</Command><Arguments>' + XmlText(Arguments) + '</Arguments><WorkingDirectory>' + XmlText(AppPath) + '</WorkingDirectory></Exec></Actions>' + #13#10 +
     '</Task>' + #13#10;
