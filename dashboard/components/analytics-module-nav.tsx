@@ -31,25 +31,25 @@ const groups = [
     label: "Operate",
     items: [
       { label: "Overview", href: "/analytics", permission: "/analytics", icon: Activity },
-      { label: "Live metrics", href: "/analytics/dashboard", permission: "/analytics", icon: BarChart3 },
+      { label: "Operational metrics", href: "/analytics/dashboard", permission: "/analytics", icon: BarChart3 },
       { label: "Alerts", href: "/analytics/alerts", permission: "/analytics/alerts", icon: ShieldAlert },
-      { label: "Predictions", href: "/analytics/predictions", permission: "/analytics/predictions", icon: TrendingUp },
+      { label: "Predictive operations", href: "/analytics/predictions", permission: "/analytics/predictions", icon: TrendingUp },
       { label: "Investigation", href: "/analytics/investigation", permission: "/analytics/investigation", icon: Route },
       { label: "Rules", href: "/analytics/rules", permission: "/analytics/rules", icon: SlidersHorizontal },
     ],
   },
   {
-    label: "Banking & NBFC",
+    label: "BFSI intelligence",
     items: [
-      { label: "BFSI analytics", href: "/analytics/banking", permission: "/analytics/banking", icon: Landmark },
+      { label: "BFSI security analytics", href: "/analytics/banking", permission: "/analytics/banking", icon: Landmark },
       { label: "Authorised persons", href: "/analytics/banking/authorized-persons", permission: "/analytics/banking", icon: UserRoundCheck },
-      { label: "NBFC watchlist", href: "/analytics/nbfc-watchlist", permission: "/analytics/banking", icon: CircleUserRound },
+      { label: "NBFC watchlist monitoring", href: "/analytics/nbfc-watchlist", permission: "/analytics/banking", icon: CircleUserRound },
       { label: "Cash logistics", href: "/analytics/anpr-logistics", permission: "/analytics/anpr", icon: CarFront },
       { label: "Branch comparison", href: "/analytics/branch-comparison", permission: "/analytics/banking", icon: Building2 },
     ],
   },
   {
-    label: "Video AI",
+    label: "Video intelligence",
     items: [
       { label: "Face watchlists", href: "/analytics/face-recognition", permission: "/analytics/face-recognition", icon: ScanFace },
       { label: "Person re-ID", href: "/analytics/reid", permission: "/analytics", icon: Users },
@@ -58,7 +58,7 @@ const groups = [
       { label: "Vehicles", href: "/analytics/vehicles", permission: "/analytics", icon: CarFront },
       { label: "Crowd", href: "/analytics/crowd", permission: "/analytics", icon: Users },
       { label: "Tailgating", href: "/analytics/tailgating", permission: "/analytics", icon: UserRoundCheck },
-      { label: "Behaviour", href: "/analytics/behavioral", permission: "/analytics", icon: BrainCircuit },
+      { label: "Behaviour insights", href: "/analytics/behavioral", permission: "/analytics", icon: BrainCircuit },
       { label: "Fall detection", href: "/analytics/fall", permission: "/analytics", icon: AlertTriangle },
       { label: "Abandoned objects", href: "/analytics/abandoned-objects", permission: "/analytics", icon: PackageSearch },
       { label: "Obstruction", href: "/analytics/camera-obstruction", permission: "/analytics", icon: Camera },
@@ -101,11 +101,11 @@ export function AnalyticsModuleNav() {
   return (
     <nav
       aria-label="Analytics module navigation"
-      className="sticky top-0 z-30 border-b border-slate-800/90 bg-slate-950/95 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur"
+      className="analytics-module-nav sticky top-0 z-30 border-b border-slate-800/90 bg-slate-950/95 px-4 py-3 shadow-lg shadow-black/10 backdrop-blur"
     >
       <div className="mx-auto flex max-w-[1600px] gap-3 overflow-x-auto pb-1">
         {visibleGroups.map((group) => (
-          <div key={group.label} className="flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/70 p-1">
+          <div key={group.label} className="analytics-module-nav-group flex shrink-0 items-center gap-1 rounded-xl border border-slate-800 bg-slate-900/70 p-1">
             <span className="px-2 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{group.label}</span>
             {group.items.map((item) => {
               const active = matches(pathname, item.href);
@@ -118,7 +118,7 @@ export function AnalyticsModuleNav() {
                   title={item.label}
                   className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 py-2 text-[11px] font-semibold transition ${
                     active
-                      ? "bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-500/30"
+                      ? "analytics-module-nav-active bg-cyan-500/15 text-cyan-200 ring-1 ring-cyan-500/30"
                       : "text-slate-400 hover:bg-slate-800 hover:text-slate-100"
                   }`}
                 >

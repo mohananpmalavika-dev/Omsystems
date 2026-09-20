@@ -313,6 +313,7 @@ export function CommandCenterView() {
       {/* Top Banner & Header */}
       <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
         <div>
+          <p className="command-center-kicker"><Sparkles size={13} /> Operations intelligence</p>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-blue-400" />
@@ -330,7 +331,7 @@ export function CommandCenterView() {
           </div>
           <p className="telemetry-truth-detail">{freshness.detail}. Actions and counts below use confirmed data only.</p>
           <p className="text-xs text-slate-400 mt-1">
-            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Camera" : "Cameras"} • Real-Time VMS Telemetry & Triage
+            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Camera" : "Cameras"} • Live VMS telemetry and triage
           </p>
         </div>
 

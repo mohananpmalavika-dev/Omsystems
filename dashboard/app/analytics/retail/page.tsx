@@ -1,6 +1,5 @@
 "use client";
 
-import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +7,7 @@ import { ShoppingBag, Users, Clock, TrendingUp, MapPin, Package, DoorOpen, BarCh
 
 export default function RetailAnalyticsPage() {
   return (
-    <AppLayout>
+    <>
       <PageHero
         title="Retail Analytics"
         description="Customer behavior insights, queue management, and conversion analytics powered by AI"
@@ -241,6 +240,6 @@ export default function RetailAnalyticsPage() {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 }

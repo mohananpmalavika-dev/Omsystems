@@ -13,7 +13,6 @@ import {
   Search,
   Upload,
 } from "lucide-react";
-import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -235,9 +234,9 @@ export default function AIInvestigationPage() {
   const lastStep = steps.at(-1);
 
   return (
-    <AppLayout>
+    <>
       <PageHero
-        title="AI Investigation Tools"
+        title="Investigation workspace"
         description="Live cross-camera journeys, visual probe searches, and observed-evidence exports."
         icon={Route}
       />
@@ -345,6 +344,6 @@ export default function AIInvestigationPage() {
           </CardContent>
         </Card>
       </div>
-    </AppLayout>
+    </>
   );
 }

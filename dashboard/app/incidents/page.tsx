@@ -6,6 +6,7 @@ import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { Plus, Siren, Camera, FileVideo, MapPin, Building2, Eye } from "lucide-react";
 import { IncidentMediaModal } from "@/components/incident-media-modal";
+import { InvestigationFlowNav } from "@/components/investigation-flow-nav";
 import { useSearchParams } from "next/navigation";
 
 type Incident = {
@@ -149,6 +150,7 @@ function IncidentsPageContent() {
   return (
     <AppLayout>
       <div className="content incident-management-page" style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto' }}>
+        <InvestigationFlowNav />
         <PageHero
           eyebrow="Response operations"
           title="Incident management"

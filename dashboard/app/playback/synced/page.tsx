@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { SyncedPlaybackView } from "@/components/synced-playback-view";
 import { NotificationsProvider } from "@/components/notifications/NotificationsProvider";
+import { InvestigationFlowNav } from "@/components/investigation-flow-nav";
 import {
   MonitorPlay,
   Building2,
@@ -209,43 +210,7 @@ export default function SyncedPlaybackPage() {
   return (
     <NotificationsProvider>
       <div className="min-h-screen bg-slate-950 p-4 lg:p-6 text-slate-100 space-y-6">
-        {/* Forensic & Playback Suite Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto border-b border-slate-800 pb-1 scrollbar-none">
-          <a
-            href="/control-room"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
-          >
-            <MonitorPlay size={14} />
-            Live Video Wall
-          </a>
-          <a
-            href="/video-search"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
-          >
-            <Search size={14} />
-            Smart Video Search
-          </a>
-          <span
-            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap bg-slate-800/80 text-cyan-400 border-b-2 border-cyan-500 shadow-sm"
-          >
-            <Play size={14} className="fill-current" />
-            Multi-Camera Synced Playback
-          </span>
-          <a
-            href="/recordings"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
-          >
-            <Layers size={14} />
-            Recordings & Vault
-          </a>
-          <a
-            href="/evidence"
-            className="flex items-center gap-2 px-3.5 py-2 rounded-t-lg text-xs font-semibold whitespace-nowrap text-slate-400 border-b-2 border-transparent hover:text-slate-200 hover:bg-slate-800/40 transition-all"
-          >
-            <CheckCircle2 size={14} />
-            Evidence & Chain of Custody
-          </a>
-        </div>
+        <InvestigationFlowNav />
 
         {/* Header Banner */}
         <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border border-slate-800 shadow-xl">
@@ -256,10 +221,10 @@ export default function SyncedPlaybackPage() {
                 <span>Forensic Multi-Camera Synchronization Engine</span>
               </div>
               <h1 className="text-2xl font-bold text-white tracking-tight mt-1">
-                Multi-Camera Synchronized Timeline Playback
+                Synchronized timeline playback
               </h1>
               <p className="text-xs text-slate-400 mt-1">
-                Sub-Second Precision Barrier Seek • Authoritative Master Clock • Cross-Camera Timeline Alignment • Evidence-Grade Forensic Audit
+                Review aligned recordings with an authoritative master clock and an evidence-grade audit trail.
               </p>
             </div>
 

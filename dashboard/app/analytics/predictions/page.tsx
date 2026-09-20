@@ -6,7 +6,6 @@ import {
   Activity, AlertTriangle, Building2, Camera, CheckCircle2, Database,
   Download, HardDrive, Network, RefreshCw, Server, ShieldAlert, TrendingUp, Wrench, Zap,
 } from "lucide-react";
-import { AppLayout } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -166,7 +165,7 @@ export default function AIPredictionPage() {
   const kpis = data?.kpis ?? EMPTY_KPIS;
 
   return (
-    <AppLayout>
+    <>
       {notice && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-red-500/40 bg-red-950 text-red-200" : "border-emerald-500/40 bg-slate-900 text-emerald-300"}`}>
           {notice.error ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
@@ -179,16 +178,16 @@ export default function AIPredictionPage() {
         </div>
       )}
       <PageHero
-        title="AI Prediction Dashboard"
-        eyebrow="LIVE PREDICTIVE OPERATIONS"
-        description="Tenant-scoped predictions and operational telemetry with explicit freshness and data-quality status."
+        title="Predictive Operations"
+        eyebrow="Decision intelligence · live telemetry"
+        description="Prioritise operational risk across cameras, recording, storage, network and branches—with explicit data freshness and confidence."
         icon={TrendingUp}
         actions={<div className="flex gap-2">
           <button onClick={() => void loadLiveData()} disabled={isRefreshing} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold disabled:opacity-50">
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />Refresh live data
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`} />Refresh telemetry
           </button>
           <button onClick={exportReport} disabled={!data} className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold disabled:opacity-50">
-            <Download className="h-4 w-4" />Export current data
+            <Download className="h-4 w-4" />Export brief
           </button>
         </div>}
       />
@@ -205,7 +204,7 @@ export default function AIPredictionPage() {
         {data && (
           <>
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/70 bg-card/50 p-3 text-xs text-muted-foreground">
-              <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">Live API</Badge>
+              <Badge variant="outline" className="border-emerald-500/30 text-emerald-400">Live operational feed</Badge>
               <span>Latest telemetry: {showTime(data.freshness.latestTelemetryAt)}</span><span>•</span>
               <span>{data.freshness.telemetryRecords} telemetry records</span><span>•</span>
               <span>{data.freshness.activePredictions} active predictions</span><span>•</span>
@@ -215,12 +214,12 @@ export default function AIPredictionPage() {
 
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
               {[
-                ["Predicted failures", `${kpis.predictedFailuresCount}`, `Within ${data.horizonHours} hours`, Camera, "text-orange-400"],
-                ["Fleet health", showNumber(kpis.fleetHealthScore, "%"), kpis.healthScoreDelta ?? "Observed inputs only", Activity, "text-emerald-400"],
-                ["Disk exhaustion", kpis.earliestDiskExhaustDays === null ? "Unavailable" : `${kpis.earliestDiskExhaustDays} days`, kpis.earliestDiskExhaustAsset ?? "No capacity forecast", HardDrive, "text-red-400"],
-                ["Network health", showNumber(kpis.networkHealthPct, "%"), `${kpis.networkWarningCount} degraded links`, Network, "text-blue-400"],
-                ["Highest branch risk", kpis.highestRiskBranch ?? "Unavailable", showNumber(kpis.highestRiskBranchScore, "/100"), Building2, "text-purple-400"],
-                ["Peak incident window", kpis.peakIncidentWindow ?? "Unavailable", kpis.peakIncidentCategory ?? "No incident forecast", Zap, "text-amber-400"],
+                ["Priority interventions", `${kpis.predictedFailuresCount}`, `Within ${data.horizonHours} hours`, Camera, "text-orange-400"],
+                ["Fleet condition", showNumber(kpis.fleetHealthScore, "%"), kpis.healthScoreDelta ?? "Observed inputs only", Activity, "text-emerald-400"],
+                ["Storage runway", kpis.earliestDiskExhaustDays === null ? "Unavailable" : `${kpis.earliestDiskExhaustDays} days`, kpis.earliestDiskExhaustAsset ?? "No capacity forecast", HardDrive, "text-red-400"],
+                ["Network condition", showNumber(kpis.networkHealthPct, "%"), `${kpis.networkWarningCount} degraded links`, Network, "text-blue-400"],
+                ["Highest branch exposure", kpis.highestRiskBranch ?? "Unavailable", showNumber(kpis.highestRiskBranchScore, "/100"), Building2, "text-purple-400"],
+                ["Peak risk window", kpis.peakIncidentWindow ?? "Unavailable", kpis.peakIncidentCategory ?? "No incident forecast", Zap, "text-amber-400"],
               ].map(([label, value, detail, Icon, color]) => (
                 <Card key={String(label)} className="border-border/60 bg-card/60">
                   <CardContent className="p-4"><div className="flex items-center justify-between text-xs text-muted-foreground"><span>{String(label)}</span><Icon className={`h-4 w-4 ${color}`} /></div>
@@ -230,10 +229,10 @@ export default function AIPredictionPage() {
               ))}
             </div>
 
-            <div className="rounded-xl border border-border/70 bg-card/40 p-4">
+            <div className="analytics-control-deck rounded-xl border border-border/70 bg-card/40 p-4">
               <div className="flex flex-wrap items-center gap-2">
                 {(["all", "camera", "storage", "network", "recording", "branch", "incident"] as Domain[]).map((domain) => (
-                  <button key={domain} onClick={() => setActiveDomain(domain)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${activeDomain === domain ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"}`}>{domain}</button>
+                  <button key={domain} onClick={() => setActiveDomain(domain)} className={`rounded-lg px-3 py-1.5 text-xs font-semibold capitalize ${activeDomain === domain ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"}`}>{domain === "all" ? "Executive view" : domain}</button>
                 ))}
                 <div className="ml-auto flex flex-wrap gap-2">
                   <select value={selectedBranch} onChange={(event) => setSelectedBranch(event.target.value)} className="h-8 rounded border border-border bg-background px-2 text-xs"><option value="all">All branches</option>{branches.map((branch) => <option key={branch} value={branch}>{branch}</option>)}</select>
@@ -259,6 +258,6 @@ export default function AIPredictionPage() {
           </>
         )}
       </div>
-    </AppLayout>
+    </>
   );
 }
