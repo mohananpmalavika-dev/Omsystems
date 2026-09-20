@@ -118,6 +118,10 @@ export class RecorderHttpClient {
         ctx.credentialRef.ref,
         ctx.tenantId
       );
+    } else if (this.authProvider) {
+      throw new RecorderAuthenticationError(
+        `Credential resolver is not configured for recorder ${ctx.recorderId}`
+      );
     }
     
     // Apply authentication
@@ -200,6 +204,16 @@ export class RecorderHttpClient {
             options = authenticatedOptions;
             continue;
           }
+        }
+
+        if (response.statusCode === 401 || response.statusCode === 403) {
+          throw new RecorderAuthenticationError(
+            `Authentication failed (HTTP ${response.statusCode})`
+          );
+        }
+
+        if (response.statusCode >= 400) {
+          throw new RecorderProtocolError(`Recorder returned HTTP ${response.statusCode}`);
         }
         
         return response;

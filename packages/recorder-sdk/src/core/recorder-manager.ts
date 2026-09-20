@@ -22,23 +22,34 @@ import { HikvisionISAPIDriver } from "../drivers/hikvision/hikvision-isapi.drive
 import { ONVIFDriver } from "../drivers/onvif/onvif.driver.js";
 import { UniviewDriver } from "../drivers/uniview/uniview.driver.js";
 import { GenericRecorderDriver } from "../drivers/generic/generic-rtsp.driver.js";
+import type { CredentialResolver } from "../transport/recorder-http-client.js";
+
+export interface RecorderManagerOptions {
+  registry?: DriverRegistry;
+  credentialResolver?: CredentialResolver;
+}
 
 export class RecorderManager {
   private registry: DriverRegistry;
   private circuitBreakers = new Map<string, CircuitBreaker>();
   private activeSessions = new Map<string, RecorderSession>();
 
-  constructor(registry?: DriverRegistry) {
-    this.registry = registry ?? new DriverRegistry();
+  constructor(options: RecorderManagerOptions | DriverRegistry = {}) {
+    const legacyRegistry = options instanceof DriverRegistry ? options : options.registry;
+    const credentialResolver = options instanceof DriverRegistry ? undefined : options.credentialResolver;
+    this.registry = legacyRegistry ?? new DriverRegistry();
+    this.credentialResolver = credentialResolver;
     this.registerDefaultDrivers();
   }
 
+  private readonly credentialResolver?: CredentialResolver;
+
   private registerDefaultDrivers(): void {
     if (this.registry.size() === 0) {
-      this.registry.register(new DahuaCGIDriver());
-      this.registry.register(new HikvisionISAPIDriver());
-      this.registry.register(new ONVIFDriver());
-      this.registry.register(new UniviewDriver());
+      this.registry.register(new DahuaCGIDriver(this.credentialResolver));
+      this.registry.register(new HikvisionISAPIDriver(this.credentialResolver));
+      this.registry.register(new ONVIFDriver(this.credentialResolver));
+      this.registry.register(new UniviewDriver(this.credentialResolver));
       this.registry.register(new GenericRecorderDriver());
     }
   }

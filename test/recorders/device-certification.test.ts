@@ -1,3 +1,4 @@
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { recorderCertificationRegistry } from "../../src/recorders/recorder-certification.registry.js";
 import { CpPlusRecorderAdapter } from "../../src/recorders/adapters/cpplus-recorder.adapter.js";
@@ -19,6 +20,14 @@ describe("Device, DVR, and NVR Certification Matrix", () => {
   });
 
   it("produces CERTIFIED status only when real hardware test result is recorded", async () => {
+    const evidenceArtifacts = [{
+      uri: "evidence://lab/hikvision-ds7616-cert-20260301.jsonl",
+      sha256: "a".repeat(64),
+      mediaType: "application/x-ndjson",
+    }];
+    const manifest = JSON.stringify([...evidenceArtifacts].sort((a, b) => a.uri.localeCompare(b.uri)));
+    const evidenceManifestSha256 = createHash("sha256").update(manifest).digest("hex");
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
     const certRecord = await recorderCertificationRegistry.recordHardwareTestResult({
       manufacturer: "Hikvision",
       model: "DS-7616NI-K2",
@@ -42,7 +51,14 @@ describe("Device, DVR, and NVR Certification Matrix", () => {
         "KV-C12": "PASS",
       },
       overall: "CERTIFIED",
-      evidenceLogFiles: ["/evidence/logs/hikvision-ds7616-cert-20260301.log"],
+      evidenceArtifacts,
+      attestation: {
+        algorithm: "Ed25519",
+        evidenceManifestSha256,
+        signatureBase64: sign(null, Buffer.from(evidenceManifestSha256, "utf8"), privateKey).toString("base64"),
+        publicKeyPem: publicKey.export({ type: "spki", format: "pem" }).toString(),
+        signedAt: "2026-03-01T10:05:00.000Z",
+      },
     });
 
     expect(certRecord.certificationStatus).toBe("CERTIFIED");
@@ -56,6 +72,20 @@ describe("Device, DVR, and NVR Certification Matrix", () => {
 
     expect(evalResult.certificationStatus).toBe("CERTIFIED");
     expect(evalResult.compatibilityLevel).toBe("KV-C12");
+  });
+
+  it("refuses a claimed certification without signed evidence", async () => {
+    await expect(recorderCertificationRegistry.recordHardwareTestResult({
+      manufacturer: "Uniview",
+      model: "NVR302-16S2",
+      firmware: "B3321P25",
+      testSuiteVersion: "KV-CERT-1.0",
+      testDate: new Date(),
+      testOperator: "operator",
+      testEnvironment: "bench",
+      capabilities: Object.fromEntries(Array.from({ length: 12 }, (_, index) => [`KV-C${index + 1}`, "PASS"])) as any,
+      overall: "CERTIFIED",
+    })).rejects.toThrow("hashed evidence artifacts");
   });
 
   it("evaluates unknown/uncertified hardware with UNVERIFIED status and UNKNOWN features", async () => {

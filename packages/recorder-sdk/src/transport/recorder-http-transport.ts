@@ -179,14 +179,13 @@ export class BasicAuthProvider implements AuthProvider {
  * Implements RFC 2617 Digest Access Authentication
  */
 export class DigestAuthProvider implements AuthProvider {
-  private challengeCache = new Map<string, DigestChallenge>();
+  private challenge?: DigestChallenge;
   
   async authenticate(
     options: HttpRequestOptions,
     credentials: { username: string; password: string }
   ): Promise<HttpRequestOptions> {
-    const cacheKey = `${options.method}:${options.path}`;
-    const challenge = this.challengeCache.get(cacheKey);
+    const challenge = this.challenge;
     
     if (!challenge) {
       // First request - will get 401 with challenge
@@ -226,7 +225,7 @@ export class DigestAuthProvider implements AuthProvider {
     const challenge = this.parseDigestChallenge(wwwAuth);
     if (challenge) {
       // Cache challenge for next request
-      this.challengeCache.set("*", challenge);
+      this.challenge = challenge;
       return true;
     }
     

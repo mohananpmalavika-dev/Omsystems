@@ -34,7 +34,7 @@ import type {
   HealthState,
   RecordingSegment
 } from "../../core/recorder-driver.types.js";
-import { RecorderHttpClient } from "../../transport/recorder-http-client.js";
+import { RecorderHttpClient, type CredentialResolver } from "../../transport/recorder-http-client.js";
 import { DigestAuthProvider } from "../../transport/recorder-http-transport.js";
 
 /**
@@ -48,10 +48,11 @@ export class HikvisionISAPIDriver implements RecorderDriver {
   
   private httpClient: RecorderHttpClient;
   
-  constructor() {
+  constructor(credentialResolver?: CredentialResolver) {
     this.httpClient = new RecorderHttpClient(
       undefined,
-      new DigestAuthProvider()
+      new DigestAuthProvider(),
+      credentialResolver
     );
   }
   

@@ -25,7 +25,8 @@ import type {
   RecorderProbeResult,
   HealthState,
 } from "../../core/recorder-driver.types.js";
-import { RecorderHttpClient } from "../../transport/recorder-http-client.js";
+import { RecorderHttpClient, type CredentialResolver } from "../../transport/recorder-http-client.js";
+import { DigestAuthProvider } from "../../transport/recorder-http-transport.js";
 import {
   parseOnvifDeviceInformation,
   parseOnvifProfiles,
@@ -38,8 +39,8 @@ export class ONVIFDriver implements RecorderDriver {
   readonly version = "1.0.0";
   private httpClient: RecorderHttpClient;
 
-  constructor() {
-    this.httpClient = new RecorderHttpClient();
+  constructor(credentialResolver?: CredentialResolver) {
+    this.httpClient = new RecorderHttpClient(undefined, new DigestAuthProvider(), credentialResolver);
   }
 
   async probe(ctx: RecorderContext, options?: ProbeOptions): Promise<RecorderProbeResult> {

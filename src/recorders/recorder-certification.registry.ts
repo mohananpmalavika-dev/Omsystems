@@ -6,7 +6,7 @@
  * Status values: UNVERIFIED | PROVISIONAL | TEST_REQUIRED | CERTIFIED | FAILED | DEPRECATED
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID, verify } from "node:crypto";
 import type { Pool } from "pg";
 import type {
   CompatibilityLevel,
@@ -36,6 +36,22 @@ export interface DeviceCertificationResult {
   capabilities: Record<CompatibilityLevel, "PASS" | "FAIL" | "SKIP">;
   overall: DeviceCertificationStatus;
   evidenceLogFiles?: string[];
+  evidenceArtifacts?: CertificationEvidenceArtifact[];
+  attestation?: CertificationAttestation;
+}
+
+export interface CertificationEvidenceArtifact {
+  uri: string;
+  sha256: string;
+  mediaType?: string;
+}
+
+export interface CertificationAttestation {
+  algorithm: "Ed25519";
+  evidenceManifestSha256: string;
+  signatureBase64: string;
+  publicKeyPem: string;
+  signedAt: string;
 }
 
 export interface DeviceCertificationRecord {
@@ -50,6 +66,8 @@ export interface DeviceCertificationRecord {
   testEnvironment?: string;
   testOperator?: string;
   evidenceLogFiles?: string[];
+  evidenceArtifacts?: CertificationEvidenceArtifact[];
+  attestation?: CertificationAttestation;
   compatibilityLevel: CompatibilityLevel;
   features: Record<CompatibilityLevel, FeatureSupportStatus>;
   certificationStatus: DeviceCertificationStatus;
@@ -197,6 +215,9 @@ export class RecorderCertificationRegistry {
    * Only this method can grant CERTIFIED status based on real execution evidence.
    */
   async recordHardwareTestResult(result: DeviceCertificationResult): Promise<DeviceCertificationRecord> {
+    if (result.overall === "CERTIFIED") {
+      this.assertCertifiableResult(result);
+    }
     const id = `cert-${result.manufacturer.toLowerCase()}-${result.model.toLowerCase()}-${randomUUID().substring(0, 8)}`;
     
     // Map pass/fail capabilities to FeatureSupportStatus
@@ -239,6 +260,8 @@ export class RecorderCertificationRegistry {
       testEnvironment: result.testEnvironment,
       testOperator: result.testOperator,
       evidenceLogFiles: result.evidenceLogFiles,
+      evidenceArtifacts: result.evidenceArtifacts,
+      attestation: result.attestation,
       compatibilityLevel: highestLevel,
       features,
       certificationStatus: result.overall,
@@ -253,13 +276,19 @@ export class RecorderCertificationRegistry {
         await this.pool.query(
           `INSERT INTO recorder_certifications (
              id, vendor, model_pattern, firmware_version_pattern, compatibility_level,
-             features, certification_status, tested_by, notes, certified_at
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             features, certification_status, tested_by, notes, certified_at,
+             manufacturer, hardware_revision, serial_number, test_suite_version,
+             test_environment, test_operator, evidence_artifacts, attestation, test_date
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                     $11, $12, $13, $14, $15, $16, $17, $18, $19)
            ON CONFLICT (id) DO UPDATE SET
              features = EXCLUDED.features,
              certification_status = EXCLUDED.certification_status,
              tested_by = EXCLUDED.tested_by,
-             certified_at = EXCLUDED.certified_at`,
+             certified_at = EXCLUDED.certified_at,
+             evidence_artifacts = EXCLUDED.evidence_artifacts,
+             attestation = EXCLUDED.attestation,
+             test_date = EXCLUDED.test_date`,
           [
             record.id,
             record.vendor,
@@ -271,6 +300,15 @@ export class RecorderCertificationRegistry {
             record.testedBy,
             record.notes,
             record.certifiedAt || null,
+            record.manufacturer || null,
+            record.hardwareRevision || null,
+            record.serialNumber || null,
+            record.testSuiteVersion || null,
+            record.testEnvironment || null,
+            record.testOperator || null,
+            JSON.stringify(record.evidenceArtifacts || []),
+            record.attestation ? JSON.stringify(record.attestation) : null,
+            record.testDate || null,
           ],
         );
       } catch (err) {
@@ -355,6 +393,15 @@ export class RecorderCertificationRegistry {
             testedBy: r.tested_by,
             notes: r.notes,
             certifiedAt: r.certified_at ? new Date(r.certified_at) : undefined,
+            manufacturer: r.manufacturer || undefined,
+            hardwareRevision: r.hardware_revision || undefined,
+            serialNumber: r.serial_number || undefined,
+            testSuiteVersion: r.test_suite_version || undefined,
+            testEnvironment: r.test_environment || undefined,
+            testOperator: r.test_operator || undefined,
+            evidenceArtifacts: typeof r.evidence_artifacts === "string" ? JSON.parse(r.evidence_artifacts) : r.evidence_artifacts,
+            attestation: typeof r.attestation === "string" ? JSON.parse(r.attestation) : r.attestation,
+            testDate: r.test_date ? new Date(r.test_date) : undefined,
           }));
           return [...dbRecords, ...all];
         }
@@ -375,6 +422,40 @@ export class RecorderCertificationRegistry {
     const regexStr = "^" + pattern.replace(/\*/g, ".*") + "$";
     const regex = new RegExp(regexStr, "i");
     return regex.test(value);
+  }
+
+  private assertCertifiableResult(result: DeviceCertificationResult): void {
+    if (!result.model.trim() || !result.firmware.trim() || result.model.includes("*") || result.firmware.includes("*")) {
+      throw new Error("CERTIFIED requires an exact model and firmware version");
+    }
+    const failed = Object.entries(result.capabilities).filter(([, status]) => status !== "PASS");
+    if (failed.length > 0) {
+      throw new Error(`CERTIFIED requires all KV capabilities to PASS: ${failed.map(([level]) => level).join(", ")}`);
+    }
+    const artifacts = result.evidenceArtifacts;
+    const attestation = result.attestation;
+    if (!artifacts?.length || !attestation) {
+      throw new Error("CERTIFIED requires hashed evidence artifacts and a signed attestation");
+    }
+    for (const artifact of artifacts) {
+      if (!artifact.uri || !/^[a-f0-9]{64}$/i.test(artifact.sha256)) {
+        throw new Error("Certification evidence artifacts require a URI and SHA-256 digest");
+      }
+    }
+    const manifest = JSON.stringify([...artifacts].sort((a, b) => a.uri.localeCompare(b.uri)));
+    const manifestSha256 = createHash("sha256").update(manifest).digest("hex");
+    if (manifestSha256 !== attestation.evidenceManifestSha256) {
+      throw new Error("Certification evidence manifest digest mismatch");
+    }
+    const valid = verify(
+      null,
+      Buffer.from(attestation.evidenceManifestSha256, "utf8"),
+      attestation.publicKeyPem,
+      Buffer.from(attestation.signatureBase64, "base64"),
+    );
+    if (!valid) {
+      throw new Error("Certification attestation signature is invalid");
+    }
   }
 }
 

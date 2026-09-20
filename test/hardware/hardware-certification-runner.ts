@@ -8,9 +8,11 @@
  * - Emits structured DeviceCertificationResult into RecorderCertificationRegistry.
  */
 
-import type { CompatibilityLevel, IRecorderAdapter } from "../../src/recorders/recorder-adapter.interface.js";
+import type { CompatibilityLevel, RecorderAdapter } from "../../src/recorders/recorder-adapter.interface.js";
 import {
   recorderCertificationRegistry,
+  type CertificationAttestation,
+  type CertificationEvidenceArtifact,
   type DeviceCertificationResult,
   type DeviceCertificationRecord,
 } from "../../src/recorders/recorder-certification.registry.js";
@@ -25,10 +27,16 @@ export interface HardwareTestTarget {
   testEnvironment?: string;
 }
 
+export interface HardwareCertificationEvidence {
+  artifacts: CertificationEvidenceArtifact[];
+  attestation: CertificationAttestation;
+}
+
 export class HardwareCertificationRunner {
   async executeCertificationSuite(
-    adapter: IRecorderAdapter,
+    adapter: RecorderAdapter,
     target: HardwareTestTarget,
+    evidence?: HardwareCertificationEvidence,
   ): Promise<{ result: DeviceCertificationResult; record: DeviceCertificationRecord }> {
     const capabilities: Record<CompatibilityLevel, "PASS" | "FAIL" | "SKIP"> = {
       "KV-C1": "FAIL",
@@ -56,29 +64,24 @@ export class HardwareCertificationRunner {
       capabilities["KV-C1"] = "FAIL";
     }
 
-    // KV-C2: RTSP Stream Generation
+    // KV-C2: Recording search against the physical recorder
     try {
-      const stream = typeof (adapter as any).getLiveStream === "function"
-        ? await (adapter as any).getLiveStream(1)
-        : await (adapter as any).getLiveStreamUri(1, "main");
-      const url = stream?.streamUrl || stream?.rtspUri;
-      if (url && (url.startsWith("rtsp://") || url.startsWith("http://") || url.startsWith("https://"))) {
+      const end = new Date();
+      const start = new Date(end.getTime() - 15 * 60_000);
+      const recordings = await adapter.searchRecording(1, start, end);
+      if (Array.isArray(recordings)) {
         capabilities["KV-C2"] = "PASS";
       }
     } catch {
       capabilities["KV-C2"] = "FAIL";
     }
 
-    // KV-C3: Storage Health & Disks
+    // KV-C3: Playback URI generation for a real recording window
     try {
-      const health = typeof (adapter as any).getHealth === "function"
-        ? await (adapter as any).getHealth()
-        : await (adapter as any).getSystemHealth();
-      const storage = typeof (adapter as any).getStorageStatus === "function"
-        ? await (adapter as any).getStorageStatus()
-        : await (adapter as any).getStorageInfo();
-      const hasDisks = Array.isArray(storage) ? storage.length > 0 : Boolean(storage?.disks?.length > 0);
-      if (health && health.storageHealthy && hasDisks) {
+      const end = new Date();
+      const start = new Date(end.getTime() - 5 * 60_000);
+      const playback = await adapter.getPlaybackStream(1, start, end);
+      if (playback.streamUrl && /^(rtsp|https?):\/\//.test(playback.streamUrl)) {
         capabilities["KV-C3"] = "PASS";
       }
     } catch {
@@ -97,11 +100,11 @@ export class HardwareCertificationRunner {
 
     // KV-C5: PTZ Verification
     try {
-      const ptzSupported = (adapter as any).capabilities?.ptz ?? (typeof (adapter as any).ptz === "function");
-      if (ptzSupported) {
-        capabilities["KV-C5"] = "PASS";
-      } else {
+      const discovered = await adapter.discoverCapabilities();
+      if (discovered["KV-C5"] === "UNSUPPORTED") {
         capabilities["KV-C5"] = "SKIP";
+      } else if (await adapter.ptz(1, { action: "stop" })) {
+        capabilities["KV-C5"] = "PASS";
       }
     } catch {
       capabilities["KV-C5"] = "FAIL";
@@ -109,12 +112,8 @@ export class HardwareCertificationRunner {
 
     // KV-C6: Event Ingestion
     try {
-      if (typeof (adapter as any).getEvents === "function") {
-        await (adapter as any).getEvents();
-        capabilities["KV-C6"] = "PASS";
-      } else {
-        capabilities["KV-C6"] = "SKIP";
-      }
+      const events = await adapter.getEvents(new Date(Date.now() - 60_000));
+      if (Array.isArray(events)) capabilities["KV-C6"] = "PASS";
     } catch {
       capabilities["KV-C6"] = "FAIL";
     }
@@ -134,15 +133,64 @@ export class HardwareCertificationRunner {
       const storage = typeof (adapter as any).getStorageStatus === "function"
         ? await (adapter as any).getStorageStatus()
         : await (adapter as any).getStorageInfo();
-      if (storage) {
+      if (Array.isArray(storage) && storage.length > 0) {
         capabilities["KV-C8"] = "PASS";
       }
     } catch {
       capabilities["KV-C8"] = "FAIL";
     }
 
+    // KV-C9: Read configuration without mutating the bench device.
+    try {
+      const config = typeof adapter.getNetworkConfiguration === "function"
+        ? await adapter.getNetworkConfiguration()
+        : typeof adapter.getRecordingSchedule === "function"
+          ? await adapter.getRecordingSchedule(1)
+          : undefined;
+      if (config) capabilities["KV-C9"] = "PASS";
+      else capabilities["KV-C9"] = "SKIP";
+    } catch {
+      capabilities["KV-C9"] = "FAIL";
+    }
+
+    // KV-C10: Firmware/security operation must be implemented by the concrete lab adapter.
+    try {
+      const extension = adapter as RecorderAdapter & { validateFirmwareSecurity?: () => Promise<boolean> };
+      capabilities["KV-C10"] = typeof extension.validateFirmwareSecurity === "function"
+        && await extension.validateFirmwareSecurity() ? "PASS" : "SKIP";
+    } catch {
+      capabilities["KV-C10"] = "FAIL";
+    }
+
+    // KV-C11: Export bytes from a real recording for evidence hashing.
+    try {
+      const extension = adapter as RecorderAdapter & { exportRecording?: (channel: number, from: Date, to: Date) => Promise<Buffer> };
+      const end = new Date();
+      const start = new Date(end.getTime() - 30_000);
+      const exported = typeof extension.exportRecording === "function"
+        ? await extension.exportRecording(1, start, end)
+        : undefined;
+      capabilities["KV-C11"] = exported && exported.length > 0 ? "PASS" : "SKIP";
+    } catch {
+      capabilities["KV-C11"] = "FAIL";
+    }
+
+    // KV-C12: Explicit disconnect/reconnect drill supplied by a hardware adapter.
+    try {
+      const extension = adapter as RecorderAdapter & { validateReconnect?: () => Promise<boolean> };
+      capabilities["KV-C12"] = typeof extension.validateReconnect === "function"
+        && await extension.validateReconnect() ? "PASS" : "SKIP";
+    } catch {
+      capabilities["KV-C12"] = "FAIL";
+    }
+
     const passedCount = Object.values(capabilities).filter((v) => v === "PASS").length;
-    const overall = passedCount >= 3 ? "CERTIFIED" : "FAILED";
+    const allPassed = Object.values(capabilities).every((value) => value === "PASS");
+    const overall = allPassed && evidence
+      ? "CERTIFIED"
+      : passedCount > 0
+        ? "PARTIALLY_SUPPORTED"
+        : "FAILED";
 
     const result: DeviceCertificationResult = {
       manufacturer: target.manufacturer,
@@ -156,9 +204,8 @@ export class HardwareCertificationRunner {
       testEnvironment: target.testEnvironment || "Physical Bench Lab (VLAN 104)",
       capabilities,
       overall,
-      evidenceLogFiles: [
-        `/var/log/certifications/${target.manufacturer.toLowerCase()}-${target.model.toLowerCase()}-${Date.now()}.log`,
-      ],
+      evidenceArtifacts: evidence?.artifacts,
+      attestation: evidence?.attestation,
     };
 
     const record = await recorderCertificationRegistry.recordHardwareTestResult(result);

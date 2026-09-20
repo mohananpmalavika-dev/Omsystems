@@ -65,7 +65,7 @@ export {
 export { DefaultDriverDetector } from "./core/driver-detector.js";
 export { CircuitBreaker } from "./core/circuit-breaker.js";
 export { RecorderSession } from "./core/recorder-session.js";
-export { RecorderManager, recorderManager } from "./core/recorder-manager.js";
+export { RecorderManager, recorderManager, type RecorderManagerOptions } from "./core/recorder-manager.js";
 
 // Transport Layer
 export type {
