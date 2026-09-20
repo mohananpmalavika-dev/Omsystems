@@ -1110,13 +1110,13 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       <aside className="login-introduction" aria-label="About your workspace">
         <div className="login-introduction-brand">{branding.logoUrl ? <img src={branding.logoUrl} alt="" /> : <span className="auth-brand-mark"><ShieldCheck size={24} /></span>}<span>{branding.orgName || "KryptonVision"}</span></div>
         <div className="login-introduction-copy">
-          <p className="login-kicker">ENTERPRISE SECURITY COMMAND</p>
-          <h2>See the operation<br /><em>before it becomes</em><br />an incident.</h2>
-          <p>One trusted command surface for video intelligence, branch health, and decisive response.</p>
+          <p className="login-kicker">BUILT FOR WHAT HAPPENS NEXT</p>
+          <h2>Security doesn&apos;t begin<br />at the alarm.<br /><em>It begins before it.</em></h2>
+          <p>Turn every camera, site, and signal into operational foresight—so your team can act while it still matters.</p>
           <ul>
-            <li><CheckCircle2 size={18} /><span>Live visibility across every critical site and device</span></li>
-            <li><CheckCircle2 size={18} /><span>Intelligence that prioritizes the next best response</span></li>
-            <li><CheckCircle2 size={18} /><span>Controls built for resilient, auditable operations</span></li>
+            <li><CheckCircle2 size={18} /><span>Every camera and site in one live operational view</span></li>
+            <li><CheckCircle2 size={18} /><span>AI that surfaces what matters before risk escalates</span></li>
+            <li><CheckCircle2 size={18} /><span>Faster response with resilient, auditable control</span></li>
           </ul>
         </div>
         <div className="auth-command-visual" aria-hidden="true">

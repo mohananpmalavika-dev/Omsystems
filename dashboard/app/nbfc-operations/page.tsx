@@ -323,7 +323,7 @@ export default function NbfcOperationsPage() {
         <PageHero
           eyebrow="NBFC security operating system"
           title="Protect every branch. Prove every response."
-          description="A focused workspace for branch security, ATM and cash-adjacent operations, reliable video coverage, defensible evidence, and audit readiness."
+          description="A focused workspace for 24×7 branch protection, cash-area and sensitive-zone operations, reliable video coverage, verifiable evidence, and audit readiness."
           icon={Landmark}
           actions={<div className="page-hero-status"><Video size={17} /><div><span>Start with the event</span><strong>Verify before you act</strong></div></div>}
         />
