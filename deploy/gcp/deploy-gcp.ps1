@@ -10,6 +10,7 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+$PSNativeCommandUseErrorActionPreference = $false
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 function Assert-LastNativeCommandSucceeded([string]$Operation) {
