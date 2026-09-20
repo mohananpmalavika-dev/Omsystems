@@ -92,9 +92,6 @@ export default function AnprLogisticsPage() {
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
 
   // Casing & Police Hotlist states
-  const [casingDispatched, setCasingDispatched] = useState(false);
-  const [hotlistDispatched, setHotlistDispatched] = useState(false);
-  const [casingFeedback, setCasingFeedback] = useState<string | null>(null);
 
   const refresh = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
@@ -244,39 +241,38 @@ export default function AnprLogisticsPage() {
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setCasingDispatched(true);
-                      setCasingFeedback(`✓ Perimeter Guard Dispatched to ${session.branchName} Ingress.`);
-                      setTimeout(() => setCasingFeedback(null), 5000);
-                    }}
-                    disabled={casingDispatched}
+                  <Link
+                    href={`/incidents/create?${new URLSearchParams({
+                      title: `ANPR route alert: ${session.vehiclePlate}`,
+                      description: session.violations[0]?.message || `Investigate ${session.routeCompliance.replaceAll("_", " ")} for ${session.vehiclePlate} at ${session.branchName}.`,
+                      incidentType: "intrusion",
+                      severity: "P2",
+                      branchId: session.branchId,
+                      occurredAt: session.violations[0]?.timestamp || session.actualArrival || new Date().toISOString(),
+                    })}`}
                     className="flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 px-3.5 py-2 text-xs font-bold text-white shadow-lg shadow-rose-600/30 transition disabled:opacity-50"
                   >
                     <Radio size={14} />
-                    {casingDispatched ? "Guard Dispatched" : "Dispatch Perimeter Guard"}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setHotlistDispatched(true);
-                      setCasingFeedback(`🚨 Telemetry for ${session.vehiclePlate} transmitted to Police Control Room 112.`);
-                      setTimeout(() => setCasingFeedback(null), 6000);
-                    }}
-                    disabled={hotlistDispatched}
+                    Open response incident
+                  </Link>
+                  <Link
+                    href={`/incidents/create?${new URLSearchParams({
+                      title: `Police review: suspicious vehicle ${session.vehiclePlate}`,
+                      description: `${session.violations[0]?.message || "ANPR route violation"} Branch: ${session.branchName}. Review evidence before contacting emergency services.`,
+                      incidentType: "intrusion",
+                      severity: "P1",
+                      branchId: session.branchId,
+                      occurredAt: session.violations[0]?.timestamp || session.actualArrival || new Date().toISOString(),
+                      policeRequired: "true",
+                      confidentialityLevel: "restricted",
+                    })}`}
                     className="flex items-center gap-1.5 rounded-xl border border-rose-500/40 bg-rose-950/50 hover:bg-rose-900/60 px-3.5 py-2 text-xs font-bold text-rose-200 transition disabled:opacity-50"
                   >
                     <PhoneCall size={14} />
-                    {hotlistDispatched ? "Police 112 Notified" : "Alert Police (112)"}
-                  </button>
+                    Prepare police escalation
+                  </Link>
                 </div>
               </div>
-
-              {casingFeedback && (
-                <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-2.5 text-xs text-rose-200 font-semibold flex items-center justify-between">
-                  <span>{casingFeedback}</span>
-                  <span className="text-[10px] text-slate-400 font-mono">ANPR SENSOR: {session.detectionPoints[0]?.cameraName || "Ingress CAM"}</span>
-                </div>
-              )}
 
               {session.detectionPoints.length > 0 && (
                 <div className="mt-4 grid gap-2 sm:grid-cols-4 text-xs">
@@ -444,7 +440,7 @@ function SessionDetail({ session }: { session?: AnprLogisticsSession }) {
         </div>
 
         <Link
-          href={`/analytics/banking?vehicle=${encodeURIComponent(session.vehiclePlate)}`}
+          href={`/analytics/banking?${new URLSearchParams({ vehicle: session.vehiclePlate, branchId: session.branchId })}`}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-2.5 text-xs font-bold hover:bg-purple-500"
         >
           <Package size={15} />

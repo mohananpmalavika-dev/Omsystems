@@ -68,7 +68,7 @@ export default function AiAlertsIncidentHubPage() {
   const [falseAlarmReasonChoice, setFalseAlarmReasonChoice] = useState("False detection / algorithm misclassification");
   const [falseAlarmNotes, setFalseAlarmNotes] = useState("");
   const [submittingFalseAlarm, setSubmittingFalseAlarm] = useState(false);
-  const [actionMessage, setActionMessage] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [actionMessage, setActionMessage] = useState<{ kind: "success" | "error"; text: string; href?: string } | null>(null);
 
   // Media modal state
   const [activeMediaAlert, setActiveMediaAlert] = useState<AnalyticsAlert | null>(null);
@@ -301,6 +301,7 @@ export default function AiAlertsIncidentHubPage() {
       setActionMessage({
         kind: "success",
         text: `Alert successfully converted to Incident ${incNum}! It is now active in the Incident Report.`,
+        href: incident.id ? `/incidents/${encodeURIComponent(incident.id)}` : "/incidents",
       });
 
       // Update local state immediately
@@ -531,12 +532,20 @@ export default function AiAlertsIncidentHubPage() {
               )}
               <span>{actionMessage.text}</span>
             </div>
-            <button
-              onClick={() => setActionMessage(null)}
-              className="p-1 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-2">
+              {actionMessage.href && (
+                <Link href={actionMessage.href} className="rounded-lg border border-current/30 px-3 py-1.5 text-xs font-bold hover:bg-white/10">
+                  Open incident
+                </Link>
+              )}
+              <button
+                onClick={() => setActionMessage(null)}
+                className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                aria-label="Dismiss message"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
 

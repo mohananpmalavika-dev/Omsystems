@@ -625,7 +625,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.get("/v1/banking/sessions/summary", handleSessionsSummary);
   app.get("/api/v1/banking/sessions/summary", handleSessionsSummary);
 
   // =========================================================================
@@ -659,7 +658,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.get("/v1/banking/sessions", handleListSessions);
   app.get("/api/v1/banking/sessions", handleListSessions);
 
   const handleGetSession = async (request: FastifyRequest, reply: any) => {
@@ -671,7 +669,6 @@ export function registerBankingAnalyticsRoutes(
     return reply.send({ success: true, data: session });
   };
 
-  app.get("/v1/banking/sessions/:sessionId", handleGetSession);
   app.get("/api/v1/banking/sessions/:sessionId", handleGetSession);
 
   // =========================================================================
@@ -699,7 +696,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.get("/v1/banking/monitors", handleListMonitors);
   app.get("/api/v1/banking/monitors", handleListMonitors);
 
   const handleCreateMonitor = async (request: FastifyRequest, reply: any) => {
@@ -724,7 +720,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.post("/v1/banking/monitors", handleCreateMonitor);
   app.post("/api/v1/banking/monitors", handleCreateMonitor);
 
   // =========================================================================
@@ -750,7 +745,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.get("/v1/banking/visits", handleListVisits);
   app.get("/api/v1/banking/visits", handleListVisits);
 
   const handleCreateVisit = async (request: FastifyRequest, reply: any) => {
@@ -775,7 +769,6 @@ export function registerBankingAnalyticsRoutes(
     }
   };
 
-  app.post("/v1/banking/visits", handleCreateVisit);
   app.post("/api/v1/banking/visits", handleCreateVisit);
 
   // =========================================================================
@@ -783,19 +776,13 @@ export function registerBankingAnalyticsRoutes(
   // =========================================================================
   const handleGenerateEvidence = async (request: FastifyRequest, reply: any) => {
     const { sessionId } = (request.params || {}) as { sessionId: string };
-    return reply.send({
-      success: true,
-      data: {
-        sessionId,
-        evidencePackageId: `ev_pkg_${Date.now()}`,
-        status: "ready",
-        downloadUrl: `/v1/banking/sessions/${encodeURIComponent(sessionId)}/evidence/download`,
-        generatedAt: new Date().toISOString(),
-      },
+    return reply.code(501).send({
+      success: false,
+      error: "banking_evidence_pipeline_unavailable",
+      message: `Session ${sessionId} is not connected to the forensic evidence worker. No package was created.`,
     });
   };
 
-  app.post("/v1/banking/sessions/:sessionId/evidence", handleGenerateEvidence);
   app.post("/api/v1/banking/sessions/:sessionId/evidence", handleGenerateEvidence);
 }
 

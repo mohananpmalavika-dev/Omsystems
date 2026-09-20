@@ -115,6 +115,7 @@ const emptyPlate: PlateFormValue = {
 
 export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: WorkspaceMode }) {
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
+  const [requestedPersonId, setRequestedPersonId] = useState<string>();
   const [faceWatchlists, setFaceWatchlists] = useState<IdentityWatchlist[]>([]);
   const [anprWatchlists, setAnprWatchlists] = useState<IdentityWatchlist[]>([]);
   const [faceEvents, setFaceEvents] = useState<FaceRecognitionEvent[]>([]);
@@ -198,7 +199,9 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
   }, [selectedAnprList]);
 
   useEffect(() => {
-    const create = new URLSearchParams(window.location.search).get("create");
+    const search = new URLSearchParams(window.location.search);
+    const create = search.get("create");
+    setRequestedPersonId(search.get("personId")?.trim() || undefined);
     if (create === "watchlist") setDialog(initialMode === "face" ? "face-watchlist" : "anpr-watchlist");
   }, [initialMode]);
 
@@ -354,6 +357,15 @@ export function IdentityWatchlistWorkspace({ initialMode }: { initialMode: Works
           {message.kind === "error" ? <AlertTriangle className="mt-0.5 shrink-0" size={16} /> : <CheckCircle2 className="mt-0.5 shrink-0" size={16} />}
           <span className="flex-1">{message.text}</span>
           <button type="button" onClick={() => setMessage(undefined)} aria-label="Dismiss message"><X size={15} /></button>
+        </div>
+      )}
+
+      {mode === "face" && requestedPersonId && (
+        <div role="status" className="mb-5 flex items-start gap-3 rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3 text-sm text-cyan-100">
+          <ScanFace className="mt-0.5 shrink-0" size={16} />
+          <span>
+            Reviewing the identity linked from the NBFC workflow: <strong>{requestedPersonId}</strong>. Use this reference while selecting the relevant watchlist and reviewing its roster and match history.
+          </span>
         </div>
       )}
 

@@ -25,7 +25,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { bankingAnalyticsApi, cameraInventoryApi } from "@/lib/api-client";
+import { bankingAnalyticsApi, cameraInventoryApi, evidenceApi } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
 
 type Assessment = "compliant" | "non_compliant" | "suspicious" | "in_progress" | "insufficient_evidence";
@@ -63,6 +63,7 @@ const emptySummary: BankingSummary = {
 };
 
 export function BankingAnalyticsDashboard() {
+  const [requestedVehicle, setRequestedVehicle] = useState<string>();
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID || "default";
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState("");
@@ -76,11 +77,15 @@ export function BankingAnalyticsDashboard() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [evidenceMessage, setEvidenceMessage] = useState<string>();
+  const [evidenceHref, setEvidenceHref] = useState<string>();
   const [message, setMessage] = useState<{ kind: "error" | "success"; text: string }>();
   const [vipList, setVipList] = useState<any[]>([]);
   const [cashCounters, setCashCounters] = useState<any[]>([]);
   const [bankingAnalytics, setBankingAnalytics] = useState<any>(null);
-  const [vipNotified, setVipNotified] = useState(false);
+
+  useEffect(() => {
+    setRequestedVehicle(new URLSearchParams(window.location.search).get("vehicle")?.trim().toUpperCase() || undefined);
+  }, []);
 
   const refresh = useCallback(async (quiet = false) => {
     if (!branchId) return;
@@ -104,23 +109,34 @@ export function BankingAnalyticsDashboard() {
       setVipList((vipResponse.data ?? []) as any[]);
       setCashCounters(counterResponse?.counters ?? []);
       setBankingAnalytics(analyticsResponse);
-      setSelected((current) => current
-        ? (sessionResponse.data as BankingSession[]).find((item) => item.sessionId === current.sessionId)
-        : undefined);
+      setSelected((current) => {
+        const nextSessions = sessionResponse.data as BankingSession[];
+        if (current) return nextSessions.find((item) => item.sessionId === current.sessionId);
+        return requestedVehicle
+          ? nextSessions.find((item) => item.vehicle?.plate?.trim().toUpperCase() === requestedVehicle)
+          : undefined;
+      });
+      if (requestedVehicle) {
+        setTab("sessions");
+        setSessionFilter("all");
+      }
       setMessage(undefined);
     } catch (error) {
       if (!quiet) setMessage({ kind: "error", text: readable(error) });
     } finally {
       if (!quiet) setLoading(false);
     }
-  }, [branchId, tenantId]);
+  }, [branchId, requestedVehicle, tenantId]);
 
   useEffect(() => {
     void cameraInventoryApi.listBranches("analytics:view")
       .then(({ data }) => {
         const next = data as Branch[];
+        const requestedBranchId = new URLSearchParams(window.location.search).get("branchId");
         setBranches(next);
-        setBranchId(next[0]?.id ?? "");
+        setBranchId(requestedBranchId && next.some((branch) => branch.id === requestedBranchId)
+          ? requestedBranchId
+          : next[0]?.id ?? "");
       })
       .catch((error) => setMessage({ kind: "error", text: readable(error) }))
       .finally(() => setLoading(false));
@@ -149,10 +165,18 @@ export function BankingAnalyticsDashboard() {
     setSaving(true);
     setEvidenceMessage(undefined);
     try {
-      const response = await bankingAnalyticsApi.generateEvidence(session.sessionId);
-      const clips = response.data?.totalClips ?? response.data?.clips?.length ?? 0;
-      const snapshots = response.data?.totalSnapshots ?? response.data?.snapshots?.length ?? 0;
-      setEvidenceMessage(`Evidence package ready: ${clips} clips and ${snapshots} snapshots.`);
+      const caseNumber = `BANK-${Date.now().toString(36).toUpperCase()}`;
+      const evidenceCase = await evidenceApi.createCase({
+        caseNumber,
+        title: `Cash movement session ${session.vehicle?.plate || session.sessionId.slice(0, 10)}`,
+        description: `Banking analytics session ${session.sessionId}; branch ${session.branchId}; assessment ${session.assessment}; state ${session.state}.`,
+      });
+      await evidenceApi.addItem(evidenceCase.id, {
+        type: "manifest",
+        description: `Session reference ${session.sessionId}. Available source evidence: ${session.evidenceAvailable?.join(", ") || "none reported"}. Created from Banking Analytics for governed review; source media must be verified before export.`,
+      });
+      setEvidenceHref(`/evidence?caseId=${encodeURIComponent(evidenceCase.id)}&branchId=${encodeURIComponent(session.branchId)}`);
+      setEvidenceMessage(`Evidence case ${caseNumber} created. Verify and preserve source media in the Evidence Vault.`);
     } catch (error) {
       setMessage({ kind: "error", text: readable(error) });
     } finally {
@@ -187,9 +211,9 @@ export function BankingAnalyticsDashboard() {
 
     {tab === "sessions" && <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(300px,.65fr)]">
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80"><header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 p-4"><div><p className="text-[10px] font-bold tracking-[.18em] text-blue-300">WORKFLOW QUEUE</p><h2 className="mt-1 font-semibold">Cash-van sessions</h2></div><div className="flex gap-1 rounded-lg bg-slate-950 p-1">{(["active", "all", "violations"] as const).map((filter) => <button key={filter} onClick={() => setSessionFilter(filter)} className={`rounded-md px-3 py-1.5 text-[10px] font-bold capitalize ${sessionFilter === filter ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-200"}`}>{filter}</button>)}</div></header>
-        {loading && sessions.length === 0 ? <Empty icon={<RefreshCw className="animate-spin" />} text="Loading banking workflows…" /> : visibleSessions.length === 0 ? <Empty icon={<Truck />} text="No sessions match this view." /> : <div className="divide-y divide-slate-800">{visibleSessions.map((session) => <button key={session.sessionId} onClick={() => { setSelected(session); setEvidenceMessage(undefined); }} className={`grid w-full gap-3 p-4 text-left transition hover:bg-slate-800/60 sm:grid-cols-[minmax(150px,.8fr)_minmax(140px,.65fr)_minmax(150px,.75fr)_auto] ${selected?.sessionId === session.sessionId ? "bg-blue-500/10" : ""}`}><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-800 text-blue-300"><Truck size={17} /></span><div><strong className="block text-sm">{session.vehicle?.plate || "Vehicle pending"}</strong><span className="text-[10px] text-slate-600">{session.sessionId.slice(0, 10)}</span></div></div><div><span className="block text-[10px] uppercase tracking-wider text-slate-600">Workflow state</span><strong className="mt-1 block text-xs capitalize text-slate-300">{session.state.replaceAll("_", " ")}</strong></div><div><span className="block text-[10px] uppercase tracking-wider text-slate-600">Personnel</span><strong className="mt-1 flex items-center gap-1 text-xs text-slate-300"><UsersRound size={12} /> {session.personnel?.observed ?? 0} observed · {session.personnel?.guards ?? 0} guards</strong></div><AssessmentBadge value={session.assessment} /></button>)}</div>}
+        {loading && sessions.length === 0 ? <Empty icon={<RefreshCw className="animate-spin" />} text="Loading banking workflows…" /> : visibleSessions.length === 0 ? <Empty icon={<Truck />} text="No sessions match this view." /> : <div className="divide-y divide-slate-800">{visibleSessions.map((session) => <button key={session.sessionId} onClick={() => { setSelected(session); setEvidenceMessage(undefined); setEvidenceHref(undefined); }} className={`grid w-full gap-3 p-4 text-left transition hover:bg-slate-800/60 sm:grid-cols-[minmax(150px,.8fr)_minmax(140px,.65fr)_minmax(150px,.75fr)_auto] ${selected?.sessionId === session.sessionId ? "bg-blue-500/10" : ""}`}><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-800 text-blue-300"><Truck size={17} /></span><div><strong className="block text-sm">{session.vehicle?.plate || "Vehicle pending"}</strong><span className="text-[10px] text-slate-600">{session.sessionId.slice(0, 10)}</span></div></div><div><span className="block text-[10px] uppercase tracking-wider text-slate-600">Workflow state</span><strong className="mt-1 block text-xs capitalize text-slate-300">{session.state.replaceAll("_", " ")}</strong></div><div><span className="block text-[10px] uppercase tracking-wider text-slate-600">Personnel</span><strong className="mt-1 flex items-center gap-1 text-xs text-slate-300"><UsersRound size={12} /> {session.personnel?.observed ?? 0} observed · {session.personnel?.guards ?? 0} guards</strong></div><AssessmentBadge value={session.assessment} /></button>)}</div>}
       </section>
-      <SessionDetails session={selected} saving={saving} evidenceMessage={evidenceMessage} onEvidence={generateEvidence} />
+      <SessionDetails session={selected} saving={saving} evidenceMessage={evidenceMessage} evidenceHref={evidenceHref} onEvidence={generateEvidence} />
     </div>}
 
     {tab === "visits" && <VisitsPanel visits={visits} tenantId={tenantId} branchId={branchId} saving={saving} setSaving={setSaving} onChanged={() => refresh()} setMessage={setMessage} />}
@@ -201,17 +225,15 @@ export function BankingAnalyticsDashboard() {
         allVipProfiles={vipList}
         cashCounters={cashCounters}
         queueAnalytics={bankingAnalytics?.queueAnalytics}
-        vipNotified={vipNotified}
-        setVipNotified={setVipNotified}
       />
     )}
 
   </main>;
 }
 
-function SessionDetails({ session, saving, evidenceMessage, onEvidence }: { session?: BankingSession; saving: boolean; evidenceMessage?: string; onEvidence: (session: BankingSession) => Promise<void> }) {
+function SessionDetails({ session, saving, evidenceMessage, evidenceHref, onEvidence }: { session?: BankingSession; saving: boolean; evidenceMessage?: string; evidenceHref?: string; onEvidence: (session: BankingSession) => Promise<void> }) {
   if (!session) return <aside className="rounded-2xl border border-slate-800 bg-slate-900/80"><Empty icon={<ShieldCheck />} text="Select a session to inspect verification and evidence." /></aside>;
-  return <aside className="self-start overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 xl:sticky xl:top-24"><header className="border-b border-slate-800 p-5"><p className="text-[10px] font-bold tracking-[.18em] text-blue-300">SESSION DETAIL</p><div className="mt-2 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">{session.vehicle?.plate || "Unknown vehicle"}</h2><AssessmentBadge value={session.assessment} /></div></header><div className="space-y-5 p-5"><dl className="grid grid-cols-2 gap-3 text-xs"><Detail label="Authorized vehicle" value={session.vehicle ? session.vehicle.authorized ? "Yes" : "No" : "Pending"} /><Detail label="Confidence" value={`${Math.round((session.confidence ?? 0) * 100)}%`} /><Detail label="Identified staff" value={String(session.personnel?.identified ?? 0)} /><Detail label="Guards" value={String(session.personnel?.guards ?? 0)} /></dl><div><h3 className="text-xs font-semibold text-slate-300">Violations</h3>{(session.violations?.length ?? 0) === 0 ? <p className="mt-2 rounded-xl bg-emerald-500/10 p-3 text-xs text-emerald-300">No violations recorded.</p> : <ul className="mt-2 space-y-2">{session.violations?.map((item) => <li key={`${item.code}-${item.detectedAt}`} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3"><strong className="text-xs text-red-200">{item.name}</strong><p className="mt-1 text-[11px] leading-5 text-slate-400">{item.message}</p></li>)}</ul>}</div><div><h3 className="text-xs font-semibold text-slate-300">Evidence available</h3><div className="mt-2 flex flex-wrap gap-2">{session.evidenceAvailable?.length ? session.evidenceAvailable.map((item) => <span key={item} className="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-400">{item.replaceAll("_", " ")}</span>) : <span className="text-xs text-slate-600">No captured evidence yet.</span>}</div></div><button disabled={saving} onClick={() => void onEvidence(session)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold hover:bg-blue-500 disabled:opacity-40"><FileCheck2 size={15} />{saving ? "Generating…" : "Generate evidence package"}</button>{evidenceMessage && <p className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200">{evidenceMessage}</p>}</div></aside>;
+  return <aside className="self-start overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80 xl:sticky xl:top-24"><header className="border-b border-slate-800 p-5"><p className="text-[10px] font-bold tracking-[.18em] text-blue-300">SESSION DETAIL</p><div className="mt-2 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">{session.vehicle?.plate || "Unknown vehicle"}</h2><AssessmentBadge value={session.assessment} /></div></header><div className="space-y-5 p-5"><dl className="grid grid-cols-2 gap-3 text-xs"><Detail label="Authorized vehicle" value={session.vehicle ? session.vehicle.authorized ? "Yes" : "No" : "Pending"} /><Detail label="Confidence" value={`${Math.round((session.confidence ?? 0) * 100)}%`} /><Detail label="Identified staff" value={String(session.personnel?.identified ?? 0)} /><Detail label="Guards" value={String(session.personnel?.guards ?? 0)} /></dl><div><h3 className="text-xs font-semibold text-slate-300">Violations</h3>{(session.violations?.length ?? 0) === 0 ? <p className="mt-2 rounded-xl bg-emerald-500/10 p-3 text-xs text-emerald-300">No violations recorded.</p> : <ul className="mt-2 space-y-2">{session.violations?.map((item) => <li key={`${item.code}-${item.detectedAt}`} className="rounded-xl border border-red-500/20 bg-red-500/10 p-3"><strong className="text-xs text-red-200">{item.name}</strong><p className="mt-1 text-[11px] leading-5 text-slate-400">{item.message}</p></li>)}</ul>}</div><div><h3 className="text-xs font-semibold text-slate-300">Evidence available</h3><div className="mt-2 flex flex-wrap gap-2">{session.evidenceAvailable?.length ? session.evidenceAvailable.map((item) => <span key={item} className="rounded-lg bg-slate-800 px-2 py-1 text-[10px] text-slate-400">{item.replaceAll("_", " ")}</span>) : <span className="text-xs text-slate-600">No captured evidence yet.</span>}</div></div><button disabled={saving || Boolean(evidenceHref)} onClick={() => void onEvidence(session)} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold hover:bg-blue-500 disabled:opacity-40"><FileCheck2 size={15} />{saving ? "Creating…" : evidenceHref ? "Evidence case created" : "Create evidence case"}</button>{evidenceMessage && <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200"><p>{evidenceMessage}</p>{evidenceHref && <Link href={evidenceHref} className="mt-2 inline-flex items-center gap-1 font-bold underline underline-offset-2">Open Evidence Vault <ArrowUpRight size={12} /></Link>}</div>}</div></aside>;
 }
 
 function VisitsPanel({ visits, tenantId, branchId, saving, setSaving, onChanged, setMessage }: { visits: Visit[]; tenantId: string; branchId: string; saving: boolean; setSaving: (value: boolean) => void; onChanged: () => Promise<void>; setMessage: (value: { kind: "error" | "success"; text: string } | undefined) => void }) {
@@ -244,8 +266,6 @@ function VipIntelligencePanel({
   allVipProfiles,
   cashCounters,
   queueAnalytics,
-  vipNotified,
-  setVipNotified,
 }: {
   branchId: string;
   vipDetections: any[];
@@ -259,8 +279,6 @@ function VipIntelligencePanel({
     avgWaitSeconds: number;
     peakQueueLength: number;
   };
-  vipNotified: boolean;
-  setVipNotified: (val: boolean) => void;
 }) {
   const [activeTellerAlert, setActiveTellerAlert] = useState(false);
   const activeVip = vipDetections[0];
@@ -302,23 +320,20 @@ function VipIntelligencePanel({
               <div className="text-xs text-slate-400 mb-2">
                 Notification Protocol: <strong className="text-slate-200">Branch Manager & RM Dispatch</strong>
               </div>
-              {!vipNotified ? (
-                <button
-                  onClick={() => setVipNotified(true)}
-                  className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg text-xs shadow-lg transition flex items-center justify-center gap-2"
-                >
-                  <MessageCircle size={15} /> Dispatch Alert to BM & RM
-                </button>
-              ) : (
-                <div className="rounded-lg bg-emerald-500/15 border border-emerald-500/30 p-2.5 text-center space-y-1">
-                  <div className="text-xs font-bold text-emerald-300 flex items-center justify-center gap-1.5">
-                    <CheckCircle2 size={14} /> Alert Dispatched
-                  </div>
-                  <p className="text-[10px] text-slate-400">
-                    Branch Manager notified at {new Date().toLocaleTimeString()}
-                  </p>
-                </div>
-              )}
+              <Link
+                href={`/incidents/create?${new URLSearchParams({
+                  title: `VIP arrival response: ${activeVip.fullName}`,
+                  description: `VIP/HNI ingress detected at ${activeVip.lastDetected?.cameraName || "branch entrance"}. Assign the Branch Manager or Relationship Manager and record the response.`,
+                  incidentType: "other",
+                  severity: "P4",
+                  branchId,
+                  occurredAt: activeVip.lastDetected?.timestamp || new Date().toISOString(),
+                  confidentialityLevel: "confidential",
+                })}`}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg transition hover:bg-emerald-500"
+              >
+                <MessageCircle size={15} /> Open auditable response record
+              </Link>
             </div>
           </div>
 

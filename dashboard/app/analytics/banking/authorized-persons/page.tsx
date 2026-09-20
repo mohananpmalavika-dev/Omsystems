@@ -28,6 +28,7 @@ export default function AuthorizedPersonsPage() {
   const [branchId, setBranchId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [activeTab, setActiveTab] = useState<ActiveTab>("cctv_identification");
+  const [requestedPersonId, setRequestedPersonId] = useState("");
 
   const [persons, setPersons] = useState<any[]>([]);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -64,6 +65,9 @@ export default function AuthorizedPersonsPage() {
   }, [branchId, scope, from, to]);
 
   useEffect(() => {
+    const personId = new URLSearchParams(window.location.search).get("personId") || "";
+    setRequestedPersonId(personId);
+    if (personId) setActiveTab("roster");
     void Promise.all([
       cameraInventoryApi.listBranches("analytics:view"),
       organizationApi.listNodes({ type: "location" }),
@@ -205,6 +209,14 @@ export default function AuthorizedPersonsPage() {
         </p>
       )}
 
+      {requestedPersonId && (
+        <div className="mb-6 flex flex-wrap items-center gap-2 rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-100" role="status">
+          <UserPlus size={16} />
+          <span>Person context carried from the NBFC watchlist:</span>
+          <strong>{persons.find((person) => person.id === requestedPersonId)?.fullName || requestedPersonId}</strong>
+        </div>
+      )}
+
       {!branchId ? (
         <p className="rounded-2xl border border-slate-800 bg-slate-900 p-8 text-center text-sm text-slate-400">
           No accessible branch is available.
@@ -226,7 +238,7 @@ export default function AuthorizedPersonsPage() {
           {activeTab === "roster" && (
             <div className="grid gap-6 xl:grid-cols-2">
               <PersonForm scope={scope} onSaved={load} />
-              <AssignmentForm scope={scope} persons={persons} onSaved={load} />
+              <AssignmentForm scope={scope} persons={persons} initialPersonId={requestedPersonId} onSaved={load} />
 
               <section className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900 xl:col-span-2">
                 <header className="flex items-center justify-between border-b border-slate-800 p-5">
@@ -360,13 +372,17 @@ function PersonForm({ scope, onSaved }: { scope: any; onSaved: () => Promise<voi
   );
 }
 
-function AssignmentForm({ scope, persons, onSaved }: { scope: any; persons: any[]; onSaved: () => Promise<void> }) {
+function AssignmentForm({ scope, persons, initialPersonId, onSaved }: { scope: any; persons: any[]; initialPersonId?: string; onSaved: () => Promise<void> }) {
   const [type, setType] = useState<Area>("cash_counter");
   const [area, setArea] = useState("");
   const [person, setPerson] = useState("");
   const [date, setDate] = useState(today());
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (initialPersonId && persons.some((candidate) => candidate.id === initialPersonId)) setPerson(initialPersonId);
+  }, [initialPersonId, persons]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

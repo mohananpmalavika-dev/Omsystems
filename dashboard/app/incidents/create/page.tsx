@@ -39,6 +39,33 @@ export default function CreateIncidentPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const severity = params.get("severity");
+    const confidentiality = params.get("confidentialityLevel");
+    const occurredAt = params.get("occurredAt");
+    const allowedSeverities: IncidentForm["severity"][] = ["P1", "P2", "P3", "P4", "P5"];
+    const allowedConfidentiality: IncidentForm["confidentialityLevel"][] = ["public", "internal", "confidential", "restricted", "highly-restricted"];
+    const localOccurredAt = occurredAt && !Number.isNaN(Date.parse(occurredAt))
+      ? new Date(new Date(occurredAt).getTime() - new Date(occurredAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+      : "";
+
+    setForm((current) => ({
+      ...current,
+      title: params.get("title")?.slice(0, 200) || current.title,
+      description: params.get("description")?.slice(0, 5000) || current.description,
+      incidentType: params.get("incidentType")?.slice(0, 100) || current.incidentType,
+      severity: allowedSeverities.includes(severity as IncidentForm["severity"])
+        ? severity as IncidentForm["severity"]
+        : current.severity,
+      confidentialityLevel: allowedConfidentiality.includes(confidentiality as IncidentForm["confidentialityLevel"])
+        ? confidentiality as IncidentForm["confidentialityLevel"]
+        : current.confidentialityLevel,
+      branchId: params.get("branchId") || current.branchId,
+      occurredAt: localOccurredAt || current.occurredAt,
+      policeRequired: params.get("policeRequired") === "true" || current.policeRequired,
+      insuranceRequired: params.get("insuranceRequired") === "true" || current.insuranceRequired,
+    }));
+
     async function loadBranches() {
       try {
         const res = await fetch("/v1/operations/branches", { credentials: "include" });

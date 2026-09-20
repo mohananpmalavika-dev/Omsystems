@@ -55,6 +55,7 @@ interface ChainOfCustodyEvent {
 export function EvidenceManager() {
   const searchParams = useSearchParams();
   const branchId = searchParams?.get("branchId");
+  const requestedCaseId = searchParams?.get("caseId");
   const [cases, setCases] = useState<EvidenceCase[]>([]);
   const [selectedCase, setSelectedCase] = useState<EvidenceCase | null>(null);
   const [items, setItems] = useState<EvidenceItem[]>([]);
@@ -575,8 +576,9 @@ export function EvidenceManager() {
       const nextCases = caseResponse.data || [];
       setCases(nextCases);
       if (!selectedCase && nextCases.length > 0) {
-        setSelectedCase(nextCases[0]);
-        void loadCaseDetails(nextCases[0].id);
+        const nextSelection = nextCases.find((item: EvidenceCase) => item.id === requestedCaseId) ?? nextCases[0];
+        setSelectedCase(nextSelection);
+        void loadCaseDetails(nextSelection.id);
       }
     } catch (error) {
       console.error("Failed to load evidence cases:", error);

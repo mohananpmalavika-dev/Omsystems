@@ -477,14 +477,14 @@ function EntryDetail({ entry }: { entry?: WatchlistEntry }) {
             className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800"
           >
             <Eye size={13} />
-            Detections
+            Face review
           </Link>
           <Link
             href={`/analytics/banking/authorized-persons?personId=${entry.personId}`}
             className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800"
           >
             <FileText size={13} />
-            Edit
+            Authorizations
           </Link>
         </div>
       </div>

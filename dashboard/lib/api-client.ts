@@ -2764,23 +2764,34 @@ export const crowdApi = {
     }),
 };
 
+async function fetchBankingApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  try {
+    return await fetchApi<T>(endpoint, options);
+  } catch (error) {
+    if (!(error instanceof ApiError) || error.statusCode !== 404 || !endpoint.startsWith('/v1/banking/')) {
+      throw error;
+    }
+    return fetchApi<T>(`/api${endpoint}`, options);
+  }
+}
+
 export const bankingAnalyticsApi = {
   listSessions: (filters: { tenantId: string; branchId?: string }) => {
     const params = new URLSearchParams({ tenantId: filters.tenantId });
     if (filters.branchId) params.set('branchId', filters.branchId);
-    return fetchApi<{ success: boolean; data: any[]; count: number }>(
+    return fetchBankingApi<{ success: boolean; data: any[]; count: number }>(
       `/v1/banking/sessions?${params}`,
     );
   },
   getSummary: (tenantId: string, branchId?: string) => {
     const params = new URLSearchParams({ tenantId });
     if (branchId) params.set('branchId', branchId);
-    return fetchApi<{ success: boolean; data: any }>(
+    return fetchBankingApi<{ success: boolean; data: any }>(
       `/v1/banking/sessions/summary?${params}`,
     );
   },
   listMonitors: (tenantId: string, branchId: string) =>
-    fetchApi<{ success: boolean; data: any[]; count: number }>(
+    fetchBankingApi<{ success: boolean; data: any[]; count: number }>(
       `/v1/banking/monitors?${new URLSearchParams({ tenantId, branchId })}`,
     ),
   createMonitor: (data: {
@@ -2791,14 +2802,14 @@ export const bankingAnalyticsApi = {
     arrivalZoneId: string;
     unloadingZoneId: string;
     secureEntryZoneId?: string;
-  }) => fetchApi<{ success: boolean; data: any }>('/v1/banking/monitors', {
+  }) => fetchBankingApi<{ success: boolean; data: any }>('/v1/banking/monitors', {
     method: 'POST', body: JSON.stringify(data),
   }),
   listVisits: (branchId: string, startDate?: string, endDate?: string) => {
     const params = new URLSearchParams({ branchId });
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
-    return fetchApi<{ success: boolean; data: any[]; count: number }>(
+    return fetchBankingApi<{ success: boolean; data: any[]; count: number }>(
       `/v1/banking/visits?${params}`,
     );
   },
@@ -2810,11 +2821,11 @@ export const bankingAnalyticsApi = {
     expectedArrivalStart: string;
     expectedArrivalEnd: string;
     notes?: string;
-  }) => fetchApi<{ success: boolean; data: any }>('/v1/banking/visits', {
+  }) => fetchBankingApi<{ success: boolean; data: any }>('/v1/banking/visits', {
     method: 'POST', body: JSON.stringify(data),
   }),
   generateEvidence: (sessionId: string) =>
-    fetchApi<{ success: boolean; data: any }>(
+    fetchBankingApi<{ success: boolean; data: any }>(
       `/v1/banking/sessions/${encodeURIComponent(sessionId)}/evidence`,
       { method: 'POST', body: JSON.stringify({}) },
     ),

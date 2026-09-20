@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Activity, AlertTriangle, Building2, Camera, CheckCircle2, Database,
   Download, HardDrive, Network, RefreshCw, Server, ShieldAlert, TrendingUp, Wrench, Zap,
@@ -100,7 +101,7 @@ export default function AIPredictionPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<{ message: string; error?: boolean } | null>(null);
+  const [notice, setNotice] = useState<{ message: string; error?: boolean; href?: string; actionLabel?: string } | null>(null);
 
   const loadLiveData = useCallback(async () => {
     setIsRefreshing(true);
@@ -119,8 +120,8 @@ export default function AIPredictionPage() {
 
   useEffect(() => { void loadLiveData(); }, [loadLiveData]);
 
-  const notify = (message: string, error = false) => {
-    setNotice({ message, error });
+  const notify = (message: string, error = false, href?: string, actionLabel?: string) => {
+    setNotice({ message, error, href, actionLabel });
     window.setTimeout(() => setNotice(null), 4500);
   };
 
@@ -128,7 +129,12 @@ export default function AIPredictionPage() {
     setActionId(cameraId);
     try {
       const result = await predictiveAnalyticsApi.executeAction({ action: "dispatch_work_order", targetId: cameraId });
-      notify(result.alreadyOpen ? `Work order ${result.ticketId} is already open.` : `Work order ${result.ticketId} created.`);
+      notify(
+        result.alreadyOpen ? `Work order ${result.ticketId} is already open.` : `Work order ${result.ticketId} created.`,
+        false,
+        result.workOrderId ? `/maintenance/workorders/${encodeURIComponent(result.workOrderId)}` : "/maintenance/workorders",
+        "Open work order",
+      );
       await loadLiveData();
     } catch (error) {
       notify(error instanceof Error ? error.message : "Work order creation failed", true);
@@ -163,7 +169,13 @@ export default function AIPredictionPage() {
     <AppLayout>
       {notice && (
         <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm shadow-2xl ${notice.error ? "border-red-500/40 bg-red-950 text-red-200" : "border-emerald-500/40 bg-slate-900 text-emerald-300"}`}>
-          {notice.error ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}{notice.message}
+          {notice.error ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+          <span>{notice.message}</span>
+          {notice.href && (
+            <Link href={notice.href} className="ml-2 rounded border border-current/30 px-2 py-1 text-xs font-bold hover:bg-white/10">
+              {notice.actionLabel ?? "Open"}
+            </Link>
+          )}
         </div>
       )}
       <PageHero
