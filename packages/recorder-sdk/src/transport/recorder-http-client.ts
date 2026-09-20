@@ -6,8 +6,22 @@
  */
 
 import axios from "axios";
-import type { AxiosInstance, AxiosError, AxiosRequestConfig } from "axios";
 import type { RecorderContext } from "../core/recorder-driver.types.js";
+
+type AxiosInstance = ReturnType<typeof axios.create>;
+type AxiosError = InstanceType<typeof axios.AxiosError>;
+
+interface AxiosRequestConfig {
+  method?: string;
+  url?: string;
+  headers?: Record<string, any>;
+  timeout?: number;
+  validateStatus?: (status: number) => boolean;
+  maxRedirects?: number;
+  data?: any;
+  responseType?: string;
+  [key: string]: any;
+}
 import {
   RecorderDriverError,
   RecorderConnectionError,
