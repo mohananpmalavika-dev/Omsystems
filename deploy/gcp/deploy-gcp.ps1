@@ -152,15 +152,24 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
             if ($remoteInstallerHash) { $remoteInstallerHash = "$remoteInstallerHash".Trim().ToLower() }
 
             if ($remoteHash -ne $expectedHash -or $remoteInstallerHash -ne $expectedInstallerHash) {
-                Write-Host "Uploading Edge Agent release artifacts to $InstanceName..." -ForegroundColor Cyan
-                $filesToUpload = @("$localManifest")
-                if ($remoteHash -ne $expectedHash) { $filesToUpload += "$localExe" }
-                if ($remoteInstallerHash -ne $expectedInstallerHash) { $filesToUpload += "$localInstaller" }
-                & gcloud compute scp --compress --zone=$Zone --project=$currentProject --quiet `
-                    @filesToUpload "${InstanceName}:/tmp/"
-                Assert-LastNativeCommandSucceeded "Uploading the Edge Agent release artifacts"
+                $installerBucket = "gs://kryptovision-installer-7866fc3f"
+                Write-Host "Uploading Edge Agent release artifacts via Google Cloud Storage ($installerBucket)..." -ForegroundColor Cyan
+                if ($remoteInstallerHash -ne $expectedInstallerHash) {
+                    Write-Host "Uploading Windows installer to $installerBucket..." -ForegroundColor Yellow
+                    & gcloud storage cp "$localInstaller" "$installerBucket/$installerFile" --project=$currentProject
+                    Assert-LastNativeCommandSucceeded "Uploading the Edge Agent installer to GCS"
+                }
+                if ($remoteHash -ne $expectedHash) {
+                    Write-Host "Uploading Edge Agent executable to $installerBucket..." -ForegroundColor Yellow
+                    & gcloud storage cp "$localExe" "$installerBucket/edge-agent.exe" --project=$currentProject
+                    Assert-LastNativeCommandSucceeded "Uploading the Edge Agent binary to GCS"
+                }
+                & gcloud storage cp "$localManifest" "$installerBucket/windows-release.json" --project=$currentProject
+                Assert-LastNativeCommandSucceeded "Uploading the Windows release manifest to GCS"
+
+                Write-Host "Installing release artifacts on $InstanceName from GCS..." -ForegroundColor Cyan
                 & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-                    --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && ([ ! -f /tmp/edge-agent.exe ] || (test `$(sha256sum /tmp/edge-agent.exe | cut -d ' ' -f 1`) = '$expectedHash' && sudo mv /tmp/edge-agent.exe /opt/sentinel-grid/edge-agent/release/)) && ([ ! -f /tmp/$installerFile ] || (test `$(sha256sum /tmp/$installerFile | cut -d ' ' -f 1`) = '$expectedInstallerHash' && sudo mv /tmp/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/)) && ([ ! -f /tmp/windows-release.json ] || sudo mv /tmp/windows-release.json /opt/sentinel-grid/edge-agent/release/) && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
+                    --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo gcloud storage cp $installerBucket/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile && sudo gcloud storage cp $installerBucket/windows-release.json /opt/sentinel-grid/edge-agent/release/windows-release.json && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
                 Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
                 Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
             } else {
