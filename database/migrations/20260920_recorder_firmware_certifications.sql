@@ -25,6 +25,18 @@ CREATE TABLE IF NOT EXISTS recorder_certifications (
   )
 );
 
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS manufacturer text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS hardware_revision text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS serial_number text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS test_suite_version text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS test_environment text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS test_operator text;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS evidence_artifacts jsonb NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS attestation jsonb;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS test_date timestamptz;
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE recorder_certifications ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
 CREATE INDEX IF NOT EXISTS idx_recorder_certifications_firmware_matrix
   ON recorder_certifications (lower(vendor), lower(model_pattern), lower(firmware_version_pattern));
 
