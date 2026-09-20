@@ -181,8 +181,26 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
 
     Write-Host "Triggering live container rebuild and restart on $InstanceName ($Zone)..." -ForegroundColor Cyan
     & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-        --command="sudo bash -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && bash deploy/gcp/update-live.sh'"
-    Assert-LastNativeCommandSucceeded "Rebuilding and restarting the live control plane"
+        --command="sudo rm -f /tmp/deploy.log && sudo sh -c 'cd /opt/sentinel-grid && git fetch origin main && git reset --hard origin/main && nohup bash deploy/gcp/update-live.sh > /tmp/deploy.log 2>&1 &'"
+    Assert-LastNativeCommandSucceeded "Triggering the live control plane rebuild"
+
+    Write-Host "Monitoring build and restart progress on $InstanceName..." -ForegroundColor Cyan
+    $completed = $false
+    $timeoutSeconds = 600
+    $startTime = [DateTime]::UtcNow
+    while (-not $completed -and ([DateTime]::UtcNow - $startTime).TotalSeconds -lt $timeoutSeconds) {
+        Start-Sleep -Seconds 4
+        $logTail = (& gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
+            --command="sudo cat /tmp/deploy.log 2>/dev/null | tail -n 12" 2>$null)
+        if ($logTail -match "Update complete!") {
+            $completed = $true
+            Write-Host $logTail -ForegroundColor Green
+            break
+        }
+    }
+    if (-not $completed) {
+        throw "Deployment timed out waiting for container rebuild. Check /tmp/deploy.log on $InstanceName."
+    }
 }
 
 # 8. Fetch Public External IP
