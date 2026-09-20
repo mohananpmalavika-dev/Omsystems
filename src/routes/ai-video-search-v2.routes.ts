@@ -135,10 +135,12 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
 
       const body = videoSummaryRequestSchema.parse(request.body);
 
-      // Verify camera access
+      // Tenant ownership is the minimum authoritative camera access boundary.
+      // More restrictive branch/ABAC checks can be layered on top, but a
+      // caller must never summarize a camera belonging to another tenant.
       const { rows: cameras } = await pool.query(
-        "SELECT id, name FROM cameras WHERE id = $1",
-        [body.cameraId]
+        "SELECT id, name FROM cameras WHERE id = $1 AND tenant_id = $2",
+        [body.cameraId, user.tenantId]
       );
 
       if (cameras.length === 0) {
@@ -147,8 +149,6 @@ export async function registerAIVideoSearchV2Routes(app: FastifyInstance, pool: 
           error: "camera_not_found",
         });
       }
-
-      // TODO: Add proper camera access check via checkCameraAccess
 
       const input = {
         ...body,

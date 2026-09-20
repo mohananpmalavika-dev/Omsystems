@@ -13,6 +13,12 @@ const nativeSharpBinary = join(
   "lib",
   "sharp-win32-x64-0.35.4.node",
 );
+const sharpRuntimeDependencies = [
+  join(dirname(executable), "node_modules", "sharp", "package.json"),
+  join(dirname(executable), "node_modules", "semver", "package.json"),
+  join(dirname(executable), "node_modules", "detect-libc", "package.json"),
+  join(dirname(executable), "node_modules", "@img", "colour", "package.json"),
+];
 
 if (!existsSync(executable)) {
   throw new Error(`Windows package verification failed: ${executable} was not created.`);
@@ -21,6 +27,13 @@ if (!existsSync(nativeSharpBinary)) {
   throw new Error(
     `Windows package verification failed: sharp native runtime is missing (${nativeSharpBinary}).`,
   );
+}
+for (const dependency of sharpRuntimeDependencies) {
+  if (!existsSync(dependency)) {
+    throw new Error(
+      `Windows package verification failed: sharp runtime dependency is missing (${dependency}).`,
+    );
+  }
 }
 
 // pkg can cross-compile a Windows executable on the Linux control-plane image,

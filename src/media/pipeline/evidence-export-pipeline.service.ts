@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { RecordingIndexService } from "./recording-index.service.js";
 
 export interface EvidenceExportPackage {
@@ -42,57 +41,17 @@ export class EvidenceExportPipelineService {
     incidentTime: string;
     requestedBy: string;
   }): Promise<EvidenceExportPackage> {
-    const incTime = new Date(input.incidentTime).getTime();
-    const fromTime = new Date(incTime - 15 * 1000).toISOString();
-    const toTime = new Date(incTime + 30 * 1000).toISOString();
-
-    const timeline = await this.recordingIndex.queryTimeline({
+    const incidentTime = new Date(input.incidentTime).getTime();
+    const from = new Date(incidentTime - 15 * 1000).toISOString();
+    const to = new Date(incidentTime + 30 * 1000).toISOString();
+    await this.recordingIndex.queryTimeline({
       cameraIds: [input.cameraId],
-      from: fromTime,
-      to: toTime,
+      from,
+      to,
     });
-
-    const now = new Date().toISOString();
-    const packageId = `EVD-${Date.now()}-${input.cameraId}`;
-
-    const pkg: EvidenceExportPackage = {
-      packageId,
-      incidentId: input.incidentId || "INC-20260817-1182",
-      branchId: input.branchId,
-      cameraId: input.cameraId,
-      cameraName: input.cameraName || `Camera ${input.cameraId}`,
-      incidentTimestamp: input.incidentTime,
-      timeWindow: {
-        from: fromTime,
-        to: toTime,
-        totalDurationSeconds: 45,
-      },
-      sealedMediaUrl: `/media/evidence/${packageId}.mp4`,
-      sha256Hash: "d8f99e4501a4e21a37c1d32098e6bfa58a4362d04a625e11c83c96048a9b22e7",
-      signature: "RSA_SHA256_OFFICIAL_FORENSIC_SEAL_SENTINEL_GRID",
-      chainOfCustody: [
-        {
-          action: "TIMELINE_INDEX_RESOLVED",
-          actor: "RecordingIndexService",
-          timestamp: now,
-        },
-        {
-          action: "SHA256_SEALED",
-          actor: "EvidenceExportPipelineService",
-          timestamp: now,
-        },
-        {
-          action: "EXPORTED_BY_OPERATOR",
-          actor: input.requestedBy,
-          timestamp: now,
-        },
-      ],
-      status: "SEALED",
-      createdAt: now,
-    };
-
-    this.packages.set(packageId, pkg);
-    return pkg;
+    throw new Error(
+      "EVIDENCE_EXPORT_PIPELINE_UNAVAILABLE: legacy metadata-only export is disabled; use the forensic evidence export worker so media bytes are hashed and signed",
+    );
   }
 
   getPackage(packageId: string): EvidenceExportPackage | undefined {

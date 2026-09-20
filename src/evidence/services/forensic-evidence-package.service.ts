@@ -297,7 +297,7 @@ export class ForensicEvidencePackageService {
       createdBy: input.capturedBy,
       createdAt: capturedAt,
       hashAlgorithm: 'SHA-256',
-      signatureAlgorithm: (this.signingProvider as any).algorithm || 'Ed25519',
+      signatureAlgorithm: normalizeSignatureAlgorithm((this.signingProvider as any).algorithm),
       signingKeyId: keyId,
     };
 
@@ -309,7 +309,7 @@ export class ForensicEvidencePackageService {
     const signatureBase64 = signatureResult.signature.toString('base64');
 
     const manifestSignature: ManifestSignature = {
-      algorithm: signatureResult.algorithm || (this.signingProvider as any).algorithm || 'Ed25519',
+      algorithm: normalizeSignatureAlgorithm(signatureResult.algorithm || (this.signingProvider as any).algorithm),
       keyId,
       publicKey,
       manifestSha256,
@@ -405,6 +405,11 @@ export class ForensicEvidencePackageService {
   getPublicKey(): string {
     return this.cachedPublicKey;
   }
+}
+
+function normalizeSignatureAlgorithm(algorithm?: string): string {
+  if (!algorithm) return 'Ed25519';
+  return algorithm.toUpperCase() === 'ED25519' ? 'Ed25519' : algorithm;
 }
 
 export const forensicEvidencePackageService = new ForensicEvidencePackageService();

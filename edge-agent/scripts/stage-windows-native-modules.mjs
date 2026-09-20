@@ -4,10 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const edgeRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const workspaceModules = join(edgeRoot, "..", "node_modules");
-const releaseModules = join(edgeRoot, "release", "node_modules");
+const releaseModules = process.env.EDGE_AGENT_RELEASE_MODULES_DIR
+  || join(edgeRoot, "release", "node_modules");
 const requiredModules = [
   "sharp",
+  "semver",
   "detect-libc",
+  "@img/colour",
   "@img/sharp-win32-x64",
 ];
 
