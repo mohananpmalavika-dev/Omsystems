@@ -25,6 +25,7 @@ import type {
   RecorderProbeResult,
   HealthState,
 } from "../../core/recorder-driver.types.js";
+import { RecorderAuthenticationError } from "../../core/recorder-driver.types.js";
 import { RecorderHttpClient, type CredentialResolver } from "../../transport/recorder-http-client.js";
 import { DigestAuthProvider } from "../../transport/recorder-http-transport.js";
 import {
@@ -94,7 +95,8 @@ export class ONVIFDriver implements RecorderDriver {
         channelCapacity: 16,
         uptimeSeconds: 864000,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof RecorderAuthenticationError) throw error;
       return {
         manufacturer: "ONVIF Device",
         model: "Network Video Transmitter",

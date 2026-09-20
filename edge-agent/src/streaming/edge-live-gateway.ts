@@ -162,6 +162,9 @@ interface LiveGatewayOptions {
   edgeBridgeSharedKey?: string;
   publicBaseUrl: () => string;
   mediaMtxHlsUrl: string;
+  mediaMtxWebRtcUrl?: string;
+  allowSrtIngest?: boolean;
+  allowMulticastIngest?: boolean;
   accessTtlMs: number;
   onTalkComplete?: ConstructorParameters<typeof TalkSessionRegistry>[1];
   talkSessions?: TalkSessionRegistry;
@@ -229,6 +232,9 @@ export class EdgeLiveGateway {
     if (["GET", "HEAD", "OPTIONS"].includes(request.method ?? "") && url.pathname.startsWith("/hls/")) {
       return this.proxyHls(request, response);
     }
+    if (["GET", "POST", "PATCH", "DELETE", "OPTIONS"].includes(request.method ?? "") && url.pathname.startsWith("/webrtc/")) {
+      return this.proxyWebRtc(request, response);
+    }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
       try {
         const body = await readJsonBody(request);
@@ -239,6 +245,9 @@ export class EdgeLiveGateway {
         if (consumed.purpose === "talk") return sendJson(response, 403, { error: "invalid_live_session" });
         const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
         if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
+        if (!isAllowedIngestSource(sourceUri, this.options.allowSrtIngest ?? false, this.options.allowMulticastIngest ?? false)) {
+          return sendJson(response, 409, { error: "stream_transport_not_enabled" });
+        }
         const path = `camera-${safeIdentifier(consumed.cameraId)}`;
         await this.options.router.ensurePath(path, sourceUri);
         const session = this.access.issue(path);
@@ -251,6 +260,12 @@ export class EdgeLiveGateway {
             url: `${stripSlash(this.options.publicBaseUrl())}/hls/${path}/index.m3u8`,
             bearerToken: session.token,
           },
+          ...(this.options.mediaMtxWebRtcUrl ? {
+            webRtc: {
+              whepUrl: `${stripSlash(this.options.publicBaseUrl())}/webrtc/${path}/whep`,
+              bearerToken: session.token,
+            },
+          } : {}),
         });
       } catch (error) {
         return sendJson(response, 500, { error: "edge_live_start_failed", message: error instanceof Error ? error.message : "Unknown error" });
@@ -327,21 +342,23 @@ export class EdgeLiveGateway {
     // HLS is authorized with a short-lived bearer token, never cookies.  Do
     // not reflect an arbitrary Origin together with credentials: that turns a
     // locally reachable camera gateway into a cross-origin credential target.
-    const reqOrigin = request.headers.origin;
-    if (reqOrigin) {
-      response.setHeader("Access-Control-Allow-Origin", reqOrigin);
-      response.setHeader("Access-Control-Allow-Credentials", "true");
-    } else {
-      response.setHeader("Access-Control-Allow-Origin", "*");
-    }
+    // Media access is bearer-token based, not cookie based. Wildcard CORS
+    // without credential reflection avoids making an arbitrary Origin trusted.
+    response.setHeader("Access-Control-Allow-Origin", "*");
     response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Range");
     response.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
     if (request.headers["access-control-request-private-network"] === "true") {
       response.setHeader("Access-Control-Allow-Private-Network", "true");
     }
     response.setHeader("Vary", "Origin");
+    response.setHeader("Cache-Control", "no-store, private");
     if (request.method === "OPTIONS") { response.writeHead(204).end(); return; }
     const suffix = (request.url ?? "/hls/").slice("/hls".length) || "/";
+    const path = suffix.split("/").filter(Boolean)[0] ?? "";
+    const token = bearerToken(request.headers.authorization) || new URL(request.url ?? "/", "http://edge.local").searchParams.get("token") || "";
+    if (!this.access.authenticate(token, path, "read")) {
+      return sendJson(response, 401, { error: "media_access_denied" });
+    }
     const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
       method: request.method ?? "GET",
       headers: forwardMediaHeaders(request.headers),
@@ -351,6 +368,30 @@ export class EdgeLiveGateway {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
     }
     if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
+    const body = Buffer.from(await upstream.arrayBuffer());
+    const contentType = upstream.headers.get("content-type") ?? "";
+    response.end(contentType.includes("mpegurl") ? rewriteHlsPlaylist(body.toString("utf8"), token) : body);
+  }
+
+  private async proxyWebRtc(request: IncomingMessage, response: ServerResponse) {
+    if (!this.options.mediaMtxWebRtcUrl) return sendJson(response, 503, { error: "webrtc_not_enabled" });
+    if (request.method === "OPTIONS") { setCorsHeaders(request, response); response.writeHead(204).end(); return; }
+    const suffix = (request.url ?? "/webrtc/").slice("/webrtc".length) || "/";
+    const path = suffix.split("/").filter(Boolean)[0] ?? "";
+    if (!this.access.authenticate(bearerToken(request.headers.authorization), path, "read")) {
+      return sendJson(response, 401, { error: "media_access_denied" });
+    }
+    const body = ["POST", "PATCH"].includes(request.method ?? "") ? await readBinaryBody(request, 1_000_000) : undefined;
+    const upstream = await fetch(new URL(suffix, this.options.mediaMtxWebRtcUrl), {
+      method: request.method ?? "GET",
+      headers: forwardMediaHeaders(request.headers),
+      ...(body ? { body } : {}),
+    });
+    setCorsHeaders(request, response);
+    response.statusCode = upstream.status;
+    for (const name of ["content-type", "location", "etag", "accept-patch"]) {
+      const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
+    }
     response.end(Buffer.from(await upstream.arrayBuffer()));
   }
 }
@@ -422,6 +463,9 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       ...(config.EDGE_BRIDGE_SHARED_KEY ? { edgeBridgeSharedKey: config.EDGE_BRIDGE_SHARED_KEY } : {}),
       publicBaseUrl: currentPublicUrl,
       mediaMtxHlsUrl: config.MEDIAMTX_HLS_URL,
+      ...(config.EDGE_MEDIA_ENABLE_WEBRTC ? { mediaMtxWebRtcUrl: config.MEDIAMTX_WEBRTC_URL } : {}),
+      allowSrtIngest: config.EDGE_MEDIA_ENABLE_SRT_INGEST,
+      allowMulticastIngest: config.EDGE_MEDIA_ENABLE_MULTICAST_INGEST,
       accessTtlMs: config.MEDIA_ACCESS_TTL_SECONDS * 1_000,
       onTalkComplete: async (completion) => {
         await input.gateway.completeTalkSession(input.agentId, completion.sessionId, completion);
@@ -644,8 +688,12 @@ hlsSegmentDuration: 2s
 hlsPartDuration: 500ms
 rtsp: no
 rtmp: no
-webrtc: no
-srt: no
+webrtc: ${config.EDGE_MEDIA_ENABLE_WEBRTC ? "yes" : "no"}
+webrtcAddress: 127.0.0.1:8889
+srt: ${config.EDGE_MEDIA_ENABLE_SRT_INGEST ? "yes" : "no"}
+srtAddress: 127.0.0.1:8890
+# UDP/RTP multicast is configured per source path (udp+rtp:// or
+# udp+mpegts://). It is intentionally not exposed as a public listener.
 pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s
@@ -658,6 +706,33 @@ pathDefaults:
   maxReorderedFrames: 60
 paths: {}
 `;
+}
+
+function isAllowedIngestSource(sourceUri: string, allowSrt: boolean, allowMulticast: boolean): boolean {
+  let parsed: URL;
+  try { parsed = new URL(sourceUri); } catch { return false; }
+  if (parsed.protocol === "srt:") return allowSrt;
+  if (parsed.protocol === "udp+rtp:" || parsed.protocol === "udp+mpegts:") {
+    const octets = parsed.hostname.split(".").map((part) => Number(part));
+    const isMulticast = octets.length === 4 && octets.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)
+      && octets[0]! >= 224 && octets[0]! <= 239;
+    return !isMulticast || allowMulticast;
+  }
+  return true;
+}
+
+function rewriteHlsPlaylist(playlist: string, token: string): string {
+  if (!token) return playlist;
+  const appendToken = (uri: string) => {
+    if (!uri || /^(?:https?:|data:)/i.test(uri)) return uri;
+    const separator = uri.includes("?") ? "&" : "?";
+    return `${uri}${separator}token=${encodeURIComponent(token)}`;
+  };
+  return playlist.split("\n").map((line) => {
+    if (!line || line.startsWith("#") && !line.includes("URI=\"")) return line;
+    if (line.includes("URI=\"")) return line.replace(/URI=\"([^\"]+)\"/g, (_all, uri) => `URI=\"${appendToken(uri)}\"`);
+    return appendToken(line);
+  }).join("\n");
 }
 
 function startManagedProcess(name: string, executable: string, args: string[], cwd: string, environment?: NodeJS.ProcessEnv) {

@@ -278,7 +278,12 @@ const seedCameras: Camera[] = [
       { name: "main", codec: "H264", width: 1920, height: 1080, role: "main" },
       { name: "sub", codec: "H264", width: 640, height: 360, role: "sub" },
     ],
-    capabilities: { ptz: false, audio: true, events: true },
+    // Deterministic development fixture only. Production discovery must write
+    // this after an edge-originated audio-loopback/capability probe.
+    capabilities: { ptz: false, audio: true, events: true, talkback: {
+      supported: true, transport: "vendor-adapter", codecs: ["PCMA"], sampleRates: [8000],
+      verifiedAt: "2026-09-20T00:00:00.000Z",
+    } },
     connectionSecretRef: "secret://cam-001",
   },
   {

@@ -102,6 +102,11 @@ export async function registerMediaOrchestratorRoutes(
     }
     return true;
   };
+  const ownLease = async (request: FastifyRequest, reply: FastifyReply, leaseId: string) => {
+    const lease = await orchestrator.leaseRepository.getById(leaseId);
+    if (!lease || !await ownSession(request, reply, lease.sessionId)) return false;
+    return accessCamera(request, reply, lease.cameraId);
+  };
 
   // 1. Create or register viewer session
   app.post("/v1/media/viewer/session", async (request: FastifyRequest, reply: FastifyReply) => {
@@ -193,6 +198,7 @@ export async function registerMediaOrchestratorRoutes(
   // 5. Renew distributed stream lease
   app.post("/v1/media/streams/renew", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = renewStreamSchema.parse(request.body);
+    if (!await ownLease(request, reply, body.leaseId)) return;
 
     const renewed = await orchestrator.leaseRepository.renew(
       body.leaseId,
@@ -213,6 +219,7 @@ export async function registerMediaOrchestratorRoutes(
   // 6. Release distributed stream lease
   app.post("/v1/media/streams/release", async (request: FastifyRequest, reply: FastifyReply) => {
     const body = releaseStreamSchema.parse(request.body);
+    if (!await ownLease(request, reply, body.leaseId)) return;
 
     const released = await orchestrator.leaseRepository.release(
       body.leaseId,
@@ -239,6 +246,7 @@ export async function registerMediaOrchestratorRoutes(
   // 9. Get durable camera capabilities
   app.get("/v1/media/cameras/:id/capabilities", async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
+    if (!await accessCamera(request, reply, id)) return;
     const capabilities = await orchestrator.capabilityRepository.getCapabilities(id);
     if (!capabilities) {
       return reply.code(404).send({ error: "camera_not_found" });

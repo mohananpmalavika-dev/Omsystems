@@ -64,12 +64,15 @@ export class TalkbackService {
       throw new TalkbackServiceError('camera_not_found', 404);
     }
 
-    // Verify camera hardware audio/speaker capability
-    if (camera.capabilities.talkback?.supported === false) {
+    // Two-way audio must have a recent, hardware-originated capability result.
+    // An advertised ONVIF/vendor flag alone is not proof that the microphone,
+    // speaker, codec and backchannel are actually wired and working.
+    const capability = await this.getDeviceCapability(cameraId);
+    if (!capability.supported) {
       throw new TalkbackServiceError(
         'talkback_not_supported',
         409,
-        camera.capabilities.talkback?.reason ?? 'device_does_not_advertise_two_way_audio'
+        capability.reason ?? 'two_way_audio_hardware_not_validated'
       );
     }
 
@@ -302,7 +305,9 @@ export class TalkbackService {
       throw new TalkbackServiceError('camera_not_found', 404);
     }
 
-    const isSupported = camera.capabilities.talkback?.supported !== false;
+    const advertised = camera.capabilities.talkback?.supported === true;
+    const verifiedAt = camera.capabilities.talkback?.verifiedAt;
+    const isSupported = advertised && Boolean(verifiedAt);
 
     const transport = camera.capabilities.talkback?.transport ?? (
       camera.vendor === 'cp-plus' || camera.vendor === 'dahua'
@@ -318,8 +323,12 @@ export class TalkbackService {
       transport,
       codecs: ['PCMA', 'PCMU'],
       sample_rates: [8000],
-      verified_at: new Date(),
-      reason: isSupported ? 'Hardware backchannel verified' : 'Device has no audio hardware',
+      verified_at: verifiedAt ? new Date(verifiedAt) : new Date(),
+      reason: isSupported
+        ? 'Hardware validation recorded by edge capability probe'
+        : advertised
+          ? 'two_way_audio_advertised_but_not_hardware_validated'
+          : (camera.capabilities.talkback?.reason ?? 'device_does_not_advertise_two_way_audio'),
       created_at: new Date(),
       updated_at: new Date(),
     };

@@ -178,4 +178,5 @@ describe("TalkbackService and TalkbackRepository", () => {
     const videoOnlyCap = await service.getDeviceCapability("cam-002");
     expect(videoOnlyCap.supported).toBe(false);
   });
+
 });

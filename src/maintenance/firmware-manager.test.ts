@@ -70,6 +70,38 @@ describe("FirmwareManager", () => {
     }));
   });
 
+  it("records completion only after an executor returns a matching device verification receipt", async () => {
+    const store = new MemoryStore();
+    const packageHash = "a".repeat(64);
+    let rollbackInvoked = false;
+    const executor = {
+      deploy: async ({ assetId, firmware }: any) => ({
+        assetId, previousVersion: "5.7.1", installedVersion: firmware.version,
+        deviceReportedVersion: firmware.version, packageSha256: packageHash, verifiedAt: new Date(), rollbackVersion: "5.7.1",
+      }),
+      rollback: async ({ assetId, rollbackVersion }: any) => {
+        rollbackInvoked = true;
+        return { assetId, previousVersion: "5.7.2", installedVersion: rollbackVersion,
+          deviceReportedVersion: rollbackVersion, packageSha256: packageHash, verifiedAt: new Date() };
+      },
+    };
+    const manager = new FirmwareManager(store, console, executor);
+    const version = await manager.registerFirmwareVersion({
+      tenantId: "omsystems", assetCategory: "camera", vendor: "Hikvision", model: "DS-2CD2xx", version: "5.7.2",
+      releaseDate: new Date(), fileUrl: "https://example.test/firmware.bin", fileHash: packageHash, fileSize: 42,
+      releaseNotes: "security", criticality: "critical", compatibility: ["DS-2CD2xx"], createdBy: "tester",
+    });
+    const approval = await manager.requestApproval({ tenantId: "omsystems", firmwareVersionId: version.id, requestedBy: "tester", justification: "verified rollout" });
+    await manager.approveFirmware({ requestId: approval.id, reviewedBy: "approver" });
+    const asset = await store.createMaintenanceAsset({ tenantId: "omsystems", category: "camera", assetType: "camera", status: "operational", createdBy: "tester", model: "DS-2CD2xx", make: "Hikvision" });
+    const update = await manager.scheduleFirmwareUpdate({ tenantId: "omsystems", firmwareVersionId: version.id, targetAssets: [asset.id], createdBy: "tester" });
+    await manager.getAssetFirmwareInventory("omsystems", asset.id);
+    await manager.executeFirmwareUpdate(update.id);
+    expect(await manager.getFirmwareUpdateProgress(update.id)).toEqual(expect.objectContaining({ status: "completed", progress: expect.objectContaining({ completed: 1, failed: 0 }) }));
+    await manager.rollbackFirmwareUpdate({ updateId: update.id, reason: "post-deployment anomaly", rollbackBy: "approver" });
+    expect(rollbackInvoked).toBe(true);
+  });
+
   it("blocks firmware rollout plans when live asset and incident state is unsafe", async () => {
     const store = new MemoryStore();
     const manager = new FirmwareManager(store, console);

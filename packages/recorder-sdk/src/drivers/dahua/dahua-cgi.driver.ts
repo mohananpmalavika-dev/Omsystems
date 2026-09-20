@@ -33,6 +33,7 @@ import type {
   RecorderProbeResult,
   HealthState,
 } from "../../core/recorder-driver.types.js";
+import { RecorderAuthenticationError } from "../../core/recorder-driver.types.js";
 import { RecorderHttpClient, type CredentialResolver } from "../../transport/recorder-http-client.js";
 import { DigestAuthProvider } from "../../transport/recorder-http-transport.js";
 import {
@@ -105,7 +106,8 @@ export class DahuaCGIDriver implements RecorderDriver {
         channelCapacity: parsed.channelCapacity || 16,
         uptimeSeconds: 864000,
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof RecorderAuthenticationError) throw error;
       // Fallback robust simulation data for local/test context
       return {
         vendor: "cp-plus",

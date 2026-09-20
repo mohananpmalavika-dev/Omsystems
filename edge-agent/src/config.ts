@@ -47,6 +47,13 @@ const schema = z.object({
   MEDIA_RUNTIME_MANAGED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   MEDIAMTX_API_URL: z.string().url().default("http://127.0.0.1:9997"),
   MEDIAMTX_HLS_URL: z.string().url().default("http://127.0.0.1:8888"),
+  MEDIAMTX_WEBRTC_URL: z.string().url().default("http://127.0.0.1:8889"),
+  // WebRTC is proxied through the authenticated edge gateway. SRT and UDP
+  // multicast remain loopback-bound ingest options until a branch firewall
+  // rule and a device-specific certification explicitly enable them.
+  EDGE_MEDIA_ENABLE_WEBRTC: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  EDGE_MEDIA_ENABLE_SRT_INGEST: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
+  EDGE_MEDIA_ENABLE_MULTICAST_INGEST: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named"]).default("disabled"),
   MEDIA_QUICK_TUNNEL_FALLBACK: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   CLOUDFLARED_PATH: z.string().default("cloudflared"),

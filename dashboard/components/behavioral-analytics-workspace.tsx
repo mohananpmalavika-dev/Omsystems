@@ -182,19 +182,19 @@ export function BehavioralAnalyticsWorkspace({ branchId }: { branchId?: string }
 
       if (healthRes) {
         setHealth({
-          status: healthRes.status || "healthy",
+          status: healthRes.status || "unknown",
           activeBranches: branches.length,
           activeBaselines: healthRes.tables?.baselines ?? mappedBaselines.length,
           anomalyDetectionEnabled: healthRes.status === "healthy",
-          lastProcessedAt: healthRes.timestamp || new Date().toISOString(),
+          lastProcessedAt: healthRes.timestamp || "unknown",
         });
       } else {
         setHealth({
-          status: "healthy",
+          status: "unknown",
           activeBranches: branches.length,
           activeBaselines: mappedBaselines.length,
-          anomalyDetectionEnabled: true,
-          lastProcessedAt: new Date().toISOString(),
+          anomalyDetectionEnabled: false,
+          lastProcessedAt: "unknown",
         });
       }
 

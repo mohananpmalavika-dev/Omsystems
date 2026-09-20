@@ -151,6 +151,33 @@ export interface FirmwareUpgradePlan {
   createdAt: Date;
 }
 
+export interface FirmwareDeploymentReceipt {
+  assetId: string;
+  previousVersion: string;
+  installedVersion: string;
+  deviceReportedVersion: string;
+  packageSha256: string;
+  verifiedAt: Date;
+  rollbackVersion?: string;
+}
+
+/** A signed edge-agent or vendor driver implementation. It performs device I/O. */
+export interface FirmwareDeploymentExecutor {
+  deploy(input: {
+    tenantId: string;
+    updateId: string;
+    assetId: string;
+    firmware: FirmwareCatalogEntry;
+  }): Promise<FirmwareDeploymentReceipt>;
+  rollback(input: {
+    tenantId: string;
+    updateId: string;
+    assetId: string;
+    rollbackVersion: string;
+    reason: string;
+  }): Promise<FirmwareDeploymentReceipt>;
+}
+
 /**
  * The generic firmware catalogue is not itself a device transport.  Callers
  * must not translate a planned update into a completed device update merely
@@ -181,10 +208,12 @@ export class FirmwareManager {
   }>();
   private upgradePlans = new Map<string, FirmwareUpgradePlan>();
   private assetInventory = new Map<string, AssetFirmwareInventoryRecord>();
+  private readonly executor?: FirmwareDeploymentExecutor;
 
-  constructor(store: ControlPlaneStore, logger?: any) {
+  constructor(store: ControlPlaneStore, logger?: any, executor?: FirmwareDeploymentExecutor) {
     this.store = store;
     this.logger = logger || console;
+    this.executor = executor;
   }
 
   private async resolveAssetContext(assetId: string, tenantId: string) {
@@ -675,9 +704,21 @@ export class FirmwareManager {
     }
 
     const version = this.catalog.get(update.firmwareVersionId);
+    if (!version || !this.executor) {
+      throw new FirmwareExecutionUnavailableError();
+    }
+    if (!/^[a-f0-9]{64}$/i.test(version.fileHash)) {
+      throw new Error("Firmware package must have a SHA-256 file hash before deployment");
+    }
     update.status = 'in-progress';
     update.startedAt = new Date();
     update.progress.inProgress = update.targetAssets.length;
+
+    // Create an inventory baseline before command dispatch so the verified
+    // executor receipt always has a durable rollback target to update.
+    for (const assetId of update.targetAssets) {
+      await this.getAssetFirmwareInventory(update.tenantId, assetId);
+    }
 
     this.logger.info('Executing firmware update on target assets:', {
       updateId,
@@ -686,20 +727,34 @@ export class FirmwareManager {
     });
 
     for (const assetId of update.targetAssets) {
-      const inventory = this.assetInventory.get(assetId);
-      if (inventory && version) {
-        inventory.rollbackVersion = inventory.currentVersion;
-        inventory.currentVersion = version.version;
-        inventory.upgradeAvailable = false;
-        inventory.classification = 'current';
-        inventory.securityStatus = 'current';
-        inventory.lastFirmwareCheck = new Date().toISOString();
+      try {
+        const receipt = await this.executor.deploy({
+          tenantId: update.tenantId,
+          updateId,
+          assetId,
+          firmware: version,
+        });
+        this.assertDeploymentReceipt(receipt, assetId, version);
+        const inventory = this.assetInventory.get(assetId);
+        if (inventory) {
+          inventory.rollbackVersion = receipt.rollbackVersion ?? receipt.previousVersion;
+          inventory.currentVersion = receipt.deviceReportedVersion;
+          inventory.upgradeAvailable = false;
+          inventory.classification = 'current';
+          inventory.securityStatus = 'current';
+          inventory.lastFirmwareCheck = receipt.verifiedAt.toISOString();
+        }
+        update.progress.completed += 1;
+      } catch (error) {
+        update.progress.failed += 1;
+        update.status = 'failed';
+        this.logger.error('Firmware deployment failed', { updateId, assetId, error });
+      } finally {
+        update.progress.inProgress = Math.max(0, update.progress.inProgress - 1);
       }
-      update.progress.inProgress = Math.max(0, update.progress.inProgress - 1);
-      update.progress.completed += 1;
     }
 
-    update.status = 'completed';
+    update.status = update.progress.failed === 0 ? 'completed' : 'failed';
     update.completedAt = new Date();
 
     this.logger.info('Firmware update completed successfully:', {
@@ -729,13 +784,26 @@ export class FirmwareManager {
     rollbackBy: string;
   }): Promise<void> {
     const update = this.updates.get(data.updateId);
-    if (!update) return;
+    if (!update || !this.executor) throw new FirmwareExecutionUnavailableError();
+    if (!await this.canRollback(data.updateId)) {
+      throw new Error('Firmware update is not eligible for rollback');
+    }
 
     update.status = 'rollback';
     for (const assetId of update.targetAssets) {
       const inventory = this.assetInventory.get(assetId);
       if (inventory?.rollbackVersion) {
-        inventory.currentVersion = inventory.rollbackVersion;
+        const receipt = await this.executor.rollback({
+          tenantId: update.tenantId,
+          updateId: update.id,
+          assetId,
+          rollbackVersion: inventory.rollbackVersion,
+          reason: data.reason,
+        });
+        if (receipt.assetId !== assetId || receipt.deviceReportedVersion !== inventory.rollbackVersion) {
+          throw new Error(`Firmware rollback verification failed for asset ${assetId}`);
+        }
+        inventory.currentVersion = receipt.deviceReportedVersion;
         inventory.rollbackVersion = undefined;
         inventory.upgradeAvailable = true;
         inventory.classification = 'update-available';
@@ -753,7 +821,19 @@ export class FirmwareManager {
   async canRollback(updateId: string): Promise<boolean> {
     const update = this.updates.get(updateId);
     if (!update) return false;
-    return update.status === 'completed' || update.status === 'failed';
+    return Boolean(this.executor) && (update.status === 'completed' || update.status === 'failed');
+  }
+
+  private assertDeploymentReceipt(receipt: FirmwareDeploymentReceipt, assetId: string, firmware: FirmwareCatalogEntry): void {
+    if (receipt.assetId !== assetId || receipt.installedVersion !== firmware.version || receipt.deviceReportedVersion !== firmware.version) {
+      throw new Error(`Firmware deployment verification failed for asset ${assetId}`);
+    }
+    if (receipt.packageSha256.toLowerCase() !== firmware.fileHash.toLowerCase()) {
+      throw new Error(`Firmware package hash verification failed for asset ${assetId}`);
+    }
+    if (!(receipt.verifiedAt instanceof Date) || Number.isNaN(receipt.verifiedAt.getTime())) {
+      throw new Error(`Firmware deployment receipt has no valid verification timestamp for asset ${assetId}`);
+    }
   }
 
   async checkCompatibility(data: {
