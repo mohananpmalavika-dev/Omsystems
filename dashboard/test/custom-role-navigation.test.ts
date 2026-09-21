@@ -58,6 +58,7 @@ describe("custom role navigation & menu permissions", () => {
     const visibleHrefs = visibleNav.flatMap((group) => group.items.map((item) => item.href));
 
     expect(visibleHrefs).toContain("/admin/system");
+    expect(visibleHrefs).toContain("/admin/zero-touch");
     expect(visibleHrefs).toContain("/maintenance/device-configuration");
     expect(visibleHrefs).toContain("/operations/cameras");
   });

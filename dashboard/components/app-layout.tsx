@@ -205,6 +205,7 @@ export const navigation: NavGroup[] = [
     icon: Settings,
     items: [
       { label: "Organization & RBAC", href: "/admin/organization", icon: Building2 },
+      { label: "Gateway enrollment & activation", href: "/admin/zero-touch", icon: Cpu },
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Platform & update management", href: "/admin/system", icon: Settings },
