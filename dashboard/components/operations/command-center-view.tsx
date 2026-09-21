@@ -194,6 +194,7 @@ export function CommandCenterView() {
     : Number(summary?.atRiskBranchesCount ?? 0);
   const totalCamerasCount = cameraTotals.total;
   const workingCamerasCount = cameraTotals.working;
+  const cameraTelemetryUnavailable = totalCamerasCount > 0 && cameraTotals.unknown >= totalCamerasCount;
   const freshness = getTelemetryFreshness(summary?.lastTelemetryTimestamp);
 
   const filteredBranches = useMemo(() => {
@@ -555,10 +556,15 @@ export function CommandCenterView() {
             <Camera className="w-3.5 h-3.5 text-slate-400" />
           </div>
           <div className="text-2xl font-black text-white">
-            {workingCamerasCount.toLocaleString()} <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>
+            {cameraTelemetryUnavailable ? totalCamerasCount.toLocaleString() : workingCamerasCount.toLocaleString()}
+            {!cameraTelemetryUnavailable && <span className="text-xs text-slate-500 font-normal">/ {totalCamerasCount}</span>}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {totalCamerasCount === 0 ? "No Cameras" : `${workingCamerasCount} Working - ${cameraTotals.notWorking} Not working`}
+            {totalCamerasCount === 0
+              ? "No Cameras"
+              : cameraTelemetryUnavailable
+                ? `${totalCamerasCount} Cameras - Telemetry unavailable`
+                : `${workingCamerasCount} Working - ${cameraTotals.notWorking} Not working`}
           </div>
         </div>
 

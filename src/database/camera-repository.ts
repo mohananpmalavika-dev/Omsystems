@@ -117,7 +117,8 @@ const selectCamera = `SELECT cameras.id::text, cameras.device_identity_id::text,
   cameras.certificate_fingerprint, cameras.first_seen_at,
   cameras.identity_last_seen_at
   FROM cameras
-  JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id`;
+  JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
+    AND camera_node.is_active = true`;
 
 export function normalizeCameraUuid(id: string): string {
   if (!id) return id;
