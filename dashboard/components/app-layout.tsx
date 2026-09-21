@@ -165,6 +165,8 @@ export const navigation: NavGroup[] = [
     icon: Sparkles,
     items: [
       { label: "Branch risk intelligence", href: "/analytics", icon: Activity },
+      { label: "AI ROI Calculator", href: "/reports/ai-analytics/roi", icon: TrendingUp },
+      { label: "AI Capability Comparison", href: "/reports/ai-analytics/compare", icon: BarChart3 },
       { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", icon: ScanFace },
       { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", icon: CarFront },
       { label: "Rules & automation", href: "/analytics/rules", icon: SlidersHorizontal },
