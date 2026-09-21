@@ -68,7 +68,7 @@ describe("Native Windows installer release build", () => {
   });
 
   it("replaces a stale activation after an incomplete installation and verifies enrollment", async () => {
-    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+    const installer = (await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8")).replace(/\r\n/g, "\n");
 
     expect(installer).toContain("function HasCompleteDeviceIdentity: Boolean;");
     expect(installer).toContain("if ExistingInstall and not HasCompleteDeviceIdentity then\n      ActivationPage.Values[0] := '';");
