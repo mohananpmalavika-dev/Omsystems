@@ -1,11 +1,15 @@
 export interface ConsumedSession {
   id: string;
   cameraId: string;
-  cameraNodeId: string;
+  cameraNodeId?: string;
   userId: string;
   tenantId: string;
   connectionSecretRef: string;
   sourceType?: string;
+  vendor?: "hikvision" | "cp-plus" | "other";
+  model?: string;
+  channel?: number;
+  recorderChannel?: number;
   purpose?: "view" | "talk";
   profiles: Array<{
     name: string;
@@ -17,6 +21,7 @@ export interface ConsumedSession {
 
 export interface ControlPlaneClient {
   consumeLiveSession(token: string): Promise<ConsumedSession>;
+  getEdgeAgentMediaUrl?(nodeId: string): Promise<{ localMediaUrl?: string } | undefined>;
 }
 
 export interface MediaRouter {

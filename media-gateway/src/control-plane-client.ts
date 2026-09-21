@@ -33,6 +33,26 @@ export class HttpControlPlaneClient implements ControlPlaneClient {
     }
     return await response.json() as ConsumedSession;
   }
+
+  async getEdgeAgentMediaUrl(nodeId: string): Promise<{ localMediaUrl?: string } | undefined> {
+    try {
+      const response = await fetch(
+        new URL(`/internal/edge-agents/${encodeURIComponent(nodeId)}/media-url`, this.baseUrl),
+        {
+          method: "GET",
+          headers: {
+            "x-media-gateway-key": this.sharedKey,
+          },
+          signal: AbortSignal.timeout(10_000),
+          redirect: "error",
+        },
+      );
+      if (!response.ok) return undefined;
+      return await response.json() as { localMediaUrl?: string };
+    } catch {
+      return undefined;
+    }
+  }
 }
 
 export class GatewayError extends Error {
