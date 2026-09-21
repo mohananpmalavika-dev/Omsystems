@@ -3,7 +3,7 @@
  * Displays detailed camera health information with quality metrics
  */
 
-import { Camera, Activity, AlertCircle, Wifi, TrendingDown, TrendingUp, Signal, RefreshCw } from "lucide-react";
+import { Camera, Activity, AlertCircle, Wifi, TrendingDown, TrendingUp, Signal, RefreshCw, HardDrive, Cloud } from "lucide-react";
 import { CameraHealth, getTimeAgo } from "@/lib/types/operational-health";
 import { HealthStatusBadge } from "./health-status-badge";
 
@@ -146,6 +146,30 @@ export function CameraHealthCard({
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* Storage Destination & Recording Tier */}
+      <div className="mb-3 pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+        <span className="text-gray-500 flex items-center gap-1">
+          <HardDrive size={13} className="text-gray-400" />
+          Storage:
+        </span>
+        {camera.activeStorageTier === 'sd_card' ? (
+          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            Tier 1 • Device MicroSD
+          </span>
+        ) : camera.activeStorageTier === 'dvr_hdd' ? (
+          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            Tier 2 • DVR/NVR HDD
+          </span>
+        ) : (
+          <span className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200 font-medium flex items-center gap-1" title="Device has no local storage; automatically recorded to Cloud pool">
+            <Cloud size={11} />
+            Tier 3 • Online Cloud
+          </span>
         )}
       </div>
 

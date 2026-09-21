@@ -32,7 +32,7 @@ describe("model provisioning contract", () => {
     await Promise.all(configs.map((config) => manager.loadModel(config.id)));
     expect(manager.getLoadedModels()).toHaveLength(configs.length);
     expect(manager.getProvisioningSummary().loaded).toBe(configs.length);
-    expect(manager.getStats()).toMatchObject({ configuredModels: 11, requiredModels: configs.length, requiredReadyModels: configs.length, loadedModels: configs.length, modelsReady: true });
+    expect(manager.getStats()).toMatchObject({ configuredModels: manager.getAllConfigs().length, requiredModels: configs.length, requiredReadyModels: configs.length, loadedModels: configs.length, modelsReady: true });
     expect(loader).toHaveBeenCalledTimes(configs.length);
     await manager.shutdown();
   });

@@ -5,6 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import * as path from "node:path";
 import { BaseDetector, type DetectionFrame, type DetectionResult } from "./base-detector.js";
 import { getInferencePipeline } from "../inference/unified-inference-pipeline.js";
 
@@ -140,12 +141,19 @@ export class FaceAnalyticsDetector extends BaseDetector {
         }
         
         // Load face recognition model (ArcFace)
-        const arcfacePath = process.env.ARCFACE_MODEL_PATH || '/app/models/face/arcface.onnx';
-        if (fs.existsSync(arcfacePath)) {
+        const arcfaceCandidates = [
+          process.env.ARCFACE_MODEL_PATH,
+          path.resolve(process.cwd(), 'models/face/arcface_r100.onnx'),
+          path.resolve(process.cwd(), 'analytics-engine/models/face/arcface_r100.onnx'),
+          '/app/models/face/arcface_r100.onnx',
+          '/app/models/face/arcface.onnx',
+        ].filter(Boolean) as string[];
+        const arcfacePath = arcfaceCandidates.find(p => fs.existsSync(p));
+        if (arcfacePath) {
           this.faceRecognizer = await ort.InferenceSession.create(arcfacePath);
           console.log(`✓ Loaded ArcFace model from ${arcfacePath}`);
         } else {
-          console.warn(`⚠️ Model file not found: ${arcfacePath}`);
+          console.warn(`⚠️ Model file not found in candidates: ${arcfaceCandidates.join(', ')}`);
         }
         
         // Load attribute model (Age/Gender/Emotion)
