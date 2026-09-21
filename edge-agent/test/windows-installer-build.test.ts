@@ -34,7 +34,7 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("schtasks.exe");
     expect(installer).toContain("netsh.exe");
     expect(installer).toContain("StopOldAgent");
-    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.24')");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.25')");
   });
 
   it("does not expand the app folder before Inno Setup initializes it", async () => {
@@ -89,6 +89,8 @@ describe("Native Windows installer release build", () => {
 
     expect(script).toContain('process.platform !== "win32"');
     expect(script).toContain("--verify-bundle");
+    expect(script).toContain("--version");
+    expect(script).toContain("mkdtempSync");
   });
 
   it("writes a signed-release manifest for production installer verification", async () => {
