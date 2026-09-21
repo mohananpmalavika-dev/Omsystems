@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.23
+AppVersion=0.1.24
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.23-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.24-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -269,8 +269,14 @@ begin
     'Enter the one-time activation code',
     'Create a gateway activation in KryptonVision and paste the code here. It is consumed on first start.');
   ActivationPage.Add('Activation Code:', False);
-  if UsePackageConfiguration then
+  if UsePackageConfiguration then begin
     LoadPackageDefaults;
+    // A package activation is single-use. If an earlier enrollment did not
+    // create a device identity, never prefill that same activation on retry.
+    // Keep the packaged branch/server defaults, but require a fresh code.
+    if ExistingInstall and not HasCompleteDeviceIdentity then
+      ActivationPage.Values[0] := '';
+  end;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
@@ -278,7 +284,8 @@ begin
   // A directory left by a failed enrollment is not an enrolled installation.
   // In that case either load the fresh package configuration or ask for a new
   // activation code instead of silently reusing the consumed/expired code.
-  Result := (UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity)) and
+  Result := ((UsePackageConfiguration and not ExistingInstall) or
+    (ExistingInstall and HasCompleteDeviceIdentity)) and
     ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
 end;
 
@@ -288,7 +295,8 @@ var
   ActivationCode: String;
 begin
   Result := True;
-  if UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity) then Exit;
+  if (UsePackageConfiguration and not ExistingInstall) or
+    (ExistingInstall and HasCompleteDeviceIdentity) then Exit;
 
   if CurPageID = BranchNamePage.ID then begin
     BranchName := Trim(BranchNamePage.Values[0]);
@@ -347,10 +355,13 @@ begin
   MediaMtxPath := FindRuntimeExecutable(AddBackslash(AppPath) + 'runtime', 'mediamtx.exe');
   if (FfmpegPath = '') or (FfprobePath = '') or (MediaMtxPath = '') then
     RaiseException('The installed camera runtime is incomplete. Download a new signed installer.');
-  if UsePackageConfiguration then begin
+  // Only a clean first installation may consume the package activation
+  // without operator input. An incomplete existing installation must use the
+  // fresh activation entered on the wizard page, never the stale sidecar.
+  if UsePackageConfiguration and not ExistingInstall then begin
     if not CopyFile(PackageConfigPath, ConfigPath, False) then
       RaiseException('The branch configuration from the installer package could not be saved.');
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.24');
     UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
     UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
     UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
@@ -362,7 +373,7 @@ begin
     'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
-    'EDGE_AGENT_VERSION="0.1.23"' + #13#10 +
+    'EDGE_AGENT_VERSION="0.1.24"' + #13#10 +
     'EDGE_IDENTITY_PATH="' + DataPath + '/device-identity.enc"' + #13#10 +
     'EDGE_IDENTITY_KEY_PATH="' + DataPath + '/device-identity.key"' + #13#10 +
     'EDGE_OFFLINE_OUTBOX_PATH="' + DataPath + '/offline-outbox.enc"' + #13#10 +
@@ -479,7 +490,7 @@ begin
   UnpackRuntime;
   HadCompleteIdentity := HasCompleteDeviceIdentity;
   if HadCompleteIdentity and FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23')
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.24')
   else
     WriteFreshConfig;
   ProtectConfigFile;
@@ -490,7 +501,7 @@ begin
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.23' + #13#10 +
+    'Version: 0.1.24' + #13#10 +
     'Installer: Native Windows', False);
 end;
 

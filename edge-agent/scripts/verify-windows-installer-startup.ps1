@@ -22,6 +22,10 @@ if ($code.Contains("ExpandConstant('{app}')")) {
 }
 $code = $code.Replace('procedure InitializeWizard;', 'procedure InitializeAgentWizard;')
 $code = $code.Replace('procedure CurStepChanged(CurStep: TSetupStep);', 'procedure DisabledInstallStep(CurStep: TSetupStep);')
+# The probe must be deterministic even when the build workstation has a failed
+# or complete Edge Agent installation. Existing-install recovery is covered by
+# the source assertions; this smoke test only verifies clean wizard startup.
+$code = $code.Replace('ExistingInstall := DetectExistingInstall;', 'ExistingInstall := False;')
 # Run the real startup callbacks without payload files, elevation, task changes,
 # or installation. Let InitializeWizard return normally, then abort from
 # PrepareToInstall. This exercises Inno's application-directory initialization;
@@ -72,7 +76,7 @@ $probe = Start-Process -FilePath (Join-Path $OutputDirectory 'startup-test.exe')
   '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', ('/LOG="{0}"' -f $probeLog)
 )
 if (-not $probe.WaitForExit(30000)) {
-  Stop-Process -Id $probe.Id -ErrorAction SilentlyContinue
+  & "$env:SystemRoot\System32\taskkill.exe" /PID $probe.Id /T /F 2>$null | Out-Null
   throw 'Installer startup test timed out.'
 }
 $log = [IO.File]::ReadAllText($probeLog)

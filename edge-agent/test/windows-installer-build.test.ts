@@ -34,7 +34,7 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("schtasks.exe");
     expect(installer).toContain("netsh.exe");
     expect(installer).toContain("StopOldAgent");
-    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23')");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.24')");
   });
 
   it("does not expand the app folder before Inno Setup initializes it", async () => {
@@ -52,6 +52,8 @@ describe("Native Windows installer release build", () => {
 
     expect(script).toContain("function PrepareToInstall(var NeedsRestart: Boolean): String;");
     expect(script).toContain("Installer Pascal code must never expand {app}");
+    expect(script).toContain("$code.Replace('ExistingInstall := DetectExistingInstall;', 'ExistingInstall := False;')");
+    expect(script).toContain("taskkill.exe");
     expect(script).not.toContain("InitializeAgentWizard;\n  Log('EDGE_INSTALLER_STARTUP_PASSED');");
   });
 
@@ -69,12 +71,16 @@ describe("Native Windows installer release build", () => {
     const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
 
     expect(installer).toContain("function HasCompleteDeviceIdentity: Boolean;");
+    expect(installer).toContain("if ExistingInstall and not HasCompleteDeviceIdentity then\n      ActivationPage.Values[0] := '';");
+    expect(installer).toContain("UsePackageConfiguration and not ExistingInstall");
     expect(installer).toContain("ExistingInstall and HasCompleteDeviceIdentity");
     expect(installer).toContain("HadCompleteIdentity := HasCompleteDeviceIdentity;");
     expect(installer).toContain("if HadCompleteIdentity and FileExists(ConfigPath) then");
     expect(installer).toContain("if not HadCompleteIdentity then\n    ValidateNewEnrollment;");
     expect(installer).toContain("--diagnose");
     expect(installer).toContain("if not HasCompleteDeviceIdentity then");
+    expect(installer).not.toContain("Result := (UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity))");
+    expect(installer).not.toContain("if UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity) then Exit;");
     expect(installer).not.toContain("if ExistingInstall or FileExists(ConfigPath) then");
   });
 
