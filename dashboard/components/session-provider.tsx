@@ -1,9 +1,9 @@
 /** Validate the server-owned session; browser storage is only a UI cache. */
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { authApi } from '@/lib/api-client';
+import { API_ERROR_EVENT, authApi, type ApiErrorNotice } from '@/lib/api-client';
 import { setupSessionGuard, teardownSessionGuard, redirectToLogin } from '@/lib/session-guard';
 import { isPublicDashboardRoute } from '@/lib/session-navigation';
 
@@ -66,21 +66,37 @@ async function syncSessionFromOpenTabs(): Promise<boolean> {
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isPublicRoute = isPublicDashboardRoute(pathname);
-  const [connectionError, setConnectionError] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<ApiErrorNotice | null>(null);
+  const dismissedApiError = useRef<{ key: string; at: number } | null>(null);
   const [retry, setRetry] = useState(0);
   // sessionReady prevents child components from firing authenticated API requests
   // before the session check has completed on protected routes.
   const [sessionReady, setSessionReady] = useState(isPublicRoute);
 
   useEffect(() => {
+    const onApiError = (event: Event) => {
+      if (isPublicRoute) return;
+      const detail = (event as CustomEvent<ApiErrorNotice>).detail;
+      if (!detail || detail.status === 404) return;
+      const key = `${detail.status}:${detail.code}:${detail.message}`;
+      if (dismissedApiError.current?.key === key && Date.now() - dismissedApiError.current.at < 60_000) return;
+      setApiError((current) => current && `${current.status}:${current.code}:${current.message}` === key ? current : detail);
+    };
+    window.addEventListener(API_ERROR_EVENT, onApiError);
+    return () => window.removeEventListener(API_ERROR_EVENT, onApiError);
+  }, [isPublicRoute]);
+
+  useEffect(() => {
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
-    // Track consecutive failures so a single transient blip doesn't show the banner.
+    // Retry transient validation failures without discarding the browser session.
     let consecutiveFailures = 0;
 
     if (isPublicRoute) {
       teardownSessionGuard();
-      setConnectionError(false);
+      setConnectionError(null);
+      setApiError(null);
       setSessionReady(true);
       return;
     }
@@ -97,7 +113,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (!hasActiveBrowserSession) {
           // No active browser session in this tab or other tabs (browser was closed or fresh launch).
           // Terminate any leftover backend session cookies and redirect immediately to login.
-          setConnectionError(false);
+          setConnectionError(null);
           try {
             await authApi.logout();
           } catch {}
@@ -117,7 +133,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         } catch { /* Restricted browser storage does not invalidate a session. */ }
         // Reset failure tracking on success
         consecutiveFailures = 0;
-        setConnectionError(false);
+        setConnectionError(null);
         setSessionReady(true);
         setupSessionGuard();
       } catch (error) {
@@ -125,17 +141,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         // The API client handles confirmed invalid sessions and preserves the
         // destination. An unavailable auth service must not cause a login loop.
         const status = (error as { statusCode?: number })?.statusCode;
-        if (status === 400 || status === 401 || status === 403) {
-          setConnectionError(false);
-          redirectToLogin('expired');
+        if (status === 401) {
+          setConnectionError(null);
+          void redirectToLogin('expired');
           return;
         }
         consecutiveFailures += 1;
-        // Only show the banner after 2+ consecutive failures to avoid
-        // flashing the message on brief/transient network blips.
-        if (consecutiveFailures >= 2) {
-          setConnectionError(true);
-        }
+        const reason = error instanceof Error ? error.message : 'Session validation failed.';
+        setConnectionError(`Session check failed${status ? ` (HTTP ${status})` : ''}: ${reason}`);
         // Exponential backoff: 8s → 16s → 32s → max 60s.
         // Avoids hammering the server when it is slow or briefly unavailable.
         const backoffMs = Math.min(8000 * Math.pow(2, consecutiveFailures - 1), 60000);
@@ -153,9 +166,18 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   return <>
     {!isPublicRoute && connectionError && (
-      <div role="status" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        Connection interrupted. Your workspace is preserved while we reconnect.
+      <div role="alert" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        {connectionError} Your session is preserved while we retry.
         <button type="button" className="ml-3 font-semibold underline underline-offset-2" onClick={() => setRetry((value) => value + 1)}>Retry now</button>
+      </div>
+    )}
+    {!isPublicRoute && apiError && (
+      <div role="alert" className="flex items-start justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <span>Request failed{apiError.status ? ` (HTTP ${apiError.status})` : ''}: {apiError.message} <code>{apiError.code}</code>. You remain signed in.</span>
+        <button type="button" className="font-semibold underline underline-offset-2" onClick={() => {
+          dismissedApiError.current = { key: `${apiError.status}:${apiError.code}:${apiError.message}`, at: Date.now() };
+          setApiError(null);
+        }}>Dismiss</button>
       </div>
     )}
     {!isPublicRoute && !sessionReady ? (

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isAuthenticated as isAuthFromGuard, redirectToLogin } from "../lib/session-guard";
+import { isAuthenticated as isAuthFromGuard, redirectToLogin, setupSessionGuard, teardownSessionGuard } from "../lib/session-guard";
 import { isAuthenticated as isAuthFromManager, getCurrentUser, logout as logoutFromManager } from "../lib/auth-manager";
-import { authApi } from "../lib/api-client";
+import { API_ERROR_EVENT, authApi } from "../lib/api-client";
 
 describe("session lifecycle and browser close isolation", () => {
   let mockSessionStorage: Map<string, string>;
@@ -28,7 +28,61 @@ describe("session lifecycle and browser close isolation", () => {
   });
 
   afterEach(() => {
+    teardownSessionGuard();
     vi.unstubAllGlobals();
+  });
+
+  it("does not revoke authentication on page unload or hard navigation", () => {
+    const browser = Object.assign(new EventTarget(), {
+      location: { pathname: "/", href: "https://sentinel.example/" },
+    });
+    vi.stubGlobal("window", browser);
+    vi.stubGlobal("document", {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    setupSessionGuard();
+    browser.dispatchEvent(new Event("beforeunload"));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still redirects after the authoritative session check and refresh both reject authentication", async () => {
+    mockSessionStorage.set("sentinel_browser_session", "active");
+    mockSessionStorage.set("user", JSON.stringify({ id: "user-1" }));
+    mockSessionStorage.set("accessToken", "expired-access");
+    const location = { pathname: "/operations/cameras", search: "", hash: "", href: "https://sentinel.example/operations/cameras" };
+    vi.stubGlobal("window", Object.assign(new EventTarget(), { location }));
+    vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      Response.json({ error: "invalid_token" }, { status: 401 })));
+
+    setupSessionGuard();
+    await vi.waitFor(() => expect(location.href).toBe("/login?reason=expired&next=%2Foperations%2Fcameras"));
+    expect(mockSessionStorage.size).toBe(0);
+  });
+
+  it("reports a session refresh outage without logging out", async () => {
+    mockSessionStorage.set("sentinel_browser_session", "active");
+    mockSessionStorage.set("user", JSON.stringify({ id: "user-1" }));
+    mockSessionStorage.set("accessToken", "expired-access");
+    const location = { pathname: "/operations/cameras", href: "https://sentinel.example/operations/cameras" };
+    const browser = Object.assign(new EventTarget(), { location });
+    const notices: string[] = [];
+    browser.addEventListener(API_ERROR_EVENT, (event) => notices.push((event as CustomEvent).detail.message));
+    vi.stubGlobal("window", browser);
+    vi.stubGlobal("document", { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    vi.stubGlobal("fetch", vi.fn()
+      .mockResolvedValueOnce(Response.json({ error: "invalid_token" }, { status: 401 }))
+      .mockRejectedValueOnce(new Error("network interrupted")));
+
+    setupSessionGuard();
+    await vi.waitFor(() => expect(notices).toContain("Sign-in service is temporarily unreachable. Please retry."));
+    expect(location.href).toBe("https://sentinel.example/operations/cameras");
+    expect(mockSessionStorage.get("sentinel_browser_session")).toBe("active");
   });
 
   it("reports unauthenticated when browser was closed (sessionStorage empty even with stale localStorage)", () => {

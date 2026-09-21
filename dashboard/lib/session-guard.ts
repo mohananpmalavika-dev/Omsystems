@@ -4,25 +4,18 @@
  */
 
 import { logout as authManagerLogout } from './auth-manager';
-import { refreshCookieBackedSession } from './api-client';
+import { refreshCookieBackedSession, reportApiFailure } from './api-client';
 import { loginPath } from './session-navigation';
 
 let sessionCheckInterval: NodeJS.Timeout | null = null;
 let isCheckingSession = false;
 let sessionGuardCleanup: (() => void) | null = null;
-// Set to true before window.location.assign() for in-app hard navigations
-// so the beforeunload logout beacon is skipped (only fires on actual browser close).
-let inAppNavigating = false;
-
 /**
- * Call this immediately before any window.location.assign() / window.location.href
- * assignment that is an in-app navigation (not a browser close).
- * Prevents the logout beacon from firing on hard in-app navigation.
+ * Kept for callers that perform hard navigation. Navigation no longer revokes
+ * the employee session; only explicit sign-out or server expiry does that.
  */
 export function markInAppNavigation(): void {
-  inAppNavigating = true;
-  // Reset after a short delay in case the navigation is somehow cancelled
-  setTimeout(() => { inAppNavigating = false; }, 3000);
+  // No-op for compatibility with existing navigation callers.
 }
 
 /**
@@ -109,23 +102,27 @@ async function checkSession() {
       headers,
     });
     
-    if (response.status === 401 || response.status === 403) {
+    if (response.status === 401) {
       // Current browser sessions are intentionally cookie-backed. The BFF
       // owns the refresh token, so refresh even when localStorage has none.
       if (await refreshCookieBackedSession()) return;
 
       console.warn('Session expired or invalid');
-      redirectToLogin('expired');
+      void redirectToLogin('expired');
+    } else if (response.status === 403) {
+      const error = await response.json().catch(() => ({}));
+      reportApiFailure(403, error, 'Session check was denied. Your workspace remains open.');
     } else if (!response.ok) {
-      console.error('Session check failed:', response.status);
-      // Don't redirect on 500 errors - might be temporary
-      if (response.status === 503 || response.status === 502) {
-        console.warn('Server temporarily unavailable');
-      }
+      const error = await response.json().catch(() => ({}));
+      reportApiFailure(response.status, error, 'Session check failed; the server may be temporarily unavailable.');
     }
   } catch (error) {
     console.error('Session check network error:', error);
-    // Don't redirect on network errors - might be temporary connection issues
+    reportApiFailure(
+      (error as { statusCode?: number })?.statusCode ?? 0,
+      { error: 'session_check_unavailable', message: error instanceof Error ? error.message : undefined },
+      'Cannot verify your session right now. Your workspace remains open.',
+    );
   } finally {
     isCheckingSession = false;
   }
@@ -181,61 +178,11 @@ export function setupSessionGuard() {
   // Check session on page focus
   const onFocus = () => { checkSession(); };
 
-  // On browser/tab close: immediately invalidate the backend session using
-  // navigator.sendBeacon — the only API that survives page unload reliably.
-  // Also clear localStorage tokens synchronously so no credentials linger.
-  const onBeforeUnload = () => {
-    stopSessionCheck();
-
-    // Clear local credentials immediately — synchronous, always runs
-    try {
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('user');
-      localStorage.removeItem('sentinel_login_time');
-    } catch {}
-
-    // Only send logout beacon on actual browser/tab close.
-    // Skip when this unload was triggered by an in-app hard navigation
-    // (e.g. window.location.assign from the Live Wall) — those navigations
-    // call markInAppNavigation() before assigning the URL.
-    if (inAppNavigating) return;
-
-    // Fire logout to the server — sendBeacon survives tab/browser close.
-    // sendBeacon automatically includes cookies, so the backend authenticates
-    // the request normally via the sentinel_access / sentinel_session cookie.
-    const apiBase = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
-
-    // End activity session
-    const activitySessionId = (() => {
-      try { return sessionStorage.getItem('activitySessionId') || ''; } catch { return ''; }
-    })();
-    if (activitySessionId) {
-      const activityBlob = new Blob(
-        [JSON.stringify({ terminationReason: 'browser_close' })],
-        { type: 'application/json' }
-      );
-      navigator.sendBeacon?.(
-        `${apiBase}/v1/activity/sessions/${activitySessionId}/end`,
-        activityBlob
-      );
-    }
-
-    // Logout — invalidate the backend cookie/token session
-    const logoutBlob = new Blob(
-      [JSON.stringify({ reason: 'browser_close' })],
-      { type: 'application/json' }
-    );
-    navigator.sendBeacon?.(`${apiBase}/v1/auth/logout`, logoutBlob);
-  };
-
   document.addEventListener('visibilitychange', onVisibilityChange);
   window.addEventListener('focus', onFocus);
-  window.addEventListener('beforeunload', onBeforeUnload);
   sessionGuardCleanup = () => {
     document.removeEventListener('visibilitychange', onVisibilityChange);
     window.removeEventListener('focus', onFocus);
-    window.removeEventListener('beforeunload', onBeforeUnload);
     sessionGuardCleanup = null;
   };
 }
