@@ -31,6 +31,7 @@ const updateArtifactParams = z.object({
 });
 const embeddedConfigMarker = Buffer.from("SENTINEL_EDGE_CONFIG_V1", "ascii");
 const publicApiBaseHeader = "x-sentinel-public-api-base";
+const signingCertificateFilename = "OM-Systems-Sentinel-Grid-Signing.cer";
 
 export interface EdgeAgentPackageOptions {
   controlPlanePublicUrl?: string;
@@ -518,6 +519,20 @@ function missingNativeWindowsInstallerError(installerPath: string) {
   );
 }
 
+async function readWindowsInstallerSigningCertificate(releaseDirectory: string) {
+  const certificatePath = join(releaseDirectory, signingCertificateFilename);
+  try {
+    const metadata = await stat(certificatePath);
+    if (!metadata.isFile() || metadata.size === 0) throw new Error("not a file");
+    return await readFile(certificatePath);
+  } catch {
+    throw Object.assign(
+      new Error(`The public signing certificate is unavailable (${certificatePath}). Publish the matching .cer file with the Windows release before enabling installer downloads.`),
+      { code: "edge_agent_signing_certificate_not_built" },
+    );
+  }
+}
+
 export async function registerEdgeAgentPackageRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
@@ -606,6 +621,7 @@ export async function registerEdgeAgentPackageRoutes(
         throw missingNativeWindowsInstallerError(installerPath);
       }
       await verifyProductionWindowsRelease(releaseDir, executablePath, installerPath);
+      const signingCertificate = await readWindowsInstallerSigningCertificate(releaseDir);
       const safeBranchName = branch.name.replace(/[^a-zA-Z0-9_-]/g, "-");
       const envConfig = Buffer.from(activationConfiguration(activation.agentName, version, packageOptions, body.activationCode), "utf8");
 
@@ -619,15 +635,16 @@ export async function registerEdgeAgentPackageRoutes(
           "==============================================================================",
           "",
           "1. Extract this ZIP to a local folder.",
-          `2. Double-click "KryptonVisionInstaller-v${version}-windows.exe".`,
-          "3. Approve the Windows administrator prompt.",
-          "4. Wait for the installer to validate the configuration and enroll the gateway.",
+          `2. Import "${signingCertificateFilename}" into Trusted Root Certification Authorities and Trusted Publishers for the current Windows user.`,
+          `3. Double-click "KryptonVisionInstaller-v${version}-windows.exe".`,
+          "4. Approve the Windows administrator prompt.",
+          "5. Wait for the installer to validate the configuration and enroll the gateway.",
           "",
           "The installer copies the agent to Program Files, protects its configuration,",
           "installs the media runtime, and creates a SYSTEM startup task. Keep edge-agent.env",
-          "beside the installer while running it; the installer reads it automatically. Endpoint-security policies must be",
-          "deployed by your organization through Intune or Group Policy; this package does",
-          "not add Defender exclusions or trust certificates.",
+          "beside the installer while running it; the installer reads it automatically. The included public certificate",
+          "trusts only this self-signed OM Systems installer publisher; it contains no private key. Endpoint-security policies",
+          "must be deployed by your organization through Intune or Group Policy; this package does not add Defender exclusions.",
           "==============================================================================",
         ].join("\r\n");
 
@@ -639,6 +656,7 @@ export async function registerEdgeAgentPackageRoutes(
             crc: installerEntry.crc,
           },
           { name: "edge-agent.env", data: envConfig },
+          { name: signingCertificateFilename, data: signingCertificate },
           { name: "README.txt", data: Buffer.from(readmeText, "utf8") },
         ];
 
@@ -849,6 +867,7 @@ export async function registerEdgeAgentPackageRoutes(
           throw missingNativeWindowsInstallerError(installerPath);
         }
         await verifyProductionWindowsRelease(join(root, "release"), executablePath, installerPath);
+        const signingCertificate = await readWindowsInstallerSigningCertificate(join(root, "release"));
         const installerEntry = await getCachedExecutableEntry(installerPath, { size: installerSize, mtimeMs: installerMtime });
         const zipData = makeZip([
           {
@@ -858,8 +877,9 @@ export async function registerEdgeAgentPackageRoutes(
             crc: installerEntry.crc,
           },
           { name: "edge-agent.env", data: config },
+          { name: signingCertificateFilename, data: signingCertificate },
           { name: "README.txt", data: Buffer.from(
-            `Extract this ZIP to a local folder, then run KryptonVisionInstaller-v${version}-windows.exe. Keep edge-agent.env beside the installer so it can install the protected branch configuration, media runtime, and SYSTEM startup task.\r\n`,
+            `Extract this ZIP to a local folder. Import ${signingCertificateFilename} into Trusted Root Certification Authorities and Trusted Publishers for the current Windows user, then run KryptonVisionInstaller-v${version}-windows.exe. Keep edge-agent.env beside the installer so it can install the protected branch configuration, media runtime, and SYSTEM startup task. The certificate is public only and contains no private key.\r\n`,
             "utf8",
           ) },
         ]);

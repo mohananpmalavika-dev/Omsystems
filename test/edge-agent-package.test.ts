@@ -8,6 +8,7 @@ import { buildApp } from "../src/app.js";
 import { MemoryStore } from "../src/store.js";
 
 const temporaryRoots: string[] = [];
+const signingCertificateFilename = "OM-Systems-Sentinel-Grid-Signing.cer";
 
 function addTestBranch(store: MemoryStore) {
   store.nodes.set("branch-blr-001", {
@@ -39,6 +40,7 @@ async function writeNativeInstaller(root: string, version = "9.8.7") {
   const output = join(root, "installer", "windows", "output");
   await mkdir(output, { recursive: true });
   await writeFile(join(output, `KryptonVisionInstaller-v${version}-windows.exe`), Buffer.from("MZ-native-installer"));
+  await writeFile(join(root, "release", signingCertificateFilename), Buffer.from("public-self-signed-certificate"));
 }
 
 function zipEntry(zip: Buffer, expectedName: string) {
@@ -113,6 +115,7 @@ describe("branch edge-agent package", () => {
       expect(response.headers["cache-control"]).toBe("no-store, private");
       expect(response.rawPayload.subarray(0, 2).toString()).toBe("PK");
       expect(zipEntry(response.rawPayload, "KryptonVisionInstaller-v9.8.7-windows.exe").toString("utf8")).toBe("MZ-native-installer");
+      expect(zipEntry(response.rawPayload, signingCertificateFilename).toString("utf8")).toBe("public-self-signed-certificate");
       const config = zipEntry(response.rawPayload, "edge-agent.env").toString("utf8");
       expect(config).toContain('CONTROL_PLANE_URL="https://control.example.com"');
       expect(config).toContain(`EDGE_AGENT_ID="${agent.id}"`);
@@ -220,6 +223,7 @@ describe("branch edge-agent package", () => {
       expect(config).toContain('EDGE_AGENT_NAME="Bengaluru Scanner"');
       expect(zipEntry(response.rawPayload, "KryptonVisionInstaller-v9.8.7-windows.exe").toString("utf8"))
         .toBe("MZ-native-installer");
+      expect(zipEntry(response.rawPayload, signingCertificateFilename).toString("utf8")).toBe("public-self-signed-certificate");
       expect(() => zipEntry(response.rawPayload, "Install Sentinel Grid Edge Agent.bat")).toThrow();
       expect(() => zipEntry(response.rawPayload, "Allow-In-Defender.bat")).toThrow();
       expect(() => zipEntry(response.rawPayload, "Install-Certificate.bat")).toThrow();

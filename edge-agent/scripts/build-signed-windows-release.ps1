@@ -70,6 +70,19 @@ if (-not $installer) {
 # original signatures and distribute only checksum-pinned copies.
 & $signScript -Path $installer.FullName -CertificateThumbprint $CertificateThumbprint -TimestampServer $TimestampServer
 
+# Installer packages include only this public certificate, never its private
+# key. This lets branch PCs trust the self-signed or private-PKI publisher
+# before launching the signed installer.
+$signingCertificate = @(
+  Get-ChildItem -Path 'Cert:\CurrentUser\My', 'Cert:\LocalMachine\My' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Thumbprint -eq ($CertificateThumbprint -replace '\s', '') }
+) | Select-Object -First 1
+if (-not $signingCertificate) {
+  throw "Code-signing certificate $CertificateThumbprint was not found for public certificate export."
+}
+$publicCertificatePath = Join-Path $projectRoot 'release\OM-Systems-Sentinel-Grid-Signing.cer'
+Export-Certificate -Cert $signingCertificate -FilePath $publicCertificatePath -Force | Out-Null
+
 $artifacts = @($agentPath, $installer.FullName)
 $hashes = $artifacts | Get-FileHash -Algorithm SHA256 |
   ForEach-Object { "{0} *{1}" -f $_.Hash, (Split-Path -Leaf $_.Path) }
