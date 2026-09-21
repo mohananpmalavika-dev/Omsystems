@@ -2,11 +2,14 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { z } from "zod";
 import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
 import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
+import type { ControlPlaneStore } from "../control-plane-store.js";
 import { immutableAuditService } from "../security/audit/immutable-audit.service.js";
+import { OPENING_RULE_TEMPLATE_ID } from "../analytics/branch-opening-dual-control.service.js";
 
 export interface NbfcAnalyticsRouteOptions {
   repository: NbfcRuleRepository;
   engineService: NbfcRuleEngineService;
+  store?: Pick<ControlPlaneStore, "getNode">;
 }
 
 export function registerNbfcAnalyticsRoutes(
@@ -14,6 +17,18 @@ export function registerNbfcAnalyticsRoutes(
   options: NbfcAnalyticsRouteOptions
 ) {
   const { repository, engineService } = options;
+  const timeValue = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use a valid 24-hour time (HH:mm)");
+  const openingPolicySchema = z.object({
+    openingStart: timeValue,
+    openingEnd: timeValue,
+    timezone: z.string().trim().min(1).max(100).default("Asia/Kolkata"),
+    activeDays: z.array(z.number().int().min(0).max(6)).min(1).default([1, 2, 3, 4, 5, 6]),
+    graceSeconds: z.number().int().min(0).max(900).default(30),
+  }).superRefine((value, context) => {
+    if (value.openingStart >= value.openingEnd) {
+      context.addIssue({ code: "custom", path: ["openingEnd"], message: "Opening window end must be after its start" });
+    }
+  });
 
   function getUser(request: FastifyRequest) {
     repository.assertProductionStorage();
@@ -53,6 +68,33 @@ export function registerNbfcAnalyticsRoutes(
     return zone;
   }
 
+  async function tenantBranch(id: string, tenantId: string, reply: FastifyReply) {
+    if (!options.store) return true;
+    const branch = await options.store.getNode(id);
+    if (!branch || branch.type !== "branch" || branch.tenantId !== tenantId) {
+      await reply.code(404).send({ error: "branch_not_found" });
+      return false;
+    }
+    return true;
+  }
+
+  function openingPolicyResponse(rule: Awaited<ReturnType<NbfcRuleRepository["getRule"]>>, branchId: string) {
+    const schedule = rule?.schedule;
+    return {
+      branchId,
+      ruleId: rule?.id,
+      inherited: Boolean(rule && !rule.branchIds.includes(branchId)),
+      enabled: Boolean(rule?.enabled && rule.state === "ACTIVE"),
+      openingStart: schedule?.start || "08:30",
+      openingEnd: schedule?.end || "09:30",
+      timezone: schedule?.timezone || "Asia/Kolkata",
+      activeDays: schedule?.days || [1, 2, 3, 4, 5, 6],
+      requiredStaff: 2,
+      graceSeconds: Math.round((rule?.durationMs ?? 30_000) / 1000),
+      enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT",
+    };
+  }
+
   // ==========================================
   // 1. RULES CRUD & LIFECYCLE
   // ==========================================
@@ -78,6 +120,89 @@ export function registerNbfcAnalyticsRoutes(
       activeCount: rules.filter((r) => r.state === "ACTIVE").length,
       shadowCount: rules.filter((r) => r.state === "SHADOW").length,
     });
+  });
+
+  // Branch-specific two-person opening policy. AI verifies and escalates; it
+  // deliberately never operates a physical lock without an approved PACS flow.
+  app.get("/api/ai/branch-opening-policy/:branchId", async (request, reply) => {
+    const { tenantId } = getUser(request);
+    const { branchId } = z.object({ branchId: z.string().min(1).max(200) }).parse(request.params);
+    if (!await tenantBranch(branchId, tenantId, reply)) return;
+    const rules = await repository.listRules({ tenantId, branchId, detectorType: "person" });
+    const candidates = rules.filter((rule) => rule.templateId === OPENING_RULE_TEMPLATE_ID);
+    const rule = candidates.find((candidate) => candidate.branchIds.includes(branchId))
+      || candidates.find((candidate) => candidate.branchIds.length === 0)
+      || null;
+    return reply.send(openingPolicyResponse(rule, branchId));
+  });
+
+  app.put("/api/ai/branch-opening-policy/:branchId", async (request, reply) => {
+    if (!await requireRuleAdministrator(request, reply)) return;
+    const { tenantId, userId } = getUser(request);
+    const { branchId } = z.object({ branchId: z.string().min(1).max(200) }).parse(request.params);
+    if (!await tenantBranch(branchId, tenantId, reply)) return;
+    const parsedPolicy = openingPolicySchema.safeParse(request.body || {});
+    if (!parsedPolicy.success) {
+      return reply.code(400).send({
+        error: "invalid_opening_policy",
+        message: parsedPolicy.error.issues[0]?.message || "Invalid branch opening policy",
+        issues: parsedPolicy.error.issues,
+      });
+    }
+    const policy = parsedPolicy.data;
+    const rules = await repository.listRules({ tenantId, branchId, detectorType: "person" });
+    let rule = rules.find((candidate) =>
+      candidate.templateId === OPENING_RULE_TEMPLATE_ID && candidate.branchIds.includes(branchId)
+    );
+
+    if (!rule) {
+      rule = await repository.instantiateTemplate(OPENING_RULE_TEMPLATE_ID, {
+        tenantId,
+        branchIds: [branchId],
+        name: "Branch Opening Two-Person Enforcement",
+        createdBy: userId,
+      });
+    }
+
+    const updated = await repository.updateRule(rule.id, {
+      name: "Branch Opening Two-Person Enforcement",
+      description: "Requires two people to be visible together during the configured branch opening window and escalates non-compliance with evidence.",
+      enabled: true,
+      state: "ACTIVE",
+      branchIds: [branchId],
+      cameraIds: [],
+      condition: { metric: "staff_count", operator: "LESS_THAN", value: 2 },
+      durationMs: policy.graceSeconds * 1000,
+      schedule: {
+        type: "BRANCH_OPENING",
+        start: policy.openingStart,
+        end: policy.openingEnd,
+        timezone: policy.timezone,
+        days: policy.activeDays,
+      },
+      severity: "CRITICAL",
+      cooldownMs: 600_000,
+      actions: [
+        "CREATE_ALERT", "CREATE_INCIDENT", "CAPTURE_SNAPSHOT",
+        "CAPTURE_EVIDENCE_CLIP", "NOTIFY_SOC", "NOTIFY_BRANCH_MANAGER",
+      ],
+      scopeType: "BRANCH",
+    }, "Updated branch opening two-person policy", userId);
+
+    if (!updated) return reply.code(404).send({ error: "opening_policy_not_found" });
+    immutableAuditService.append({
+      tenantId,
+      category: "CONFIG_CHANGED",
+      action: "branch_opening_policy.updated",
+      actorUserId: userId,
+      actorRoles: ["admin"],
+      targetResourceType: "BRANCH",
+      targetResourceId: branchId,
+      outcome: "SUCCESS",
+      metadata: { openingStart: policy.openingStart, openingEnd: policy.openingEnd, requiredStaff: 2 },
+      timestamp: new Date().toISOString(),
+    });
+    return reply.send(openingPolicyResponse(updated, branchId));
   });
 
   // Create rule

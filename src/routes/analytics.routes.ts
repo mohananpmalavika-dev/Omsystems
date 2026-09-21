@@ -3,11 +3,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import {
   hasExtendedInfrastructure,
+  type AnalyticsEventInput,
   type ControlPlaneStore,
 } from "../control-plane-store.js";
 import type {
   Action,
   AnalyticsAlert,
+  AnalyticsIngestResult,
   AnalyticsEvent,
   AnalyticsAlertStatus,
   Camera,
@@ -37,6 +39,21 @@ import {
   normalizePlateNumber,
   recordAnprRegistryMatches,
 } from "../analytics/identity-registry.js";
+import type { NbfcRuleRepository } from "../analytics/nbfc-rule-repository.js";
+import type { NbfcRuleEngineService } from "../analytics/nbfc-rule-engine.service.js";
+import { evaluateBranchOpeningDualControl } from "../analytics/branch-opening-dual-control.service.js";
+
+interface AnalyticsRouteOptions {
+  analyticsEngineSharedKey?: string;
+  analyticsSourceSharedKey?: string;
+  analyticsEngineUrl?: string;
+  recordingEngineUrl?: string;
+  recordingEngineSharedKey?: string;
+  alertDispatcher?: AlertNotificationDispatcher;
+  alertEvidenceClient?: AlertEvidenceClient;
+  nbfcRuleRepository?: NbfcRuleRepository;
+  nbfcRuleEngine?: NbfcRuleEngineService;
+}
 
 const detectionTypeSchema = z.string().trim().min(1).max(120).refine(isAiCapability, {
   message: "Unknown AI capability",
@@ -246,15 +263,7 @@ function stringMetadata(record: Record<string, unknown> | undefined, ...keys: st
 export async function registerAnalyticsRoutes(
   app: FastifyInstance,
   store: ControlPlaneStore,
-  options: {
-    analyticsEngineSharedKey?: string;
-    analyticsSourceSharedKey?: string;
-    analyticsEngineUrl?: string;
-    recordingEngineUrl?: string;
-    recordingEngineSharedKey?: string;
-    alertDispatcher?: AlertNotificationDispatcher;
-    alertEvidenceClient?: AlertEvidenceClient;
-  } = {},
+  options: AnalyticsRouteOptions = {},
 ) {
   app.get("/v1/analytics/capabilities", async () => ({
     service: "sentinel-analytics-engine",
@@ -945,79 +954,44 @@ export async function registerAnalyticsRoutes(
         input.occurredAt,
       );
     }
-    for (let index = 0; index < result.alerts.length; index += 1) {
-      const alert = result.alerts[index]!;
-      const rule = result.rules.find((item) => item.id === alert.ruleId);
-      if (!rule || alert.eventId !== result.event.id) continue;
-      if (result.event.status === "accepted") {
-        if (options.alertEvidenceClient && (alert.severity === "P1" || alert.severity === "P2") &&
-            (!alert.snapshotReference || !alert.clipReference)) {
-          try {
-            await options.alertEvidenceClient.capture({
-              alertId: alert.id,
-              cameraId: alert.cameraId,
-              occurredAt: alert.firstDetectedAt,
-              clipSeconds: Math.min(20, Math.max(5, rule.postRollSeconds)),
-            });
-            const managed = managedAlertEvidenceReferences(alert.id);
-            const updated = await store.updateAnalyticsAlertEvidence(alert.id, alert.tenantId, {
-              ...(!alert.snapshotReference ? { snapshotReference: managed.snapshotReference } : {}),
-              ...(!alert.clipReference ? { clipReference: managed.clipReference } : {}),
-            });
-            if (updated) Object.assign(alert, updated);
-          } catch (error) {
-            app.log.error({ error, alertId: alert.id }, "Automatic alert evidence capture failed to start");
-          }
-        }
-        await enqueueAlertMatrix(store, alert, rule);
-        publishAlert(alert, "alert.created");
-        try {
-          const siren = await queuePhysicalSiren(store, {
-            alertId: alert.id,
-            tenantId: alert.tenantId,
-            cameraId: alert.cameraId,
-            severity: alert.severity,
-            detectionType: rule.detectionType,
-            occurredAt: alert.firstDetectedAt,
-          });
-          if (!siren.queued) {
-            app.log.warn({ alertId: alert.id, reason: "reason" in siren ? siren.reason : undefined }, "Physical siren command was not queued");
-          }
-        } catch (error) {
-          app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");
-        }
-        const camera = await store.getCamera(alert.cameraId);
-        if (camera) {
-          digitalTwinEvents.publish({
-            id: randomUUID(), tenantId: input.tenantId, branchId: camera.branchId,
-            type: "analytics.alert.created", occurredAt: alert.lastDetectedAt,
-            alertId: alert.id, severity: alert.severity === "P1" ? "critical" : "warning",
-          });
+    await applyAnalyticsIngestSideEffects(app, store, options, eventInput, result);
+
+    let openingViolationCount = 0;
+    if (
+      result.event.status === "accepted" &&
+      input.detectionType !== "dual-control-verification" &&
+      options.nbfcRuleRepository &&
+      options.nbfcRuleEngine
+    ) {
+      const camera = await store.getCamera(input.cameraId);
+      if (camera) {
+        const violations = await evaluateBranchOpeningDualControl(
+          options.nbfcRuleRepository,
+          options.nbfcRuleEngine,
+          eventInput,
+          camera,
+        );
+        openingViolationCount = violations.length;
+        for (const violation of violations) {
+          const violationInput: AnalyticsEventInput = {
+            ...eventInput,
+            sourceEventId: `${input.sourceEventId}:opening:${violation.ruleId}`.slice(0, 300),
+            detectionType: "dual-control-verification",
+            durationSeconds: violation.evaluation.durationPersistedMs / 1000,
+            metadata: {
+              ...(eventInput.metadata || {}),
+              branchId: violation.branchId,
+              sourceRuleId: violation.ruleId,
+              sourceRuleName: violation.ruleName,
+              staffCount: violation.staffCount,
+              requiredStaff: violation.requiredStaff,
+              violation: "BRANCH_OPENING_MINIMUM_STAFF",
+            },
+          };
+          const violationResult = await store.processAnalyticsEvent(violationInput);
+          await applyAnalyticsIngestSideEffects(app, store, options, violationInput, violationResult);
         }
       }
-      if (rule.recordingPolicy === "event-recording") {
-        await triggerRecording(app, options, alert.cameraId,
-          input.detectionType === "motion" ? "motion" : "event");
-      }
-      if (rule.recordingPolicy === "protect-window" && rule.createdBy) {
-        try {
-          const incident = await store.createLiveIncident({
-            tenantId: input.tenantId, cameraId: input.cameraId,
-            createdBy: rule.createdBy, title: alert.title,
-            notes: alert.description, priority: alert.severity,
-            occurredAt: alert.firstDetectedAt,
-            preRollSeconds: rule.preRollSeconds, postRollSeconds: rule.postRollSeconds,
-          });
-          await store.linkAnalyticsAlertIncident(alert.id, input.tenantId, incident.id);
-          alert.incidentId = incident.id;
-        } catch (error) {
-          app.log.error({ error, alertId: alert.id }, "Analytics evidence protection failed");
-        }
-      }
-    }
-    if (result.event.status === "accepted" && options.alertDispatcher) {
-      void options.alertDispatcher.drainOnce().catch((error) =>
-        app.log.error({ error }, "Alert notification dispatch failed"));
     }
     await store.writeAudit({
       tenantId: input.tenantId, actorUserId: null,
@@ -1025,6 +999,7 @@ export async function registerAnalyticsRoutes(
       outcome: "success", details: {
         eventId: result.event.id, sourceEventId: input.sourceEventId,
         status: result.event.status, alertCount: result.alerts.length,
+        openingViolationCount,
       },
     });
     return reply.code(202).send(result);
@@ -1447,6 +1422,88 @@ function engineIdentity(
   if (fallback && same(supplied, fallback)) return true;
   void reply.code(401).send({ error: "invalid_analytics_engine_identity" });
   return false;
+}
+
+async function applyAnalyticsIngestSideEffects(
+  app: FastifyInstance,
+  store: ControlPlaneStore,
+  options: AnalyticsRouteOptions,
+  input: AnalyticsEventInput,
+  result: AnalyticsIngestResult,
+) {
+  for (const alert of result.alerts) {
+    const rule = result.rules.find((item) => item.id === alert.ruleId);
+    if (!rule || alert.eventId !== result.event.id) continue;
+    if (result.event.status === "accepted") {
+      if (options.alertEvidenceClient && (alert.severity === "P1" || alert.severity === "P2") &&
+          (!alert.snapshotReference || !alert.clipReference)) {
+        try {
+          await options.alertEvidenceClient.capture({
+            alertId: alert.id,
+            cameraId: alert.cameraId,
+            occurredAt: alert.firstDetectedAt,
+            clipSeconds: Math.min(20, Math.max(5, rule.postRollSeconds)),
+          });
+          const managed = managedAlertEvidenceReferences(alert.id);
+          const updated = await store.updateAnalyticsAlertEvidence(alert.id, alert.tenantId, {
+            ...(!alert.snapshotReference ? { snapshotReference: managed.snapshotReference } : {}),
+            ...(!alert.clipReference ? { clipReference: managed.clipReference } : {}),
+          });
+          if (updated) Object.assign(alert, updated);
+        } catch (error) {
+          app.log.error({ error, alertId: alert.id }, "Automatic alert evidence capture failed to start");
+        }
+      }
+      await enqueueAlertMatrix(store, alert, rule);
+      publishAlert(alert, "alert.created");
+      try {
+        const siren = await queuePhysicalSiren(store, {
+          alertId: alert.id,
+          tenantId: alert.tenantId,
+          cameraId: alert.cameraId,
+          severity: alert.severity,
+          detectionType: rule.detectionType,
+          occurredAt: alert.firstDetectedAt,
+        });
+        if (!siren.queued) {
+          app.log.warn({ alertId: alert.id, reason: "reason" in siren ? siren.reason : undefined }, "Physical siren command was not queued");
+        }
+      } catch (error) {
+        app.log.error({ error, alertId: alert.id }, "Physical siren command dispatch failed");
+      }
+      const camera = await store.getCamera(alert.cameraId);
+      if (camera) {
+        digitalTwinEvents.publish({
+          id: randomUUID(), tenantId: input.tenantId, branchId: camera.branchId,
+          type: "analytics.alert.created", occurredAt: alert.lastDetectedAt,
+          alertId: alert.id, severity: alert.severity === "P1" ? "critical" : "warning",
+        });
+      }
+    }
+    if (rule.recordingPolicy === "event-recording") {
+      await triggerRecording(app, options, alert.cameraId,
+        input.detectionType === "motion" ? "motion" : "event");
+    }
+    if (rule.recordingPolicy === "protect-window" && rule.createdBy) {
+      try {
+        const incident = await store.createLiveIncident({
+          tenantId: input.tenantId, cameraId: input.cameraId,
+          createdBy: rule.createdBy, title: alert.title,
+          notes: alert.description, priority: alert.severity,
+          occurredAt: alert.firstDetectedAt,
+          preRollSeconds: rule.preRollSeconds, postRollSeconds: rule.postRollSeconds,
+        });
+        await store.linkAnalyticsAlertIncident(alert.id, input.tenantId, incident.id);
+        alert.incidentId = incident.id;
+      } catch (error) {
+        app.log.error({ error, alertId: alert.id }, "Analytics evidence protection failed");
+      }
+    }
+  }
+  if (result.event.status === "accepted" && options.alertDispatcher) {
+    void options.alertDispatcher.drainOnce().catch((error) =>
+      app.log.error({ error }, "Alert notification dispatch failed"));
+  }
 }
 
 async function triggerRecording(

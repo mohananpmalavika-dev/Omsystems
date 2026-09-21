@@ -1177,6 +1177,30 @@ export const cameraInventoryApi = {
     ),
 };
 
+export interface BranchOpeningPolicy {
+  branchId: string;
+  ruleId?: string;
+  inherited: boolean;
+  enabled: boolean;
+  openingStart: string;
+  openingEnd: string;
+  timezone: string;
+  activeDays: number[];
+  requiredStaff: 2;
+  graceSeconds: number;
+  enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT";
+}
+
+export const branchOpeningPolicyApi = {
+  get: (branchId: string) =>
+    fetchApi<BranchOpeningPolicy>(`/api/ai/branch-opening-policy/${encodeURIComponent(branchId)}`),
+  update: (branchId: string, policy: Pick<BranchOpeningPolicy, "openingStart" | "openingEnd" | "timezone" | "activeDays" | "graceSeconds">) =>
+    fetchApi<BranchOpeningPolicy>(`/api/ai/branch-opening-policy/${encodeURIComponent(branchId)}`, {
+      method: "PUT",
+      body: JSON.stringify(policy),
+    }),
+};
+
 export const cameraApi = {
   get: (cameraId: string) => fetchApi<any>(`/v1/cameras/${encodeURIComponent(cameraId)}`),
 };

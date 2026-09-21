@@ -65,6 +65,19 @@ describe("Native Windows installer release build", () => {
     expect(installer).not.toContain('/TR "');
   });
 
+  it("replaces a stale activation after an incomplete installation and verifies enrollment", async () => {
+    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+
+    expect(installer).toContain("function HasCompleteDeviceIdentity: Boolean;");
+    expect(installer).toContain("ExistingInstall and HasCompleteDeviceIdentity");
+    expect(installer).toContain("HadCompleteIdentity := HasCompleteDeviceIdentity;");
+    expect(installer).toContain("if HadCompleteIdentity and FileExists(ConfigPath) then");
+    expect(installer).toContain("if not HadCompleteIdentity then\n    ValidateNewEnrollment;");
+    expect(installer).toContain("--diagnose");
+    expect(installer).toContain("if not HasCompleteDeviceIdentity then");
+    expect(installer).not.toContain("if ExistingInstall or FileExists(ConfigPath) then");
+  });
+
   it("does not execute a cross-compiled Windows EXE on the Linux control-plane image", async () => {
     const script = await readFile("edge-agent/scripts/verify-windows-package.mjs", "utf8");
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { AppLayout, getVisibleNavigation, type MenuAccessUser } from "@/components/app-layout";
 import { PageHero } from "@/components/page-hero";
-import { authApi, cameraInventoryApi, anprLogisticsApi, nbfcWatchlistApi, secureAreaAuthorizationApi } from "@/lib/api-client";
+import { authApi, cameraInventoryApi, anprLogisticsApi, nbfcWatchlistApi, secureAreaAuthorizationApi, branchOpeningPolicyApi, type BranchOpeningPolicy } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
 import {
   ArrowRight,
@@ -31,6 +31,7 @@ import {
   Fingerprint,
   Timer,
   Plus,
+  Save,
   X,
 } from "lucide-react";
 
@@ -138,6 +139,11 @@ export default function NbfcOperationsPage() {
   const [secureStaff, setSecureStaff] = useState<any[]>([]);
   const [custodyAssignments, setCustodyAssignments] = useState<any[]>([]);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
+  const [openingPolicy, setOpeningPolicy] = useState<BranchOpeningPolicy | null>(null);
+  const [openingStart, setOpeningStart] = useState("08:30");
+  const [openingEnd, setOpeningEnd] = useState("09:30");
+  const [openingPolicySaving, setOpeningPolicySaving] = useState(false);
+  const [openingPolicyMessage, setOpeningPolicyMessage] = useState<string | null>(null);
 
   // Strong Room Multi-Party Time-Lock & Anti-Duress State
   const [custodian1Approved, setCustodian1Approved] = useState(false);
@@ -219,6 +225,47 @@ export default function NbfcOperationsPage() {
     }
     void loadLiveData();
   }, []);
+
+  useEffect(() => {
+    if (!activeBranch?.id) {
+      setOpeningPolicy(null);
+      return;
+    }
+    let active = true;
+    setOpeningPolicyMessage(null);
+    branchOpeningPolicyApi.get(activeBranch.id)
+      .then((policy) => {
+        if (!active) return;
+        setOpeningPolicy(policy);
+        setOpeningStart(policy.openingStart);
+        setOpeningEnd(policy.openingEnd);
+      })
+      .catch((error) => {
+        if (active) setOpeningPolicyMessage(error instanceof Error ? error.message : "Opening policy unavailable");
+      });
+    return () => { active = false; };
+  }, [activeBranch?.id]);
+
+  const saveOpeningPolicy = async () => {
+    if (!activeBranch?.id) return;
+    setOpeningPolicySaving(true);
+    setOpeningPolicyMessage(null);
+    try {
+      const updated = await branchOpeningPolicyApi.update(activeBranch.id, {
+        openingStart,
+        openingEnd,
+        timezone: openingPolicy?.timezone || "Asia/Kolkata",
+        activeDays: openingPolicy?.activeDays || [1, 2, 3, 4, 5, 6],
+        graceSeconds: openingPolicy?.graceSeconds ?? 30,
+      });
+      setOpeningPolicy(updated);
+      setOpeningPolicyMessage("Opening policy saved and enforcement activated.");
+    } catch (error) {
+      setOpeningPolicyMessage(error instanceof Error ? error.message : "Failed to save opening policy");
+    } finally {
+      setOpeningPolicySaving(false);
+    }
+  };
 
   const reloadLogisticsData = useCallback(async () => {
     try {
@@ -336,33 +383,49 @@ export default function NbfcOperationsPage() {
 
         {/* Live Banking Security & Vault Cockpit */}
         <section className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Locker Room 2-Person Rule */}
+          {/* Branch Opening 2-Person Rule */}
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
                   <Lock size={15} className="text-amber-400" />
-                  Locker Vault 2-Person Rule
+                  Branch Opening 2-Person Rule
                 </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
-                  Telemetry unavailable
+                <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${openingPolicy?.enabled ? "bg-emerald-500/10 text-emerald-300 border-emerald-500/30" : "bg-slate-800 text-slate-400 border-slate-700"}`}>
+                  {openingPolicy?.enabled ? "Enforced" : "Not configured"}
                 </span>
               </div>
-              <div className="mt-3">
-                <div className="text-xl font-bold text-white">No live custody telemetry</div>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Connect a custody telemetry source before showing vault authorization state.
+              <div className="mt-4 space-y-3">
+                <select
+                  aria-label="Branch for opening policy"
+                  value={activeBranch?.id || ""}
+                  onChange={(event) => setActiveBranch(branches.find((branch) => branch.id === event.target.value) || null)}
+                  className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200"
+                >
+                  {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Opening starts
+                    <input type="time" value={openingStart} onChange={(event) => setOpeningStart(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-sm text-white" />
+                  </label>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Verify until
+                    <input type="time" value={openingEnd} onChange={(event) => setOpeningEnd(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-2 text-sm text-white" />
+                  </label>
+                </div>
+                <p className="text-xs leading-5 text-slate-400">
+                  Minimum <strong className="text-white">2 people</strong> must remain visible together. Non-compliance creates a P1 alert, evidence clip and incident after {openingPolicy?.graceSeconds ?? 30}s.
                 </p>
+                {openingPolicyMessage && <p className={`text-[11px] ${openingPolicyMessage.includes("saved") ? "text-emerald-300" : "text-amber-300"}`}>{openingPolicyMessage}</p>}
               </div>
             </div>
-            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500 flex items-center gap-1">
-                <Clock size={12} />
-                No live session
-              </span>
-              <Link href="/analytics/banking" className="text-cyan-400 hover:text-cyan-300 font-medium">
-                Live Vault Stream &rarr;
-              </Link>
+            <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-3 text-xs">
+              <span className="text-slate-500 flex items-center gap-1"><Clock size={12} /> Asia/Kolkata</span>
+              <button type="button" onClick={saveOpeningPolicy} disabled={!activeBranch || openingPolicySaving || openingStart >= openingEnd} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 font-semibold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40">
+                {openingPolicySaving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
+                {openingPolicySaving ? "Saving" : "Save & enforce"}
+              </button>
             </div>
           </div>
 

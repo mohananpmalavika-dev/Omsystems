@@ -77,6 +77,7 @@ interface RuleItem {
     timezone?: string;
     start?: string;
     end?: string;
+    days?: number[];
   };
   severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO";
   cooldownMs: number;
@@ -237,6 +238,9 @@ export function NbfcRulesWorkspace() {
     value: 2,
     durationSeconds: 5,
     scheduleType: "BUSINESS_HOURS",
+    scheduleStart: "08:30",
+    scheduleEnd: "09:30",
+    scheduleTimezone: "Asia/Kolkata",
     severity: "CRITICAL" as "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | "INFO",
     cooldownSeconds: 60,
     actionAlert: true,
@@ -340,6 +344,9 @@ export function NbfcRulesWorkspace() {
       value: 2,
       durationSeconds: 5,
       scheduleType: "BUSINESS_HOURS",
+      scheduleStart: "08:30",
+      scheduleEnd: "09:30",
+      scheduleTimezone: "Asia/Kolkata",
       severity: "CRITICAL",
       cooldownSeconds: 60,
       actionAlert: true,
@@ -360,6 +367,9 @@ export function NbfcRulesWorkspace() {
   const handleCreateFromTemplate = (tmpl: TemplateItem) => {
     setEditingRule(null);
     const cond = tmpl.defaultCondition || {};
+    const editableCond = cond.metric
+      ? cond
+      : cond.conditions?.find((item: any) => item?.metric === "staff_count") || cond.conditions?.[0] || {};
     setBuilderForm({
       name: tmpl.name,
       description: tmpl.description,
@@ -367,11 +377,14 @@ export function NbfcRulesWorkspace() {
       cameraId: "ALL",
       zoneId: "",
       detectorType: tmpl.detectorType,
-      metric: cond.metric || "person_count",
-      operator: cond.operator || "GREATER_THAN",
-      value: cond.value !== undefined ? cond.value : 2,
+      metric: editableCond.metric || "person_count",
+      operator: editableCond.operator || "GREATER_THAN",
+      value: editableCond.value !== undefined ? editableCond.value : 2,
       durationSeconds: Math.round(tmpl.defaultDurationMs / 1000),
       scheduleType: tmpl.suggestedSchedule || "BUSINESS_HOURS",
+      scheduleStart: tmpl.metadata?.defaultOpeningStart || "08:30",
+      scheduleEnd: tmpl.metadata?.defaultOpeningEnd || "09:30",
+      scheduleTimezone: "Asia/Kolkata",
       severity: tmpl.defaultSeverity || "CRITICAL",
       cooldownSeconds: Math.round(tmpl.defaultCooldownMs / 1000),
       actionAlert: tmpl.defaultActions.includes("CREATE_ALERT"),
@@ -392,6 +405,9 @@ export function NbfcRulesWorkspace() {
   const handleEditRule = (r: RuleItem) => {
     setEditingRule(r);
     const cond = r.condition || {};
+    const editableCond = cond.metric
+      ? cond
+      : cond.conditions?.find((item: any) => item?.metric === "staff_count") || cond.conditions?.[0] || {};
     setBuilderForm({
       name: r.name,
       description: r.description || "",
@@ -399,11 +415,14 @@ export function NbfcRulesWorkspace() {
       cameraId: r.cameraIds?.[0] || "ALL",
       zoneId: r.zoneId || "",
       detectorType: r.detectorType,
-      metric: cond.metric || "person_count",
-      operator: cond.operator || "GREATER_THAN",
-      value: cond.value !== undefined ? cond.value : 2,
+      metric: editableCond.metric || "person_count",
+      operator: editableCond.operator || "GREATER_THAN",
+      value: editableCond.value !== undefined ? editableCond.value : 2,
       durationSeconds: Math.round((r.durationMs || 0) / 1000),
       scheduleType: r.schedule?.type || "BUSINESS_HOURS",
+      scheduleStart: r.schedule?.start || (r.schedule?.type === "BRANCH_CLOSING" ? "17:00" : "08:30"),
+      scheduleEnd: r.schedule?.end || (r.schedule?.type === "BRANCH_CLOSING" ? "18:30" : "09:30"),
+      scheduleTimezone: r.schedule?.timezone || "Asia/Kolkata",
       severity: r.severity,
       cooldownSeconds: Math.round((r.cooldownMs || 60000) / 1000),
       actionAlert: r.actions.includes("CREATE_ALERT"),
@@ -451,7 +470,17 @@ export function NbfcRulesWorkspace() {
         value: Number(builderForm.value) || builderForm.value,
       },
       durationMs: Number(builderForm.durationSeconds) * 1000,
-      schedule: { type: builderForm.scheduleType },
+      schedule: {
+        type: builderForm.scheduleType,
+        ...(["BRANCH_OPENING", "BRANCH_CLOSING", "CUSTOM"].includes(builderForm.scheduleType)
+          ? {
+              start: builderForm.scheduleStart,
+              end: builderForm.scheduleEnd,
+              timezone: builderForm.scheduleTimezone,
+              days: [1, 2, 3, 4, 5, 6],
+            }
+          : {}),
+      },
       severity: builderForm.severity,
       cooldownMs: Number(builderForm.cooldownSeconds) * 1000,
       actions,
@@ -1838,9 +1867,23 @@ export function NbfcRulesWorkspace() {
                     <option value="BUSINESS_HOURS">Business Hours (08:30 – 17:30)</option>
                     <option value="AFTER_HOURS">After Hours (19:00 – 08:00)</option>
                     <option value="24X7">24x7 Continuous</option>
-                    <option value="BRANCH_OPENING">Branch Opening (08:30 – 09:30)</option>
-                    <option value="BRANCH_CLOSING">Branch Closing (17:00 – 18:30)</option>
+                    <option value="BRANCH_OPENING">Branch Opening Window</option>
+                    <option value="BRANCH_CLOSING">Branch Closing Window</option>
+                    <option value="CUSTOM">Custom Window</option>
                   </select>
+                  {["BRANCH_OPENING", "BRANCH_CLOSING", "CUSTOM"].includes(builderForm.scheduleType) && (
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                      <label className="text-[10px] text-gray-500">
+                        Start time
+                        <input type="time" required value={builderForm.scheduleStart} onChange={(e) => setBuilderForm({ ...builderForm, scheduleStart: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-white" />
+                      </label>
+                      <label className="text-[10px] text-gray-500">
+                        End time
+                        <input type="time" required value={builderForm.scheduleEnd} onChange={(e) => setBuilderForm({ ...builderForm, scheduleEnd: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-800 p-2 text-white" />
+                      </label>
+                      <span className="col-span-2 text-[10px] text-gray-500">Monday–Saturday · {builderForm.scheduleTimezone}</span>
+                    </div>
+                  )}
                 </div>
 
                 <div>

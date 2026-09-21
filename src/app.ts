@@ -2525,6 +2525,7 @@ export async function buildApp(options?: {
   registerNbfcAnalyticsRoutes(app, {
     repository: nbfcRuleRepo,
     engineService: nbfcRuleEngine,
+    store,
   });
   registerSecureAreaAuthorizationRoutes(app, store);
   registerBankingAnalyticsRoutes(app, { pool: (store as any).pool });
@@ -2752,6 +2753,8 @@ export async function buildApp(options?: {
       ? { recordingEngineSharedKey: options?.recordingEngineSharedKey } : {}),
     ...(alertEvidenceClient ? { alertEvidenceClient } : {}),
     alertDispatcher,
+    nbfcRuleRepository: nbfcRuleRepo,
+    nbfcRuleEngine,
   });
   await registerAnalyticsPhase2Routes(app, store);
   await registerBehavioralAnalyticsRoutes(app, store, pool);

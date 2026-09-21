@@ -95,6 +95,15 @@ begin
   Result := AddBackslash(AppPath) + 'config\edge-agent.env';
 end;
 
+function HasCompleteDeviceIdentity: Boolean;
+var
+  DataPath: String;
+begin
+  DataPath := AddBackslash(AppPath) + 'data\';
+  Result := FileExists(DataPath + 'device-identity.enc') and
+    FileExists(DataPath + 'device-identity.key');
+end;
+
 function DetectExistingInstall: Boolean;
 var
   InstalledDir: String;
@@ -266,7 +275,11 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (ExistingInstall or UsePackageConfiguration) and ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
+  // A directory left by a failed enrollment is not an enrolled installation.
+  // In that case either load the fresh package configuration or ask for a new
+  // activation code instead of silently reusing the consumed/expired code.
+  Result := (UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity)) and
+    ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -275,7 +288,7 @@ var
   ActivationCode: String;
 begin
   Result := True;
-  if ExistingInstall or UsePackageConfiguration then Exit;
+  if UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity) then Exit;
 
   if CurPageID = BranchNamePage.ID then begin
     BranchName := Trim(BranchNamePage.Values[0]);
@@ -443,17 +456,35 @@ begin
     'Unable to start the Sentinel Grid Edge Agent', True);
 end;
 
+procedure ValidateNewEnrollment;
+var
+  ProgramPath: String;
+  Arguments: String;
+begin
+  ProgramPath := AddBackslash(AppPath) + 'edge-agent.exe';
+  Arguments := '--config "' + ConfigPath + '" --diagnose';
+  RunNative(ProgramPath, Arguments,
+    'The Edge Agent could not enroll with KryptonVision. Download a fresh Repair package and run it before its activation expires', True);
+  if not HasCompleteDeviceIdentity then
+    RaiseException('The Edge Agent enrollment did not create a protected device identity. Download a fresh Repair package and try again.');
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
+var
+  HadCompleteIdentity: Boolean;
 begin
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
   UnpackRuntime;
-  if ExistingInstall or FileExists(ConfigPath) then
+  HadCompleteIdentity := HasCompleteDeviceIdentity;
+  if HadCompleteIdentity and FileExists(ConfigPath) then
     UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.23')
   else
     WriteFreshConfig;
   ProtectConfigFile;
+  if not HadCompleteIdentity then
+    ValidateNewEnrollment;
   ConfigureFirewall;
   RegisterAgentTask;
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',

@@ -52,7 +52,9 @@ export const CAMERA_AI_RULE_BUNDLE: readonly CameraAiRuleDefinition[] = [
   { name: "Banking AI - Cash van arrival", detectionType: "cash-van-arrival", objectClasses: ["vehicle"], severity: "P3", minDurationSeconds: 0, cooldownSeconds: 120 },
   { name: "Banking AI - Strong room entry", detectionType: "strong-room-entry", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
   { name: "Banking AI - Cash tray left open", detectionType: "cash-tray-left-open", objectClasses: [], severity: "P1", minDurationSeconds: 5, cooldownSeconds: 30 },
-  { name: "Banking AI - Dual control verification", detectionType: "dual-control-verification", objectClasses: ["person"], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
+  // A zero-person opening violation is still a valid dual-control breach, so
+  // this derived event must not require a detected person object to match.
+  { name: "Banking AI - Dual control verification", detectionType: "dual-control-verification", objectClasses: [], severity: "P1", minDurationSeconds: 0, cooldownSeconds: 30 },
 ];
 
 // Footfall rules are safe to provision, but emit counts only from a configured

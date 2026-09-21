@@ -46,4 +46,55 @@ describe("NBFC AI rules API production safeguards", () => {
     expect(scoped.statusCode).toBe(201);
     expect(scoped.json()).toMatchObject({ enabled: true, state: "ACTIVE", branchIds: ["A005"] });
   });
+
+  it("configures a branch-specific two-person opening window", async () => {
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/ai/branch-opening-policy/A005",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: {
+        openingStart: "08:15",
+        openingEnd: "09:05",
+        timezone: "Asia/Kolkata",
+        activeDays: [1, 2, 3, 4, 5, 6],
+        graceSeconds: 30,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      branchId: "A005",
+      enabled: true,
+      inherited: false,
+      openingStart: "08:15",
+      openingEnd: "09:05",
+      requiredStaff: 2,
+      graceSeconds: 30,
+      enforcementMode: "ALERT_EVIDENCE_AND_INCIDENT",
+    });
+
+    const loaded = await app.inject({
+      method: "GET",
+      url: "/api/ai/branch-opening-policy/A005",
+      headers: { "x-user-id": "user-global-admin" },
+    });
+    expect(loaded.statusCode).toBe(200);
+    expect(loaded.json()).toMatchObject({ openingStart: "08:15", openingEnd: "09:05" });
+  });
+
+  it("rejects an invalid branch-opening time range", async () => {
+    const response = await app.inject({
+      method: "PUT",
+      url: "/api/ai/branch-opening-policy/A005",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: {
+        openingStart: "09:30",
+        openingEnd: "08:30",
+        timezone: "Asia/Kolkata",
+        activeDays: [1, 2, 3, 4, 5, 6],
+        graceSeconds: 30,
+      },
+    });
+    expect(response.statusCode).toBe(400);
+  });
 });

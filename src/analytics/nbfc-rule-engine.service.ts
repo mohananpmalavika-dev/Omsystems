@@ -430,6 +430,20 @@ export class NbfcRuleEngineService {
     const dayOfWeek = dayMap[parts.weekday || "Mon"] ?? 1;
 
     const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute);
+    const configuredWindow = () => {
+      if (!schedule?.start || !schedule?.end) return undefined;
+      const [startHour, startMinute] = schedule.start.split(":").map(Number);
+      const [endHour, endMinute] = schedule.end.split(":").map(Number);
+      if (![startHour, startMinute, endHour, endMinute].every(Number.isFinite)) return undefined;
+      return {
+        start: startHour! * 60 + startMinute!,
+        end: endHour! * 60 + endMinute!,
+      };
+    };
+    const isWithinWindow = (start: number, end: number) =>
+      start <= end
+        ? currentMinutes >= start && currentMinutes <= end
+        : currentMinutes >= start || currentMinutes <= end;
 
     // Business Hours: Monday to Friday 08:30 - 17:30 (and Saturday until 13:00)
     if (type === "BUSINESS_HOURS") {
@@ -447,26 +461,25 @@ export class NbfcRuleEngineService {
 
     // Branch Opening Window: 08:30 - 09:30
     if (type === "BRANCH_OPENING") {
-      if (dayOfWeek === 0) return false;
-      return currentMinutes >= 510 && currentMinutes <= 570;
+      const activeDays = schedule?.days || [1, 2, 3, 4, 5, 6];
+      if (!activeDays.includes(dayOfWeek)) return false;
+      const window = configuredWindow();
+      return window ? isWithinWindow(window.start, window.end) : isWithinWindow(510, 570);
     }
 
     // Branch Closing Window: 17:00 - 18:30
     if (type === "BRANCH_CLOSING") {
-      if (dayOfWeek === 0) return false;
-      return currentMinutes >= 1020 && currentMinutes <= 1110;
+      const activeDays = schedule?.days || [1, 2, 3, 4, 5, 6];
+      if (!activeDays.includes(dayOfWeek)) return false;
+      const window = configuredWindow();
+      return window ? isWithinWindow(window.start, window.end) : isWithinWindow(1020, 1110);
     }
 
     // Custom weekly slots
     if (type === "CUSTOM") {
       if (schedule?.days && !schedule.days.includes(dayOfWeek)) return false;
-      if (schedule?.start && schedule?.end) {
-        const [sh, sm] = schedule.start.split(":").map(Number);
-        const [eh, em] = schedule.end.split(":").map(Number);
-        const startMin = sh! * 60 + sm!;
-        const endMin = eh! * 60 + em!;
-        return currentMinutes >= startMin && currentMinutes <= endMin;
-      }
+      const window = configuredWindow();
+      if (window) return isWithinWindow(window.start, window.end);
       return true;
     }
 
