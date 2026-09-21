@@ -17,6 +17,7 @@ import {
   Filter,
   Search,
   RefreshCw,
+  HardDrive,
 } from 'lucide-react';
 import { useCameraMonitoring } from '../hooks/useCameraMonitoring';
 import { CameraHealthCard } from '../components/operational-health/camera-health-card';
@@ -29,6 +30,34 @@ export function CameraMonitoringDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [selectedBranch, setSelectedBranch] = useState<string | undefined>();
+  const [storageMappings, setStorageMappings] = useState<Record<string, any>>({});
+  const [storageSummary, setStorageSummary] = useState<{
+    tier1SdCardCount: number;
+    tier2DvrHddCount: number;
+    tier3OnlineCloudCount: number;
+  }>({ tier1SdCardCount: 0, tier2DvrHddCount: 0, tier3OnlineCloudCount: 0 });
+
+  useEffect(() => {
+    fetch('/api/operations/storage')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.cameras)) {
+          const map: Record<string, any> = {};
+          data.cameras.forEach((c: any) => {
+            map[c.cameraId] = c;
+          });
+          setStorageMappings(map);
+          if (data.summary) {
+            setStorageSummary({
+              tier1SdCardCount: data.summary.tier1SdCardCount || 0,
+              tier2DvrHddCount: data.summary.tier2DvrHddCount || 0,
+              tier3OnlineCloudCount: data.summary.tier3OnlineCloudCount || 0,
+            });
+          }
+        }
+      })
+      .catch((err) => console.warn('Failed to load storage mapping in camera monitoring:', err));
+  }, []);
 
   const {
     cameras,
@@ -134,7 +163,7 @@ export function CameraMonitoringDashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
         {/* Total Cameras */}
         <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between mb-2">
@@ -196,6 +225,20 @@ export function CameraMonitoringDashboard() {
           </div>
           <div className="text-sm text-gray-600">Quality Issues</div>
         </div>
+
+        {/* Storage Destinations */}
+        <Link href="/operations/storage" className="bg-white rounded-lg shadow p-4 hover:shadow-md transition-shadow cursor-pointer block border-l-4 border-l-blue-500">
+          <div className="flex items-center justify-between mb-2">
+            <HardDrive size={24} className="text-blue-600" />
+            <span className="text-sm font-bold text-slate-800">
+              {storageSummary.tier1SdCardCount + storageSummary.tier2DvrHddCount} Local / {storageSummary.tier3OnlineCloudCount} Cloud
+            </span>
+          </div>
+          <div className="text-sm text-gray-600 font-medium">Storage Routing</div>
+          <div className="text-[11px] text-gray-500 mt-1">
+            SD: {storageSummary.tier1SdCardCount} • DVR: {storageSummary.tier2DvrHddCount} • Cloud: {storageSummary.tier3OnlineCloudCount}
+          </div>
+        </Link>
       </div>
 
       {/* Recent Alerts Banner */}
@@ -299,6 +342,8 @@ export function CameraMonitoringDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {sortedCameras.map((camera) => {
               const metrics = qualityMetricsMap.get(camera.id);
+              const storageInfo = storageMappings[camera.id];
+              const isRecording = camera.streamActive || camera.status === 'online';
               
               return (
                 <Link
@@ -312,7 +357,11 @@ export function CameraMonitoringDashboard() {
                       name: camera.name,
                       branchName: '', // Would come from branch data
                       onlineStatus: camera.status,
-                      recordingStatus: camera.streamActive ? 'healthy' : 'stream_unavailable',
+                      recordingStatus: isRecording ? 'healthy' : 'stream_unavailable',
+                      activeStorageTier: storageInfo?.activeStorageTier || (camera.status === 'online' ? 'online_cloud' : undefined),
+                      storageDetails: storageInfo?.storageDetails,
+                      storageCapacity: storageInfo?.capacity,
+                      storageUsed: storageInfo?.used,
                       rtspUrl: '',
                       currentBitrate: camera.currentBitrate || 0,
                       packetLoss: camera.packetLoss || 0,

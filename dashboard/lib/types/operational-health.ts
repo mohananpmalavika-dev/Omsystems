@@ -175,6 +175,10 @@ export interface CameraHealth {
   };
   onlineStatus: 'online' | 'offline' | 'warning' | 'degraded' | 'unknown';
   recordingStatus: RecordingStatus;
+  activeStorageTier?: 'sd_card' | 'dvr_hdd' | 'online_cloud';
+  storageDetails?: string;
+  storageCapacity?: string;
+  storageUsed?: string;
   lastHeartbeat: string | null;
   currentFps: number | null;
   expectedFps: number | null;

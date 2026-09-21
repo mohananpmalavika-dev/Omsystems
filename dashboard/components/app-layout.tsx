@@ -182,6 +182,7 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Camera & device uptime", href: "/operations/cameras", icon: Camera, badge: "cameras" },
       { label: "Recording continuity", href: "/operations/recording", icon: FileVideo2 },
+      { label: "Storage & Disks", href: "/operations/storage", icon: HardDrive },
       { label: "Device Configuration Center", href: "/maintenance/device-configuration", icon: SlidersHorizontal },
       { label: "Hardware Asset Registry", href: "/maintenance/assets", icon: Library },
       { label: "Camera Location Map", href: "/maintenance/camera-map", icon: Globe2 },
@@ -227,6 +228,9 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/video-search",
     "/playback/synced",
     "/recordings",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
   ],
   security_officer: [
     "/",
@@ -237,6 +241,10 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/video-search",
     "/playback/synced",
     "/evidence",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
+    "/recordings",
   ],
   viewer: ["/", "/control-room", "/video-search", "/playback/synced", "/recordings"],
   branch_manager: [
@@ -310,6 +318,10 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
   admin: [
     "/",
     "/analytics/alerts",
+    "/operations/storage",
+    "/operations/cameras",
+    "/operations/recording",
+    "/recordings",
     "/admin/organization",
     "/admin/organization?tab=hierarchy",
     "/admin/organization?tab=employees",

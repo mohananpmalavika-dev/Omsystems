@@ -5,8 +5,9 @@
 
 import * as ort from 'onnxruntime-node';
 import type { FaceEmbedding } from './face.types.js';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import * as fs from 'node:fs/promises';
+import * as fsSync from 'node:fs';
+import * as path from 'node:path';
 
 export interface FaceEmbeddingConfig {
   modelPath: string;
@@ -15,6 +16,21 @@ export interface FaceEmbeddingConfig {
   embeddingDimension: number;
   executionProviders: string[];
   batchSize: number;
+}
+
+function resolveDefaultArcFacePath(): string {
+  if (process.env.ARCFACE_MODEL_PATH) return process.env.ARCFACE_MODEL_PATH;
+  const candidates = [
+    path.resolve(process.cwd(), 'models/face/arcface_r100.onnx'),
+    path.resolve(process.cwd(), 'analytics-engine/models/face/arcface_r100.onnx'),
+    path.resolve(process.cwd(), '../models/face/arcface_r100.onnx'),
+    '/app/models/face/arcface_r100.onnx',
+    '/app/models/face/arcface-r100.onnx',
+  ];
+  for (const candidate of candidates) {
+    if (fsSync.existsSync(candidate)) return candidate;
+  }
+  return '/app/models/face/arcface-r100.onnx';
 }
 
 export class FaceEmbeddingService {
@@ -26,7 +42,7 @@ export class FaceEmbeddingService {
 
   constructor(config?: Partial<FaceEmbeddingConfig>) {
     this.config = {
-      modelPath: process.env.ARCFACE_MODEL_PATH || '/app/models/face/arcface-r100.onnx',
+      modelPath: resolveDefaultArcFacePath(),
       modelName: 'arcface-r100',
       modelVersion: '1.0.0',
       embeddingDimension: 512,
