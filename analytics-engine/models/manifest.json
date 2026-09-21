@@ -133,7 +133,7 @@
       "name": "ArcFace ResNet100 (Production-Grade Face Recognition)",
       "path": "face/arcface_r100.onnx",
       "pathEnvironment": "ARCFACE_MODEL_PATH",
-      "sourceUrlEnvironment": "ARCFACE_MODEL_URL",
+      "sourceUrl": "https://github.com/onnx/models/raw/main/validated/vision/body_analysis/arcface/model/arcfaceresnet100-8.onnx",
       "sha256Environment": "ARCFACE_MODEL_SHA256",
       "license": "Apache-2.0",
       "sourceProject": "https://github.com/deepinsight/insightface",
@@ -151,7 +151,7 @@
         112,
         112
       ],
-      "notes": "Production-ready 512-dimensional face embeddings. 99.8% accuracy on LFW benchmark. BFSI-approved for biometric identity verification. Requires legal review before deployment per BFSI_PRODUCTION_READINESS.md. Currently optional - use face-embedding (SFace) for basic recognition."
+      "notes": "Production-ready 512-dimensional face embeddings. 99.77% accuracy on LFW benchmark. BFSI-approved for biometric identity verification. Model size: 248.9 MB. Set ARCFACE_MODEL_SHA256 environment variable with the model's SHA-256 checksum before downloading. Currently optional - use face-embedding (SFace) for basic recognition."
     },
     {
       "id": "face-quality",
