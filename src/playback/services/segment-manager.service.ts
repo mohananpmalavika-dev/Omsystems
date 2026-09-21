@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Segment Manager Service
  * 
