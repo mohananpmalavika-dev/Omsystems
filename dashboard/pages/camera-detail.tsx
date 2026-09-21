@@ -3,6 +3,7 @@
  * Detailed camera monitoring with quality charts, uptime history, and recovery controls
  */
 
+
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import {
@@ -39,9 +40,9 @@ export function CameraDetailView() {
   const cameraId = typeof router.query.cameraId === 'string'
     ? router.query.cameraId
     : typeof router.query.id === 'string' ? router.query.id : '';
-  
+
   const { camera, qualityMetrics, alerts, isConnected } = useSingleCameraMonitoring(cameraId!);
-  
+
   const [healthHistory, setHealthHistory] = useState<any[]>([]);
   const [qualityHistory, setQualityHistory] = useState<any[]>([]);
   const [uptimeStats, setUptimeStats] = useState<any>(null);
@@ -54,16 +55,16 @@ export function CameraDetailView() {
     if (!cameraId) return;
 
     setIsLoadingHistory(true);
-    
+
     const hours = timeRange === '1h' ? 1 : timeRange === '24h' ? 24 : 168;
-    
+
     fetch(`/api/control/v1/cameras/${cameraId}/health-history?hours=${hours}`, { credentials: "include" })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
           setHealthHistory(data.data.history);
           setUptimeStats(data.data.statistics);
-          
+
           // Transform for charts
           const chartData = data.data.history.map((h: any) => ({
             timestamp: new Date(h.timestamp).getTime(),
@@ -73,7 +74,7 @@ export function CameraDetailView() {
             latency: h.latencyMs,
             online: h.status === 'online' ? 1 : 0,
           }));
-          
+
           setQualityHistory(chartData.reverse());
         }
       })
@@ -88,7 +89,7 @@ export function CameraDetailView() {
   // Trigger manual health check
   const handleHealthCheck = async () => {
     if (!cameraId) return;
-    
+
     setIsRecovering(true);
     try {
       const response = await fetch(`/api/control/v1/cameras/${cameraId}/health-check`, {
@@ -96,7 +97,7 @@ export function CameraDetailView() {
         credentials: "include",
       });
       const data = await response.json();
-      
+
       if (data.success) {
         alert('Health check completed');
       } else {
@@ -112,13 +113,13 @@ export function CameraDetailView() {
   // Trigger recovery workflow
   const handleRecovery = async (steps: string[]) => {
     if (!cameraId) return;
-    
+
     const confirmed = window.confirm(
       `This will attempt to recover the camera using: ${steps.join(', ')}. Continue?`
     );
-    
+
     if (!confirmed) return;
-    
+
     setIsRecovering(true);
     try {
       const response = await fetch(`/api/control/v1/cameras/${cameraId}/recover`, {
@@ -128,7 +129,7 @@ export function CameraDetailView() {
         body: JSON.stringify({ steps, autoEscalate: true }),
       });
       const data = await response.json();
-      
+
       if (data.success) {
         alert('Recovery workflow initiated');
       } else {
@@ -144,7 +145,7 @@ export function CameraDetailView() {
   // Download health report
   const handleDownloadReport = () => {
     if (!cameraId) return;
-    
+
     const hours = timeRange === '1h' ? 1 : timeRange === '24h' ? 24 : 168;
     window.open(`/api/v1/cameras/${cameraId}/health-history?hours=${hours}&format=csv`, '_blank');
   };
@@ -165,15 +166,15 @@ export function CameraDetailView() {
 
   const statusColor =
     camera.status === 'online' ? 'text-green-600' :
-    camera.status === 'offline' ? 'text-red-600' :
-    camera.status === 'warning' ? 'text-yellow-600' :
-    'text-orange-600';
+      camera.status === 'offline' ? 'text-red-600' :
+        camera.status === 'warning' ? 'text-yellow-600' :
+          'text-orange-600';
 
   const statusBgColor =
     camera.status === 'online' ? 'bg-green-100' :
-    camera.status === 'offline' ? 'bg-red-100' :
-    camera.status === 'warning' ? 'bg-yellow-100' :
-    'bg-orange-100';
+      camera.status === 'offline' ? 'bg-red-100' :
+        camera.status === 'warning' ? 'bg-yellow-100' :
+          'bg-orange-100';
 
   return (
     <AppLayout><main className="legacy-camera-detail-page min-h-screen bg-gray-50 p-6">
@@ -187,7 +188,7 @@ export function CameraDetailView() {
             <ArrowLeft size={20} />
             Back to Camera Monitoring
           </button>
-          
+
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{camera.name}</h1>
@@ -219,7 +220,7 @@ export function CameraDetailView() {
                 <Download size={18} />
                 Download Report
               </button>
-              
+
               <button
                 onClick={handleHealthCheck}
                 disabled={isRecovering}
@@ -228,7 +229,7 @@ export function CameraDetailView() {
                 <RefreshCw size={18} className={isRecovering ? 'animate-spin' : ''} />
                 Health Check
               </button>
-              
+
               {camera.status === 'offline' && (
                 <button
                   onClick={() => handleRecovery(['retry', 'reboot'])}
@@ -359,11 +360,10 @@ export function CameraDetailView() {
                 <button
                   key={range}
                   onClick={() => setTimeRange(range)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    timeRange === range
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${timeRange === range
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {range === '1h' ? '1 Hour' : range === '24h' ? '24 Hours' : '7 Days'}
                 </button>
