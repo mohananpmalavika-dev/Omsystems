@@ -1,6 +1,4 @@
 // API client for backend communication
-import { loginPath } from './session-navigation';
-
 import type {
   AlertNotificationPolicy,
   AlertNotificationPolicyInput,
@@ -17,7 +15,21 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
 const DEFAULT_API_TIMEOUT_MS = 8_000;
 const SESSION_API_TIMEOUT_MS = 3_000;
 let cookieRefreshPromise: Promise<boolean> | null = null;
-let loginRedirectInProgress = false;
+export const API_ERROR_EVENT = 'sentinel:api-error';
+
+export type ApiErrorNotice = { status: number; code: string; message: string };
+
+export function reportApiFailure(status: number, error: { error?: unknown; message?: unknown; reason?: unknown }, fallback: string) {
+  if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+  const code = typeof error.error === 'string' ? error.error.slice(0, 80) : 'request_failed';
+  const detail = error.message || error.reason;
+  const message = typeof detail === 'string' && detail.trim()
+    ? detail.trim().slice(0, 240)
+    : fallback;
+  window.dispatchEvent(new CustomEvent<ApiErrorNotice>(API_ERROR_EVENT, {
+    detail: { status, code, message },
+  }));
+}
 
 function saveBrowserDownload(blob: Blob, filename: string) {
   if (typeof document === "undefined" || typeof URL === "undefined") {
@@ -52,29 +64,6 @@ class ApiError extends Error {
   }
 }
 
-/**
- * Redirect to login page and clear session
- */
-function redirectToLogin() {
-  if (typeof window !== 'undefined') {
-    if (loginRedirectInProgress) return;
-    loginRedirectInProgress = true;
-
-    // Clear all session data
-    sessionStorage.clear();
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
-    localStorage.removeItem('sentinel_login_time');
-
-    // Redirect to login
-    const currentPath = window.location.pathname;
-    if (currentPath !== '/login') {
-      window.location.href = loginPath('expired', window.location);
-    }
-  }
-}
-
 function isPublicAuthEndpoint(endpoint: string): boolean {
   return endpoint.includes('/auth/login') ||
     endpoint.includes('/auth/face-login') ||
@@ -84,6 +73,18 @@ function isPublicAuthEndpoint(endpoint: string): boolean {
     endpoint.includes('/auth/request-password-reset') ||
     endpoint.includes('/auth/verify-otp') ||
     endpoint.includes('/auth/reset-password');
+}
+
+const sessionFailureCodes = new Set([
+  'unauthenticated', 'invalid_token', 'token_expired', 'invalid_session',
+  'session_expired', 'user_not_found',
+]);
+
+async function shouldAttemptSessionRefresh(response: Response, endpoint: string): Promise<boolean> {
+  if (response.status !== 401 || isPublicAuthEndpoint(endpoint)) return false;
+  if (endpoint === '/v1/auth/me') return true;
+  const payload = await response.clone().json().catch(() => null);
+  return sessionFailureCodes.has(payload?.error);
 }
 
 function getStoredToken(key: 'accessToken' | 'refreshToken'): string | null {
@@ -141,7 +142,11 @@ export function refreshCookieBackedSession(): Promise<boolean> {
     })
     .catch((err) => {
       if (err instanceof ApiError) throw err;
-      return false;
+      // A failed refresh request is not evidence that the refresh token is
+      // invalid. Keep the workspace and show the transport failure.
+      throw new ApiError('Sign-in service is temporarily unreachable. Please retry.', 0, {
+        error: 'session_refresh_unreachable',
+      });
     })
     .finally(() => { cookieRefreshPromise = null; });
   return cookieRefreshPromise;
@@ -151,51 +156,54 @@ async function fetchApi<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = getStoredToken('accessToken');
-
-  const headers = new Headers(options.headers);
-  if (!headers.has('Content-Type')) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  if (token) {
-    // The public dashboard can itself be protected by HTTP Basic auth, so the
-    // employee session travels to the BFF in a separate header.
-    headers.set('x-sentinel-session', token);
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-  }
-
   const isAuthEndpoint = isPublicAuthEndpoint(endpoint);
-  const requestSignal = options.signal ?? AbortSignal.timeout(
-    endpoint === '/v1/auth/me' ? SESSION_API_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
-  );
-  const send = () => fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: "include",
-    headers,
-    signal: requestSignal,
-  });
+  const send = () => {
+    // Rebuild headers after refresh. Cross-site cookie fallback otherwise
+    // retries with the expired token captured before the refresh completed.
+    const headers = new Headers(options.headers);
+    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    const token = getStoredToken('accessToken');
+    if (token) {
+      headers.set('x-sentinel-session', token);
+      if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      credentials: "include",
+      headers,
+      signal: options.signal ?? AbortSignal.timeout(
+        endpoint === '/v1/auth/me' ? SESSION_API_TIMEOUT_MS : DEFAULT_API_TIMEOUT_MS,
+      ),
+    });
+  };
 
   let response: Response;
 
   try {
     response = await send();
-    if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
+    if (await shouldAttemptSessionRefresh(response, endpoint) && await refreshCookieBackedSession()) {
       response = await send();
     }
   } catch (error: any) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) {
+      if (!isAuthEndpoint && endpoint !== '/v1/auth/me') {
+        reportApiFailure(error.statusCode, error.details ?? {}, error.message);
+      }
+      throw error;
+    }
     // A transport failure does not invalidate an existing cookie-backed
     // session. Clearing browser state here caused a login loop whenever the
     // control plane was restarting or briefly unreachable immediately after
     // sign-in. Preserve the session and let the caller/session guard retry.
-    throw new ApiError(
+    const failure = new ApiError(
       'Cannot connect to server. Please check your connection.',
       0,
       { originalError: error.message }
     );
+    if (!isAuthEndpoint && endpoint !== '/v1/auth/me') {
+      reportApiFailure(0, { error: 'connection_failed' }, failure.message);
+    }
+    throw failure;
   }
 
   if (!response.ok) {
@@ -204,19 +212,10 @@ async function fetchApi<T>(
       message: 'An unexpected error occurred',
     }));
 
-    // Handle authentication errors
-    if (response.status === 401) {
-      // Token expired or invalid
-      if (!isAuthEndpoint) {
-        redirectToLogin();
-      }
-    }
-
-    // Handle forbidden errors (might indicate session issues)
-    if (response.status === 403) {
-      if (error.error === 'session_expired' || error.error === 'invalid_session') {
-        redirectToLogin();
-      }
+    // A module can return 401 for its own credentials or 403 for missing
+    // permission. Only the session validator may decide to sign the user out.
+    if (!isAuthEndpoint && endpoint !== '/v1/auth/me') {
+      reportApiFailure(response.status, error, 'Request failed');
     }
 
     throw new ApiError(
@@ -236,42 +235,45 @@ async function fetchApi<T>(
 }
 
 async function downloadApi(endpoint: string, options: RequestInit = {}, onProgress?: (received: number, total?: number) => void): Promise<Blob> {
-  const token = getStoredToken('accessToken');
-
-  const headers = new Headers(options.headers);
-  if (token) {
-    headers.set('x-sentinel-session', token);
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-  }
-
   const isAuthEndpoint = isPublicAuthEndpoint(endpoint);
-  const send = () => fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    credentials: 'include',
-    headers,
-  });
+  const send = () => {
+    const headers = new Headers(options.headers);
+    const token = getStoredToken('accessToken');
+    if (token) {
+      headers.set('x-sentinel-session', token);
+      if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${token}`);
+    }
+    return fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
+  };
 
   let response: Response;
 
   try {
     response = await send();
-    if (response.status === 401 && !isAuthEndpoint && await refreshCookieBackedSession()) {
+    if (await shouldAttemptSessionRefresh(response, endpoint) && await refreshCookieBackedSession()) {
       response = await send();
     }
   } catch (error: any) {
-    if (error instanceof ApiError) throw error;
+    if (error instanceof ApiError) {
+      if (!isAuthEndpoint) reportApiFailure(error.statusCode, error.details ?? {}, error.message);
+      throw error;
+    }
     // Network error - API not reachable
     console.error('API connection failed:', error);
     // Downloads must follow the same authentication policy as JSON requests:
     // an unavailable server is recoverable and is not proof that the employee
     // session expired.
-    throw new ApiError(
+    const failure = new ApiError(
       'Cannot connect to server. Please check your connection.',
       0,
       { originalError: error.message }
     );
+    if (!isAuthEndpoint) reportApiFailure(0, { error: 'connection_failed' }, failure.message);
+    throw failure;
   }
 
   if (!response.ok) {
@@ -294,10 +296,7 @@ async function downloadApi(endpoint: string, options: RequestInit = {}, onProgre
       }
     }
 
-    // Handle authentication errors
-    if (response.status === 401 || response.status === 403) {
-      redirectToLogin();
-    }
+    if (!isAuthEndpoint) reportApiFailure(response.status, error, 'Download failed');
 
     throw new ApiError(
       error.message || (typeof error.error === 'string'
@@ -348,7 +347,6 @@ export const authApi = {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       localStorage.removeItem('sentinel_login_time');
-      loginRedirectInProgress = false;
       if (response.accessToken) {
         sessionStorage.setItem('accessToken', response.accessToken);
       }
@@ -382,7 +380,6 @@ export const authApi = {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       localStorage.removeItem('sentinel_login_time');
-      loginRedirectInProgress = false;
       if (response.accessToken) {
         sessionStorage.setItem('accessToken', response.accessToken);
       }
@@ -428,7 +425,6 @@ export const authApi = {
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       localStorage.removeItem('sentinel_login_time');
-      loginRedirectInProgress = false;
       if (response.accessToken) {
         sessionStorage.setItem('accessToken', response.accessToken);
       }

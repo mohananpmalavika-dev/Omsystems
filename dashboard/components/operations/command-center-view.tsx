@@ -313,11 +313,11 @@ export function CommandCenterView() {
       {/* Top Banner & Header */}
       <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
         <div>
-          <p className="command-center-kicker"><Sparkles size={13} /> Bank &amp; NBFC protection intelligence</p>
+          <p className="command-center-kicker"><Sparkles size={13} /> Security operations</p>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-blue-400" />
-              24×7 Branch Protection Command Center
+              Branch protection overview
             </h1>
             <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}>
               <span className="telemetry-truth-dot" />
@@ -329,9 +329,9 @@ export function CommandCenterView() {
               </span>
             )}
           </div>
-          <p className="telemetry-truth-detail">{freshness.detail}. Actions and counts below use confirmed data only.</p>
+          <p className="telemetry-truth-detail">Monitor branch coverage, recording health, and risk from one place. {freshness.detail}.</p>
           <p className="text-xs text-slate-400 mt-1">
-            {totalBranchesCount} {totalBranchesCount === 1 ? "Branch" : "Branches"} • {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "Camera" : "Cameras"} • Live VMS telemetry and triage
+            {totalBranchesCount} {totalBranchesCount === 1 ? "branch" : "branches"} · {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "camera" : "cameras"} · Live telemetry
           </p>
         </div>
 
@@ -360,7 +360,7 @@ export function CommandCenterView() {
             className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 disabled:opacity-50 text-slate-300 border border-slate-700 text-xs font-medium transition-colors"
             title="Download CSV Device Health Report"
           >
-            <span>📥 Export Health</span>
+            <span>Export health</span>
           </button>
 
           <button
@@ -376,8 +376,8 @@ export function CommandCenterView() {
 
       <nav className="command-center-workflow" aria-label="Security operations workflow">
         <div className="command-center-workflow-intro">
-          <span>BRANCH PROTECTION PATH</span>
-          <strong>Keep every branch protected, 24×7.</strong>
+          <span>WORKFLOW</span>
+          <strong>From coverage to evidence</strong>
         </div>
         <div className="command-center-workflow-steps">
           <Link href="/control-room" onClick={navigateTo("/control-room")} className="active">
@@ -436,7 +436,7 @@ export function CommandCenterView() {
         </form>
 
         <p className="mt-2 pl-8 text-[11px] text-slate-500">
-          Guided telemetry queries · answers use confirmed Command Center data only
+          Answers use the latest confirmed telemetry
         </p>
 
         {askSentinelResponse && (
