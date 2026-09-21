@@ -6,14 +6,11 @@
  * and anti-spoofing detection for voice biometric authentication.
  */
 
-let ort: any = null;
-try {
-  ort = await import("onnxruntime-node");
-} catch {
-  // onnxruntime-node is optional and not present in Alpine Linux container
-}
 import { promises as fs } from "fs";
 import { createHash } from "crypto";
+import { getVoiceModelManager, type VoiceModels } from "./voice-model-manager.service.js";
+import { getAudioProcessor, type AudioProcessingOptions } from "./audio-processor.service.js";
+import { getAntiSpoofingService, type SpoofingDetectionResult } from "./anti-spoofing.service.js";
 import type {
   AudioFeatures,
   SpeakerEmbedding,
@@ -24,11 +21,17 @@ import type {
   DEFAULT_VOICE_AUTH_CONFIG,
 } from "../types/voice-biometric.types.js";
 
+let ort: any = null;
+try {
+  ort = await import("onnxruntime-node");
+} catch {
+  console.warn("onnxruntime-node not available, using fallback mode");
+}
+
 export class VoiceProcessingService {
-  private embeddingSession: any = null;
-  private vadSession: any = null;
-  private antiSpoofingSession: any = null;
   private config: VoiceAuthConfig;
+  private modelManager = getVoiceModelManager();
+  private models: VoiceModels | null = null;
 
   constructor(config: Partial<VoiceAuthConfig> = {}) {
     this.config = { ...DEFAULT_VOICE_AUTH_CONFIG, ...config };
@@ -38,45 +41,13 @@ export class VoiceProcessingService {
    * Initialize the voice processing models
    */
   async initialize(): Promise<void> {
-    if (!ort) {
-      console.log("Voice processing running in acoustic feature mode (onnxruntime-node not present)");
-      return;
-    }
     try {
-      // Load speaker embedding model
-      if (await this.fileExists(this.config.embeddingModelPath)) {
-        this.embeddingSession = await ort.InferenceSession.create(
-          this.config.embeddingModelPath,
-          {
-            executionProviders: ["cpu"],
-            graphOptimizationLevel: "all",
-          }
-        );
-        console.log("Voice embedding model loaded successfully");
-      } else {
-        console.warn(`Voice embedding model not found at ${this.config.embeddingModelPath}`);
-      }
-
-      // Load VAD model (optional)
-      if (this.config.vadModelPath && await this.fileExists(this.config.vadModelPath)) {
-        this.vadSession = await ort.InferenceSession.create(
-          this.config.vadModelPath,
-          { executionProviders: ["cpu"] }
-        );
-        console.log("VAD model loaded successfully");
-      }
-
-      // Load anti-spoofing model (optional)
-      if (this.config.antiSpoofingModelPath && await this.fileExists(this.config.antiSpoofingModelPath)) {
-        this.antiSpoofingSession = await ort.InferenceSession.create(
-          this.config.antiSpoofingModelPath,
-          { executionProviders: ["cpu"] }
-        );
-        console.log("Anti-spoofing model loaded successfully");
-      }
-    } catch (error) {
-      console.error("Failed to initialize voice processing models:", error);
-      throw new Error("Voice processing initialization failed");
+      await this.modelManager.initialize();
+      this.models = this.modelManager.getModels();
+      console.log(`Voice processing initialized in ${this.modelManager.getOperatingMode()} mode`);
+    } catch (error: any) {
+      console.error("Failed to initialize voice processing:", error.message);
+      throw new Error(`Voice processing initialization failed: ${error.message}`);
     }
   }
 
@@ -84,27 +55,75 @@ export class VoiceProcessingService {
    * Check if model or acoustic feature extractor is ready for processing
    */
   isReady(): boolean {
-    return true;
+    return this.modelManager.isReady();
   }
 
   /**
-   * Process audio file and extract features
+   * Get operating mode
+   */
+  getOperatingMode(): string {
+    return this.modelManager.getOperatingMode();
+  }
+
+  /**
+   * Get model health status
+   */
+  getHealthStatus() {
+    return this.modelManager.getHealthStatus();
+  }
+
+  /**
+   * Process audio file and extract features (production-grade pipeline)
    */
   async processAudioFile(audioBuffer: Buffer, audioFormat: string): Promise<{
     audioFeatures: AudioFeatures;
     audioArray: Float32Array;
   }> {
     try {
-      // Convert audio to the required format
-      const audioArray = await this.convertAudio(audioBuffer, audioFormat);
+      // Get audio processor
+      const audioProcessor = await getAudioProcessor();
+      
+      // Process audio with production pipeline
+      const processingOptions: AudioProcessingOptions = {
+        targetSampleRate: this.config.targetSampleRate,
+        targetChannels: 1, // Mono for voice
+        normalizeAudio: true,
+        noiseReduction: true,
+        highpassFilter: 80, // Remove low-frequency rumble
+        lowpassFilter: 8000, // Remove high-frequency noise
+        trimSilence: true,
+        silenceThresholdDb: -40,
+      };
+      
+      const processed = await audioProcessor.processAudio(
+        audioBuffer,
+        audioFormat,
+        processingOptions
+      );
       
       // Extract audio features
-      const features = this.extractAudioFeatures(audioArray);
+      const features = this.extractAudioFeatures(processed.audioArray);
       
-      return { audioFeatures: features, audioArray };
-    } catch (error) {
+      // Add processing metadata
+      features.processingMetadata = {
+        appliedFilters: processed.processing.appliedFilters,
+        originalDuration: processed.processing.originalDuration,
+        processedDuration: processed.processing.processedDuration,
+      };
+      
+      return { audioFeatures: features, audioArray: processed.audioArray };
+    } catch (error: any) {
       console.error("Audio processing failed:", error);
-      throw new Error(`Audio processing failed: ${error.message}`);
+      
+      // Fallback to basic processing
+      console.log("Falling back to basic audio conversion");
+      try {
+        const audioArray = await this.convertAudio(audioBuffer, audioFormat);
+        const features = this.extractAudioFeatures(audioArray);
+        return { audioFeatures: features, audioArray };
+      } catch (fallbackError: any) {
+        throw new Error(`Audio processing failed: ${fallbackError.message}`);
+      }
     }
   }
 
@@ -339,9 +358,15 @@ export class VoiceProcessingService {
    * Extract speaker embedding from audio
    */
   async extractSpeakerEmbedding(audioArray: Float32Array): Promise<SpeakerEmbedding> {
-    if (!this.embeddingSession) {
+    const embeddingModel = this.models?.embedding;
+    
+    if (!embeddingModel) {
+      // Fallback to acoustic features
       return this.extractAcousticFeatureEmbedding(audioArray);
     }
+    
+    const startTime = Date.now();
+    let success = false;
     
     try {
       // Prepare input tensor
@@ -350,10 +375,10 @@ export class VoiceProcessingService {
       
       // Run inference
       const feeds = { input: inputTensor }; // Adjust input name based on your model
-      const results = await this.embeddingSession.run(feeds);
+      const results = await embeddingModel.run(feeds);
       
       // Extract embedding vector
-      const outputName = this.embeddingSession.outputNames[0];
+      const outputName = embeddingModel.outputNames[0];
       const outputTensor = results[outputName];
       const embedding = Array.from(outputTensor.data as Float32Array);
       
@@ -366,15 +391,23 @@ export class VoiceProcessingService {
       // Calculate confidence based on embedding magnitude and consistency
       const confidence = this.calculateEmbeddingConfidence(normalizedEmbedding);
       
+      success = true;
+      
       return {
         vector: normalizedEmbedding,
         dimension: normalizedEmbedding.length,
         modelVersion: this.config.embeddingModelName || "ecapa-tdnn-512",
         confidence,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Speaker embedding extraction failed:", error);
-      throw new Error(`Speaker embedding extraction failed: ${error.message}`);
+      
+      // Try fallback to acoustic features
+      console.log("Attempting fallback to acoustic feature extraction");
+      return this.extractAcousticFeatureEmbedding(audioArray);
+    } finally {
+      const duration = Date.now() - startTime;
+      this.modelManager.recordInference("embedding", duration, success);
     }
   }
 
@@ -460,43 +493,52 @@ export class VoiceProcessingService {
   }
 
   /**
-   * Perform anti-spoofing detection
+   * Perform anti-spoofing detection (production-grade)
    */
   async detectSpoofing(audioArray: Float32Array, audioFeatures: AudioFeatures): Promise<AntiSpoofingResult> {
-    if (!this.antiSpoofingSession) {
-      // If no anti-spoofing model, perform basic heuristic checks
-      return this.heuristicSpoofingDetection(audioArray, audioFeatures);
-    }
-    
+    const antiSpoofingService = getAntiSpoofingService({
+      enabled: true,
+      confidenceThreshold: this.config.livenessThreshold,
+      useMultipleDetectors: true,
+      enableSpectralAnalysis: true,
+      enableTemporalAnalysis: true,
+      enableReplayDetection: true,
+      enableDeepfakeDetection: true,
+    });
+
+    const startTime = Date.now();
+    let success = false;
+
     try {
-      // Prepare input for anti-spoofing model
-      const inputTensor = new ort.Tensor("float32", audioArray, [1, audioArray.length]);
-      
-      // Run anti-spoofing detection
-      const feeds = { input: inputTensor };
-      const results = await this.antiSpoofingSession.run(feeds);
-      
-      // Extract spoofing probability
-      const outputName = this.antiSpoofingSession.outputNames[0];
-      const outputTensor = results[outputName];
-      const spoofingProbability = (outputTensor.data as Float32Array)[0];
-      
-      const isSpoofed = spoofingProbability > 0.5;
-      const confidence = Math.abs(spoofingProbability - 0.5) * 2; // Convert to confidence
-      
+      const result: SpoofingDetectionResult = await antiSpoofingService.detectSpoofing(
+        audioArray,
+        this.config.targetSampleRate,
+        audioFeatures
+      );
+
+      success = true;
+
+      // Convert to legacy format
       return {
-        isSpoofed,
-        confidence,
-        spoofingType: isSpoofed ? "synthetic" : undefined,
+        isSpoofed: result.isSpoofed,
+        spoofingType: result.spoofingType,
+        confidence: result.confidence,
         details: {
-          modelScores: {
-            spoofing_probability: spoofingProbability,
-          },
+          spectralAnomalies: result.details.spectralAnomalies,
+          temporalInconsistencies: result.details.temporalInconsistencies,
+          modelScores: result.details.modelScores,
+          suspiciousFeatures: result.details.suspiciousFeatures,
+          riskLevel: result.riskLevel,
+          detectionMethod: result.detectionMethod,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Anti-spoofing detection failed:", error);
+      // Fallback to heuristic detection
       return this.heuristicSpoofingDetection(audioArray, audioFeatures);
+    } finally {
+      const duration = Date.now() - startTime;
+      this.modelManager.recordInference("antiSpoofing", duration, success);
     }
   }
 
@@ -634,23 +676,18 @@ export class VoiceProcessingService {
   }
 
   /**
+   * Get model metrics
+   */
+  getMetrics(): Record<string, any> {
+    return this.modelManager.getMetrics();
+  }
+
+  /**
    * Clean up resources
    */
   async dispose(): Promise<void> {
-    if (this.embeddingSession) {
-      await this.embeddingSession.release();
-      this.embeddingSession = null;
-    }
-    
-    if (this.vadSession) {
-      await this.vadSession.release();
-      this.vadSession = null;
-    }
-    
-    if (this.antiSpoofingSession) {
-      await this.antiSpoofingSession.release();
-      this.antiSpoofingSession = null;
-    }
+    // Models are managed by the model manager singleton
+    console.log("Voice processing service disposed");
   }
 }
 

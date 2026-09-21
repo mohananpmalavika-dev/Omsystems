@@ -349,6 +349,11 @@ export interface AudioFeatures {
   clippingDetected: boolean;
   speechDetected: boolean;
   energyLevel?: number;
+  processingMetadata?: {
+    appliedFilters: string[];
+    originalDuration: number;
+    processedDuration: number;
+  };
 }
 
 export interface SpeakerEmbedding {
@@ -376,6 +381,9 @@ export interface AntiSpoofingResult {
     spectralAnomalies?: string[];
     temporalInconsistencies?: string[];
     modelScores?: Record<string, number>;
+    suspiciousFeatures?: string[];
+    riskLevel?: "low" | "medium" | "high" | "critical";
+    detectionMethod?: string;
   };
 }
 
