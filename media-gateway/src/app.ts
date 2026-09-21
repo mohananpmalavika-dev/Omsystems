@@ -258,6 +258,7 @@ export async function buildMediaGateway(options: {
   interface GatewayTalkSession {
     id: string;
     cameraId: string;
+    cameraNodeId?: string;
     token: string;
     expiresAt: number;
     adapter: string;
@@ -266,8 +267,9 @@ export async function buildMediaGateway(options: {
     bytesSent: number;
     startedAt: number;
     timer: NodeJS.Timeout;
-    onWritePcm?: (pcm: Buffer) => Promise<void>;
-    onClose?: () => Promise<void>;
+    edgeAudioUrl?: string;
+    edgeBearerToken?: string;
+    edgeEndUrl?: string;
   }
   const gatewayTalkSessions = new Map<string, GatewayTalkSession>();
   const gatewayTalkLeases = new Map<string, string>();
@@ -303,27 +305,56 @@ export async function buildMediaGateway(options: {
     const sourceUri = await options.secrets.resolve(consumed.connectionSecretRef);
     if (!sourceUri) throw new GatewayError(503, "stream_secret_unavailable");
 
+    // Forward talk session to edge agent if camera has an edge node
+    let edgeSession: { sessionId: string; audio: { url: string; bearerToken: string; endUrl: string }; adapter: string; codec: string; sampleRate: number } | undefined;
+    if (consumed.cameraNodeId) {
+      const edgeAgent = await options.controlPlane.getEdgeAgentMediaUrl?.(consumed.cameraNodeId);
+      if (edgeAgent?.localMediaUrl) {
+        try {
+          const edgeResponse = await fetch(new URL("/v1/talk/start", edgeAgent.localMediaUrl), {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              ...(options.edgeBridgeSharedKey ? { "x-edge-bridge-key": options.edgeBridgeSharedKey } : {}),
+            },
+            body: JSON.stringify({ controlPlaneToken: body.controlPlaneToken }),
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (edgeResponse.ok) {
+            edgeSession = await edgeResponse.json() as typeof edgeSession;
+          }
+        } catch (error) {
+          app.log.warn("Edge agent talk session unavailable; continuing without edge forwarding", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+    }
+
     const sessionId = consumed.id;
     const token = randomBytes(32).toString("base64url");
     const expiresAt = now + options.accessTtlMs;
-    const adapter = "onvif-rtsp-backchannel";
-    const codec = "PCMA";
-    const sampleRate = 8000;
 
     const session: GatewayTalkSession = {
       id: sessionId,
       cameraId: consumed.cameraId,
+      cameraNodeId: consumed.cameraNodeId,
       token,
       expiresAt,
-      adapter,
-      codec,
-      sampleRate,
+      adapter: edgeSession?.adapter ?? "onvif-rtsp-backchannel",
+      codec: edgeSession?.codec ?? "PCMA",
+      sampleRate: edgeSession?.sampleRate ?? 8000,
       bytesSent: 0,
       startedAt: now,
       timer: setTimeout(() => {
         gatewayTalkSessions.delete(sessionId);
         gatewayTalkLeases.delete(consumed.cameraId);
       }, options.accessTtlMs),
+      ...(edgeSession ? {
+        edgeAudioUrl: edgeSession.audio.url,
+        edgeBearerToken: edgeSession.audio.bearerToken,
+        edgeEndUrl: edgeSession.audio.endUrl,
+      } : {}),
     };
     session.timer.unref();
 
@@ -368,9 +399,30 @@ export async function buildMediaGateway(options: {
         throw new GatewayError(400, "invalid_audio_chunk");
       }
 
-      if (session.onWritePcm) {
-        await session.onWritePcm(pcm);
+      // Forward audio to edge agent if available
+      if (session.edgeAudioUrl && session.edgeBearerToken) {
+        try {
+          const edgeResponse = await fetch(session.edgeAudioUrl, {
+            method: "POST",
+            headers: {
+              "authorization": `Bearer ${session.edgeBearerToken}`,
+              "content-type": "audio/L16;rate=8000;channels=1",
+            },
+            body: pcm,
+            signal: AbortSignal.timeout(5_000),
+          });
+          if (!edgeResponse.ok) {
+            throw new Error(`edge_audio_forward_failed: ${edgeResponse.status}`);
+          }
+        } catch (error) {
+          app.log.error("Failed to forward audio to edge agent", {
+            error: error instanceof Error ? error.message : String(error),
+            sessionId: session.id,
+          });
+          throw new GatewayError(502, "edge_audio_forward_failed");
+        }
       }
+
       session.bytesSent += pcm.length;
       return reply.code(202).send();
     },
@@ -394,9 +446,20 @@ export async function buildMediaGateway(options: {
       clearTimeout(session.timer);
       gatewayTalkSessions.delete(sessionId);
       gatewayTalkLeases.delete(session.cameraId);
-      if (session.onClose) {
-        await session.onClose().catch(() => undefined);
+
+      // Forward end to edge agent if available
+      if (session.edgeEndUrl && session.edgeBearerToken) {
+        try {
+          await fetch(session.edgeEndUrl, {
+            method: "DELETE",
+            headers: { "authorization": `Bearer ${session.edgeBearerToken}` },
+            signal: AbortSignal.timeout(5_000),
+          }).catch(() => undefined); // Best-effort cleanup
+        } catch {
+          // Ignore edge cleanup failures
+        }
       }
+
       return reply.code(204).send();
     },
   });

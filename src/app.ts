@@ -2370,6 +2370,22 @@ export async function buildApp(options?: {
     return session;
   });
 
+  app.get("/internal/edge-agents/:nodeId/media-url", async (request, reply) => {
+    const suppliedKey = request.headers["x-media-gateway-key"];
+    if (
+      typeof suppliedKey !== "string" ||
+      !secureEqual(suppliedKey, mediaGatewaySharedKey)
+    ) {
+      return reply.code(401).send({ error: "invalid_gateway_identity" });
+    }
+    const { nodeId } = z.object({ nodeId: z.string().min(1) }).parse(request.params);
+    const agent = await store.getEdgeAgent(nodeId);
+    if (!agent) {
+      return reply.code(404).send({ error: "edge_agent_not_found" });
+    }
+    return { localMediaUrl: agent.localMediaUrl };
+  });
+
   app.post("/v1/access/check", async (request, reply) => {
     const body = z.object({
       action: z.enum(actions),

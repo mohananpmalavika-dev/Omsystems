@@ -374,4 +374,124 @@ describe("authorized media startup", () => {
     });
     expect(nextStartRes.statusCode).toBe(201);
   });
+
+  it("forwards audio to edge agent when camera has edge node", async () => {
+    let edgeAudioReceived: Buffer | undefined;
+    let edgeSessionDeleted = false;
+    
+    // Mock edge agent HTTP server
+    const edgeAgent = await import("node:http").then(({ createServer }) =>
+      createServer((request, response) => {
+        const edgeAddress = edgeAgent.address();
+        const edgePort = (edgeAddress && typeof edgeAddress !== "string") ? edgeAddress.port : 8091;
+        
+        if (request.method === "POST" && request.url === "/v1/talk/start") {
+          response.writeHead(201, { "content-type": "application/json" });
+          response.end(JSON.stringify({
+            sessionId: "edge-talk-session-1",
+            cameraId: "cam-edge-01",
+            expiresAt: new Date(Date.now() + 30000).toISOString(),
+            adapter: "onvif-rtsp-backchannel",
+            codec: "PCMA",
+            sampleRate: 8000,
+            audio: {
+              url: `http://127.0.0.1:${edgePort}/v1/talk/edge-talk-session-1/audio`,
+              endUrl: `http://127.0.0.1:${edgePort}/v1/talk/edge-talk-session-1`,
+              bearerToken: "edge-bearer-token-123",
+            },
+          }));
+        } else if (request.method === "POST" && request.url?.includes("/audio")) {
+          const chunks: Buffer[] = [];
+          request.on("data", (chunk) => chunks.push(chunk));
+          request.on("end", () => {
+            edgeAudioReceived = Buffer.concat(chunks);
+            response.writeHead(202).end();
+          });
+        } else if (request.method === "DELETE") {
+          edgeSessionDeleted = true;
+          response.writeHead(204).end();
+        } else {
+          response.writeHead(404).end();
+        }
+      })
+    );
+    await new Promise<void>((resolve) => edgeAgent.listen(0, "127.0.0.1", resolve));
+    const edgeAddress = edgeAgent.address();
+    if (!edgeAddress || typeof edgeAddress === "string") throw new Error("edge server unavailable");
+
+    try {
+      const controlPlane: ControlPlaneClient = {
+        consumeLiveSession: vi.fn(async () => ({
+          id: "gateway-talk-session-1",
+          cameraId: "cam-edge-01",
+          cameraNodeId: "edge-node-1",
+          userId: "user-1",
+          tenantId: "tenant-1",
+          purpose: "talk" as const,
+          connectionSecretRef: "secret://cam-edge-01",
+          profiles: [],
+        })),
+        getEdgeAgentMediaUrl: vi.fn(async () => ({
+          localMediaUrl: `http://127.0.0.1:${edgeAddress.port}`,
+        })),
+      };
+
+      app = await buildMediaGateway({
+        controlPlane,
+        router: {
+          ensurePath: vi.fn(async () => undefined),
+          removePath: vi.fn(async () => undefined),
+        },
+        secrets: {
+          resolve: vi.fn(async () => "rtsp://camera:554/live"),
+        },
+        publicHlsBaseUrl: "https://media.example/hls",
+        publicWebRtcBaseUrl: "https://media.example/webrtc",
+        accessTtlMs: 30_000,
+        edgeBridgeSharedKey: "test-bridge-key",
+      });
+
+      // 1. Start talk session - should forward to edge agent
+      const startRes = await app.inject({
+        method: "POST",
+        url: "/v1/talk/start",
+        headers: { "x-edge-bridge-key": "test-bridge-key" },
+        payload: { controlPlaneToken: "a".repeat(43) },
+      });
+      expect(startRes.statusCode).toBe(201);
+      expect(controlPlane.getEdgeAgentMediaUrl).toHaveBeenCalledWith("edge-node-1");
+      
+      const session = startRes.json();
+      expect(session.adapter).toBe("onvif-rtsp-backchannel");
+
+      // 2. Send audio - should be forwarded to edge agent
+      const pcmChunk = Buffer.from(new Int16Array([100, 200, 300, 400]).buffer);
+      const audioRes = await app.inject({
+        method: "POST",
+        url: `/v1/talk/${session.sessionId}/audio`,
+        headers: {
+          authorization: `Bearer ${session.audio.bearerToken}`,
+          "content-type": "audio/L16",
+        },
+        payload: pcmChunk,
+      });
+      expect(audioRes.statusCode).toBe(202);
+      expect(edgeAudioReceived).toEqual(pcmChunk);
+
+      // 3. End session - should forward to edge agent
+      const endRes = await app.inject({
+        method: "DELETE",
+        url: `/v1/talk/${session.sessionId}`,
+        headers: {
+          authorization: `Bearer ${session.audio.bearerToken}`,
+        },
+      });
+      expect(endRes.statusCode).toBe(204);
+      expect(edgeSessionDeleted).toBe(true);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        edgeAgent.close((error) => error ? reject(error) : resolve())
+      );
+    }
+  });
 });
