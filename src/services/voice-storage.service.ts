@@ -234,7 +234,7 @@ export class VoiceStorageService {
     const cipher = createCipheriv(this.config.encryption.algorithm, this.encryptionKey, iv);
 
     const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-    const authTag = cipher.getAuthTag();
+    const authTag = (cipher as any).getAuthTag();
 
     return { data: encrypted, iv, authTag };
   }
@@ -252,7 +252,7 @@ export class VoiceStorageService {
       this.encryptionKey,
       iv
     );
-    decipher.setAuthTag(authTag);
+    (decipher as any).setAuthTag(authTag);
 
     return Buffer.concat([decipher.update(encryptedData), decipher.final()]);
   }

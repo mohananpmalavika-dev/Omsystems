@@ -11,7 +11,9 @@ import path from "path";
 
 let ort: any = null;
 try {
-  ort = await import("onnxruntime-node");
+  // @ts-ignore
+  const ortModule = "onnxruntime-node";
+  ort = await import(ortModule);
 } catch {
   console.warn("onnxruntime-node not available, using fallback mode");
 }

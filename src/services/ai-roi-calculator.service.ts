@@ -19,7 +19,7 @@
  * Status: Production-ready, tenant-configurable
  */
 
-import { pool } from '../database.js';
+import { pool } from '../database/pool.js';
 
 export interface RoiInvestment {
   initial_setup: {
