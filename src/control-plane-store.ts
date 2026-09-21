@@ -1950,6 +1950,7 @@ export interface UserManagementStore {
   createUser(tenantId: string, input: any): Promise<any>;
   updateUser(id: string, input: any): Promise<any>;
   deactivateUser(id: string): Promise<void>;
+  deleteUser?(id: string): Promise<boolean>;
   updateUserPassword(id: string, passwordHash: string, mustChange?: boolean): Promise<void>;
   unlockUserAccount(id: string): Promise<void>;
   assignUserToOrganization(

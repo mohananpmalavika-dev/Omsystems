@@ -89,15 +89,17 @@ const updateUserSchema = z.object({
     (preferences) => !Object.prototype.hasOwnProperty.call(preferences, "menuAccess"),
     "Menu access must be assigned through a role",
   ).optional(),
-  photoUrl: z.string().optional(),
-  avatarUrl: z.string().optional(),
+  photoUrl: z.string().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
   facePhotoBase64: z
     .string()
     .max(2_800_000)
     .regex(/^data:image\/(jpe?g|png|webp);base64,/i, "Invalid employee face photo")
+    .nullable()
     .optional(),
-  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpe?g|png|webp);base64,/i)).min(3).max(7).optional(),
+  facePhotosBase64: z.array(z.string().max(2_800_000).regex(/^data:image\/(jpe?g|png|webp);base64,/i)).min(3).max(7).nullable().optional(),
   faceEnrolled: z.boolean().optional(),
+  removeFace: z.boolean().optional(),
   customRoleId: z.string().uuid().optional().nullable(),
 });
 
@@ -425,7 +427,13 @@ export async function registerUserRoutes(
     }
 
     let updateInput: Record<string, unknown> = body;
-    if (body.facePhotoBase64 || body.facePhotosBase64) {
+    if (body.removeFace || body.facePhotoBase64 === null || body.photoUrl === null) {
+      updateInput = {
+        ...body,
+        profilePhotoUrl: null,
+        removeFace: true,
+      };
+    } else if (body.facePhotoBase64 || body.facePhotosBase64) {
       try {
         updateInput = {
           ...body,
@@ -466,7 +474,7 @@ export async function registerUserRoutes(
       details: {
         userId: id,
         changes: safeChanges,
-        faceVerificationUpdated: Boolean(body.facePhotoBase64),
+        faceVerificationUpdated: Boolean(body.facePhotoBase64 || body.facePhotosBase64 || body.removeFace),
       },
     });
 
@@ -474,7 +482,7 @@ export async function registerUserRoutes(
     return safeUser;
   });
 
-  // Delete user (soft delete)
+  // Delete user (hard delete if unreferenced, or deactivation + credential revocation)
   app.delete("/v1/users/:id", async (request, reply) => {
     const { id } = userIdSchema.parse(request.params);
 
@@ -491,7 +499,12 @@ export async function registerUserRoutes(
       });
     }
 
-    await store.deactivateUser(id);
+    if (typeof (store as any).deleteUser === "function") {
+      await (store as any).deleteUser(id);
+    } else {
+      await store.deactivateUser(id);
+    }
+    invalidateAllInMemorySessionsForUser(id);
 
     await store.writeAudit({
       tenantId: request.currentUser.tenantId,

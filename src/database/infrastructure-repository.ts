@@ -981,6 +981,26 @@ export class InfrastructureRepository {
   }
 
   async updateUser(id: string, input: any) {
+    if (input.removeFace) {
+      await this.pool.query(
+        `UPDATE users
+         SET profile_photo_url = NULL,
+             preferences = COALESCE(preferences, '{}'::jsonb) - 'faceVerification' - 'faceVector' - 'faceProfile' - 'faceVectors' - 'faceEnrolled',
+             updated_at = now()
+         WHERE id = $1`,
+        [id],
+      );
+      if (input.preferences) {
+        delete input.preferences.faceVerification;
+        delete input.preferences.faceVector;
+        delete input.preferences.faceProfile;
+        delete input.preferences.faceVectors;
+        delete input.preferences.faceEnrolled;
+      }
+      if (input.profilePhotoUrl === undefined) {
+        input.profilePhotoUrl = null;
+      }
+    }
     const mapping: Array<[string, unknown, string?]> = [
       ["email", input.email], ["display_name", input.displayName],
       ["phone_number", input.phoneNumber], ["role", input.role, "user_role"],
@@ -1099,9 +1119,51 @@ export class InfrastructureRepository {
 
   async deactivateUser(id: string) {
     await this.pool.query(
-      "UPDATE users SET active=false,status='inactive',updated_at=now() WHERE id=$1",
+      `UPDATE users
+       SET active = false,
+           status = 'inactive',
+           profile_photo_url = NULL,
+           preferences = COALESCE(preferences, '{}'::jsonb) - 'faceVerification' - 'faceVector' - 'faceProfile' - 'faceVectors' - 'faceEnrolled',
+           updated_at = now()
+       WHERE id = $1`,
       [id],
     );
+    await this.pool.query("DELETE FROM user_sessions WHERE user_id = $1::uuid", [id]).catch(() => {});
+    await this.pool.query("DELETE FROM user_organizational_assignments WHERE user_id = $1::uuid", [id]).catch(() => {});
+    await this.pool.query("DELETE FROM access_grants WHERE user_id = $1::uuid", [id]).catch(() => {});
+    await this.pool.query("DELETE FROM user_camera_permissions WHERE user_id = $1::uuid", [id]).catch(() => {});
+    await this.pool.query("DELETE FROM user_device_tokens WHERE user_id = $1::uuid", [id]).catch(() => {});
+    await this.pool.query("DELETE FROM camera_permission_requests WHERE user_id = $1::uuid", [id]).catch(() => {});
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("DELETE FROM user_sessions WHERE user_id = $1::uuid", [id]).catch(() => {});
+      await client.query("DELETE FROM user_organizational_assignments WHERE user_id = $1::uuid", [id]).catch(() => {});
+      await client.query("DELETE FROM access_grants WHERE user_id = $1::uuid", [id]).catch(() => {});
+      await client.query("DELETE FROM user_camera_permissions WHERE user_id = $1::uuid", [id]).catch(() => {});
+      await client.query("DELETE FROM user_device_tokens WHERE user_id = $1::uuid", [id]).catch(() => {});
+      await client.query("DELETE FROM camera_permission_requests WHERE user_id = $1::uuid", [id]).catch(() => {});
+
+      try {
+        const delRes = await client.query("DELETE FROM users WHERE id = $1::uuid", [id]);
+        await client.query("COMMIT");
+        return (delRes.rowCount ?? 0) > 0;
+      } catch (err: any) {
+        // Fall back to deactivation if constrained by audit logs or compliance assessment FKs
+        await client.query("ROLLBACK");
+        await this.deactivateUser(id);
+        return false;
+      }
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      await this.deactivateUser(id).catch(() => {});
+      return false;
+    } finally {
+      client.release();
+    }
   }
 
   async updateUserPassword(id: string, passwordHash: string, mustChange = false) {

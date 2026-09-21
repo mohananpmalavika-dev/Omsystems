@@ -34,6 +34,8 @@ import {
   UserCheck,
   ScanFace,
   Check,
+  X,
+  UserMinus,
   RotateCcw,
   Key,
   Mic,
@@ -239,6 +241,7 @@ export default function OrganizationHierarchyPage() {
   const [empSearchQuery, setEmpSearchQuery] = useState("");
   const [empRoleFilter, setEmpRoleFilter] = useState("all");
   const [empFaceFilter, setEmpFaceFilter] = useState("all");
+  const [empStatusFilter, setEmpStatusFilter] = useState("active");
   const [empCurrentPage, setEmpCurrentPage] = useState(1);
   const EMP_PAGE_SIZE = 10;
 
@@ -1076,8 +1079,12 @@ export default function OrganizationHierarchyPage() {
         designation: editEmpDesignation.trim() || undefined,
         department: editEmpDept.trim() || undefined,
       };
+      const hadPhoto = Boolean(editingEmp.photoUrl || editingEmp.avatarUrl || editingEmp.facePhotoBase64);
       if (editEmpPhotoData && editEmpPhotoData.startsWith("data:image/")) {
         payload.facePhotoBase64 = editEmpPhotoData;
+      } else if (!editEmpPhotoData && hadPhoto) {
+        payload.removeFace = true;
+        payload.facePhotoBase64 = null;
       }
       const res = await fetchWithAuth(`/api/control/v1/users/${editingEmp.id}`, {
         method: "PATCH",
@@ -1130,7 +1137,7 @@ export default function OrganizationHierarchyPage() {
   }
 
   async function handleDeleteEmployee(emp: Employee) {
-    if (!confirm(`Are you sure you want to deactivate and remove employee "${emp.displayName}"?`)) return;
+    if (!confirm(`Are you sure you want to remove employee "${emp.displayName}"? This will revoke all access permissions, biometrics, and active sessions.`)) return;
     setSaving(true);
     setError(null);
     try {
@@ -1141,10 +1148,41 @@ export default function OrganizationHierarchyPage() {
         const errJson = await res.json();
         throw new Error(errJson.message || "Failed to delete employee");
       }
-      setNotice(`Deactivated employee "${emp.displayName}".`);
+      setEmployees((prev) => prev.filter((u) => u.id !== emp.id));
+      setNotice(`Removed employee "${emp.displayName}".`);
       await loadAllData({ tree: false, roles: false, cameras: false });
     } catch (err: any) {
       setError(err.message || "Failed to delete employee");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemoveFaceEnrollment(emp: Employee) {
+    if (!confirm(`Are you sure you want to un-enroll and clear facial biometrics for "${emp.displayName}"?`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetchWithAuth(`/api/control/v1/users/${emp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ removeFace: true, facePhotoBase64: null }),
+      });
+      if (!res.ok) {
+        const errJson = await res.json();
+        throw new Error(errJson.message || "Failed to remove face enrollment");
+      }
+      setNotice(`Removed facial enrollment for "${emp.displayName}".`);
+      setEmployees((prev) =>
+        prev.map((u) =>
+          u.id === emp.id
+            ? { ...u, photoUrl: undefined, avatarUrl: undefined, facePhotoBase64: undefined, faceEnrolled: false }
+            : u
+        )
+      );
+      await loadAllData({ tree: false, roles: false, cameras: false });
+    } catch (err: any) {
+      setError(err.message || "Failed to remove face enrollment");
     } finally {
       setSaving(false);
     }
@@ -1693,6 +1731,8 @@ export default function OrganizationHierarchyPage() {
         {/* TAB 2: Employee Permissions & Roster */}
         {activeTab === "employees" && (() => {
           const filteredEmployees = employees.filter((emp) => {
+            if (empStatusFilter === "active" && (emp.status === "inactive" || (emp as any).active === false)) return false;
+            if (empStatusFilter === "inactive" && emp.status !== "inactive" && (emp as any).active !== false) return false;
             if (empRoleFilter !== "all" && emp.role !== empRoleFilter) return false;
             if (empFaceFilter === "enrolled" && !emp.photoUrl && !emp.avatarUrl && !emp.facePhotoBase64) return false;
             if (empFaceFilter === "pending" && (emp.photoUrl || emp.avatarUrl || emp.facePhotoBase64)) return false;
@@ -1739,7 +1779,7 @@ export default function OrganizationHierarchyPage() {
               </div>
 
               {/* Search and Filters Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2.5 pt-1">
                 <div className="sm:col-span-2 relative">
                   <Search size={14} className="absolute left-3 top-2.5 text-slate-500" />
                   <input
@@ -1760,6 +1800,21 @@ export default function OrganizationHierarchyPage() {
                       &times;
                     </button>
                   )}
+                </div>
+
+                <div>
+                  <select
+                    value={empStatusFilter}
+                    onChange={(e) => {
+                      setEmpStatusFilter(e.target.value);
+                      setEmpCurrentPage(1);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs"
+                  >
+                    <option value="active">Active Employees</option>
+                    <option value="inactive">Deactivated / Removed</option>
+                    <option value="all">All Statuses</option>
+                  </select>
                 </div>
 
                 <div>
@@ -1791,16 +1846,17 @@ export default function OrganizationHierarchyPage() {
                     }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 text-xs"
                   >
-                    <option value="all">All Biometric Statuses</option>
+                    <option value="all">All Biometrics</option>
                     <option value="enrolled">Face Enrolled</option>
                     <option value="pending">Pending Photo</option>
                   </select>
-                  {(empSearchQuery || empRoleFilter !== "all" || empFaceFilter !== "all") && (
+                  {(empSearchQuery || empRoleFilter !== "all" || empFaceFilter !== "all" || empStatusFilter !== "active") && (
                     <button
                       onClick={() => {
                         setEmpSearchQuery("");
                         setEmpRoleFilter("all");
                         setEmpFaceFilter("all");
+                        setEmpStatusFilter("active");
                         setEmpCurrentPage(1);
                       }}
                       className="px-2.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded-lg text-xs transition"
@@ -1883,9 +1939,19 @@ export default function OrganizationHierarchyPage() {
                           </td>
                           <td className="py-3 px-3">
                             {photo ? (
-                              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-mono flex items-center gap-1 w-fit">
-                                <Check size={10} /> Face Enrolled
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-mono flex items-center gap-1 w-fit">
+                                  <Check size={10} /> Face Enrolled
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveFaceEnrollment(emp)}
+                                  className="p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 rounded transition"
+                                  title="Un-enroll face biometrics"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
                             ) : (
                               <span className="px-2 py-0.5 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-mono w-fit">
                                 Pending Photo

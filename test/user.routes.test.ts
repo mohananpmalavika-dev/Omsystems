@@ -251,4 +251,82 @@ describe("user directory route", () => {
       message: "An employee with this login username already exists in this organization.",
     });
   });
+
+  it("calls deleteUser and invalidates sessions on DELETE /v1/users/:id", async () => {
+    const deleteUser = vi.fn().mockResolvedValue(true);
+    const writeAudit = vi.fn().mockResolvedValue(undefined);
+    const targetUserId = "00000000-0000-4000-8000-000000000999";
+    const app = await createApp({
+      deleteUser,
+      getUserDetails: vi.fn().mockResolvedValue({
+        id: targetUserId,
+        tenantId: currentUser.tenantId,
+        role: "operator",
+        organizations: [{ scopeNodeId: "00000000-0000-4000-8000-000000000201", isPrimary: true }],
+      }),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      writeAudit,
+    });
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/v1/users/${targetUserId}`,
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(deleteUser).toHaveBeenCalledWith(targetUserId);
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.deleted",
+        details: { userId: targetUserId },
+      }),
+    );
+  });
+
+  it("clears face biometrics when removeFace is specified on PATCH /v1/users/:id", async () => {
+    const targetUserId = "00000000-0000-4000-8000-000000000888";
+    const updateUser = vi.fn().mockResolvedValue({
+      id: targetUserId,
+      tenantId: currentUser.tenantId,
+      displayName: "Updated User",
+      profilePhotoUrl: null,
+    });
+    const writeAudit = vi.fn().mockResolvedValue(undefined);
+    const app = await createApp({
+      updateUser,
+      getUserDetails: vi.fn().mockResolvedValue({
+        id: targetUserId,
+        tenantId: currentUser.tenantId,
+        role: "operator",
+        organizations: [{ scopeNodeId: "00000000-0000-4000-8000-000000000201", isPrimary: true }],
+      }),
+      checkAccess: vi.fn().mockResolvedValue({ allowed: true }),
+      writeAudit,
+    });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/users/${targetUserId}`,
+      payload: {
+        removeFace: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(updateUser).toHaveBeenCalledWith(
+      targetUserId,
+      expect.objectContaining({
+        removeFace: true,
+        profilePhotoUrl: null,
+      }),
+    );
+    expect(writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "user.updated",
+        details: expect.objectContaining({
+          faceVerificationUpdated: true,
+        }),
+      }),
+    );
+  });
 });
