@@ -35,7 +35,9 @@ fi
 
 if [ -s /opt/sentinel-grid/edge-agent/release/edge-agent.exe ]; then
   echo "--> Ensuring pre-deflated edge agent cache..."
-  node /opt/sentinel-grid/edge-agent/scripts/cache-deflated.mjs /opt/sentinel-grid/edge-agent/release || true
+  if command -v node >/dev/null 2>&1; then
+    node /opt/sentinel-grid/edge-agent/scripts/cache-deflated.mjs /opt/sentinel-grid/edge-agent/release || true
+  fi
 fi
 
 cd /opt/sentinel-grid/deploy/gcp
