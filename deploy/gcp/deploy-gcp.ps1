@@ -170,7 +170,7 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
 
                 Write-Host "Installing release artifacts on $InstanceName from GCS..." -ForegroundColor Cyan
                 & gcloud compute ssh $InstanceName --zone=$Zone --project=$currentProject --quiet `
-                    --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo gcloud storage cp $installerBucket/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile && sudo gcloud storage cp $installerBucket/windows-release.json /opt/sentinel-grid/edge-agent/release/windows-release.json && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
+                    --command="sudo install -d /opt/sentinel-grid/edge-agent/release /opt/sentinel-grid/edge-agent/installer/windows/output && sudo gcloud storage cp $installerBucket/$installerFile /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile && sudo gcloud storage cp $installerBucket/edge-agent.exe /opt/sentinel-grid/edge-agent/release/edge-agent.exe && sudo gcloud storage cp $installerBucket/windows-release.json /opt/sentinel-grid/edge-agent/release/windows-release.json && sudo chmod 644 /opt/sentinel-grid/edge-agent/release/* /opt/sentinel-grid/edge-agent/installer/windows/output/$installerFile"
                 Assert-LastNativeCommandSucceeded "Installing the Edge Agent release artifacts on the VM"
                 Write-Host "✅ Edge Agent release binary and manifest uploaded and installed." -ForegroundColor Green
             } else {
