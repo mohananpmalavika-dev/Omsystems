@@ -254,10 +254,12 @@ services:
       MODELS_DIR: /app/models
       ANALYTICS_REQUIRE_MODELS: "true"
       FACE_RECOGNITION_ENABLED: "true"
+      # ArcFace model — downloaded from GCS by startup-script.sh before container starts
+      ARCFACE_MODEL_PATH: /app/models/face/arcface_r100.onnx
     ports:
       - "8092:8092"
     volumes:
-      - ../../analytics-engine/models/manifest.json:/app/models/manifest.json:ro
+      - /opt/sentinel-grid/analytics-engine/models:/app/models:ro
     mem_limit: 4096m
     memswap_limit: 6144m
     depends_on:

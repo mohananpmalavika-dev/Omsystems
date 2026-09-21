@@ -74,6 +74,21 @@ for migration in $(ls -1v /opt/sentinel-grid/database/migrations/*.sql 2>/dev/nu
     docker exec -i sentinel-gcp-postgres psql -U sentinel_admin -d sentinel_grid -c "INSERT INTO schema_migrations (filename, checksum) VALUES ('$m_name', 'startup') ON CONFLICT (filename) DO NOTHING;" > /dev/null 2>&1 || true
 done
 
+# Download ArcFace model from GCS (too large for Git / Docker image)
+ARCFACE_MODEL_DIR="/opt/sentinel-grid/analytics-engine/models/face"
+ARCFACE_MODEL_PATH="$ARCFACE_MODEL_DIR/arcface_r100.onnx"
+ARCFACE_GCS_URI="gs://kryptovision-installer-7866fc3f/models/arcface_r100.onnx"
+
+mkdir -p "$ARCFACE_MODEL_DIR"
+if [ ! -f "$ARCFACE_MODEL_PATH" ]; then
+    echo "=== Downloading ArcFace model from GCS (~249 MB) ==="
+    gsutil -q cp "$ARCFACE_GCS_URI" "$ARCFACE_MODEL_PATH" && \
+        echo "✅ ArcFace model downloaded successfully." || \
+        echo "⚠️  ArcFace model download failed — face recognition will be unavailable."
+else
+    echo "=== ArcFace model already present. Skipping download. ==="
+fi
+
 # Build and start remaining services
 echo "=== Building application microservices ==="
 docker compose -f docker-compose.gcp.yml build
