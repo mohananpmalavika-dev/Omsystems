@@ -1367,7 +1367,7 @@ export class InfrastructureRepository {
       `INSERT INTO user_sessions (
          user_id,tenant_id,access_token_hash,refresh_token_hash,ip_address,
          user_agent,access_expires_at,expires_at
-       ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '1 hour',now()+interval '30 days')
+      ) VALUES ($1,$2,$3,$4,$5,$6,now()+interval '30 minutes',now()+interval '30 days')
        RETURNING id::text,user_id::text,tenant_id::text,access_expires_at,expires_at`,
       [resolvedUserId, resolvedTenantId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],
     );
@@ -1376,9 +1376,10 @@ export class InfrastructureRepository {
 
   async findSessionByAccessToken(tokenHash: string) {
     const result = await this.pool.query(
-      `SELECT id::text,user_id::text,tenant_id::text,access_expires_at,expires_at
+      `SELECT id::text,user_id::text,tenant_id::text,access_expires_at,expires_at,last_activity_at
        FROM user_sessions
-       WHERE access_token_hash=$1 AND access_expires_at>now() AND expires_at>now()`,
+       WHERE access_token_hash=$1 AND access_expires_at>now() AND expires_at>now()
+         AND last_activity_at > now()-interval '1 hour'`,
       [tokenHash],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
@@ -1386,8 +1387,10 @@ export class InfrastructureRepository {
 
   async findSessionByRefreshToken(tokenHash: string) {
     const result = await this.pool.query(
-      `SELECT id::text,user_id::text,tenant_id::text,access_expires_at,expires_at
-       FROM user_sessions WHERE refresh_token_hash=$1 AND expires_at>now()`,
+      `SELECT id::text,user_id::text,tenant_id::text,access_expires_at,expires_at,last_activity_at
+       FROM user_sessions
+       WHERE refresh_token_hash=$1 AND expires_at>now()
+         AND last_activity_at > now()-interval '1 hour'`,
       [tokenHash],
     );
     return result.rows[0] ? camelRow(result.rows[0]) : undefined;
@@ -1401,7 +1404,7 @@ export class InfrastructureRepository {
   ) {
     await this.pool.query(
       `UPDATE user_sessions SET access_token_hash=$2,
-         access_expires_at=now()+interval '1 hour',last_activity_at=now(),
+         access_expires_at=now()+interval '30 minutes',last_activity_at=now(),
          ip_address=COALESCE($3,ip_address),user_agent=COALESCE($4,user_agent)
        WHERE id=$1`,
       [sessionId, newTokenHash, ipAddress ?? null, userAgent ?? null],
@@ -1417,7 +1420,7 @@ export class InfrastructureRepository {
   ) {
     await this.pool.query(
       `UPDATE user_sessions SET access_token_hash=$2,refresh_token_hash=$3,
-         access_expires_at=now()+interval '1 hour',last_activity_at=now(),
+         access_expires_at=now()+interval '30 minutes',last_activity_at=now(),
          ip_address=COALESCE($4,ip_address),user_agent=COALESCE($5,user_agent)
        WHERE id=$1`,
       [sessionId, accessTokenHash, refreshTokenHash, ipAddress ?? null, userAgent ?? null],

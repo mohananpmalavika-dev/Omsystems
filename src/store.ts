@@ -1257,7 +1257,7 @@ export class MemoryStore {
       refreshTokenHash,
       ipAddress,
       userAgent,
-      accessExpiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+      accessExpiresAt: new Date(now.getTime() + 30 * 60 * 1000),
       expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
       lastActivityAt: now,
       createdAt: now,
@@ -1275,7 +1275,7 @@ export class MemoryStore {
   async findSessionByAccessToken(tokenHash: string) {
     const now = new Date();
     for (const session of this.userSessions.values()) {
-      if (session.accessTokenHash === tokenHash && session.accessExpiresAt > now && session.expiresAt > now) {
+      if (session.accessTokenHash === tokenHash && session.accessExpiresAt > now && session.expiresAt > now && session.lastActivityAt.getTime() > now.getTime() - 60 * 60 * 1000) {
         return { ...session };
       }
     }
@@ -1285,7 +1285,7 @@ export class MemoryStore {
   async findSessionByRefreshToken(tokenHash: string) {
     const now = new Date();
     for (const session of this.userSessions.values()) {
-      if (session.refreshTokenHash === tokenHash && session.expiresAt > now) {
+      if (session.refreshTokenHash === tokenHash && session.expiresAt > now && session.lastActivityAt.getTime() > now.getTime() - 60 * 60 * 1000) {
         return { ...session };
       }
     }
@@ -1301,7 +1301,7 @@ export class MemoryStore {
     const session = this.userSessions.get(sessionId);
     if (session) {
       session.accessTokenHash = newTokenHash;
-      session.accessExpiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      session.accessExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
       session.lastActivityAt = new Date();
       if (ipAddress) session.ipAddress = ipAddress;
       if (userAgent) session.userAgent = userAgent;

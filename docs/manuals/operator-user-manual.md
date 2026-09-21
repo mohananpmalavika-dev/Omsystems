@@ -86,7 +86,7 @@ All authorized operators, investigators, branch supervisors, and administrators.
 6. Click **Sign In**.
 
 ### Session Lifespan & Expiry
-* **Idle Timeout:** Sessions automatically invalidate after 30 minutes of inactivity.
+* **Idle Timeout:** Sessions automatically invalidate after 1 hour of inactivity.
 * **Token Refresh:** Sessions are backed by secure HTTP-only cookies and JWT refresh mechanisms.
 * **Concurrent Logins:** If another user signs in with your credentials, the prior session will terminate immediately with a notification: `Your session has expired. Please sign in again.`
 
