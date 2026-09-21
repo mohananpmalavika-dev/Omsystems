@@ -141,4 +141,16 @@ describe("Windows scanner installer resilience", () => {
     expect(source).toContain('$previousErrorActionPreference = $ErrorActionPreference');
     expect(source).toContain('$ErrorActionPreference = "Continue"');
   });
+
+  it("uses distinct exit codes for rejected activations so transient failures can retry", async () => {
+    const source = await readFile("edge-agent/src/index.ts", "utf8");
+    const installer = await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8");
+
+    expect(source).toContain('message.includes("activation_invalid_or_expired")');
+    expect(source).toContain("process.exit(41)");
+    expect(source).toContain('message.includes("device_already_enrolled")');
+    expect(source).toContain("process.exit(42)");
+    expect(installer).toContain("ActivationInvalidExitCode = 41;");
+    expect(installer).toContain("DeviceAlreadyEnrolledExitCode = 42;");
+  });
 });

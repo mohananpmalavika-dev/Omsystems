@@ -16,6 +16,24 @@ describe("secure edge gateway operations", () => {
     await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { recursive: true, force: true })));
   });
 
+  it("keeps a newly issued gateway activation available for the full installation day by default", async () => {
+    const store = testStore();
+    const app = await buildApp({ store, controlPlanePublicUrl: "https://control.example" });
+    apps.push(app);
+    const before = Date.now();
+
+    const response = await app.inject({
+      method: "POST", url: "/v1/branches/branch-blr-001/edge-activations",
+      headers: { "x-user-id": "user-global-admin" },
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(201);
+    const expiresInMs = Date.parse(response.json().expiresAt) - before;
+    expect(expiresInMs).toBeGreaterThan(23 * 60 * 60_000);
+    expect(expiresInMs).toBeLessThanOrEqual((24 * 60 * 60_000) + 60_000);
+  });
+
   it("consumes a one-time activation and authenticates with a unique revocable credential", async () => {
     const store = testStore();
     const app = await buildApp({ store, controlPlanePublicUrl: "https://control.example" });

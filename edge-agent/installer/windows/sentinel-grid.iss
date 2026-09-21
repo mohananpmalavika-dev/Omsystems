@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.25
+AppVersion=0.1.26
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.25-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.26-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -61,6 +61,8 @@ const
   LegacyServiceName = 'SentinelGridEdgeAgent';
   FirewallRuleName = 'Sentinel Grid Private Live Video';
   ControlPlaneUrl = 'https://sentinel-grid-control-plane-zcli.onrender.com';
+  ActivationInvalidExitCode = 41;
+  DeviceAlreadyEnrolledExitCode = 42;
 
 var
   BranchNamePage: TInputQueryWizardPage;
@@ -95,6 +97,25 @@ begin
   Result := AddBackslash(AppPath) + 'config\edge-agent.env';
 end;
 
+function ConfigurationValue(const Filename, Key: String): String;
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+  Prefix: String;
+begin
+  Result := '';
+  if not LoadStringsFromFile(Filename, Lines) then Exit;
+  Prefix := Key + '=';
+  for Index := 0 to GetArrayLength(Lines) - 1 do begin
+    if Pos(Prefix, Lines[Index]) = 1 then begin
+      Result := Trim(Copy(Lines[Index], Length(Prefix) + 1, MaxInt));
+      if (Length(Result) >= 2) and (Result[1] = '"') and (Result[Length(Result)] = '"') then
+        Result := Copy(Result, 2, Length(Result) - 2);
+      Exit;
+    end;
+  end;
+end;
+
 function HasCompleteDeviceIdentity: Boolean;
 var
   DataPath: String;
@@ -102,6 +123,30 @@ begin
   DataPath := AddBackslash(AppPath) + 'data\';
   Result := FileExists(DataPath + 'device-identity.enc') and
     FileExists(DataPath + 'device-identity.key');
+end;
+
+function HasManagedGatewayCredential: Boolean;
+var
+  BranchId: String;
+  AgentId: String;
+  BridgeKey: String;
+begin
+  // Dashboard-issued installer packages use a branch-scoped agent id plus a
+  // protected bridge credential. That is already a durable authentication
+  // method; only activation-code packages create a local device identity.
+  if not FileExists(ConfigPath) then begin
+    Result := False;
+    Exit;
+  end;
+  BranchId := ConfigurationValue(ConfigPath, 'BRANCH_ID');
+  AgentId := ConfigurationValue(ConfigPath, 'EDGE_AGENT_ID');
+  BridgeKey := ConfigurationValue(ConfigPath, 'EDGE_BRIDGE_SHARED_KEY');
+  Result := (BranchId <> '') and (AgentId <> '') and (Length(BridgeKey) >= 32);
+end;
+
+function HasPersistentGatewayCredential: Boolean;
+begin
+  Result := HasCompleteDeviceIdentity or HasManagedGatewayCredential;
 end;
 
 function DetectExistingInstall: Boolean;
@@ -155,22 +200,8 @@ begin
 end;
 
 function PackageConfigValue(const Key: String): String;
-var
-  Lines: TArrayOfString;
-  Index: Integer;
-  Prefix: String;
 begin
-  Result := '';
-  if not LoadStringsFromFile(PackageConfigPath, Lines) then Exit;
-  Prefix := Key + '=';
-  for Index := 0 to GetArrayLength(Lines) - 1 do begin
-    if Pos(Prefix, Lines[Index]) = 1 then begin
-      Result := Trim(Copy(Lines[Index], Length(Prefix) + 1, MaxInt));
-      if (Length(Result) >= 2) and (Result[1] = '"') and (Result[Length(Result)] = '"') then
-        Result := Copy(Result, 2, Length(Result) - 2);
-      Exit;
-    end;
-  end;
+  Result := ConfigurationValue(PackageConfigPath, Key);
 end;
 
 procedure LoadPackageDefaults;
@@ -271,10 +302,10 @@ begin
   ActivationPage.Add('Activation Code:', False);
   if UsePackageConfiguration then begin
     LoadPackageDefaults;
-    // A package activation is single-use. If an earlier enrollment did not
-    // create a device identity, never prefill that same activation on retry.
+    // A package activation is single-use. If an earlier activation did not
+    // create a durable credential, never prefill that same code on retry.
     // Keep the packaged branch/server defaults, but require a fresh code.
-    if ExistingInstall and not HasCompleteDeviceIdentity then
+    if ExistingInstall and not HasPersistentGatewayCredential then
       ActivationPage.Values[0] := '';
   end;
 end;
@@ -282,10 +313,10 @@ end;
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   // A directory left by a failed enrollment is not an enrolled installation.
-  // In that case either load the fresh package configuration or ask for a new
-  // activation code instead of silently reusing the consumed/expired code.
+  // A dashboard-managed package is durable when its protected branch credential
+  // is present, even though it does not create an activation-code identity.
   Result := ((UsePackageConfiguration and not ExistingInstall) or
-    (ExistingInstall and HasCompleteDeviceIdentity)) and
+    (ExistingInstall and HasPersistentGatewayCredential)) and
     ((PageID = BranchNamePage.ID) or (PageID = ActivationPage.ID));
 end;
 
@@ -296,7 +327,7 @@ var
 begin
   Result := True;
   if (UsePackageConfiguration and not ExistingInstall) or
-    (ExistingInstall and HasCompleteDeviceIdentity) then Exit;
+    (ExistingInstall and HasPersistentGatewayCredential) then Exit;
 
   if CurPageID = BranchNamePage.ID then begin
     BranchName := Trim(BranchNamePage.Values[0]);
@@ -361,7 +392,7 @@ begin
   if UsePackageConfiguration and not ExistingInstall then begin
     if not CopyFile(PackageConfigPath, ConfigPath, False) then
       RaiseException('The branch configuration from the installer package could not be saved.');
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.25');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.26');
     UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
     UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
     UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
@@ -373,7 +404,7 @@ begin
     'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
-    'EDGE_AGENT_VERSION="0.1.25"' + #13#10 +
+    'EDGE_AGENT_VERSION="0.1.26"' + #13#10 +
     'EDGE_IDENTITY_PATH="' + DataPath + '/device-identity.enc"' + #13#10 +
     'EDGE_IDENTITY_KEY_PATH="' + DataPath + '/device-identity.key"' + #13#10 +
     'EDGE_OFFLINE_OUTBOX_PATH="' + DataPath + '/offline-outbox.enc"' + #13#10 +
@@ -467,41 +498,78 @@ begin
     'Unable to start the Sentinel Grid Edge Agent', True);
 end;
 
-procedure ValidateNewEnrollment;
+function RunNativeResult(const Filename, Parameters: String): Integer;
+var
+  ResultCode: Integer;
+begin
+  if not Exec(Filename, Parameters, AppPath, SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    RaiseException('Unable to start the Edge Agent enrollment check.');
+  Result := ResultCode;
+end;
+
+function ValidateNewEnrollment: Boolean;
 var
   ProgramPath: String;
   Arguments: String;
+  ResultCode: Integer;
 begin
   ProgramPath := AddBackslash(AppPath) + 'edge-agent.exe';
   Arguments := '--config "' + ConfigPath + '" --diagnose';
-  RunNative(ProgramPath, Arguments,
-    'The Edge Agent could not enroll with KryptonVision. Download a fresh Repair package and run it before its activation expires', True);
-  if not HasCompleteDeviceIdentity then
-    RaiseException('The Edge Agent enrollment did not create a protected device identity. Download a fresh Repair package and try again.');
+  ResultCode := RunNativeResult(ProgramPath, Arguments);
+  if ResultCode = 0 then begin
+    if not HasPersistentGatewayCredential then
+      RaiseException('The Edge Agent authenticated but did not retain a durable gateway credential.');
+    Result := True;
+    Exit;
+  end;
+
+  // The control plane can accept activation and then have the first heartbeat
+  // fail. The identity is written before that heartbeat, so preserve it and
+  // let the startup task retry instead of falsely requiring a Repair package.
+  if HasPersistentGatewayCredential then begin
+    Log('Initial enrollment completed but the diagnostic heartbeat was unavailable; continuing with automatic retry.');
+    Result := False;
+    Exit;
+  end;
+
+  if ResultCode = ActivationInvalidExitCode then
+    RaiseException('The one-time gateway activation is invalid, expired, or already used. Create one fresh activation in Sentinel Grid and run its matching installer package.');
+  if ResultCode = DeviceAlreadyEnrolledExitCode then
+    RaiseException('This computer is already enrolled with another gateway identity. Use that gateway''s Repair package or remove the previous Edge Agent installation first.');
+
+  // Connectivity and server-side transient errors must not strand a newly
+  // installed gateway. Its startup task retains the protected configuration
+  // and retries enrollment after the network or control plane recovers.
+  Log('Initial enrollment could not reach the control plane (exit code ' + IntToStr(ResultCode) + '); scheduling automatic retry.');
+  Result := False;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  HadCompleteIdentity: Boolean;
+  HadPersistentGatewayCredential: Boolean;
+  EnrollmentConfirmed: Boolean;
 begin
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
   UnpackRuntime;
-  HadCompleteIdentity := HasCompleteDeviceIdentity;
-  if HadCompleteIdentity and FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.25')
+  HadPersistentGatewayCredential := HasPersistentGatewayCredential;
+  if HadPersistentGatewayCredential and FileExists(ConfigPath) then
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.26')
   else
     WriteFreshConfig;
   ProtectConfigFile;
-  if not HadCompleteIdentity then
-    ValidateNewEnrollment;
+  EnrollmentConfirmed := HadPersistentGatewayCredential;
+  if not HadPersistentGatewayCredential then
+    EnrollmentConfirmed := ValidateNewEnrollment;
   ConfigureFirewall;
   RegisterAgentTask;
+  if not EnrollmentConfirmed then
+    MsgBox('Sentinel Grid Edge Agent is installed and will retry enrollment automatically when the network and control plane are reachable. Keep this installer package on the branch PC until the dashboard shows the gateway online.', mbInformation, MB_OK);
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.25' + #13#10 +
+    'Version: 0.1.26' + #13#10 +
     'Installer: Native Windows', False);
 end;
 

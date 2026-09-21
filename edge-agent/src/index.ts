@@ -84,7 +84,7 @@ if (installEnvironmentFile && (
   process.exit(0);
 }
 if (hasArgument(argv, "--version")) {
-  process.stdout.write("Sentinel Grid Edge Agent 0.1.25\n");
+  process.stdout.write("Sentinel Grid Edge Agent 0.1.26\n");
   process.exit(0);
 }
 
@@ -1599,5 +1599,11 @@ if (!importedAsApplicationPatch && process.env.SENTINEL_EDGE_IMPORT_ONLY !== "1"
   // setting exitCode can leave the process alive forever when a managed child
   // (MediaMTX/Cloudflared) still owns an open handle, preventing automatic
   // restart after networking returns.
+  // The native Windows installer must distinguish a permanently rejected
+  // one-time activation from a temporary control-plane/network failure. Its
+  // startup task safely retries the latter, while the former needs a fresh
+  // dashboard-issued activation and must remain visible to the installer.
+  if (message.includes("activation_invalid_or_expired")) process.exit(41);
+  if (message.includes("device_already_enrolled")) process.exit(42);
   process.exit(1);
 });

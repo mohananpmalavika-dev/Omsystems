@@ -61,7 +61,10 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!(await requireDeviceAccess(request, reply, store, branchId))) return;
     const body = z.object({
       agentName: z.string().trim().min(2).max(120).default("Sentinel Branch Gateway"),
-      ttlMinutes: z.number().int().min(5).max(1440).default(60),
+      // An installer can be downloaded before the branch PC is online. Keep
+      // the one-time code usable through a normal installation window while
+      // retaining the existing 24-hour hard limit and single-use semantics.
+      ttlMinutes: z.number().int().min(5).max(1440).default(1440),
     }).parse(request.body ?? {});
     if (options.requireManagedTunnel && !options.tunnelProvider) {
       return reply.code(503).send({

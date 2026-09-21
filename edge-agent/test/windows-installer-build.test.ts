@@ -34,7 +34,7 @@ describe("Native Windows installer release build", () => {
     expect(installer).toContain("schtasks.exe");
     expect(installer).toContain("netsh.exe");
     expect(installer).toContain("StopOldAgent");
-    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.25')");
+    expect(installer).toContain("UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.26')");
   });
 
   it("does not expand the app folder before Inno Setup initializes it", async () => {
@@ -67,18 +67,22 @@ describe("Native Windows installer release build", () => {
     expect(installer).not.toContain('/TR "');
   });
 
-  it("replaces a stale activation after an incomplete installation and verifies enrollment", async () => {
+  it("handles activation retries without rejecting dashboard-managed credentials", async () => {
     const installer = (await readFile("edge-agent/installer/windows/sentinel-grid.iss", "utf8")).replace(/\r\n/g, "\n");
 
     expect(installer).toContain("function HasCompleteDeviceIdentity: Boolean;");
-    expect(installer).toContain("if ExistingInstall and not HasCompleteDeviceIdentity then\n      ActivationPage.Values[0] := '';");
+    expect(installer).toContain("function HasManagedGatewayCredential: Boolean;");
+    expect(installer).toContain("function HasPersistentGatewayCredential: Boolean;");
+    expect(installer).toContain("if ExistingInstall and not HasPersistentGatewayCredential then\n      ActivationPage.Values[0] := '';");
     expect(installer).toContain("UsePackageConfiguration and not ExistingInstall");
-    expect(installer).toContain("ExistingInstall and HasCompleteDeviceIdentity");
-    expect(installer).toContain("HadCompleteIdentity := HasCompleteDeviceIdentity;");
-    expect(installer).toContain("if HadCompleteIdentity and FileExists(ConfigPath) then");
-    expect(installer).toContain("if not HadCompleteIdentity then\n    ValidateNewEnrollment;");
+    expect(installer).toContain("ExistingInstall and HasPersistentGatewayCredential");
+    expect(installer).toContain("HadPersistentGatewayCredential := HasPersistentGatewayCredential;");
+    expect(installer).toContain("if HadPersistentGatewayCredential and FileExists(ConfigPath) then");
+    expect(installer).toContain("EnrollmentConfirmed := ValidateNewEnrollment;");
     expect(installer).toContain("--diagnose");
-    expect(installer).toContain("if not HasCompleteDeviceIdentity then");
+    expect(installer).toContain("ActivationInvalidExitCode = 41;");
+    expect(installer).toContain("scheduling automatic retry");
+    expect(installer).toContain("will retry enrollment automatically");
     expect(installer).not.toContain("Result := (UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity))");
     expect(installer).not.toContain("if UsePackageConfiguration or (ExistingInstall and HasCompleteDeviceIdentity) then Exit;");
     expect(installer).not.toContain("if ExistingInstall or FileExists(ConfigPath) then");
