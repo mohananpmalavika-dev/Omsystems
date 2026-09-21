@@ -1,0 +1,5 @@
+2026/09/21 22:11:17 INF MediaMTX v1.17.1, windows, amd64
+2026/09/21 22:11:17 INF configuration loaded from C:\Omsystems\scratch\mediamtx-live-hotfix.yml
+2026/09/21 22:11:17 INF [HLS] listener opened on 127.0.0.1:8888
+2026/09/21 22:11:17 INF [WebRTC] listener opened on 127.0.0.1:8889 (HTTP), :8189 (ICE/UDP)
+2026/09/21 22:11:17 INF [API] listener opened on 127.0.0.1:9997

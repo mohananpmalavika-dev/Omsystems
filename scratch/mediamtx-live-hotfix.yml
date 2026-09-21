@@ -1,0 +1,35 @@
+logLevel: info
+api: yes
+apiAddress: 127.0.0.1:9997
+authMethod: http
+authHTTPAddress: http://127.0.0.1:8090/internal/mediamtx/auth
+authHTTPExclude:
+  - action: api
+  - action: metrics
+  - action: pprof
+hls: yes
+hlsAddress: 127.0.0.1:8888
+# Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
+hlsVariant: fmp4
+hlsAllowOrigins: ['*']
+hlsSegmentCount: 5
+hlsSegmentDuration: 2s
+hlsPartDuration: 500ms
+rtsp: no
+rtmp: no
+webrtc: yes
+webrtcAddress: 127.0.0.1:8889
+srt: no
+srtAddress: 127.0.0.1:8890
+# UDP/RTP multicast is configured per source path (udp+rtp:// or
+# udp+mpegts://). It is intentionally not exposed as a public listener.
+pathDefaults:
+  sourceOnDemand: yes
+  sourceOnDemandStartTimeout: 15s
+  sourceOnDemandCloseAfter: 120s
+  # Raised from the MediaMTX default (6) to tolerate IP cameras that emit
+  # heavily B-frame-reordered H.264 streams (28+ frames observed in the field).
+  # Without this limit the HLS muxer is destroyed mid-session causing a
+  # context-canceled error through the Cloudflare tunnel and a spurious CORS
+  # failure in the browser.
+paths: {}
