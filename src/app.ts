@@ -126,6 +126,7 @@ import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
 import { registerP0ControlPlaneRoutes } from "./routes/p0-control-plane.routes.js";
 import { registerLocalAiAnalyticsRoutes } from "./routes/local-ai-analytics.routes.js";
+import { registerAiAnalyticsDashboardRoutes } from "./routes/ai-analytics-dashboard.routes.js";
 import { registerPortableCameraRoutes } from "./routes/portable-camera.routes.js";
 import { PortableCameraRepository } from "./portable-camera/portable-camera-repository.js";
 import { PortableCameraLeaseManager } from "./ha/services/portable-camera-lease-manager.service.js";
@@ -3161,6 +3162,14 @@ export async function buildApp(options?: {
     app.log.info('Local open-source AI analytics routes registered (100% Free / Zero Cloud Billing)');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register local AI analytics routes');
+  }
+
+  // Register AI Analytics Dashboard (ROI Calculator & Comparison Tool) routes
+  try {
+    await registerAiAnalyticsDashboardRoutes(app);
+    app.log.info('AI Analytics Dashboard routes registered (ROI Calculator & Comparison Tool)');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register AI analytics dashboard routes');
   }
 
   // Register NBFC Enhancement Routes
