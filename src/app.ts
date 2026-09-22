@@ -1687,6 +1687,10 @@ export async function buildApp(options?: {
       recorderId: z.string().trim().min(1).max(200).optional(),
       recorderChannel: z.number().int().min(1).max(65_535).optional(),
       recorderSerialNumber: z.string().trim().max(120).optional(),
+      storageTier: z.enum(["auto", "sd_card", "dvr_hdd", "online_cloud"]).optional(),
+      retentionDays: z.number().int().min(1).max(3650).optional(),
+      recordingMode: z.enum(["continuous", "motion", "events", "disabled"]).optional(),
+      storageLocationName: z.string().trim().max(120).optional(),
     }).parse(request.body);
     const isPortable = [
       "laptop-camera", "usb-webcam", "usb-capture-card",
@@ -1749,7 +1753,32 @@ export async function buildApp(options?: {
     if (!camera) {
       return reply.code(parsed.discoveryId ? 404 : 400).send({ error: parsed.discoveryId ? "discovery_not_found" : "manual_registration_failed" });
     }
-    await store.upsertRecordingJob(camera.id, initialRecordingJobForSource(parsed.sourceType));
+    const initialJob = initialRecordingJobForSource(parsed.sourceType);
+    if (parsed.recordingMode) {
+      if (parsed.recordingMode === "disabled") {
+        initialJob.enabled = false;
+      } else {
+        initialJob.mode = parsed.recordingMode === "events" ? "event" : parsed.recordingMode;
+        initialJob.enabled = true;
+      }
+    }
+    if (parsed.retentionDays) {
+      initialJob.retentionDays = parsed.retentionDays;
+      initialJob.hotRetentionDays = Math.min(parsed.retentionDays, 30);
+      initialJob.warmRetentionDays = Math.min(parsed.retentionDays, 60);
+      initialJob.coldRetentionDays = Math.min(parsed.retentionDays, 90);
+    }
+    if (parsed.storageTier) {
+      if (parsed.storageTier === "dvr_hdd") {
+        initialJob.primaryRecordingStorage = "recorder-local";
+      } else {
+        initialJob.primaryRecordingStorage = "sentinel-local";
+      }
+      if (parsed.storageTier === "online_cloud") {
+        initialJob.cloudArchivePolicy = "incident-evidence-only";
+      }
+    }
+    await store.upsertRecordingJob(camera.id, initialJob);
     try {
       await ensureCameraAiBundle(store, request.currentUser.tenantId, camera.id, request.currentUser.id);
     } catch {
@@ -1760,6 +1789,10 @@ export async function buildApp(options?: {
       registrationMethod: parsed.discoveryId ? "discovery" : "manual",
       connectionTransport: connectionTransport ?? "unspecified",
       sourceType: parsed.sourceType,
+      storageTier: parsed.storageTier ?? "auto",
+      retentionDays: parsed.retentionDays ?? initialJob.retentionDays,
+      recordingMode: parsed.recordingMode ?? initialJob.mode,
+      storageLocationName: parsed.storageLocationName,
     });
     return reply.code(201).send(safeCamera(camera));
   });
