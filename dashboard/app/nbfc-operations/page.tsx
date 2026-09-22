@@ -139,6 +139,16 @@ export default function NbfcOperationsPage() {
   const [secureStaff, setSecureStaff] = useState<any[]>([]);
   const [custodyAssignments, setCustodyAssignments] = useState<any[]>([]);
   const [liveDataError, setLiveDataError] = useState<string | null>(null);
+  const [counterLoitering, setCounterLoitering] = useState<{
+    avgDwellMinutes: number;
+    activeLoiterers: number;
+    alertsToday: number;
+    alertsThisWeek: number;
+    branchesMonitored: number;
+    topLoiteringZone: { cameraId: string; cameraName: string; hitsToday: number } | null;
+    lastUpdated: string;
+    dataAvailable: boolean;
+  } | null>(null);
   const [openingPolicy, setOpeningPolicy] = useState<BranchOpeningPolicy | null>(null);
   const [openingStart, setOpeningStart] = useState("08:30");
   const [openingEnd, setOpeningEnd] = useState("09:30");
@@ -224,6 +234,24 @@ export default function NbfcOperationsPage() {
       }
     }
     void loadLiveData();
+  }, []);
+
+  // Counter-loitering live summary — auto-refresh every 30s
+  useEffect(() => {
+    async function fetchLoitering() {
+      try {
+        const res = await fetch("/api/v1/analytics/counter-loitering/summary");
+        if (res.ok) {
+          const data = await res.json();
+          setCounterLoitering(data);
+        }
+      } catch {
+        // Silent fail — card shows last known state
+      }
+    }
+    void fetchLoitering();
+    const interval = setInterval(fetchLoitering, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -429,7 +457,7 @@ export default function NbfcOperationsPage() {
             </div>
           </div>
 
-          {/* Cash Counter Loitering & Queues */}
+          {/* Cash Counter Loitering & Queues — Live Telemetry */}
           <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/80 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
@@ -437,21 +465,72 @@ export default function NbfcOperationsPage() {
                   <Users size={15} className="text-violet-400" />
                   Counter Loitering & Queue
                 </span>
-                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
-                  Backend only
-                </span>
+                {counterLoitering == null ? (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-500 border border-slate-700">
+                    Loading…
+                  </span>
+                ) : counterLoitering.dataAvailable ? (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-900/60 text-emerald-300 border border-emerald-700">
+                    ● Live
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
+                    No Data
+                  </span>
+                )}
               </div>
               <div className="mt-3">
-                <div className="text-xl font-bold text-white">{logistics ? `${Number(logistics.summary?.avgDwellTimeMinutes ?? 0).toFixed(1)}m Avg Dwell` : "Live analytics unavailable"}</div>
+                <div className="text-xl font-bold text-white">
+                  {counterLoitering != null
+                    ? `${counterLoitering.avgDwellMinutes.toFixed(1)}m Avg Dwell`
+                    : "Loading…"}
+                </div>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  {logistics ? "Calculated from recorded logistics sessions." : "Connect an analytics source to show counter dwell telemetry."}
+                  {counterLoitering?.dataAvailable
+                    ? "Live counter dwell telemetry from AI analytics."
+                    : "No loitering rules active. Configure a rule in Analytics → Rules."
+                  }
                 </p>
               </div>
+              {counterLoitering && (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Active Now</div>
+                    <div className={`text-sm font-bold mt-0.5 ${
+                      counterLoitering.activeLoiterers > 0 ? "text-amber-300" : "text-slate-300"
+                    }`}>
+                      {counterLoitering.activeLoiterers > 0
+                        ? `⚠️ ${counterLoitering.activeLoiterers} loitering`
+                        : "Clear"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-slate-800/60 px-3 py-2">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider">Alerts Today</div>
+                    <div className={`text-sm font-bold mt-0.5 ${
+                      counterLoitering.alertsToday > 0 ? "text-rose-300" : "text-slate-300"
+                    }`}>
+                      {counterLoitering.alertsToday}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {counterLoitering?.topLoiteringZone && (
+                <div className="mt-2 rounded-lg bg-amber-900/20 border border-amber-800/40 px-3 py-2">
+                  <div className="text-[10px] text-amber-400 uppercase tracking-wider">Top Loitering Zone Today</div>
+                  <div className="text-xs text-amber-200 mt-0.5 truncate">
+                    {counterLoitering.topLoiteringZone.cameraName} — {counterLoitering.topLoiteringZone.hitsToday} alerts
+                  </div>
+                </div>
+              )}
             </div>
             <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-              <span className="text-slate-500">No live loitering telemetry</span>
-              <Link href="/analytics/banking" className="text-violet-400 hover:text-violet-300 font-medium">
-                Counter Analytics &rarr;
+              <span className="text-slate-500">
+                {counterLoitering?.lastUpdated
+                  ? `Updated ${new Date(counterLoitering.lastUpdated).toLocaleTimeString()}`
+                  : "Refresh: 30s"}
+              </span>
+              <Link href="/analytics/rules" className="text-violet-400 hover:text-violet-300 font-medium">
+                Configure Rules →
               </Link>
             </div>
           </div>

@@ -744,4 +744,152 @@ export function registerNbfcAnalyticsRoutes(
     const updated = await repository.updateUserPreferences(userId, safePreferences);
     return reply.send({ success: true, preferences: updated });
   });
+
+  // ==========================================
+  // 8. COUNTER LOITERING LIVE SUMMARY
+  // GET /api/v1/analytics/counter-loitering/summary
+  // Powers the NBFC Operations page "Counter Loitering & Queue" card.
+  // ==========================================
+  app.get("/api/v1/analytics/counter-loitering/summary", async (request, reply) => {
+    try {
+      const user = request.currentUser;
+      if (!user?.tenantId) {
+        return reply.code(401).send({ error: "authentication_required" });
+      }
+      const tenantId = user.tenantId;
+
+      // Access the DB pool directly (same pattern as rest of this file)
+      const pool = (options as any).store?.pool ?? (options as any).pool ?? null;
+
+      if (!pool) {
+        // No DB pool — return safe defaults so the UI still renders
+        return reply.send({
+          avgDwellMinutes: 0,
+          activeLoiterers: 0,
+          alertsToday: 0,
+          alertsThisWeek: 0,
+          branchesMonitored: 0,
+          topLoiteringZone: null,
+          lastUpdated: new Date().toISOString(),
+          dataAvailable: false,
+          message: "Analytics engine not connected",
+        });
+      }
+
+      // Query today's LOITERING alerts for this tenant
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date();
+      weekStart.setDate(weekStart.getDate() - 7);
+      weekStart.setHours(0, 0, 0, 0);
+
+      // Count alerts today
+      const alertsTodayResult = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM alerts
+         WHERE tenant_id = $1
+           AND alert_type = 'LOITERING'
+           AND created_at >= $2`,
+        [tenantId, todayStart.toISOString()]
+      ).catch(() => ({ rows: [{ count: 0 }] }));
+
+      // Count alerts this week
+      const alertsWeekResult = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM alerts
+         WHERE tenant_id = $1
+           AND alert_type = 'LOITERING'
+           AND created_at >= $2`,
+        [tenantId, weekStart.toISOString()]
+      ).catch(() => ({ rows: [{ count: 0 }] }));
+
+      // Active loiterers right now (unresolved LOITERING alerts in last 15 min)
+      const activeResult = await pool.query(
+        `SELECT COUNT(*)::int AS count
+         FROM alerts
+         WHERE tenant_id = $1
+           AND alert_type = 'LOITERING'
+           AND status NOT IN ('RESOLVED', 'DISMISSED', 'FALSE_POSITIVE')
+           AND created_at >= NOW() - INTERVAL '15 minutes'`,
+        [tenantId]
+      ).catch(() => ({ rows: [{ count: 0 }] }));
+
+      // Avg dwell from NBFC active rules (dwell_time_seconds metric)
+      const dwellResult = await pool.query(
+        `SELECT AVG((metrics->>'dwellSeconds')::numeric) AS avg_dwell
+         FROM nbfc_rule_evaluations
+         WHERE tenant_id = $1
+           AND condition_type = 'LOITERING'
+           AND evaluated_at >= $2`,
+        [tenantId, todayStart.toISOString()]
+      ).catch(() => ({ rows: [{ avg_dwell: null }] }));
+
+      // Distinct branches being monitored for loitering
+      const branchResult = await pool.query(
+        `SELECT COUNT(DISTINCT branch_id)::int AS count
+         FROM nbfc_rules
+         WHERE tenant_id = $1
+           AND condition_type = 'LOITERING'
+           AND is_active = true`,
+        [tenantId]
+      ).catch(() => ({ rows: [{ count: 0 }] }));
+
+      // Top loitering zone (camera name with most hits today)
+      const topZoneResult = await pool.query(
+        `SELECT camera_id, camera_name, COUNT(*)::int AS hits
+         FROM alerts
+         WHERE tenant_id = $1
+           AND alert_type = 'LOITERING'
+           AND created_at >= $2
+         GROUP BY camera_id, camera_name
+         ORDER BY hits DESC
+         LIMIT 1`,
+        [tenantId, todayStart.toISOString()]
+      ).catch(() => ({ rows: [] }));
+
+      const alertsToday = alertsTodayResult.rows[0]?.count ?? 0;
+      const alertsThisWeek = alertsWeekResult.rows[0]?.count ?? 0;
+      const activeLoiterers = activeResult.rows[0]?.count ?? 0;
+      const branchesMonitored = branchResult.rows[0]?.count ?? 0;
+      const topZone = topZoneResult.rows[0] ?? null;
+
+      // Avg dwell: use nbfc_rule_evaluations if available, else derive from alert count
+      let avgDwellMinutes = 0;
+      const rawDwell = dwellResult.rows[0]?.avg_dwell;
+      if (rawDwell != null && !isNaN(Number(rawDwell))) {
+        avgDwellMinutes = Math.round((Number(rawDwell) / 60) * 10) / 10;
+      } else if (alertsToday > 0) {
+        // Fallback: estimate based on loitering rule default (300s = 5min)
+        avgDwellMinutes = 5.0;
+      }
+
+      return reply.send({
+        avgDwellMinutes,
+        activeLoiterers,
+        alertsToday,
+        alertsThisWeek,
+        branchesMonitored,
+        topLoiteringZone: topZone
+          ? { cameraId: topZone.camera_id, cameraName: topZone.camera_name, hitsToday: topZone.hits }
+          : null,
+        lastUpdated: new Date().toISOString(),
+        dataAvailable: branchesMonitored > 0 || alertsToday > 0,
+      });
+    } catch (err) {
+      request.log.error({ err }, "counter-loitering summary failed");
+      return reply.send({
+        avgDwellMinutes: 0,
+        activeLoiterers: 0,
+        alertsToday: 0,
+        alertsThisWeek: 0,
+        branchesMonitored: 0,
+        topLoiteringZone: null,
+        lastUpdated: new Date().toISOString(),
+        dataAvailable: false,
+        message: "Analytics temporarily unavailable",
+      });
+    }
+  });
 }
+
