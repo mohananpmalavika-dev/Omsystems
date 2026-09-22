@@ -1,4 +1,10 @@
 import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import helmet from "@fastify/helmet";
+import {
+  csrfProtectionHook,
+  registerCsrfRoutes,
+} from "./security/middleware/csrf-protection.middleware.js";
 import Fastify, {
   type FastifyInstance,
   type FastifyReply,
@@ -122,6 +128,7 @@ import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
 import { registerClockMonitoringRoutes } from "./routes/clock-monitoring.routes.js";
+import { registerBiometricPrivacyRoutes } from "./routes/biometric-privacy.routes.js";
 import { registerDigitalTwinHealthRoutes } from "./routes/digital-twin-health.routes.js";
 import { registerStaleHealthRoutes } from "./routes/stale-health.routes.js";
 import { registerSurveillancePolicyRoutes } from "./routes/surveillance-policy.routes.js";
@@ -681,6 +688,52 @@ export async function buildApp(options?: {
     },
   });
 
+  await app.register(helmet, {
+    contentSecurityPolicy: false,
+    crossOriginEmbedderPolicy: false,
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    noSniff: true,
+    frameguard: { action: "sameorigin" },
+  });
+
+  await app.register(rateLimit, {
+    max: 300,
+    timeWindow: "1 minute",
+    allowList: (req) => {
+      const url = req.url;
+      return (
+        url === "/health" ||
+        url === "/live" ||
+        url === "/ready" ||
+        url === "/capabilities" ||
+        url === "/metrics" ||
+        url.startsWith("/api/observability/") ||
+        url.startsWith("/v1/observability/") ||
+        url.startsWith("/internal/")
+      );
+    },
+    keyGenerator: (req) => {
+      const authReq = req as any;
+      if (authReq.currentUser?.id) {
+        return `user:${authReq.currentUser.id}`;
+      }
+      return req.ip;
+    },
+    errorResponseBuilder: (_req, context) => ({
+      statusCode: 429,
+      error: "Too Many Requests",
+      message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
+      retryAfter: Math.ceil(context.ttl / 1000),
+    }),
+  });
+
+  app.addHook("preHandler", csrfProtectionHook);
+  registerCsrfRoutes(app);
+
   app.decorateRequest("currentUser");
     app.addHook("preHandler", performanceTrackingMiddleware);
     app.decorateRequest("edgeAgentAuthenticated", false);
@@ -715,6 +768,7 @@ export async function buildApp(options?: {
       || request.url.startsWith("/v1/reports/daily-surveillance-health")
       || request.url.startsWith("/v1/edge-updates/artifacts/")
       || request.url.startsWith("/v1/security/mtls/")
+      || request.url === "/v1/auth/csrf-token"
     ) return;
 
     const edgeAgentIngressRoute = isEdgeAgentIngressRoute(request.method, request.url);
@@ -2798,6 +2852,7 @@ export async function buildApp(options?: {
   });
   await registerDailySurveillanceReportRoutes(app, store);
   await registerEvidenceRoutes(app, store, exportWorker);
+  await registerBiometricPrivacyRoutes(app);
   await registerHsmSigningRoutes(app, store);
   await registerSignedConfigurationRoutes(app, store);
   await registerLiveOperationsRoutes(app, store);

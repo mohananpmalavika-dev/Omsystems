@@ -693,6 +693,11 @@ pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s
   sourceOnDemandCloseAfter: 120s
+  # Audio transcoding for browser HLS compatibility
+  # Cameras often send G.711 (PCMU/PCMA) which browsers cannot play
+  # This FFmpeg hook transcodes audio to AAC for browser playback
+  runOnReady: ffmpeg -fflags nobuffer -flags low_delay -rtsp_transport tcp -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH -c:v copy -c:a aac -b:a 128k -ar 48000 -ac 2 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
+  runOnReadyRestart: yes
 paths: {}
 `;
 }

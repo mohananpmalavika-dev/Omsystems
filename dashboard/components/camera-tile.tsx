@@ -38,6 +38,7 @@ import { PtzControl } from "./ptz-control";
 import { HoldToTalkButton } from "./hold-to-talk-button";
 import { FisheyeDewarpCanvas } from "./fisheye-dewarp-canvas";
 import { VideoWallDispatchModal } from "./video-wall-dispatch-modal";
+import { AudioDiagnostic } from "./audio-diagnostic";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -141,7 +142,7 @@ function CameraTileComponent({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false); // Audio unmuted by default for live camera wall
   const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -160,6 +161,7 @@ function CameraTileComponent({
   const [settingsScheduleEnd, setSettingsScheduleEnd] = useState(recording?.schedule?.windows?.[0]?.end ?? "18:00");
   const [showFisheyeDewarp, setShowFisheyeDewarp] = useState(false);
   const [showDispatchModal, setShowDispatchModal] = useState(false);
+  const [showAudioDiagnostic, setShowAudioDiagnostic] = useState(false);
   const [internalVideoElement, setInternalVideoElement] = useState<HTMLVideoElement | null>(null);
 
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -465,6 +467,7 @@ function CameraTileComponent({
             className={!isMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
             onClick={() => setIsMuted(!isMuted)}
             disabled={!canPlayLive}
+            onDoubleClick={() => setShowAudioDiagnostic(true)}
           >
             {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
           </button>

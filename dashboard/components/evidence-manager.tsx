@@ -13,6 +13,7 @@ import {
   Search,
   Shield,
   Trash2,
+  Video,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -74,6 +75,7 @@ export function EvidenceManager() {
   const [showRedactModal, setShowRedactModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showSection65BModal, setShowSection65BModal] = useState(false);
+  const [showAddRecordingModal, setShowAddRecordingModal] = useState(false);
   const [selected65BItem, setSelected65BItem] = useState<EvidenceItem | null>(null);
   const [selectedAuditData, setSelectedAuditData] = useState<any | null>(null);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -269,7 +271,30 @@ export function EvidenceManager() {
 
             {/* Evidence Items */}
             <div className="items-section">
-              <h4>Evidence Items ({items.length})</h4>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                <h4 style={{ margin: 0 }}>Evidence Items ({items.length})</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowAddRecordingModal(true)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    background: "rgba(59, 130, 246, 0.15)",
+                    border: "1px solid rgba(59, 130, 246, 0.4)",
+                    color: "#93c5fd",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                  title="Capture or link a video recording clip as evidence"
+                >
+                  <Video size={13} />
+                  Add Video Recording
+                </button>
+              </div>
               {preservationFeedback && (
                 <div style={{ marginBottom: "12px", padding: "8px 12px", borderRadius: "8px", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#fca5a5", fontSize: "12px", fontWeight: 600 }}>
                   {preservationFeedback}
@@ -563,6 +588,19 @@ export function EvidenceManager() {
           evidenceCase={selectedCase}
           item={selected65BItem}
           onClose={() => setShowSection65BModal(false)}
+        />
+      )}
+
+      {/* Add Video Recording to Evidence Case Modal */}
+      {showAddRecordingModal && selectedCase && (
+        <AddVideoRecordingModal
+          caseId={selectedCase.id}
+          caseNumber={selectedCase.caseNumber}
+          onClose={() => setShowAddRecordingModal(false)}
+          onAdded={async () => {
+            setShowAddRecordingModal(false);
+            await loadCaseDetails(selectedCase.id);
+          }}
         />
       )}
     </div>
@@ -1367,3 +1405,534 @@ function Section65BCertificateModal({
 }
 
 
+// ─── Add Video Recording Modal ──────────────────────────────────────────────
+
+type AddVideoRecordingMode = "capture" | "link";
+
+function toLocalDatetimeInput(date: Date): string {
+  // Returns "YYYY-MM-DDTHH:mm" in local time for datetime-local inputs
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function AddVideoRecordingModal({
+  caseId,
+  caseNumber,
+  onClose,
+  onAdded,
+}: {
+  caseId: string;
+  caseNumber: string;
+  onClose: () => void;
+  onAdded: () => Promise<void>;
+}) {
+  // Mode: "capture" = trigger a new clip from RTSP via evidence-capture-pipeline
+  //       "link"    = link an existing recording segment by camera + time range
+  const [mode, setMode] = useState<AddVideoRecordingMode>("capture");
+
+  // Shared fields
+  const defaultEnd = new Date();
+  const defaultStart = new Date(defaultEnd.getTime() - 5 * 60 * 1000); // 5 min ago
+  const [cameraId, setCameraId] = useState("");
+  const [startTime, setStartTime] = useState(toLocalDatetimeInput(defaultStart));
+  const [endTime, setEndTime] = useState(toLocalDatetimeInput(defaultEnd));
+  const [description, setDescription] = useState("");
+
+  // Capture-mode only
+  const [alertType, setAlertType] = useState("MANUAL_EVIDENCE_CAPTURE");
+  const [severity, setSeverity] = useState("medium");
+  const [preBuffer, setPreBuffer] = useState(30); // seconds before event
+
+  // Camera list from API
+  const [cameras, setCameras] = useState<Array<{ id: string; name: string; branchId?: string; branchName?: string }>>([]);
+  const [camerasLoading, setCamerasLoading] = useState(true);
+  const [camerasError, setCamerasError] = useState<string | null>(null);
+
+  // Submission state
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+
+  // Load cameras on mount
+  useEffect(() => {
+    void (async () => {
+      setCamerasLoading(true);
+      setCamerasError(null);
+      try {
+        // Load branches first, then cameras for all branches
+        const branchRes = await fetch("/api/branches", { credentials: "include" });
+        if (!branchRes.ok) throw new Error("Failed to load branches");
+        const branchBody: { data: Array<{ id: string; name: string }> } = await branchRes.json();
+        const branches = branchBody.data ?? [];
+
+        const cameraLists = await Promise.allSettled(
+          branches.map(async (branch) => {
+            const r = await fetch(`/api/branches/${encodeURIComponent(branch.id)}/cameras`, { credentials: "include" });
+            if (!r.ok) return [];
+            const body: { data: Array<{ id: string; name: string }> } = await r.json();
+            return (body.data ?? []).map((cam) => ({
+              id: cam.id,
+              name: cam.name,
+              branchId: branch.id,
+              branchName: branch.name,
+            }));
+          })
+        );
+
+        type CameraEntry = { id: string; name: string; branchId: string; branchName: string };
+        const allCameras = (cameraLists as PromiseSettledResult<CameraEntry[]>[])
+          .filter((r): r is PromiseFulfilledResult<CameraEntry[]> => r.status === "fulfilled")
+          .flatMap((r) => r.value);
+
+        setCameras(allCameras);
+        if (allCameras.length > 0) setCameraId(allCameras[0].id);
+      } catch (err) {
+        setCamerasError(err instanceof Error ? err.message : "Camera list unavailable");
+      } finally {
+        setCamerasLoading(false);
+      }
+    })();
+  }, []);
+
+  const validateTimes = (): string | null => {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    if (isNaN(start.getTime())) return "Start time is invalid";
+    if (isNaN(end.getTime())) return "End time is invalid";
+    if (end <= start) return "End time must be after start time";
+    const diffMs = end.getTime() - start.getTime();
+    if (diffMs > 4 * 60 * 60 * 1000) return "Recording window cannot exceed 4 hours";
+    return null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const timeError = validateTimes();
+    if (timeError) { setSubmitError(timeError); return; }
+    if (!cameraId) { setSubmitError("Please select a camera"); return; }
+
+    const startIso = new Date(startTime).toISOString();
+    const endIso = new Date(endTime).toISOString();
+    const selectedCamera = cameras.find((c) => c.id === cameraId);
+    const itemDescription = description.trim() ||
+      `${mode === "capture" ? "Captured" : "Linked"} recording — ${selectedCamera?.name ?? cameraId} — ${new Date(startIso).toLocaleString()} to ${new Date(endIso).toLocaleString()}`;
+
+    setSubmitting(true);
+    try {
+      if (mode === "capture") {
+        // Step 1: Enqueue a guaranteed evidence capture job via the pipeline
+        // This triggers FFmpeg-based clip extraction from the RTSP stream
+        const capturePayload = {
+          alertId: `manual-${caseId}-${Date.now()}`,
+          branchId: selectedCamera?.branchId ?? "unknown",
+          cameraId,
+          alertType,
+          severity,
+          detectedAt: startIso,
+          preferredSource: "recording",
+          preBuffer,
+        };
+
+        const captureRes = await fetch("/api/v1/evidence/jobs", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(capturePayload),
+        });
+
+        const captureData = await captureRes.json();
+
+        if (!captureRes.ok) {
+          throw new Error(
+            captureData?.error ?? captureData?.details ?? "Evidence capture job failed to enqueue"
+          );
+        }
+
+        // Step 2: Link the clip as an item in the evidence case
+        await evidenceApi.addItem(caseId, {
+          type: "recording",
+          cameraId,
+          startTime: startIso,
+          endTime: endIso,
+          description: itemDescription,
+        });
+
+        const jobId: string = captureData?.data?.id ?? captureData?.id ?? "(queued)";
+        setSubmitSuccess(`✅ Capture job ${jobId} enqueued. The recording clip will be extracted and cryptographically sealed. Item added to case ${caseNumber}.`);
+      } else {
+        // Link mode: simply register an existing recording segment as evidence
+        await evidenceApi.addItem(caseId, {
+          type: "recording",
+          cameraId,
+          startTime: startIso,
+          endTime: endIso,
+          description: itemDescription,
+        });
+
+        setSubmitSuccess(`✅ Recording segment linked to evidence case ${caseNumber}. Chain of custody updated.`);
+      }
+
+      // Auto-close after brief success display
+      setTimeout(() => void onAdded(), 1800);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Failed to add recording to evidence case");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const selectedCamera = cameras.find((c) => c.id === cameraId);
+
+  return (
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 9999 }}>
+      <div
+        className="modal-content medium"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: "580px", background: "var(--color-bg-primary, #111827)", border: "1px solid rgba(59,130,246,0.3)" }}
+      >
+        {/* Header */}
+        <div className="modal-header" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "12px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ padding: "8px", borderRadius: "8px", background: "rgba(59,130,246,0.15)", color: "#60a5fa" }}>
+              <Video size={18} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>Add Video Recording</h3>
+              <p style={{ margin: 0, fontSize: "11px", color: "#9CA3AF" }}>Case: {caseNumber}</p>
+            </div>
+          </div>
+          <button
+            className="close-button"
+            onClick={onClose}
+            style={{ background: "transparent", border: 0, color: "#6B7280", cursor: "pointer" }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Mode Selector */}
+        <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+          <button
+            type="button"
+            onClick={() => setMode("capture")}
+            style={{
+              flex: 1,
+              padding: "10px",
+              borderRadius: "8px",
+              border: mode === "capture" ? "1px solid #3B82F6" : "1px solid rgba(255,255,255,0.1)",
+              background: mode === "capture" ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.03)",
+              color: mode === "capture" ? "#93c5fd" : "#9CA3AF",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: 600,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+              <Video size={14} /> Capture New Clip
+            </div>
+            <div style={{ fontSize: "11px", fontWeight: 400, opacity: 0.8 }}>
+              Enqueues a guaranteed extraction job from the live RTSP stream
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("link")}
+            style={{
+              flex: 1,
+              padding: "10px",
+              borderRadius: "8px",
+              border: mode === "link" ? "1px solid #8B5CF6" : "1px solid rgba(255,255,255,0.1)",
+              background: mode === "link" ? "rgba(139,92,246,0.15)" : "rgba(255,255,255,0.03)",
+              color: mode === "link" ? "#c4b5fd" : "#9CA3AF",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: 600,
+              textAlign: "left",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "4px" }}>
+              <Archive size={14} /> Link Existing Recording
+            </div>
+            <div style={{ fontSize: "11px", fontWeight: 400, opacity: 0.8 }}>
+              Register a known recording segment already on the storage backend
+            </div>
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={(e) => void handleSubmit(e)} style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "16px" }}>
+
+          {/* Camera Selector */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+              Camera *
+            </label>
+            {camerasLoading ? (
+              <div style={{ padding: "10px", color: "#6B7280", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Clock size={14} /> Loading cameras…
+              </div>
+            ) : camerasError ? (
+              <div style={{ padding: "8px", color: "#F87171", fontSize: "12px", background: "rgba(239,68,68,0.1)", borderRadius: "6px" }}>
+                <AlertTriangle size={13} style={{ display: "inline", marginRight: "4px" }} />
+                {camerasError}
+              </div>
+            ) : (
+              <select
+                value={cameraId}
+                onChange={(e) => setCameraId(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "9px 10px",
+                  borderRadius: "7px",
+                  background: "var(--color-bg-secondary, #1F2937)",
+                  color: "inherit",
+                  border: "1px solid var(--color-border, #374151)",
+                  fontSize: "13px",
+                }}
+              >
+                <option value="">— Select a camera —</option>
+                {cameras.map((cam) => (
+                  <option key={cam.id} value={cam.id}>
+                    {cam.branchName ? `${cam.branchName} / ` : ""}{cam.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedCamera && (
+              <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "4px" }}>
+                ID: {selectedCamera.id}{selectedCamera.branchName ? ` · Branch: ${selectedCamera.branchName}` : ""}
+              </div>
+            )}
+          </div>
+
+          {/* Time Range */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+                {mode === "capture" ? "Event Time (start of capture window) *" : "Recording Start *"}
+              </label>
+              <input
+                type="datetime-local"
+                value={startTime}
+                onChange={(e) => setStartTime(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: "7px",
+                  background: "var(--color-bg-secondary, #1F2937)",
+                  color: "inherit",
+                  border: "1px solid var(--color-border, #374151)",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+                {mode === "capture" ? "Capture Until *" : "Recording End *"}
+              </label>
+              <input
+                type="datetime-local"
+                value={endTime}
+                onChange={(e) => setEndTime(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  padding: "8px 10px",
+                  borderRadius: "7px",
+                  background: "var(--color-bg-secondary, #1F2937)",
+                  color: "inherit",
+                  border: "1px solid var(--color-border, #374151)",
+                  fontSize: "12px",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Capture-mode only fields */}
+          {mode === "capture" && (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+                    Alert / Capture Type
+                  </label>
+                  <select
+                    value={alertType}
+                    onChange={(e) => setAlertType(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: "7px",
+                      background: "var(--color-bg-secondary, #1F2937)",
+                      color: "inherit",
+                      border: "1px solid var(--color-border, #374151)",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <option value="MANUAL_EVIDENCE_CAPTURE">Manual Evidence Capture</option>
+                    <option value="INTRUSION">Intrusion Detected</option>
+                    <option value="MOTION">Motion Event</option>
+                    <option value="FACE_DETECTED">Face Detected</option>
+                    <option value="LOITERING">Loitering</option>
+                    <option value="VEHICLE">Vehicle Event</option>
+                    <option value="TAILGATING">Tailgating</option>
+                    <option value="VIOLENCE">Violence Detected</option>
+                    <option value="CROWD">Crowd Alert</option>
+                    <option value="PERIMETER_BREACH">Perimeter Breach</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+                    Severity
+                  </label>
+                  <select
+                    value={severity}
+                    onChange={(e) => setSeverity(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px 10px",
+                      borderRadius: "7px",
+                      background: "var(--color-bg-secondary, #1F2937)",
+                      color: "inherit",
+                      border: "1px solid var(--color-border, #374151)",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+                  Pre-Event Buffer: {preBuffer}s
+                </label>
+                <input
+                  type="range"
+                  min={5}
+                  max={120}
+                  step={5}
+                  value={preBuffer}
+                  onChange={(e) => setPreBuffer(Number(e.target.value))}
+                  style={{ width: "100%" }}
+                />
+                <div style={{ fontSize: "11px", color: "#6B7280", marginTop: "2px" }}>
+                  The capture pipeline will also extract {preBuffer}s of footage before the event time
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Description */}
+          <div>
+            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, marginBottom: "5px", color: "#D1D5DB" }}>
+              Description / Chain of Custody Note
+            </label>
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g., Vault area footage — robbery suspect observed at 14:22"
+              style={{
+                width: "100%",
+                padding: "8px 10px",
+                borderRadius: "7px",
+                background: "var(--color-bg-secondary, #1F2937)",
+                color: "inherit",
+                border: "1px solid var(--color-border, #374151)",
+                fontSize: "12px",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Info callout for capture mode */}
+          {mode === "capture" && (
+            <div style={{
+              padding: "10px 12px",
+              borderRadius: "7px",
+              background: "rgba(59,130,246,0.08)",
+              border: "1px solid rgba(59,130,246,0.2)",
+              fontSize: "11px",
+              color: "#93c5fd",
+              lineHeight: 1.6,
+            }}>
+              <strong>How capture works:</strong> The system enqueues a guaranteed 8-stage capture pipeline job.
+              FFmpeg extracts the clip from the RTSP/NVR stream, generates SHA-256 hashes, builds a cryptographic
+              manifest, and archives to the configured storage backend. The item is immediately registered
+              in this case's chain of custody.
+            </div>
+          )}
+
+          {/* Errors & Success */}
+          {submitError && (
+            <div style={{ padding: "10px 12px", borderRadius: "7px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", color: "#F87171", fontSize: "12px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: "1px" }} />
+              {submitError}
+            </div>
+          )}
+          {submitSuccess && (
+            <div style={{ padding: "10px 12px", borderRadius: "7px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", color: "#34D399", fontSize: "12px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+              <CheckCircle size={14} style={{ flexShrink: 0, marginTop: "1px" }} />
+              {submitSuccess}
+            </div>
+          )}
+
+          {/* Footer Buttons */}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "4px" }}>
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "7px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                color: "#9CA3AF",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || camerasLoading || !!submitSuccess}
+              style={{
+                padding: "8px 20px",
+                borderRadius: "7px",
+                background: mode === "capture" ? "#2563EB" : "#7C3AED",
+                border: "none",
+                color: "#fff",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: (submitting || camerasLoading) ? 0.6 : 1,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <Video size={14} />
+              {submitting
+                ? (mode === "capture" ? "Enqueueing capture…" : "Linking recording…")
+                : (mode === "capture" ? "Capture & Add to Case" : "Link Recording to Case")
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
