@@ -1,5 +1,13 @@
 # Cross-Branch Alert Visibility
 
+## Summary
+
+✅ **Implementation Complete** - The alert system now supports cross-branch visibility, allowing users to view alerts from all branches they have access to in a single query.
+
+**Documentation**: See [CROSS_BRANCH_ALERTS_SUMMARY.md](./CROSS_BRANCH_ALERTS_SUMMARY.md) for a complete implementation overview.
+
+---
+
 ## Overview
 
 The alert system has been enhanced to support cross-branch visibility, allowing eligible users to view alerts from all branches they have access to, not just their assigned branch.
