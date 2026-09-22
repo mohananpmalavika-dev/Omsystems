@@ -262,6 +262,24 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
     app.log.warn({ err: storageErr, cameraId: id }, "Failed to clean up associated storage nodes on camera deletion");
   }
 
+  // 7. Purge camera-type operational telemetry so the removed camera does NOT
+  //    re-surface in the Command Center as an "Unenrolled camera" ghost entry.
+  try {
+    await client.query(
+      `DELETE FROM operational_health_telemetry
+       WHERE device_type = 'camera' AND device_id = $1`,
+      [id],
+    ).catch(() => null);
+
+    await client.query(
+      `DELETE FROM operational_health_latest
+       WHERE device_type = 'camera' AND device_id = $1`,
+      [id],
+    ).catch(() => null);
+  } catch (telemetryErr) {
+    app.log.warn({ err: telemetryErr, cameraId: id }, "Failed to purge camera operational telemetry on deletion");
+  }
+
   return { found: true, deletedNodes, relatedDataDeleted };
 }
 

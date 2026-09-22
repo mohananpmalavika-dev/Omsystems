@@ -332,46 +332,57 @@ export class BranchOperationalSnapshotService {
       };
     });
 
-    // Telemetry can arrive before inventory approval (or after a device has
-    // been removed from inventory). Surface those observed cameras instead of
-    // making a branch look fully monitored merely because its registry is
-    // incomplete.
+    // Telemetry may arrive from cameras that were recently deleted/deactivated
+    // (soft-delete leaves operational_health_telemetry rows behind until they
+    // are aged out or explicitly purged by the deletion pipeline).
+    // We intentionally do NOT add such ghost entries to cameraList so they
+    // cannot inflate cameraSummary.total / offline counts in the Command Center.
+    // We still emit a WARNING reason code so operators are aware of the
+    // stale telemetry — but the device is not counted as part of the fleet.
     const registeredCameraIds = new Set(cameras.map((camera) => camera.id));
     for (const observed of telemetry.filter((item) => item.deviceType === "camera" && !registeredCameraIds.has(item.deviceId))) {
-      const health = snapshotHealth(observed, policy);
-      const rawRecording = metricString(observed, "recordingStatus")?.toLowerCase();
-      const recordingStatus: CameraOperationalStatus["recordingStatus"] = rawRecording === "recording"
-        ? "recording" : rawRecording === "stopped" || rawRecording === "not_recording"
-          ? "stopped" : rawRecording === "error" || rawRecording === "failed" ? "error" : "unknown";
-      const retentionDays = health === "UNKNOWN" || health === "CRITICAL" ? undefined : metricNumber(observed, "retentionDays");
-      cameraList.push({
-        id: observed.deviceId,
-        name: metricString(observed, "name") ?? `Unenrolled camera ${observed.deviceId}`,
-        channelNumber: `CH-${String(metricNumber(observed, "channel") ?? 0).padStart(2, "0")}`,
-        state: health === "CRITICAL" ? "OFFLINE" : health === "UNKNOWN" ? "UNKNOWN"
-          : observed.metrics.streamActive === false ? "STREAM_LOSS"
-            : recordingStatus === "stopped" || recordingStatus === "error" ? "NO_RECORD"
-              : observed.metrics.streamActive === true && recordingStatus === "recording" ? "LIVE" : "ONLINE",
-        healthScore: scoreForHealth(health) ?? 0,
-        onlineStatus: health === "CRITICAL" ? "offline" : health === "UNKNOWN" ? "unknown" : "online",
-        streamAvailable: observed.metrics.streamActive === true,
-        recordingStatus,
-        retentionDays,
-        retentionState: retentionDays === undefined ? "UNKNOWN" : retentionDays >= policy.retentionDays ? "COMPLIANT" : "VIOLATION",
-        currentFps: metricNumber(observed, "fps"),
-        latencyMs: metricNumber(observed, "responseTimeMs") ?? metricNumber(observed, "latencyMs"),
-        videoLoss: observed.metrics.videoLoss === true,
-        tamperingDetected: observed.metrics.tamperingDetected === true,
-        imageFrozen: observed.metrics.imageFrozen === true,
-        blackScreen: observed.metrics.blackScreen === true,
-        ptzSupported: false,
-        audioSupported: false,
-        lastHeartbeat: observed.observedAt,
-        observedAt: observed.observedAt,
-      });
+      // Only add unrecognised camera telemetry to the camera list when the
+      // branch has NO registered cameras at all. In that case the telemetry is
+      // genuinely useful (shows cameras sending data before approval). When at
+      // least one approved camera exists, any extra telemetry most likely
+      // originates from a previously removed camera and must not be counted.
+      if (cameras.length === 0) {
+        const health = snapshotHealth(observed, policy);
+        const rawRecording = metricString(observed, "recordingStatus")?.toLowerCase();
+        const recordingStatus: CameraOperationalStatus["recordingStatus"] = rawRecording === "recording"
+          ? "recording" : rawRecording === "stopped" || rawRecording === "not_recording"
+            ? "stopped" : rawRecording === "error" || rawRecording === "failed" ? "error" : "unknown";
+        const retentionDays = health === "UNKNOWN" || health === "CRITICAL" ? undefined : metricNumber(observed, "retentionDays");
+        cameraList.push({
+          id: observed.deviceId,
+          name: metricString(observed, "name") ?? `Unenrolled camera ${observed.deviceId}`,
+          channelNumber: `CH-${String(metricNumber(observed, "channel") ?? 0).padStart(2, "0")}`,
+          state: health === "CRITICAL" ? "OFFLINE" : health === "UNKNOWN" ? "UNKNOWN"
+            : observed.metrics.streamActive === false ? "STREAM_LOSS"
+              : recordingStatus === "stopped" || recordingStatus === "error" ? "NO_RECORD"
+                : observed.metrics.streamActive === true && recordingStatus === "recording" ? "LIVE" : "ONLINE",
+          healthScore: scoreForHealth(health) ?? 0,
+          onlineStatus: health === "CRITICAL" ? "offline" : health === "UNKNOWN" ? "unknown" : "online",
+          streamAvailable: observed.metrics.streamActive === true,
+          recordingStatus,
+          retentionDays,
+          retentionState: retentionDays === undefined ? "UNKNOWN" : retentionDays >= policy.retentionDays ? "COMPLIANT" : "VIOLATION",
+          currentFps: metricNumber(observed, "fps"),
+          latencyMs: metricNumber(observed, "responseTimeMs") ?? metricNumber(observed, "latencyMs"),
+          videoLoss: observed.metrics.videoLoss === true,
+          tamperingDetected: observed.metrics.tamperingDetected === true,
+          imageFrozen: observed.metrics.imageFrozen === true,
+          blackScreen: observed.metrics.blackScreen === true,
+          ptzSupported: false,
+          audioSupported: false,
+          lastHeartbeat: observed.observedAt,
+          observedAt: observed.observedAt,
+        });
+      }
+      // Always emit the reason code so the stale/ghost telemetry is visible to operators.
       reasons.push({
         code: "UNENROLLED_CAMERA_TELEMETRY", severity: "WARNING", component: "CAMERA",
-        message: `Camera ${observed.deviceId} reports telemetry but is not in approved inventory`,
+        message: `Camera ${observed.deviceId} reports telemetry but is not in the approved camera inventory`,
         affectedCameras: [observed.deviceId], impactLevel: "MEDIUM",
       });
     }
