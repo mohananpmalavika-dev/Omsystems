@@ -133,7 +133,7 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
         []
       );
       
-      const branches = branchSummary.rows.map(row => ({
+      const branches = branchSummary.rows.map((row: any) => ({
         branchId: row.branch_id,
         branchName: row.branch_name,
         deviceCount: row.device_count || 0,
@@ -142,8 +142,8 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
         hasData: (row.device_count || 0) > 0,
       }));
       
-      const branchesWithData = branches.filter(b => b.hasData).length;
-      const branchesWithoutData = branches.filter(b => !b.hasData).length;
+      const branchesWithData = branches.filter((b: any) => b.hasData).length;
+      const branchesWithoutData = branches.filter((b: any) => !b.hasData).length;
       
       return {
         summary: {

@@ -11,7 +11,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
-import type { DeviceInventoryRecord } from '../domain/models.js';
+import type { DeviceInventoryRecord } from '../control-plane-store.js';
 
 interface StorageTelemetryConfig {
   deviceId: string;
@@ -65,8 +65,20 @@ export class AutoStorageTelemetryService {
     const isDVR = config.deviceType === 'dvr';
     const isStorage = config.deviceType === 'storage-device';
     
+    interface DiskConfig {
+      deviceId: string;
+      name: string;
+      capacityTb: number;
+      usedPercent: number;
+      dailyGrowthGb: number;
+      smartStatus: 'HEALTHY' | 'WARNING' | 'CRITICAL';
+      temperatureC: number;
+      tier: 'Hot' | 'Warm' | 'Cold';
+      mediaType: 'SSD' | 'HDD';
+    }
+
     // Default storage configuration based on device type
-    const storageConfigs = [
+    const storageConfigs: DiskConfig[] = [
       // System disk (always present)
       {
         deviceId: 'disk-01',
@@ -74,10 +86,10 @@ export class AutoStorageTelemetryService {
         capacityTb: isStorage ? 1 : 0.5,
         usedPercent: 35 + Math.random() * 20, // 35-55%
         dailyGrowthGb: 2 + Math.random() * 3, // 2-5 GB/day
-        smartStatus: 'HEALTHY' as const,
+        smartStatus: 'HEALTHY',
         temperatureC: 30 + Math.random() * 10, // 30-40°C
-        tier: 'Hot' as const,
-        mediaType: 'SSD' as const,
+        tier: 'Hot',
+        mediaType: 'SSD',
       },
     ];
     
@@ -93,10 +105,10 @@ export class AutoStorageTelemetryService {
           capacityTb: diskCapacity,
           usedPercent: 50 + Math.random() * 40, // 50-90%
           dailyGrowthGb: 40 + Math.random() * 60, // 40-100 GB/day
-          smartStatus: (Math.random() > 0.9 ? 'WARNING' : 'HEALTHY') as const,
+          smartStatus: Math.random() > 0.9 ? 'WARNING' : 'HEALTHY',
           temperatureC: 35 + Math.random() * 15, // 35-50°C
-          tier: 'Warm' as const,
-          mediaType: 'HDD' as const,
+          tier: 'Warm',
+          mediaType: 'HDD',
         });
       }
     }
@@ -109,10 +121,10 @@ export class AutoStorageTelemetryService {
         capacityTb: 20,
         usedPercent: 60 + Math.random() * 30, // 60-90%
         dailyGrowthGb: 20 + Math.random() * 30, // 20-50 GB/day
-        smartStatus: (Math.random() > 0.95 ? 'WARNING' : 'HEALTHY') as const,
+        smartStatus: Math.random() > 0.95 ? 'WARNING' : 'HEALTHY',
         temperatureC: 32 + Math.random() * 10, // 32-42°C
-        tier: 'Cold' as const,
-        mediaType: 'HDD' as const,
+        tier: 'Cold',
+        mediaType: 'HDD',
       });
     }
     
