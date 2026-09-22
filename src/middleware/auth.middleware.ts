@@ -93,6 +93,21 @@ function requiresPasswordChangeOnly(request: FastifyRequest, user: any): boolean
 }
 
 /**
+ * Fastify / Express compatible authenticateToken middleware
+ * Validates that the request has an authenticated currentUser or session
+ */
+export const authenticateToken = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+  done?: (err?: Error) => void,
+) => {
+  if (!request.currentUser && reply?.code) {
+    return reply.code(401).send({ error: "unauthenticated", message: "Authentication required" });
+  }
+  if (typeof done === "function") done();
+};
+
+/**
  * Authentication middleware that validates session tokens
  * and populates request.currentUser
  */

@@ -618,8 +618,7 @@ export async function buildApp(options?: {
   const operationalReportWorker = new OperationalReportWorker(store, reportExportRoot, reportEmailSender,
     Number(process.env.REPORT_ARCHIVE_RETENTION_DAYS ?? 365));
 
-  // Initialize video search and forensic services
-  const pool = (store as any).pool; // Access pool from store
+  const pool = (store as any).pool || (store as any).db; // Access pool from store
   // Recent JPEG frames are media-plane state and must be shared by replicas.
   // A local fallback would make snapshots disappear after a restart or route
   // to the wrong control-plane instance.
@@ -2915,6 +2914,15 @@ export async function buildApp(options?: {
     } catch (err: unknown) {
       app.log.error({ err }, 'failed to register AI Assistant V2 routes');
     }
+  }
+
+  // Register AI Intelligence Layer routes (Incident Summary, SOP Engine, Investigation Reports, Evidence Builder, Video Search)
+  try {
+    const { registerAIIntelligenceRoutes } = await import("./routes/ai-intelligence.js");
+    await registerAIIntelligenceRoutes(app);
+    app.log.info('AI Intelligence Layer routes registered');
+  } catch (err: unknown) {
+    app.log.error({ err }, 'failed to register AI Intelligence Layer routes');
   }
   
   // Register security dashboard routes

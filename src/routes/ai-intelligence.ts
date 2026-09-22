@@ -17,10 +17,10 @@ import { AIInvestigationReportService } from "../services/ai-investigation-repor
 import { AIEvidenceBuilderService } from "../services/ai-evidence-builder.js";
 import { AIVideoSearchService } from "../services/ai-video-search.js";
 import { AIAssistant } from "../../analytics-engine/src/detectors/ai-assistant.js";
-import { analyzeWithEngine } from "../services/command-center/rca.js";
 import { buildOperationalGraph } from "../services/command-center/operational-kg.js";
 import type { CommandTimelineEvent } from "../services/command-center/types.js";
 import { FeatureUnavailableError } from "../errors/feature-unavailable-error.js";
+import { requireFeature, requireAnyFeature } from "../middleware/feature-flag.middleware.js";
 
 function handleFeatureResponse<T>(feature: string, fn: () => Promise<T>): Promise<T | { feature: string; status: string; reason: string }> {
   return fn().catch((err: any) => {
@@ -62,7 +62,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/incidents/summary/shift
    * Generate shift summary with alert correlation
    */
-  app.get("/v1/ai/incidents/summary/shift", async (request, reply) => {
+  app.get("/v1/ai/incidents/summary/shift", {
+    preHandler: requireFeature('ai-incident-summary')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { shiftStart, shiftEnd, branchId } = request.query as any;
 
@@ -80,7 +82,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/incidents/summary/daily
    * Generate daily incident summary
    */
-  app.get("/v1/ai/incidents/summary/daily", async (request, reply) => {
+  app.get("/v1/ai/incidents/summary/daily", {
+    preHandler: requireFeature('ai-incident-summary')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { date, branchId } = request.query as any;
 
@@ -97,7 +101,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/incidents/summary/executive
    * Generate executive summary (weekly/monthly)
    */
-  app.get("/v1/ai/incidents/summary/executive", async (request, reply) => {
+  app.get("/v1/ai/incidents/summary/executive", {
+    preHandler: requireFeature('ai-incident-summary')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { period, startDate } = request.query as any;
 
@@ -114,7 +120,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/incidents/correlate
    * Correlate alerts into incident clusters
    */
-  app.post("/v1/ai/incidents/correlate", async (request, reply) => {
+  app.post("/v1/ai/incidents/correlate", {
+    preHandler: requireFeature('ai-incident-summary')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { from, to, branchId, limit } = request.body as any;
 
@@ -449,7 +457,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages
    * Create evidence package
    */
-  app.post("/v1/ai/evidence-packages", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const config = request.body as any;
 
@@ -467,7 +477,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/court
    * Generate court-ready package
    */
-  app.post("/v1/ai/evidence-packages/court", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/court", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
@@ -480,7 +492,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/police
    * Generate police submission package
    */
-  app.post("/v1/ai/evidence-packages/police", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/police", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
@@ -493,7 +507,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/insurance
    * Generate insurance claim package
    */
-  app.post("/v1/ai/evidence-packages/insurance", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/insurance", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { incidentId } = request.body as any;
 
@@ -506,7 +522,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/:packageId/collect
    * Collect evidence automatically
    */
-  app.post("/v1/ai/evidence-packages/:packageId/collect", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/:packageId/collect", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
@@ -519,7 +537,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/:packageId/sign
    * Apply digital signature
    */
-  app.post("/v1/ai/evidence-packages/:packageId/sign", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/:packageId/sign", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
@@ -532,7 +552,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/evidence-packages/:packageId/verify
    * Verify package integrity
    */
-  app.get("/v1/ai/evidence-packages/:packageId/verify", async (request, reply) => {
+  app.get("/v1/ai/evidence-packages/:packageId/verify", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
@@ -545,7 +567,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/evidence-packages/:packageId/manifest
    * Get evidence manifest
    */
-  app.get("/v1/ai/evidence-packages/:packageId/manifest", async (request, reply) => {
+  app.get("/v1/ai/evidence-packages/:packageId/manifest", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
@@ -558,7 +582,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/:packageId/custody/transfer
    * Transfer custody
    */
-  app.post("/v1/ai/evidence-packages/:packageId/custody/transfer", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/:packageId/custody/transfer", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
     const { toUser, method, purpose } = request.body as any;
@@ -578,7 +604,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/evidence-packages/:packageId/download
    * Record download
    */
-  app.post("/v1/ai/evidence-packages/:packageId/download", async (request, reply) => {
+  app.post("/v1/ai/evidence-packages/:packageId/download", {
+    preHandler: requireFeature('ai-evidence-builder')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { packageId } = request.params as any;
 
@@ -597,7 +625,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/video/search
    * Search videos with natural language
    */
-  app.post("/v1/ai/video/search", async (request, reply) => {
+  app.post("/v1/ai/video/search", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { query, branchId, from, to, limit } = request.body as any;
 
@@ -621,7 +651,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/video/search/person
    * Find person by clothing description
    */
-  app.post("/v1/ai/video/search/person", async (request, reply) => {
+  app.post("/v1/ai/video/search/person", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { clothing, branchId, from, to } = request.body as any;
 
@@ -644,7 +676,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/video/search/vehicle
    * Find vehicle by description
    */
-  app.post("/v1/ai/video/search/vehicle", async (request, reply) => {
+  app.post("/v1/ai/video/search/vehicle", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { vehicle, branchId, from, to } = request.body as any;
 
@@ -667,7 +701,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/video/track-across-cameras
    * Track object across cameras
    */
-  app.post("/v1/ai/video/track-across-cameras", async (request, reply) => {
+  app.post("/v1/ai/video/track-across-cameras", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { objectId, startTimestamp, timeWindowMinutes } = request.body as any;
 
@@ -687,7 +723,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/video/tracks
    * Get cross-camera tracks
    */
-  app.get("/v1/ai/video/tracks", async (request, reply) => {
+  app.get("/v1/ai/video/tracks", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { objectType, branchId, from, to, minCameras } = request.query as any;
 
@@ -712,7 +750,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * GET /v1/ai/video/journey/:trackingId
    * Get object journey visualization
    */
-  app.get("/v1/ai/video/journey/:trackingId", async (request, reply) => {
+  app.get("/v1/ai/video/journey/:trackingId", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { trackingId } = request.params as any;
 
@@ -740,7 +780,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/video/index
    * Index video metadata for search
    */
-  app.post("/v1/ai/video/index", async (request, reply) => {
+  app.post("/v1/ai/video/index", {
+    preHandler: requireFeature('ai-video-search')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { cameraId, segmentId, objects, metadata } = request.body as any;
 
@@ -761,7 +803,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/assistant/chat
    * Conversational security copilot
    */
-  app.post("/v1/ai/assistant/chat", async (request, reply) => {
+  app.post("/v1/ai/assistant/chat", {
+    preHandler: requireFeature('guardian-ai-assistant')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { query, sessionId } = (request.body as any) || {};
 
@@ -782,7 +826,9 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
    * POST /v1/ai/copilot/chat
    * Alias for conversational security copilot
    */
-  app.post("/v1/ai/copilot/chat", async (request, reply) => {
+  app.post("/v1/ai/copilot/chat", {
+    preHandler: requireFeature('guardian-ai-assistant')
+  }, async (request, reply) => {
     const auth = await authenticateRequest(request);
     const { query, sessionId } = (request.body as any) || {};
 
@@ -832,7 +878,7 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     for (const a of activeAlerts) {
       const sev = String(a.severity || "").toLowerCase();
       const title = String(a.title || "").toLowerCase();
-      const type = String(a.detectionType || a.detection?.type || "").toLowerCase();
+      const type = String(a.detectionType || "").toLowerCase();
 
       if (sev === "critical" || sev === "p1") {
         alertScore += 25;
@@ -912,16 +958,23 @@ export async function registerAIIntelligenceRoutes(app: FastifyInstance) {
     try {
       const graph = await buildOperationalGraph(store, auth.user, branchId);
       const events: CommandTimelineEvent[] = Array.isArray(timeline) ? timeline : [];
-      const rcaResult = await analyzeWithEngine(graph, events, {
-        tenantId: auth.user.tenantId,
-        branchId,
-        includeHistorical: true,
-      });
+      
+      // TODO: RCA engine integration pending
+      // const rcaResult = await analyzeWithEngine(graph, events, {
+      //   tenantId: auth.user.tenantId,
+      //   branchId,
+      //   includeHistorical: true,
+      // });
 
       return {
         success: true,
         branchId,
-        rca: rcaResult,
+        rca: {
+          status: "pending_implementation",
+          message: "RCA analysis engine integration in progress",
+          graphEntities: graph.entities.length,
+          events: events.length
+        },
       };
     } catch (err: any) {
       return reply.code(500).send({

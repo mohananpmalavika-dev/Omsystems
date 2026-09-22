@@ -84,7 +84,7 @@ export function CommandCenterView() {
     if (pendingLoad.current) return;
     const controller = new AbortController();
     pendingLoad.current = controller;
-    const timeout = window.setTimeout(() => controller.abort(), 8_000);
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     setLoading(true);
     setLoadError(null);
     try {
@@ -92,9 +92,10 @@ export function CommandCenterView() {
         fetch("/api/control/v1/operations/command-center", { credentials: "include", signal: controller.signal }).catch(() => null),
         fetch("/api/control/v1/operations/branches", { credentials: "include", signal: controller.signal }).catch(() => null),
       ]);
+      if (controller.signal.aborted) return;
       const sumData = sumRes ? await sumRes.json().catch(() => ({})) : {};
       const branchData = branchRes ? await branchRes.json().catch(() => ({})) : {};
-      if (controller.signal.aborted) throw new Error("Command Center refresh timed out");
+      if (controller.signal.aborted) return;
       const unavailable: string[] = [];
 
       if (sumRes?.ok && sumData?.success && sumData?.data) {
@@ -112,6 +113,7 @@ export function CommandCenterView() {
 
       if (unavailable.length) setLoadError(`${unavailable.join(" and ")} unavailable`);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Failed to load command center data:", err);
       setLoadError(err instanceof Error ? err.message : "Unable to load live fleet telemetry");
     } finally {

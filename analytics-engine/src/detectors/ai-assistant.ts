@@ -335,7 +335,7 @@ export class AIAssistant extends BaseDetector {
     
     // Color
     const colorMatch = lowerQuery.match(this.entityPatterns.color);
-    if (colorMatch) {
+    if (colorMatch && colorMatch[1]) {
       entities.push({
         type: 'color',
         value: colorMatch[1],
@@ -345,7 +345,7 @@ export class AIAssistant extends BaseDetector {
     
     // Time
     const timeMatch = lowerQuery.match(this.entityPatterns.time);
-    if (timeMatch) {
+    if (timeMatch && timeMatch[0]) {
       entities.push({
         type: 'time',
         value: timeMatch[0],
@@ -355,7 +355,7 @@ export class AIAssistant extends BaseDetector {
     
     // Camera
     const cameraMatch = lowerQuery.match(this.entityPatterns.camera);
-    if (cameraMatch) {
+    if (cameraMatch && cameraMatch[1]) {
       entities.push({
         type: 'camera',
         value: cameraMatch[1],
@@ -365,7 +365,7 @@ export class AIAssistant extends BaseDetector {
     
     // Number
     const numberMatch = lowerQuery.match(this.entityPatterns.number);
-    if (numberMatch) {
+    if (numberMatch && numberMatch[1]) {
       entities.push({
         type: 'number',
         value: numberMatch[1],
