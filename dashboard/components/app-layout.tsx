@@ -1047,23 +1047,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <span aria-hidden="true">•</span>
             <Link href="/terms" onClick={handleNavClick("/terms")}>Terms</Link>
           </div>
-          <div className="sidebar-user-menu">
-            <Link href="/account/security" className="sidebar-user" onClick={handleNavClick("/account/security")}>
-              <div className="avatar" aria-hidden="true">{operatorInitials}</div>
-              <Settings size={16} />
-            </Link>
-            <button 
-              className="logout-button" 
-              onClick={() => {
-                closeSidebar();
-                logout();
-              }}
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut size={16} />
-            </button>
-          </div>
         </div>
       </aside>
 
