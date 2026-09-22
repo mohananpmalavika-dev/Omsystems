@@ -414,16 +414,16 @@ export default function MISDashboardPage() {
                 Explore detailed analytics, financial reports, and compliance tracking
               </p>
               <div className="space-y-2">
-                <Link href="/reports/mis/financial" className="block text-sm text-purple-400 hover:underline">
+                <Link href="/reports/financial" className="block text-sm text-purple-400 hover:underline">
                   → Financial TCO Report
                 </Link>
-                <Link href="/reports/mis/compliance" className="block text-sm text-purple-400 hover:underline">
+                <Link href="/reports/compliance" className="block text-sm text-purple-400 hover:underline">
                   → Compliance Scorecard
                 </Link>
-                <Link href="/reports/mis/ai-analytics" className="block text-sm text-purple-400 hover:underline">
+                <Link href="/reports/ai-analytics/roi" className="block text-sm text-purple-400 hover:underline">
                   → AI Analytics Performance
                 </Link>
-                <Link href="/reports/mis/benchmarking" className="block text-sm text-purple-400 hover:underline">
+                <Link href="/reports/benchmarking" className="block text-sm text-purple-400 hover:underline">
                   → Branch Benchmarking
                 </Link>
               </div>

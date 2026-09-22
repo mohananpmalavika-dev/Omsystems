@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { AppLayout, getVisibleNavigation, type MenuAccessUser } from "@/components/app-layout";
+import { hasUnrestrictedMenuAccess } from "@/lib/navigation-access";
+import { defaultRoleWorkspace } from "@/lib/role-workspaces";
 import { PageHero } from "@/components/page-hero";
 import { authApi, cameraInventoryApi, anprLogisticsApi, nbfcWatchlistApi, secureAreaAuthorizationApi, branchOpeningPolicyApi, type BranchOpeningPolicy } from "@/lib/api-client";
 import type { Branch } from "@/lib/types";
@@ -380,8 +382,14 @@ export default function NbfcOperationsPage() {
 
   const availableWorkflows = useMemo(() => {
     if (!user) return [];
-    const allowed = new Set(getVisibleNavigation(user).flatMap((group) => group.items.map((item) => item.href)));
-    return workflows.filter((workflow) => allowed.has(workflow.href));
+    if (hasUnrestrictedMenuAccess(user)) return workflows;
+    const navHrefs = new Set(getVisibleNavigation(user).flatMap((group) => group.items.map((item) => item.href)));
+    const roleHrefs = new Set(defaultRoleWorkspace(user.role));
+    return workflows.filter((workflow) => {
+      if (navHrefs.has(workflow.href) || roleHrefs.has(workflow.href)) return true;
+      const section = "/" + workflow.href.split("/")[1];
+      return [...navHrefs].some((href) => href.startsWith(section));
+    });
   }, [user]);
 
   const activeVehicle = Array.isArray(logistics?.data)

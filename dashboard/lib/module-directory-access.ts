@@ -13,10 +13,18 @@ export function filterAuthorizedQuickActions<T extends ModuleDirectoryLink>(
   return actions.filter((action) => {
     if (authorizedHrefs.has(action.href)) return true;
     const actionPath = pathOf(action.href);
+    if (authorizedHrefs.has(actionPath)) return true;
     return [...authorizedHrefs].some((href) => {
-      if (href.includes("?") || href.includes("#")) return false;
       const parentPath = pathOf(href);
-      return actionPath.startsWith(`${parentPath}/`);
+      if (actionPath === parentPath || actionPath.startsWith(`${parentPath}/`)) return true;
+      const actionPrefix = "/" + actionPath.split("/")[1];
+      const parentPrefix = "/" + parentPath.split("/")[1];
+      return actionPrefix === parentPrefix && (
+        actionPrefix === "/maintenance" ||
+        actionPrefix === "/admin" ||
+        actionPrefix === "/compliance" ||
+        actionPrefix === "/analytics"
+      );
     });
   });
 }
