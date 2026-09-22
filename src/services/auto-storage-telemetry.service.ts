@@ -10,6 +10,7 @@
  */
 
 
+import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
 import type { DeviceInventoryRecord } from '../control-plane-store.js';
 
