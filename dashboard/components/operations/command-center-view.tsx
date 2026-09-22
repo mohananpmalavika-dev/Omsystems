@@ -36,6 +36,8 @@ import {
   Thermometer,
   HardDrive,
   PlusCircle,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
