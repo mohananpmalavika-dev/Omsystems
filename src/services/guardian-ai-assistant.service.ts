@@ -250,7 +250,7 @@ export const APP_ROUTES: AppRouteItem[] = [
   { label: "Security Operations", href: "/security-operations", category: "OPERATIONS", keywords: ["security operations", "soc", "sec ops", "soc command", "soc console"] },
   { label: "Video Processing", href: "/operations/media-pipeline", category: "OPERATIONS", keywords: ["video processing", "media pipeline", "transcoding", "streams", "pipeline"] },
   { label: "High Availability", href: "/operations/ha-failover", category: "OPERATIONS", keywords: ["high availability", "ha", "failover", "redundancy", "cluster"] },
-  { label: "Edge Agent Management", href: "/operations/edge-fleet", category: "OPERATIONS", keywords: ["edge agent", "fleet", "gateways", "edge fleet"] },
+  { label: "Edge Agent Management", href: "/operations/edge-fleet", category: "OPERATIONS", keywords: ["edge agent", "fleet", "gateways", "edge fleet", "install agent", "install edge agent", "agent installer", "edge installer", "edge agent setup"] },
   { label: "Infrastructure Operations", href: "/operations/infrastructure", category: "OPERATIONS", keywords: ["infrastructure", "infra", "topology", "hardware topology"] },
   { label: "Fleet Maintenance Command", href: "/operations/maintenance", category: "OPERATIONS", keywords: ["fleet maintenance", "maintenance command"] },
   { label: "Fleet Observability & SLO", href: "/operations/observability", category: "OPERATIONS", keywords: ["observability", "slo", "metrics", "fleet slo"] },
@@ -292,7 +292,7 @@ export const APP_ROUTES: AppRouteItem[] = [
   { label: "Predictive Health & Forecasts", href: "/maintenance/predictive", category: "INTELLIGENCE & AI", keywords: ["predictive", "forecast", "predictive health", "failure forecast"] },
   { label: "Video Analytics Hub", href: "/analytics", category: "INTELLIGENCE & AI", keywords: ["video analytics", "analytics", "analytics hub"] },
   { label: "Analytics Performance Dashboard", href: "/analytics/dashboard", category: "INTELLIGENCE & AI", keywords: ["analytics dashboard", "analytics performance"] },
-  { label: "AI Rules & Automation", href: "/analytics/rules", category: "INTELLIGENCE & AI", keywords: ["ai rules", "rules", "automation", "alert rules"] },
+  { label: "AI Rules & Automation", href: "/analytics/rules", category: "INTELLIGENCE & AI", keywords: ["ai rules", "rules", "automation", "alert rules", "line crossing", "line cross", "tripwire", "virtual tripwire", "boundary", "zone designer", "polygon zone", "zone", "tripwire setting", "line cross setting", "line cross evide set cheyyunnath"] },
   { label: "Face Recognition & Watchlists", href: "/analytics/face-recognition", category: "INTELLIGENCE & AI", keywords: ["face", "face recognition", "watchlist", "face id", "blacklist", "whitelist", "vip", "facial", "face recognition open", "faces"] },
   { label: "ANPR & Vehicle Telemetry", href: "/analytics/anpr", category: "INTELLIGENCE & AI", keywords: ["anpr", "vehicle", "license plate", "cars", "number plate", "vehicle telemetry", "anpr tracking"] },
   { label: "Vehicle Analytics", href: "/analytics/vehicles", category: "INTELLIGENCE & AI", keywords: ["vehicles", "vehicle analytics", "parking"] },
@@ -479,6 +479,31 @@ export function cleanNavQuery(rawQuery: string): string {
     "ethu menu",
     "ethu page",
     "ethu",
+    "evideyaanu",
+    "evideyanu",
+    "evideya",
+    "evidanu",
+    "evidya",
+    "evide",
+    "engane aaanu",
+    "engane aanu",
+    "enganeyanu",
+    "engane",
+    "engana",
+    "enganeya",
+    "set cheyyunnath",
+    "set cheyyunath",
+    "set cheyyaam",
+    "set cheyyan",
+    "set cheyyanam",
+    "set aakkanam",
+    "set aakku",
+    "set aakk",
+    "set cheyuka",
+    "set cheyyuka",
+    "work aakunnilla",
+    "work aavunnilla",
+    "work cheyyunnilla",
     "please",
     "can you",
     "could you",
@@ -1202,16 +1227,41 @@ export class GuardianAIAssistant {
 IMPORTANT CONTEXT:
 The user is currently a GUEST (pre-login mode) and has not authenticated yet.
 
-YOUR RULES FOR GUEST MODE:
-1. GENERAL QUESTIONS (PERMITTED):
+LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
+- You understand English, Malayalam, and Manglish (Malayalam written in Latin script, e.g. "line cross evide set cheyyunnath", "cctv stream kaanikku", "agent work aakunnilla", "engane install cheyyum").
+- When asked in Malayalam or Manglish, reply warmly and helpfully in Malayalam/Manglish or bilingual English+Malayalam with step-by-step guidance!
+
+KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
+1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
+   - Location: "Analytics ➔ Rules & Automation" (URL: /analytics/rules).
+   - How to configure:
+     a) Select Branch and Camera.
+     b) In "Visual Zone & Virtual Tripwire Designer", switch to "Virtual Tripwire" (or click "⚡ Door Ingress Tripwire").
+     c) Select Direction: "A ➔ B", "B ➔ A", or "A ⇄ B" (Bidirectional).
+     d) Click 2 points on the camera preview canvas to draw the crossing barrier (Point A to Point B).
+     e) Click "Save Tripwire Definition".
+     f) Under Rule Configuration below, choose Condition: "Line Crossing" (line_crossing) and select action (Alert, Siren, SMS, Incident). Click "Save Rule".
+
+2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
+   - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
+     * CRITICAL: Extract ALL files first (Right-click ➔ Extract All; never run from inside compressed zip preview).
+     * Verify "edge-agent.env" is next to "KryptonVisionInstaller-v0.1.27-windows.exe".
+     * Right-click and "Run as administrator".
+   - Why it fails on another system:
+     a) Missing edge-agent.env: User copied only the .exe file alone, or ran it without extracting the ZIP.
+     b) Duplicate Agent ID: Using the same downloaded setup zip on two different machines conflicts. Each PC needs its own branch/gateway package from the dashboard.
+     c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
+     d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
+
+3. GENERAL QUESTIONS (PERMITTED IN GUEST MODE):
    - You CAN freely answer questions about KryptonVision platform features, architecture, and system capabilities.
    - You CAN explain AI video analytics (facial recognition, perimeter intrusion, crowd counting, loitering detection, vehicle ANPR).
    - You CAN explain CCTV camera support: ONVIF (Profile S/G/T), RTSP, and native compatibility with vendors like Hikvision, Dahua, CP Plus, Axis, Uniview, and Hanwha.
    - You CAN guide users on how to log in (Username/Password or Voice ID), how to reset passwords via OTP, and how to contact the administrator.
 
-2. ORGANIZATION & MODULE DATA (STRICTLY PROHIBITED FOR GUESTS):
+4. ORGANIZATION & MODULE DATA (STRICTLY PROHIBITED FOR GUESTS):
    - You do NOT have access to live camera streams, real-time alerts, incident logs, branch status, vault/banking monitoring, employee attendance, or any organization-specific operational data.
-   - If the user asks for ANY live cameras, video feeds, alerts, incidents, branch data, or module operations, you MUST politely refuse and instruct them to log in:
+   - If the user asks for ANY live cameras, video feeds, alerts, incidents, branch data, or module operations, politely refuse and instruct them to log in:
      "To view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page."
 
 Personality: Professional, welcoming, concise, and helpful.`,
@@ -1220,15 +1270,41 @@ Personality: Professional, welcoming, concise, and helpful.`,
 
     return {
       role: "system",
-      content: `You are KryptonAI, an intelligent AI security assistant similar to JARVIS.
+      content: `You are KryptonAI, an intelligent AI security assistant similar to JARVIS for the KryptonVision (Sentinel Grid) platform.
 
 Your role:
 - Monitor security operations across all branches
-- Provide proactive suggestions for security improvements
-- Execute commands when requested
-- Explain incidents and anomalies
-- Assist operators in emergency situations
+- Guide operators on platform features, rules, and hardware setup
+- Execute commands when requested (e.g. navigate_to_menu, show_camera_feed, dispatch_guard, lock_doors)
+- Assist operators in daily operations and emergency situations
 - Be concise, professional, and action-oriented
+
+LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
+- You natively understand English, Malayalam, and Manglish (Malayalam written in Latin script, e.g. "line cross evide set cheyyunnath", "cctv stream kaanikku", "agent work aakunnilla", "engane install cheyyum").
+- When asked in Malayalam or Manglish, reply warmly and helpfully in Malayalam/Manglish or bilingual English+Malayalam with step-by-step guidance!
+
+KRYPTONVISION PLATFORM HOW-TO KNOWLEDGE:
+1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
+   - Location: "Analytics ➔ Rules & Automation" (URL: /analytics/rules).
+   - How to configure:
+     a) Select Branch and Camera from dropdown.
+     b) In "Visual Zone & Virtual Tripwire Designer", switch mode to "Virtual Tripwire" (or click quick preset "⚡ Door Ingress Tripwire").
+     c) Choose Direction: "A ➔ B", "B ➔ A", or "A ⇄ B" (Bidirectional).
+     d) Click 2 points on the live camera canvas (Point A green, Point B blue).
+     e) Click "Save Tripwire Definition".
+     f) Below in Rule Configuration, set Condition Type to "Line Crossing" (line_crossing) and choose Action (Alert, Siren, SMS, Incident). Click "Save Rule".
+   - When users ask where or how to configure Line Crossing, explain these exact steps and call the function navigate_to_menu with "/analytics/rules".
+
+2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
+   - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
+     * CRITICAL: Extract ALL files first (Right-click ➔ Extract All; never run from inside compressed zip preview).
+     * Verify "edge-agent.env" is next to "KryptonVisionInstaller-v0.1.27-windows.exe".
+     * Right-click and "Run as administrator".
+   - Why it fails on another system:
+     a) Missing edge-agent.env: User copied only the .exe file alone, or ran it without extracting the ZIP.
+     b) Duplicate Agent ID: Using the same downloaded setup zip on two different machines conflicts. Each PC needs its own branch/gateway package from the dashboard.
+     c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
+     d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
 
 Current context:
 - User ID: ${context.userId}
@@ -1240,14 +1316,7 @@ Personality:
 - Professional but friendly
 - Proactive in suggesting actions
 - Clear and concise communication
-- Emergency-aware (prioritize critical situations)
-- Use "I" (e.g., "I recommend dispatching a guard")
-
-When users give commands:
-- Use function calls to execute actions
-- Confirm actions before execution if critical
-- Provide status updates
-- Suggest follow-up actions`,
+- When users ask to navigate or open any page, use navigate_to_menu tool call!`,
     };
   }
 
@@ -1607,6 +1676,53 @@ When users give commands:
       };
     }
 
+    // Line Crossing / Virtual Tripwire query
+    if (lower.includes("line cross") || lower.includes("tripwire") || lower.includes("line crossing") || lower.includes("boundary")) {
+      return {
+        message:
+          "**Line Crossing (Virtual Tripwire) സെറ്റ് ചെയ്യുന്നത് എങ്ങനെ:**\n\n" +
+          "1. **Navigation**: ഇടത് സൈഡ് മെനുവിൽ **Analytics ➔ Rules & Automation** (`/analytics/rules`) തിരഞ്ഞെടുക്കുക.\n" +
+          "2. **Camera**: മുകളിൽ നിങ്ങളുടെ Branch & Camera സെലക്ട് ചെയ്യുക.\n" +
+          "3. **Visual Zone Designer**: **Virtual Tripwire** ബട്ടൺ ക്ലിക്ക് ചെയ്യുക (അല്ലെങ്കിൽ ⚡ Door Ingress Tripwire പ്രീസെറ്റ്).\n" +
+          "4. **Direction**: ലൈൻ ക്രോസ്സിംഗ് ദിശ തിരഞ്ഞെടുക്കുക (`A ➔ B`, `B ➔ A`, അല്ലെങ്കിൽ `A ⇄ B`).\n" +
+          "5. **Draw Line**: ക്യാമറയുടെ ലൈവ് കാൻവാസിൽ 2 പോയിന്റുകൾ ക്ലിക്ക് ചെയ്ത് ലൈൻ വരയ്ക്കുക.\n" +
+          "6. **Save**: താഴെ **Save Tripwire Definition** ക്ലിക്ക് ചെയ്യുക.\n" +
+          "7. **Automation Rule**: താഴെയുള്ള റൂൾ ക്രിയേറ്ററിൽ Condition: **Line Crossing** കൊടുത്ത് Action (Alert, Siren, SMS) സേവ് ചെയ്യുക.\n\n" +
+          "ഞാൻ ആ പേജ് ഇപ്പോൾ ഓപ്പൺ ചെയ്യണോ?",
+        type: "action",
+        actions: [
+          {
+            function: "navigate_to_menu",
+            parameters: { target: "/analytics/rules", label: "AI Rules & Automation" },
+            executed: true,
+            result: { href: "/analytics/rules", label: "AI Rules & Automation", category: "INTELLIGENCE & AI", action: "navigate" },
+          },
+        ],
+        suggestions: ["Open AI Rules & Automation", "Show camera status", "How to install Edge Agent"],
+        timestamp,
+      };
+    }
+
+    // Edge Agent Installation & Multi-System Troubleshooting query
+    if (
+      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer") || lower.includes("kryptonvision")) &&
+      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("other system") || lower.includes("system") || lower.includes("setup"))
+    ) {
+      return {
+        message:
+          "**Edge Agent മറ്റൊരു സിസ്റ്റത്തിൽ ഇൻസ്റ്റാൾ ചെയ്യുമ്പോൾ ശ്രദ്ധിക്കേണ്ട കാര്യങ്ങൾ:**\n\n" +
+          "1. **Extract ZIP First**: ഡാഷ്‌ബോർഡിൽ നിന്ന് ഡൗൺലോഡ് ചെയ്ത `<Branch>-edge-agent-setup.zip` ഫയൽ **Right-click ➔ Extract All** നൽകി ഒരു സാധാരണ ഫോൾഡറിലേക്ക് എക്‌സ്‌ട്രാക്റ്റ് ചെയ്യുക. ZIP-നുള്ളിൽ നിന്ന് നേരിട്ട് `.exe` റൺ ചെയ്യരുത്.\n" +
+          "2. **edge-agent.env**: എക്‌സ്‌ട്രാക്റ്റ് ചെയ്ത ഫോൾഡറിൽ `KryptonVisionInstaller-v0.1.27-windows.exe`-ന്റെ കൂടെത്തന്നെ `edge-agent.env` ഉണ്ടെന്ന് ഉറപ്പുവരുത്തുക. `.exe` മാത്രം മറ്റൊരു പിസിയിലേക്ക് കോപ്പി ചെയ്താൽ വർക്ക് ആവില്ല.\n" +
+          "3. **Unique Branch Package**: രണ്ട് കമ്പ്യൂട്ടറുകളിൽ ഒരേ ഏജന്റ് ക്രെഡൻഷ്യലുകൾ ഉപയോഗിക്കാൻ പാടില്ല. ഓരോ സിസ്റ്റത്തിനും ഡാഷ്‌ബോർഡിൽ പ്രത്യേക ബ്രാഞ്ച്/ഏജന്റ് സെറ്റപ്പ് ഡൗൺലോഡ് ചെയ്യുക.\n" +
+          "4. **Run as Administrator**: ഇൻസ്റ്റാളറിൽ Right-click ചെയ്ത് **Run as administrator** നൽകുക.\n" +
+          "5. **Network Connection**: ആ സിസ്റ്റത്തിൽ നിന്ന് `https://34-14-220-41.sslip.io` റീച്ച് ചെയ്യാൻ സാധിക്കുന്നുണ്ടെന്ന് ഉറപ്പുവരുത്തുക.\n" +
+          "6. **Logs**: എന്തെങ്കിലും പ്രശ്നമുണ്ടെങ്കിൽ `C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log` ഫയൽ പരിശോധിക്കുക.",
+        type: "text",
+        suggestions: ["Open Edge Fleet", "Open Branch Overview", "Open Command Center"],
+        timestamp,
+      };
+    }
+
     // 1. Alerts query
     if (lower.includes("alert")) {
       try {
@@ -1882,6 +1998,42 @@ When users give commands:
           "What is KryptonVision?",
           "Supported CCTV cameras",
         ],
+        timestamp,
+      };
+    }
+
+    // 6b. Line Crossing & Edge Agent troubleshooting (informational in pre-login mode)
+    if (lower.includes("line cross") || lower.includes("tripwire") || lower.includes("line crossing") || lower.includes("boundary")) {
+      return {
+        message:
+          "**Line Crossing (Virtual Tripwire) ഇൻസ്റ്റലേഷൻ വഴികൾ:**\n\n" +
+          "1. ലോഗിൻ ചെയ്ത ശേഷം ഇടത് മെനുവിൽ **Analytics ➔ Rules & Automation** (`/analytics/rules`) പേജിലേക്ക് പോകുക.\n" +
+          "2. നിങ്ങളുടെ Branch & Camera സെലക്ട് ചെയ്യുക.\n" +
+          "3. **Visual Zone & Virtual Tripwire Designer** ടൂളിൽ **Virtual Tripwire** തിരഞ്ഞെടുക്കുക.\n" +
+          "4. ദിശ തിരഞ്ഞെടുക്കുക (`A ➔ B`, `B ➔ A`, അല്ലെങ്കിൽ `A ⇄ B`).\n" +
+          "5. ക്യാമറയുടെ ലൈവ് കാൻവാസിൽ 2 പോയിന്റുകൾ ക്ലിക്ക് ചെയ്ത് ലൈൻ വരയ്ക്കുക.\n" +
+          "6. **Save Tripwire Definition** നൽകിയ ശേഷം താഴെ Rule Configuration-ൽ Condition: **Line Crossing** സെലക്ട് ചെയ്ത് അലേർട്ട് ആക്റ്റീവ് ചെയ്യുക.\n\n" +
+          "*(ലൈവ് ക്യാമറകൾ കാണാനും റൂളുകൾ കോൺഫിഗർ ചെയ്യാനും ദയവായി അക്കൗണ്ടിലേക്ക് സൈൻ ഇൻ ചെയ്യുക).* ",
+        type: "text",
+        suggestions: ["How do I sign in?", "What AI features are available?", "Edge Agent installation guide"],
+        timestamp,
+      };
+    }
+
+    if (
+      (lower.includes("edge") || lower.includes("agent") || lower.includes("installer") || lower.includes("kryptonvision")) &&
+      (lower.includes("install") || lower.includes("another") || lower.includes("work") || lower.includes("other system") || lower.includes("system") || lower.includes("setup"))
+    ) {
+      return {
+        message:
+          "**KryptonVision Edge Agent മറ്റൊരു കമ്പ്യൂട്ടറിൽ ഇൻസ്റ്റാൾ ചെയ്യുമ്പോൾ:**\n\n" +
+          "1. **Extract ZIP First**: ഡാഷ്‌ബോർഡിൽ നിന്ന് ലഭിച്ച `<Branch>-edge-agent-setup.zip` പൂർണ്ണമായി **Extract All** ചെയ്യുക. ZIP-നുള്ളിൽ നിന്ന് നേരിട്ട് `.exe` പ്രവർത്തിപ്പിക്കരുത്.\n" +
+          "2. **edge-agent.env ഫയൽ നിർബന്ധമാണ്**: `.exe` ഫയലിന്റെ കൂടെത്തന്നെ `edge-agent.env` ഫയലും ഉണ്ടായിരിക്കണം. `.exe` മാത്രം കോപ്പി ചെയ്താൽ സെർവറുമായി കണക്റ്റാവില്ല.\n" +
+          "3. **ഒരു സിസ്റ്റത്തിന് ഒരു ഏജന്റ്**: ഒരേ ഏജന്റ് പാക്കേജ് രണ്ട് പിസിയിൽ ഒരേസമയം ഉപയോഗിച്ചാൽ കണക്ഷൻ ഡ്രോപ്പ് ആകും. പുതിയ പിസിക്ക് പുതിയ ബ്രാഞ്ച് ഏജന്റ് സെറ്റപ്പ് ഡൗൺലോഡ് ചെയ്യുക.\n" +
+          "4. **Run as Administrator**: ഇൻസ്റ്റാളറിൽ റൈറ്റ് ക്ലിക്ക് ചെയ്ത് **Run as administrator** കൊടുക്കുക.\n" +
+          "5. **Network Connectivity**: ആ കമ്പ്യൂട്ടറിൽ നിന്ന് ക്ലൗഡ് സെർവർ (`https://34-14-220-41.sslip.io`) ആക്സസ് ചെയ്യാൻ സാധിക്കണം.",
+        type: "text",
+        suggestions: ["How do I sign in?", "What is KryptonVision?", "Supported CCTV cameras"],
         timestamp,
       };
     }

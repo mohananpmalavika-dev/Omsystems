@@ -352,14 +352,14 @@ export class VoiceMetricsService {
 
   private parseKey(key: string): { name: string; tags?: Record<string, string> } {
     const parts = key.split(":");
-    const name = parts[0];
+    const name = parts[0] || "";
     
     if (parts.length === 1) {
       return { name };
     }
     
     const tags: Record<string, string> = {};
-    const tagParts = parts[1].split(",");
+    const tagParts = (parts[1] || "").split(",");
     
     for (const tagPart of tagParts) {
       const [k, v] = tagPart.split("=");
@@ -400,7 +400,7 @@ export class VoiceMetricsService {
     if (sortedValues.length === 0) return 0;
     
     const index = Math.ceil(sortedValues.length * p) - 1;
-    return sortedValues[Math.max(0, index)];
+    return sortedValues[Math.max(0, index)] ?? 0;
   }
 }
 

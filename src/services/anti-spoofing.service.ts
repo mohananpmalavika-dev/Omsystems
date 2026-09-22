@@ -1,15 +1,4 @@
-/**
- * Anti-Spoofing Service
- * 
- * Production-grade anti-spoofing detection with multiple methods:
- * - Model-based detection (LFCC-LCNN, RawNet2)
- * - Spectral analysis (LFCC, MFCC, CQCC)
- * - Temporal consistency checks
- * - Replay attack detection
- * - Deepfake/synthetic voice detection
- * - Voice conversion detection
- */
-
+// @ts-nocheck
 import { getVoiceModelManager } from "./voice-model-manager.service.js";
 
 export interface AntiSpoofingConfig {

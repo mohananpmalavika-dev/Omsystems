@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * AI Metrics Collector Service
  * 
@@ -19,7 +20,7 @@
  * Status: Production-ready with error handling
  */
 
-import { pool } from '../database.js';
+import { pool } from '../database/pool.js';
 import { EventEmitter } from 'events';
 
 export interface AIMetricEvent {

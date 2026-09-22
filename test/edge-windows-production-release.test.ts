@@ -36,6 +36,7 @@ async function fixture(manifestText?: string, binary?: Buffer) {
   if (binary !== undefined) await writeFile(join(root, "release", "edge-agent.exe"), binary);
   await writeFile(join(root, "installer", "windows", "sentinel-grid.iss"), installerSource);
   await writeFile(join(root, "installer", "windows", "output", "KryptonVisionInstaller-v1.0.0-windows.exe"), nativeInstaller);
+  await writeFile(join(root, "release", "OM-Systems-Sentinel-Grid-Signing.cer"), Buffer.from("public-self-signed-certificate"));
   return script;
 }
 

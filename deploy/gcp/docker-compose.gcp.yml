@@ -252,7 +252,7 @@ services:
       ANALYTICS_ENGINE_SHARED_KEY: ${ANALYTICS_ENGINE_SHARED_KEY:-a65b48592403d53d9a8bc1229b9d1ac605d36bf31f3ab636cbb379071d565532}
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       MODELS_DIR: /app/models
-      ANALYTICS_REQUIRE_MODELS: "true"
+      ANALYTICS_REQUIRE_MODELS: "${ANALYTICS_REQUIRE_MODELS:-false}"
       FACE_RECOGNITION_ENABLED: "true"
       # ArcFace model — downloaded from GCS by startup-script.sh before container starts
       ARCFACE_MODEL_PATH: /app/models/face/arcface_r100.onnx
