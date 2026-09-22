@@ -60,7 +60,7 @@ const
   TaskName = 'Sentinel Grid Edge Agent';
   LegacyServiceName = 'SentinelGridEdgeAgent';
   FirewallRuleName = 'Sentinel Grid Private Live Video';
-  ControlPlaneUrl = 'https://sentinel-grid-control-plane-zcli.onrender.com';
+  ControlPlaneUrl = 'https://34-14-220-41.sslip.io';
   ActivationInvalidExitCode = 41;
   DeviceAlreadyEnrolledExitCode = 42;
 
@@ -574,7 +574,7 @@ begin
   ConfigureFirewall;
   RegisterAgentTask;
   if not EnrollmentConfirmed then
-    MsgBox('Sentinel Grid Edge Agent is installed and will retry enrollment automatically when the network and control plane are reachable. Keep this installer package on the branch PC until the dashboard shows the gateway online.', mbInformation, MB_OK);
+    Log('Sentinel Grid Edge Agent is installed and will retry enrollment automatically when the network and control plane are reachable.');
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +

@@ -1,10 +1,11 @@
 import { createReadStream, statSync, readFileSync, openSync, readSync, closeSync } from "node:fs";
+import { basename } from "node:path";
 import { execSync } from "node:child_process";
 
 const token = execSync("gcloud auth print-access-token", { encoding: "utf8" }).trim();
 const bucket = "kryptovision-installer-7866fc3f";
-const objectName = "edge-agent.exe.zip";
-const filePath = "edge-agent/release/edge-agent.exe.zip";
+const filePath = process.argv[2] || "edge-agent/release/edge-agent.exe";
+const objectName = process.argv[3] || basename(filePath);
 const fileSize = statSync(filePath).size;
 
 console.log(`Starting Resumable Chunked Upload of ${filePath} (${(fileSize / (1024 * 1024)).toFixed(2)} MB) to gs://${bucket}/${objectName}...`);
@@ -16,7 +17,7 @@ const initRes = await fetch(initUrl, {
   headers: {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json; charset=UTF-8",
-    "X-Upload-Content-Type": "application/zip",
+    "X-Upload-Content-Type": "application/octet-stream",
     "X-Upload-Content-Length": String(fileSize),
   },
   body: JSON.stringify({ name: objectName }),
@@ -57,7 +58,7 @@ while (offset < fileSize) {
         headers: {
           "Content-Range": `bytes ${offset}-${end}/${fileSize}`,
           "Content-Length": String(currentChunkSize),
-          "Content-Type": "application/zip",
+          "Content-Type": "application/octet-stream",
         },
         body: buffer,
       });
