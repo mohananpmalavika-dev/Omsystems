@@ -502,7 +502,8 @@ export type AnalyticsRuleInput = Omit<
 
 export interface AnalyticsAlertFilters {
   cameraId?: string | undefined;
-  branchId?: string | undefined;
+  branchId?: string | undefined; // Single branch (backward compatible)
+  branchIds?: string[] | undefined; // Multiple branches (new feature for cross-branch visibility)
   status?: AnalyticsAlertStatus | undefined;
   severity?: AnalyticsAlert["severity"] | undefined;
   from?: string | undefined;

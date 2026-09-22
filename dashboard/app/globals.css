@@ -738,8 +738,8 @@ button { cursor: pointer; }
 .sidebar-status strong, .sidebar-user strong { display: block; font-size: 11px; color: var(--ink); }
 .sidebar-status span, .sidebar-user span { color: var(--sidebar-muted); font-size: 9px; }
 .sidebar-user {
-  display: flex; align-items: center; gap: 10px; margin-top: 12px;
-  padding: 12px 8px 2px; border-top: 1px solid var(--sidebar-border);
+  display: flex; align-items: center; gap: 10px; margin-top: 6px;
+  padding: 6px 8px 2px; border-top: 1px solid var(--sidebar-border);
 }
 .avatar {
   width: 31px; height: 31px; display: grid; place-items: center;
@@ -7438,7 +7438,7 @@ body {
 .main-nav a.active::before { left: -3px; height: 21px; border-radius: 0 3px 3px 0; }
 .sidebar-footer { padding-top: 11px; }
 .sidebar-status { border-radius: 12px; }
-.sidebar-user { margin-top: 11px; padding-top: 11px; }
+.sidebar-user { margin-top: 6px; padding-top: 6px; }
 
 .workspace { margin-left: 276px; min-width: 0; background: transparent; }
 .topbar { height: 78px; padding: 0 32px; background: var(--topbar-bg); border-bottom: 1px solid var(--line); box-shadow: 0 1px 0 rgba(20,43,79,.025), 0 14px 34px rgba(20,43,79,.045); backdrop-filter: blur(20px) saturate(150%); }

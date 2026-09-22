@@ -234,7 +234,7 @@ export class CameraRepository {
       this.pool.query<{ count: string }>(
         `SELECT count(*)::text AS count FROM cameras
          JOIN resource_nodes camera_node ON camera_node.id = cameras.resource_node_id
-         ${where}`,
+         ${where} AND camera_node.is_active = true`,
         values,
       ),
     ]);

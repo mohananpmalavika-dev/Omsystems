@@ -21,7 +21,6 @@ import {
   Wrench,
   HelpCircle,
   FileCheck2,
-  Sparkles,
   Search,
   Activity,
   ChevronRight,
@@ -32,7 +31,6 @@ import {
   TrendingDown,
   Layers,
   FileSearch,
-  X,
   Play,
   Cpu,
   Thermometer,
@@ -60,8 +58,6 @@ export function CommandCenterView() {
   const [selectedRegion, setSelectedRegion] = useState("ALL");
   const [viewMode, setViewMode] = useState<"table" | "map">("table");
   const [selectedBranchWorkspace, setSelectedBranchWorkspace] = useState<any | null>(null);
-  const [askSentinelQuery, setAskSentinelQuery] = useState("");
-  const [askSentinelResponse, setAskSentinelResponse] = useState<string | null>(null);
   const pendingLoad = useRef<AbortController | null>(null);
   const router = useRouter();
 
@@ -208,54 +204,6 @@ export function CommandCenterView() {
       return true;
     });
   }, [branches, searchQuery, selectedStatus, selectedRegion]);
-
-  const handleAskSentinel = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!askSentinelQuery.trim()) return;
-    const q = askSentinelQuery.toLowerCase();
-
-    if (!hasAnyConfirmedData) {
-      setAskSentinelResponse("Live fleet telemetry is unavailable. Refresh the Command Center before relying on an operational answer.");
-      return;
-    }
-
-    if (hasBranchCountData && totalBranchesCount === 0) {
-      setAskSentinelResponse("The latest confirmed fleet data contains no enrolled branches.");
-      return;
-    }
-
-    if (q.includes("fail") || q.includes("72") || q.includes("risk")) {
-      if (hasBranchData) {
-        const atRisk = branches.filter((b) => b.risk?.level === "HIGH" || b.risk?.level === "MEDIUM");
-        if (atRisk.length > 0) {
-          setAskSentinelResponse(`The latest branch telemetry marks ${atRisk.length} branch(es) at risk: ${atRisk.map((b) => `${b.name} (${b.risk?.probabilityPct ?? "unknown"}%)`).join(", ")}.`);
-        } else {
-          setAskSentinelResponse("No branches in the latest confirmed branch telemetry are marked medium or high risk.");
-        }
-      } else if (summary?.atRiskBranchesCount != null) {
-        setAskSentinelResponse(`The latest Command Center summary reports ${Number(summary.atRiskBranchesCount)} at-risk branch(es). Branch-level telemetry is unavailable.`);
-      } else {
-        setAskSentinelResponse("Risk telemetry is unavailable, so no risk assessment can be confirmed.");
-      }
-    } else if (q.includes("offline") || q.includes("camera")) {
-      if (hasBranchData) {
-        const offline = branches.filter((b) => (b.cameras?.notWorking ?? (b.cameras?.total ?? 0) - (b.cameras?.healthy ?? 0)) > 0);
-        if (offline.length > 0) {
-          setAskSentinelResponse(`The latest branch telemetry reports cameras not working at: ${offline.map((b) => `${b.name} (${b.cameras.notWorking ?? ((b.cameras.total ?? 0) - (b.cameras.healthy ?? 0))})`).join(", ")}.`);
-        } else {
-          setAskSentinelResponse("No branch in the latest confirmed telemetry reports a camera as not working.");
-        }
-      } else if (hasCameraCountData) {
-        setAskSentinelResponse(`The latest Command Center summary reports ${workingCamerasCount} of ${totalCamerasCount} cameras working. Branch-level telemetry is unavailable.`);
-      } else {
-        setAskSentinelResponse("Camera telemetry is unavailable, so camera status cannot be confirmed.");
-      }
-    } else {
-      setAskSentinelResponse(hasBranchCountData
-        ? `The latest confirmed telemetry covers ${totalBranchesCount} registered branch(es). Refine the query to camera or risk status for the available checks.`
-        : "The Command Center summary is available, but the requested detail is not present in the current telemetry.");
-    }
-  };
 
   const exportHealthCsv = () => {
     if (branches.length === 0) return;
@@ -415,64 +363,7 @@ export function CommandCenterView() {
         </div>
       )}
 
-      {/* Global "Ask KryptonVision" AI Command Bar */}
-      <div className="command-center-ai-bar p-3 bg-slate-900/90 border border-indigo-900/50 rounded-xl shadow-md">
-        <form onSubmit={handleAskSentinel} className="flex items-center gap-2">
-          <div className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-400">
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            value={askSentinelQuery}
-            onChange={(e) => setAskSentinelQuery(e.target.value)}
-            placeholder='Ask KryptonVision: "Show me branches likely to fail recording within 72 hours" or "Are all cameras recording?"'
-            className="flex-1 bg-transparent text-sm text-slate-100 placeholder-slate-500 focus:outline-none"
-          />
-          <button
-            type="submit"
-            className="px-3 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-all"
-          >
-            Ask KryptonVision
-          </button>
-        </form>
 
-        <p className="mt-2 pl-8 text-[11px] text-slate-500">
-          Answers use the latest confirmed telemetry
-        </p>
-
-        {askSentinelResponse && (
-          <div className="mt-2.5 p-2.5 bg-indigo-950/50 border border-indigo-800/50 rounded-lg text-xs text-indigo-200 flex items-start justify-between gap-2">
-            <div>
-              <strong>Guided telemetry result:</strong> {askSentinelResponse}
-            </div>
-            <button onClick={() => setAskSentinelResponse(null)} className="text-slate-400 hover:text-white">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800/60 text-[11px] text-slate-400">
-          <span className="font-semibold text-slate-500">Quick queries:</span>
-          <button
-            onClick={() => { setAskSentinelQuery("Show me branches likely to fail recording within 72 hours"); }}
-            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            "Predicted failures &lt;72h"
-          </button>
-          <button
-            onClick={() => { setAskSentinelQuery("Are all connected cameras recording?"); }}
-            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            "Recording health"
-          </button>
-          <button
-            onClick={() => { setAskSentinelQuery("Which branches have retention below policy?"); }}
-            className="px-2 py-0.5 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 transition-colors"
-          >
-            "Retention deficits"
-          </button>
-        </div>
-      </div>
 
       {/* Row 1 & 2: Operational Intelligence Cards Grid */}
       <div className="command-center-metrics grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
