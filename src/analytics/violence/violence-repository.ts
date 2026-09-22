@@ -155,9 +155,10 @@ export class ViolenceRepository {
     const total = parseInt(countRes.rows[0]?.total ?? '0', 10);
 
     const listQuery = `
-      SELECT e.*, c.name as camera_name
+      SELECT e.*, camera_node.name as camera_name
       FROM violence_detection_events e
       LEFT JOIN cameras c ON e.camera_id = c.id
+      LEFT JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
       WHERE ${whereClause}
       ORDER BY e.occurred_at DESC
       LIMIT $${idx++} OFFSET $${idx++};
@@ -176,9 +177,10 @@ export class ViolenceRepository {
    */
   async getEventById(eventId: string, tenantId: string): Promise<ViolenceEventRecord | null> {
     const query = `
-      SELECT e.*, c.name as camera_name
+      SELECT e.*, camera_node.name as camera_name
       FROM violence_detection_events e
       LEFT JOIN cameras c ON e.camera_id = c.id
+      LEFT JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
       WHERE e.id = $1 AND e.tenant_id = $2;
     `;
     const res = await this.pool.query(query, [eventId, tenantId]);

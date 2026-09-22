@@ -200,9 +200,10 @@ export async function registerBehavioralAnalyticsRoutes(
       const { rows } = await pool.query(
         `SELECT 
           b.*,
-          c.name as camera_name
+          camera_node.name as camera_name
         FROM behavior_baselines b
         JOIN cameras c ON b.camera_id = c.id
+        JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
         WHERE b.camera_id = ANY($1)
           AND b.confidence_score >= $2
         ORDER BY b.last_updated DESC
@@ -670,7 +671,7 @@ export async function registerBehavioralAnalyticsRoutes(
       params.push(query.limit);
 
       const { rows } = await pool.query(
-        `SELECT * FROM predictive_alerts
+        `SELECT * FROM behavioral_predictive_alerts
          WHERE ${conditions.join(" AND ")}
          ORDER BY probability DESC, created_at DESC
          LIMIT $${paramIndex}`,
@@ -696,7 +697,7 @@ export async function registerBehavioralAnalyticsRoutes(
 
     try {
       const { rows } = await pool.query(
-        "SELECT * FROM predictive_alerts WHERE id = $1",
+        "SELECT * FROM behavioral_predictive_alerts WHERE id = $1",
         [id]
       );
 
@@ -735,7 +736,7 @@ export async function registerBehavioralAnalyticsRoutes(
 
       // Get prediction
       const { rows: predictionRows } = await pool.query(
-        "SELECT * FROM predictive_alerts WHERE id = $1",
+        "SELECT * FROM behavioral_predictive_alerts WHERE id = $1",
         [id]
       );
 
@@ -757,7 +758,7 @@ export async function registerBehavioralAnalyticsRoutes(
 
       // Dismiss prediction
       const { rows } = await pool.query(
-        `UPDATE predictive_alerts
+        `UPDATE behavioral_predictive_alerts
          SET status = 'dismissed',
              dismissed_by = $1,
              dismissed_at = NOW(),
@@ -847,7 +848,7 @@ export async function registerBehavioralAnalyticsRoutes(
         SELECT 
           (SELECT COUNT(*) FROM behavior_baselines) as baselines_count,
           (SELECT COUNT(*) FROM behavior_anomalies WHERE timestamp >= NOW() - INTERVAL '7 days') as recent_anomalies_count,
-          (SELECT COUNT(*) FROM predictive_alerts WHERE status = 'active') as active_predictions_count
+          (SELECT COUNT(*) FROM behavioral_predictive_alerts WHERE status = 'active') as active_predictions_count
       `);
 
       return {

@@ -85,6 +85,7 @@ import { registerMaintenanceHealthRoutes } from "./routes/maintenance-health.rou
 import { registerMaintenanceReportsRoutes } from "./routes/maintenance-reports.routes.js";
 import { registerMaintenanceExportRoutes } from "./routes/maintenance-export.routes.js";
 import { registerPredictiveAnalyticsRoutes } from "./routes/maintenance-predictive.routes.js";
+import { registerStorageTelemetryHealthRoutes } from "./routes/health-storage.routes.js";
 import { registerFirmwareManagementRoutes } from "./routes/maintenance-firmware.routes.js";
 import { registerCameraLocationMapRoutes } from "./routes/camera-location-map.routes.js";
 import { registerSlaReportRoutes } from "./routes/sla-reports.routes.js";
@@ -2513,6 +2514,7 @@ export async function buildApp(options?: {
   await registerMaintenanceRoutes(app, store);
   await registerMaintenanceExportRoutes(app, store);
   await registerPredictiveAnalyticsRoutes(app, store);
+  await registerStorageTelemetryHealthRoutes(app, store);
   await registerCameraLocationMapRoutes(app, store);
   await registerSlaReportRoutes(app, store);
   await registerOperationalHealthRoutes(app, store);

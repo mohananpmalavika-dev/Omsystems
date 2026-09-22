@@ -162,7 +162,10 @@ export class BehavioralAnalyticsService {
 
     // Get camera location
     const { rows: cameras } = await this.pool.query(
-      "SELECT location FROM cameras WHERE id = $1",
+      `SELECT camera_node.name AS location
+       FROM cameras c
+       JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
+       WHERE c.id = $1`,
       [cameraId]
     );
     const location = cameras[0]?.location || "Unknown";
@@ -227,7 +230,10 @@ export class BehavioralAnalyticsService {
 
     // Get camera info
     const { rows: cameras } = await this.pool.query(
-      "SELECT name FROM cameras WHERE id = $1",
+      `SELECT camera_node.name
+       FROM cameras c
+       JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
+       WHERE c.id = $1`,
       [cameraId]
     );
     const cameraName = cameras[0]?.name || "Unknown Camera";
@@ -369,7 +375,10 @@ export class BehavioralAnalyticsService {
 
     // Get all cameras for branch
     const { rows: cameras } = await this.pool.query(
-      "SELECT id, name, location FROM cameras WHERE branch_id = $1",
+      `SELECT c.id, camera_node.name, camera_node.name AS location
+       FROM cameras c
+       JOIN resource_nodes camera_node ON camera_node.id = c.resource_node_id
+       WHERE c.branch_node_id = $1`,
       [branchId]
     );
 
@@ -650,7 +659,7 @@ export class BehavioralAnalyticsService {
 
   private async storePrediction(prediction: PredictiveAlert): Promise<void> {
     await this.pool.query(
-      `INSERT INTO predictive_alerts (
+      `INSERT INTO behavioral_predictive_alerts (
         id, location, branch_id, prediction_type, probability, time_window,
         reasoning, suggested_actions, based_on_patterns, created_at
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
