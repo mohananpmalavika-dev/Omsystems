@@ -371,7 +371,6 @@ export const APP_ROUTES: AppRouteItem[] = [
   { label: "Signed Edge Config Bundles", href: "/admin/signed-configuration", category: "ADMINISTRATION", keywords: ["signed config", "edge config bundles"] },
   { label: "Database Manager", href: "/admin/database", category: "ADMINISTRATION", keywords: ["database", "db manager", "database manager"] },
   { label: "Device Registry & ONVIF", href: "/maintenance/device-management", category: "ADMINISTRATION", keywords: ["device registry", "onvif registry"] },
-  { label: "Third-Party Integrations", href: "/integrations", category: "ADMINISTRATION", keywords: ["integrations", "third party", "webhooks", "hikvision ax pro", "third party integrations"] },
   { label: "Notification Policies", href: "/operations/alert-notification-policy", category: "ADMINISTRATION", keywords: ["notification policies", "notifications", "alert policies"] },
   { label: "Camera Import / Export (Excel)", href: "/admin/camera-import-export", category: "ADMINISTRATION", keywords: ["camera import", "camera export", "excel import"] },
   { label: "Stream Quality Settings", href: "/admin/system", category: "ADMINISTRATION", keywords: ["stream quality", "main stream", "sub stream"] },

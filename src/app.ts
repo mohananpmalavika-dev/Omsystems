@@ -123,7 +123,6 @@ import { registerOperationalReportRoutes } from "./routes/operational-reports.ro
 import { registerDailySurveillanceReportRoutes } from "./routes/daily-surveillance-report.routes.js";
 import { registerFederationRoutes } from "./routes/federation.routes.js";
 import { registerEmployeeActivityTrackingRoutes } from "./routes/employee-activity-tracking.routes.js";
-import { registerIntegrationRoutes } from "./routes/integrations.routes.js";
 import { registerProvisioningRoutes } from "./routes/provisioning.routes.js";
 import { registerStorageHealthRoutes } from "./routes/storage-health.routes.js";
 import { registerAlertOperationsRoutes } from "./routes/alert-operations.routes.js";
@@ -2880,7 +2879,6 @@ export async function buildApp(options?: {
   });
   await registerAnalyticsPhase2Routes(app, store);
   await registerBehavioralAnalyticsRoutes(app, store, pool);
-  await registerIntegrationRoutes(app, store);
   await adminCameraManagementRoutes(app, store);
   await registerAlertCommandCenterRoutes(app, store, alertDispatcher,
     options?.alertWorkerKey ?? process.env.ALERT_WORKER_SHARED_KEY, voiceTokens,
