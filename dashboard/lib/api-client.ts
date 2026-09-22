@@ -161,7 +161,11 @@ async function fetchApi<T>(
     // Rebuild headers after refresh. Cross-site cookie fallback otherwise
     // retries with the expired token captured before the refresh completed.
     const headers = new Headers(options.headers);
-    if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (!headers.has('Content-Type') && options.body !== undefined && options.body !== null) {
+      if (typeof options.body === 'string' || !(options.body instanceof FormData)) {
+        headers.set('Content-Type', 'application/json');
+      }
+    }
     const token = getStoredToken('accessToken');
     if (token) {
       headers.set('x-sentinel-session', token);

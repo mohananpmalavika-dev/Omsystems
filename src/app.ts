@@ -885,6 +885,21 @@ export async function buildApp(options?: {
     }
     return reply.code(readiness.statusCode).send(readiness);
   });
+  app.removeContentTypeParser("application/json");
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (_request, body, done) => {
+    const raw = typeof body === "string" ? body.trim() : "";
+    if (!raw) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(raw));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
     done(null, Object.fromEntries(new URLSearchParams(String(body))));
   });

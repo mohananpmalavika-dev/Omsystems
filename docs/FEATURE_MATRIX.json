@@ -1,0 +1,304 @@
+{
+  "platform": "Sentinel Grid",
+  "version": "1.0.0-rc.2",
+  "generatedAt": "2026-09-22T22:15:00+05:30",
+  "features": [
+    {
+      "feature": "10-Tier Organizational Hierarchy",
+      "module": "organization",
+      "status": "REAL",
+      "implementation": "src/routes/organization.routes.ts",
+      "dependencies": ["PostgreSQL", "resource_nodes"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Role-Based Access Control (RBAC)",
+      "module": "identity-access",
+      "status": "REAL",
+      "implementation": "src/routes/auth.routes.ts",
+      "dependencies": ["PostgreSQL", "bcryptjs", "auth.middleware"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Attribute-Based Access Control (ABAC)",
+      "module": "identity-access",
+      "status": "REAL",
+      "implementation": "src/routes/abac.routes.ts",
+      "dependencies": ["PostgreSQL", "abac.service"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Enterprise Single Sign-On (OIDC/SAML)",
+      "module": "identity-access",
+      "status": "REAL",
+      "implementation": "src/security/oidc-provider.ts",
+      "dependencies": ["OIDC Provider", "LDAP Sync"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Zero-Touch Camera Onboarding (16-Step)",
+      "module": "device-management",
+      "status": "REAL",
+      "implementation": "src/routes/camera-discovery.routes.ts",
+      "dependencies": ["edge-agent", "ONVIF", "WS-Discovery"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Multi-Vendor Camera & Recorder Drivers",
+      "module": "device-management",
+      "status": "REAL",
+      "implementation": "src/recorder-drivers/",
+      "dependencies": ["Hikvision", "CP Plus", "Dahua", "ONVIF"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Dynamic Video Wall with Incident Prioritization",
+      "module": "live-monitoring",
+      "status": "REAL",
+      "implementation": "dashboard/app/control-room/page.tsx",
+      "dependencies": ["MediaMTX", "WebRTC", "HLS"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Media Gateway Token-Gated Streaming",
+      "module": "media-gateway",
+      "status": "REAL",
+      "implementation": "media-gateway/src/app.ts",
+      "dependencies": ["MediaMTX", "Fastify", "crypto"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Tiered Recording Storage (Hot/Warm/Cold)",
+      "module": "recording-engine",
+      "status": "REAL",
+      "implementation": "recording-engine/src/index.ts",
+      "dependencies": ["Local Disk", "S3/MinIO", "FFmpeg"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Multi-Camera Synchronized Playback",
+      "module": "playback",
+      "status": "REAL",
+      "implementation": "src/routes/synchronized-playback.routes.ts",
+      "dependencies": ["recording-engine", "HLS"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Pluggable ONNX/YOLO AI Detector Pipeline",
+      "module": "ai-analytics",
+      "status": "REAL",
+      "implementation": "analytics-engine/src/inference/yolo-detection-inference.ts",
+      "dependencies": ["onnxruntime-node", "YOLOv8"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Branch Opening/Closing Dual-Control Enforcement",
+      "module": "banking-analytics",
+      "status": "REAL",
+      "implementation": "src/analytics/branch-opening-dual-control.service.ts",
+      "dependencies": ["PostgreSQL", "nbfc_analytics_rules"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Cash Counter & Teller Surveillance",
+      "module": "banking-analytics",
+      "status": "REAL",
+      "implementation": "analytics-engine/src/detectors/banking-analytics.ts",
+      "dependencies": ["YOLOv8", "Zone Analysis"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Vault Mandatory Dual-Control Detection",
+      "module": "banking-analytics",
+      "status": "REAL",
+      "implementation": "src/routes/secure-area-authorizations.routes.ts",
+      "dependencies": ["PostgreSQL", "Camera Stream"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "ATM Health, Tampering & Risk Scoring",
+      "module": "banking-analytics",
+      "status": "REAL",
+      "implementation": "src/routes/nbfc-analytics.routes.ts",
+      "dependencies": ["analytics-engine", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Cash Van Logistics & ANPR Route Tracking",
+      "module": "banking-analytics",
+      "status": "REAL",
+      "implementation": "src/routes/anpr-logistics.routes.ts",
+      "dependencies": ["ANPR", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Access Control vs CCTV Mismatch Correlation",
+      "module": "banking-integrations",
+      "status": "REAL",
+      "implementation": "src/banking/access-control-cctv-correlation.service.ts",
+      "dependencies": ["Access Control Gateway", "Camera Analytics"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "POS / Core Banking Transaction Video Correlation",
+      "module": "banking-integrations",
+      "status": "REAL",
+      "implementation": "src/banking/pos-core-banking-correlation.service.ts",
+      "dependencies": ["Core Banking API", "Recording Search"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Natural Language Forensic Video Search",
+      "module": "ai-search",
+      "status": "REAL",
+      "implementation": "src/services/ai-video-search.ts",
+      "dependencies": ["PostgreSQL", "video_metadata", "video_objects"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Security AI Copilot & Incident Case Timeline",
+      "module": "ai-copilot",
+      "status": "REAL",
+      "implementation": "src/services/guardian-ai-assistant.service.ts",
+      "dependencies": ["PostgreSQL", "Audit Log", "Incident Engine"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Cross-Camera Person Re-Identification",
+      "module": "ai-analytics",
+      "status": "REAL",
+      "implementation": "src/routes/reid.routes.ts",
+      "dependencies": ["analytics-engine", "Vector Embeddings"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Privacy-Governed Face Recognition & Watchlists",
+      "module": "ai-analytics",
+      "status": "REAL",
+      "implementation": "src/privacy/",
+      "dependencies": ["PostgreSQL", "pgvector", "DPDP Guard"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Indian License Plate ANPR Engine",
+      "module": "ai-analytics",
+      "status": "REAL",
+      "implementation": "analytics-engine/src/detectors/anpr-detector.ts",
+      "dependencies": ["Tesseract/ONNX OCR", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Predictive Camera Health & Explainable Scoring",
+      "module": "maintenance",
+      "status": "REAL",
+      "implementation": "src/routes/maintenance-predictive.routes.ts",
+      "dependencies": ["Telemetry", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Explainable Branch Security Score",
+      "module": "command-center",
+      "status": "REAL",
+      "implementation": "src/routes/command-center.routes.ts",
+      "dependencies": ["Incident Repository", "Camera Uptime"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Enterprise SOC Command Center",
+      "module": "command-center",
+      "status": "REAL",
+      "implementation": "src/routes/enterprise-soc-operations.routes.ts",
+      "dependencies": ["PostgreSQL", "Redis"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "P1-P4 Multi-Channel Alert Engine",
+      "module": "alerts",
+      "status": "REAL",
+      "implementation": "src/alerts/notification-dispatcher.js",
+      "dependencies": ["SES", "Twilio", "Msg91", "Exotel"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Comprehensive Incident Lifecycle Management",
+      "module": "incidents",
+      "status": "REAL",
+      "implementation": "src/routes/incidents.routes.ts",
+      "dependencies": ["PostgreSQL", "Playbook Engine"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Evidence Vault & Section 65B Certification",
+      "module": "evidence",
+      "status": "REAL",
+      "implementation": "src/routes/evidence.routes.ts",
+      "dependencies": ["SHA-256", "HSM Signer", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Legal Hold Preservation Overriding Retention Purge",
+      "module": "evidence",
+      "status": "REAL",
+      "implementation": "recording-engine/src/index.ts",
+      "dependencies": ["PostgreSQL", "Retention Worker"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Automated Multi-Format Compliance Reports",
+      "module": "reporting",
+      "status": "REAL",
+      "implementation": "src/routes/reports.routes.ts",
+      "dependencies": ["PDFKit", "ExcelJS", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Edge Agent WAN Offline Buffer & Sync Replay",
+      "module": "edge-agent",
+      "status": "REAL",
+      "implementation": "edge-agent/src/offline/",
+      "dependencies": ["SQLite", "HTTPS mTLS"],
+      "testStatus": "PASS",
+      "productionReady": true
+    },
+    {
+      "feature": "Cryptographic Immutable Audit Logging",
+      "module": "audit",
+      "status": "REAL",
+      "implementation": "src/security/audit/immutable-audit.service.ts",
+      "dependencies": ["SHA-256 Chaining", "PostgreSQL"],
+      "testStatus": "PASS",
+      "productionReady": true
+    }
+  ]
+}

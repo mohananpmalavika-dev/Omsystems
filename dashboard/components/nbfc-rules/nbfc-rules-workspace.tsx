@@ -172,7 +172,7 @@ async function aiFetch<T = any>(url: string, options: RequestInit = {}): Promise
     : null;
 
   const headers = new Headers(options.headers || {});
-  if (!headers.has("Content-Type") && options.method && options.method !== "GET") {
+  if (!headers.has("Content-Type") && options.body !== undefined && options.body !== null) {
     headers.set("Content-Type", "application/json");
   }
   if (token) {
@@ -189,7 +189,11 @@ async function aiFetch<T = any>(url: string, options: RequestInit = {}): Promise
   if (!res.ok) {
     throw new Error(`AI API error: ${res.status} ${res.statusText}`);
   }
-  return res.json();
+  if (res.status === 204) {
+    return undefined as unknown as T;
+  }
+  const text = await res.text();
+  return text ? JSON.parse(text) : ({} as T);
 }
 
 export function NbfcRulesWorkspace() {
