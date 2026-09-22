@@ -70,7 +70,7 @@ import {
   Siren,
   SlidersHorizontal,
   Snowflake,
-  Sparkles,
+  Sparkles as SparklesIcon,
   ToggleLeft,
   TrendingUp,
   Truck,
@@ -161,7 +161,7 @@ export const navigation: NavGroup[] = [
   },
   {
     label: "INTELLIGENCE & AI",
-    icon: Sparkles,
+    icon: SparklesIcon,
     items: [
       { label: "Branch risk intelligence", href: "/analytics", icon: Activity },
       { label: "AI ROI Calculator", href: "/reports/ai-analytics/roi", icon: TrendingUp },
