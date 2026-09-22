@@ -28,6 +28,8 @@ import {
   Laptop,
   StopCircle,
   ShieldCheck,
+  HardDrive,
+  Database,
 } from "lucide-react";
 import QRCode from "qrcode";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -83,6 +85,10 @@ type CameraForm = {
   ptz: boolean;
   audio: boolean;
   events: boolean;
+  storageTier: "auto" | "sd_card" | "dvr_hdd" | "online_cloud";
+  retentionDays: string;
+  recordingMode: "continuous" | "motion" | "events" | "disabled";
+  storageLocationName: string;
 };
 
 const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
@@ -113,6 +119,10 @@ const emptyCameraForm: CameraForm = {
   ptz: false,
   audio: false,
   events: false,
+  storageTier: "auto",
+  retentionDays: "90",
+  recordingMode: "continuous",
+  storageLocationName: "",
 };
 
 type DeviceInventoryForm = {
@@ -1779,13 +1789,17 @@ export function DeviceManager() {
       }
 
       const streamProfile = cameraProfilePayload(cameraForm);
-      await cameraInventoryApi.approveCamera(selectedBranch, {
+      const approveResult = await cameraInventoryApi.approveCamera(selectedBranch, {
         discoveryId: "",
         name: cameraForm.name,
         channel: Number(cameraForm.channel),
         protocol: cameraForm.protocol,
         connectionTransport: cameraForm.connectionTransport,
         sourceType: cameraForm.sourceType,
+        storageTier: cameraForm.storageTier,
+        retentionDays: Number(cameraForm.retentionDays || 90),
+        recordingMode: cameraForm.recordingMode,
+        storageLocationName: cameraForm.storageLocationName.trim() || undefined,
         ...(cameraForm.connectionSecretRef.trim() ? { connectionSecretRef: cameraForm.connectionSecretRef.trim() } : {}),
         ...(cameraForm.sourceType !== "ip-camera" ? {
           recorderId: cameraForm.recorderId,
@@ -1802,8 +1816,20 @@ export function DeviceManager() {
         ...(cameraForm.streamRole !== "unknown" ? { streamProfile: cameraForm.streamRole } : {}),
         ...(streamProfile ? { profile: streamProfile } : {}),
       });
+      const createdCamId = approveResult?.id || approveResult?.data?.id;
+      if (createdCamId && cameraForm.storageTier && cameraForm.storageTier !== "auto") {
+        await fetch("/api/operations/storage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            cameraId: createdCamId,
+            targetTier: cameraForm.storageTier,
+            reason: `Initial storage tier assignment during device onboarding: ${cameraForm.storageTier}`,
+          }),
+        }).catch(() => null);
+      }
       setShowCameraForm(false);
-      setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"}.`);
+      setNotice(`${cameraForm.name} was added to ${activeBranch?.name ?? "the branch"} with ${cameraForm.retentionDays}-day ${cameraForm.recordingMode} storage retention.`);
       await refreshBranch(selectedBranch);
     } catch (reason) {
       setError(messageOf(reason, "Camera onboarding failed."));
@@ -2827,6 +2853,12 @@ export function DeviceManager() {
               </div>
               {(cameraForm.sourceType === "analog-dvr-channel" || cameraForm.sourceType === "nvr-channel") ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
               <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>
+
+              <div className="form-section"><h3>Storage and recording allocation</h3><p className="field-help">Assign storage tier, recording schedule, and RBI/regulatory retention duration for this device.</p><div className="form-row form-row-three">
+                <div className="form-group"><label htmlFor="cameraStorageTier">Storage tier</label><select id="cameraStorageTier" value={cameraForm.storageTier} onChange={(event) => setCameraForm((form) => ({ ...form, storageTier: event.target.value as CameraForm["storageTier"] }))}><option value="auto">Auto-Detect (3-Tier Hierarchical Fallback)</option><option value="sd_card">Tier 1: Camera SD Card</option><option value="dvr_hdd">Tier 2: DVR / NVR Hard Disk</option><option value="online_cloud">Tier 3: Online Cloud Recording Pool</option></select></div>
+                <div className="form-group"><label htmlFor="cameraRecordingMode">Recording mode</label><select id="cameraRecordingMode" value={cameraForm.recordingMode} onChange={(event) => setCameraForm((form) => ({ ...form, recordingMode: event.target.value as CameraForm["recordingMode"] }))}><option value="continuous">Continuous 24x7 recording</option><option value="motion">Motion &amp; AI events only</option><option value="events">High-priority alerts only</option><option value="disabled">Live view only (no recording)</option></select></div>
+                <div className="form-group"><label htmlFor="cameraRetentionDays">Retention period</label><select id="cameraRetentionDays" value={cameraForm.retentionDays} onChange={(event) => setCameraForm((form) => ({ ...form, retentionDays: event.target.value }))}><option value="30">30 days (standard)</option><option value="60">60 days (extended)</option><option value="90">90 days (RBI / NBFC mandate)</option><option value="180">180 days (high security / vault)</option><option value="365">365 days (long-term archive)</option></select></div>
+              </div><div className="form-group"><label htmlFor="storageLocationName">Storage pool / disk label <span className="optional">(optional)</span></label><input id="storageLocationName" value={cameraForm.storageLocationName} onChange={(event) => setCameraForm((form) => ({ ...form, storageLocationName: event.target.value }))} placeholder="e.g. Branch-NVR-SATA-01 or Vault-Cold-Archive" /><small className="field-help">Optional identifier for branch physical HDD tag, local pool, or cloud bucket.</small></div></div>
 
               <div className="form-section"><h3>Remote monitoring stream and capabilities</h3><p className="field-help">DVR/NVR main streams remain recorded locally. Use a low-bitrate substream for central live view and analytics over VPN.</p><div className="form-row form-row-three">
                 <div className="form-group"><label htmlFor="streamRole">Stream role</label><select id="streamRole" value={cameraForm.streamRole} onChange={(event) => setCameraForm((form) => ({ ...form, streamRole: event.target.value as CameraForm["streamRole"] }))}><option value="sub">Substream (recommended over VPN)</option><option value="main">Main stream</option><option value="unknown">Auto-detect</option></select></div>
