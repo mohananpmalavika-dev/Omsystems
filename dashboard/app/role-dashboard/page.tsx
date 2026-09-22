@@ -7,7 +7,7 @@ import { PageHero } from "@/components/page-hero";
 import { authApi } from "@/lib/api-client";
 import { Activity, ArrowRight, BadgeCheck, Building2, FileCheck2, ShieldAlert, Siren } from "lucide-react";
 
-type Outcome = { value: number | null; unit: string; sampleSize?: number; label: string; status: "AVAILABLE" | "UNAVAILABLE"; reason?: string };
+type Outcome = { value: number | null; unit: string; sampleSize?: number; denominator?: number; label: string; status: "AVAILABLE" | "UNAVAILABLE"; reason?: string };
 type OutcomeData = { window: { days: number }; cameraAvailability: Outcome; alertToVerification: Outcome; evidenceTurnaround: Outcome; auditExceptions: Outcome };
 type WorkspaceLink = { href: string; title: string; description: string; icon: typeof Activity };
 
@@ -53,7 +53,10 @@ export default function RoleDashboardPage() {
     <PageHero eyebrow="Role-specific NBFC operations" title={copy.title} description={copy.description} icon={user?.role === "branch_manager" ? Building2 : user?.role === "auditor" ? BadgeCheck : Siren} actions={<div className="page-hero-status"><Activity size={17}/><div><span>Reporting window</span><strong>Last {outcomes?.window.days ?? 30} days</strong></div></div>} />
     {error && <p className="mt-5 rounded-xl border border-rose-400/40 bg-rose-500/10 p-4 text-sm text-rose-200" role="alert">{error}</p>}
     <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="NBFC business outcomes">
-      {outcomes && Object.values({ cameraAvailability: outcomes.cameraAvailability, alertToVerification: outcomes.alertToVerification, evidenceTurnaround: outcomes.evidenceTurnaround, auditExceptions: outcomes.auditExceptions }).map((metric) => <article key={metric.label} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metric.label}</p><strong className="mt-2 block text-2xl text-slate-100">{formatOutcome(metric)}</strong><p className="mt-2 min-h-5 text-xs text-slate-400">{metric.status === "AVAILABLE" ? `${metric.sampleSize ?? 0} observed record${metric.sampleSize === 1 ? "" : "s"}` : metric.reason}</p></article>)}
+      {outcomes && Object.values({ cameraAvailability: outcomes.cameraAvailability, alertToVerification: outcomes.alertToVerification, evidenceTurnaround: outcomes.evidenceTurnaround, auditExceptions: outcomes.auditExceptions }).map((metric) => {
+        const observedCount = metric.denominator ?? metric.sampleSize;
+        return <article key={metric.label} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{metric.label}</p><strong className="mt-2 block text-2xl text-slate-100">{formatOutcome(metric)}</strong><p className="mt-2 min-h-5 text-xs text-slate-400">{metric.status === "AVAILABLE" ? `${observedCount ?? 0} observed record${observedCount === 1 ? "" : "s"}` : metric.reason}</p></article>;
+      })}
     </section>
     <section className="mt-5 rounded-2xl border border-slate-800 bg-slate-950/50 p-5"><header><p className="text-xs font-semibold uppercase tracking-[.18em] text-cyan-300">Operating loop</p><h2 className="mt-1 text-xl font-semibold text-slate-100">Attention, action, proof</h2></header><div className="mt-5 grid gap-3 md:grid-cols-3">{routes.map(({ href, title, description, icon: Icon }) => <Link key={href} href={href} className="group rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition hover:border-cyan-400/50"><Icon size={20} className="text-cyan-300"/><h3 className="mt-4 font-semibold text-slate-100">{title}</h3><p className="mt-2 min-h-10 text-sm text-slate-400">{description}</p><span className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-cyan-300">Open workspace <ArrowRight size={15}/></span></Link>)}</div></section>
   </main></AppLayout>;
