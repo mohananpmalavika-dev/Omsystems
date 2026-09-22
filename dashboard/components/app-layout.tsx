@@ -78,7 +78,6 @@ import {
   Users,
   Video,
   Volume2,
-  Wifi,
 
   Workflow,
   Wrench,
@@ -1048,11 +1047,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             <span aria-hidden="true">•</span>
             <Link href="/terms" onClick={handleNavClick("/terms")}>Terms</Link>
           </div>
-          <Link href="/maintenance/health" className="sidebar-status" onClick={handleNavClick("/maintenance/health")}>
-            <div className="pulse-icon"><Wifi size={16} /></div>
-            <div><strong>Platform status</strong><span>Open infrastructure health</span></div>
-            <ChevronRight size={15} />
-          </Link>
           <div className="sidebar-user-menu">
             <Link href="/account/security" className="sidebar-user" onClick={handleNavClick("/account/security")}>
               <div className="avatar" aria-hidden="true">{operatorInitials}</div>
