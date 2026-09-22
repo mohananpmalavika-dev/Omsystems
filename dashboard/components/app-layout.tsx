@@ -216,7 +216,6 @@ export const navigation: NavGroup[] = [
       { label: "Feature Management", href: "/admin/features", icon: ToggleLeft },
       { label: "Third-Party Integrations", href: "/integrations", icon: Workflow },
       { label: "Platform & update management", href: "/admin/system", icon: Settings },
-      { label: "Resilience & failover drills", href: "/admin/ha-topology", icon: Server },
       { label: "Account & Security Settings", href: "/account/security", icon: LockKeyhole },
     ],
   },

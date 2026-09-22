@@ -520,13 +520,21 @@ describe('NBFC AI Surveillance & Dynamic Rule Engine', () => {
       expect(crowdDet?.status).toBe('EXPERIMENTAL');
     });
 
-    it('calculates GPU stream capacity bounds correctly', () => {
-      const capacity = engine.getCapacityPlanningInfo();
+    it('calculates GPU stream capacity bounds correctly when telemetry exists', () => {
+      const capacity = engine.getHardwareCapacity(24);
       expect(capacity.totalCapacityStreams).toBeGreaterThan(0);
       expect(capacity.activeStreams).toBeLessThanOrEqual(capacity.totalCapacityStreams);
       expect(capacity.availableStreams).toBe(
         capacity.totalCapacityStreams - capacity.activeStreams - capacity.reservedStreams
       );
+    });
+
+    it('does not invent a fake 64-channel default without telemetry', () => {
+      const capacity = engine.getHardwareCapacity(0);
+      expect(capacity.totalStreamsCapacity).toBe(0);
+      expect(capacity.totalCapacityStreams).toBe(0);
+      expect(capacity.activeStreams).toBe(0);
+      expect(capacity.availableStreams).toBe(0);
     });
   });
 

@@ -15,6 +15,7 @@ import {
   Clock,
   Copy,
   Cpu,
+  Edit3,
   Eye,
   EyeOff,
   Filter,
@@ -268,7 +269,17 @@ export function NbfcRulesWorkspace() {
   const [tripwireDirection, setTripwireDirection] = useState<"A_TO_B" | "B_TO_A" | "BIDIRECTIONAL">("A_TO_B");
   const [lensTamperDetected, setLensTamperDetected] = useState(false);
   const [isDrawingZone, setIsDrawingZone] = useState(false);
+  const [cameraSnapshot, setCameraSnapshot] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [loadingSnapshot, setLoadingSnapshot] = useState(false);
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  const [undoStack, setUndoStack] = useState<Array<{ x: number; y: number }[]>>([]);
+  const [redoStack, setRedoStack] = useState<Array<{ x: number; y: number }[]>>([]);
+  const [snapToGrid, setSnapToGrid] = useState(false);
+  const [showMeasurements, setShowMeasurements] = useState(true);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
 
   // Load initial data
   const fetchData = async () => {
@@ -317,6 +328,71 @@ export function NbfcRulesWorkspace() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Load camera snapshot when camera changes
+  useEffect(() => {
+    if (zoneCameraId && activeTab === "zones") {
+      loadCameraSnapshot(zoneCameraId);
+    }
+  }, [zoneCameraId, activeTab]);
+
+  const loadCameraSnapshot = async (cameraId: string) => {
+    setLoadingSnapshot(true);
+    setSnapshotError(null);
+    
+    try {
+      // Try multiple snapshot endpoints
+      const endpoints = [
+        `/api/media/snapshots/${encodeURIComponent(cameraId)}.jpg`,
+        `/api/v1/media/snapshots/${encodeURIComponent(cameraId)}.jpg`,
+        `/api/cameras/${encodeURIComponent(cameraId)}/snapshot`,
+      ];
+
+      let snapshotLoaded = false;
+      for (const endpoint of endpoints) {
+        try {
+          const response = await fetch(endpoint, {
+            credentials: "include",
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken")}`,
+            },
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            setCameraSnapshot(url);
+            
+            // Load image into canvas
+            const img = new Image();
+            img.onload = () => {
+              imageRef.current = img;
+              drawCanvas(drawnPoints);
+            };
+            img.src = url;
+            
+            snapshotLoaded = true;
+            break;
+          }
+        } catch (err) {
+          // Try next endpoint
+          continue;
+        }
+      }
+
+      if (!snapshotLoaded) {
+        setSnapshotError("Camera snapshot not available. Drawing on blank canvas.");
+        // Draw on blank canvas
+        drawCanvas(drawnPoints);
+      }
+    } catch (error) {
+      console.error("Failed to load camera snapshot:", error);
+      setSnapshotError("Failed to load camera feed");
+      drawCanvas(drawnPoints);
+    } finally {
+      setLoadingSnapshot(false);
+    }
+  };
 
   // Filtered rules
   const filteredRules = useMemo(() => {
@@ -622,13 +698,119 @@ export function NbfcRulesWorkspace() {
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+    let x = (e.clientX - rect.left) / rect.width;
+    let y = (e.clientY - rect.top) / rect.height;
+
+    // Apply snap to grid if enabled
+    if (snapToGrid) {
+      x = Math.round(x / 0.05) * 0.05;
+      y = Math.round(y / 0.05) * 0.05;
+    }
+
+    // Check if clicking near first point to close polygon
+    if (zoneMode === "POLYGON" && drawnPoints.length >= 3) {
+      const firstPoint = drawnPoints[0];
+      const distToFirst = Math.sqrt(
+        Math.pow((x - firstPoint.x) * rect.width, 2) + 
+        Math.pow((y - firstPoint.y) * rect.height, 2)
+      );
+      
+      if (distToFirst < 15) {
+        // Close the polygon
+        validateAndSetPoints(drawnPoints);
+        return;
+      }
+    }
+
+    // For tripwire, limit to 2 points
+    if (zoneMode === "TRIPWIRE" && drawnPoints.length >= 2) {
+      return;
+    }
+
+    // Save to undo stack before adding point
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack([]); // Clear redo stack on new action
 
     const newPoints = [...drawnPoints, { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)) }];
-    setDrawnPoints(newPoints);
-    drawCanvas(newPoints);
+    validateAndSetPoints(newPoints);
   };
+
+  const validateAndSetPoints = (points: { x: number; y: number }[]) => {
+    setDrawnPoints(points);
+    
+    // Run validation
+    if (zoneMode === "POLYGON" && points.length >= 3) {
+      const validation = validatePolygonZone(points);
+      setValidationErrors(validation.errors);
+    } else if (zoneMode === "TRIPWIRE" && points.length === 2) {
+      const validation = validateTripwire(points);
+      setValidationErrors(validation.errors);
+    } else {
+      setValidationErrors([]);
+    }
+    
+    drawCanvas(points);
+  };
+
+  const handleUndo = () => {
+    if (undoStack.length === 0) return;
+    const previousState = undoStack[undoStack.length - 1];
+    setRedoStack([...redoStack, drawnPoints]);
+    setUndoStack(undoStack.slice(0, -1));
+    validateAndSetPoints(previousState);
+  };
+
+  const handleRedo = () => {
+    if (redoStack.length === 0) return;
+    const nextState = redoStack[redoStack.length - 1];
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack(redoStack.slice(0, -1));
+    validateAndSetPoints(nextState);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (activeTab !== "zones") return;
+    
+    // Escape to cancel
+    if (e.key === "Escape") {
+      setDrawnPoints([]);
+      setUndoStack([]);
+      setRedoStack([]);
+      setValidationErrors([]);
+      setEditingZoneId(null);
+      drawCanvas([]);
+    }
+    
+    // Ctrl+Z for undo
+    if (e.ctrlKey && e.key === "z") {
+      e.preventDefault();
+      handleUndo();
+    }
+    
+    // Ctrl+Y or Ctrl+Shift+Z for redo
+    if (e.ctrlKey && (e.key === "y" || (e.shiftKey && e.key === "z"))) {
+      e.preventDefault();
+      handleRedo();
+    }
+    
+    // Enter to complete polygon
+    if (e.key === "Enter" && drawnPoints.length >= 3 && zoneMode === "POLYGON") {
+      validateAndSetPoints(drawnPoints);
+    }
+    
+    // Delete/Backspace to remove last point
+    if ((e.key === "Delete" || e.key === "Backspace") && drawnPoints.length > 0) {
+      e.preventDefault();
+      setUndoStack([...undoStack, drawnPoints]);
+      const newPoints = drawnPoints.slice(0, -1);
+      validateAndSetPoints(newPoints);
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, drawnPoints, undoStack, redoStack, zoneMode]);
 
   const drawCanvas = (points: { x: number; y: number }[]) => {
     const canvas = canvasRef.current;
@@ -638,21 +820,59 @@ export function NbfcRulesWorkspace() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw grid background
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x < canvas.width; x += 40) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
-      ctx.stroke();
+    // Draw camera snapshot if available
+    if (imageRef.current) {
+      ctx.drawImage(imageRef.current, 0, 0, canvas.width, canvas.height);
+      // Add semi-transparent overlay for better zone visibility
+      ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      // Draw grid background if no camera image
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
     }
-    for (let y = 0; y < canvas.height; y += 40) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
-      ctx.stroke();
-    }
+
+    // Draw existing zones from the same camera (dimmed)
+    zones
+      .filter((z) => z.cameraId === zoneCameraId && (!editingZoneId || z.id !== editingZoneId))
+      .forEach((zone) => {
+        if (zone.polygon && zone.polygon.length >= 3) {
+          ctx.beginPath();
+          ctx.moveTo(zone.polygon[0].x * canvas.width, zone.polygon[0].y * canvas.height);
+          for (let i = 1; i < zone.polygon.length; i++) {
+            ctx.lineTo(zone.polygon[i].x * canvas.width, zone.polygon[i].y * canvas.height);
+          }
+          ctx.closePath();
+          ctx.fillStyle = "rgba(100, 100, 255, 0.15)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(100, 100, 255, 0.5)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          
+          // Label
+          const centerX = zone.polygon.reduce((sum, p) => sum + p.x, 0) / zone.polygon.length * canvas.width;
+          const centerY = zone.polygon.reduce((sum, p) => sum + p.y, 0) / zone.polygon.length * canvas.height;
+          ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
+          ctx.font = "10px monospace";
+          ctx.textAlign = "center";
+          ctx.fillText(zone.name, centerX, centerY);
+        }
+      });
 
     if (points.length === 0) return;
 
@@ -667,6 +887,22 @@ export function NbfcRulesWorkspace() {
       }
       ctx.stroke();
       ctx.setLineDash([]);
+      
+      // Draw direction arrow
+      if (points.length === 2) {
+        const [p1, p2] = points;
+        const midX = ((p1.x + p2.x) / 2) * canvas.width;
+        const midY = ((p1.y + p2.y) / 2) * canvas.height;
+        const angle = Math.atan2((p2.y - p1.y) * canvas.height, (p2.x - p1.x) * canvas.width);
+        
+        ctx.fillStyle = "#38bdf8";
+        ctx.beginPath();
+        ctx.moveTo(midX, midY);
+        ctx.lineTo(midX - 15 * Math.cos(angle - Math.PI / 6), midY - 15 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(midX - 15 * Math.cos(angle + Math.PI / 6), midY - 15 * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+      }
     } else {
       // Draw polygon path
       ctx.beginPath();
@@ -676,13 +912,25 @@ export function NbfcRulesWorkspace() {
       }
       if (points.length >= 3) {
         ctx.closePath();
-        ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
+        ctx.fillStyle = validationErrors.length > 0 ? "rgba(239, 68, 68, 0.25)" : "rgba(34, 197, 94, 0.25)";
         ctx.fill();
       }
 
-      ctx.strokeStyle = "#ef4444";
+      ctx.strokeStyle = validationErrors.length > 0 ? "#ef4444" : "#22c55e";
       ctx.lineWidth = 2;
       ctx.stroke();
+      
+      // Draw closing hint
+      if (points.length >= 3) {
+        const firstPoint = points[0];
+        ctx.beginPath();
+        ctx.arc(firstPoint.x * canvas.width, firstPoint.y * canvas.height, 15, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(34, 197, 94, 0.5)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Draw vertices
@@ -694,7 +942,92 @@ export function NbfcRulesWorkspace() {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+      
+      // Draw vertex number
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 10px monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(idx + 1), p.x * canvas.width, p.y * canvas.height);
     });
+    
+    // Draw measurements if enabled
+    if (showMeasurements && points.length >= 2) {
+      ctx.font = "11px monospace";
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = "#000000";
+      ctx.lineWidth = 3;
+      
+      if (zoneMode === "TRIPWIRE" && points.length === 2) {
+        const length = Math.sqrt(
+          Math.pow(points[1].x - points[0].x, 2) + 
+          Math.pow(points[1].y - points[0].y, 2)
+        );
+        const midX = ((points[0].x + points[1].x) / 2) * canvas.width;
+        const midY = ((points[0].y + points[1].y) / 2) * canvas.height - 20;
+        const text = `${(length * 100).toFixed(1)}%`;
+        ctx.strokeText(text, midX, midY);
+        ctx.fillText(text, midX, midY);
+      } else if (zoneMode === "POLYGON" && points.length >= 3) {
+        const area = calculatePolygonArea(points);
+        const perimeter = calculatePerimeter(points);
+        const centerX = points.reduce((sum, p) => sum + p.x, 0) / points.length * canvas.width;
+        const centerY = points.reduce((sum, p) => sum + p.y, 0) / points.length * canvas.height;
+        const text = `Area: ${(area * 100).toFixed(1)}%`;
+        ctx.strokeText(text, centerX, centerY);
+        ctx.fillText(text, centerX, centerY);
+      }
+    }
+  };
+
+  // Helper functions for measurements
+  const calculatePolygonArea = (points: { x: number; y: number }[]) => {
+    let area = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      area += points[i].x * points[j].y;
+      area -= points[j].x * points[i].y;
+    }
+    return Math.abs(area) / 2;
+  };
+
+  const calculatePerimeter = (points: { x: number; y: number }[]) => {
+    let perimeter = 0;
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      const dx = points[j].x - points[i].x;
+      const dy = points[j].y - points[i].y;
+      perimeter += Math.sqrt(dx * dx + dy * dy);
+    }
+    return perimeter;
+  };
+
+  // Import validation functions
+  const validatePolygonZone = (points: { x: number; y: number }[]) => {
+    const errors: string[] = [];
+    if (points.length < 3) {
+      errors.push("Polygon must have at least 3 vertices");
+    }
+    // Check for very small area
+    const area = calculatePolygonArea(points);
+    if (area < 0.001) {
+      errors.push("Polygon area is too small");
+    }
+    return { errors };
+  };
+
+  const validateTripwire = (points: { x: number; y: number }[]) => {
+    const errors: string[] = [];
+    if (points.length !== 2) {
+      errors.push("Tripwire must have exactly 2 points");
+    } else {
+      const [p1, p2] = points;
+      const length = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
+      if (length < 0.05) {
+        errors.push("Tripwire is too short");
+      }
+    }
+    return { errors };
   };
 
   const applyPresetVault = () => {
@@ -702,8 +1035,9 @@ export function NbfcRulesWorkspace() {
     setZoneName("Gold Locker Cage Boundary");
     setZoneType("LOCKER");
     const pts = [{ x: 0.25, y: 0.25 }, { x: 0.75, y: 0.25 }, { x: 0.75, y: 0.8 }, { x: 0.25, y: 0.8 }];
-    setDrawnPoints(pts);
-    setTimeout(() => drawCanvas(pts), 50);
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack([]);
+    validateAndSetPoints(pts);
   };
 
   const applyPresetCounter = () => {
@@ -711,17 +1045,58 @@ export function NbfcRulesWorkspace() {
     setZoneName("Teller Cash Drawer Exclusion Box");
     setZoneType("CASH_COUNTER");
     const pts = [{ x: 0.35, y: 0.55 }, { x: 0.65, y: 0.55 }, { x: 0.65, y: 0.85 }, { x: 0.35, y: 0.85 }];
-    setDrawnPoints(pts);
-    setTimeout(() => drawCanvas(pts), 50);
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack([]);
+    validateAndSetPoints(pts);
   };
 
   const applyPresetTripwire = () => {
     setZoneMode("TRIPWIRE");
     setZoneName("Main Ingress Doorway Tripwire");
-    setZoneType("PERIMETER");
+    setZoneType("ENTRANCE");
     const pts = [{ x: 0.15, y: 0.65 }, { x: 0.85, y: 0.65 }];
-    setDrawnPoints(pts);
-    setTimeout(() => drawCanvas(pts), 50);
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack([]);
+    validateAndSetPoints(pts);
+  };
+
+  const applyTemplate = (template: any) => {
+    setZoneMode(template.polygon.length === 2 ? "TRIPWIRE" : "POLYGON");
+    setZoneName(template.name);
+    setZoneType(template.type);
+    setUndoStack([...undoStack, drawnPoints]);
+    setRedoStack([]);
+    validateAndSetPoints([...template.polygon]);
+  };
+
+  const handleEditZone = (zone: ZoneItem) => {
+    setEditingZoneId(zone.id);
+    setZoneName(zone.name);
+    setZoneType(zone.type);
+    setZoneCameraId(zone.cameraId);
+    setZoneMode(zone.polygon.length === 2 ? "TRIPWIRE" : "POLYGON");
+    setUndoStack([]);
+    setRedoStack([]);
+    validateAndSetPoints(zone.polygon);
+    
+    // Scroll to canvas
+    canvasRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  const handleDuplicateZone = (zone: ZoneItem) => {
+    setEditingZoneId(null);
+    setZoneName(`${zone.name} (Copy)`);
+    setZoneType(zone.type);
+    setZoneCameraId(zone.cameraId);
+    setZoneMode(zone.polygon.length === 2 ? "TRIPWIRE" : "POLYGON");
+    setUndoStack([]);
+    setRedoStack([]);
+    // Offset the polygon slightly
+    const offsetPolygon = zone.polygon.map(p => ({
+      x: Math.min(0.95, p.x + 0.05),
+      y: Math.min(0.95, p.y + 0.05),
+    }));
+    validateAndSetPoints(offsetPolygon);
   };
 
   const handleSaveZone = async () => {
@@ -730,6 +1105,17 @@ export function NbfcRulesWorkspace() {
       alert(`Please draw at least ${minPoints} points to complete the ${zoneMode.toLowerCase()}.`);
       return;
     }
+
+    // Run final validation
+    const validation = zoneMode === "TRIPWIRE" 
+      ? validateTripwire(drawnPoints)
+      : validatePolygonZone(drawnPoints);
+      
+    if (validation.errors.length > 0) {
+      alert(`Validation errors:\n${validation.errors.join("\n")}`);
+      return;
+    }
+
     const inferredBranchId = selectedBranch !== "ALL"
       ? selectedBranch
       : cameras.find((camera) => camera.id === zoneCameraId)?.branchId;
@@ -737,28 +1123,49 @@ export function NbfcRulesWorkspace() {
       alert("Select a camera that belongs to a branch before saving a zone.");
       return;
     }
-    try {
-      const res = await aiFetch("/api/ai/zones", {
-        method: "POST",
-        body: JSON.stringify({
-          branchId: inferredBranchId,
-          cameraId: zoneCameraId,
-          name: zoneName,
-          type: zoneType,
-          polygon: drawnPoints,
-        }),
-      });
 
-      setZones((prev) => [res, ...prev]);
+    try {
+      if (editingZoneId) {
+        // Update existing zone
+        const res = await aiFetch(`/api/ai/zones/${editingZoneId}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            name: zoneName,
+            type: zoneType,
+            polygon: drawnPoints,
+          }),
+        });
+        setZones((prev) => prev.map((z) => (z.id === editingZoneId ? res : z)));
+        alert(`Zone '${zoneName}' updated successfully.`);
+        setEditingZoneId(null);
+      } else {
+        // Create new zone
+        const res = await aiFetch("/api/ai/zones", {
+          method: "POST",
+          body: JSON.stringify({
+            branchId: inferredBranchId,
+            cameraId: zoneCameraId,
+            name: zoneName,
+            type: zoneType,
+            polygon: drawnPoints,
+          }),
+        });
+        setZones((prev) => [res, ...prev]);
+        alert(`Zone '${zoneName}' created successfully.`);
+      }
+
+      // Reset canvas
       setDrawnPoints([]);
+      setUndoStack([]);
+      setRedoStack([]);
+      setValidationErrors([]);
       const canvas = canvasRef.current;
       if (canvas) {
-        const ctx = canvas.getContext("2d");
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+        drawCanvas([]);
       }
-      alert(`Zone '${zoneName}' saved successfully.`);
     } catch (e) {
       console.error(e);
+      alert(`Failed to save zone: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
   };
 
@@ -1273,25 +1680,55 @@ export function NbfcRulesWorkspace() {
 
             {/* Quick Presets & Tripwire Direction Bar */}
             <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-gray-950/60 rounded-lg border border-gray-800 text-xs">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-gray-400 font-semibold uppercase text-[10px] tracking-wider mr-1">Quick Presets:</span>
                 <button
                   onClick={applyPresetVault}
                   className="px-2.5 py-1 bg-gray-800 hover:bg-amber-600/30 hover:border-amber-500/50 text-amber-300 border border-gray-700 rounded text-xs transition"
                 >
-                  🔒 Gold Vault Cage
+                  🔒 Vault
                 </button>
                 <button
                   onClick={applyPresetCounter}
                   className="px-2.5 py-1 bg-gray-800 hover:bg-blue-600/30 hover:border-blue-500/50 text-blue-300 border border-gray-700 rounded text-xs transition"
                 >
-                  💵 Cash Counter
+                  💵 Counter
                 </button>
                 <button
                   onClick={applyPresetTripwire}
                   className="px-2.5 py-1 bg-gray-800 hover:bg-emerald-600/30 hover:border-emerald-500/50 text-emerald-300 border border-gray-700 rounded text-xs transition"
                 >
-                  ⚡ Door Ingress Tripwire
+                  ⚡ Door
+                </button>
+                <button
+                  onClick={() => applyTemplate({
+                    name: "Customer Queue Area",
+                    type: "QUEUE_AREA",
+                    polygon: [{ x: 0.1, y: 0.3 }, { x: 0.4, y: 0.3 }, { x: 0.4, y: 0.9 }, { x: 0.1, y: 0.9 }],
+                  })}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-purple-600/30 hover:border-purple-500/50 text-purple-300 border border-gray-700 rounded text-xs transition"
+                >
+                  👥 Queue
+                </button>
+                <button
+                  onClick={() => applyTemplate({
+                    name: "ATM Lobby",
+                    type: "ATM_AREA",
+                    polygon: [{ x: 0.6, y: 0.2 }, { x: 0.9, y: 0.2 }, { x: 0.9, y: 0.7 }, { x: 0.6, y: 0.7 }],
+                  })}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-cyan-600/30 hover:border-cyan-500/50 text-cyan-300 border border-gray-700 rounded text-xs transition"
+                >
+                  🏧 ATM
+                </button>
+                <button
+                  onClick={() => applyTemplate({
+                    name: "Restricted Area",
+                    type: "RESTRICTED_AREA",
+                    polygon: [{ x: 0.05, y: 0.05 }, { x: 0.3, y: 0.05 }, { x: 0.3, y: 0.3 }, { x: 0.05, y: 0.3 }],
+                  })}
+                  className="px-2.5 py-1 bg-gray-800 hover:bg-red-600/30 hover:border-red-500/50 text-red-300 border border-gray-700 rounded text-xs transition"
+                >
+                  ⚠️ Restricted
                 </button>
               </div>
 
@@ -1315,6 +1752,88 @@ export function NbfcRulesWorkspace() {
               )}
             </div>
 
+            {/* Drawing Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-gray-950/40 rounded-lg border border-gray-800/50">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleUndo}
+                  disabled={undoStack.length === 0}
+                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-xs rounded border border-gray-700 transition flex items-center gap-1"
+                  title="Undo (Ctrl+Z)"
+                >
+                  ↶ Undo
+                </button>
+                <button
+                  onClick={handleRedo}
+                  disabled={redoStack.length === 0}
+                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-xs rounded border border-gray-700 transition flex items-center gap-1"
+                  title="Redo (Ctrl+Y)"
+                >
+                  ↷ Redo
+                </button>
+                <div className="h-4 w-px bg-gray-700" />
+                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer hover:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={snapToGrid}
+                    onChange={(e) => setSnapToGrid(e.target.checked)}
+                    className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                  />
+                  Snap to Grid (5%)
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer hover:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={showMeasurements}
+                    onChange={(e) => setShowMeasurements(e.target.checked)}
+                    className="rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-0"
+                  />
+                  Show Measurements
+                </label>
+              </div>
+              {editingZoneId && (
+                <button
+                  onClick={() => {
+                    setEditingZoneId(null);
+                    setDrawnPoints([]);
+                    setUndoStack([]);
+                    setRedoStack([]);
+                    setValidationErrors([]);
+                    drawCanvas([]);
+                  }}
+                  className="px-2 py-1 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs rounded border border-amber-600/30 transition"
+                >
+                  Cancel Edit
+                </button>
+              )}
+            </div>
+
+            {/* Validation Errors */}
+            {validationErrors.length > 0 && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-2.5 space-y-1">
+                <p className="text-xs font-semibold text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Validation Errors
+                </p>
+                {validationErrors.map((error, idx) => (
+                  <p key={idx} className="text-xs text-red-300">• {error}</p>
+                ))}
+              </div>
+            )}
+
+            {/* Snapshot Loading Status */}
+            {loadingSnapshot && (
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-2.5 flex items-center gap-2 text-xs text-blue-300">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                Loading camera snapshot...
+              </div>
+            )}
+            {snapshotError && !loadingSnapshot && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 flex items-center gap-2 text-xs text-amber-300">
+                <Info className="w-3.5 h-3.5" />
+                {snapshotError}
+              </div>
+            )}
+
             {/* Canvas Container */}
             <div className="relative aspect-video bg-black rounded-xl overflow-hidden border border-gray-800 shadow-inner flex items-center justify-center">
               <canvas
@@ -1324,12 +1843,24 @@ export function NbfcRulesWorkspace() {
                 onClick={handleCanvasClick}
                 className="w-full h-full cursor-crosshair"
               />
-              {drawnPoints.length === 0 && (
-                <div className="absolute pointer-events-none text-center text-gray-500 text-xs">
-                  <p>{zoneMode === "TRIPWIRE" ? "Click 2 points to draw Tripwire Line (A to B)" : "Click anywhere inside to plot points"}</p>
-                  <p className="text-[10px] text-gray-600 mt-1">
-                    {zoneMode === "TRIPWIRE" ? "Vector direction determines alarm trigger orientation" : "Point 1 (Green) closes polygon at point 3+"}
+              {drawnPoints.length === 0 && !loadingSnapshot && (
+                <div className="absolute pointer-events-none text-center text-gray-500 text-xs max-w-md">
+                  <p className="font-semibold text-gray-400">
+                    {zoneMode === "TRIPWIRE" 
+                      ? "Click 2 points to draw Tripwire Line (A → B)" 
+                      : "Click anywhere to plot polygon vertices (min 3 points)"}
                   </p>
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    {zoneMode === "TRIPWIRE" 
+                      ? "Direction arrow shows trigger orientation" 
+                      : "Click near first point (green) to close polygon"}
+                  </p>
+                  <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-gray-600">
+                    <span>ESC: Cancel</span>
+                    <span>Ctrl+Z: Undo</span>
+                    <span>Enter: Complete</span>
+                    <span>Backspace: Remove Point</span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1337,25 +1868,43 @@ export function NbfcRulesWorkspace() {
             {/* Drawing stats & save */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
               <div className="flex items-center gap-3 text-xs text-gray-400">
-                <span>Vertices Plotted: <strong className="text-white">{drawnPoints.length}</strong></span>
-                {zoneMode === "POLYGON" && drawnPoints.length >= 3 && (
-                  <span className="text-emerald-400 flex items-center gap-1">
-                    <CheckCircle className="w-3.5 h-3.5" /> Valid Closed Polygon
+                <span>Vertices: <strong className="text-white">{drawnPoints.length}</strong></span>
+                {zoneMode === "POLYGON" && drawnPoints.length >= 3 && validationErrors.length === 0 && (
+                  <>
+                    <span className="text-emerald-400 flex items-center gap-1">
+                      <CheckCircle className="w-3.5 h-3.5" /> Valid Polygon
+                    </span>
+                    <span>Area: <strong className="text-emerald-300">{(calculatePolygonArea(drawnPoints) * 100).toFixed(1)}%</strong></span>
+                  </>
+                )}
+                {zoneMode === "POLYGON" && drawnPoints.length >= 3 && validationErrors.length > 0 && (
+                  <span className="text-red-400 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Invalid
                   </span>
                 )}
-                {zoneMode === "TRIPWIRE" && drawnPoints.length === 2 && (
-                  <span className="text-amber-400 flex items-center gap-1 font-mono">
-                    <ShieldAlert className="w-3.5 h-3.5" /> Armed Tripwire ({tripwireDirection})
+                {zoneMode === "TRIPWIRE" && drawnPoints.length === 2 && validationErrors.length === 0 && (
+                  <>
+                    <span className="text-amber-400 flex items-center gap-1 font-mono">
+                      <ShieldAlert className="w-3.5 h-3.5" /> Armed ({tripwireDirection})
+                    </span>
+                    <span>Length: <strong className="text-amber-300">
+                      {(Math.sqrt(Math.pow(drawnPoints[1].x - drawnPoints[0].x, 2) + Math.pow(drawnPoints[1].y - drawnPoints[0].y, 2)) * 100).toFixed(1)}%
+                    </strong></span>
+                  </>
+                )}
+                {editingZoneId && (
+                  <span className="text-blue-400 flex items-center gap-1">
+                    <Edit3 className="w-3.5 h-3.5" /> Editing Mode
                   </span>
                 )}
               </div>
 
               <button
                 onClick={handleSaveZone}
-                disabled={zoneMode === "TRIPWIRE" ? drawnPoints.length < 2 : drawnPoints.length < 3}
-                className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 text-white rounded-lg text-xs font-semibold shadow transition"
+                disabled={zoneMode === "TRIPWIRE" ? drawnPoints.length < 2 : drawnPoints.length < 3 || validationErrors.length > 0}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-gray-800 disabled:text-gray-600 disabled:cursor-not-allowed text-white rounded-lg text-xs font-semibold shadow transition"
               >
-                Save {zoneMode === "TRIPWIRE" ? "Tripwire" : "Zone"} Definition
+                {editingZoneId ? "Update Zone" : `Save ${zoneMode === "TRIPWIRE" ? "Tripwire" : "Zone"}`}
               </button>
             </div>
           </div>
@@ -1431,19 +1980,37 @@ export function NbfcRulesWorkspace() {
                       <div>
                         <p className="font-semibold text-gray-200">{z.name}</p>
                         <p className="text-[10px] text-gray-400">
-                          {z.type} • {z.cameraId} • {z.polygon?.length || 0} pts
+                          {z.type} • {z.polygon?.length || 0} pts • {cameras.find(c => c.id === z.cameraId)?.name || z.cameraId}
                         </p>
                       </div>
-                      <button
-                        onClick={async () => {
-                          await aiFetch(`/api/ai/zones/${z.id}`, { method: "DELETE" });
-                          setZones((prev) => prev.filter((item) => item.id !== z.id));
-                        }}
-                        className="text-gray-500 hover:text-red-400 p-1"
-                        title="Delete Zone"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditZone(z)}
+                          className="text-gray-500 hover:text-blue-400 p-1"
+                          title="Edit Zone"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDuplicateZone(z)}
+                          className="text-gray-500 hover:text-emerald-400 p-1"
+                          title="Duplicate Zone"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Delete zone "${z.name}"?`)) {
+                              await aiFetch(`/api/ai/zones/${z.id}`, { method: "DELETE" });
+                              setZones((prev) => prev.filter((item) => item.id !== z.id));
+                            }
+                          }}
+                          className="text-gray-500 hover:text-red-400 p-1"
+                          title="Delete Zone"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -1528,7 +2095,9 @@ export function NbfcRulesWorkspace() {
             <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4">
               <span className="text-xs text-gray-400">Total Stream Capacity</span>
               <p className="text-2xl font-bold text-white mt-1">
-                {capacity?.totalStreamsCapacity ?? "Unavailable"}{capacity?.totalStreamsCapacity !== undefined ? " Channels" : ""}
+                {(capacity?.totalStreamsCapacity ?? 0) > 0
+                  ? `${capacity.totalStreamsCapacity} Channels`
+                  : "Unavailable"}
               </p>
               <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden mt-3">
                 <div
@@ -1538,25 +2107,27 @@ export function NbfcRulesWorkspace() {
                       100,
                       Math.max(
                         0,
-                        Math.round(
-                          (((capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) + (capacity?.reservedStreams ?? 0)) /
-                            (capacity?.totalStreamsCapacity || 1)) *
-                            100
-                        )
+                        (capacity?.totalStreamsCapacity ?? 0) > 0
+                          ? Math.round(
+                              (((capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) + (capacity?.reservedStreams ?? 0)) /
+                                (capacity?.totalStreamsCapacity || 1)) *
+                                100
+                            )
+                          : 0
                       )
                     )}%`,
                   }}
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-2">
-                {capacity?.activeStreams ?? stats?.totalAiCameras ?? 0} active, {capacity?.reservedStreams ?? 0} reserved,{" "}
-                {Math.max(
-                  0,
-                  (capacity?.totalStreamsCapacity ?? 0) -
-                    (capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) -
-                    (capacity?.reservedStreams ?? 0)
-                )}{" "}
-                available
+                {(capacity?.totalStreamsCapacity ?? 0) > 0
+                  ? `${capacity?.activeStreams ?? stats?.totalAiCameras ?? 0} active, ${capacity?.reservedStreams ?? 0} reserved, ${Math.max(
+                      0,
+                      (capacity?.totalStreamsCapacity ?? 0) -
+                        (capacity?.activeStreams ?? stats?.totalAiCameras ?? 0) -
+                        (capacity?.reservedStreams ?? 0)
+                    )} available`
+                  : "No live capacity telemetry available"}
               </p>
             </div>
 

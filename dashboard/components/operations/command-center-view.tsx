@@ -44,11 +44,6 @@ import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
 import { getTelemetryFreshness } from "@/lib/telemetry-freshness";
 
-const FleetCameraMap = dynamic(
-  () => import("./fleet-camera-map").then((module) => module.FleetCameraMap),
-  { ssr: false, loading: () => <div className="grid h-[430px] place-items-center rounded-xl border border-slate-800 bg-slate-900 text-sm text-slate-400">Loading map…</div> },
-);
-
 export function CommandCenterView() {
   const [summary, setSummary] = useState<any | null>(null);
   const [branches, setBranches] = useState<any[]>([]);
@@ -58,7 +53,6 @@ export function CommandCenterView() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [selectedRegion, setSelectedRegion] = useState("ALL");
-  const [viewMode, setViewMode] = useState<"table" | "map">("table");
   const [selectedBranchWorkspace, setSelectedBranchWorkspace] = useState<any | null>(null);
   const pendingLoad = useRef<AbortController | null>(null);
   const router = useRouter();
@@ -194,6 +188,15 @@ export function CommandCenterView() {
   const workingCamerasCount = cameraTotals.working;
   const cameraTelemetryUnavailable = totalCamerasCount > 0 && cameraTotals.unknown >= totalCamerasCount;
   const freshness = getTelemetryFreshness(summary?.lastTelemetryTimestamp);
+
+  const regionOptions = useMemo(() => {
+    const regions = Array.from(new Set(branches.map((branch) => branch.region).filter(Boolean)))
+      .filter((region) => region && region !== "Unassigned")
+      .sort((left, right) => left.localeCompare(right))
+      .map((region) => ({ label: region, value: region }));
+
+    return [{ label: "All Regions", value: "ALL" }, ...regions];
+  }, [branches]);
 
   const filteredBranches = useMemo(() => {
     return branches.filter((b) => {
@@ -616,20 +619,6 @@ export function CommandCenterView() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-bold text-white">Fleet Operational Board</h2>
-            <div className="flex rounded-lg bg-slate-800 p-0.5 text-xs">
-              <button
-                onClick={() => setViewMode("table")}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${viewMode === "table" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
-              >
-                Table View
-              </button>
-              <button
-                onClick={() => setViewMode("map")}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${viewMode === "map" ? "bg-blue-600 text-white shadow" : "text-slate-400 hover:text-white"}`}
-              >
-                Fleet Map View
-              </button>
-            </div>
           </div>
 
           <Link
@@ -647,11 +636,11 @@ export function CommandCenterView() {
           onStatusChange={setSelectedStatus}
           selectedRegion={selectedRegion}
           onRegionChange={setSelectedRegion}
+          regionOptions={regionOptions}
           onRefresh={loadData}
         />
 
-        {viewMode === "table" ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden shadow-xl">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-slate-300">
                 <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
@@ -811,12 +800,6 @@ export function CommandCenterView() {
               </table>
             </div>
           </div>
-        ) : (
-          <FleetCameraMap
-            visibleBranchIds={filteredBranches.map((branch) => branch.branchId)}
-            onOpenBranch={(branchId) => setSelectedBranchWorkspace(branches.find((branch) => branch.branchId === branchId) ?? null)}
-          />
-        )}
       </div>
 
       {/* Deep Branch 360 Workspace Drawer */}

@@ -827,10 +827,10 @@ export class NbfcRuleEngineService {
       ? Math.round(((totalMem - freeMem) / totalMem) * 1000) / 10
       : 42.5;
 
-    const activeStreams = liveCameraCount !== undefined ? liveCameraCount : 0;
-    const totalStreamsCapacity = Math.max(64, Math.ceil((activeStreams + 16) / 16) * 16);
-    const reservedStreams = Math.min(10, Math.max(0, Math.floor(activeStreams * 0.1)));
-    const availableStreams = Math.max(0, totalStreamsCapacity - activeStreams - reservedStreams);
+    const activeStreams = liveCameraCount !== undefined ? Math.max(0, liveCameraCount) : 0;
+    const totalStreamsCapacity = activeStreams > 0 ? Math.max(activeStreams, Math.ceil((activeStreams + 16) / 16) * 16) : 0;
+    const reservedStreams = activeStreams > 0 ? Math.min(10, Math.max(0, Math.floor(activeStreams * 0.1))) : 0;
+    const availableStreams = activeStreams > 0 ? Math.max(0, totalStreamsCapacity - activeStreams - reservedStreams) : 0;
 
     return {
       gpuNodeId: "node-" + os.hostname(),
