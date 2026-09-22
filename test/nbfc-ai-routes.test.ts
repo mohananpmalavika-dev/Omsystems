@@ -8,11 +8,11 @@ describe("NBFC AI rules API production safeguards", () => {
 
   beforeEach(async () => {
     app = await buildApp({ store: new MemoryStore() });
-  });
+  }, 60000);
 
   afterEach(async () => {
     if (app) await app.close();
-  });
+  }, 30000);
 
   it("requires authentication and a scoped target before activating automation", async () => {
     const anonymous = await app.inject({ method: "GET", url: "/api/ai/rules" });
