@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleUserRound,
   Eye,
   EyeOff,
   Globe,
@@ -475,6 +476,91 @@ export default function AccountSecurityPage() {
             </button>
           }
         />
+
+        {/* User Profile Information Card */}
+        <section
+          className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm overflow-hidden"
+          aria-label="User profile information"
+        >
+          <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400">
+                <CircleUserRound className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                  Profile Information
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Your account identity and assigned role
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="grid h-16 w-16 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-2xl font-bold shadow-md">
+                {(currentUser?.displayName?.trim() || currentUser?.username?.trim() || currentUser?.email?.trim() || "U")
+                  .split(/\s+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part: string) => part[0]?.toUpperCase())
+                  .join("") || "U"}
+              </div>
+              
+              <div className="flex-1 space-y-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                    Display Name
+                  </label>
+                  <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {currentUser?.displayName?.trim() || currentUser?.username?.trim() || currentUser?.email?.trim() || "Not set"}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                      Username
+                    </label>
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-mono">
+                      {currentUser?.username || "—"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                      Email
+                    </label>
+                    <p className="text-sm text-slate-700 dark:text-slate-300">
+                      {currentUser?.email || "—"}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
+                    Role
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-400 border border-indigo-300 dark:border-indigo-800">
+                      <Shield size={13} />
+                      {currentUser?.customRoleName || (currentUser?.role
+                        ? currentUser.role.replace(/[_-]+/g, " ").replace(/\b\w/g, (letter: string) => letter.toUpperCase())
+                        : "User")}
+                    </span>
+                    {currentUser?.customRoleId && (
+                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                        (Custom role)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Global Status Alerts */}
         {error && (

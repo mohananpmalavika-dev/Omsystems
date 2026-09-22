@@ -1050,7 +1050,6 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           <div className="sidebar-user-menu">
             <Link href="/account/security" className="sidebar-user" onClick={handleNavClick("/account/security")}>
               <div className="avatar" aria-hidden="true">{operatorInitials}</div>
-              <div><strong>{operatorName}</strong><span>{operatorRole}</span></div>
               <Settings size={16} />
             </Link>
             <button 
