@@ -31,7 +31,7 @@ import {
   Search,
   ShieldAlert,
   Siren,
-  Sparkles,
+  Sparkles as SparklesIcon,
   SlidersHorizontal,
   Unlock,
   Video,
@@ -1027,7 +1027,7 @@ function ControlRoomContent() {
               onClick={() => setShowAiOverlays((current) => !current)}
               aria-pressed={showAiOverlays}
             >
-              <Sparkles size={12} /> Overlays {showAiOverlays ? "on" : "off"}
+              <SparklesIcon size={12} /> Overlays {showAiOverlays ? "on" : "off"}
             </button>
             <button
               type="button"
