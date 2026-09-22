@@ -223,13 +223,18 @@ export class UnifiedAiAlertService {
   getAlerts(filter?: {
     tenantId?: string | undefined;
     branchId?: string | undefined;
+    branchIds?: string[] | undefined;
     alertType?: CanonicalAlertType | undefined;
     severity?: AlertSeverity | undefined;
     status?: AlertLifecycleState | undefined;
   }): SurveillanceAlert[] {
     return Array.from(this.alerts.values()).filter((a) => {
       if (filter?.tenantId && a.tenantId !== filter.tenantId) return false;
+      
+      // Support both single branchId (for backward compatibility) and branchIds array (for multi-branch access)
       if (filter?.branchId && a.branchId !== filter.branchId) return false;
+      if (filter?.branchIds && filter.branchIds.length > 0 && !filter.branchIds.includes(a.branchId)) return false;
+      
       if (filter?.alertType && a.alertType !== filter.alertType) return false;
       if (filter?.severity && a.severity !== filter.severity) return false;
       if (filter?.status && a.status !== filter.status) return false;

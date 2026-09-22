@@ -463,6 +463,22 @@ export class AnalyticsRepository {
 
   async listAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<AnalyticsAlert[]> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    
+    // Build branch filter condition
+    let branchCondition = '$3::uuid IS NULL OR camera.branch_node_id=$3';
+    const params: any[] = [
+      resolvedTenantId, 
+      filters.cameraId ?? null, 
+      filters.branchId ?? null,
+    ];
+    let nextParamIndex = 4;
+    
+    // If branchIds array is provided, use IN clause instead of single branch equality
+    if (filters.branchIds && filters.branchIds.length > 0) {
+      branchCondition = `camera.branch_node_id = ANY($3::uuid[])`;
+      params[2] = filters.branchIds;
+    }
+    
     const result = await this.pool.query(
       `SELECT 
          alert.*,
@@ -495,14 +511,13 @@ export class AnalyticsRepository {
        LEFT JOIN incidents inc ON inc.id=alert.incident_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
-         AND ($3::uuid IS NULL OR camera.branch_node_id=$3)
+         AND (${branchCondition})
          AND ($4::text IS NULL OR alert.status=$4)
          AND ($5::text IS NULL OR alert.severity=$5)
          AND ($6::timestamptz IS NULL OR alert.last_detected_at >= $6)
          AND ($7::timestamptz IS NULL OR alert.first_detected_at <= $7)
        ORDER BY alert.last_detected_at DESC LIMIT $8`,
-      [resolvedTenantId, filters.cameraId ?? null, filters.branchId ?? null,
-        filters.status ?? null, filters.severity ?? null, filters.from ?? null,
+      [...params, filters.status ?? null, filters.severity ?? null, filters.from ?? null,
         filters.to ?? null, filters.limit],
     );
     return result.rows.map(mapAlert);
@@ -510,6 +525,16 @@ export class AnalyticsRepository {
 
   async countAlerts(tenantId: string, filters: AnalyticsAlertFilters): Promise<Record<AnalyticsAlert["severity"], number>> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    
+    // Build branch filter condition (same logic as listAlerts)
+    let branchCondition = '$3::uuid IS NULL OR camera.branch_node_id=$3';
+    const params: any[] = [resolvedTenantId, filters.cameraId ?? null, filters.branchId ?? null];
+    
+    if (filters.branchIds && filters.branchIds.length > 0) {
+      branchCondition = `camera.branch_node_id = ANY($3::uuid[])`;
+      params[2] = filters.branchIds;
+    }
+    
     const result = await this.pool.query(
       `SELECT
          COUNT(*) FILTER (WHERE alert.severity='P1' AND alert.status NOT IN ('resolved','false_alarm','suppressed')) AS p1,
@@ -521,10 +546,10 @@ export class AnalyticsRepository {
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
-         AND ($3::uuid IS NULL OR camera.branch_node_id=$3)
+         AND (${branchCondition})
          AND ($4::timestamptz IS NULL OR alert.last_detected_at >= $4)
          AND ($5::timestamptz IS NULL OR alert.first_detected_at <= $5)`,
-      [resolvedTenantId, filters.cameraId ?? null, filters.branchId ?? null, filters.from ?? null, filters.to ?? null],
+      [...params, filters.from ?? null, filters.to ?? null],
     );
     const row = result.rows[0] ?? {};
     return {
@@ -538,9 +563,19 @@ export class AnalyticsRepository {
 
   async getAlertsSummary(
     tenantId: string,
-    filters?: { branchId?: string; cameraId?: string },
+    filters?: { branchId?: string; branchIds?: string[]; cameraId?: string },
   ): Promise<AnalyticsAlertsAggregateSummary> {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId);
+    
+    // Build branch filter condition
+    let branchCondition = '$3::uuid IS NULL OR camera.branch_node_id=$3';
+    const params: any[] = [resolvedTenantId, filters?.cameraId ?? null, filters?.branchId ?? null];
+    
+    if (filters?.branchIds && filters.branchIds.length > 0) {
+      branchCondition = `camera.branch_node_id = ANY($3::uuid[])`;
+      params[2] = filters.branchIds;
+    }
+    
     const result = await this.pool.query(
       `SELECT
          COUNT(*)::int AS total,
@@ -553,8 +588,8 @@ export class AnalyticsRepository {
        JOIN cameras camera ON camera.id=alert.camera_id
        WHERE alert.tenant_id=$1
          AND ($2::uuid IS NULL OR alert.camera_id=$2)
-         AND ($3::uuid IS NULL OR camera.branch_node_id=$3)`,
-      [resolvedTenantId, filters?.cameraId ?? null, filters?.branchId ?? null],
+         AND (${branchCondition})`,
+      params,
     );
     const row = result.rows[0] ?? {};
     return {

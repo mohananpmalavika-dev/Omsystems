@@ -57,12 +57,23 @@ export async function registerAiAlertsRoutes(app: FastifyInstance) {
   /**
    * GET /api/v1/ai/alerts
    * Queries normalized alerts with filters
+   * Supports both single branchId and multiple branchIds[] for cross-branch visibility
    */
   const handleGetAlerts = async (request: FastifyRequest, reply: FastifyReply) => {
     const query = (request.query as any) || {};
+    
+    // Parse branchIds from comma-separated string or array
+    let branchIds: string[] | undefined;
+    if (query.branchIds) {
+      branchIds = Array.isArray(query.branchIds) 
+        ? query.branchIds 
+        : String(query.branchIds).split(',').map(id => id.trim()).filter(Boolean);
+    }
+    
     const alerts = unifiedAiAlertService.getAlerts({
       tenantId: query.tenantId,
-      branchId: query.branchId,
+      branchId: query.branchId, // Single branch filter (backward compatible)
+      branchIds, // Multi-branch filter (new feature)
       alertType: query.alertType,
       severity: query.severity,
       status: query.status,
