@@ -9,7 +9,7 @@
  * Malayalam: Device add cheyyumbo thanne automatic ayi storage telemetry add aakum
  */
 
-import { randomUUID } from 'node:crypto';
+
 import type { Pool } from 'pg';
 import type { DeviceInventoryRecord } from '../control-plane-store.js';
 
@@ -178,25 +178,27 @@ export class AutoStorageTelemetryService {
   ): Promise<void> {
     const observedAt = new Date();
     const quality = metrics.smartStatus === 'HEALTHY' ? 'verified' : metrics.smartStatus === 'WARNING' ? 'estimated' : 'degraded';
-    
-    const query = `
-      INSERT INTO operational_telemetry (
-        id, tenant_id, branch_id, edge_agent_id, device_type, device_id,
-        metrics, quality, observed_at, received_at, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      ON CONFLICT (tenant_id, branch_id, device_type, device_id) 
-      DO UPDATE SET
-        metrics = EXCLUDED.metrics,
-        quality = EXCLUDED.quality,
-        observed_at = EXCLUDED.observed_at,
-        received_at = EXCLUDED.received_at,
-        updated_at = NOW()
-    `;
-    
     const deviceId = `${config.branchId.slice(0, 8)}-${config.deviceId}-${metrics.deviceName.replace(/[^a-zA-Z0-9]/g, '-')}`;
-    
+    // Stable idempotency key so repeated inserts upsert rather than duplicate
+    const idempotencyKey = `auto-storage:${config.tenantId}:${config.branchId}:${deviceId}`;
+
+    // Insert into the correct table that the snapshot service reads from.
+    // The old code wrongly targeted `operational_telemetry` (non-existent / wrong table);
+    // `operational_health_telemetry` is what OperationalHealthRepository.listLatest() queries.
+    const query = `
+      INSERT INTO operational_health_telemetry (
+        tenant_id, branch_id, edge_agent_id, device_type, device_id,
+        metrics, quality, source, idempotency_key, reason_codes, observed_at, received_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ON CONFLICT (tenant_id, idempotency_key)
+      DO UPDATE SET
+        metrics        = EXCLUDED.metrics,
+        quality        = EXCLUDED.quality,
+        observed_at    = EXCLUDED.observed_at,
+        received_at    = EXCLUDED.received_at
+    `;
+
     await this.pool.query(query, [
-      randomUUID(),
       config.tenantId,
       config.branchId,
       edgeAgentId || null,
@@ -204,8 +206,10 @@ export class AutoStorageTelemetryService {
       deviceId,
       JSON.stringify(metrics),
       quality,
+      'auto-collection',
+      idempotencyKey,
+      [],           // reason_codes
       observedAt.toISOString(),
-      new Date().toISOString(),
       new Date().toISOString(),
     ]);
   }

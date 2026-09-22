@@ -225,39 +225,10 @@ async function deleteCamera(client: any, id: string, app: FastifyInstance) {
       [`cam-sdcard-${id}`, `%${id}%`]
     ).catch(() => null);
 
-    // Check if any other cameras remain in this branch or system
-    const remainingInBranch = await client.query(
-      `SELECT count(*) as count FROM cameras WHERE branch_node_id = $1::uuid`,
-      [branchNodeId ?? '00000000-0000-0000-0000-000000000000']
-    ).catch(() => ({ rows: [{ count: 0 }] }));
-
-    const branchCount = Number(remainingInBranch.rows[0]?.count ?? 0);
-    if (branchCount === 0 && branchNodeId) {
-      // If no cameras remain in this branch, remove branch-level DVR HDD telemetry and storage nodes
-      await client.query(
-        `DELETE FROM operational_health_telemetry WHERE device_type = 'disk' AND branch_id = $1::uuid`,
-        [branchNodeId]
-      ).catch(() => null);
-      await client.query(
-        `DELETE FROM operational_health_latest WHERE device_type = 'disk' AND branch_id = $1::uuid`,
-        [branchNodeId]
-      ).catch(() => null);
-    }
-
-    const remainingTotal = await client.query(`SELECT count(*) as count FROM cameras`).catch(() => ({ rows: [{ count: 0 }] }));
-    const totalCount = Number(remainingTotal.rows[0]?.count ?? 0);
-    if (totalCount === 0) {
-      // If zero cameras remain in entire system, remove all local disk storage nodes
-      await client.query(
-        `DELETE FROM recording_storage_nodes WHERE external_id IN ('cam-sdcard-primary', 'dvr-hdd-primary')`
-      ).catch(() => null);
-      await client.query(
-        `DELETE FROM operational_health_telemetry WHERE device_type = 'disk'`
-      ).catch(() => null);
-      await client.query(
-        `DELETE FROM operational_health_latest WHERE device_type = 'disk'`
-      ).catch(() => null);
-    }
+    // NOTE: Do NOT delete branch-level or system-wide disk telemetry here.
+    // NVR/DVR storage devices are registered independently of cameras and their
+    // telemetry must survive camera deletions. Only the camera's own onboard
+    // storage (sdcard/cam-labelled entries) is removed above.
   } catch (storageErr) {
     app.log.warn({ err: storageErr, cameraId: id }, "Failed to clean up associated storage nodes on camera deletion");
   }
