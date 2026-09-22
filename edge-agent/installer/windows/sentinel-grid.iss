@@ -4,14 +4,14 @@
 
 [Setup]
 AppName=KryptonVision Edge Agent
-AppVersion=0.1.26
+AppVersion=0.1.27
 AppPublisher=KryptonVision
 AppPublisherURL=https://sentinel-grid.com
 AppSupportURL=https://sentinel-grid.com/support
 DefaultDirName={autopf}\Sentinel Grid\Edge Agent
 DefaultGroupName=KryptonVision
 OutputDir=output
-OutputBaseFilename=KryptonVisionInstaller-v0.1.26-windows
+OutputBaseFilename=KryptonVisionInstaller-v0.1.27-windows
 Compression=lzma2/max
 SolidCompression=yes
 PrivilegesRequired=admin
@@ -31,7 +31,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; Package the same executable that the release manifest verifies and signs.
-Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; DestName: "edge-agent.exe"; Flags: ignoreversion
+Source: "..\..\release\edge-agent.exe"; DestDir: "{app}"; DestName: "edge-agent.exe"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "..\..\release\node_modules\*"; DestDir: "{app}\node_modules"; Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 Source: "..\..\models\secure-face\*"; DestDir: "{app}\models\secure-face"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\vendor\windows\ffmpeg.zip"; DestName: "edge-agent-ffmpeg.zip"; Flags: dontcopy
@@ -392,7 +392,7 @@ begin
   if UsePackageConfiguration and not ExistingInstall then begin
     if not CopyFile(PackageConfigPath, ConfigPath, False) then
       RaiseException('The branch configuration from the installer package could not be saved.');
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.26');
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.27');
     UpdateConfigSetting('EDGE_LOG_PATH', LogPath);
     UpdateConfigSetting('FFMPEG_PATH', DotenvPath(FfmpegPath));
     UpdateConfigSetting('FFPROBE_PATH', DotenvPath(FfprobePath));
@@ -404,7 +404,7 @@ begin
     'CONTROL_PLANE_URL="' + PackageControlPlaneUrl + '"' + #13#10 +
     'EDGE_ACTIVATION_CODE="' + Trim(ActivationPage.Values[0]) + '"' + #13#10 +
     'EDGE_AGENT_NAME="' + Trim(BranchNamePage.Values[0]) + '"' + #13#10 +
-    'EDGE_AGENT_VERSION="0.1.26"' + #13#10 +
+    'EDGE_AGENT_VERSION="0.1.27"' + #13#10 +
     'EDGE_IDENTITY_PATH="' + DataPath + '/device-identity.enc"' + #13#10 +
     'EDGE_IDENTITY_KEY_PATH="' + DataPath + '/device-identity.key"' + #13#10 +
     'EDGE_OFFLINE_OUTBOX_PATH="' + DataPath + '/offline-outbox.enc"' + #13#10 +
@@ -446,6 +446,10 @@ end;
 procedure StopOldAgent;
 begin
   RunNative(ExpandConstant('{sys}\schtasks.exe'), '/End /TN "' + TaskName + '"', '', False);
+  RunNative(ExpandConstant('{sys}\taskkill.exe'), '/F /IM edge-agent.exe /T', '', False);
+  RunNative(ExpandConstant('{sys}\taskkill.exe'), '/F /IM mediamtx.exe /T', '', False);
+  RunNative(ExpandConstant('{sys}\taskkill.exe'), '/F /IM ffmpeg.exe /T', '', False);
+  RunNative(ExpandConstant('{sys}\taskkill.exe'), '/F /IM cloudflared.exe /T', '', False);
   RunNative(ExpandConstant('{sys}\sc.exe'), 'stop "' + LegacyServiceName + '"', '', False);
   Sleep(1500);
   RunNative(ExpandConstant('{sys}\sc.exe'), 'delete "' + LegacyServiceName + '"', '', False);
@@ -549,13 +553,18 @@ var
   HadPersistentGatewayCredential: Boolean;
   EnrollmentConfirmed: Boolean;
 begin
+  if CurStep = ssInstall then begin
+    StopOldAgent;
+    Exit;
+  end;
+
   if CurStep <> ssPostInstall then Exit;
 
   StopOldAgent;
   UnpackRuntime;
   HadPersistentGatewayCredential := HasPersistentGatewayCredential;
   if HadPersistentGatewayCredential and FileExists(ConfigPath) then
-    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.26')
+    UpdateConfigSetting('EDGE_AGENT_VERSION', '0.1.27')
   else
     WriteFreshConfig;
   ProtectConfigFile;
@@ -569,7 +578,7 @@ begin
   SaveStringToFile(AddBackslash(AppPath) + 'install-info.txt',
     'Installation Date: ' + GetDateTimeString('yyyy-mm-dd hh:nn:ss', #0, #0) + #13#10 +
     'Installation Path: ' + AppPath + #13#10 +
-    'Version: 0.1.26' + #13#10 +
+    'Version: 0.1.27' + #13#10 +
     'Installer: Native Windows', False);
 end;
 
