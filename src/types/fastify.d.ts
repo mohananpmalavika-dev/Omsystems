@@ -6,4 +6,14 @@ declare module "fastify" {
     store: ControlPlaneStore;
     authenticateRequest: (request: FastifyRequest) => Promise<any>;
   }
+
+  interface FastifyContextConfig {
+    noAuth?: boolean;
+    public?: boolean;
+    auth?: boolean;
+    permission?: string;
+    action?: string;
+    rateLimit?: any;
+    [key: string]: any;
+  }
 }
