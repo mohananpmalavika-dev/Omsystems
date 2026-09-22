@@ -6,7 +6,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { GuardianAIAssistant } from "../services/guardian-ai-assistant.service.js";
+import { GuardianAIAssistant, KRYPTON_PRODUCT_FEATURES } from "../services/guardian-ai-assistant.service.js";
 import { requireFeatureWithLogging } from "../middleware/feature-flag.middleware.js";
 
 const messageSchema = z.object({
@@ -302,6 +302,47 @@ export async function registerGuardianAIRoutes(app: FastifyInstance, pool: any) 
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
+  });
+
+
+  /**
+   * GET /api/v1/guardian/features
+   *
+   * Returns structured KryptonVision product feature cards.
+   * Supports ?lang=ml (Malayalam) or ?lang=en (English, default).
+   * No authentication required — public product information.
+   */
+  app.get("/api/v1/guardian/features", {
+    config: { noAuth: true },
+  }, async (request, _reply) => {
+    const query = z.object({
+      lang: z.enum(["ml", "en"]).optional().default("en"),
+    }).parse(request.query);
+
+    const isMalayalam = query.lang === "ml";
+
+    const cards = KRYPTON_PRODUCT_FEATURES.map((f) => ({
+      icon: f.icon,
+      title: isMalayalam ? f.titleMl : f.title,
+      titleEn: f.title,
+      titleMl: f.titleMl,
+      description: isMalayalam ? f.descriptionMl : f.description,
+      descriptionEn: f.description,
+      descriptionMl: f.descriptionMl,
+      tags: f.tags,
+    }));
+
+    return {
+      success: true,
+      lang: query.lang,
+      total: cards.length,
+      platform: "KryptonVision (Sentinel Grid)",
+      tagline: isMalayalam
+        ? "Enterprise AI Physical Security & Video Analytics Platform"
+        : "Enterprise AI Physical Security & Video Analytics Platform",
+      features: cards,
+      timestamp: new Date().toISOString(),
+    };
   });
 
   app.log.info("[KryptonAI] Routes registered successfully");

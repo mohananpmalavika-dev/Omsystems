@@ -10,34 +10,46 @@ const fileSize = statSync(filePath).size;
 
 console.log(`Starting Resumable Chunked Upload of ${filePath} (${(fileSize / (1024 * 1024)).toFixed(2)} MB) to gs://${bucket}/${objectName}...`);
 
-// Step 1: Initiate Resumable Session
+// Step 1: Initiate Resumable Session with retries
 const initUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=resumable&name=${encodeURIComponent(objectName)}`;
-const initRes = await fetch(initUrl, {
-  method: "POST",
-  headers: {
-    Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json; charset=UTF-8",
-    "X-Upload-Content-Type": "application/octet-stream",
-    "X-Upload-Content-Length": String(fileSize),
-  },
-  body: JSON.stringify({ name: objectName }),
-});
+let sessionUri = null;
+for (let initAttempt = 1; initAttempt <= 10; initAttempt++) {
+  try {
+    const initRes = await fetch(initUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": "application/octet-stream",
+        "X-Upload-Content-Length": String(fileSize),
+      },
+      body: JSON.stringify({ name: objectName }),
+      signal: AbortSignal.timeout(15000),
+    });
 
-if (!initRes.ok) {
-  console.error("Failed to initiate resumable upload:", initRes.status, await initRes.text());
-  process.exit(1);
+    if (!initRes.ok) {
+      console.error("Failed to initiate resumable upload:", initRes.status, await initRes.text());
+      await new Promise((r) => setTimeout(r, 2000));
+      continue;
+    }
+
+    sessionUri = initRes.headers.get("location");
+    if (sessionUri) break;
+  } catch (err) {
+    console.warn(`Session initiation attempt ${initAttempt} failed (${err.message}), retrying...`);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }
 
-const sessionUri = initRes.headers.get("location");
 if (!sessionUri) {
-  console.error("No upload location returned");
+  console.error("No upload location returned after 10 attempts.");
   process.exit(1);
 }
 
 console.log("Resumable upload session initiated.");
 
-// Step 2: Upload in 8MB chunks with automatic retries
-const CHUNK_SIZE = 8 * 1024 * 1024; // 8MB chunks
+// Step 2: Upload in 2MB chunks with automatic retries
+const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunks (GCS 256KiB aligned)
 const fd = openSync(filePath, "r");
 let offset = 0;
 
@@ -50,7 +62,7 @@ while (offset < fileSize) {
   let success = false;
   let attempts = 0;
 
-  while (!success && attempts < 5) {
+  while (!success && attempts < 10) {
     attempts++;
     try {
       const chunkRes = await fetch(sessionUri, {
@@ -61,6 +73,7 @@ while (offset < fileSize) {
           "Content-Type": "application/octet-stream",
         },
         body: buffer,
+        signal: AbortSignal.timeout(120000),
       });
 
       if (chunkRes.status === 200 || chunkRes.status === 201) {
@@ -79,13 +92,32 @@ while (offset < fileSize) {
         await new Promise((r) => setTimeout(r, 2000));
       }
     } catch (err) {
-      console.warn(`Chunk ${offset}-${end} network error: ${err.message}, retrying (attempt ${attempts})...`);
+      console.warn(`Chunk ${offset}-${end} network error: ${err.message}, checking session (attempt ${attempts})...`);
+      try {
+        const checkRes = await fetch(sessionUri, {
+          method: "PUT",
+          headers: { "Content-Range": `bytes */${fileSize}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        if (checkRes.status === 308) {
+          const range = checkRes.headers.get("range");
+          if (range) {
+            const match = range.match(/bytes=0-(\d+)/);
+            if (match && Number(match[1]) >= end) {
+              success = true;
+              offset += currentChunkSize;
+              console.log(`Progress: recovered chunk at offset ${offset}`);
+              break;
+            }
+          }
+        }
+      } catch {}
       await new Promise((r) => setTimeout(r, 2000));
     }
   }
 
   if (!success) {
-    console.error(`Failed to upload chunk starting at ${offset} after 5 attempts.`);
+    console.error(`Failed to upload chunk starting at ${offset} after 10 attempts.`);
     closeSync(fd);
     process.exit(1);
   }

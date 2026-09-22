@@ -630,9 +630,20 @@ export interface GuardianContext {
   permissions?: string[];
 }
 
+export interface GuardianFeatureCard {
+  title: string;
+  titleMl: string;
+  icon: string;
+  description: string;
+  descriptionMl: string;
+  tags: string[];
+}
+
 export interface GuardianResponse {
   message: string;
-  type: "text" | "action" | "suggestion" | "warning" | "error";
+  messageMl?: string;
+  type: "text" | "action" | "suggestion" | "warning" | "error" | "feature_cards";
+  cards?: GuardianFeatureCard[];
   actions?: Array<{
     function: string;
     parameters: Record<string, any>;
@@ -640,9 +651,165 @@ export interface GuardianResponse {
     result?: any;
   }>;
   suggestions?: string[];
+  suggestionsMl?: string[];
   requiresConfirmation?: boolean;
   timestamp: string;
 }
+
+/**
+ * KryptonVision / Sentinel Grid — Complete Product Features Knowledge Base
+ * Bilingual: English + Malayalam
+ */
+export const KRYPTON_PRODUCT_FEATURES: GuardianFeatureCard[] = [
+  {
+    icon: "🧠",
+    title: "Facial Recognition",
+    titleMl: "മുഖം തിരിച്ചറിയൽ (Face Recognition)",
+    description:
+      "Real-time identification of enrolled employees, VIP visitors, and blacklisted individuals from live camera feeds. " +
+      "Supports multi-face detection, liveness check, and instant alert dispatch.",
+    descriptionMl:
+      "ലൈവ് ക്യാമറ ഫീഡിൽ നിന്ന് enrolled employees, VIP visitors, blacklisted ആളുകളെ real-time-ൽ തിരിച്ചറിയും. " +
+      "Multi-face detection, liveness check, instant alert dispatch എന്നിവ support ചെയ്യുന്നു.",
+    tags: ["AI", "Biometric", "Security", "Real-time"],
+  },
+  {
+    icon: "🚗",
+    title: "ANPR — Automatic Number Plate Recognition",
+    titleMl: "ANPR — വാഹന നമ്പർ തിരിച്ചറിയൽ",
+    description:
+      "Automatic license plate recognition for vehicle access control. Supports allowlist/blocklist alerts, " +
+      "entry/exit logging, and integration with parking and logistics systems.",
+    descriptionMl:
+      "വാഹനങ്ങളുടെ നമ്പർ പ്ലേറ്റ് automatic-ആയി തിരിച്ചറിഞ്ഞ് access control നടത്തും. " +
+      "Allowlist/blocklist alerts, entry/exit logging, parking & logistics integration support ചെയ്യുന്നു.",
+    tags: ["AI", "Vehicle", "ANPR", "Access Control"],
+  },
+  {
+    icon: "🔴",
+    title: "Perimeter & Intrusion Detection",
+    titleMl: "കടന്നുകയറ്റ ഡിറ്റക്ഷൻ & വെർച്വൽ ട്രിപ്‌വയർ",
+    description:
+      "Virtual tripwires, sterile zone breach detection, and boundary crossing alarms. " +
+      "Draw custom zones on any camera canvas and set directional rules (A→B, B→A, bidirectional).",
+    descriptionMl:
+      "ഏതൊരു ക്യാമറയിലും virtual tripwires വരച്ച് boundary crossing alerts set ചെയ്യാം. " +
+      "Sterile zone breach, directional rules (A→B, B→A, bidirectional) support ഉണ്ട്. " +
+      "Analytics → Rules & Automation page-ൽ configure ചെയ്യാം.",
+    tags: ["AI", "Perimeter", "Intrusion", "Virtual Tripwire"],
+  },
+  {
+    icon: "👥",
+    title: "Crowd & Loitering Analytics",
+    titleMl: "ജനക്കൂട്ടം & സംശയകരമായ ലോയ്‌റ്ററിംഗ് ഡിറ്റക്ഷൻ",
+    description:
+      "Real-time crowd density monitoring with overcrowding alerts. Detects suspicious loitering " +
+      "in sensitive areas like ATMs, bank lobbies, and vaults.",
+    descriptionMl:
+      "Real-time crowd density monitor ചെയ്ത് overcrowding alerts അയക്കും. ATM, bank lobby, vault-ൽ " +
+      "suspicious loitering detect ചെയ്ത് ഉടൻ alert നൽകും.",
+    tags: ["AI", "Crowd", "Analytics", "Loitering"],
+  },
+  {
+    icon: "🏦",
+    title: "Banking & NBFC Compliance Module",
+    titleMl: "ബാങ്കിംഗ് & NBFC കംപ്ലയൻസ് മൊഡ്യൂൾ",
+    description:
+      "Automated vault dual-custody verification, cash counter camera monitoring, teller area security, " +
+      "strong-room checks, and daily executive MIS surveillance health reports.",
+    descriptionMl:
+      "Vault opening/closing-ൽ dual-custody ഉറപ്പാക്കും. Cash counter coverage, teller area security, " +
+      "strong-room checks, daily executive MIS reports — ഇവ automated ആയി run ആകും. " +
+      "Gold loan branches, banks, NBFC-കൾക്ക് ഇത് specially designed ആണ്.",
+    tags: ["Banking", "NBFC", "Vault", "Compliance", "MIS Reports"],
+  },
+  {
+    icon: "🎙️",
+    title: "Voice Authentication & Biometrics",
+    titleMl: "ശബ്ദ ആധികാരീകരണം (Voice ID Login)",
+    description:
+      "Enroll a voice passphrase for password-free login. Uses voice biometrics to authenticate " +
+      "operators securely without typing credentials.",
+    descriptionMl:
+      "ഒരു voice passphrase enroll ചെയ്ത ശേഷം password ടൈപ്പ് ചെയ്യാതെ voice ID ഉപയോഗിച്ച് login ചെയ്യാം. " +
+      "Login page-ൽ 'Voice Login' button click ചെയ്ത് phrase speak ചെയ്താൽ authenticate ആകും.",
+    tags: ["Biometric", "Voice", "Authentication", "Security"],
+  },
+  {
+    icon: "🌐",
+    title: "Multi-Branch Command Center",
+    titleMl: "മൾട്ടി-ബ്രാഞ്ച് കമാൻഡ് സെന്റർ",
+    description:
+      "Centralized live video wall, PTZ camera control, and unified alert escalation across all branches. " +
+      "Real-time branch health dashboard with per-branch camera status.",
+    descriptionMl:
+      "എല്ലാ branches-ലെയും ലൈവ് video wall ഒരിടത്ത് നിന്ന് control ചെയ്യാം. " +
+      "PTZ control, unified alert escalation, real-time branch health — centralized ആയി manage ചെയ്യാം.",
+    tags: ["Multi-Branch", "Live Video", "PTZ", "Command Center"],
+  },
+  {
+    icon: "💾",
+    title: "Edge Agent & Offline Recording",
+    titleMl: "Edge Agent & ഓഫ്‌ലൈൻ വീഡിയോ റെക്കോർഡിംഗ്",
+    description:
+      "Local edge appliance (Windows PC / Jetson / Intel x86) records video continuously even when internet is down. " +
+      "Encrypted sync to cloud when connectivity resumes. Each branch gets its own edge agent.",
+    descriptionMl:
+      "Internet ഇല്ലെങ്കിലും edge PC-ൽ locally video record ആകും. " +
+      "Internet restore ആയ ശേഷം encrypted ആയി cloud-ലേക്ക് sync ആകും. " +
+      "Windows PC-ൽ installer download ചെയ്ത് Run as Administrator ആയി install ചെയ്യാം.",
+    tags: ["Edge", "Offline", "Recording", "High Availability"],
+  },
+  {
+    icon: "📋",
+    title: "Evidence & Audit Trail",
+    titleMl: "തെളിവ് & ഓഡിറ്റ് ട്രെയിൽ",
+    description:
+      "Tamper-evident evidence packages with chain of custody. Export incident clips, screenshots, " +
+      "and audit logs for legal or compliance purposes. HSM-signed for integrity.",
+    descriptionMl:
+      "Incidents-ൽ video clip, screenshots, audit logs — tamper-evident ആയി export ചെയ്യാം. " +
+      "HSM signing ഉള്ളതിനാൽ evidence-ന്റെ integrity legally provable ആണ്.",
+    tags: ["Evidence", "Audit", "Legal", "Compliance"],
+  },
+  {
+    icon: "🤖",
+    title: "AI Video Search",
+    titleMl: "AI വീഡിയോ സെർച്ച്",
+    description:
+      "Search recorded footage using natural language: 'show me a person in red shirt at main entrance between 10am-12pm'. " +
+      "Powered by vision AI for rapid forensic investigation.",
+    descriptionMl:
+      "'Red shirt ധരിച്ച ആൾ main entrance-ൽ 10am-12pm-ൽ' എന്ന് natural language-ൽ search ചെയ്ത് " +
+      "recorded footage-ൽ നിന്ن instantly clips കാണാം. Forensic investigation-ന് ഉപകരിക്കും.",
+    tags: ["AI", "Video Search", "Forensic", "Analytics"],
+  },
+  {
+    icon: "🚨",
+    title: "Incident Management & SOP Workflow",
+    titleMl: "ഇൻസിഡന്റ് മാനേജ്‌മെന്റ് & SOP വർക്ക്‌ഫ്ലോ",
+    description:
+      "Automated incident creation, operator assignment, escalation timers, SOP checklists, " +
+      "and resolution audit trail. Integrates with physical siren, SMS, and guard dispatch.",
+    descriptionMl:
+      "Alert trigger ആകുമ്പോൾ automatically incident create ആകും, operator-ന് assign ആകും, " +
+      "escalation timer run ആകും. SOP checklist, SMS, physical siren, guard dispatch — " +
+      "ഒരൊറ്റ workflow-ൽ handle ചെയ്യും.",
+    tags: ["Incident", "SOP", "Workflow", "Escalation"],
+  },
+  {
+    icon: "🔒",
+    title: "Access Control & Secure Area Authorization",
+    titleMl: "ആക്‌സസ് കൺട്രോൾ & സെക്യൂർ ഏരിയ ഓതറൈസേഷൻ",
+    description:
+      "Role-based access control (RBAC/ABAC), secure area whitelists, dual-person authorization zones, " +
+      "and door lock/unlock integrations.",
+    descriptionMl:
+      "Role-based access control, secure area whitelists, dual-person authorization zones " +
+      "(vault entry-ക്ക് 2 authorized ആളുകൾ ഒരേ സമയം ഉണ്ടായിരിക്കണം), door lock/unlock integration.",
+    tags: ["Access Control", "ABAC", "RBAC", "Security"],
+  },
+];
 
 export class GuardianAIAssistant {
   private openAIApiKey: string;
@@ -1234,13 +1401,25 @@ LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
 KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
 1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
    - Location: "Analytics ➔ Rules & Automation" (URL: /analytics/rules).
-   - How to configure:
+   - How to configure LINE CROSSING (Virtual Tripwire):
      a) Select Branch and Camera.
-     b) In "Visual Zone & Virtual Tripwire Designer", switch to "Virtual Tripwire" (or click "⚡ Door Ingress Tripwire").
+     b) In "Visual Zone & Virtual Tripwire Designer", switch to "Virtual Tripwire" (or click "⚡ Door Ingress Tripwire" preset).
      c) Select Direction: "A ➔ B", "B ➔ A", or "A ⇄ B" (Bidirectional).
-     d) Click 2 points on the camera preview canvas to draw the crossing barrier (Point A to Point B).
+     d) Click 2 points on the camera preview canvas to draw the crossing line (Point A = start, Point B = end).
      e) Click "Save Tripwire Definition".
      f) Under Rule Configuration below, choose Condition: "Line Crossing" (line_crossing) and select action (Alert, Siren, SMS, Incident). Click "Save Rule".
+
+   - How to configure POLYGON ZONE (Sterile / Restricted Area Zone Intrusion):
+     a) Select Branch and Camera.
+     b) In "Visual Zone & Virtual Tripwire Designer", switch mode to "Polygon Zone".
+     c) Click 3 or more points on the camera canvas to draw a closed polygon area.
+        • Each click = one corner of the zone.
+        • Click the first point again (or double-click) to close the polygon.
+     d) Click "Save Zone Definition".
+     e) Under Rule Configuration, choose Condition: "Zone Intrusion" (zone_intrusion) and select action. Click "Save Rule".
+
+   PATH for both: Dashboard sidebar → Analytics → Rules & Automation → /analytics/rules
+   Malayalam: Line Crossing-ന് 2 points, Polygon Zone-ന് 3+ points ക്ലിക്ക് ചെയ്ത് area draw ചെയ്ത് save ചെയ്യുക. Condition-ൽ Line Crossing / Zone Intrusion select ചെയ്ത് Rule save ചെയ്യുക.
 
 2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
    - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
@@ -1253,18 +1432,57 @@ KRYPTONVISION PLATFORM ARCHITECTURE & HOW-TO KNOWLEDGE:
      c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
      d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
 
-3. GENERAL QUESTIONS (PERMITTED IN GUEST MODE):
+3. COMPLETE PRODUCT FEATURES KNOWLEDGE (Answer these in detail — including in Malayalam/Manglish when asked):
+
+   🧠 FACIAL RECOGNITION: Real-time ID of enrolled employees, VIP visitors, blacklisted persons. Multi-face detection, liveness check, instant alerts.
+   Malayalam: ലൈവ് ക്യാമറ ഫീഡിൽ enrolled employees, VIP visitors, blacklisted ആളുകളെ real-time-ൽ തിരിച്ചറിഞ്ഞ് alert അയക്കും.
+
+   🚗 ANPR (Automatic Number Plate Recognition): Vehicle license plate recognition. Allowlist/blocklist alerts, entry/exit logging, parking integration.
+   Malayalam: വാഹന നമ്പർ plate automatic-ആയി read ചെയ്ത് blocklist vehicles-ന് alert തരും, entry/exit log ചെയ്യും.
+
+   🔴 INTRUSION & LINE CROSSING: Virtual tripwires on any camera. Draw a line → set direction (A→B, B→A, bidirectional) → trigger alerts/siren/SMS on crossing.
+   Malayalam: ഏതൊരു ക്യാമറയിലും virtual line വരച്ച് line cross ചെയ്യുമ്പോൾ alert/siren/SMS trigger ചെയ്യാം.
+
+   👥 CROWD & LOITERING: Overcrowding alerts, suspicious loitering detection in ATMs, bank lobbies, vaults.
+   Malayalam: ATM, bank lobby, vault-ൽ loitering detect ചെയ്ത് ഉടൻ alert നൽകും, crowd density monitor ചെയ്യും.
+
+   🏦 NBFC/BANKING MODULE: Vault dual-custody verification, cash counter monitoring, teller area security, daily automated MIS reports.
+   Malayalam: Vault open/close-ൽ dual-custody enforce ചെയ്യും. Cash counter, teller area monitor ചെയ്ത് daily MIS reports auto-generate ആകും.
+
+   🎙️ VOICE AUTHENTICATION: Voice passphrase enrollment for password-free login. Click Voice Login → speak passphrase → authenticated.
+   Malayalam: Voice passphrase enroll ചെയ്ത ശേഷം password ഇല്ലാതെ login ചെയ്യാം.
+
+   🌐 MULTI-BRANCH CONTROL CENTER: Centralized live video wall, PTZ control, unified alert escalation across all branches.
+   Malayalam: എല്ലാ branches-ലെയും ലൈവ് cameras ഒരിടത്ത് നിന്ന് control ചെയ്യാം.
+
+   💾 EDGE AGENT & OFFLINE RECORDING: Records video locally even without internet. Encrypted sync to cloud when connectivity resumes.
+   Malayalam: Internet ഇല്ലെങ്കിലും locally record ആകും, internet restore ആകുമ്പോൾ cloud-ലേക്ക് sync ആകും.
+
+   📋 EVIDENCE & AUDIT TRAIL: Tamper-evident evidence packages, video clip export, HSM-signed for legal compliance.
+   Malayalam: Incidents-ൽ video clip, audit log — HSM-signed tamper-evident ആയി export ചെയ്യാം.
+
+   🤖 AI VIDEO SEARCH: Natural language video search — 'red shirt person at main gate 10am-12pm'. Rapid forensic investigation.
+   Malayalam: Natural language-ൽ recorded footage search ചെയ്ത് instantly clips കണ്ടെത്താം.
+
+   🚨 INCIDENT MANAGEMENT & SOP: Automated incident creation, operator assignment, escalation timers, SOP checklists, guard dispatch, siren.
+   Malayalam: Alert ആകുമ്പോൾ incident auto-create ആകും, operator-ന് assign ആകും, SOP checklist run ആകും.
+
+   🔒 ACCESS CONTROL & SECURE AREAS: RBAC/ABAC roles, secure area whitelists, dual-person authorization zones, door lock/unlock.
+   Malayalam: Role-based access, secure area whitelist, vault-ൽ dual-person authorization enforce ചെയ്യും.
+
+4. GENERAL QUESTIONS (PERMITTED IN GUEST MODE):
    - You CAN freely answer questions about KryptonVision platform features, architecture, and system capabilities.
    - You CAN explain AI video analytics (facial recognition, perimeter intrusion, crowd counting, loitering detection, vehicle ANPR).
    - You CAN explain CCTV camera support: ONVIF (Profile S/G/T), RTSP, and native compatibility with vendors like Hikvision, Dahua, CP Plus, Axis, Uniview, and Hanwha.
    - You CAN guide users on how to log in (Username/Password or Voice ID), how to reset passwords via OTP, and how to contact the administrator.
+   - When asked in Malayalam or Manglish, ALWAYS reply in Malayalam/Manglish with full details!
 
-4. ORGANIZATION & MODULE DATA (STRICTLY PROHIBITED FOR GUESTS):
+5. ORGANIZATION & MODULE DATA (STRICTLY PROHIBITED FOR GUESTS):
    - You do NOT have access to live camera streams, real-time alerts, incident logs, branch status, vault/banking monitoring, employee attendance, or any organization-specific operational data.
    - If the user asks for ANY live cameras, video feeds, alerts, incidents, branch data, or module operations, politely refuse and instruct them to log in:
      "To view live camera feeds, branch status, security alerts, and operational module data, please sign in to your KryptonVision account on the login page."
 
-Personality: Professional, welcoming, concise, and helpful.`,
+Personality: Professional, welcoming, concise, and helpful. Always reply in the same language the user writes in (English, Malayalam, or Manglish).`,
       };
     }
 
@@ -1286,14 +1504,30 @@ LANGUAGE & LOCALIZATION (മലയാളം / MANGLISH):
 KRYPTONVISION PLATFORM HOW-TO KNOWLEDGE:
 1. LINE CROSSING & VIRTUAL TRIPWIRES (ലൈൻ ക്രോസ്സിംഗ് സെറ്റ് ചെയ്യുന്നത്):
    - Location: "Analytics ➔ Rules & Automation" (URL: /analytics/rules).
-   - How to configure:
+   - How to configure LINE CROSSING (Virtual Tripwire):
      a) Select Branch and Camera from dropdown.
      b) In "Visual Zone & Virtual Tripwire Designer", switch mode to "Virtual Tripwire" (or click quick preset "⚡ Door Ingress Tripwire").
      c) Choose Direction: "A ➔ B", "B ➔ A", or "A ⇄ B" (Bidirectional).
-     d) Click 2 points on the live camera canvas (Point A green, Point B blue).
+     d) Click 2 points on the live camera canvas (Point A green = start, Point B blue = end).
      e) Click "Save Tripwire Definition".
      f) Below in Rule Configuration, set Condition Type to "Line Crossing" (line_crossing) and choose Action (Alert, Siren, SMS, Incident). Click "Save Rule".
-   - When users ask where or how to configure Line Crossing, explain these exact steps and call the function navigate_to_menu with "/analytics/rules".
+   - When users ask where or how to configure Line Crossing, explain these exact steps and call navigate_to_menu with "/analytics/rules".
+
+   - How to configure POLYGON ZONE (Sterile / Restricted Area Zone Intrusion):
+     a) Select Branch and Camera.
+     b) In "Visual Zone & Virtual Tripwire Designer", switch mode to "Polygon Zone".
+     c) Click 3 or more points on the live camera canvas to draw a closed polygon (each click = one corner).
+     d) Close the polygon by clicking the first point or double-clicking.
+     e) Click "Save Zone Definition".
+     f) In Rule Configuration, set Condition Type to "Zone Intrusion" (zone_intrusion) and choose Action. Click "Save Rule".
+   - When users ask about polygon zone / sterile zone / restricted area, explain these steps and call navigate_to_menu with "/analytics/rules".
+
+   KEY DIFFERENCE:
+   • Line Crossing = 2 points, draws a straight line. Alert when someone crosses that line.
+   • Polygon Zone = 3+ points, draws a closed area. Alert when someone enters/exits that zone.
+
+   PATH for both: Dashboard sidebar → Analytics → Rules & Automation → /analytics/rules
+   Malayalam: /analytics/rules page-ൽ branch & camera select ചെയ്ത് Designer-ൽ mode choose ചെയ്ത് points click ചെയ്ത് save ചെയ്യുക. Rule Configuration-ൽ condition set ചെയ്ത് Rule save ചെയ്യുക.
 
 2. EDGE AGENT INSTALLATION & MULTI-SYSTEM TROUBLESHOOTING (എഡ്ജ് ഏജന്റ് ഇൻസ്റ്റാളേഷൻ):
    - How to install: In Dashboard Branch Management, download the branch package ("<Branch>-edge-agent-setup.zip").
@@ -1306,6 +1540,21 @@ KRYPTONVISION PLATFORM HOW-TO KNOWLEDGE:
      c) Network: The PC must reach the cloud control plane at https://34-14-220-41.sslip.io.
      d) Diagnosis: Check logs at "C:\\Program Files\\Sentinel Grid\\Edge Agent\\logs\\edge-agent.log" and Windows Scheduled Task "Sentinel Grid Edge Agent" in taskschd.msc.
 
+3. COMPLETE PRODUCT FEATURES (Explain in detail when asked — reply in Malayalam when user asks in Malayalam/Manglish):
+
+   🧠 FACIAL RECOGNITION: Real-time ID of enrolled employees, VIP visitors, blacklisted persons from live feeds. Multi-face detection, liveness check.
+   🚗 ANPR: Automatic vehicle license plate recognition. Allowlist/blocklist alerts, entry/exit logging.
+   🔴 INTRUSION & LINE CROSSING: Virtual tripwires on any camera. Draw line → set direction → trigger alerts/siren/SMS on crossing. Configure at /analytics/rules.
+   👥 CROWD & LOITERING: Overcrowding alerts and suspicious loitering detection in sensitive areas.
+   🏦 NBFC/BANKING MODULE: Vault dual-custody verification, cash counter monitoring, teller security, automated daily MIS reports.
+   🎙️ VOICE AUTHENTICATION: Voice passphrase enrollment for password-free login.
+   🌐 MULTI-BRANCH CONTROL CENTER: Centralized live video wall, PTZ control, unified alerts across all branches.
+   💾 EDGE AGENT & OFFLINE RECORDING: Local recording even without internet, encrypted sync to cloud on reconnect.
+   📋 EVIDENCE & AUDIT TRAIL: Tamper-evident evidence packages, video clip export, HSM-signed for legal use.
+   🤖 AI VIDEO SEARCH: Natural language search through recorded footage for rapid forensic investigation.
+   🚨 INCIDENT MANAGEMENT & SOP: Automated incident creation, operator assignment, escalation timers, SOP checklists, guard dispatch.
+   🔒 ACCESS CONTROL & SECURE AREAS: RBAC/ABAC, secure area whitelists, dual-person authorization zones, door lock/unlock.
+
 Current context:
 - User ID: ${context.userId}
 - Tenant: ${context.tenantId}
@@ -1316,6 +1565,7 @@ Personality:
 - Professional but friendly
 - Proactive in suggesting actions
 - Clear and concise communication
+- LANGUAGE: Always reply in the same language the user writes in (English, Malayalam, or Manglish)
 - When users ask to navigate or open any page, use navigate_to_menu tool call!`,
     };
   }
@@ -1956,10 +2206,11 @@ Personality:
     }
 
     // 5. Features / AI analytics capabilities
-    if (
+    const isFeatureQuery =
       lower.includes("feature") ||
       lower.includes("analytic") ||
       lower.includes("capability") ||
+      lower.includes("capabilities") ||
       lower.includes("face recognition") ||
       lower.includes("facial") ||
       lower.includes("anpr") ||
@@ -1967,13 +2218,83 @@ Personality:
       lower.includes("intrusion") ||
       lower.includes("crowd") ||
       lower.includes("loitering") ||
-      lower.includes("ai") ||
-      lower.includes("enthellam")
-    ) {
+      lower.includes("what can") ||
+      lower.includes("what does") ||
+      lower.includes("what features") ||
+      lower.includes("ai features") ||
+      lower.includes("enthellam") ||
+      lower.includes("enthu okke") ||
+      lower.includes("enthu features") ||
+      lower.includes("features enthaanu") ||
+      lower.includes("features enthokke") ||
+      lower.includes("features unduo") ||
+      lower.includes("features undoo") ||
+      lower.includes("features undo") ||
+      lower.includes("features ullathu") ||
+      lower.includes("features undayo") ||
+      lower.includes("enthanu features") ||
+      lower.includes("ethu features") ||
+      lower.includes("njan enthellam cheyyan") ||
+      lower.includes("enthu cheyyan") ||
+      lower.includes("enthu okke ayyo") ||
+      lower.includes("platform enthu") ||
+      lower.includes("product enthu") ||
+      lower.includes("system enthu") ||
+      lower.includes("ai unduo") ||
+      lower.includes("ai undoo") ||
+      lower.includes("ai undo") ||
+      (lower.includes("ai") && lower.includes("enthu")) ||
+      (lower.includes("ai") && lower.includes("entha"));
+
+    const isMalayalamQuery =
+      lower.includes("enthu") ||
+      lower.includes("entha") ||
+      lower.includes("enthellam") ||
+      lower.includes("enthu okke") ||
+      lower.includes("unduo") ||
+      lower.includes("undoo") ||
+      lower.includes("undo") ||
+      lower.includes("ullathu") ||
+      lower.includes("paranjal") ||
+      lower.includes("cheyyanam") ||
+      lower.includes("cheyyam") ||
+      lower.includes("ayyo") ||
+      lower.includes("aaano") ||
+      lower.includes("aano") ||
+      lower.includes("anuu") ||
+      lower.includes("engane") ||
+      lower.includes("evide") ||
+      lower.includes("enikku") ||
+      lower.includes("njan");
+
+    if (isFeatureQuery) {
+      if (isMalayalamQuery) {
+        return {
+          message:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**",
+          messageMl:
+            "**KryptonVision-ന്റെ AI & Security ഫീച്ചറുകൾ:**\n\n" +
+            "ഈ platform-ൽ ഉള്ള പ്രധാന capabilities:",
+          type: "feature_cards",
+          cards: KRYPTON_PRODUCT_FEATURES,
+          suggestions: [
+            "What is KryptonVision?",
+            "Which cameras are supported?",
+            "How do I sign in?",
+          ],
+          suggestionsMl: [
+            "KryptonVision എന്താണ്?",
+            "Supported cameras ഏതൊക്കെ?",
+            "Sign in എങ്ങനെ ചെയ്യും?",
+          ],
+          timestamp,
+        };
+      }
       return {
         message:
-          "**KryptonVision AI & Security Capabilities:**\n\n• **Facial Recognition:** Instant identification of enrolled employees, VIP visitors, and blacklisted individuals.\n• **Perimeter & Intrusion Detection:** Virtual tripwires, sterile zone breach alarms, and boundary protection.\n• **Vehicle ANPR:** Automatic license plate recognition with allowlist/blocklist alerts.\n• **Crowd & Loitering Analytics:** Overcrowding alerts and suspicious loitering detection.\n• **NBFC/Banking Security:** Automated vault dual-custody monitoring, cash counter supervision, and guard presence audit.\n• **Incident Workflow:** Automated operator dispatches, audit trails, and daily executive MIS graphic reports.",
-        type: "text",
+          "**KryptonVision AI & Security Capabilities:**",
+        type: "feature_cards",
+        cards: KRYPTON_PRODUCT_FEATURES,
         suggestions: [
           "What is KryptonVision?",
           "Which cameras are supported?",
@@ -2002,20 +2323,126 @@ Personality:
       };
     }
 
-    // 6b. Line Crossing & Edge Agent troubleshooting (informational in pre-login mode)
-    if (lower.includes("line cross") || lower.includes("tripwire") || lower.includes("line crossing") || lower.includes("boundary")) {
+    // 6b. Polygon Zone / Line Crossing / Virtual Tripwire — comprehensive bilingual guide
+    const isLineCrossQuery =
+      lower.includes("line cross") ||
+      lower.includes("line crossing") ||
+      lower.includes("tripwire") ||
+      lower.includes("boundary") ||
+      lower.includes("polygon") ||
+      lower.includes("zone") ||
+      lower.includes("virtual zone") ||
+      lower.includes("draw zone") ||
+      lower.includes("draw line") ||
+      lower.includes("sterile zone") ||
+      lower.includes("restricted zone") ||
+      lower.includes("restricted area") ||
+      lower.includes("intrusion zone") ||
+      lower.includes("analytics rule") ||
+      lower.includes("rules automation") ||
+      lower.includes("lain cross") ||
+      lower.includes("laim cross") ||
+      lower.includes("line kroos") ||
+      lower.includes("polygon set") ||
+      lower.includes("polygon varak") ||
+      lower.includes("polygon varakk") ||
+      lower.includes("zone set") ||
+      lower.includes("zone varakk") ||
+      lower.includes("zone varak") ||
+      lower.includes("zone undaak") ||
+      lower.includes("zone undak") ||
+      lower.includes("zone create") ||
+      lower.includes("line varakk") ||
+      lower.includes("line varak") ||
+      lower.includes("virtual line") ||
+      lower.includes("cross cheyyumbol") ||
+      lower.includes("cross cheyyumpoL") ||
+      lower.includes("cross alert") ||
+      lower.includes("kadannu poyal") ||
+      lower.includes("kadannal") ||
+      lower.includes("kadan poyal") ||
+      lower.includes("boundary alert");
+
+    if (isLineCrossQuery) {
+      const isPolygon =
+        lower.includes("polygon") ||
+        lower.includes("zone") ||
+        lower.includes("sterile") ||
+        lower.includes("restricted") ||
+        lower.includes("intrusion zone") ||
+        lower.includes("zone set") ||
+        lower.includes("zone varak") ||
+        lower.includes("zone undaak") ||
+        lower.includes("zone undak") ||
+        lower.includes("zone create");
+
+      if (isPolygon) {
+        return {
+          message:
+            "**Polygon Zone (Sterile / Restricted Area) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+            "📍 **Path:** Dashboard → **Analytics ➔ Rules & Automation** (`/analytics/rules`)\n\n" +
+            "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+            "1️⃣ Login ചെയ്ത ശേഷം ഇടത് sidebar-ൽ **Analytics** → **Rules & Automation** click ചെയ്യുക.\n" +
+            "   🔗 Direct URL: `/analytics/rules`\n\n" +
+            "2️⃣ **Branch** (ഏത് branch?) & **Camera** (ഏത് camera?) dropdown-ൽ നിന്ന് select ചെയ്യുക.\n\n" +
+            "3️⃣ **\"Visual Zone & Virtual Tripwire Designer\"** tool-ൽ mode **\"Polygon Zone\"** select ചെയ്യുക.\n" +
+            "   *(Default \"Virtual Tripwire\" ആണ്, അത് polygon zone-ലേക്ക് switch ചെയ്യുക)*\n\n" +
+            "4️⃣ Camera-യുടെ live canvas-ൽ **3 or more points click** ചെയ്ത് ഒരു closed polygon വരയ്ക്കുക.\n" +
+            "   • ഓരോ click-ഉം ഓരോ corner point ആണ്.\n" +
+            "   • Last point first point-ൽ click ചെയ്ത് polygon close ചെയ്യുക.\n\n" +
+            "5️⃣ **\"Save Zone Definition\"** button click ചെയ്യുക.\n\n" +
+            "6️⃣ **Rule Configuration** section-ൽ (Page-ന്റെ bottom-ൽ):\n" +
+            "   • **Condition Type:** `Zone Intrusion` (zone_intrusion) select ചെയ്യുക.\n" +
+            "   • **Action:** Alert / Siren / SMS / Incident — ഏത് action വേണം?\n" +
+            "   • **\"Save Rule\"** click ചെയ്യുക.\n\n" +
+            "✅ ഇനി ആ polygon zone-ലേക്ക് ആരെങ്കിലും കടന്നു കഴിഞ്ഞാൽ automatic alert trigger ആകും!\n\n" +
+            "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+          type: "text",
+          suggestions: [
+            "Line Crossing (Virtual Tripwire) set cheyyaan",
+            "What AI features are available?",
+            "How do I sign in?",
+            "Edge Agent installation guide",
+          ],
+          timestamp,
+        };
+      }
+
+      // Line Crossing / Virtual Tripwire
       return {
         message:
-          "**Line Crossing (Virtual Tripwire) ഇൻസ്റ്റലേഷൻ വഴികൾ:**\n\n" +
-          "1. ലോഗിൻ ചെയ്ത ശേഷം ഇടത് മെനുവിൽ **Analytics ➔ Rules & Automation** (`/analytics/rules`) പേജിലേക്ക് പോകുക.\n" +
-          "2. നിങ്ങളുടെ Branch & Camera സെലക്ട് ചെയ്യുക.\n" +
-          "3. **Visual Zone & Virtual Tripwire Designer** ടൂളിൽ **Virtual Tripwire** തിരഞ്ഞെടുക്കുക.\n" +
-          "4. ദിശ തിരഞ്ഞെടുക്കുക (`A ➔ B`, `B ➔ A`, അല്ലെങ്കിൽ `A ⇄ B`).\n" +
-          "5. ക്യാമറയുടെ ലൈവ് കാൻവാസിൽ 2 പോയിന്റുകൾ ക്ലിക്ക് ചെയ്ത് ലൈൻ വരയ്ക്കുക.\n" +
-          "6. **Save Tripwire Definition** നൽകിയ ശേഷം താഴെ Rule Configuration-ൽ Condition: **Line Crossing** സെലക്ട് ചെയ്ത് അലേർട്ട് ആക്റ്റീവ് ചെയ്യുക.\n\n" +
-          "*(ലൈവ് ക്യാമറകൾ കാണാനും റൂളുകൾ കോൺഫിഗർ ചെയ്യാനും ദയവായി അക്കൗണ്ടിലേക്ക് സൈൻ ഇൻ ചെയ്യുക).* ",
+          "**Line Crossing (Virtual Tripwire) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics ➔ Rules & Automation** (`/analytics/rules`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം ഇടത് sidebar-ൽ **Analytics** → **Rules & Automation** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/rules`\n\n" +
+          "2️⃣ **Branch** & **Camera** dropdown-ൽ നിന്ന് select ചെയ്യുക.\n\n" +
+          "3️⃣ **\"Visual Zone & Virtual Tripwire Designer\"** tool-ൽ mode **\"Virtual Tripwire\"** select ചെയ്യുക.\n" +
+          "   *(Quick preset: **⚡ Door Ingress Tripwire** click ചെയ്ത് automatically set ആക്കാം)*\n\n" +
+          "4️⃣ **Direction** select ചെയ്യുക:\n" +
+          "   • `A ➔ B` — ഒരു direction-ൽ cross ചെയ്താൽ alert\n" +
+          "   • `B ➔ A` — opposite direction-ൽ cross ചെയ്താൽ alert\n" +
+          "   • `A ⇄ B` — ഏത് direction-ലും cross ചെയ്താൽ alert (bidirectional)\n\n" +
+          "5️⃣ Camera-യുടെ live canvas-ൽ **2 points click** ചെയ്ത് line വരയ്ക്കുക.\n" +
+          "   • Point A (🟢 Green) — line-ന്റെ start\n" +
+          "   • Point B (🔵 Blue) — line-ന്റെ end\n\n" +
+          "6️⃣ **\"Save Tripwire Definition\"** button click ചെയ്യുക.\n\n" +
+          "7️⃣ **Rule Configuration** section-ൽ:\n" +
+          "   • **Condition Type:** `Line Crossing` (line_crossing) select ചെയ്യുക.\n" +
+          "   • **Action:** Alert / Siren / SMS / Incident — ഏത് action വേണം?\n" +
+          "   • **\"Save Rule\"** click ചെയ്യുക.\n\n" +
+          "✅ ഇനി ആ line cross ചെയ്ത് ആരെങ്കിലും കടന്നാൽ automatic alert trigger ആകും!\n\n" +
+          "💡 **Polygon Zone vs Line Crossing:**\n" +
+          "   • **Line Crossing** = ഒരു straight line cross ചെയ്യുമ്പോൾ alert (2 points)\n" +
+          "   • **Polygon Zone** = ഒരു area/region-ലേക്ക് കടക്കുമ്പോൾ alert (3+ points, closed shape)\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
         type: "text",
-        suggestions: ["How do I sign in?", "What AI features are available?", "Edge Agent installation guide"],
+        suggestions: [
+          "Polygon Zone set cheyyaan",
+          "What AI features are available?",
+          "How do I sign in?",
+          "Edge Agent installation guide",
+        ],
         timestamp,
       };
     }
@@ -2038,7 +2465,595 @@ Personality:
       };
     }
 
+    // ── 7. FACE RECOGNITION / WATCHLIST ─────────────────────────────────
+    const isFaceQuery =
+      lower.includes("face recognition") ||
+      lower.includes("facial") ||
+      lower.includes("face id") ||
+      lower.includes("watchlist") ||
+      lower.includes("blacklist") ||
+      lower.includes("whitelist") ||
+      lower.includes("enroll face") ||
+      lower.includes("enroll person") ||
+      lower.includes("face enroll") ||
+      lower.includes("add face") ||
+      lower.includes("vip face") ||
+      lower.includes("mukham") ||
+      lower.includes("mukha") ||
+      lower.includes("face set") ||
+      lower.includes("face add") ||
+      lower.includes("face register") ||
+      lower.includes("face configure") ||
+      lower.includes("face evide") ||
+      lower.includes("face engane") ||
+      lower.includes("face recognition evide") ||
+      lower.includes("face recognition engane");
+
+    if (isFaceQuery) {
+      return {
+        message:
+          "**Face Recognition & Watchlist — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → Face Recognition & Watchlists** (`/analytics/face-recognition`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Face Recognition & Watchlists** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/face-recognition`\n\n" +
+          "2️⃣ **\"+ Enroll Person\"** button click ചെയ്യുക.\n\n" +
+          "3️⃣ Details fill ചെയ്യുക:\n" +
+          "   • **Name** — ആളിന്റെ പേര്\n" +
+          "   • **Category** — `VIP` / `Employee` / `Blacklisted` / `Watchlist`\n" +
+          "   • **Photo** — clear face photo upload ചെയ്യുക (minimum 1, recommended 3-5 angles)\n\n" +
+          "4️⃣ **\"Save\"** click ചെയ്യുക — enrollment complete!\n\n" +
+          "5️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
+          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Face Match` select ചെയ്യുക.\n" +
+          "   • Blacklisted person detected ആകുമ്പോൾ auto-alert set ആകും.\n\n" +
+          "✅ ഇനി enroll ചെയ്ത face camera-ൽ appear ആകുമ്പോൾ automatic recognition!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "ANPR vehicle tracking set cheyyaan",
+          "What AI features are available?",
+          "Line Crossing set cheyyaan",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 8. ANPR / VEHICLE TRACKING ───────────────────────────────────────
+    const isAnprQuery =
+      lower.includes("anpr") ||
+      lower.includes("number plate") ||
+      lower.includes("license plate") ||
+      lower.includes("vehicle") ||
+      lower.includes("vahana") ||
+      lower.includes("car plate") ||
+      lower.includes("plate recognition") ||
+      lower.includes("vehicle tracking") ||
+      lower.includes("vehicle alert") ||
+      lower.includes("vehicle access") ||
+      lower.includes("blocklist vehicle") ||
+      lower.includes("allowlist vehicle") ||
+      lower.includes("anpr evide") ||
+      lower.includes("anpr engane") ||
+      lower.includes("anpr set") ||
+      lower.includes("vehicle set");
+
+    if (isAnprQuery) {
+      return {
+        message:
+          "**ANPR (Vehicle Number Plate Recognition) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → ANPR & Vehicle Telemetry** (`/analytics/anpr`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → ANPR & Vehicle Telemetry** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/anpr`\n\n" +
+          "2️⃣ ANPR module-ൽ **Camera Assignment** — ഏത് camera-ൽ number plates capture ചെയ്യണം എന്ന് select ചെയ്യുക.\n\n" +
+          "3️⃣ **Allowlist / Blocklist** configure ചെയ്യാൻ:\n" +
+          "   • **Allowlist** — permitted vehicles (employees, authorized visitors)\n" +
+          "   • **Blocklist** — blocked vehicles (alert trigger ആകും)\n" +
+          "   • Number plate format: `KL01AB1234`\n\n" +
+          "4️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
+          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `ANPR Match` select ചെയ്യുക.\n" +
+          "   • Blocklist vehicle detected ആകുമ്പോൾ auto-alert set ആകും.\n\n" +
+          "5️⃣ **Entry / Exit Logs** — `/analytics/anpr` page-ൽ timestamp, plate, camera location സഹിതം entry/exit log automatically record ആകും.\n\n" +
+          "✅ ഇനി blocklist vehicle enter ചെയ്യുമ്പോൾ immediate alert!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Face Recognition set cheyyaan",
+          "Line Crossing set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 9. CROWD & LOITERING ANALYTICS ───────────────────────────────────
+    const isCrowdQuery =
+      lower.includes("crowd") ||
+      lower.includes("loitering") ||
+      lower.includes("overcrowding") ||
+      lower.includes("people count") ||
+      lower.includes("footfall") ||
+      lower.includes("janakkoottam") ||
+      lower.includes("loitering detection") ||
+      lower.includes("loitering alert") ||
+      lower.includes("crowd alert") ||
+      lower.includes("crowd detection") ||
+      lower.includes("crowd density") ||
+      lower.includes("crowd set") ||
+      lower.includes("crowd evide") ||
+      lower.includes("crowd engane") ||
+      lower.includes("queue") ||
+      lower.includes("waiting line");
+
+    if (isCrowdQuery) {
+      return {
+        message:
+          "**Crowd & Loitering Analytics — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → Crowd & Counter Queue** (`/analytics/crowd`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Crowd & Counter Queue** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/crowd`\n\n" +
+          "2️⃣ Camera select ചെയ്ത് **Crowd Density Threshold** set ചെയ്യുക.\n" +
+          "   • Example: 10+ people detected → alert trigger\n\n" +
+          "3️⃣ **Loitering Alert** set ചെയ്യാൻ:\n" +
+          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Loitering` select ചെയ്യുക.\n" +
+          "   • **Loitering Duration Threshold** set ചെയ്യുക (e.g., 5 minutes in same area).\n\n" +
+          "4️⃣ **Alert Action** configure ചെയ്യുക:\n" +
+          "   • Alert / SMS / Siren / Guard Dispatch — ഏത് action വേണം?\n\n" +
+          "✅ ഇനി ATM, bank lobby, vault area-ൽ suspicious loitering automatically detect ആകും!\n\n" +
+          "💡 **People Counting / Heatmaps:** `/analytics/people` page-ൽ footfall count & heatmap കാണാം.\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Face Recognition set cheyyaan",
+          "ANPR set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 10. BANKING / NBFC / VAULT ────────────────────────────────────────
+    const isBankingQuery =
+      lower.includes("vault") ||
+      lower.includes("cash counter") ||
+      lower.includes("banking") ||
+      lower.includes("nbfc") ||
+      lower.includes("dual custody") ||
+      lower.includes("teller") ||
+      lower.includes("strong room") ||
+      lower.includes("strongroom") ||
+      lower.includes("gold loan") ||
+      lower.includes("bank module") ||
+      lower.includes("vault monitoring") ||
+      lower.includes("vault evide") ||
+      lower.includes("vault engane") ||
+      lower.includes("vault set") ||
+      lower.includes("vault camera") ||
+      lower.includes("vault dual") ||
+      lower.includes("nbfc set") ||
+      lower.includes("nbfc evide") ||
+      lower.includes("banking set") ||
+      lower.includes("banking evide") ||
+      lower.includes("cash counter set") ||
+      lower.includes("teller set");
+
+    if (isBankingQuery) {
+      return {
+        message:
+          "**Banking & NBFC / Vault Module — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → Banking & Cash Counters** (`/analytics/banking`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Banking & Cash Counters** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/banking`\n\n" +
+          "2️⃣ **Vault Setup:**\n" +
+          "   • Vault camera assign ചെയ്യുക (strong-room camera select)\n" +
+          "   • **Dual Custody Rule** enable ചെയ്യുക — vault open ചെയ്യാൻ 2 authorized persons present ആയിരിക്കണം.\n" +
+          "   • Dual custody timer configure ചെയ്യുക.\n\n" +
+          "3️⃣ **Cash Counter Setup:**\n" +
+          "   • Cash counter camera assign ചെയ്യുക.\n" +
+          "   • **Unauthorized Access Alert** enable ചെയ്യുക.\n\n" +
+          "4️⃣ **Teller Area Coverage:**\n" +
+          "   • Teller cameras configure ചെയ്ത് coverage verify ചെയ്യുക.\n\n" +
+          "5️⃣ **Daily MIS Reports:**\n" +
+          "   • Reports → Executive MIS Reports (`/reports/mis`) → Daily surveillance health report auto-generate ആകും.\n\n" +
+          "6️⃣ **NBFC Watchlist** (`/analytics/nbfc-watchlist`) — defaulters, suspicious persons watchlist manage ചെയ്യാം.\n\n" +
+          "✅ Vault dual-custody violation, unauthorized cash counter access — all automatically monitored!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "MIS Reports evide kaanam",
+          "Face Recognition set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 11. AI VIDEO SEARCH ───────────────────────────────────────────────
+    const isVideoSearchQuery =
+      lower.includes("video search") ||
+      lower.includes("search footage") ||
+      lower.includes("find person") ||
+      lower.includes("ai search") ||
+      lower.includes("smart search") ||
+      lower.includes("search video") ||
+      lower.includes("forensic search") ||
+      lower.includes("video saarch") ||
+      lower.includes("video thadukal") ||
+      lower.includes("search cheyyaan") ||
+      lower.includes("search evide") ||
+      lower.includes("search engane") ||
+      lower.includes("footage search") ||
+      lower.includes("clip search") ||
+      lower.includes("find in recording");
+
+    if (isVideoSearchQuery) {
+      return {
+        message:
+          "**AI Smart Video Search — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **AI Smart Video Search** (`/video-search`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Investigate → AI Smart Video Search** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/video-search`\n\n" +
+          "2️⃣ Search query type ചെയ്യുക — **natural language** ഉപയോഗിക്കാം:\n" +
+          "   • \"Red shirt person at main entrance between 10am-12pm\"\n" +
+          "   • \"Person carrying bag near ATM yesterday\"\n" +
+          "   • \"Blue car at parking at 3pm\"\n\n" +
+          "3️⃣ **Filters** set ചെയ്യുക:\n" +
+          "   • **Camera** — ഏത് camera-ൽ search ചെയ്യണം\n" +
+          "   • **Date & Time Range** — ഏത് time range-ൽ\n" +
+          "   • **Branch** — ഏത് branch\n\n" +
+          "4️⃣ **Search** click ചെയ്യുക — AI matching clips automatically list ആകും.\n\n" +
+          "5️⃣ Result clips **preview** ചെയ്ത് **Download / Export to Evidence** ചെയ്യാം.\n\n" +
+          "✅ Minutes-ൽ hours of footage-ൽ നിന്ന് specific person/object/vehicle കണ്ടെത്താം!\n\n" +
+          "*(Search ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Evidence export cheyyaan",
+          "Face Recognition set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 12. INCIDENT MANAGEMENT ───────────────────────────────────────────
+    const isIncidentQuery =
+      lower.includes("incident") ||
+      lower.includes("create incident") ||
+      lower.includes("guard dispatch") ||
+      lower.includes("escalation") ||
+      lower.includes("sop") ||
+      lower.includes("incident management") ||
+      lower.includes("incident evide") ||
+      lower.includes("incident engane") ||
+      lower.includes("incident set") ||
+      lower.includes("incident create") ||
+      lower.includes("incident workflow") ||
+      lower.includes("dispatch guard") ||
+      lower.includes("operator assign") ||
+      lower.includes("sop checklist");
+
+    if (isIncidentQuery) {
+      return {
+        message:
+          "**Incident Management & SOP Workflow — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Incident Response** (`/incidents`)\n\n" +
+          "**Auto-Incident Creation (Recommended):**\n\n" +
+          "1️⃣ Analytics → Rules & Automation (`/analytics/rules`) → Alert Rule create ചെയ്യുമ്പോൾ Action-ൽ **\"Create Incident\"** select ചെയ്യുക.\n" +
+          "   → Rule trigger ആകുമ്പോൾ automatically incident create ആകും, operator-ന് assign ആകും.\n\n" +
+          "**Manual Incident Create:**\n\n" +
+          "2️⃣ Sidebar-ൽ **Incident Response** click ചെയ്ത് **\"+ New Incident\"** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/incidents`\n\n" +
+          "3️⃣ Fill ചെയ്യുക:\n" +
+          "   • **Title** — incident description\n" +
+          "   • **Severity** — Low / Medium / High / Critical\n" +
+          "   • **Branch & Camera** — incident location\n" +
+          "   • **Assign to Operator** — ആർക്ക് assign ചെയ്യണം\n\n" +
+          "4️⃣ **SOP Checklist** — configured SOPs automatically appear ആകും. Operator items ✅ tick ചെയ്ത് proceed ചെയ്യും.\n\n" +
+          "5️⃣ **Guard Dispatch:** Incident-ൽ **\"Dispatch Guard\"** button click ചെയ്ത് location specify ചെയ്യുക.\n\n" +
+          "6️⃣ **Escalation Timer** — configurable time-ൽ unresolved incidents automatically escalate ആകും.\n\n" +
+          "✅ Complete audit trail with timestamps, operator actions, evidence clips!\n\n" +
+          "*(Incidents manage ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Line Crossing alert set cheyyaan",
+          "Evidence export cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 13. VOICE AUTHENTICATION ──────────────────────────────────────────
+    const isVoiceAuthQuery =
+      lower.includes("voice auth") ||
+      lower.includes("voice login") ||
+      lower.includes("voice id") ||
+      lower.includes("enroll voice") ||
+      lower.includes("voice enroll") ||
+      lower.includes("voice passphrase") ||
+      lower.includes("voice biometric") ||
+      lower.includes("shabdam") ||
+      lower.includes("voice set") ||
+      lower.includes("voice evide") ||
+      lower.includes("voice engane") ||
+      lower.includes("voice register") ||
+      lower.includes("voice setup") ||
+      lower.includes("voice authentication");
+
+    if (isVoiceAuthQuery) {
+      return {
+        message:
+          "**Voice Authentication (Voice ID Login) — എവിടെ, എങ്ങനെ Enroll ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Account & Security Settings** (`/account/security`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം top-right profile icon click ചെയ്ത് **Account Settings → Security** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/account/security`\n\n" +
+          "2️⃣ **\"Voice Biometric Enrollment\"** section-ൽ **\"Enroll Voice ID\"** click ചെയ്യുക.\n\n" +
+          "3️⃣ **Passphrase** record ചെയ്യുക:\n" +
+          "   • Screen-ൽ shown passphrase clearly speak ചെയ്യുക.\n" +
+          "   • 3 recordings (multiple angles/moods) — better accuracy-ക്ക്.\n\n" +
+          "4️⃣ **\"Save Voice Profile\"** click ചെയ്യുക.\n\n" +
+          "5️⃣ **Login ചെയ്യുന്ന വിധം (Voice ID):**\n" +
+          "   • Login page-ൽ **\"Voice Login\"** button click ചെയ്യുക.\n" +
+          "   • Enrolled passphrase speak ചെയ്യുക → authenticated!\n\n" +
+          "💡 **Admin-level Voice Enrollment** (users-ന് വേണ്ടി enroll ചെയ്യാൻ):\n" +
+          "   → Admin → Users & RBAC (`/admin/users`) → User select → Voice Enrollment tab.\n\n" +
+          "✅ Password type ചെയ്യേണ്ട, voice alone use ചെയ്ത് secure login!\n\n" +
+          "*(Enrollment ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Face Recognition set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 14. EVIDENCE EXPORT ───────────────────────────────────────────────
+    const isEvidenceQuery =
+      lower.includes("evidence") ||
+      lower.includes("export clip") ||
+      lower.includes("export video") ||
+      lower.includes("chain of custody") ||
+      lower.includes("video export") ||
+      lower.includes("clip export") ||
+      lower.includes("evidence export") ||
+      lower.includes("download clip") ||
+      lower.includes("save clip") ||
+      lower.includes("evidence evide") ||
+      lower.includes("evidence engane") ||
+      lower.includes("evidence set") ||
+      lower.includes("evidence package");
+
+    if (isEvidenceQuery) {
+      return {
+        message:
+          "**Evidence & Chain of Custody Export — എവിടെ, എങ്ങനെ Use ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Evidence & Chain of Custody** (`/evidence`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Investigate → Evidence & Chain of Custody** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/evidence`\n\n" +
+          "2️⃣ **\"Create Evidence Package\"** click ചെയ്യുക.\n\n" +
+          "3️⃣ Details fill ചെയ്യുക:\n" +
+          "   • **Title** — case/incident name\n" +
+          "   • **Camera & Time Range** — ഏത് camera, ഏത് time\n" +
+          "   • **Video Clips** — specific time slots select ചെയ്ത് clip attach ചെയ്യുക\n" +
+          "   • **Screenshots** — key frames add ചെയ്യാം\n\n" +
+          "4️⃣ **HSM Digital Signature** — evidence package automatically HSM-signed ആകും (tamper-evident).\n\n" +
+          "5️⃣ **Export:**\n" +
+          "   • **Download** — local system-ലേക്ക് download ചെയ്യാം\n" +
+          "   • **Share Link** — secure link generate ചെയ്ത് share ചെയ്യാം\n" +
+          "   • **Email** — directly email ചെയ്യാം\n\n" +
+          "6️⃣ **Audit Log** — evidence package access history automatically track ആകും.\n\n" +
+          "✅ Legally admissible, tamper-evident evidence export — court/legal use-ന് ready!\n\n" +
+          "*(Evidence export ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "AI Video Search set cheyyaan",
+          "Incident management evide",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 15. MIS REPORTS ───────────────────────────────────────────────────
+    const isMisQuery =
+      lower.includes("mis report") ||
+      lower.includes("executive report") ||
+      lower.includes("daily report") ||
+      lower.includes("graphic report") ||
+      lower.includes("surveillance report") ||
+      lower.includes("mis evide") ||
+      lower.includes("mis engane") ||
+      lower.includes("report evide") ||
+      lower.includes("report engane") ||
+      lower.includes("report kaanam") ||
+      lower.includes("mis kaanam") ||
+      lower.includes("mis dashboard") ||
+      lower.includes("report download") ||
+      lower.includes("mis download") ||
+      lower.includes("surveillance digest");
+
+    if (isMisQuery) {
+      return {
+        message:
+          "**Executive MIS Reports & Daily Surveillance Digest — എവിടെ, എങ്ങനെ കാണാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Reports → Executive MIS Reports & Graphs** (`/reports/mis`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Reports → Executive MIS Reports & Graphs** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/reports/mis`\n\n" +
+          "2️⃣ **Date Range** select ചെയ്യുക — Daily / Weekly / Monthly.\n\n" +
+          "3️⃣ **Branch** filter ചെയ്യുക — ഏത് branch-ന്റെ report?\n\n" +
+          "4️⃣ Report includes:\n" +
+          "   • 📊 Camera uptime & health stats\n" +
+          "   • 🚨 Alert summary (by category, severity)\n" +
+          "   • 🎥 Recording coverage percentage\n" +
+          "   • 👥 Footfall & crowd analytics\n" +
+          "   • 🏦 Vault compliance (banking branches)\n" +
+          "   • 📈 Charts & graphs\n\n" +
+          "5️⃣ **Download / Export:**\n" +
+          "   • **PDF** — printable format\n" +
+          "   • **Excel** — data export\n" +
+          "   • **Email** — schedule daily auto-email to executives\n\n" +
+          "💡 **Daily Surveillance Digest:** `/reports` → automated daily summary.\n\n" +
+          "✅ Management-ന് daily surveillance health at-a-glance!\n\n" +
+          "*(Reports കാണാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Banking NBFC vault module set cheyyaan",
+          "Evidence export cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 16. FALL DETECTION ────────────────────────────────────────────────
+    const isFallQuery =
+      lower.includes("fall detection") ||
+      lower.includes("worker fall") ||
+      lower.includes("elderly fall") ||
+      lower.includes("fall alert") ||
+      lower.includes("fall detect") ||
+      lower.includes("fall evide") ||
+      lower.includes("fall engane") ||
+      lower.includes("fall set") ||
+      lower.includes("veezhcha") ||
+      lower.includes("veezhu") ||
+      lower.includes("fall down") ||
+      lower.includes("person fell");
+
+    if (isFallQuery) {
+      return {
+        message:
+          "**Fall Detection (Worker / Elderly) — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → Worker & Elderly Fall Detection** (`/analytics/fall`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Worker & Elderly Fall** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/fall`\n\n" +
+          "2️⃣ **Camera Assignment** — fall detection enable ചെയ്യേണ്ട cameras select ചെയ്യുക.\n" +
+          "   • Factory floor, elderly care areas, staircases, etc.\n\n" +
+          "3️⃣ **Detection Sensitivity** configure ചെയ്യുക:\n" +
+          "   • High / Medium / Low (False alarm trade-off)\n\n" +
+          "4️⃣ **Alert Rule Set ചെയ്യാൻ:**\n" +
+          "   • Analytics → Rules & Automation (`/analytics/rules`) → Condition: `Fall Detection` select ചെയ്യുക.\n" +
+          "   • Action: Alert / SMS / Guard Dispatch\n\n" +
+          "✅ Fall detect ആകുമ്പോൾ immediate alert — medical emergency response ആകാം!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Incident management evide",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 17. CAMERA TAMPER DETECTION ───────────────────────────────────────
+    const isTamperQuery =
+      lower.includes("tamper") ||
+      lower.includes("camera tamper") ||
+      lower.includes("defocus") ||
+      lower.includes("blind camera") ||
+      lower.includes("camera covered") ||
+      lower.includes("camera blocked") ||
+      lower.includes("camera obstruction") ||
+      lower.includes("tamper evide") ||
+      lower.includes("tamper engane") ||
+      lower.includes("tamper set") ||
+      lower.includes("tamper alert") ||
+      lower.includes("camera vandal");
+
+    if (isTamperQuery) {
+      return {
+        message:
+          "**Camera Tamper & Defocus Detection — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → Camera Tamper & Defocus** (`/analytics/camera-tamper`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → Camera Tamper & Defocus** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/camera-tamper`\n\n" +
+          "2️⃣ Tamper detection enable ചെയ്യേണ്ട **cameras select** ചെയ്യുക.\n\n" +
+          "3️⃣ **Detection Types** enable ചെയ്യുക:\n" +
+          "   • **Defocus** — camera lens blur ആകുമ്പോൾ alert\n" +
+          "   • **Covered/Blocked** — camera physically block ചെയ്യുമ്പോൾ alert\n" +
+          "   • **Moved/Redirected** — camera angle change ആകുമ്പോൾ alert\n" +
+          "   • **Dark Frame** — camera feed black ആകുമ്പോൾ alert\n\n" +
+          "4️⃣ **Alert Rule:**\n" +
+          "   • Analytics → Rules & Automation → Condition: `Camera Tamper` select ചെയ്യുക.\n\n" +
+          "✅ Camera vandalism immediately detect ആകും — security blind-spot ഉണ്ടാകില്ല!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Camera obstruction set cheyyaan",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
+    // ── 18. EMPLOYEE / PEOPLE TRACKING & ATTENDANCE ───────────────────────
+    const isAttendanceQuery =
+      lower.includes("attendance") ||
+      lower.includes("employee tracking") ||
+      lower.includes("people tracking") ||
+      lower.includes("footfall") ||
+      lower.includes("visitor tracking") ||
+      lower.includes("heatmap") ||
+      lower.includes("people count") ||
+      lower.includes("headcount") ||
+      lower.includes("attendance evide") ||
+      lower.includes("attendance engane") ||
+      lower.includes("attendance set") ||
+      lower.includes("employee evide") ||
+      lower.includes("employee engane") ||
+      lower.includes("people evide") ||
+      lower.includes("haajari");
+
+    if (isAttendanceQuery) {
+      return {
+        message:
+          "**People Counting, Heatmaps & Employee Tracking — എവിടെ, എങ്ങനെ Set ചെയ്യാം:**\n\n" +
+          "📍 **Path:** Dashboard → **Analytics → People Counting & Heatmaps** (`/analytics/people`)\n\n" +
+          "**Step-by-Step ഇൻസ്ട്രക്ഷൻ:**\n\n" +
+          "1️⃣ Login ചെയ്ത ശേഷം sidebar-ൽ **Analytics → People Counting & Heatmaps** click ചെയ്യുക.\n" +
+          "   🔗 Direct URL: `/analytics/people`\n\n" +
+          "2️⃣ **Camera Assignment** — people count ചെയ്യേണ്ട cameras select ചെയ്യുക.\n" +
+          "   • Entrance cameras, lobby cameras, floor cameras\n\n" +
+          "3️⃣ **Counting Zones** define ചെയ്യുക — entrance line draw ചെയ്ത് IN / OUT count ചെയ്യാം.\n\n" +
+          "4️⃣ **Heatmap View** — ഏത് area-ൽ ആളുകൾ കൂടുതൽ time spend ചെയ്യുന്നു എന്ന് visualize ആകും.\n\n" +
+          "5️⃣ **Employee Activity Tracking:**\n" +
+          "   • Face Recognition + People Counting combine ചെയ്ത് employee presence track ആകും.\n" +
+          "   • Reports → Daily Digest-ൽ headcount summary കിട്ടും.\n\n" +
+          "✅ Real-time footfall count, peak hours, zone utilization — all automatically!\n\n" +
+          "*(Configuration ചെയ്യാൻ KryptonVision-ലേക്ക് ആദ്യം sign in ചെയ്യുക)*",
+        type: "text",
+        suggestions: [
+          "How do I sign in?",
+          "Face Recognition set cheyyaan",
+          "MIS Reports evide kaanam",
+          "What AI features are available?",
+        ],
+        timestamp,
+      };
+    }
+
     // 7. Request for module data, operational records, cameras, alerts, reports (Requires Login)
+
     const isModuleOrOperationalRequest =
       lower.includes("camera") ||
       lower.includes("feed") ||

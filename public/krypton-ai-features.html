@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KryptonAI — Product Features Assistant</title>
+  <meta name="description" content="Ask KryptonAI about KryptonVision platform features in English, Malayalam, or Manglish." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #070a12;
+      --surface: rgba(15, 20, 35, 0.85);
+      --surface2: rgba(22, 30, 50, 0.9);
+      --glass: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --accent: #4f8ef7;
+      --accent2: #7c3aed;
+      --accent3: #06b6d4;
+      --success: #22c55e;
+      --text: #e8eaf0;
+      --text2: #8b93a8;
+      --text3: #4a5568;
+      --radius: 16px;
+      --shadow: 0 24px 80px rgba(0,0,0,0.6);
+    }
+
+    html, body { height: 100%; width: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); overflow: hidden; }
+
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(79,142,247,0.10) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(124,58,237,0.10) 0%, transparent 50%),
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+    }
+
+    .app { position: fixed; inset: 0; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+    /* Header */
+    .header {
+      width: 100%; max-width: 940px;
+      display: flex; align-items: center; gap: 14px;
+      padding: 16px 24px;
+    }
+    .logo-orb {
+      width: 46px; height: 46px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+      box-shadow: 0 0 24px rgba(79,142,247,0.4);
+      animation: pulse-orb 3s ease-in-out infinite;
+    }
+    @keyframes pulse-orb {
+      0%, 100% { box-shadow: 0 0 24px rgba(79,142,247,0.4); }
+      50% { box-shadow: 0 0 40px rgba(79,142,247,0.7), 0 0 60px rgba(124,58,237,0.3); }
+    }
+    .header-title h1 {
+      font-size: 20px; font-weight: 700; letter-spacing: -0.3px;
+      background: linear-gradient(90deg, #fff 0%, var(--accent) 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-title p { font-size: 12px; color: var(--text2); margin-top: 1px; }
+    .online-badge { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--success); font-weight: 500; }
+    .online-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: blink 2s ease-in-out infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* Chat Window */
+    .chat-window {
+      width: 100%; max-width: 940px;
+      height: calc(100vh - 170px);
+      margin: 0 20px;
+      background: var(--surface);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(20px);
+      box-shadow: var(--shadow);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Quick Chips */
+    .quick-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 16px 0; }
+    .chip {
+      padding: 6px 13px; border-radius: 24px; font-size: 12px; font-weight: 500;
+      background: var(--glass); border: 1px solid var(--glass-border);
+      color: var(--text2); cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .chip:hover { background: rgba(79,142,247,0.15); border-color: rgba(79,142,247,0.4); color: var(--accent); transform: translateY(-1px); }
+
+    /* Messages */
+    .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 4px; }
+
+    .msg { display: flex; gap: 10px; align-items: flex-start; animation: msg-in 0.3s ease; }
+    @keyframes msg-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .msg.user { flex-direction: row-reverse; }
+
+    .avatar { width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .avatar.ai { background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 0 12px rgba(79,142,247,0.4); }
+    .avatar.user-av { background: rgba(255,255,255,0.08); border: 1px solid var(--glass-border); }
+
+    .bubble { max-width: 76%; padding: 12px 16px; border-radius: 14px; font-size: 14px; line-height: 1.6; }
+    .bubble.ai { background: var(--surface2); border: 1px solid var(--glass-border); border-top-left-radius: 4px; }
+    .bubble.user-b { background: linear-gradient(135deg, rgba(79,142,247,0.22), rgba(124,58,237,0.22)); border: 1px solid rgba(79,142,247,0.3); border-top-right-radius: 4px; }
+    .bubble strong { color: #fff; }
+    .bubble code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+    /* Feature Cards */
+    .feature-cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 10px; margin-top: 12px; }
+    .feature-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 12px; padding: 14px;
+      transition: all 0.25s; position: relative; overflow: hidden;
+    }
+    .feature-card::before {
+      content: ''; position: absolute; inset: 0; border-radius: 12px; opacity: 0;
+      background: linear-gradient(135deg, rgba(79,142,247,0.08), rgba(124,58,237,0.08));
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover { transform: translateY(-2px); border-color: rgba(79,142,247,0.25); }
+    .feature-card:hover::before { opacity: 1; }
+    .card-icon { font-size: 26px; margin-bottom: 8px; }
+    .card-title { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 3px; }
+    .card-title-ml { font-size: 11px; color: var(--accent3); margin-bottom: 6px; }
+    .card-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+    .card-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .card-tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: rgba(79,142,247,0.1); border: 1px solid rgba(79,142,247,0.2); color: var(--accent); }
+
+    .ml-toggle { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; color: var(--text2); }
+    .toggle-btn {
+      padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      border: 1px solid var(--glass-border); background: var(--glass);
+      color: var(--text2); cursor: pointer; transition: all 0.2s;
+    }
+    .toggle-btn.active { background: rgba(6,182,212,0.15); border-color: rgba(6,182,212,0.4); color: var(--accent3); }
+
+    /* Suggestions */
+    .suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .suggestion-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: 20px;
+      background: rgba(79,142,247,0.08); border: 1px solid rgba(79,142,247,0.2);
+      color: var(--accent); cursor: pointer; transition: all 0.2s;
+    }
+    .suggestion-btn:hover { background: rgba(79,142,247,0.2); transform: translateY(-1px); }
+
+    /* Typing */
+    .typing { display: flex; gap: 4px; align-items: center; padding: 12px 16px; background: var(--surface2); border: 1px solid var(--glass-border); border-radius: 14px; border-top-left-radius: 4px; width: fit-content; }
+    .typing span { width: 7px; height: 7px; background: var(--text3); border-radius: 50%; animation: bounce 1.2s ease-in-out infinite; }
+    .typing span:nth-child(2) { animation-delay: 0.15s; }
+    .typing span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-6px); opacity: 1; } }
+
+    /* Input Bar */
+    .input-bar { padding: 12px 16px; border-top: 1px solid var(--glass-border); display: flex; gap: 10px; align-items: flex-end; background: rgba(0,0,0,0.2); }
+    .input-wrap { flex: 1; position: relative; }
+    textarea {
+      width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--glass-border);
+      border-radius: 12px; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px;
+      padding: 11px 44px 11px 14px; resize: none; outline: none; max-height: 120px;
+      line-height: 1.5; transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: rgba(79,142,247,0.5); }
+    textarea::placeholder { color: var(--text3); }
+
+    .send-btn {
+      position: absolute; right: 8px; bottom: 8px;
+      width: 32px; height: 32px; border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      font-size: 14px; transition: all 0.2s;
+    }
+    .send-btn:hover { transform: scale(1.08); box-shadow: 0 0 12px rgba(79,142,247,0.5); }
+    .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+    .lang-toggle { display: flex; border-radius: 10px; overflow: hidden; border: 1px solid var(--glass-border); flex-shrink: 0; }
+    .lang-btn { padding: 8px 12px; font-size: 11px; font-weight: 600; border: none; cursor: pointer; transition: all 0.2s; background: transparent; color: var(--text2); }
+    .lang-btn.active { background: rgba(79,142,247,0.2); color: var(--accent); }
+
+    /* Welcome */
+    .welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 32px 20px; text-align: center; flex: 1; }
+    .welcome-orb { width: 72px; height: 72px; border-radius: 22px; background: linear-gradient(135deg, var(--accent), var(--accent2)); display: flex; align-items: center; justify-content: center; font-size: 36px; box-shadow: 0 0 40px rgba(79,142,247,0.4); animation: pulse-orb 3s ease-in-out infinite; }
+    .welcome h2 { font-size: 22px; font-weight: 700; }
+    .welcome p { font-size: 14px; color: var(--text2); max-width: 380px; }
+    .welcome-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+  </style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-orb">🛡️</div>
+    <div class="header-title">
+      <h1>KryptonAI</h1>
+      <p>KryptonVision — Sentinel Grid Platform Assistant</p>
+    </div>
+    <div class="online-badge">
+      <div class="online-dot"></div>
+      Online
+    </div>
+  </div>
+
+  <!-- Chat Window -->
+  <div class="chat-window">
+    <!-- Quick Chips -->
+    <div class="quick-chips">
+      <span class="chip" onclick="sendChip('What AI features are available?')">🤖 AI Features</span>
+      <span class="chip" onclick="sendChip('features enthaanu')">🌸 Features (ML)</span>
+      <span class="chip" onclick="sendChip('What is KryptonVision?')">ℹ️ About</span>
+      <span class="chip" onclick="sendChip('Supported cameras')">📷 Cameras</span>
+      <span class="chip" onclick="sendChip('Banking NBFC module')">🏦 Banking</span>
+      <span class="chip" onclick="sendChip('How do I sign in?')">🔐 Login</span>
+      <span class="chip" onclick="sendChip('Edge agent install guide')">⚙️ Edge Agent</span>
+      <span class="chip" onclick="sendChip('enthellam features unduo')">💬 Manglish</span>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages" id="messages">
+      <div class="welcome" id="welcomeScreen">
+        <div class="welcome-orb">🛡️</div>
+        <h2>Hello! I'm KryptonAI</h2>
+        <p>Ask me about KryptonVision platform features, AI analytics, camera support, or how to get started. I understand English, Malayalam &amp; Manglish!</p>
+        <div class="welcome-chips">
+          <span class="chip" onclick="sendChip('What AI features are available?')">🤖 AI Features</span>
+          <span class="chip" onclick="sendChip('enthellam features unduo')">🌸 ML-ൽ ചോദിക്കൂ</span>
+          <span class="chip" onclick="sendChip('Banking NBFC module')">🏦 Banking</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input Bar -->
+    <div class="input-bar">
+      <div class="lang-toggle">
+        <button class="lang-btn active" id="btnEN" onclick="setLang('en')">EN</button>
+        <button class="lang-btn" id="btnML" onclick="setLang('ml')">ML</button>
+      </div>
+      <div class="input-wrap">
+        <textarea id="msgInput" rows="1"
+          placeholder="Ask about features, cameras, analytics… or type in Malayalam!"
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = window.location.origin;
+  const CHAT_ENDPOINT = `${API_BASE}/api/v1/guardian/chat`;
+
+  let sessionId = `krypton-widget-${Date.now()}`;
+  let currentLang = 'en';
+  let isSending = false;
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.getElementById('btnEN').classList.toggle('active', lang === 'en');
+    document.getElementById('btnML').classList.toggle('active', lang === 'ml');
+    document.getElementById('msgInput').placeholder = lang === 'ml'
+      ? 'Features, cameras, analytics… Malayalam-ൽ ചോദിക്കൂ!'
+      : 'Ask about features, cameras, analytics… or type in Malayalam!';
+  }
+
+  function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }
+
+  function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+
+  function sendChip(text) { document.getElementById('msgInput').value = text; sendMessage(); }
+
+  async function sendMessage() {
+    if (isSending) return;
+    const input = document.getElementById('msgInput');
+    const text = input.value.trim();
+    if (!text) return;
+    const welcome = document.getElementById('welcomeScreen');
+    if (welcome) welcome.remove();
+    isSending = true;
+    input.value = ''; autoResize(input);
+    document.getElementById('sendBtn').disabled = true;
+    appendUserMsg(text);
+    const typingEl = appendTyping();
+    try {
+      const res = await fetch(CHAT_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, sessionId }),
+      });
+      const json = await res.json();
+      typingEl.remove();
+      if (json.success && json.data) {
+        sessionId = json.sessionId || sessionId;
+        renderAIResponse(json.data);
+      } else {
+        appendAIMsg('⚠️ Sorry, I could not process that. Please try again.', []);
+      }
+    } catch (err) {
+      typingEl.remove();
+      appendAIMsg('⚠️ Connection error. Ensure the KryptonVision server is running.', []);
+    } finally {
+      isSending = false;
+      document.getElementById('sendBtn').disabled = false;
+      input.focus();
+    }
+  }
+
+  function renderAIResponse(data) {
+    if (data.type === 'feature_cards' && data.cards && data.cards.length > 0) {
+      const headerMsg = (currentLang === 'ml' && data.messageMl) ? data.messageMl : data.message;
+      renderFeatureCards(headerMsg, data.cards, data.suggestions, data.suggestionsMl);
+    } else {
+      const msg = (currentLang === 'ml' && data.messageMl) ? data.messageMl : data.message;
+      const sugs = (currentLang === 'ml' && data.suggestionsMl) ? data.suggestionsMl : (data.suggestions || []);
+      appendAIMsg(markdownToHTML(msg), sugs);
+    }
+  }
+
+  function appendUserMsg(text) {
+    const el = document.createElement('div');
+    el.className = 'msg user';
+    el.innerHTML = `<div class="avatar user-av">👤</div><div class="bubble user-b">${esc(text)}</div>`;
+    append(el);
+  }
+
+  function appendAIMsg(html, suggestions) {
+    const el = document.createElement('div');
+    el.className = 'msg';
+    const sugsHTML = (suggestions && suggestions.length)
+      ? `<div class="suggestions">${suggestions.map(s => `<button class="suggestion-btn" onclick="sendChip('${escAttr(s)}')">${esc(s)}</button>`).join('')}</div>`
+      : '';
+    el.innerHTML = `<div class="avatar ai">🛡️</div><div class="bubble ai">${html}${sugsHTML}</div>`;
+    append(el);
+  }
+
+  function renderFeatureCards(headerMsg, cards, suggestions, suggestionsMl) {
+    const el = document.createElement('div');
+    el.className = 'msg';
+    const activeSugs = (currentLang === 'ml' && suggestionsMl) ? suggestionsMl : (suggestions || []);
+    const sugsHTML = activeSugs.length
+      ? `<div class="suggestions">${activeSugs.map(s => `<button class="suggestion-btn" onclick="sendChip('${escAttr(s)}')">${esc(s)}</button>`).join('')}</div>`
+      : '';
+    const cardsHTML = cards.map(c => `
+      <div class="feature-card">
+        <div class="card-icon">${c.icon}</div>
+        <div class="card-title">${esc(c.title)}</div>
+        <div class="card-title-ml">${esc(c.titleMl)}</div>
+        <div class="card-desc" data-en="${escAttr(c.description)}" data-ml="${escAttr(c.descriptionMl)}">
+          ${currentLang === 'ml' ? esc(c.descriptionMl) : esc(c.description)}
+        </div>
+        <div class="card-tags">${c.tags.map(t => `<span class="card-tag">${esc(t)}</span>`).join('')}</div>
+      </div>`).join('');
+
+    el.innerHTML = `
+      <div class="avatar ai">🛡️</div>
+      <div style="flex:1;max-width:calc(100% - 44px)">
+        <div class="bubble ai" style="max-width:100%;width:100%">
+          <div style="font-weight:600;margin-bottom:12px;color:#fff">${markdownToHTML(headerMsg)}</div>
+          <div class="ml-toggle">
+            <span>Show in:</span>
+            <button class="toggle-btn ${currentLang !== 'ml' ? 'active' : ''}" onclick="toggleCardLang(this,'en')">English</button>
+            <button class="toggle-btn ${currentLang === 'ml' ? 'active' : ''}" onclick="toggleCardLang(this,'ml')">Malayalam</button>
+          </div>
+          <div class="feature-cards-grid">${cardsHTML}</div>
+          ${sugsHTML}
+        </div>
+      </div>`;
+    append(el);
+  }
+
+  function toggleCardLang(btn, lang) {
+    const container = btn.closest('.bubble');
+    container.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    container.querySelectorAll('.card-desc').forEach(d => { d.textContent = lang === 'ml' ? d.dataset.ml : d.dataset.en; });
+  }
+
+  function appendTyping() {
+    const el = document.createElement('div');
+    el.className = 'msg';
+    el.innerHTML = `<div class="avatar ai">🛡️</div><div class="typing"><span></span><span></span><span></span></div>`;
+    append(el);
+    return el;
+  }
+
+  function append(el) {
+    const m = document.getElementById('messages');
+    m.appendChild(el);
+    m.scrollTop = m.scrollHeight;
+  }
+
+  function markdownToHTML(text) {
+    if (!text) return '';
+    return text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+      .replace(/`([^`]+)`/g,'<code>$1</code>')
+      .replace(/^• (.+)$/gm,'<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+      .replace(/<\/ul><ul>/g,'')
+      .replace(/\n/g,'<br>');
+  }
+  function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function escAttr(s) { return (s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
