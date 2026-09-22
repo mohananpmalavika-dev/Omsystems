@@ -832,8 +832,6 @@ function ControlRoomContent() {
         </div>
       </header>
 
-      <InvestigationFlowNav />
-
       {/* 2. Interactive Zone / Region / Area / Branch Scope Filter Toolbar */}
       <section className="hierarchy-filter-bar" aria-label="Live Wall Scope Selection">
         <div className="filter-controls-row">
@@ -1269,6 +1267,8 @@ function ControlRoomContent() {
           </div>
         )}
       </section>
+
+      <InvestigationFlowNav />
 
       {aiPanelOpen && (
         <LiveAiWallPanel
