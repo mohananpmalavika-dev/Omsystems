@@ -90,16 +90,19 @@ export class HelmetDetector extends BaseDetector {
 
     if (riderViolations.length > 0) {
       const avgConf = this.calculateAverageConfidence(riderViolations);
-      const effectiveConf = avgConf;
+      // Default to 0 when confidence is unknown so the event passes Zod validation
+      // and reaches the rule engine; cameras with minConfidence > 0 will correctly
+      // suppress it, while cameras with minConfidence: 0 will alert as expected.
+      const effectiveConf = avgConf ?? 0;
       const violationObjects = riderViolations.flatMap(detection => [
         {
           label: "no-helmet",
-          confidence: detection.confidence,
+          confidence: detection.confidence ?? 0,
           boundingBox: detection.personBoundingBox,
         },
         {
           label: "person",
-          confidence: detection.confidence,
+          confidence: detection.confidence ?? 0,
           boundingBox: detection.personBoundingBox,
         },
       ]);
@@ -134,16 +137,16 @@ export class HelmetDetector extends BaseDetector {
     const indoorHelmetWearers = detections.filter(d => !d.vehicleType && d.helmetDetected);
     if (indoorHelmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
-      const effectiveConf = avgConf;
+      const effectiveConf = avgConf ?? 0;
       const compliantObjects = indoorHelmetWearers.flatMap(detection => [
         {
           label: "helmet",
-          confidence: detection.confidence,
+          confidence: detection.confidence ?? 0,
           boundingBox: detection.personBoundingBox,
         },
         {
           label: "person",
-          confidence: detection.confidence,
+          confidence: detection.confidence ?? 0,
           boundingBox: detection.personBoundingBox,
         },
       ]);

@@ -811,7 +811,7 @@ export class AnalyticsPipeline {
       sourceEventId: eventId,
       detectionType: result.detectionType,
       occurredAt: frame.timestamp.toISOString(),
-      confidence: result.confidence,
+      confidence: result.confidence ?? 0,
       durationSeconds: typeof result.durationSeconds === "number"
         ? result.durationSeconds
         : (result.requiresAlert ? 1 : 0),
