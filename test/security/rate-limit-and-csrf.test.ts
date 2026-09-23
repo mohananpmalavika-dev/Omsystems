@@ -65,6 +65,38 @@ describe("Security Hardening: Rate Limiting, CSRF, and Security Headers", () => 
       // Should not be rejected by CSRF hook (might fail auth/session, but not 403 csrf_token_missing)
       expect(response.statusCode).not.toBe(403);
     });
+
+    it("allows edge enrollment activation requests without CSRF token", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/edge-enrollment/activate",
+        payload: {
+          activationCode: "test-code",
+          deviceUuid: "test-device",
+          version: "0.1.27",
+          commandPublicKey: "test-key",
+        },
+      });
+      // Should not be rejected by CSRF hook (not 403 csrf_token_missing)
+      const parsed = JSON.parse(response.body);
+      expect(parsed.error).not.toBe("csrf_token_missing");
+    });
+
+    it("allows edge agent heartbeat requests without CSRF token", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/edge-agents/test-agent-id/heartbeat",
+        headers: {
+          "x-edge-agent-token": "test-edge-token",
+        },
+        payload: {
+          version: "0.1.27",
+        },
+      });
+      // Should not be rejected by CSRF hook (not 403 csrf_token_missing)
+      const parsed = JSON.parse(response.body);
+      expect(parsed.error).not.toBe("csrf_token_missing");
+    });
   });
 
   describe("Security Headers (Helmet)", () => {

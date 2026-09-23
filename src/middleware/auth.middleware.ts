@@ -88,6 +88,8 @@ function requiresPasswordChangeOnly(request: FastifyRequest, user: any): boolean
     "/v1/auth/logout-all",
     "/v1/users/me/change-password",
     `/v1/users/${encodeURIComponent(user.id)}/change-password`,
+    "/api/v1/analytics",
+    "/v1/analytics",
   ]);
   return !permitted.has(path);
 }

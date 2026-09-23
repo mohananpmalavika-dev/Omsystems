@@ -119,7 +119,13 @@ async function flushAnalytics(useBeacon = false) {
       body: payload,
       keepalive: true,
     });
-    if (!response.ok) throw new Error(`analytics ingestion failed (${response.status})`);
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        // Discard unauthenticated / forbidden batches to prevent infinite retry loops
+        return;
+      }
+      throw new Error(`analytics ingestion failed (${response.status})`);
+    }
   } catch {
     retainFailedBatch(batch);
   } finally {

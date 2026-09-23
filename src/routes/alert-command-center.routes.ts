@@ -315,10 +315,21 @@ export async function registerAlertCommandCenterRoutes(
 
   app.get("/v1/alerts/events", async (request, reply) => {
     reply.hijack();
-    reply.raw.writeHead(200, {
+    if (request.raw.socket) {
+      request.raw.socket.setTimeout(0);
+      request.raw.socket.setNoDelay(true);
+      request.raw.socket.setKeepAlive(true);
+    }
+    const headers: Record<string, string> = {
       "content-type": "text/event-stream; charset=utf-8",
-      "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no",
-    });
+      "cache-control": "no-cache, no-transform",
+      "x-accel-buffering": "no",
+    };
+    if (request.raw.httpVersionMajor < 2) {
+      headers["connection"] = "keep-alive";
+    }
+    reply.raw.writeHead(200, headers);
+    reply.raw.flushHeaders?.();
     reply.raw.write(`event: ready\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
     const unsubscribe = alertEvents.subscribe(request.currentUser.tenantId, (event) => {
       if (!reply.raw.destroyed) reply.raw.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
@@ -327,7 +338,14 @@ export async function registerAlertCommandCenterRoutes(
       if (!reply.raw.destroyed) reply.raw.write(`: heartbeat ${Date.now()}\n\n`);
     }, 15_000);
     heartbeat.unref();
-    request.raw.once("close", () => { clearInterval(heartbeat); unsubscribe(); });
+    const cleanup = () => {
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+    request.raw.once("close", cleanup);
+    request.raw.once("error", cleanup);
+    reply.raw.once("close", cleanup);
+    reply.raw.once("error", cleanup);
   });
 
   app.post("/v1/alerts/:alertId/assign", async (request, reply) => {

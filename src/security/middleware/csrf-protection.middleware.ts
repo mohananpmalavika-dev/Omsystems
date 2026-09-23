@@ -67,14 +67,20 @@ function isExemptRoute(url: string, method: string): boolean {
     return true;
   }
 
-  // Exempt monitoring / health probes
+  const cleanUrl = url.split("?")[0] ?? url;
+
+  // Exempt monitoring / health probes / telemetry analytics ingestion
   if (
-    url === "/health" ||
-    url === "/live" ||
-    url === "/ready" ||
-    url === "/metrics" ||
-    url.startsWith("/api/observability/") ||
-    url.startsWith("/v1/observability/")
+    cleanUrl === "/health" ||
+    cleanUrl === "/live" ||
+    cleanUrl === "/ready" ||
+    cleanUrl === "/metrics" ||
+    cleanUrl.startsWith("/api/observability/") ||
+    cleanUrl.startsWith("/v1/observability/") ||
+    cleanUrl === "/api/v1/analytics" ||
+    cleanUrl === "/v1/analytics" ||
+    cleanUrl.startsWith("/api/v1/analytics/") ||
+    cleanUrl.startsWith("/v1/analytics/")
   ) {
     return true;
   }
@@ -100,11 +106,14 @@ function isExemptRoute(url: string, method: string): boolean {
     return true;
   }
 
-  // Exempt edge-agent ingress (uses mTLS or shared-secret headers, not browser cookies)
+  // Exempt edge-agent ingress (uses mTLS, edge tokens, or shared-secret headers, not browser cookies)
   if (
-    url.startsWith("/edge/") ||
-    url.startsWith("/v1/edge/") ||
-    url.startsWith("/internal/")
+    cleanUrl.startsWith("/edge/") ||
+    cleanUrl.startsWith("/v1/edge/") ||
+    cleanUrl.startsWith("/v1/edge-") ||
+    cleanUrl.startsWith("/edge-agent/") ||
+    cleanUrl.startsWith("/internal/") ||
+    cleanUrl.includes("/edge-agents/")
   ) {
     return true;
   }
@@ -126,8 +135,18 @@ export async function csrfProtectionHook(request: FastifyRequest, reply: Fastify
     return;
   }
 
-  // Edge agents and microservices with preshared keys are exempt from browser CSRF
-  if (request.headers["x-edge-shared-key"] || request.headers["x-media-gateway-key"]) {
+  // Edge agents and microservices with preshared keys or edge credentials are exempt from browser CSRF
+  if (
+    request.headers["x-edge-agent-token"] ||
+    request.headers["x-edge-bridge-key"] ||
+    request.headers["x-edge-shared-key"] ||
+    request.headers["x-media-gateway-key"]
+  ) {
+    return;
+  }
+
+  // Non-cookie API clients providing direct identity headers (e.g. CLI/tests/internal services)
+  if ((request.headers["x-user-id"] || request.headers["x-development-user-id"]) && !request.headers.cookie) {
     return;
   }
 

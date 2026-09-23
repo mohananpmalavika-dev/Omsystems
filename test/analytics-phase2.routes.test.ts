@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { registerAnalyticsPhase2Routes } from "../src/routes/analytics-phase2.routes.js";
 import { MemoryStore } from "../src/store.js";
 
+import { csrfProtectionHook } from "../src/security/middleware/csrf-protection.middleware.js";
+
 describe("identity analytics routes without PostgreSQL", () => {
   let app: FastifyInstance;
   let store: MemoryStore;
@@ -406,5 +408,28 @@ describe("identity analytics routes without PostgreSQL", () => {
       },
     });
     expect(unauthenticated.statusCode).toBe(401);
+  });
+
+  it("exempts /api/v1/analytics from CSRF middleware", async () => {
+    const csrfApp = Fastify();
+    csrfApp.addHook("preHandler", csrfProtectionHook);
+    csrfApp.decorateRequest("currentUser");
+    csrfApp.addHook("preHandler", async (request) => {
+      request.currentUser = await store.getUser("user-superadmin-mgdhanyamohan");
+    });
+    await registerAnalyticsPhase2Routes(csrfApp, store);
+
+    const timestamp = new Date().toISOString();
+    const res = await csrfApp.inject({
+      method: "POST",
+      url: "/api/v1/analytics",
+      payload: {
+        sessionId: "00000000-0000-4000-8000-000000000123",
+        timestamp,
+        events: [{ category: "page", action: "view", metadata: {}, timestamp }],
+      },
+    });
+    expect(res.statusCode).toBe(202);
+    await csrfApp.close();
   });
 });
