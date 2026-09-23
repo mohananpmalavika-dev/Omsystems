@@ -54,7 +54,7 @@ const schema = z.object({
   EDGE_MEDIA_ENABLE_WEBRTC: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   EDGE_MEDIA_ENABLE_SRT_INGEST: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   EDGE_MEDIA_ENABLE_MULTICAST_INGEST: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
-  MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named"]).default("disabled"),
+  MEDIA_TUNNEL_MODE: z.enum(["disabled", "quick", "named", "relay"]).default("disabled"),
   MEDIA_QUICK_TUNNEL_FALLBACK: z.enum(["true", "false"]).default("false").transform((value) => value === "true"),
   CLOUDFLARED_PATH: z.string().default("cloudflared"),
   CLOUDFLARED_TUNNEL_TOKEN: z.preprocess(

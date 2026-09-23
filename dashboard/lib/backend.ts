@@ -125,7 +125,7 @@ export async function startLive(
     const hasSecureTunnel = isHttpsUrl(sessionMediaGatewayUrl ?? publicMediaGatewayUrl);
     if (routePreference === "auto" && localMediaGatewayUrl && (!isProduction || isHttpsUrl(localMediaGatewayUrl) || !hasSecureTunnel)) {
       const direct: DirectLiveGateway = {
-        url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
+        url: mediaEndpoint(localMediaGatewayUrl, "/v1/live/start"),
         controlPlaneToken: controlSession.token,
       };
       return {
@@ -161,7 +161,7 @@ export async function startLive(
       if (index > 0) controlSession = await requestControlSession();
       try {
         const res = await fetch(
-          new URL("/v1/live/start", normalizeHttpOrigin(gwUrl)),
+          mediaEndpoint(gwUrl, "/v1/live/start"),
           {
             method: "POST",
             headers: bridgeHeaders(),
@@ -347,7 +347,10 @@ function rewriteLiveMediaUrls(session: LiveSessionResponse, mediaGatewayUrl: str
     try {
       const source = new URL(value);
       if (source.protocol !== "http:") return value;
-      return new URL(`${source.pathname}${source.search}`, gateway).toString();
+      const prefix = gateway.pathname.replace(/\/$/, "");
+      const path = prefix && prefix !== "/" && !source.pathname.startsWith(`${prefix}/`)
+        ? `${prefix}${source.pathname}` : source.pathname;
+      return new URL(`${path}${source.search}`, gateway).toString();
     } catch {
       return value;
     }
@@ -377,12 +380,12 @@ export async function startTalk(
     return {
       cameraId,
       direct: {
-        url: new URL("/v1/talk/start", normalizeHttpOrigin(mediaGatewayUrl)).toString(),
+        url: mediaEndpoint(mediaGatewayUrl, "/v1/talk/start"),
         controlPlaneToken: controlSession.token,
       },
     };
   }
-  const response = await fetch(new URL("/v1/talk/start", normalizeHttpOrigin(mediaGatewayUrl)), {
+  const response = await fetch(mediaEndpoint(mediaGatewayUrl, "/v1/talk/start"), {
     method: "POST",
     headers: bridgeHeaders(),
     body: JSON.stringify({ controlPlaneToken: controlSession.token }),
@@ -397,6 +400,14 @@ export async function startTalk(
 
 function normalizeHttpOrigin(value: string) {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value) ? value : `http://${value}`;
+}
+
+function mediaEndpoint(base: string, path: string) {
+  const gateway = new URL(normalizeHttpOrigin(base));
+  const prefix = gateway.pathname.replace(/\/$/, "");
+  gateway.pathname = `${prefix}${path}`;
+  gateway.search = "";
+  return gateway.toString();
 }
 
 function bridgeHeaders() {

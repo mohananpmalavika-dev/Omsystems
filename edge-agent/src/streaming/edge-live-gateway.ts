@@ -2,6 +2,7 @@ import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Serv
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
+import { existsSync, readdirSync } from "node:fs";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -11,6 +12,7 @@ import type { LocalStreamSecretStore } from "./secret-store.js";
 import { logger } from "../utils/logger.js";
 import { TalkSessionRegistry } from "../talkback/talk-session-registry.js";
 import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
+import { startManagedMediaRelay } from "./managed-media-relay.js";
 
 interface MediaRouter {
   ensurePath(path: string, sourceUri: string): Promise<void>;
@@ -438,6 +440,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
   let liveGateway: EdgeLiveGateway | undefined;
   let tunnel: ChildProcessWithoutNullStreams | undefined;
   let quickTunnel: QuickTunnelSupervisor | undefined;
+  let managedRelay: ReturnType<typeof startManagedMediaRelay> | undefined;
 
   try {
     await mkdir(runtimeDirectory, { recursive: true });
@@ -458,7 +461,8 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     }
     await waitForHttp(mediaMtxApi, mediaMtx, 30_000);
 
-    const router = new MediaMtxRouter(config.MEDIAMTX_API_URL);
+    const resolvedFfmpeg = resolveFfmpegPath(config.FFMPEG_PATH, runtimeDirectory);
+    const router = new MediaMtxRouter(config.MEDIAMTX_API_URL, resolvedFfmpeg);
     let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL === "auto"
       ? resolvePrivateMediaGatewayUrlIfAvailable(config.EDGE_LIVE_GATEWAY_PORT)
       : config.PUBLIC_MEDIA_GATEWAY_URL;
@@ -489,7 +493,13 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     });
     await liveGateway.listen({ host: config.EDGE_LIVE_GATEWAY_HOST, port: config.EDGE_LIVE_GATEWAY_PORT });
 
-    if (tunnelMode === "quick") {
+    if (tunnelMode === "relay") {
+      const credential = input.gateway.getEdgeCredential();
+      if (!credential || !resolvedPublicUrl) throw new Error("managed_media_relay_identity_unavailable");
+      managedRelay = startManagedMediaRelay(resolvedPublicUrl, input.agentId, credential, config.EDGE_LIVE_GATEWAY_PORT);
+      await waitForPublicGateway(new URL(`${new URL(resolvedPublicUrl).pathname.replace(/\/$/, "")}/health`, resolvedPublicUrl), 30_000);
+      logger.info("Self-hosted media relay is reachable", { publicUrl: resolvedPublicUrl });
+    } else if (tunnelMode === "quick") {
       if (config.MEDIA_TUNNEL_MODE === "named") {
         logger.warn("Managed media tunnel is not provisioned; using a protected temporary tunnel");
       }
@@ -539,6 +549,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     return {
       get publicUrl() { return resolvedPublicUrl; },
       async stop() {
+        managedRelay?.stop();
         quickTunnel?.stop();
         tunnel?.kill();
         await liveGateway?.close().catch(() => undefined);
@@ -546,6 +557,7 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
       },
     };
   } catch (error) {
+    managedRelay?.stop();
     quickTunnel?.stop();
     tunnel?.kill();
     await liveGateway?.close().catch(() => undefined);
@@ -627,12 +639,47 @@ function isPrivateIpv4(address: string) {
     (first === 192 && second === 168);
 }
 
+function resolveFfmpegPath(configuredPath: string, runtimeDirectory: string): string | undefined {
+  if (configuredPath && existsSync(configuredPath)) return configuredPath;
+  const direct = join(runtimeDirectory, "ffmpeg.exe");
+  if (existsSync(direct)) return direct;
+  const binDirect = join(runtimeDirectory, "bin", "ffmpeg.exe");
+  if (existsSync(binDirect)) return binDirect;
+  try {
+    const entries = readdirSync(runtimeDirectory, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.toLowerCase().startsWith("ffmpeg")) {
+        const candidate = join(runtimeDirectory, entry.name, "bin", "ffmpeg.exe");
+        if (existsSync(candidate)) return candidate;
+        const candidate2 = join(runtimeDirectory, entry.name, "ffmpeg.exe");
+        if (existsSync(candidate2)) return candidate2;
+      }
+    }
+  } catch {}
+  return configuredPath || undefined;
+}
+
 export class MediaMtxRouter implements MediaRouter {
-  constructor(private readonly apiUrl: string) {}
+  constructor(private readonly apiUrl: string, private readonly ffmpegPath?: string) {}
   async ensurePath(path: string, sourceUri: string) {
     const encodedPath = encodeURIComponent(path);
-    const payload = { source: sourceUri, rtspTransport: "tcp", sourceOnDemand: true,
-      sourceOnDemandStartTimeout: "15s", sourceOnDemandCloseAfter: "120s" };
+    const isRtsp = /^rtsps?:\/\//i.test(sourceUri);
+    const payload = (this.ffmpegPath && isRtsp)
+      ? {
+          source: "publisher",
+          sourceOnDemand: false,
+          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -i "${sourceUri}" -map 0:v:0 -c:v copy -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp rtsp://127.0.0.1:8554/${path}`,
+          runOnDemandRestart: true,
+          runOnDemandStartTimeout: "15s",
+          runOnDemandCloseAfter: "120s",
+        }
+      : {
+          source: sourceUri,
+          rtspTransport: "tcp",
+          sourceOnDemand: true,
+          sourceOnDemandStartTimeout: "15s",
+          sourceOnDemandCloseAfter: "120s",
+        };
     const add = await fetch(new URL(`/v3/config/paths/add/${encodedPath}`, this.apiUrl), {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
     });
@@ -659,6 +706,7 @@ class EdgeAccessRegistry {
     return { ...session, expiresAt: new Date(session.expiresAt).toISOString() };
   }
   authenticate(token: string, path: string, action: string) {
+    if (action === "publish") return true;
     return action === "read" && [...this.sessions.values()].some((session) =>
       session.path === path && session.expiresAt > Date.now() && secureEqual(session.token, token));
   }
@@ -689,6 +737,7 @@ authHTTPExclude:
   - action: api
   - action: metrics
   - action: pprof
+  - action: publish
 hls: yes
 hlsAddress: 127.0.0.1:8888
 # Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
@@ -697,7 +746,8 @@ hlsAllowOrigins: ['*']
 hlsSegmentCount: 3
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
-rtsp: no
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
 rtmp: no
 webrtc: ${config.EDGE_MEDIA_ENABLE_WEBRTC ? "yes" : "no"}
 webrtcAddress: 127.0.0.1:8889

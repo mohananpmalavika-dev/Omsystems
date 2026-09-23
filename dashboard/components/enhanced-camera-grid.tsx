@@ -82,6 +82,8 @@ interface GridTileProps {
   showAiOverlay: boolean;
   onOpenAi?: (cameraId: string) => void;
   onDeleteCamera?: (cameraId: string) => Promise<void> | void;
+  onSoloAudio?: (cameraId: string) => void;
+  isSoloAudio?: boolean;
 }
 
 const GridTile = memo(function GridTile({
@@ -101,6 +103,8 @@ const GridTile = memo(function GridTile({
   showAiOverlay,
   onOpenAi,
   onDeleteCamera,
+  onSoloAudio,
+  isSoloAudio,
 }: GridTileProps) {
   const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -127,6 +131,8 @@ const GridTile = memo(function GridTile({
       showAiOverlay={showAiOverlay}
       onOpenAi={onOpenAi ? () => onOpenAi(camera.id) : undefined}
       onDeleteCamera={onDeleteCamera}
+      onSoloAudio={onSoloAudio}
+      isSoloAudio={isSoloAudio}
       index={index}
     />
   );
@@ -181,9 +187,15 @@ export function EnhancedCameraGrid({
   const [sequencing, setSequencing] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [tourInterval, setTourInterval] = useState(15);
+  const [isGridHovered, setIsGridHovered] = useState(false);
+  const [soloAudioCameraId, setSoloAudioCameraId] = useState<string | null>(null);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const handleSoloAudio = useCallback((cameraId: string) => {
+    setSoloAudioCameraId((current) => (current === cameraId ? null : cameraId));
+  }, []);
   const [compactGrid, setCompactGrid] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches,
   );
@@ -580,15 +592,15 @@ export function EnhancedCameraGrid({
     setGridPositions(posMap);
   }, [cameras, currentPage, totalPositions]);
 
-  // Video wall auto-tour rotation timer
+  // Video wall auto-tour rotation timer with hover-pause inspection
   useEffect(() => {
-    if (!sequencing || totalPages <= 1) return;
+    if (!sequencing || totalPages <= 1 || isGridHovered) return;
     const intervalMs = Math.max(3, tourInterval) * 1000;
     const timer = setInterval(() => {
       setCurrentPage((prev) => (prev + 1) % totalPages);
     }, intervalMs);
     return () => clearInterval(timer);
-  }, [sequencing, totalPages, tourInterval]);
+  }, [sequencing, totalPages, tourInterval, isGridHovered]);
 
   // Keyboard navigation shortcuts for presentation/monitoring mode
   useEffect(() => {
@@ -914,8 +926,8 @@ export function EnhancedCameraGrid({
             title={sequencing ? "Auto-tour is running (Space to pause)" : "Auto-tour is paused (Space to start)"}
             aria-pressed={sequencing}
           >
-            <RotateCw size={16} className={sequencing ? "animate-spin" : ""} />
-            {sequencing ? `Tour (${tourInterval}s)` : "Tour: Off"}
+            <RotateCw size={16} className={sequencing && !isGridHovered ? "animate-spin" : ""} />
+            {sequencing ? (isGridHovered ? "Tour: Paused (Inspecting)" : `Tour (${tourInterval}s)`) : "Tour: Off"}
           </button>
           {sequencing && (
             <label className="toolbar-control">
@@ -1043,6 +1055,8 @@ export function EnhancedCameraGrid({
       <div 
         ref={containerRef}
         className={`camera-grid ${gpuAccelClass}`}
+        onMouseEnter={() => setIsGridHovered(true)}
+        onMouseLeave={() => setIsGridHovered(false)}
         style={{
           "--camera-grid-columns": renderedColumnCount,
           "--minimum-tile-width": `${minimumTileWidth}px`,
@@ -1158,6 +1172,8 @@ export function EnhancedCameraGrid({
                   showAiOverlay={showAiOverlay}
                   onOpenAi={onOpenCameraAi}
                   onDeleteCamera={handleRemoveFromWall}
+                  onSoloAudio={handleSoloAudio}
+                  isSoloAudio={soloAudioCameraId ? soloAudioCameraId === camera.id : undefined}
                   index={i}
                 />
               </div>

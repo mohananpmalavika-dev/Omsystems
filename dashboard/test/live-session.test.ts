@@ -220,6 +220,28 @@ describe("dashboard live session startup", () => {
     });
   });
 
+  it("keeps the agent path when starting and rewriting self-hosted relay media", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    const base = "https://gcp.example/v1/edge-media/c8921284-3240-4bd5-8d73-21acbe7eef11";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("control.internal")) {
+        return Response.json({ token: "t".repeat(43), mediaGatewayUrl: base }, { status: 201 });
+      }
+      expect(url).toBe(`${base}/v1/live/start`);
+      return Response.json({
+        cameraId: "camera-1",
+        sessionId: "session-1",
+        hls: { url: "http://127.0.0.1:8090/hls/camera-1/index.m3u8", bearerToken: "stream-token" },
+      }, { status: 201 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(startLive("camera-1", undefined, "public")).resolves.toMatchObject({
+      hls: { url: `${base}/hls/camera-1/index.m3u8` },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("returns the edge-advertised LAN gateway to a VPN or local-network browser when no tunnel is available", async () => {
     process.env.NODE_ENV = "production";
     process.env.DASHBOARD_DEMO_MODE = "false";

@@ -89,6 +89,15 @@ if (hasArgument(argv, "--version")) {
 }
 
 const config = loadConfigOrExit();
+const installedMediaConfig = {
+  LIVE_MEDIA_ENABLED: config.LIVE_MEDIA_ENABLED,
+  MEDIA_RUNTIME_MANAGED: config.MEDIA_RUNTIME_MANAGED,
+  MEDIA_TUNNEL_MODE: config.MEDIA_TUNNEL_MODE,
+  PUBLIC_MEDIA_GATEWAY_URL: config.PUBLIC_MEDIA_GATEWAY_URL,
+  CLOUDFLARED_TUNNEL_TOKEN: config.CLOUDFLARED_TUNNEL_TOKEN,
+  EDGE_MEDIA_ENABLE_WEBRTC: config.EDGE_MEDIA_ENABLE_WEBRTC,
+  EDGE_LIVE_GATEWAY_HOST: config.EDGE_LIVE_GATEWAY_HOST,
+};
 if (hasArgument(argv, "--verify-secure-face")) {
   if (!config.SECURE_FACE_AI_ENABLED) {
     process.stderr.write("Secure face AI is disabled. Set SECURE_FACE_AI_ENABLED=true before verifying local models.\n");
@@ -1432,12 +1441,19 @@ async function executeEdgeCommand(type: string, payload: Record<string, unknown>
 async function refreshManagedMediaBootstrap() {
   if (!identity || !config.EDGE_MANAGED_MEDIA_BOOTSTRAP) return false;
   const bootstrap = await control.getBootstrap(agentId);
-  if (!bootstrap.media) return false;
+  if (!bootstrap.media) {
+    if (identity.media?.mode !== "relay") return false;
+    delete identity.media;
+    await identityStore.save(identity);
+    Object.assign(config, installedMediaConfig);
+    return true;
+  }
   const previous = identity.media;
   identity.media = bootstrap.media;
   await identityStore.save(identity);
   applyManagedMediaBootstrap(bootstrap.media);
-  return previous?.publicUrl !== bootstrap.media.publicUrl ||
+  return previous?.mode !== bootstrap.media.mode ||
+    previous?.publicUrl !== bootstrap.media.publicUrl ||
     previous?.tunnelToken !== bootstrap.media.tunnelToken;
 }
 
@@ -1446,9 +1462,11 @@ function applyManagedMediaBootstrap(media: NonNullable<typeof identity>["media"]
   Object.assign(config, {
     LIVE_MEDIA_ENABLED: true,
     MEDIA_RUNTIME_MANAGED: true,
-    MEDIA_TUNNEL_MODE: "named" as const,
+    MEDIA_TUNNEL_MODE: media.mode,
     PUBLIC_MEDIA_GATEWAY_URL: media.publicUrl,
-    CLOUDFLARED_TUNNEL_TOKEN: media.tunnelToken,
+    CLOUDFLARED_TUNNEL_TOKEN: media.mode === "named" ? media.tunnelToken : undefined,
+    EDGE_MEDIA_ENABLE_WEBRTC: media.mode === "relay" ? false : installedMediaConfig.EDGE_MEDIA_ENABLE_WEBRTC,
+    EDGE_LIVE_GATEWAY_HOST: media.mode === "relay" ? "127.0.0.1" : installedMediaConfig.EDGE_LIVE_GATEWAY_HOST,
   });
 }
 

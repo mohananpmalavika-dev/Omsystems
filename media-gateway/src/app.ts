@@ -324,9 +324,9 @@ export async function buildMediaGateway(options: {
             edgeSession = await edgeResponse.json() as typeof edgeSession;
           }
         } catch (error) {
-          app.log.warn("Edge agent talk session unavailable; continuing without edge forwarding", {
+          app.log.warn({
             error: error instanceof Error ? error.message : String(error),
-          });
+          }, "Edge agent talk session unavailable; continuing without edge forwarding");
         }
       }
     }
@@ -338,7 +338,7 @@ export async function buildMediaGateway(options: {
     const session: GatewayTalkSession = {
       id: sessionId,
       cameraId: consumed.cameraId,
-      cameraNodeId: consumed.cameraNodeId,
+      ...(consumed.cameraNodeId ? { cameraNodeId: consumed.cameraNodeId } : {}),
       token,
       expiresAt,
       adapter: edgeSession?.adapter ?? "onvif-rtsp-backchannel",
@@ -408,17 +408,17 @@ export async function buildMediaGateway(options: {
               "authorization": `Bearer ${session.edgeBearerToken}`,
               "content-type": "audio/L16;rate=8000;channels=1",
             },
-            body: pcm,
+            body: new Uint8Array(pcm),
             signal: AbortSignal.timeout(5_000),
           });
           if (!edgeResponse.ok) {
             throw new Error(`edge_audio_forward_failed: ${edgeResponse.status}`);
           }
         } catch (error) {
-          app.log.error("Failed to forward audio to edge agent", {
+          app.log.error({
             error: error instanceof Error ? error.message : String(error),
             sessionId: session.id,
-          });
+          }, "Failed to forward audio to edge agent");
           throw new GatewayError(502, "edge_audio_forward_failed");
         }
       }

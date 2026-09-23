@@ -83,6 +83,7 @@ const app = await buildApp({
   ...(edgePresenceCache ? { edgePresenceCache } : {}),
   ...(edgeTunnelProvider ? { edgeTunnelProvider } : {}),
   requireManagedEdgeTunnel: config.EDGE_MANAGED_TUNNEL_REQUIRED,
+  edgeMediaRelayEnabled: config.EDGE_MEDIA_RELAY_ENABLED,
   ...(controlPlanePublicUrl
     ? { controlPlanePublicUrl }
     : {}),

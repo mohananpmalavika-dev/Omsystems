@@ -13,9 +13,9 @@ export interface DeviceIdentity {
   media?: {
     enabled: true;
     managed: true;
-    mode: "named";
+    mode: "named" | "relay";
     publicUrl: string;
-    tunnelToken: string;
+    tunnelToken?: string;
     status: "inactive" | "healthy" | "degraded" | "down" | "unknown";
   };
   enrolledAt: string;
@@ -108,9 +108,9 @@ function validateIdentity(value: unknown): DeviceIdentity {
     if (typeof candidate[key] !== "string" || !candidate[key]) throw new Error("invalid_device_identity");
   }
   if (candidate.media && (
-    candidate.media.enabled !== true || candidate.media.managed !== true || candidate.media.mode !== "named" ||
+    candidate.media.enabled !== true || candidate.media.managed !== true || !["named", "relay"].includes(candidate.media.mode) ||
     typeof candidate.media.publicUrl !== "string" || !candidate.media.publicUrl.startsWith("https://") ||
-    typeof candidate.media.tunnelToken !== "string" || candidate.media.tunnelToken.length < 20
+    (candidate.media.mode === "named" && (typeof candidate.media.tunnelToken !== "string" || candidate.media.tunnelToken.length < 20))
   )) throw new Error("invalid_device_media_identity");
   return candidate as DeviceIdentity;
 }

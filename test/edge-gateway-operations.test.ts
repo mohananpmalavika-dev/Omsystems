@@ -208,6 +208,30 @@ describe("secure edge gateway operations", () => {
     );
   });
 
+  it("bootstraps an enrolled gateway with the shared GCP relay instead of a per-PC tunnel", async () => {
+    const store = testStore();
+    const app = await buildApp({
+      store,
+      controlPlanePublicUrl: "https://gcp.example",
+      edgeMediaRelayEnabled: true,
+      requireManagedEdgeTunnel: true,
+    });
+    apps.push(app);
+    const activation = await createActivation(app);
+    expect(activation.bootstrap.media).toMatchObject({ managed: true, mode: "relay" });
+    const identity = await enroll(app, activation);
+    const publicUrl = `https://gcp.example/v1/edge-media/${identity.agentId}`;
+    expect(identity.media).toMatchObject({ mode: "relay", publicUrl });
+    expect(identity.media.tunnelToken).toBeUndefined();
+    const bootstrap = await app.inject({
+      method: "GET",
+      url: `/v1/edge-agents/${identity.agentId}/bootstrap`,
+      headers: { "x-edge-agent-token": identity.credential },
+    });
+    expect(bootstrap.statusCode).toBe(200);
+    expect(bootstrap.json().media).toMatchObject({ mode: "relay", publicUrl });
+  });
+
   it("delivers remote commands once and records their result", async () => {
     const app = await buildApp({ store: testStore() });
     apps.push(app);

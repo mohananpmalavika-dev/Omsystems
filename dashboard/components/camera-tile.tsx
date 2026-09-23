@@ -22,6 +22,9 @@ import {
   Trash2,
   Tv,
   Move,
+  ExternalLink,
+  Headphones,
+  ShieldAlert,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -106,6 +109,8 @@ function CameraTileComponent({
   showAiOverlay = true,
   onOpenAi,
   onDeleteCamera,
+  onSoloAudio,
+  isSoloAudio,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -130,6 +135,8 @@ function CameraTileComponent({
   showAiOverlay?: boolean;
   onOpenAi?: () => void;
   onDeleteCamera?: (cameraId: string) => Promise<void> | void;
+  onSoloAudio?: (cameraId: string) => void;
+  isSoloAudio?: boolean;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
@@ -143,6 +150,7 @@ function CameraTileComponent({
     setPan({ x: 0, y: 0 });
   }, []);
   const [isMuted, setIsMuted] = useState(false); // Audio unmuted by default for live camera wall
+  const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -199,6 +207,71 @@ function CameraTileComponent({
       setIsMuted(false);
     }
   }, []);
+
+  const effectiveMuted = isSoloAudio === true ? false : isSoloAudio === false ? true : isMuted;
+
+  // Real-time Web Audio API VU decibel meter
+  useEffect(() => {
+    if (!internalVideoElement || effectiveMuted || !hasLiveFrame) {
+      setAudioLevel(0);
+      return;
+    }
+
+    let animId: number;
+    let isCancelled = false;
+
+    const setupAudioMeter = () => {
+      try {
+        const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!AudioCtxClass) return;
+
+        let ctx = (internalVideoElement as unknown as { __audioCtx?: AudioContext }).__audioCtx;
+        let analyser = (internalVideoElement as unknown as { __audioAnalyser?: AnalyserNode }).__audioAnalyser;
+
+        if (!ctx) {
+          ctx = new AudioCtxClass();
+          (internalVideoElement as unknown as { __audioCtx: AudioContext }).__audioCtx = ctx;
+          analyser = ctx.createAnalyser();
+          analyser.fftSize = 64;
+          analyser.smoothingTimeConstant = 0.4;
+          (internalVideoElement as unknown as { __audioAnalyser: AnalyserNode }).__audioAnalyser = analyser;
+
+          const source = ctx.createMediaElementSource(internalVideoElement);
+          source.connect(analyser);
+          analyser.connect(ctx.destination);
+        }
+
+        if (ctx.state === "suspended") {
+          void ctx.resume();
+        }
+
+        const dataArray = new Uint8Array(analyser!.frequencyBinCount);
+        const updateMeter = () => {
+          if (isCancelled) return;
+          analyser!.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / (dataArray.length || 1);
+          setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+          animId = requestAnimationFrame(updateMeter);
+        };
+        updateMeter();
+      } catch {
+        // Fallback for CORS or browser autoplay policy without errors
+      }
+    };
+
+    setupAudioMeter();
+
+    return () => {
+      isCancelled = true;
+      cancelAnimationFrame(animId);
+      setAudioLevel(0);
+    };
+  }, [internalVideoElement, effectiveMuted, hasLiveFrame]);
+
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
   const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
@@ -282,17 +355,68 @@ function CameraTileComponent({
   const takeSnapshot = () => {
     const video = tileRef.current?.querySelector("video");
     if (!video || !video.videoWidth) return;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-    canvas.getContext("2d")?.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Draw high-resolution frame
+    ctx.drawImage(video, 0, 0, width, height);
+
+    // Forensic audit banner background
+    const bannerHeight = Math.max(44, Math.round(height * 0.055));
+    ctx.fillStyle = "rgba(10, 15, 29, 0.88)";
+    ctx.fillRect(0, height - bannerHeight, width, bannerHeight);
+
+    // Accent line above metadata footer
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(0, height - bannerHeight, width, Math.max(2, Math.round(height * 0.003)));
+
+    // Forensic audit texts
+    const fontSize = Math.max(11, Math.round(bannerHeight * 0.36));
+    ctx.font = `600 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
+    ctx.textBaseline = "middle";
+
+    // Left: System identifier & camera name
+    ctx.fillStyle = "#ffffff";
+    const leftText = `● SENTINEL GRID FORENSIC RECORD | ${camera.name.toUpperCase()} [${camera.id.slice(0, 8)}]`;
+    ctx.fillText(leftText, 16, height - bannerHeight / 2);
+
+    // Right: Exact timestamp and frame dimensions
+    const now = new Date();
+    const utcStr = now.toISOString();
+    const localStr = now.toLocaleString();
+    const rightText = `${localStr} (${utcStr}) | ${width}×${height}`;
+    ctx.fillStyle = "#94a3b8";
+    const rightWidth = ctx.measureText(rightText).width;
+    ctx.fillText(rightText, width - rightWidth - 16, height - bannerHeight / 2);
+
+    // Top watermark seal
+    ctx.font = `700 ${Math.max(10, Math.round(fontSize * 0.8))}px sans-serif`;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.35)";
+    ctx.fillText("PROPRIETARY & CONFIDENTIAL EVIDENCE CAPTURE", 16, Math.max(18, Math.round(height * 0.035)));
+
+    // Direct download
     const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/jpeg", 0.92);
-    link.download = `${camera.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${Date.now()}.jpg`;
+    link.href = canvas.toDataURL("image/jpeg", 0.95);
+    const safeName = camera.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+    link.download = `EVIDENCE_${safeName}_${now.toISOString().replace(/[:.]/g, "-")}.jpg`;
     link.click();
   };
 
+  const hasCriticalAlert = Boolean(latestAiAlert && (latestAiAlert.severity === "P1" || latestAiAlert.severity === "P2"));
+  const hasWarningAlert = Boolean(latestAiAlert && latestAiAlert.severity === "P3");
+  const alertRingClass = hasCriticalAlert
+    ? "ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.55)] animate-pulse"
+    : hasWarningAlert
+      ? "ring-2 ring-amber-500 shadow-[0_0_16px_rgba(245,158,11,0.4)]"
+      : "";
+
   return (
-    <article className="camera-tile" ref={tileRef} data-camera-id={camera.id}>
+    <article className={`camera-tile ${alertRingClass}`} ref={tileRef} data-camera-id={camera.id}>
       <div
         className="feed-stage"
         style={{ cursor: zoom > 1 ? "grab" : undefined }}
@@ -345,7 +469,7 @@ function CameraTileComponent({
                 bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
                 cameraName={camera.name}
                 cameraId={camera.id}
-                muted={isMuted}
+                muted={effectiveMuted}
                 onPlaybackError={onPlaybackError}
                 onPlaybackStateChange={handlePlaybackStateChange}
                 onVideoElementChange={handleVideoElementChange}
@@ -373,6 +497,16 @@ function CameraTileComponent({
           )}
         </div>
 
+        {hasCriticalAlert && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-600/90 text-white text-[11px] font-bold tracking-wide shadow-lg border border-red-400/50 backdrop-blur animate-bounce pointer-events-none">
+            <ShieldAlert size={13} className="text-white" />
+            <span>ALARM: {latestAiAlert.title.toUpperCase()}</span>
+            <span className="text-[9px] bg-red-800/90 px-1.5 py-0.5 rounded ml-1 font-mono">
+              {Math.round(latestAiAlert.confidence * 100)}%
+            </span>
+          </div>
+        )}
+
         <div className="tile-topline">
           <div className="flex items-center gap-1.5">
             {typeof index === "number" && (
@@ -384,10 +518,23 @@ function CameraTileComponent({
               <i />
               {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
             </span>
-            {!isMuted && (
-              <span className="status-pill text-emerald-400 border-emerald-500/40 bg-emerald-950/70" title="Audio from camera is active and playing">
-                <Volume2 size={11} className="animate-pulse inline mr-1 text-emerald-400" />
-                Audio ON
+            {!effectiveMuted && (
+              <span className="status-pill text-emerald-400 border-emerald-500/40 bg-emerald-950/70 flex items-center gap-1.5" title={`Live Audio: ${audioLevel}%`}>
+                <Volume2 size={11} className={audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"} />
+                <span>Audio ON</span>
+                <span className="inline-flex items-center gap-0.5 w-6 h-1.5 bg-emerald-950 rounded-sm overflow-hidden p-[1px]">
+                  <span
+                    className={`h-full rounded-[0.5px] transition-all duration-100 ${
+                      audioLevel > 70 ? "bg-rose-500" : audioLevel > 35 ? "bg-amber-400" : "bg-emerald-400"
+                    }`}
+                    style={{ width: `${Math.max(5, audioLevel)}%` }}
+                  />
+                </span>
+              </span>
+            )}
+            {isSoloAudio && (
+              <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
+                SOLO AUDIO
               </span>
             )}
           </div>
@@ -463,15 +610,27 @@ function CameraTileComponent({
           )}
           <button
             type="button"
-            aria-label={isMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio (Listening)"}
-            title={isMuted ? "Click to hear live audio from camera" : "Camera audio listening is active. Click to mute."}
-            className={!isMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
-            onClick={() => setIsMuted(!isMuted)}
+            aria-label={effectiveMuted ? "Unmute audio (Listen to camera)" : "Mute camera audio (Listening)"}
+            title={effectiveMuted ? "Click to hear live audio from camera" : "Camera audio listening is active. Click to mute."}
+            className={!effectiveMuted ? "audio-listening-active text-emerald-400 border-emerald-500/60 shadow-[0_0_8px_rgba(16,185,129,0.35)]" : ""}
+            onClick={() => setIsMuted(!effectiveMuted)}
             disabled={!canPlayLive}
             onDoubleClick={() => setShowAudioDiagnostic(true)}
           >
-            {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
+            {effectiveMuted ? <VolumeX size={15} /> : <Volume2 size={15} className="text-emerald-400" />}
           </button>
+          {onSoloAudio && (
+            <button
+              type="button"
+              aria-label="Solo Audio"
+              title={isSoloAudio ? "Solo Audio is Active (Click to unmute all)" : "Solo Audio: Mute all other cameras and isolate this stream"}
+              className={isSoloAudio ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : ""}
+              onClick={() => onSoloAudio(camera.id)}
+              disabled={!canPlayLive}
+            >
+              <Headphones size={15} />
+            </button>
+          )}
           <HoldToTalkButton
             cameraId={camera.id}
             disabled={!canPlayLive}
@@ -506,6 +665,17 @@ function CameraTileComponent({
             disabled={!canPlayLive}
           >
             <Tv size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Pop-out camera stream"
+            title="Pop-out stream into a detached window for multi-monitor display"
+            onClick={() => {
+              const popoutUrl = `/control-room?detached=true&cameraId=${encodeURIComponent(camera.id)}`;
+              window.open(popoutUrl, `camera_detached_${camera.id}`, "width=1280,height=720,menubar=no,toolbar=no,location=no,status=no");
+            }}
+          >
+            <ExternalLink size={15} />
           </button>
           <button
             type="button"

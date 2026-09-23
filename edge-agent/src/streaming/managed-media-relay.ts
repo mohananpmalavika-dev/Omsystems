@@ -1,0 +1,95 @@
+import { WebSocket } from "ws";
+import { logger } from "../utils/logger.js";
+
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
+const MAX_CONCURRENT = 32;
+
+type RelayRequest = { id: string; method: string; path: string; headers?: Record<string, string>; body?: string };
+
+/** The connector only dials the HTTPS control plane and only fetches loopback media. */
+export function startManagedMediaRelay(publicUrl: string, agentId: string, credential: string, localPort: number) {
+  const endpoint = new URL(publicUrl);
+  if (endpoint.protocol !== "https:" && endpoint.hostname !== "localhost" && endpoint.hostname !== "127.0.0.1") {
+    throw new Error("managed_media_relay_requires_https");
+  }
+  endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
+  endpoint.pathname = `/v1/edge-media/connect/${encodeURIComponent(agentId)}`;
+  endpoint.search = "";
+  let stopped = false;
+  let socket: WebSocket | undefined;
+  let reconnect: NodeJS.Timeout | undefined;
+  let inFlight = 0;
+
+  const connect = () => {
+    if (stopped) return;
+    socket = new WebSocket(endpoint, { headers: { "x-edge-agent-token": credential }, maxPayload: 12 * 1024 * 1024 });
+    const current = socket;
+    current.on("open", () => logger.info("Self-hosted media relay connected", { agentId }));
+    current.on("message", (raw) => {
+      let frame: RelayRequest;
+      try { frame = JSON.parse(raw.toString()) as RelayRequest; } catch { current.close(1003, "invalid frame"); return; }
+      if (!frame || typeof frame.id !== "string" || typeof frame.path !== "string" || typeof frame.method !== "string") {
+        current.close(1003, "invalid request"); return;
+      }
+      if (inFlight >= MAX_CONCURRENT) {
+        current.send(JSON.stringify({ id: frame.id, status: 503, body: Buffer.from('{"error":"edge_media_busy"}').toString("base64") }));
+        return;
+      }
+      inFlight++;
+      void handleRequest(frame, localPort).then((response) => {
+        if (current.readyState === WebSocket.OPEN) current.send(JSON.stringify({ id: frame.id, ...response }));
+      }).catch((error) => {
+        logger.warn("Self-hosted media relay request failed", { error: error instanceof Error ? error.message : String(error) });
+        if (current.readyState === WebSocket.OPEN) current.send(JSON.stringify({ id: frame.id, status: 502, body: Buffer.from('{"error":"local_media_unavailable"}').toString("base64") }));
+      }).finally(() => { inFlight--; });
+    });
+    current.on("error", (error) => logger.warn("Self-hosted media relay connection error", { error: error.message }));
+    current.on("close", () => {
+      if (socket === current) socket = undefined;
+      if (!stopped) reconnect = setTimeout(connect, 3_000);
+    });
+  };
+  connect();
+  return {
+    stop() {
+      stopped = true;
+      if (reconnect) clearTimeout(reconnect);
+      socket?.terminate();
+    },
+  };
+}
+
+async function handleRequest(frame: RelayRequest, localPort: number) {
+  if (!frame.path.startsWith("/") || frame.path.startsWith("//") || frame.path.includes("..") || Buffer.byteLength(frame.body ?? "", "base64") > MAX_BODY_BYTES) {
+    return { status: 400, body: Buffer.from('{"error":"invalid_relay_request"}').toString("base64") };
+  }
+  const pathname = new URL(frame.path, "http://edge.local").pathname;
+  const method = frame.method;
+  const allowed = pathname === "/health" && ["GET", "HEAD"].includes(method)
+    || pathname === "/v1/live/start" && method === "POST"
+    || /^\/v1\/live\/[a-zA-Z0-9_-]+$/.test(pathname) && method === "DELETE"
+    || pathname === "/v1/talk/start" && method === "POST"
+    || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(pathname) && ["POST", "DELETE"].includes(method)
+    || /^\/hls\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(pathname) && ["GET", "HEAD", "OPTIONS"].includes(method);
+  if (!allowed) return { status: 404, body: Buffer.from('{"error":"not_found"}').toString("base64") };
+  const headers: Record<string, string> = {};
+  for (const name of ["authorization", "content-type", "range", "accept"]) {
+    const value = frame.headers?.[name];
+    if (typeof value === "string") headers[name] = value;
+  }
+  const body = frame.body ? Buffer.from(frame.body, "base64") : undefined;
+  const response = await fetch(`http://127.0.0.1:${localPort}${frame.path}`, {
+    method: frame.method,
+    headers,
+    ...(body ? { body } : {}),
+    signal: AbortSignal.timeout(35_000),
+  });
+  const payload = Buffer.from(await response.arrayBuffer());
+  if (payload.length > MAX_BODY_BYTES) return { status: 502, body: Buffer.from('{"error":"media_response_too_large"}').toString("base64") };
+  const responseHeaders: Record<string, string> = {};
+  for (const name of ["content-type", "cache-control", "accept-ranges", "content-range", "access-control-allow-origin", "access-control-allow-headers", "access-control-allow-methods", "vary"]) {
+    const value = response.headers.get(name);
+    if (value) responseHeaders[name] = value;
+  }
+  return { status: response.status, headers: responseHeaders, body: payload.toString("base64") };
+}

@@ -198,7 +198,6 @@ export function HlsPlayer({
             manifestLoadingMaxRetry: 4,
             // Fix: MediaMTX fMP4 playlists may omit EXT-X-PROGRAM-DATE-TIME,
             // causing hls.js to throw 'Cannot read properties of undefined (reading programDateTime)'
-            enableDateRanges: false,
             xhrSetup: (xhr, requestUrl) => {
               const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
               if (isSameOrigin) {

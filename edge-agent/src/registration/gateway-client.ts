@@ -188,9 +188,9 @@ export interface DiscoveryBootstrap {
 export interface GatewayMediaBootstrap {
   enabled: true;
   managed: true;
-  mode: "named";
+  mode: "named" | "relay";
   publicUrl: string;
-  tunnelToken: string;
+  tunnelToken?: string;
   status: "inactive" | "healthy" | "degraded" | "down" | "unknown";
 }
 
@@ -215,6 +215,7 @@ export class GatewayClient {
   ) {}
 
   useEdgeCredential(credential: string) { this.edgeCredential = credential; }
+  getEdgeCredential() { return this.edgeCredential; }
 
   async activate(activationCode: string, deviceUuid: string, version: string, commandPublicKey: string) {
     return this.request<{

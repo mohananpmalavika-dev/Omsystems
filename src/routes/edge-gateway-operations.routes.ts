@@ -46,6 +46,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     artifactRoot?: string;
     tunnelProvider?: ManagedEdgeTunnelProvider;
     requireManagedTunnel?: boolean;
+    relayEnabled?: boolean;
   } = {},
 ) {
   const updateForAgent = async (edgeAgentId: string, currentVersion: string, allowPackagedFallback = true) => {
@@ -66,14 +67,14 @@ export async function registerEdgeGatewayOperationsRoutes(
       // retaining the existing 24-hour hard limit and single-use semantics.
       ttlMinutes: z.number().int().min(5).max(1440).default(1440),
     }).parse(request.body ?? {});
-    if (options.requireManagedTunnel && !options.tunnelProvider) {
+    if (options.requireManagedTunnel && !options.relayEnabled && !options.tunnelProvider) {
       return reply.code(503).send({
         error: "managed_tunnel_not_configured",
         message: "Configure the Cloudflare account, zone, API token, and media domain before enrolling production gateways.",
       });
     }
     let tunnel = await store.getEdgeManagedTunnel(branchId);
-    if (options.tunnelProvider && (!tunnel || tunnel.status === "revoked")) {
+    if (!options.relayEnabled && options.tunnelProvider && (!tunnel || tunnel.status === "revoked")) {
       try {
         const branch = await store.getNode(branchId);
         if (!branch) return reply.code(404).send({ error: "branch_not_found" });
@@ -98,7 +99,12 @@ export async function registerEdgeGatewayOperationsRoutes(
       bootstrap: {
         controlPlaneUrl: options.controlPlanePublicUrl ?? "",
         message: "This one-time code is shown once and is consumed automatically by the gateway.",
-        media: tunnel ? {
+        media: options.relayEnabled ? {
+          managed: true,
+          mode: "relay",
+          tunnelStatus: "available",
+          credentialsDeliveredTo: "gateway-only",
+        } : tunnel ? {
           managed: true,
           mode: "named",
           publicUrl: `https://${tunnel.hostname}`,
@@ -126,11 +132,10 @@ export async function registerEdgeGatewayOperationsRoutes(
         tokenHash: hashSecret(body.activationCode), credentialHash: hashSecret(credential),
         deviceUuid: body.deviceUuid, version: body.version, commandPublicKey: body.commandPublicKey,
       });
-      const media = await managedGatewayMediaBootstrap(
-        store,
-        options.tunnelProvider,
-        enrollment.agent.branchId,
-      ).catch((error) => {
+      const media = options.relayEnabled && options.controlPlanePublicUrl
+        ? { enabled: true as const, managed: true as const, mode: "relay" as const,
+          publicUrl: new URL(`/v1/edge-media/${enrollment.agent.id}`, options.controlPlanePublicUrl).toString(), status: "inactive" as const }
+        : await managedGatewayMediaBootstrap(store, options.tunnelProvider, enrollment.agent.branchId).catch((error) => {
         app.log.error({ err: error, branchId: enrollment.agent.branchId }, "Gateway media bootstrap delivery failed");
         return undefined;
       });
@@ -164,7 +169,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
     const revoked = await store.revokeEdgeAgentCredential(id);
     const tunnel = await store.getEdgeManagedTunnel(branchId);
-    if (tunnel && options.tunnelProvider) {
+    if (!options.relayEnabled && tunnel && options.tunnelProvider) {
       await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
       await store.updateEdgeManagedTunnelStatus(branchId, "revoked");
     }
@@ -245,7 +250,7 @@ export async function registerEdgeGatewayOperationsRoutes(
       // 500 response that encourages the operator to retry it.
       try {
         const tunnel = await store.getEdgeManagedTunnel(agent.branchId);
-        if (tunnel && options.tunnelProvider) {
+        if (!options.relayEnabled && tunnel && options.tunnelProvider) {
           await options.tunnelProvider.revoke(tunnel.providerTunnelId, tunnel.hostname);
           await store.updateEdgeManagedTunnelStatus(agent.branchId, "revoked");
         }
@@ -283,7 +288,10 @@ export async function registerEdgeGatewayOperationsRoutes(
     const { id } = agentParams.parse(request.params);
     const agent = await store.getEdgeAgent(id);
     if (!agent) return reply.code(404).send({ error: "edge_agent_not_found" });
-    const media = await managedGatewayMediaBootstrap(store, options.tunnelProvider, agent.branchId);
+    const media = options.relayEnabled && options.controlPlanePublicUrl
+      ? { enabled: true as const, managed: true as const, mode: "relay" as const,
+        publicUrl: new URL(`/v1/edge-media/${id}`, options.controlPlanePublicUrl).toString(), status: "inactive" as const }
+      : await managedGatewayMediaBootstrap(store, options.tunnelProvider, agent.branchId);
     return reply.header("cache-control", "no-store").send({
       controlPlaneUrl: options.controlPlanePublicUrl ?? "",
       ...(media ? { media } : {}),

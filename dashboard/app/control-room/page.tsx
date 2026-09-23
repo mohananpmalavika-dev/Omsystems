@@ -314,6 +314,8 @@ const PATROL_STAGES = [
 function ControlRoomContent() {
   const searchParams = useSearchParams();
   const urlBranchId = searchParams?.get("branchId") || searchParams?.get("branch") || null;
+  const isDetached = searchParams?.get("detached") === "true";
+  const detachedCameraId = searchParams?.get("cameraId");
 
   const [cameras, setCameras] = useState<CameraType[]>([]);
   const [priorityCameraIds, setPriorityCameraIds] = useState<string[]>([]);
@@ -754,6 +756,59 @@ function ControlRoomContent() {
           }
         `}</style>
       </div>
+    );
+  }
+
+  if (isDetached && detachedCameraId) {
+    const detachedCam = cameras.find((c) => c.id === detachedCameraId);
+    return (
+      <main className="detached-control-room" style={{ width: "100vw", height: "100vh", background: "#050b14", display: "flex", flexDirection: "column", overflow: "hidden", color: "#f8fafc" }}>
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 16px", background: "rgba(10, 20, 35, 0.95)", borderBottom: "1px solid rgba(255, 255, 255, 0.08)", zIndex: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#10b981", boxShadow: "0 0 8px #10b981" }} />
+            <h1 style={{ fontSize: "14px", fontWeight: 700, margin: 0, letterSpacing: "0.5px" }}>
+              {detachedCam?.name || `Camera Feed (${detachedCameraId})`}
+            </h1>
+            {detachedCam?.branchName && (
+              <span style={{ fontSize: "12px", color: "#94a3b8", background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: "4px" }}>
+                {detachedCam.branchName}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span style={{ fontSize: "11px", color: "#64748b", fontFamily: "monospace" }}>
+              DETACHED DUAL-MONITOR SURVEILLANCE
+            </span>
+            <button
+              type="button"
+              onClick={() => window.close()}
+              style={{ background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", color: "#f87171", padding: "4px 10px", borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}
+            >
+              Close Window
+            </button>
+          </div>
+        </header>
+        <div style={{ flex: 1, minHeight: 0, padding: "8px" }}>
+          {detachedCam ? (
+            <EnhancedCameraGrid
+              cameras={[detachedCam]}
+              initialLayout={{
+                name: "Detached",
+                gridSize: "1x1",
+                positions: [{ position: 0, cameraId: detachedCam.id, stream: "main" }],
+              }}
+              enableGPUAcceleration={true}
+              presentationMode="LIVE_MONITORING"
+              aiByCamera={aiByCamera}
+              showAiOverlay={showAiOverlays}
+            />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#94a3b8" }}>
+              <RefreshCw size={24} className="spin" style={{ marginRight: 8 }} /> Loading camera stream ({detachedCameraId})...
+            </div>
+          )}
+        </div>
+      </main>
     );
   }
 

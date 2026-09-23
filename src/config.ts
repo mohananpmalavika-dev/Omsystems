@@ -20,6 +20,8 @@ const configSchema = z.object({
   EDGE_PRESENCE_TTL_SECONDS: z.coerce.number().int().min(15).max(600).default(90),
   EDGE_MANAGED_TUNNEL_REQUIRED: z.enum(["true", "false"]).default("false")
     .transform((value) => value === "true"),
+  EDGE_MEDIA_RELAY_ENABLED: z.enum(["true", "false"]).default("false")
+    .transform((value) => value === "true"),
   CLOUDFLARE_ACCOUNT_ID: z.preprocess(
     (value) => value === "" ? undefined : value,
     z.string().regex(/^[a-f0-9]{32}$/i).optional(),
@@ -82,7 +84,7 @@ const configSchema = z.object({
       context.addIssue({ code: "custom", path: [name], message: "placeholder secret/value is forbidden in production" });
     }
   }
-  if (config.EDGE_MANAGED_TUNNEL_REQUIRED && !(
+  if (config.EDGE_MANAGED_TUNNEL_REQUIRED && !config.EDGE_MEDIA_RELAY_ENABLED && !(
     config.CLOUDFLARE_ACCOUNT_ID && config.CLOUDFLARE_ZONE_ID &&
     config.CLOUDFLARE_API_TOKEN && config.EDGE_MEDIA_BASE_DOMAIN
   )) {
@@ -105,6 +107,9 @@ const configSchema = z.object({
       path: ["CONTROL_PLANE_PUBLIC_URL"],
       message: "CONTROL_PLANE_PUBLIC_URL must use HTTPS in production",
     });
+  }
+  if (config.EDGE_MEDIA_RELAY_ENABLED && !config.CONTROL_PLANE_PUBLIC_URL) {
+    context.addIssue({ code: "custom", path: ["CONTROL_PLANE_PUBLIC_URL"], message: "Self-hosted media relay requires a public HTTPS control-plane URL" });
   }
 });
 

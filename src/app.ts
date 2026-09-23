@@ -110,6 +110,7 @@ import { registerEdgeAgentPackageRoutes } from "./routes/edge-agent-package.rout
 import { registerEdgeDiscoveryBootstrapRoutes } from "./routes/edge-discovery-bootstrap.routes.js";
 import { registerEdgeLifecycleRoutes } from "./routes/edge-lifecycle.routes.js";
 import { registerEdgeGatewayOperationsRoutes } from "./routes/edge-gateway-operations.routes.js";
+import { registerEdgeMediaRelay } from "./services/edge-media-relay.js";
 import { registerOperationalHealthRoutes } from "./routes/operational-health.routes.js";
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
@@ -518,6 +519,7 @@ export async function buildApp(options?: {
   edgePresenceCache?: EdgePresenceCacheContract;
   edgeTunnelProvider?: ManagedEdgeTunnelProvider;
   requireManagedEdgeTunnel?: boolean;
+  edgeMediaRelayEnabled?: boolean;
   /** Optional edge/vendor provider resolver for on-demand recorder operations. */
   recorderProviderResolver?: RecorderProviderResolver;
   /** Optional device configuration service orchestrator. */
@@ -705,6 +707,7 @@ export async function buildApp(options?: {
       const url = req.url;
       return (
         url === "/health" ||
+        url.startsWith("/v1/edge-media/") ||
         url === "/live" ||
         url === "/ready" ||
         url === "/capabilities" ||
@@ -855,6 +858,10 @@ export async function buildApp(options?: {
     ];
     const isPublicAuthRoute = publicAuthPaths.some((path) => request.url.startsWith(path));
 
+    // Relay requests are bounded by the per-agent connection limit and the
+    // gateway's one-use/live bearer tokens; login throttling breaks HLS.
+    if (request.url.startsWith("/v1/edge-media/") &&
+        (request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) return;
     if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth || isPublicAuthRoute) {
       await loginRateLimiter.middleware()(request, reply);
       return;
@@ -2513,7 +2520,9 @@ export async function buildApp(options?: {
     artifactRoot: options?.edgeAgentArtifactRoot,
     tunnelProvider: options?.edgeTunnelProvider,
     requireManagedTunnel: options?.requireManagedEdgeTunnel,
+    relayEnabled: options?.edgeMediaRelayEnabled,
   });
+  if (options?.edgeMediaRelayEnabled) registerEdgeMediaRelay(app, store);
   await registerEdgeAgentPackageRoutes(app, store, {
     controlPlanePublicUrl: options?.controlPlanePublicUrl ?? process.env.CONTROL_PLANE_PUBLIC_URL,
     edgeBridgeSharedKey: options?.edgeBridgeSharedKey ?? process.env.EDGE_BRIDGE_SHARED_KEY,

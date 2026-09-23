@@ -52,7 +52,8 @@ export async function releaseLiveSession(session: LiveSessionResponse | undefine
     const bearerToken = session.hls?.bearerToken ?? session.webRtc?.bearerToken;
     if (!mediaUrl || !bearerToken) return;
     const source = new URL(mediaUrl);
-    const releaseUrl = `${source.origin}/v1/live/${encodeURIComponent(session.sessionId)}`;
+    const relayPrefix = source.pathname.match(/^\/v1\/edge-media\/[0-9a-f-]{36}/)?.[0] ?? "";
+    const releaseUrl = `${source.origin}${relayPrefix}/v1/live/${encodeURIComponent(session.sessionId)}`;
     await fetch(releaseUrl, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${bearerToken}` },

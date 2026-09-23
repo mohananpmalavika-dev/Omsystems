@@ -1,0 +1,69 @@
+import { createHash } from "node:crypto";
+import { createServer, type Server } from "node:http";
+import Fastify from "fastify";
+import { afterEach, describe, expect, it } from "vitest";
+import type { ControlPlaneStore } from "../src/control-plane-store.js";
+import { registerEdgeMediaRelay } from "../src/services/edge-media-relay.js";
+import { startManagedMediaRelay } from "../edge-agent/src/streaming/managed-media-relay.js";
+
+const agentId = "c8921284-3240-4bd5-8d73-21acbe7eef11";
+const credential = "sggw_" + "a".repeat(43);
+
+describe("self-hosted edge media relay", () => {
+  const cleanup: Array<() => Promise<void>> = [];
+  afterEach(async () => {
+    for (const close of cleanup.splice(0).reverse()) await close();
+  });
+
+  it("forwards health and protected HLS over an outbound edge connection", async () => {
+    const local: Server = createServer((request, response) => {
+      if (request.url === "/health") {
+        response.setHeader("content-type", "application/json");
+        response.end('{"status":"ok"}');
+        return;
+      }
+      if (request.url === "/hls/camera-1/index.m3u8" && request.headers.authorization === "Bearer session-token") {
+        response.setHeader("content-type", "application/vnd.apple.mpegurl");
+        response.end("#EXTM3U\n#EXTINF:1,\nsegment1.mp4\n");
+        return;
+      }
+      response.statusCode = 401;
+      response.end('{"error":"media_access_denied"}');
+    });
+    await new Promise<void>((resolve) => local.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise<void>((resolve) => local.close(() => resolve())));
+    const localAddress = local.address();
+    if (!localAddress || typeof localAddress === "string") throw new Error("local listener unavailable");
+
+    const app = Fastify();
+    registerEdgeMediaRelay(app, {
+      verifyEdgeAgentCredential: async (id: string, hash: string) =>
+        id === agentId && hash === createHash("sha256").update(credential).digest("hex"),
+    } as unknown as ControlPlaneStore);
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    cleanup.push(() => app.close());
+    const publicUrl = `${address}/v1/edge-media/${agentId}`;
+    const offline = await fetch(`${publicUrl}/health`);
+    expect(offline.status).toBe(503);
+
+    const relay = startManagedMediaRelay(publicUrl, agentId, credential, localAddress.port);
+    cleanup.push(async () => relay.stop());
+    let ready = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const result = await fetch(`${publicUrl}/health`);
+      if (result.ok) { ready = true; break; }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    expect(ready).toBe(true);
+
+    const unauthorized = await fetch(`${publicUrl}/hls/camera-1/index.m3u8`);
+    expect(unauthorized.status).toBe(401);
+    const authorized = await fetch(`${publicUrl}/hls/camera-1/index.m3u8`, {
+      headers: { authorization: "Bearer session-token" },
+    });
+    expect(authorized.status).toBe(200);
+    expect(await authorized.text()).toContain("#EXTM3U");
+    const forbidden = await fetch(`${publicUrl}/internal/mediamtx/auth`);
+    expect(forbidden.status).toBe(404);
+  });
+});
