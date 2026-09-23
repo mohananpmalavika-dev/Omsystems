@@ -704,7 +704,7 @@ export class CameraRepository {
     const row = route.rows[0];
     let activeAgent = row;
     const lastSeenMs = row?.last_seen_at ? new Date(row.last_seen_at).getTime() : 0;
-    const isStale = (Date.now() - lastSeenMs) > 5 * 60 * 1000;
+    const isStale = (Date.now() - lastSeenMs) > 60 * 60 * 1000;
     if (!row?.edge_agent_id || row.agent_status === "offline" || isStale || !row.agent_id) {
       // Auto-heal: Check if the camera's branch has an active online gateway
         const fallbackAgent = await this.pool.query<{
@@ -719,7 +719,7 @@ export class CameraRepository {
            JOIN cameras c ON c.branch_node_id = agent.branch_node_id
            WHERE (c.id::text = $1 OR c.resource_node_id::text = $1)
              AND agent.credential_revoked_at IS NULL
-             AND agent.last_seen_at >= now() - interval '5 minutes'
+             AND agent.last_seen_at >= now() - interval '60 minutes'
            ORDER BY agent.last_seen_at DESC
            LIMIT 1`,
           [targetCameraId],
@@ -749,7 +749,7 @@ export class CameraRepository {
         } else {
           // Do not fail live session creation when branch edge agent is offline.
           // Allow control plane to issue session token so cloud media-gateway can serve standby video.
-          activeAgent = undefined;
+          activeAgent = row?.public_media_url ? row : undefined;
         }
       }
 
@@ -763,9 +763,9 @@ export class CameraRepository {
        VALUES ($1, $2::uuid, $3, $4, $5, $6)`,
       [id, targetCameraId, userId, tokenHash, expiresAt, purpose],
     );
-    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 5 * 60 * 1000);
-    const mediaGatewayUrl = (isAgentRecent && activeAgent?.agent_status === "online")
-      ? (activeAgent.public_media_url || undefined)
+    const isAgentRecent = activeAgent?.last_seen_at && (Date.now() - new Date(activeAgent.last_seen_at).getTime() < 60 * 60 * 1000);
+    const mediaGatewayUrl = (activeAgent?.public_media_url && (activeAgent.agent_status === "online" || isAgentRecent))
+      ? activeAgent.public_media_url
       : undefined;
     const localMediaGatewayUrl = activeAgent?.local_media_url ?? undefined;
     return {

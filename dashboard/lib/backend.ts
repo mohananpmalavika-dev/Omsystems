@@ -122,7 +122,8 @@ export async function startLive(
     // VPN. Give it the camera-specific local route first; the browser client
     // enforces HTTPS/mixed-content policy and requests a fresh public route
     // when that address is not usable from its current network.
-    if (routePreference === "auto" && localMediaGatewayUrl) {
+    const hasSecureTunnel = isHttpsUrl(sessionMediaGatewayUrl ?? publicMediaGatewayUrl);
+    if (routePreference === "auto" && localMediaGatewayUrl && (!isProduction || isHttpsUrl(localMediaGatewayUrl) || !hasSecureTunnel)) {
       const direct: DirectLiveGateway = {
         url: new URL("/v1/live/start", normalizeHttpOrigin(localMediaGatewayUrl)).toString(),
         controlPlaneToken: controlSession.token,
@@ -140,20 +141,8 @@ export async function startLive(
     const defaultMediaGateway = isProduction ? "http://media-gateway:8090" : "http://localhost:8090";
     const internalMediaGateway = runtimeEnv("MEDIA_GATEWAY_INTERNAL_URL", defaultMediaGateway);
     const primaryGateway = routePreference === "public"
-      ? publicMediaGatewayUrl ?? internalMediaGateway
+      ? publicMediaGatewayUrl ?? sessionMediaGatewayUrl ?? internalMediaGateway
       : controlSession.mediaGatewayUrl ?? internalMediaGateway;
-
-    const isCloudflareQuickTunnel = primaryGateway.includes("trycloudflare.com");
-    if (routePreference === "auto" && controlSession.mediaGatewayUrl &&
-        isBrowserDirectMediaUrl(primaryGateway) && (!isProduction || (isHttpsUrl(primaryGateway) && !isCloudflareQuickTunnel))) {
-      return {
-        cameraId,
-        direct: {
-          url: new URL("/v1/live/start", normalizeHttpOrigin(primaryGateway)).toString(),
-          controlPlaneToken: controlSession.token,
-        },
-      };
-    }
 
     const gatewayCandidates = [
       primaryGateway,

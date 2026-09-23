@@ -13,7 +13,7 @@ authHTTPExclude:
 hls: yes
 hlsAddress: :8888
 # Low-latency buffer depth: 3 segments × 1s = ~3s total buffer
-hlsVariant: mpegts
+hlsVariant: fmp4
 hlsSegmentCount: 3
 hlsSegmentDuration: 1s
 hlsPartDuration: 200ms
@@ -33,12 +33,6 @@ pathDefaults:
   # Keep the RTSP connection alive for 3 minutes after the last viewer
   # leaves to avoid cold-start 500s on quick reconnect.
   sourceOnDemandCloseAfter: 180s
-  
-  # Audio transcoding for browser HLS compatibility
-  # Cameras often send G.711 (PCMU/PCMA) which browsers cannot play
-  # This FFmpeg hook transcodes audio to AAC for browser playback while keeping video as-is
-  runOnReady: ffmpeg -fflags nobuffer -flags low_delay -rtsp_transport tcp -i rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH -c:v copy -c:a aac -b:a 128k -ar 48000 -ac 2 -f rtsp -rtsp_transport tcp rtsp://127.0.0.1:$RTSP_PORT/$MTX_PATH
-  runOnReadyRestart: yes
 
 paths: {}
 
