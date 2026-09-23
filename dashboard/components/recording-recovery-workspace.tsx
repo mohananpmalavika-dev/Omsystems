@@ -267,7 +267,7 @@ export function RecordingRecoveryWorkspace() {
         <div className="p-4 rounded-xl bg-red-950/40 border border-red-800/60 text-red-300 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
-            <span className="text-sm">{actionError}</span>
+            <span className="text-sm">{typeof actionError === "string" ? actionError : JSON.stringify(actionError)}</span>
           </div>
           <button onClick={() => setActionError(null)} className="text-red-400 hover:text-red-200">
             <X className="h-4 w-4" />

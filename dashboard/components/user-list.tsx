@@ -207,7 +207,7 @@ export function UserList({
 
       {error && (
         <div className="error-state">
-          <p>{error}</p>
+          <p>{typeof error === "string" ? error : JSON.stringify(error)}</p>
           <button onClick={loadUsers} className="retry-button">
             Retry
           </button>

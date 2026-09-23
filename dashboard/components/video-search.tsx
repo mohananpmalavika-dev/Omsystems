@@ -185,7 +185,7 @@ export function VideoSearch() {
         {error && (
           <div className="error-banner">
             <AlertTriangle size={16} />
-            {error}
+            <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
             <button onClick={() => setError(null)}>
               <X size={14} />
             </button>

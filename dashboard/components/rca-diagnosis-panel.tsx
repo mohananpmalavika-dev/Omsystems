@@ -295,7 +295,7 @@ export function RCADiagnosisPanel({ diagnosis }: { diagnosis: RCADiagnosis | nul
                 {diagnosis.evidenceMatrix.missing.map((item, index) => (
                   <li key={index} className="flex gap-2">
                     <span className="text-amber-400">•</span>
-                    <span>{item}</span>
+                    <span>{typeof item === "string" ? item : JSON.stringify(item)}</span>
                   </li>
                 ))}
               </ul>

@@ -554,7 +554,7 @@ export function VideoBookmarksWorkspace() {
       {error && (
         <div className="p-4 rounded-xl bg-red-950/50 border border-red-800 text-red-200 text-sm flex items-center gap-3">
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-          <span>{error}</span>
+          <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
         </div>
       )}
 

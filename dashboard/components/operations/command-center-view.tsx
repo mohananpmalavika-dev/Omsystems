@@ -366,7 +366,7 @@ export function CommandCenterView() {
 
       {loadError && (
         <div className="p-3 rounded-xl border border-rose-800/60 bg-rose-950/30 text-sm text-rose-200" role="alert">
-          Live fleet data could not be refreshed: {loadError}. {summary || hasBranchData ? "Showing the last confirmed values." : "Retry when the connection is restored."}
+          Live fleet data could not be refreshed: {typeof loadError === "string" ? loadError : JSON.stringify(loadError)}. {summary || hasBranchData ? "Showing the last confirmed values." : "Retry when the connection is restored."}
         </div>
       )}
 

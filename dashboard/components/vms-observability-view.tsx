@@ -93,7 +93,7 @@ export function VmsObservabilityView() {
 
   return (
     <div className="space-y-6">
-      {error && <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200"><AlertTriangle size={18} /> {error}. Verify metrics endpoint and connectivity.</div>}
+      {error && <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/20 p-4 text-sm text-rose-200"><AlertTriangle size={18} /> {typeof error === "string" ? error : JSON.stringify(error)}. Verify metrics endpoint and connectivity.</div>}
 
       {/* Operational Trust Banner */}
       <div className="rounded-xl border border-blue-500/30 bg-blue-950/20 p-4">

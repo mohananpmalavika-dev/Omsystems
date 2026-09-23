@@ -165,13 +165,16 @@ export function EdgeFleetManager() {
 
       if (agRes.ok && agData?.success && Array.isArray(agData.data)) {
         setAgents(agData.data);
-      } else if (!agRes.ok && agData?.error) {
-        setFetchError(agData.message || agData.error);
+      } else if (!agRes.ok) {
+        const rawMsg = agData?.message || agData?.error;
+        const msg = typeof rawMsg === "string" ? rawMsg : (rawMsg?.message && typeof rawMsg.message === "string" ? rawMsg.message : "Failed to load edge gateways");
+        setFetchError(msg);
       }
 
       setLastUpdated(new Date());
     } catch (err: any) {
-      setFetchError(err?.message || "Failed to reach edge fleet control plane");
+      const msg = typeof err?.message === "string" ? err.message : "Failed to reach edge fleet control plane";
+      setFetchError(msg);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -539,7 +542,7 @@ export function EdgeFleetManager() {
         <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs font-medium flex items-center justify-between animate-in fade-in">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{actionError}</span>
+            <span>{typeof actionError === "string" ? actionError : JSON.stringify(actionError)}</span>
           </div>
           <button onClick={() => setActionError(null)} className="text-slate-400 hover:text-white p-1">
             <X className="w-4 h-4" />
@@ -551,7 +554,7 @@ export function EdgeFleetManager() {
         <div className="p-3.5 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-200 text-xs font-medium flex items-center justify-between animate-in fade-in">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-            <span>{fetchError}</span>
+            <span>{typeof fetchError === "string" ? fetchError : JSON.stringify(fetchError)}</span>
           </div>
           <button onClick={() => setFetchError(null)} className="text-slate-400 hover:text-white p-1">
             <X className="w-4 h-4" />

@@ -496,7 +496,7 @@ export function VoiceEnrollmentCard() {
             <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <strong className="font-semibold block">Enrollment Notice</strong>
-              <p className="mt-0.5 text-xs text-red-800 dark:text-red-300">{error}</p>
+              <p className="mt-0.5 text-xs text-red-800 dark:text-red-300">{typeof error === "string" ? error : JSON.stringify(error)}</p>
             </div>
           </div>
         )}

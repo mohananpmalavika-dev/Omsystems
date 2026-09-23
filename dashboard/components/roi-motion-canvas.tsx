@@ -225,7 +225,7 @@ export function RoiMotionCanvas({
       {errorMessage && (
         <div className="absolute bottom-2 left-2 z-20 flex items-center gap-1.5 bg-red-950/90 text-red-300 border border-red-800 px-2.5 py-1 rounded text-xs">
           <AlertCircle className="w-3.5 h-3.5" />
-          {errorMessage}
+          <span>{typeof errorMessage === "string" ? errorMessage : JSON.stringify(errorMessage)}</span>
         </div>
       )}
     </div>

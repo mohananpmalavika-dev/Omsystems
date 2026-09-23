@@ -970,11 +970,13 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         setInfo("Facial biometric verification required. Please face the camera.");
         return;
       }
-      setError(
+      const rawMsg =
         err.response?.data?.message ||
-          err.details?.message ||
-          err.message ||
-          "Invalid username or password"
+        err.details?.message ||
+        err.message ||
+        "Invalid username or password";
+      setError(
+        typeof rawMsg === "string" ? rawMsg : (typeof rawMsg === "object" ? JSON.stringify(rawMsg) : String(rawMsg))
       );
     } finally {
       setLoading(false);
@@ -1015,11 +1017,13 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
       }
     } catch (err: any) {
       console.error("Password change failed:", err);
-      setError(
+      const rawMsg =
         err.response?.data?.message ||
-          err.details?.message ||
-          err.message ||
-          "Failed to change password"
+        err.details?.message ||
+        err.message ||
+        "Failed to change password";
+      setError(
+        typeof rawMsg === "string" ? rawMsg : (typeof rawMsg === "object" ? JSON.stringify(rawMsg) : String(rawMsg))
       );
     } finally {
       setLoading(false);
@@ -1048,14 +1052,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           {error && (
             <div className="login-error" role="alert">
               <AlertCircle size={16} />
-              <span>{error}</span>
+              <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
             </div>
           )}
 
           {info && (
             <div className="login-info" role="status">
               <Info size={16} />
-              <span>{info}</span>
+              <span>{typeof info === "string" ? info : JSON.stringify(info)}</span>
             </div>
           )}
 
@@ -1181,14 +1185,14 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         {error && (
           <div className="login-error" role="alert">
             <AlertCircle size={16} />
-            <span>{error}</span>
+            <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
           </div>
         )}
 
         {info && (
           <div className="login-info" role="status">
             <Info size={16} />
-            <span>{info}</span>
+            <span>{typeof info === "string" ? info : JSON.stringify(info)}</span>
           </div>
         )}
 

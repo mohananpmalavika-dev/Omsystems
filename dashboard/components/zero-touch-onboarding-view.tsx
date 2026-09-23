@@ -234,7 +234,11 @@ function handleApiError(error: unknown): ApiError {
     return { message: error.message };
   }
   if (typeof error === "object" && error !== null && "message" in error) {
-    return error as ApiError;
+    const msg = (error as any).message;
+    return { message: typeof msg === "string" ? msg : JSON.stringify(msg) };
+  }
+  if (typeof error === "string") {
+    return { message: error };
   }
   return { message: "An unexpected error occurred" };
 }
@@ -996,7 +1000,7 @@ Write-Host "================================================================" -F
                 <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-semibold">Error Loading Fleet Data</div>
-                  <div className="text-sm text-rose-300 mt-1">{error.message}</div>
+                  <div className="text-sm text-rose-300 mt-1">{typeof error.message === "string" ? error.message : JSON.stringify(error.message)}</div>
                 </div>
               </div>
               <button

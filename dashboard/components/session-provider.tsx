@@ -167,13 +167,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   return <>
     {!isPublicRoute && connectionError && (
       <div role="alert" className="border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        {connectionError} Your session is preserved while we retry.
+        {typeof connectionError === "string" ? connectionError : JSON.stringify(connectionError)} Your session is preserved while we retry.
         <button type="button" className="ml-3 font-semibold underline underline-offset-2" onClick={() => setRetry((value) => value + 1)}>Retry now</button>
       </div>
     )}
     {!isPublicRoute && apiError && (
       <div role="alert" className="flex items-start justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-        <span>Request failed{apiError.status ? ` (HTTP ${apiError.status})` : ''}: {apiError.message} <code>{apiError.code}</code>. You remain signed in.</span>
+        <span>Request failed{apiError.status ? ` (HTTP ${apiError.status})` : ''}: {typeof apiError.message === "string" ? apiError.message : JSON.stringify(apiError.message)} <code>{typeof apiError.code === "string" ? apiError.code : JSON.stringify(apiError.code)}</code>. You remain signed in.</span>
         <button type="button" className="font-semibold underline underline-offset-2" onClick={() => {
           dismissedApiError.current = { key: `${apiError.status}:${apiError.code}:${apiError.message}`, at: Date.now() };
           setApiError(null);

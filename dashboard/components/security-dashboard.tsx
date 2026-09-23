@@ -199,7 +199,7 @@ export default function SecurityDashboard() {
 
       {error && (
         <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
-          <span>{error} Showing the most recently received live data.</span>
+          <span>{typeof error === "string" ? error : JSON.stringify(error)} Showing the most recently received live data.</span>
           <button onClick={() => void fetchSecurityOperations()} className="font-semibold text-amber-900 underline underline-offset-2">Retry</button>
         </div>
       )}

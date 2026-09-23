@@ -352,7 +352,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
           <AlertOctagon className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
           <div>
             <p className="font-semibold">Resolution Blocked / Step Validation Error</p>
-            <p className="text-xs text-red-300 mt-0.5">{errorMessage}</p>
+            <p className="text-xs text-red-300 mt-0.5">{typeof errorMessage === "string" ? errorMessage : JSON.stringify(errorMessage)}</p>
           </div>
         </div>
       )}

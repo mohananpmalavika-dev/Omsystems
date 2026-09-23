@@ -145,7 +145,7 @@ export function TileStateIndicator({
       {(degradationInfo || error) && (
         <div className="state-details">
           {degradationInfo && <span className="degradation-info">{degradationInfo}</span>}
-          {error && <span className="error-info">{error}</span>}
+          {error && <span className="error-info">{typeof error === "string" ? error : JSON.stringify(error)}</span>}
         </div>
       )}
 

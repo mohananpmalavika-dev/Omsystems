@@ -164,7 +164,7 @@ export const StorageFailoverStatus: React.FC = () => {
                       {failover.fromTier} → {failover.toTier}
                     </div>
                     <div className="text-sm text-gray-600 mt-1">
-                      {failover.details}
+                      {typeof failover.details === 'string' ? failover.details : JSON.stringify(failover.details)}
                     </div>
                     {failover.cameraId && (
                       <div className="text-sm text-gray-500 mt-1">

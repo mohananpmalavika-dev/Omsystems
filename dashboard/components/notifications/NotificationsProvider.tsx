@@ -26,17 +26,20 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     resolve?: (value: boolean) => void;
   }>({ open: false });
 
-  const showToast = useCallback((message: string, type: Toast["type"] = "info") => {
+  const showToast = useCallback((message: any, type: Toast["type"] = "info") => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const t: Toast = { id, message, type };
+    const safeMessage = typeof message === "string" ? message : (typeof message === "object" ? JSON.stringify(message) : String(message ?? ""));
+    const t: Toast = { id, message: safeMessage, type };
     setToasts((s) => [t, ...s]);
     // Auto-dismiss
     setTimeout(() => setToasts((s) => s.filter((x) => x.id !== id)), 4000);
   }, []);
 
-  const confirm = useCallback((message: string, title?: string) => {
+  const confirm = useCallback((message: any, title?: any) => {
     return new Promise<boolean>((resolve) => {
-      setConfirmState({ open: true, message, title, resolve });
+      const safeMessage = typeof message === "string" ? message : (typeof message === "object" ? JSON.stringify(message) : String(message ?? ""));
+      const safeTitle = typeof title === "string" ? title : (title ? (typeof title === "object" ? JSON.stringify(title) : String(title)) : undefined);
+      setConfirmState({ open: true, message: safeMessage, title: safeTitle, resolve });
     });
   }, []);
 
@@ -54,7 +57,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         {toasts.map((t) => (
           <div key={t.id} style={{ marginTop: 8 }}>
             <div style={{ background: t.type === "error" ? "#7f1d1d" : t.type === "success" ? "#064e3b" : "#1f2937", color: "white", padding: "8px 12px", borderRadius: 6 }}>
-              {t.message}
+              {typeof t.message === "string" ? t.message : JSON.stringify(t.message)}
             </div>
           </div>
         ))}
@@ -64,8 +67,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       {confirmState.open && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 10000 }}>
           <div style={{ background: "#111", padding: 20, borderRadius: 8, width: 420 }}>
-            {confirmState.title && <h3 style={{ margin: 0 }}>{confirmState.title}</h3>}
-            <p style={{ color: "#cbd5e1" }}>{confirmState.message}</p>
+            {confirmState.title && <h3 style={{ margin: 0 }}>{typeof confirmState.title === "string" ? confirmState.title : JSON.stringify(confirmState.title)}</h3>}
+            <p style={{ color: "#cbd5e1" }}>{typeof confirmState.message === "string" ? confirmState.message : JSON.stringify(confirmState.message)}</p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
               <button onClick={() => handleConfirm(false)}>Cancel</button>
               <button onClick={() => handleConfirm(true)}>Confirm</button>

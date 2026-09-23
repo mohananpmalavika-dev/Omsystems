@@ -402,13 +402,13 @@ function CheckDetail({
             result.status === 'unknown' ? 'text-amber-600' :
             'text-gray-600'
           }`}>
-            {result.message}
+            {typeof result.message === "string" ? result.message : JSON.stringify(result.message)}
           </div>
         )}
         
         {details && (
           <div className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">
-            {details}
+            {typeof details === "string" ? details : JSON.stringify(details)}
           </div>
         )}
         

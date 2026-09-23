@@ -406,7 +406,7 @@ export function VideoSearchInterface() {
       {error && (
         <div className="error-banner">
           <AlertTriangle size={20} />
-          <span>{error}</span>
+          <span>{typeof error === "string" ? error : JSON.stringify(error)}</span>
           <button onClick={() => setError(null)}>
             <X size={16} />
           </button>

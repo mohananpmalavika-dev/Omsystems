@@ -189,7 +189,7 @@ export function UserForm({ editUser, onSuccess, onCancel }: UserFormProps) {
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form">
-          {error && <div className="error-banner">{error}</div>}
+          {error && <div className="error-banner">{typeof error === "string" ? error : JSON.stringify(error)}</div>}
 
           <div className="form-section">
             <h3>Account Information</h3>

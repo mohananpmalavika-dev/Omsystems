@@ -131,7 +131,7 @@ export function RecordingWorkspace() {
         <button className="primary-button" onClick={() => void loadRecording()} disabled={!cameraId || loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Load recording</button>
       </section>
 
-      {error && <div className="error-banner"><AlertTriangle size={17} />{error}</div>}
+      {error && <div className="error-banner"><AlertTriangle size={17} />{typeof error === "string" ? error : JSON.stringify(error)}</div>}
       {job && <section className="recording-summary">
         <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "KryptonVision"}</strong><small>{job.mode} recording at source</small></article>
         <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Recorder evidence" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? recordingState : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? (archiveSummary?.newestPlayableAt ? `Latest archive ${formatTime(archiveSummary.newestPlayableAt)}` : availabilityMessage(vms?.recordingSearch)) : `${segments.length} indexed segments in selected range`}</small></article>
