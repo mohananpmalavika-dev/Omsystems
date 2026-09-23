@@ -7,6 +7,7 @@ import {
   Layout,
   Plus,
   RotateCw,
+  ShieldAlert,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
 import {
@@ -25,7 +26,7 @@ import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { releaseLiveSession, startLiveFromBrowser } from "@/lib/live-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
 
-export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12";
+export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12" | "1+5" | "1+7" | "2+8";
 
 export interface GridLayout {
   id?: string;
@@ -189,6 +190,7 @@ export function EnhancedCameraGrid({
   const [tourInterval, setTourInterval] = useState(15);
   const [isGridHovered, setIsGridHovered] = useState(false);
   const [soloAudioCameraId, setSoloAudioCameraId] = useState<string | null>(null);
+  const [autoFocusAlerts, setAutoFocusAlerts] = useState(true);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -261,8 +263,11 @@ export function EnhancedCameraGrid({
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
 
-  const gridSizeMap = {
+  const gridSizeMap: Record<GridSize, number> = {
     "1x1": 1,
+    "1+5": 6,
+    "1+7": 8,
+    "2+8": 10,
     "2x2": 4,
     "3x3": 9,
     "4x4": 16,
@@ -306,7 +311,7 @@ export function EnhancedCameraGrid({
     return cameraIds;
   }, [schedulerGridPositions, visibleRange]);
   const schedulerTileGeometry = useMemo(() => {
-    const columns = Number(gridSize.split("x")[0]);
+    const columns = gridSize === "1+5" ? 3 : (gridSize === "1+7" || gridSize === "2+8") ? 4 : Number(gridSize.split("x")[0]);
     const viewportWidth = containerRef.current?.clientWidth ??
       (typeof window === "undefined" ? 1280 : window.innerWidth);
     const width = Math.max(1, Math.floor(viewportWidth / columns));
@@ -533,7 +538,7 @@ export function EnhancedCameraGrid({
       const clientHeight = container.clientHeight;
 
       // Calculate approximate tile height based on grid size
-      const cols = parseInt(gridSize.split("x")[0]);
+      const cols = gridSize === "1+5" ? 3 : (gridSize === "1+7" || gridSize === "2+8") ? 4 : parseInt(gridSize.split("x")[0]);
       const tileWidth = container.clientWidth / cols;
       const tileHeight = tileWidth * (9 / 16); // 16:9 aspect ratio
 
@@ -647,26 +652,65 @@ export function EnhancedCameraGrid({
     if (sessionsChanged) setSessions(new Map(sessionsRef.current));
   }, [cameras, releaseSession]);
 
-  // Adaptive layout: elevate stream priority in-place for alerting cameras
-  // WITHOUT rearranging physical tile positions (Channel 1 stays in Slot 0, Channel 2 in Slot 1, etc.)
+  // Smart Alarm Spotlight: Auto-promote alerting camera into dominant primary Hero Slot (Slot 0)
   useEffect(() => {
-    if (!adaptiveLayout) return;
+    if (!autoFocusAlerts) return;
 
-    const prioritySet = new Set(priorityCameraIds);
-    setGridPositions((currentPositions) => {
-      let changed = false;
-      const nextPositions = new Map(currentPositions);
-      for (const [pos, entry] of currentPositions.entries()) {
-        const isAlerting = prioritySet.has(entry.camera.id) || entry.camera.status === "alert";
-        const targetPriority = isAlerting ? 3 : 0;
-        if (entry.priority !== targetPriority) {
-          nextPositions.set(pos, { ...entry, priority: targetPriority });
-          changed = true;
+    // Find any camera with active critical P1/P2 alert or detected intrusion/safety violation
+    let alertingCameraId: string | null = null;
+    if (aiByCamera) {
+      for (const [camId, data] of aiByCamera.entries()) {
+        const hasCritical = data.alerts.some(
+          (a) => a.severity === "P1" || a.severity === "P2" || a.title.toLowerCase().includes("intrusion") || a.title.toLowerCase().includes("no helmet")
+        );
+        if (hasCritical) {
+          alertingCameraId = camId;
+          break;
         }
       }
-      return changed ? nextPositions : currentPositions;
+    }
+    if (!alertingCameraId && priorityCameraIds.length > 0) {
+      alertingCameraId = priorityCameraIds[0];
+    }
+
+    if (!alertingCameraId) return;
+
+    const slot0Entry = gridPositions.get(0);
+    if (slot0Entry?.camera.id === alertingCameraId) return;
+
+    const targetCamera = cameras.find((c) => c.id === alertingCameraId);
+    if (!targetCamera) return;
+
+    setGridPositions((currentPositions) => {
+      const nextPositions = new Map(currentPositions);
+      let existingPos: number | null = null;
+      for (const [pos, entry] of nextPositions.entries()) {
+        if (entry.camera.id === alertingCameraId) {
+          existingPos = pos;
+          break;
+        }
+      }
+
+      const prevHero = nextPositions.get(0);
+      nextPositions.set(0, { camera: targetCamera, stream: "main", priority: 3 });
+
+      if (existingPos !== null && existingPos !== 0 && prevHero) {
+        nextPositions.set(existingPos, { ...prevHero, stream: "sub", priority: 0 });
+      }
+
+      return nextPositions;
     });
-  }, [adaptiveLayout, priorityCameraIds]);
+
+    const heroTile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(alertingCameraId)}"]`);
+    heroTile?.animate(
+      [
+        { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
+        { boxShadow: "0 0 0 8px rgba(239, 68, 68, 0.9)" },
+        { boxShadow: "0 0 0 0 rgba(239, 68, 68, 0)" },
+      ],
+      { duration: 1600, easing: "ease-out" }
+    );
+  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, cameras, gridPositions]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
     // Keep the first camera from the current page in view while changing
@@ -873,7 +917,7 @@ export function EnhancedCameraGrid({
     setLayoutFeedback({ kind: "success", message: `Loaded “${layout.name}”.` });
   };
 
-  const gridColumnCount = Number(gridSize.split("x")[0]);
+  const gridColumnCount = gridSize === "1+5" ? 3 : (gridSize === "1+7" || gridSize === "2+8") ? 4 : Number(gridSize.split("x")[0]);
   const renderedColumnCount = compactGrid || (typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches)
     ? 1
     : gridColumnCount;
@@ -945,6 +989,16 @@ export function EnhancedCameraGrid({
               </select>
             </label>
           )}
+          <button
+            type="button"
+            className={`btn-secondary ${autoFocusAlerts ? "active-control" : ""}`}
+            onClick={() => setAutoFocusAlerts((prev) => !prev)}
+            title={autoFocusAlerts ? "Smart Alarm Spotlight: Auto-focus alerting camera into primary Hero Slot" : "Smart Alarm Spotlight: OFF"}
+            aria-pressed={autoFocusAlerts}
+          >
+            <ShieldAlert size={15} className={autoFocusAlerts ? "text-amber-400" : ""} />
+            {autoFocusAlerts ? "Spotlight: Auto" : "Spotlight: Off"}
+          </button>
           <div className="tour-pagination" title="Page navigation (Left/Right Arrow key or buttons)">
             <button
               type="button"
@@ -1054,7 +1108,7 @@ export function EnhancedCameraGrid({
 
       <div 
         ref={containerRef}
-        className={`camera-grid ${gpuAccelClass}`}
+        className={`camera-grid ${gpuAccelClass} ${gridSize === "1+5" ? "layout-hero-1-5" : gridSize === "1+7" ? "layout-hero-1-7" : gridSize === "2+8" ? "layout-hero-2-8" : ""}`}
         onMouseEnter={() => setIsGridHovered(true)}
         onMouseLeave={() => setIsGridHovered(false)}
         style={{
@@ -1073,7 +1127,7 @@ export function EnhancedCameraGrid({
             return (
               <div 
                 key={i} 
-                className="grid-empty-slot"
+                className={`grid-empty-slot slot-index-${i}`}
                 onDragOver={handleDragOver}
                 onDrop={() => handleDrop(i)}
               >
@@ -1123,7 +1177,7 @@ export function EnhancedCameraGrid({
               onVisibilityChange={setTileVisibility}
             >
               <div 
-                className="grid-camera-slot"
+                className={`grid-camera-slot slot-index-${i}`}
                 data-activity-camera-id={camera.id}
                 data-activity-branch-id={camera.branchId}
                 data-activity-branch-name={camera.branchName}
@@ -1400,6 +1454,34 @@ export function EnhancedCameraGrid({
           flex: 1;
           overflow: auto;
           padding: 4px;
+        }
+
+        .camera-grid.layout-hero-1-5 {
+          grid-template-columns: repeat(3, minmax(var(--minimum-tile-width), 1fr)) !important;
+        }
+        .camera-grid.layout-hero-1-5 .slot-index-0 {
+          grid-column: span 2 !important;
+          grid-row: span 2 !important;
+        }
+
+        .camera-grid.layout-hero-1-7 {
+          grid-template-columns: repeat(4, minmax(var(--minimum-tile-width), 1fr)) !important;
+        }
+        .camera-grid.layout-hero-1-7 .slot-index-0 {
+          grid-column: span 3 !important;
+          grid-row: span 3 !important;
+        }
+
+        .camera-grid.layout-hero-2-8 {
+          grid-template-columns: repeat(4, minmax(var(--minimum-tile-width), 1fr)) !important;
+        }
+        .camera-grid.layout-hero-2-8 .slot-index-0 {
+          grid-column: 1 / span 2 !important;
+          grid-row: 1 / span 2 !important;
+        }
+        .camera-grid.layout-hero-2-8 .slot-index-1 {
+          grid-column: 3 / span 2 !important;
+          grid-row: 1 / span 2 !important;
         }
 
         .gpu-accelerated {

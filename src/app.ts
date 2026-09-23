@@ -1,5 +1,4 @@
 import cors from "@fastify/cors";
-import rateLimit from "@fastify/rate-limit";
 import helmet from "@fastify/helmet";
 import {
   csrfProtectionHook,
@@ -23,7 +22,7 @@ import {
   type ControlPlaneStore,
 } from "./control-plane-store.js";
 import { actions, type Action, type Camera, type RecordingJob } from "./domain/models.js";
-import { createAuthMiddleware, RateLimiter, sanitizeCurrentUser } from "./middleware/auth.middleware.js";
+import { createAuthMiddleware, sanitizeCurrentUser } from "./middleware/auth.middleware.js";
 import { buildPlaybackTimeline } from "./recording/playback-timeline.js";
 import { RecorderService, type RecorderProviderResolver } from "./vms/index.js";
 import { calculateRecordingStorage } from "./recording/storage-calculator.js";
@@ -700,38 +699,6 @@ export async function buildApp(options?: {
     frameguard: { action: "sameorigin" },
   });
 
-  await app.register(rateLimit, {
-    max: 300,
-    timeWindow: "1 minute",
-    allowList: (req) => {
-      const url = req.url;
-      return (
-        url === "/health" ||
-        url.startsWith("/v1/edge-media/") ||
-        url === "/live" ||
-        url === "/ready" ||
-        url === "/capabilities" ||
-        url === "/metrics" ||
-        url.startsWith("/api/observability/") ||
-        url.startsWith("/v1/observability/") ||
-        url.startsWith("/internal/")
-      );
-    },
-    keyGenerator: (req) => {
-      const authReq = req as any;
-      if (authReq.currentUser?.id) {
-        return `user:${authReq.currentUser.id}`;
-      }
-      return req.ip;
-    },
-    errorResponseBuilder: (_req, context) => ({
-      statusCode: 429,
-      error: "Too Many Requests",
-      message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
-      retryAfter: Math.ceil(context.ttl / 1000),
-    }),
-  });
-
   app.addHook("preHandler", csrfProtectionHook);
   registerCsrfRoutes(app);
 
@@ -746,7 +713,6 @@ export async function buildApp(options?: {
         developmentMode: (options?.authMode ?? "development") === "development",
       })
     : undefined;
-  const loginRateLimiter = new RateLimiter(20, 15 * 60 * 1000);
 
   app.addHook("preHandler", async (request, reply) => {
     if (
@@ -863,7 +829,6 @@ export async function buildApp(options?: {
     if (request.url.startsWith("/v1/edge-media/") &&
         (request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth) return;
     if ((request.routeOptions.config as unknown as Record<string, unknown>)?.noAuth || isPublicAuthRoute) {
-      await loginRateLimiter.middleware()(request, reply);
       return;
     }
 

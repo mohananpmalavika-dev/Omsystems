@@ -25,6 +25,10 @@ import {
   ExternalLink,
   Headphones,
   ShieldAlert,
+  Film,
+  History,
+  Rewind,
+  Play,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -42,6 +46,7 @@ import { HoldToTalkButton } from "./hold-to-talk-button";
 import { FisheyeDewarpCanvas } from "./fisheye-dewarp-canvas";
 import { VideoWallDispatchModal } from "./video-wall-dispatch-modal";
 import { AudioDiagnostic } from "./audio-diagnostic";
+import { LiveAiOverlay } from "./live-ai-overlay";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -151,6 +156,9 @@ function CameraTileComponent({
   }, []);
   const [isMuted, setIsMuted] = useState(false); // Audio unmuted by default for live camera wall
   const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [audioWaveform, setAudioWaveform] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
+  const [loudNoiseAlert, setLoudNoiseAlert] = useState<{ active: boolean; decibels: number; timestamp: number } | null>(null);
+  const loudNoiseThresholdRef = useRef<{ consecutiveHighFrames: number; lastAlertTime: number }>({ consecutiveHighFrames: 0, lastAlertTime: 0 });
   const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -171,6 +179,13 @@ function CameraTileComponent({
   const [showDispatchModal, setShowDispatchModal] = useState(false);
   const [showAudioDiagnostic, setShowAudioDiagnostic] = useState(false);
   const [internalVideoElement, setInternalVideoElement] = useState<HTMLVideoElement | null>(null);
+  const [dvrOffset, setDvrOffset] = useState<number>(0);
+  const [showDvrScrubber, setShowDvrScrubber] = useState<boolean>(false);
+  const [isRecordingClip, setIsRecordingClip] = useState<boolean>(false);
+  const [clipCountdown, setClipCountdown] = useState<number>(15);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const clipTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
     setInternalVideoElement(videoElement);
@@ -246,6 +261,7 @@ function CameraTileComponent({
         }
 
         const dataArray = new Uint8Array(analyser!.frequencyBinCount);
+        let frameCount = 0;
         const updateMeter = () => {
           if (isCancelled) return;
           analyser!.getByteFrequencyData(dataArray);
@@ -254,7 +270,38 @@ function CameraTileComponent({
             sum += dataArray[i];
           }
           const avg = sum / (dataArray.length || 1);
-          setAudioLevel(Math.min(100, Math.round((avg / 128) * 100)));
+          const currentLevel = Math.min(100, Math.round((avg / 128) * 100));
+          setAudioLevel(currentLevel);
+
+          // Update multi-band equalizer waveform
+          frameCount++;
+          if (frameCount % 2 === 0) {
+            setAudioWaveform([
+              Math.min(100, Math.round((dataArray[1] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[3] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[5] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[8] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[12] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[18] / 240) * 100)),
+              Math.min(100, Math.round((dataArray[25] / 240) * 100)),
+            ]);
+          }
+
+          // Automated Loud Noise / Panic Sound Detection (>76% / ~82dB threshold)
+          if (currentLevel > 76) {
+            loudNoiseThresholdRef.current.consecutiveHighFrames += 1;
+            if (loudNoiseThresholdRef.current.consecutiveHighFrames >= 10 || currentLevel > 90) {
+              const now = Date.now();
+              if (now - loudNoiseThresholdRef.current.lastAlertTime > 6000) {
+                loudNoiseThresholdRef.current.lastAlertTime = now;
+                const estimatedDb = Math.round(50 + (currentLevel * 0.45));
+                setLoudNoiseAlert({ active: true, decibels: estimatedDb, timestamp: now });
+              }
+            }
+          } else {
+            loudNoiseThresholdRef.current.consecutiveHighFrames = Math.max(0, loudNoiseThresholdRef.current.consecutiveHighFrames - 1);
+          }
+
           animId = requestAnimationFrame(updateMeter);
         };
         updateMeter();
@@ -269,8 +316,18 @@ function CameraTileComponent({
       isCancelled = true;
       cancelAnimationFrame(animId);
       setAudioLevel(0);
+      setAudioWaveform([0, 0, 0, 0, 0, 0, 0]);
     };
   }, [internalVideoElement, effectiveMuted, hasLiveFrame]);
+
+  // Auto-dismiss Loud Noise alert after 6 seconds of silence
+  useEffect(() => {
+    if (!loudNoiseAlert?.active) return;
+    const timer = setTimeout(() => {
+      setLoudNoiseAlert(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [loudNoiseAlert]);
 
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
@@ -407,10 +464,131 @@ function CameraTileComponent({
     link.click();
   };
 
+  const handleDvrScrub = useCallback((secondsAgo: number) => {
+    const video = internalVideoElement || tileRef.current?.querySelector("video");
+    if (!video) return;
+
+    if (secondsAgo <= 0) {
+      setDvrOffset(0);
+      if (video.seekable && video.seekable.length > 0) {
+        video.currentTime = video.seekable.end(video.seekable.length - 1);
+      }
+      void video.play().catch(() => {});
+      return;
+    }
+
+    setDvrOffset(secondsAgo);
+    if (video.seekable && video.seekable.length > 0) {
+      const liveEdge = video.seekable.end(video.seekable.length - 1);
+      const earliest = video.seekable.start(0);
+      const targetTime = Math.max(earliest, liveEdge - secondsAgo);
+      video.currentTime = targetTime;
+      void video.play().catch(() => {});
+    } else if (video.currentTime) {
+      video.currentTime = Math.max(0, video.currentTime - secondsAgo);
+    }
+  }, [internalVideoElement]);
+
+  const handleExportIncidentClip = useCallback(() => {
+    const video = internalVideoElement || tileRef.current?.querySelector("video");
+    if (!video) return;
+
+    if (isRecordingClip) {
+      if (clipTimerRef.current) clearInterval(clipTimerRef.current);
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    try {
+      type VideoWithCapture = HTMLVideoElement & {
+        captureStream?: () => MediaStream;
+        mozCaptureStream?: () => MediaStream;
+      };
+      const v = video as VideoWithCapture;
+      let stream: MediaStream | null = null;
+      if (typeof v.captureStream === "function") {
+        stream = v.captureStream();
+      } else if (typeof v.mozCaptureStream === "function") {
+        stream = v.mozCaptureStream();
+      }
+
+      if (!stream || stream.getVideoTracks().length === 0) {
+        takeSnapshot();
+        return;
+      }
+
+      const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")
+        ? "video/webm;codecs=vp9,opus"
+        : MediaRecorder.isTypeSupported("video/webm")
+        ? "video/webm"
+        : MediaRecorder.isTypeSupported("video/mp4")
+        ? "video/mp4"
+        : "";
+
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      recordedChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        setIsRecordingClip(false);
+        setClipCountdown(15);
+        if (recordedChunksRef.current.length === 0) return;
+
+        const blob = new Blob(recordedChunksRef.current, {
+          type: recorder.mimeType || "video/webm",
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        const ext = (recorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        const safeName = camera.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+        const now = new Date();
+        link.download = `INCIDENT_CLIP_${safeName}_${now.toISOString().replace(/[:.]/g, "-")}.${ext}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      };
+
+      recorder.start(1000);
+      setIsRecordingClip(true);
+      setClipCountdown(15);
+
+      let remaining = 15;
+      clipTimerRef.current = setInterval(() => {
+        remaining -= 1;
+        setClipCountdown(remaining);
+        if (remaining <= 0) {
+          if (clipTimerRef.current) clearInterval(clipTimerRef.current);
+          recorder.stop();
+        }
+      }, 1000);
+    } catch (err) {
+      console.error("Failed to start incident clip recording, falling back to snapshot:", err);
+      takeSnapshot();
+    }
+  }, [internalVideoElement, isRecordingClip, camera.name, takeSnapshot]);
+
+  useEffect(() => {
+    return () => {
+      if (clipTimerRef.current) clearInterval(clipTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+    };
+  }, []);
+
   const hasCriticalAlert = Boolean(latestAiAlert && (latestAiAlert.severity === "P1" || latestAiAlert.severity === "P2"));
   const hasWarningAlert = Boolean(latestAiAlert && latestAiAlert.severity === "P3");
-  const alertRingClass = hasCriticalAlert
-    ? "ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.55)] animate-pulse"
+  const hasAudioPanic = Boolean(loudNoiseAlert?.active);
+  const alertRingClass = (hasCriticalAlert || hasAudioPanic)
+    ? "ring-2 ring-red-500 shadow-[0_0_24px_rgba(239,68,68,0.7)] animate-pulse"
     : hasWarningAlert
       ? "ring-2 ring-amber-500 shadow-[0_0_16px_rgba(245,158,11,0.4)]"
       : "";
@@ -451,10 +629,10 @@ function CameraTileComponent({
           }
         }}
         onWheel={(event) => {
-          if (!event.ctrlKey && !event.metaKey) return;
           event.preventDefault();
+          const delta = event.deltaY < 0 ? 0.35 : -0.35;
           setZoom((value) => {
-            const next = Math.max(1, Math.min(3, Number((value + (event.deltaY < 0 ? 0.25 : -0.25)).toFixed(2))));
+            const next = Math.max(1, Math.min(4, Number((value + delta).toFixed(2))));
             if (next === 1) setPan({ x: 0, y: 0 });
             return next;
           });
@@ -481,13 +659,31 @@ function CameraTileComponent({
                   onClose={() => setShowFisheyeDewarp(false)}
                 />
               )}
+              {showAiOverlay && (
+                <LiveAiOverlay
+                  rules={aiOverlay?.rules}
+                  alerts={aiOverlay?.alerts}
+                  cameraName={camera.name}
+                  showHeatmap={true}
+                />
+              )}
             </>
           ) : snapshotUrl ? (
-            <img
-              src={snapshotUrl}
-              alt={`Latest snapshot from ${camera.name}`}
-              className="live-video"
-            />
+            <>
+              <img
+                src={snapshotUrl}
+                alt={`Latest snapshot from ${camera.name}`}
+                className="live-video"
+              />
+              {showAiOverlay && (
+                <LiveAiOverlay
+                  rules={aiOverlay?.rules}
+                  alerts={aiOverlay?.alerts}
+                  cameraName={camera.name}
+                  showHeatmap={true}
+                />
+              )}
+            </>
           ) : (
             <div className={`camera-feed-placeholder ${liveError ? "has-error" : ""}`}>
               <CameraIcon size={26} />
@@ -507,6 +703,120 @@ function CameraTileComponent({
           </div>
         )}
 
+        {hasAudioPanic && (
+          <div className="absolute top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600/95 text-white text-[11px] font-black tracking-wide shadow-2xl border border-rose-300/80 backdrop-blur animate-bounce pointer-events-none">
+            <Volume2 size={13} className="text-white animate-pulse" />
+            <span>PANIC AUDIO: LOUD NOISE DETECTED ({loudNoiseAlert?.decibels} dB)</span>
+          </div>
+        )}
+
+        {zoom > 1 && (
+          <div className="absolute top-2.5 right-2.5 z-20 flex items-center gap-1.5 px-2 py-0.5 rounded bg-black/85 border border-sky-500/60 text-[11px] font-mono text-sky-300 backdrop-blur shadow-lg">
+            <span>{Math.round(zoom * 100)}% PTZ</span>
+            <button
+              type="button"
+              onClick={resetZoom}
+              className="ml-1 text-[10px] text-zinc-400 hover:text-white underline cursor-pointer"
+              title="Reset digital zoom to 100%"
+            >
+              Reset
+            </button>
+          </div>
+        )}
+
+        {isRecordingClip && (
+          <button
+            type="button"
+            onClick={handleExportIncidentClip}
+            className="absolute top-2.5 left-2.5 z-20 flex items-center gap-2 px-2.5 py-1 rounded bg-red-950/95 border border-red-500 text-xs font-bold text-red-200 shadow-2xl animate-pulse cursor-pointer hover:bg-red-900"
+            title="Recording 15s incident evidence clip. Click to finish and save immediately."
+          >
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+            <span>REC CLIP: {clipCountdown}s (Click to save)</span>
+          </button>
+        )}
+
+        {showDvrScrubber && (
+          <div
+            className="absolute bottom-11 left-2 right-2 z-20 flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-300">
+              <span className="flex items-center gap-1.5 text-sky-400">
+                <History size={13} />
+                <span>DVR Quick Scrub</span>
+                {dvrOffset > 0 ? (
+                  <span className="text-amber-400 font-mono font-bold">(-{dvrOffset}s)</span>
+                ) : (
+                  <span className="text-emerald-400 font-mono font-bold">● LIVE</span>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDvrScrub(0)}
+                className={`px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-colors ${
+                  dvrOffset > 0
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                ▶ RETURN TO LIVE
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-zinc-400 font-mono">-60s</span>
+              <input
+                type="range"
+                min={0}
+                max={60}
+                step={1}
+                value={dvrOffset}
+                onChange={(e) => handleDvrScrub(Number(e.target.value))}
+                className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
+              />
+              <span className="text-[10px] text-emerald-400 font-mono">0s (LIVE)</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleDvrScrub(10)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                    dvrOffset === 10 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                  }`}
+                >
+                  -10s
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDvrScrub(30)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                    dvrOffset === 30 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                  }`}
+                >
+                  -30s
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDvrScrub(60)}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                    dvrOffset === 60 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
+                  }`}
+                >
+                  -60s
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDvrScrubber(false)}
+                className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="tile-topline">
           <div className="flex items-center gap-1.5">
             {typeof index === "number" && (
@@ -519,16 +829,36 @@ function CameraTileComponent({
               {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
             </span>
             {!effectiveMuted && (
-              <span className="status-pill text-emerald-400 border-emerald-500/40 bg-emerald-950/70 flex items-center gap-1.5" title={`Live Audio: ${audioLevel}%`}>
-                <Volume2 size={11} className={audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"} />
-                <span>Audio ON</span>
-                <span className="inline-flex items-center gap-0.5 w-6 h-1.5 bg-emerald-950 rounded-sm overflow-hidden p-[1px]">
-                  <span
-                    className={`h-full rounded-[0.5px] transition-all duration-100 ${
-                      audioLevel > 70 ? "bg-rose-500" : audioLevel > 35 ? "bg-amber-400" : "bg-emerald-400"
-                    }`}
-                    style={{ width: `${Math.max(5, audioLevel)}%` }}
-                  />
+              <span
+                className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
+                  loudNoiseAlert?.active
+                    ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
+                    : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
+                }`}
+                title={`Live Audio: ${audioLevel}% (~${Math.round(45 + audioLevel * 0.45)} dB)`}
+              >
+                <Volume2
+                  size={12}
+                  className={loudNoiseAlert?.active ? "text-rose-400 animate-bounce" : audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"}
+                />
+                <span className="text-[10px] font-mono font-bold tracking-tight">
+                  {loudNoiseAlert?.active ? "LOUD NOISE!" : "AUDIO"}
+                </span>
+
+                {/* Live 7-Band Equalizer Waveform */}
+                <span className="inline-flex items-end gap-[1.5px] h-3 px-1 py-[1px] bg-slate-950/80 rounded border border-emerald-500/30 overflow-hidden">
+                  {audioWaveform.map((band, idx) => (
+                    <span
+                      key={idx}
+                      className={`w-[2.5px] rounded-[0.5px] transition-all duration-75 ${
+                        band > 75 ? "bg-rose-500" : band > 35 ? "bg-amber-400" : "bg-emerald-400"
+                      }`}
+                      style={{ height: `${Math.max(15, band)}%` }}
+                    />
+                  ))}
+                </span>
+                <span className="text-[9px] font-mono opacity-85">
+                  {Math.round(45 + audioLevel * 0.45)}dB
                 </span>
               </span>
             )}
@@ -536,6 +866,17 @@ function CameraTileComponent({
               <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
                 SOLO AUDIO
               </span>
+            )}
+            {dvrOffset > 0 && (
+              <button
+                type="button"
+                onClick={() => handleDvrScrub(0)}
+                className="status-pill flex items-center gap-1 bg-amber-950/90 border-amber-500/80 text-amber-300 font-bold animate-pulse hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500 cursor-pointer"
+                title="DVR Rewind is active. Click to jump back to live broadcast."
+              >
+                <Rewind size={11} />
+                DVR: -{dvrOffset}s · ▶ LIVE
+              </button>
             )}
           </div>
           {onToggleRecording && (
@@ -729,7 +1070,27 @@ function CameraTileComponent({
           >
             <ZoomIn size={15} />
           </button>
-          <button type="button" aria-label="Take snapshot" title="Take snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
+          <button
+            type="button"
+            aria-label="Instant Rewind & DVR Scrub"
+            title={showDvrScrubber ? "Close DVR Quick Scrub" : "Instant Rewind: Quick scrub past 10s–60s without leaving live view"}
+            className={showDvrScrubber || dvrOffset > 0 ? "text-amber-400 border-amber-500/80 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.4)]" : ""}
+            onClick={() => setShowDvrScrubber(!showDvrScrubber)}
+            disabled={!canPlayLive}
+          >
+            <History size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label={isRecordingClip ? "Stop recording clip" : "Record 15-second incident evidence clip"}
+            title={isRecordingClip ? `Recording incident clip (${clipCountdown}s left). Click to stop and download now.` : "One-Click Incident Clip: Record and download 15s evidence video with audio"}
+            className={isRecordingClip ? "text-red-400 border-red-500 bg-red-950/90 shadow-[0_0_12px_rgba(239,68,68,0.7)] animate-pulse" : ""}
+            onClick={handleExportIncidentClip}
+            disabled={!canPlayLive}
+          >
+            <Film size={15} />
+          </button>
+          <button type="button" aria-label="Take forensic snapshot" title="Take forensic watermarked snapshot" onClick={takeSnapshot} disabled={!hasLiveFrame}><SnapshotIcon size={15} /></button>
           {onDeleteCamera && (
             <button
               type="button"

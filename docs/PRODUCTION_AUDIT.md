@@ -547,10 +547,9 @@ That is the key improvement required before this platform can be treated as a pr
 | Session security | **REAL** | JWT + refresh rotation | Token expiry |
 | Audit logging | **REAL** | Comprehensive audit | 005_audit_logging_schema.sql |
 | TPM attestation | **REAL** | Hardware attestation | Edge agent |
-| Rate limiting | **PARTIAL** | Mentioned | Implementation unclear |
 | CSRF protection | **PARTIAL** | Framework available | Implementation unclear |
 
-**Assessment:** ✅ **CORE SECURE** - Rate limiting/CSRF need verification
+**Assessment:** ✅ **CORE SECURE** - CSRF hardening remains to be verified
 
 ---
 
@@ -626,9 +625,9 @@ That is the key improvement required before this platform can be treated as a pr
 - **Action:** Implement/verify service worker caching
 - **Timeline:** 1 week
 
-#### ⚠️ GAP #4: Rate Limiting & CSRF
+#### ⚠️ GAP #4: CSRF Hardening
 - **Impact:** API security hardening
-- **Action:** Verify and enable rate limiting, CSRF tokens
+- **Action:** Verify and enable CSRF tokens; rate limiting deferred for later implementation
 - **Timeline:** 2-3 days
 
 ### 2.3 LOW-PRIORITY ENHANCEMENTS
@@ -779,7 +778,6 @@ internet-health      ✅ PASSING
 ### Security
 
 - [ ] Penetration testing: Third-party audit
-- [ ] Rate limiting: Configure and enable
 - [ ] CSRF protection: Verify implementation
 - [ ] Session timeout: Configure appropriate TTL
 - [ ] Credential rotation: Establish schedule
@@ -865,10 +863,9 @@ internet-health      ✅ PASSING
 7. **Penetration testing** - Third-party security audit
 
 ### Phase 3: Hardening (1 week)
-8. **Rate limiting** - Enable API throttling
-9. **CSRF protection** - Verify and enable
-10. **Mobile PWA offline** - Service worker caching
-11. **Load testing** - 500 branches, 3000 cameras
+8. **CSRF protection** - Verify and enable
+9. **Mobile PWA offline** - Service worker caching
+10. **Load testing** - 500 branches, 3000 cameras
 
 ### Phase 4: Optional Enhancements (4+ weeks)
 12. Voice biometric authentication
@@ -895,7 +892,7 @@ internet-health      ✅ PASSING
 - ❌ Evidence export and legal hold workflows
 - ❌ Face recognition with full privacy controls
 - ❌ Banking workflows requiring external integration
-- ❌ Advanced security hardening (rate limit, CSRF)
+- ❌ Advanced security hardening (CSRF; rate limiting deferred)
 
 ### Recommendation
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { generateCsrfToken, verifyCsrfToken } from "../../src/security/middleware/csrf-protection.middleware.js";
 import { buildApp } from "../../src/app.js";
+import { MemoryStore } from "../../src/store.js";
 import type { FastifyInstance } from "fastify";
 
 describe("Security Hardening: Rate Limiting, CSRF, and Security Headers", () => {
@@ -8,6 +9,7 @@ describe("Security Hardening: Rate Limiting, CSRF, and Security Headers", () => 
 
   beforeAll(async () => {
     app = await buildApp({
+      store: new MemoryStore(),
       authMode: "development",
       logger: false,
     });
@@ -97,6 +99,58 @@ describe("Security Hardening: Rate Limiting, CSRF, and Security Headers", () => 
       const parsed = JSON.parse(response.body);
       expect(parsed.error).not.toBe("csrf_token_missing");
     });
+
+    it("rejects invalid CSRF token header with 403 csrf_token_invalid", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/cameras/cam-1/live-sessions",
+        headers: {
+          "x-csrf-token": "invalid.csrf-token",
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const parsed = JSON.parse(response.body);
+      expect(parsed.error).toBe("csrf_token_invalid");
+    });
+
+    it("accepts valid CSRF token header without 403 csrf error", async () => {
+      const validToken = generateCsrfToken("test-session");
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/cameras/cam-1/live-sessions",
+        headers: {
+          "x-csrf-token": validToken,
+        },
+      });
+      expect(response.statusCode).not.toBe(403);
+    });
+
+    it("allows API clients with x-sentinel-session without requiring CSRF token", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/cameras/cam-1/live-sessions",
+        headers: {
+          "x-sentinel-session": "api-session-token",
+        },
+      });
+      expect(response.statusCode).not.toBe(403);
+    });
+
+    it("blocks cross-site ambient cookie requests missing CSRF token with 403 csrf_token_missing", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/cameras/cam-1/live-sessions",
+        headers: {
+          cookie: "sentinel_access=ambient-session-cookie-123",
+          origin: "https://attacker-site.com",
+          "sec-fetch-site": "cross-site",
+          host: "api.sentinelgrid.internal",
+        },
+      });
+      expect(response.statusCode).toBe(403);
+      const parsed = JSON.parse(response.body);
+      expect(parsed.error).toBe("csrf_token_missing");
+    });
   });
 
   describe("Security Headers (Helmet)", () => {
@@ -113,18 +167,17 @@ describe("Security Hardening: Rate Limiting, CSRF, and Security Headers", () => 
   });
 
   describe("Rate Limiting", () => {
-    it("includes rate limit headers in API responses", async () => {
+    it("does not emit rate-limit headers while rate limiting is disabled", async () => {
       const response = await app.inject({
         method: "GET",
         url: "/v1/auth/csrf-token",
       });
 
       expect(response.statusCode).toBe(200);
-      // Fastify rate-limit sets x-ratelimit-limit or ratelimit-limit
-      const hasRateLimitHeader = 
+      const hasRateLimitHeader =
         response.headers["x-ratelimit-limit"] !== undefined ||
         response.headers["ratelimit-limit"] !== undefined;
-      expect(hasRateLimitHeader).toBe(true);
+      expect(hasRateLimitHeader).toBe(false);
     });
   });
 });

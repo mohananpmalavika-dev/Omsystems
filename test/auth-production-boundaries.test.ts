@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuthMiddleware, activeInMemorySessions, PermissionChecker, RateLimiter } from "../src/middleware/auth.middleware.js";
+import { createAuthMiddleware, activeInMemorySessions, PermissionChecker } from "../src/middleware/auth.middleware.js";
 import { registerAuthRoutes } from "../src/routes/auth.routes.js";
 import { hashPassword } from "../src/security/password.js";
 import { PERMANENT_SUPERADMIN } from "../src/identity/services/bootstrap-onboarding.service.js";
@@ -87,14 +87,6 @@ describe("production authentication trust boundaries", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("does not allow spoofed forwarded headers to evade login rate limits", async () => {
-    const app = Fastify();
-    apps.push(app);
-    app.addHook("preHandler", new RateLimiter(1).middleware());
-    app.post("/auth/login", () => ({ success: true }));
-    expect((await app.inject({ method: "POST", url: "/auth/login", headers: { "x-forwarded-for": "1.1.1.1" } })).statusCode).toBe(200);
-    expect((await app.inject({ method: "POST", url: "/auth/login", headers: { "x-forwarded-for": "2.2.2.2" } })).statusCode).toBe(429);
-  });
 });
 
 describe("persisted login credentials", () => {

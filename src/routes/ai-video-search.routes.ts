@@ -14,13 +14,6 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { AIVideoSearchService, VideoSearchError, ValidationError as SearchValidationError } from "../services/ai-video-search.js";
 import { VideoSearchIntegrationPipeline, PipelineError } from "../services/video-search-integration.js";
-import { 
-  RateLimiter, 
-  createRateLimitMiddleware, 
-  RATE_LIMITS,
-  RequestQueue,
-  QueryComplexityAnalyzer 
-} from "../middleware/rate-limiter.js";
 import { initializeMetrics, getMetrics } from "../services/video-search-metrics.js";
 
 /**
@@ -131,6 +124,52 @@ function hasValidSearchWindow(from?: string, to?: string): boolean {
   return Number.isFinite(start) && Number.isFinite(end) && end > start && end - start <= maxSearchWindowMs;
 }
 
+class QueryComplexityAnalyzer {
+  static calculateComplexity(query: {
+    naturalLanguageQuery?: string;
+    timeRangeDays?: number;
+    cameraCount?: number;
+    hasEmbeddings?: boolean;
+    requiresCrossCameraTracking?: boolean;
+    attributeCount?: number;
+  }): number {
+    let complexity = 1;
+
+    if (query.naturalLanguageQuery && query.naturalLanguageQuery.length > 50) {
+      complexity += 1;
+    }
+
+    if (query.timeRangeDays) {
+      if (query.timeRangeDays > 30) complexity += 2;
+      else if (query.timeRangeDays > 7) complexity += 1;
+    }
+
+    if (query.cameraCount) {
+      if (query.cameraCount > 50) complexity += 3;
+      else if (query.cameraCount > 10) complexity += 2;
+      else if (query.cameraCount > 1) complexity += 1;
+    }
+
+    if (query.hasEmbeddings) {
+      complexity += 2;
+    }
+
+    if (query.requiresCrossCameraTracking) {
+      complexity += 3;
+    }
+
+    if (query.attributeCount && query.attributeCount > 3) {
+      complexity += 1;
+    }
+
+    return complexity;
+  }
+
+  static isComplexQuery(complexity: number, threshold: number = 5): boolean {
+    return complexity > threshold;
+  }
+}
+
 export async function registerAIVideoSearchRoutes(
   app: FastifyInstance,
   pool: Pool
@@ -140,13 +179,8 @@ export async function registerAIVideoSearchRoutes(
   integrationPipeline.start();
   app.addHook("onClose", async () => integrationPipeline.stop());
 
-  // Initialize rate limiter and metrics
-  const rateLimiter = new RateLimiter(pool);
+  // Initialize metrics
   const metrics = initializeMetrics(pool);
-  
-  // Initialize request queue for expensive operations
-  const searchQueue = new RequestQueue(5); // Max 5 concurrent searches
-  const indexingQueue = new RequestQueue(10); // Max 10 concurrent indexing jobs
 
   // Set up metrics event listeners
   metrics.on("critical_error", (error) => {
@@ -163,17 +197,7 @@ export async function registerAIVideoSearchRoutes(
    * POST /v1/ai-video-search/natural-language
    */
   app.post(
-    "/v1/ai-video-search/natural-language", 
-    {
-      preHandler: createRateLimitMiddleware(
-        rateLimiter, 
-        RATE_LIMITS.NATURAL_LANGUAGE_SEARCH,
-        {
-          multiLimit: true,
-          errorMessage: "Too many search requests. Please try again later.",
-        }
-      ),
-    },
+    "/v1/ai-video-search/natural-language",
     async (request, reply) => {
     const operationId = `search_${Date.now()}_${Math.random()}`;
     metrics.startTimer(operationId);
@@ -226,9 +250,7 @@ export async function registerAIVideoSearchRoutes(
         return await integrationPipeline.enrichSearchResults(tenantId, results);
       };
 
-      const enrichedResults = QueryComplexityAnalyzer.isComplexQuery(complexity, 5)
-        ? await searchQueue.enqueue(searchOperation)
-        : await searchOperation();
+      const enrichedResults = await searchOperation();
 
       const responseTimeMs = metrics.endTimer(operationId, "video_search_response_time");
       
@@ -258,7 +280,6 @@ export async function registerAIVideoSearchRoutes(
         metadata: {
           complexity,
           responseTimeMs,
-          queueStats: searchQueue.getStats(),
         },
       };
     } catch (error) {
@@ -292,13 +313,6 @@ export async function registerAIVideoSearchRoutes(
    */
   app.post(
     "/v1/ai-video-search/attributes",
-    {
-      preHandler: createRateLimitMiddleware(
-        rateLimiter,
-        RATE_LIMITS.ATTRIBUTE_SEARCH,
-        { multiLimit: true }
-      ),
-    },
     async (request, reply) => {
     try {
       const body = attributeSearchSchema.parse(request.body);
@@ -342,16 +356,6 @@ export async function registerAIVideoSearchRoutes(
    */
   app.post(
     "/v1/ai-video-search/similarity",
-    {
-      preHandler: createRateLimitMiddleware(
-        rateLimiter,
-        RATE_LIMITS.SIMILARITY_SEARCH,
-        { 
-          multiLimit: true,
-          errorMessage: "Similarity search rate limit exceeded. This is an expensive operation."
-        }
-      ),
-    },
     async (request, reply) => {
     const body = similaritySearchSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
@@ -408,16 +412,6 @@ export async function registerAIVideoSearchRoutes(
    */
   app.post(
     "/v1/ai-video-search/track",
-    {
-      preHandler: createRateLimitMiddleware(
-        rateLimiter,
-        RATE_LIMITS.CROSS_CAMERA_TRACKING,
-        {
-          multiLimit: true,
-          errorMessage: "Cross-camera tracking rate limit exceeded. This is a very expensive operation."
-        }
-      ),
-    },
     async (request, reply) => {
     const body = crossCameraTrackingSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
@@ -538,16 +532,6 @@ export async function registerAIVideoSearchRoutes(
    */
   app.post(
     "/v1/ai-video-search/indexing/reindex",
-    {
-      preHandler: createRateLimitMiddleware(
-        rateLimiter,
-        RATE_LIMITS.BULK_INDEXING,
-        {
-          multiLimit: true,
-          errorMessage: "Bulk indexing rate limit exceeded. Please wait before starting another indexing job."
-        }
-      ),
-    },
     async (request, reply) => {
     const body = bulkReindexSchema.parse(request.body);
     const tenantId = request.currentUser.tenantId;
