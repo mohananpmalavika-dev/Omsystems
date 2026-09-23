@@ -70,3 +70,82 @@ if (pipelineCode.includes(target2)) {
 } else {
     console.log('target2 not found in analytics-pipeline.js, checking if already patched...');
 }
+
+// Patch 3: helmet-detector.js
+const helmetPath = '/app/dist/analytics-engine/src/detectors/helmet-detector.js';
+if (fs.existsSync(helmetPath)) {
+    let helmetCode = fs.readFileSync(helmetPath, 'utf8');
+    const target3a = `            const avgConf = this.calculateAverageConfidence(riderViolations);
+            const effectiveConf = avgConf;
+            const violationObjects = riderViolations.flatMap(detection => [
+                {
+                    label: "no-helmet",
+                    confidence: detection.confidence,
+                    boundingBox: detection.personBoundingBox,
+                },
+                {
+                    label: "person",
+                    confidence: detection.confidence,
+                    boundingBox: detection.personBoundingBox,
+                },
+            ]);`;
+    const rep3a = `            const avgConf = this.calculateAverageConfidence(riderViolations);
+            const effectiveConf = avgConf ?? 0;
+            const violationObjects = riderViolations.flatMap(detection => [
+                {
+                    label: "no-helmet",
+                    confidence: detection.confidence ?? 0,
+                    boundingBox: detection.personBoundingBox,
+                },
+                {
+                    label: "person",
+                    confidence: detection.confidence ?? 0,
+                    boundingBox: detection.personBoundingBox,
+                },
+            ]);`;
+
+    const target3b = `            const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
+            const effectiveConf = avgConf;
+            const compliantObjects = indoorHelmetWearers.flatMap(detection => [
+                {
+                    label: "helmet",
+                    confidence: detection.confidence,
+                    boundingBox: detection.personBoundingBox,
+                },
+                {
+                    label: "person",
+                    confidence: detection.confidence,
+                    boundingBox: detection.personBoundingBox,
+                },
+            ]);`;
+    const rep3b = `            const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
+            const effectiveConf = avgConf ?? 0;
+            const compliantObjects = indoorHelmetWearers.flatMap(detection => [
+                {
+                    label: "helmet",
+                    confidence: detection.confidence ?? 0,
+                    boundingBox: detection.personBoundingBox,
+                },
+                {
+                    label: "person",
+                    confidence: detection.confidence ?? 0,
+                    boundingBox: detection.personBoundingBox,
+                },
+            ]);`;
+
+    let modified = false;
+    if (helmetCode.includes(target3a)) {
+        helmetCode = helmetCode.replace(target3a, rep3a);
+        modified = true;
+    }
+    if (helmetCode.includes(target3b)) {
+        helmetCode = helmetCode.replace(target3b, rep3b);
+        modified = true;
+    }
+    if (modified) {
+        fs.writeFileSync(helmetPath, helmetCode, 'utf8');
+        console.log('Successfully patched helmet-detector.js');
+    } else {
+        console.log('helmet-detector.js already patched or target not found');
+    }
+}

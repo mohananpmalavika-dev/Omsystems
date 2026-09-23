@@ -47,6 +47,21 @@ docker compose -f docker-compose.gcp.yml build control-plane dashboard
 echo "--> Recreating containers..."
 docker compose -f docker-compose.gcp.yml up -d --force-recreate caddy control-plane dashboard
 
+# Update media-gateway configuration (low-latency HLS)
+if [ -f /opt/sentinel-grid/media-gateway/mediamtx.yml ]; then
+  echo "--> Updating media-gateway mediamtx.yml..."
+  docker cp /opt/sentinel-grid/media-gateway/mediamtx.yml sentinel-gcp-media-gateway:/app/media-gateway/mediamtx.yml || true
+  docker restart sentinel-gcp-media-gateway || true
+fi
+
+# Apply hotfixes/patches to analytics-engine if needed
+if [ -f /opt/sentinel-grid/scratch/patch_analytics.cjs ]; then
+  echo "--> Patching analytics-engine in-container..."
+  docker cp /opt/sentinel-grid/scratch/patch_analytics.cjs sentinel-gcp-analytics-engine:/tmp/patch_analytics.cjs || true
+  docker exec sentinel-gcp-analytics-engine node /tmp/patch_analytics.cjs || true
+  docker restart sentinel-gcp-analytics-engine || true
+fi
+
 echo "========================================================"
 echo "✅ Update complete! Sentinel Grid is running latest code."
 echo "========================================================"
