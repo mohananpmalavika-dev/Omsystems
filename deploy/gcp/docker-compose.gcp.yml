@@ -116,7 +116,10 @@ services:
       ANALYTICS_SOURCE_SHARED_KEY: ${ANALYTICS_SOURCE_SHARED_KEY:-10bcf3c15292e4a76522e6c2b73644cd0f480e57fc67ab293ec60ac5c6a82844}
       REPORT_DOWNLOAD_SECRET: ${REPORT_DOWNLOAD_SECRET:-beb9be9407b659e637760235d2f6fb466508133082374c489d5ccbf8f8ba0faf}
       CONTROL_PLANE_PUBLIC_URL: ${CONTROL_PLANE_PUBLIC_URL:-https://34-14-220-41.sslip.io}
-      EDGE_MEDIA_RELAY_ENABLED: ${EDGE_MEDIA_RELAY_ENABLED:-false}
+      # GCP is the managed public relay. Edge Agents establish an authenticated
+      # outbound WebSocket, so branches need no public IP, DNS, VPN, or manual
+      # tunnel credentials.
+      EDGE_MEDIA_RELAY_ENABLED: ${EDGE_MEDIA_RELAY_ENABLED:-true}
       RECORDING_ENGINE_URL: http://recording-engine:8091
       ANALYTICS_ENGINE_URL: http://analytics-engine:8092
       BOOTSTRAP_SUPERADMIN_PASSWORD: ${BOOTSTRAP_SUPERADMIN_PASSWORD:-SentinelMasterAdmin2026!}
