@@ -116,6 +116,8 @@ function CameraTileComponent({
   onDeleteCamera,
   onSoloAudio,
   isSoloAudio,
+  activeStream,
+  onStreamQualityChange,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -142,6 +144,8 @@ function CameraTileComponent({
   onDeleteCamera?: (cameraId: string) => Promise<void> | void;
   onSoloAudio?: (cameraId: string) => void;
   isSoloAudio?: boolean;
+  activeStream?: "main" | "sub";
+  onStreamQualityChange?: (cameraId: string, quality: "main" | "sub") => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
@@ -328,6 +332,23 @@ function CameraTileComponent({
     }, 6000);
     return () => clearTimeout(timer);
   }, [loudNoiseAlert]);
+
+  // Adaptive Dual-Stream switching on fullscreen
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isTileFullscreen = document.fullscreenElement === tileRef.current;
+      if (isTileFullscreen) {
+        // Automatically promote to high-definition main stream (1080p/4K)
+        onStreamQualityChange?.(camera.id, "main");
+      } else {
+        // Drop back to bandwidth-conserving sub-stream when leaving fullscreen
+        onStreamQualityChange?.(camera.id, "sub");
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", handleFullscreenChange);
+  }, [camera.id, onStreamQualityChange]);
 
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
@@ -866,6 +887,24 @@ function CameraTileComponent({
               <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
                 SOLO AUDIO
               </span>
+            )}
+            {activeStream && (
+              <button
+                type="button"
+                onClick={() => onStreamQualityChange?.(camera.id, activeStream === "main" ? "sub" : "main")}
+                className={`status-pill font-mono font-bold text-[9px] cursor-pointer transition-all ${
+                  activeStream === "main"
+                    ? "text-sky-300 border-sky-500/70 bg-sky-950/80 shadow-[0_0_8px_rgba(14,165,233,0.35)]"
+                    : "text-zinc-400 border-zinc-700 bg-zinc-900/80 hover:text-zinc-200"
+                }`}
+                title={
+                  activeStream === "main"
+                    ? "Adaptive Dual-Stream: Main-stream HD (1080p / 4K) active. Click to switch to Sub-stream."
+                    : "Adaptive Dual-Stream: Sub-stream SD (D1 / 720p) active to conserve bandwidth. Fullscreen auto-elevates to Main-stream HD. Click to switch manually."
+                }
+              >
+                {activeStream === "main" ? "HD MAIN" : "SD SUB"}
+              </button>
             )}
             {dvrOffset > 0 && (
               <button

@@ -127,8 +127,6 @@ function isExemptRoute(url: string, method: string): boolean {
     cleanUrl === "/v1/live/start" ||
     cleanUrl.startsWith("/v1/talk/") ||
     cleanUrl === "/v1/talk/start" ||
-    cleanUrl.includes("/live-sessions") ||
-    cleanUrl.includes("/talk-sessions") ||
     cleanUrl.startsWith("/webrtc/") ||
     cleanUrl.startsWith("/hls/") ||
     cleanUrl.startsWith("/v1/secure-area-authorizations/") ||

@@ -85,6 +85,8 @@ interface GridTileProps {
   onDeleteCamera?: (cameraId: string) => Promise<void> | void;
   onSoloAudio?: (cameraId: string) => void;
   isSoloAudio?: boolean;
+  stream?: "main" | "sub";
+  onStreamQualityChange?: (cameraId: string, quality: "main" | "sub") => void;
 }
 
 const GridTile = memo(function GridTile({
@@ -106,6 +108,8 @@ const GridTile = memo(function GridTile({
   onDeleteCamera,
   onSoloAudio,
   isSoloAudio,
+  stream,
+  onStreamQualityChange,
 }: GridTileProps) {
   const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -134,6 +138,8 @@ const GridTile = memo(function GridTile({
       onDeleteCamera={onDeleteCamera}
       onSoloAudio={onSoloAudio}
       isSoloAudio={isSoloAudio}
+      activeStream={stream}
+      onStreamQualityChange={onStreamQualityChange}
       index={index}
     />
   );
@@ -517,8 +523,28 @@ export function EnhancedCameraGrid({
   const handleRequestLive = useCallback((cameraId: string) => {
     setOperatorSelectedCameraId(cameraId);
     updateStreamState(cameraId, "CONNECTING");
-    void handleStartLive(cameraId, "sub");
-  }, [handleStartLive, updateStreamState]);
+    const targetStream = [...gridPositions.values()].find((p) => p.camera.id === cameraId)?.stream ?? "sub";
+    void handleStartLive(cameraId, targetStream);
+  }, [handleStartLive, updateStreamState, gridPositions]);
+
+  const handleStreamQualityChange = useCallback((cameraId: string, quality: "main" | "sub") => {
+    setGridPositions((current) => {
+      const next = new Map(current);
+      for (const [pos, entry] of next.entries()) {
+        if (entry.camera.id === cameraId) {
+          next.set(pos, { ...entry, stream: quality });
+          break;
+        }
+      }
+      return next;
+    });
+
+    if (activeStreamTypesRef.current.get(cameraId) === quality) {
+      return;
+    }
+
+    void handleStartLive(cameraId, quality, true);
+  }, [handleStartLive]);
 
   // GPU acceleration classes
   const gpuAccelClass = enableGPUAcceleration ? "gpu-accelerated" : "";
@@ -589,13 +615,21 @@ export function EnhancedCameraGrid({
 
     const startIdx = currentPage * totalPositions;
     const pageSlice = cameras.slice(startIdx, startIdx + totalPositions);
-    const stream = totalPositions >= 16 ? "sub" : "main";
     const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
     pageSlice.forEach((camera, index) => {
-      posMap.set(index, { camera, stream, priority: 0 });
+      // Adaptive Dual-Stream rule:
+      // - Solo 1x1: Main-stream (1080p/4K)
+      // - Hero layouts (1+5, 1+7): Slot 0 is Main-stream, companion slots are Sub-stream (D1/720p)
+      // - Hero layout (2+8): Slots 0 and 1 are Main-stream, companion slots are Sub-stream
+      // - All other multi-camera grids (2x2, 3x3, 4x4, etc.): Low-bandwidth Sub-stream by default
+      const isHeroSlot = (totalPositions === 1) ||
+        (index === 0 && (gridSize === "1+5" || gridSize === "1+7")) ||
+        (index < 2 && gridSize === "2+8");
+      const defaultStream: "main" | "sub" = isHeroSlot ? "main" : "sub";
+      posMap.set(index, { camera, stream: defaultStream, priority: isHeroSlot ? 2 : 0 });
     });
     setGridPositions(posMap);
-  }, [cameras, currentPage, totalPositions]);
+  }, [cameras, currentPage, totalPositions, gridSize]);
 
   // Video wall auto-tour rotation timer with hover-pause inspection
   useEffect(() => {
@@ -738,13 +772,8 @@ export function EnhancedCameraGrid({
   const handleStreamToggle = (position: number) => {
     const entry = gridPositions.get(position);
     if (entry) {
-      const newPositions = new Map(gridPositions);
-      newPositions.set(position, {
-        camera: entry.camera,
-        stream: entry.stream === "main" ? "sub" : "main",
-        priority: entry.priority,
-      });
-      setGridPositions(newPositions);
+      const nextStream = entry.stream === "main" ? "sub" : "main";
+      handleStreamQualityChange(entry.camera.id, nextStream);
     }
   };
 
@@ -1228,6 +1257,8 @@ export function EnhancedCameraGrid({
                   onDeleteCamera={handleRemoveFromWall}
                   onSoloAudio={handleSoloAudio}
                   isSoloAudio={soloAudioCameraId ? soloAudioCameraId === camera.id : undefined}
+                  stream={entry.stream}
+                  onStreamQualityChange={handleStreamQualityChange}
                   index={i}
                 />
               </div>
