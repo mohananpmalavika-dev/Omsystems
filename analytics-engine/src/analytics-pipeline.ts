@@ -846,6 +846,9 @@ export class AnalyticsPipeline {
       if (!rule.enabled) return false;
       const ruleType = normalizeDetectionType(rule.detectionType);
       if (ruleType === target) return true;
+      if (target === "helmet" || target === "helmet-worn") {
+        return ruleType === "helmet" || ruleType === "helmet-worn";
+      }
       if (target === "fire" || target === "smoke") {
         return ruleType === "fire-smoke" || ruleType === target;
       }

@@ -24,6 +24,9 @@ export function sortedMatchingRules(
 
 export function eventDetectionTypes(event: AnalyticsEventInput): string[] {
   const types = [event.detectionType];
+  if (event.detectionType === "helmet" || event.detectionType === "helmet-worn") {
+    types.push("helmet", "helmet-worn");
+  }
   if (event.detectionType === "anpr" && Array.isArray(event.metadata?.matches)) {
     const hasAlertingMatch = event.metadata.matches.some((value) =>
       value !== null && typeof value === "object" && !Array.isArray(value) &&

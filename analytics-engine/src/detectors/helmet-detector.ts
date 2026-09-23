@@ -85,93 +85,23 @@ export class HelmetDetector extends BaseDetector {
     
     const results: DetectionResult[] = [];
 
-    // 1. Vehicle Rider Traffic / PPE Violations (ONLY riders on motorcycle/bicycle without a helmet)
-    const riderViolations = detections.filter(d => Boolean(d.vehicleType) && d.riskLevel === "violation");
-
-    if (riderViolations.length > 0) {
-      const avgConf = this.calculateAverageConfidence(riderViolations);
-      // Default to 0 when confidence is unknown so the event passes Zod validation
-      // and reaches the rule engine; cameras with minConfidence > 0 will correctly
-      // suppress it, while cameras with minConfidence: 0 will alert as expected.
-      const effectiveConf = avgConf ?? 0;
-      const violationObjects = riderViolations.flatMap(detection => [
-        {
-          label: "no-helmet",
-          confidence: detection.confidence ?? 0,
-          boundingBox: detection.personBoundingBox,
-        },
-        {
-          label: "person",
-          confidence: detection.confidence ?? 0,
-          boundingBox: detection.personBoundingBox,
-        },
-      ]);
-      results.push({
-        detectionType: "no-helmet",
-        status: "SUCCESS",
-        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-        confidence: effectiveConf,
-        durationSeconds: 1,
-        objects: violationObjects,
-        metadata: {
-          violationCount: riderViolations.length,
-          totalChecked: detections.length,
-          vehicleTypes: riderViolations.map(v => v.vehicleType).filter(Boolean),
-        },
-        executionMetadata: {
-          status: "SUCCESS",
-          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-          modelId: "helmet-classifier",
-          modelVersion: "1.0.0",
-          simulated: false,
-          timestamp: new Date().toISOString(),
-        },
-        requiresAlert: true,
-      });
-    }
-
-    // 2. Bank / Indoor Security Violations: Helmet Worn Inside Facility
-    // In banking & NBFC security, entering the branch, ATM kiosk, or vault area with a helmet
-    // or face covering is a critical security threat (identity concealment/robbery risk).
-    // Note: Persons without helmets inside a bank are normal/compliant and must NEVER trigger alerts.
-    const indoorHelmetWearers = detections.filter(d => !d.vehicleType && d.helmetDetected);
-    if (indoorHelmetWearers.length > 0) {
-      const avgConf = this.calculateAverageConfidence(indoorHelmetWearers);
-      const effectiveConf = avgConf ?? 0;
-      const compliantObjects = indoorHelmetWearers.flatMap(detection => [
+    // Alert ONLY when helmet is detected / present (no-helmet alert disabled as requested)
+    const helmetWearers = detections.filter(d => d.helmetDetected);
+    if (helmetWearers.length > 0) {
+      const avgConf = this.calculateAverageConfidence(helmetWearers);
+      const effectiveConf = avgConf ?? 0.85;
+      const compliantObjects = helmetWearers.flatMap(detection => [
         {
           label: "helmet",
-          confidence: detection.confidence ?? 0,
+          confidence: detection.confidence ?? effectiveConf,
           boundingBox: detection.personBoundingBox,
         },
         {
           label: "person",
-          confidence: detection.confidence ?? 0,
+          confidence: detection.confidence ?? effectiveConf,
           boundingBox: detection.personBoundingBox,
         },
       ]);
-      results.push({
-        detectionType: "helmet-worn",
-        status: "SUCCESS",
-        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-        confidence: effectiveConf,
-        durationSeconds: 1,
-        objects: compliantObjects,
-        metadata: {
-          compliantCount: indoorHelmetWearers.length,
-          threatType: "helmet_worn_inside_facility",
-        },
-        executionMetadata: {
-          status: "SUCCESS",
-          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
-          modelId: "helmet-classifier",
-          modelVersion: "1.0.0",
-          simulated: false,
-          timestamp: new Date().toISOString(),
-        },
-        requiresAlert: true,
-      });
-      // Also emit "helmet" detection type so cameras configured with "AI - Helmet / Face cover detection" trigger
       results.push({
         detectionType: "helmet",
         status: "SUCCESS",
@@ -180,8 +110,29 @@ export class HelmetDetector extends BaseDetector {
         durationSeconds: 1,
         objects: compliantObjects,
         metadata: {
-          compliantCount: indoorHelmetWearers.length,
-          threatType: "helmet_face_cover_detected",
+          compliantCount: helmetWearers.length,
+          threatType: "helmet_detected",
+        },
+        executionMetadata: {
+          status: "SUCCESS",
+          provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+          modelId: "helmet-classifier",
+          modelVersion: "1.0.0",
+          simulated: false,
+          timestamp: new Date().toISOString(),
+        },
+        requiresAlert: true,
+      });
+      results.push({
+        detectionType: "helmet-worn",
+        status: "SUCCESS",
+        provenance: this.classifier ? "LIVE_INFERENCE" : "HEURISTIC_RULE_ENGINE",
+        confidence: effectiveConf,
+        durationSeconds: 1,
+        objects: compliantObjects,
+        metadata: {
+          compliantCount: helmetWearers.length,
+          threatType: "helmet_worn_inside_facility",
         },
         executionMetadata: {
           status: "SUCCESS",
@@ -251,7 +202,7 @@ export class HelmetDetector extends BaseDetector {
     if (riderMatches.length === 0 && indoorPersons.length === 0 && runLocal && this.classifier) {
       // Fallback: evaluate frame when safety helmet rules are active but base detector missed seated/occluded person
       const fullFrameClassification = await this.classifier.run(frame, { x: 0, y: 0, width: 1, height: 1 });
-      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.8) {
+      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.55) {
         return [{
           personBoundingBox: { x: 0, y: 0, width: 1, height: 1 },
           helmetDetected: true,
@@ -399,7 +350,7 @@ export class HelmetDetector extends BaseDetector {
   ): Promise<HelmetDetection> {
     const personBox = person.boundingBox;
     const classification = await this.bestHelmetClassification(frame, personBox);
-    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.7);
+    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.5);
     return {
       personBoundingBox: person.boundingBox,
       helmetDetected,
