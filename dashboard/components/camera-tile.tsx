@@ -29,6 +29,7 @@ import {
   History,
   Rewind,
   Play,
+  Tag,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -47,6 +48,11 @@ import { FisheyeDewarpCanvas } from "./fisheye-dewarp-canvas";
 import { VideoWallDispatchModal } from "./video-wall-dispatch-modal";
 import { AudioDiagnostic } from "./audio-diagnostic";
 import { LiveAiOverlay } from "./live-ai-overlay";
+import {
+  useCameraOperatorFlags,
+  PREDEFINED_OPERATOR_FLAGS,
+} from "@/lib/camera-operator-flags";
+import { OperatorCameraFlagModal } from "./operator-camera-flag-modal";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -185,6 +191,8 @@ function CameraTileComponent({
   const [internalVideoElement, setInternalVideoElement] = useState<HTMLVideoElement | null>(null);
   const [dvrOffset, setDvrOffset] = useState<number>(0);
   const [showDvrScrubber, setShowDvrScrubber] = useState<boolean>(false);
+  const [showFlagModal, setShowFlagModal] = useState<boolean>(false);
+  const { cameraFlags } = useCameraOperatorFlags(camera.id);
   const [isRecordingClip, setIsRecordingClip] = useState<boolean>(false);
   const [clipCountdown, setClipCountdown] = useState<number>(15);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -926,6 +934,29 @@ function CameraTileComponent({
           )}
         </div>
 
+        {cameraFlags.length > 0 && (
+          <div className="absolute top-11 left-2.5 z-20 flex flex-wrap items-center gap-1.5 pointer-events-auto">
+            {cameraFlags.map((flag, idx) => {
+              const def = PREDEFINED_OPERATOR_FLAGS.find((f) => f.type === flag.type);
+              const colorClass = def
+                ? def.colorClass
+                : "bg-indigo-500/20 text-indigo-300 border-indigo-500/60";
+              return (
+                <button
+                  key={`${flag.type}-${idx}`}
+                  type="button"
+                  onClick={() => setShowFlagModal(true)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold shadow-lg backdrop-blur-md cursor-pointer transition-transform hover:scale-105 ${colorClass}`}
+                  title={`${flag.label}${flag.note ? `: ${flag.note}` : ""} · Click to edit flag`}
+                >
+                  <span className="text-[11px]">{def ? def.icon : "🏷️"}</span>
+                  <span>{flag.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {showAiOverlay && activeAiRules.length > 0 && (
           <button
             type="button"
@@ -1036,6 +1067,23 @@ function CameraTileComponent({
             disabled={!canPlayLive}
           >
             <Move size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Operator Status Flags"
+            title={
+              cameraFlags.length > 0
+                ? `Operator Flags (${cameraFlags.map((f) => f.label).join(", ")}): Click to manage`
+                : "Add Operator Status Flags (Maintenance Needed, Lens Dirty, VIP, etc.)"
+            }
+            className={
+              cameraFlags.length > 0
+                ? "text-amber-400 border-amber-500/70 bg-amber-950/80 shadow-[0_0_8px_rgba(245,158,11,0.35)]"
+                : ""
+            }
+            onClick={() => setShowFlagModal(true)}
+          >
+            <Tag size={15} />
           </button>
           <button
             type="button"
@@ -1361,6 +1409,14 @@ function CameraTileComponent({
           cameraName={camera.name}
           isOpen={showDispatchModal}
           onClose={() => setShowDispatchModal(false)}
+        />
+      )}
+      {showFlagModal && (
+        <OperatorCameraFlagModal
+          cameraId={camera.id}
+          cameraName={camera.name}
+          isOpen={showFlagModal}
+          onClose={() => setShowFlagModal(false)}
         />
       )}
     </article>

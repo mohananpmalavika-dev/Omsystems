@@ -8,6 +8,8 @@ import {
   Plus,
   RotateCw,
   ShieldAlert,
+  FolderPlus,
+  Layers,
 } from "lucide-react";
 import { CameraTile } from "./camera-tile";
 import {
@@ -25,6 +27,12 @@ import type { TileStreamState, PresentationMode } from "@/lib/media-types";
 import type { CameraPlaybackMode, DegradationReason } from "@/lib/video/types";
 import { releaseLiveSession, startLiveFromBrowser } from "@/lib/live-client";
 import { useVideoWallScheduler } from "@/hooks/use-video-wall-scheduler";
+import {
+  useCameraPresets,
+  useCameraOperatorFlags,
+  PREDEFINED_OPERATOR_FLAGS,
+} from "@/lib/camera-operator-flags";
+import { CameraPresetManagerModal } from "./camera-preset-manager-modal";
 
 export type GridSize = "1x1" | "2x2" | "3x3" | "4x4" | "5x5" | "6x6" | "7x7" | "8x8" | "9x9" | "10x10" | "11x11" | "12x12" | "1+5" | "1+7" | "2+8";
 
@@ -200,6 +208,40 @@ export function EnhancedCameraGrid({
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const { presets } = useCameraPresets();
+  const { allFlags } = useCameraOperatorFlags();
+  const [activeViewFilter, setActiveViewFilter] = useState<string>("all");
+  const [showPresetManager, setShowPresetManager] = useState<boolean>(false);
+
+  const displayedCameras = useMemo(() => {
+    if (activeViewFilter === "all") return cameras;
+    if (activeViewFilter.startsWith("flag:")) {
+      const flagType = activeViewFilter.replace("flag:", "");
+      return cameras.filter((c) =>
+        allFlags[c.id]?.some((f) => f.type === flagType)
+      );
+    }
+    const preset = presets.find((p) => p.id === activeViewFilter);
+    if (preset) {
+      if (preset.cameraIds.length === 0) return [];
+      const idSet = new Set(preset.cameraIds);
+      return cameras.filter((c) => idSet.has(c.id));
+    }
+    return cameras;
+  }, [cameras, activeViewFilter, presets, allFlags]);
+
+  const handleSelectPreset = (presetId: string) => {
+    setActiveViewFilter(presetId);
+    setCurrentPage(0);
+    const preset = presets.find((p) => p.id === presetId);
+    if (preset?.gridSize && gridSizeMap[preset.gridSize as GridSize]) {
+      setGridSize(preset.gridSize as GridSize);
+    }
+    setLayoutFeedback({
+      kind: "success",
+      message: preset ? `Viewing preset group: ${preset.name}` : "Viewing all cameras",
+    });
+  };
 
   const handleSoloAudio = useCallback((cameraId: string) => {
     setSoloAudioCameraId((current) => (current === cameraId ? null : cameraId));
@@ -288,7 +330,7 @@ export function EnhancedCameraGrid({
   };
 
   const totalPositions = gridSizeMap[gridSize];
-  const totalPages = Math.max(1, Math.ceil(cameras.length / totalPositions));
+  const totalPages = Math.max(1, Math.ceil(displayedCameras.length / totalPositions));
   const decoderCapacityOptions = useMemo(
     () => getDecoderCapacityOptions(maxConcurrentStreams),
     [maxConcurrentStreams],
@@ -608,13 +650,13 @@ export function EnhancedCameraGrid({
 
   // Initialize and slice cameras based on current page and grid size
   useEffect(() => {
-    if (cameras.length === 0) {
+    if (displayedCameras.length === 0) {
       setGridPositions(new Map());
       return;
     }
 
     const startIdx = currentPage * totalPositions;
-    const pageSlice = cameras.slice(startIdx, startIdx + totalPositions);
+    const pageSlice = displayedCameras.slice(startIdx, startIdx + totalPositions);
     const posMap = new Map<number, { camera: Camera; stream: "main" | "sub"; priority: number }>();
     pageSlice.forEach((camera, index) => {
       // Adaptive Dual-Stream rule:
@@ -629,7 +671,7 @@ export function EnhancedCameraGrid({
       posMap.set(index, { camera, stream: defaultStream, priority: isHeroSlot ? 2 : 0 });
     });
     setGridPositions(posMap);
-  }, [cameras, currentPage, totalPositions, gridSize]);
+  }, [displayedCameras, currentPage, totalPositions, gridSize]);
 
   // Video wall auto-tour rotation timer with hover-pause inspection
   useEffect(() => {
@@ -751,7 +793,7 @@ export function EnhancedCameraGrid({
     // density. This avoids jumping an operator back to the beginning of a
     // large wall when changing from, for example, 12×12 to 4×4.
     setCurrentPage((current) => retainCameraPageOnGridChange(
-      cameras.length,
+      displayedCameras.length,
       current,
       totalPositions,
       gridSizeMap[newSize],
@@ -1055,6 +1097,48 @@ export function EnhancedCameraGrid({
             {activeDecoderCount}/{budget?.decoderBudget ?? capacity?.recommendedDecoderLimit ?? decoderLimit} live
             {snapshotCount > 0 ? ` · ${snapshotCount} snapshots` : ""}
           </span>
+          {/* Custom Presets & Group Selector */}
+          <label className="toolbar-control" title="Filter video wall by Custom Preset Group or Operator Status Flag">
+            <span><Layers size={14} /> View / Group</span>
+            <select
+              value={activeViewFilter}
+              onChange={(e) => handleSelectPreset(e.target.value)}
+            >
+              <option value="all">All Cameras ({cameras.length})</option>
+              {presets.length > 0 && (
+                <optgroup label="📁 Custom Preset Groups">
+                  {presets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.name} ({preset.cameraIds.length} cams)
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="🏷️ Filter by Status Flag">
+                {PREDEFINED_OPERATOR_FLAGS.map((flag) => {
+                  const count = cameras.filter((c) =>
+                    allFlags[c.id]?.some((f) => f.type === flag.type)
+                  ).length;
+                  return (
+                    <option key={flag.type} value={`flag:${flag.type}`}>
+                      {flag.icon} {flag.label} ({count})
+                    </option>
+                  );
+                })}
+              </optgroup>
+            </select>
+          </label>
+
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => setShowPresetManager(true)}
+            title="Create and manage custom camera preset groups (Main Gates, Warehouse All, Night Patrol, etc.)"
+          >
+            <FolderPlus size={15} />
+            Presets ({presets.length})
+          </button>
+
           {savedLayouts.length > 0 && (
             <label className="toolbar-control">
               <span><Layout size={14} /> Saved layout</span>
@@ -1640,6 +1724,14 @@ export function EnhancedCameraGrid({
           .camera-grid { --camera-grid-columns: 1 !important; }
         }
       `}</style>
+      <CameraPresetManagerModal
+        isOpen={showPresetManager}
+        onClose={() => setShowPresetManager(false)}
+        cameras={cameras}
+        currentGridSize={gridSize}
+        onSelectPreset={handleSelectPreset}
+        activePresetId={activeViewFilter}
+      />
     </div>
   );
 }
