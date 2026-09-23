@@ -359,10 +359,21 @@ export class EdgeLiveGateway {
     if (!this.access.authenticate(token, path, "read")) {
       return sendJson(response, 401, { error: "media_access_denied" });
     }
-    const upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
-      method: request.method ?? "GET",
-      headers: forwardMediaHeaders(request.headers),
-    });
+    let upstream: Response;
+    try {
+      upstream = await fetch(new URL(suffix, this.options.mediaMtxHlsUrl), {
+        method: request.method ?? "GET",
+        headers: forwardMediaHeaders(request.headers),
+      });
+    } catch {
+      return sendJson(response, 502, { error: "upstream_media_unavailable" });
+    }
+    if (upstream.status >= 400) {
+      return sendJson(response, upstream.status, {
+        error: upstream.status === 404 ? "stream_not_found" : "stream_muxing_failed",
+        status: upstream.status,
+      });
+    }
     response.statusCode = upstream.status;
     for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);

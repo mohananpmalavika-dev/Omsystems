@@ -206,6 +206,17 @@ export function HlsPlayer({
               void video.play().catch(() => undefined);
             });
             hls.on(Hls.Events.ERROR, (_event, data) => {
+              const statusCode = data.response?.code;
+              if (statusCode && statusCode >= 400) {
+                const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
+                setError(message);
+                setPlayerError(`http_${statusCode}`);
+                reportPlaying(false);
+                setStatus("error");
+                onPlaybackError?.(message);
+                try { hls?.stopLoad(); } catch {}
+                return;
+              }
               if (!data.fatal) {
                 if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
                   hls?.startLoad(-1);
@@ -303,6 +314,17 @@ export function HlsPlayer({
           void video.play().catch(() => undefined);
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
+          const statusCode = data.response?.code;
+          if (statusCode && statusCode >= 400) {
+            const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
+            setError(message);
+            setPlayerError(`http_${statusCode}`);
+            reportPlaying(false);
+            setStatus("error");
+            onPlaybackError?.(message);
+            try { hls?.stopLoad(); } catch {}
+            return;
+          }
           if (!data.fatal) {
             // Non-fatal error: If a segment 404s/slid past buffer, catch up to live edge
             if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
