@@ -170,21 +170,10 @@ if (fs.existsSync(helmetPath)) {
         console.log('Successfully patched detect() in helmet-detector.js to alert ONLY when helmet is present');
     }
 
-    // Lower threshold in classifyPersonHelmetCompliance
-    const targetThresh = 'classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.7);';
-    const repThresh = 'classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.5);';
-    if (helmetCode.includes(targetThresh)) {
-        helmetCode = helmetCode.replace(targetThresh, repThresh);
-        console.log('Successfully adjusted helmet detection confidence threshold to 0.5');
-    }
-
-    // Lower full-frame fallback threshold
-    const targetFallback = 'fullFrameClassification.confidence >= 0.8';
-    const repFallback = 'fullFrameClassification.confidence >= 0.55';
-    if (helmetCode.includes(targetFallback)) {
-        helmetCode = helmetCode.replace(targetFallback, repFallback);
-        console.log('Successfully adjusted full-frame fallback threshold to 0.55');
-    }
+    // Set threshold in classifyPersonHelmetCompliance to 0.75 (real helmet gives 0.85-0.95, bare head gives ~0.55-0.61)
+    helmetCode = helmetCode.replace(/classification\.confidence >= Math\.max\(this\.MIN_CONFIDENCE,\s*0\.\d+\);/g, 'classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.75);');
+    helmetCode = helmetCode.replace(/fullFrameClassification\.confidence >= 0\.\d+/g, 'fullFrameClassification.confidence >= 0.75');
+    console.log('Successfully adjusted helmet detection confidence thresholds to 0.75');
 
     fs.writeFileSync(helmetPath, helmetCode, 'utf8');
 }

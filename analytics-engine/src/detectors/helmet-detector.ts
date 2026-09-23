@@ -30,7 +30,7 @@ export class HelmetDetector extends BaseDetector {
 
   constructor(
     inference: ObjectFrameInference | null = null,
-    confidenceThreshold = 0.5,
+    confidenceThreshold = 0.75,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
     super("helmet", "1.0.0");
@@ -202,7 +202,7 @@ export class HelmetDetector extends BaseDetector {
     if (riderMatches.length === 0 && indoorPersons.length === 0 && runLocal && this.classifier) {
       // Fallback: evaluate frame when safety helmet rules are active but base detector missed seated/occluded person
       const fullFrameClassification = await this.classifier.run(frame, { x: 0, y: 0, width: 1, height: 1 });
-      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.55) {
+      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.75) {
         return [{
           personBoundingBox: { x: 0, y: 0, width: 1, height: 1 },
           helmetDetected: true,
@@ -350,7 +350,7 @@ export class HelmetDetector extends BaseDetector {
   ): Promise<HelmetDetection> {
     const personBox = person.boundingBox;
     const classification = await this.bestHelmetClassification(frame, personBox);
-    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.5);
+    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.75);
     return {
       personBoundingBox: person.boundingBox,
       helmetDetected,
