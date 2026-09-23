@@ -49,6 +49,12 @@ edge-agent/release/data/
 edge-agent/release/logs/
 edge-agent/release/runtime/
 
+# Activated GCP media sites and WireGuard peer material stay host-local.
+deploy/gcp/sites/*.caddy
+deploy/gcp/wireguard-media/*.conf
+deploy/gcp/wireguard-media/*.key
+deploy/gcp/wireguard-media/*.pub
+
 # Ignore environment files (examples only checked into repo)
 .env*
 !.env.example

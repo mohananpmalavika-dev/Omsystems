@@ -1,0 +1,13 @@
+# Enable by copying this file to edge-media.caddy and setting EDGE_MEDIA_DOMAIN
+# and EDGE_MEDIA_UPSTREAM in the GCP Compose environment. The upstream must be
+# the Edge Agent's WireGuard IP and port, for example 10.203.0.2:8090.
+{$EDGE_MEDIA_DOMAIN} {
+    @edge_media path /health /v1/live/* /v1/talk/* /hls/*
+    handle @edge_media {
+        reverse_proxy {$EDGE_MEDIA_UPSTREAM} {
+            flush_interval -1
+        }
+    }
+
+    respond 404
+}

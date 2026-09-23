@@ -112,3 +112,7 @@ http://34.14.220.41, :80 {
         }
     }
 }
+
+# Optional branch media sites live in ./sites. An empty glob is valid, so the
+# existing dashboard deployment keeps working until a site is enabled.
+import sites/*.caddy

@@ -27,9 +27,9 @@ webrtcAllowOrigins: ["*"]
 
 pathDefaults:
   sourceOnDemand: yes
-  # Increased from 15s: gives the RTSP source time to connect, authenticate,
-  # and buffer enough segments for the m3u8 to be valid before clients poll.
-  sourceOnDemandStartTimeout: 20s
+  # 8s is sufficient since edge-agent is always online and starts pushing quickly.
+  # Reduced from 20s to cut first-connect delay by ~12 seconds.
+  sourceOnDemandStartTimeout: 8s
   # Keep the RTSP connection alive for 3 minutes after the last viewer
   # leaves to avoid cold-start 500s on quick reconnect.
   sourceOnDemandCloseAfter: 180s

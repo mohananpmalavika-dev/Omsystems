@@ -18,8 +18,11 @@ services:
     environment:
       - DOMAIN_NAME=${DOMAIN_NAME:-localhost}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-mohanpmalavika@gmail.com}
+      - EDGE_MEDIA_DOMAIN=${EDGE_MEDIA_DOMAIN:-}
+      - EDGE_MEDIA_UPSTREAM=${EDGE_MEDIA_UPSTREAM:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
