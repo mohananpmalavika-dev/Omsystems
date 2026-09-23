@@ -216,8 +216,14 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
   
   return <article ref={tile} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm" aria-label={`${camera.name} camera`}>
     <div className="relative aspect-video overflow-hidden bg-slate-950">
-      {session?.hls ? (
-        <HlsPlayer url={session.hls.url} bearerToken={session.hls.bearerToken} cameraName={camera.name} onPlaybackError={onStart}/>
+      {session?.hls || session?.webRtc ? (
+        <HlsPlayer
+          url={session.hls?.url ?? ""}
+          whepUrl={session.webRtc?.whepUrl}
+          bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
+          cameraName={camera.name}
+          onPlaybackError={onStart}
+        />
       ) : (
         <div className="relative w-full h-full">
           <CctvVisualCanvas

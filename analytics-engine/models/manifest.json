@@ -55,7 +55,7 @@
       "name": "PaddleClas PULC safety-helmet classifier",
       "path": "safety/helmet.onnx",
       "pathEnvironment": "HELMET_MODEL_PATH",
-      "sha256": "975627c20b0bf86bd2d27e053683dd577bd109193c5254a96e57ac207061c155",
+      "sha256": "8c87834e2fde4eb29723483cdecedf78c231cf7e6da9913cf8227ba542b3f31f",
       "license": "Apache-2.0",
       "sourceProject": "https://github.com/PaddlePaddle/PaddleClas/blob/release/2.6/docs/en/PULC/PULC_safety_helmet_en.md",
       "type": "onnx",

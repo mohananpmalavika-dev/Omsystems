@@ -458,10 +458,11 @@ export function GlobalAlertCenter() {
                   >
                     Your browser cannot play this evidence clip.
                   </video>
-                ) : session?.hls?.url ? (
+                ) : (session?.hls?.url || session?.webRtc?.whepUrl) ? (
                   <HlsPlayer
-                    url={session.hls.url}
-                    bearerToken={session.hls.bearerToken ?? ""}
+                    url={session?.hls?.url ?? ""}
+                    whepUrl={session?.webRtc?.whepUrl}
+                    bearerToken={session?.hls?.bearerToken ?? session?.webRtc?.bearerToken ?? ""}
                     cameraName={current.cameraName || current.cameraId}
                   />
                 ) : (

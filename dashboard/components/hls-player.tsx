@@ -2,7 +2,7 @@
 
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
-import { Loader2, RotateCw, Sliders, Zap, Shield, Wifi, ChevronDown } from "lucide-react";
+import { Loader2, RotateCw, Sliders, Zap, ChevronDown } from "lucide-react";
 
 const MAX_RECOVERY_ATTEMPTS = 25;
 const STALL_TIMEOUT_MS = 15_000;
@@ -12,6 +12,7 @@ type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
 export function HlsPlayer({
   url,
+  whepUrl,
   bearerToken,
   cameraName,
   cameraId,
@@ -22,6 +23,7 @@ export function HlsPlayer({
   onVideoElementChange,
 }: {
   url: string;
+  whepUrl?: string;
   bearerToken: string;
   cameraName: string;
   cameraId?: string;
@@ -34,14 +36,14 @@ export function HlsPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const playbackErrorRef = useRef(onPlaybackError);
   const playbackStateChangeRef = useRef(onPlaybackStateChange);
-  const [status, setStatus] = useState<PlayerStatus>(url ? "loading" : "idle");
+  const [status, setStatus] = useState<PlayerStatus>(url || whepUrl ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
 
   // Sub-Second Zero-Latency & Dynamic Bitrate Switcher State
-  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">("webrtc");
+  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl ? "webrtc" : "ll-hls");
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
-  const [latencyMs, setLatencyMs] = useState<number>(290);
+  const [latencyMs, setLatencyMs] = useState<number>(whepUrl ? 280 : 1200);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -76,9 +78,12 @@ export function HlsPlayer({
 
   useEffect(() => {
     let hls: Hls | null = null;
+    let peerConnection: RTCPeerConnection | null = null;
+    let whepAbortController: AbortController | null = null;
     let disposed = false;
     let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
     let watchdogTimer: ReturnType<typeof setInterval> | undefined;
+    let whepTimeoutTimer: ReturnType<typeof setTimeout> | undefined;
     let recoveryAttempts = 0;
     let lastProgressAt = Date.now();
     let playbackStarted = false;
@@ -92,13 +97,13 @@ export function HlsPlayer({
 
     playbackStateChangeRef.current?.(false);
 
-    if (!url) {
+    if (!url && !whepUrl) {
       setStatus("idle");
       setError(null);
       return;
     }
 
-    const isSnapshotFeed = url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url);
+    const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
     if (isSnapshotFeed) {
       setStatus("loading");
       setError(null);
@@ -117,14 +122,41 @@ export function HlsPlayer({
 
     const setPlayerError = (reason: string) => {
       if (disposed) return;
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
+      cleanupStreaming();
       setError(reason);
       setStatus("error");
       reportPlaying(false);
       playbackErrorRef.current?.(reason);
+    };
+
+    const cleanupStreaming = () => {
+      if (whepTimeoutTimer) {
+        clearTimeout(whepTimeoutTimer);
+        whepTimeoutTimer = undefined;
+      }
+      if (whepAbortController) {
+        whepAbortController.abort();
+        whepAbortController = null;
+      }
+      if (peerConnection) {
+        peerConnection.ontrack = null;
+        peerConnection.oniceconnectionstatechange = null;
+        peerConnection.close();
+        peerConnection = null;
+      }
+      if (hls) {
+        hls.destroy();
+        hls = null;
+      }
+      if (video) {
+        if (video.srcObject) {
+          try {
+            const stream = video.srcObject as MediaStream;
+            stream.getTracks().forEach((t) => t.stop());
+          } catch {}
+          video.srcObject = null;
+        }
+      }
     };
 
     const markProgress = () => {
@@ -135,6 +167,209 @@ export function HlsPlayer({
       setError(null);
       setStatus("live");
       reportPlaying(true);
+    };
+
+    // Low Latency HLS Playback Logic
+    const startHls = (sourceUrl: string) => {
+      if (disposed || !video) return;
+      cleanupStreaming();
+      setStreamProtocol("ll-hls");
+      setLatencyMs(1200);
+
+      const refreshedSource = sourceUrl;
+      if (Hls.isSupported()) {
+        try {
+          hls = new Hls({
+            lowLatencyMode: true,
+            backBufferLength: 2,
+            maxBufferLength: 4,
+            maxMaxBufferLength: 6,
+            startPosition: -1, // Start directly at the live edge to eliminate startup lag
+            liveSyncDuration: 1.5,
+            liveMaxLatencyDuration: 3.5,
+            maxLiveSyncPlaybackRate: 1.3,
+            liveDurationInfinity: true,
+            highBufferWatchdogPeriod: 1,
+            fragLoadingTimeOut: 10_000,
+            fragLoadingMaxRetry: 4,
+            manifestLoadingTimeOut: 10_000,
+            manifestLoadingMaxRetry: 4,
+            xhrSetup: (xhr, requestUrl) => {
+              const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
+              if (isSameOrigin) {
+                xhr.withCredentials = true;
+              }
+              if (bearerToken) {
+                xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
+              }
+            },
+          });
+
+          hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            playbackStarted = true;
+            lastProgressAt = Date.now();
+            if (typeof hls?.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition) && hls.liveSyncPosition > 0) {
+              try { video.currentTime = hls.liveSyncPosition; } catch {}
+            }
+            void video.play().catch(() => undefined);
+          });
+
+          hls.on(Hls.Events.ERROR, (_event, data) => {
+            const statusCode = data.response?.code;
+            if (statusCode && statusCode >= 400) {
+              const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
+              setError(message);
+              setPlayerError(`http_${statusCode}`);
+              reportPlaying(false);
+              setStatus("error");
+              onPlaybackError?.(message);
+              try { hls?.stopLoad(); } catch {}
+              return;
+            }
+            if (!data.fatal) {
+              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
+                hls?.startLoad(-1);
+              }
+              return;
+            }
+            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
+                if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                  recoveryAttempts += 1;
+                  lastProgressAt = Date.now();
+                  hls?.startLoad(-1);
+                  return;
+                }
+              }
+            }
+            if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+              recover("media_error");
+              return;
+            }
+            recover("hls_error");
+          });
+
+          hls.loadSource(refreshedSource);
+          hls.attachMedia(video);
+        } catch {
+          setPlayerError("Unable to initialize HLS playback");
+        }
+      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+        video.src = withToken(refreshedSource, bearerToken);
+        video.load();
+        void video.play().catch(() => undefined);
+      } else {
+        setPlayerError("This browser does not support live video playback");
+      }
+    };
+
+    // Sub-Second WebRTC (WHEP) Playback Logic
+    const startWebRtc = async (targetWhepUrl: string) => {
+      if (disposed || !video) return;
+      cleanupStreaming();
+
+      whepAbortController = new AbortController();
+      const signal = whepAbortController.signal;
+
+      try {
+        const pc = new RTCPeerConnection({
+          iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }],
+          bundlePolicy: "max-bundle",
+        });
+        peerConnection = pc;
+
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+
+        pc.ontrack = (event) => {
+          if (disposed || signal.aborted) return;
+          if (event.streams && event.streams[0]) {
+            if (whepTimeoutTimer) {
+              clearTimeout(whepTimeoutTimer);
+              whepTimeoutTimer = undefined;
+            }
+            video.srcObject = event.streams[0];
+            void video.play().catch(() => undefined);
+            markProgress();
+            setStreamProtocol("webrtc");
+            setLatencyMs(280);
+          }
+        };
+
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+            if (!disposed && url) {
+              console.warn("[WebRTC] Connection failed or disconnected, falling back to HLS", pc.iceConnectionState);
+              startHls(url);
+            }
+          }
+        };
+
+        // Fallback timer: if WebRTC does not receive media within 4 seconds, fallback to HLS
+        whepTimeoutTimer = setTimeout(() => {
+          if (!disposed && !playbackStarted && url) {
+            console.warn("[WebRTC] Handshake timed out, falling back to HLS");
+            startHls(url);
+          }
+        }, 4_000);
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+
+        // Allow up to 600ms to gather local ICE candidates into the SDP
+        await new Promise<void>((resolve) => {
+          if (pc.iceGatheringState === "complete") {
+            resolve();
+          } else {
+            const onGatherChange = () => {
+              if (pc.iceGatheringState === "complete") {
+                pc.removeEventListener("icegatheringstatechange", onGatherChange);
+                resolve();
+              }
+            };
+            pc.addEventListener("icegatheringstatechange", onGatherChange);
+            setTimeout(resolve, 600);
+          }
+        });
+
+        if (disposed || signal.aborted) return;
+
+        const offerSdp = pc.localDescription?.sdp || offer.sdp;
+        const headers: Record<string, string> = {
+          "Content-Type": "application/sdp",
+        };
+        if (bearerToken) {
+          headers["Authorization"] = `Bearer ${bearerToken}`;
+        }
+
+        const res = await fetch(targetWhepUrl, {
+          method: "POST",
+          headers,
+          body: offerSdp,
+          signal,
+        });
+
+        if (!res.ok) {
+          throw new Error(`WHEP endpoint returned ${res.status}`);
+        }
+
+        const answerSdp = await res.text();
+        if (disposed || signal.aborted) return;
+
+        await pc.setRemoteDescription({
+          type: "answer",
+          sdp: answerSdp,
+        });
+      } catch (err) {
+        if (!disposed) {
+          console.warn("[WebRTC] WHEP initiation error, falling back to HLS:", err);
+          if (url) {
+            startHls(url);
+          } else {
+            setPlayerError("WebRTC connection failed and no HLS fallback available");
+          }
+        }
+      }
     };
 
     const recover = (reason: string) => {
@@ -159,7 +394,6 @@ export function HlsPlayer({
               lastProgressAt = Date.now();
               return;
             } else if (reason === "playback_stalled" && recoveryAttempts % 4 !== 0) {
-              // Try catching up to live edge without full teardown
               hls.startLoad(-1);
               if (typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
                 try { video.currentTime = hls.liveSyncPosition; } catch {}
@@ -167,84 +401,12 @@ export function HlsPlayer({
               void video.play().catch(() => undefined);
               lastProgressAt = Date.now();
               return;
-            } else {
-              hls.destroy();
-              hls = null;
             }
           }
-          const refreshedSource = url;
-          if (Hls.isSupported()) {
-            hls = new Hls({
-              // The edge gateway publishes fMP4 parts; consume them instead
-              // of waiting for whole two-second segments on live cameras.
-              lowLatencyMode: true,
-              backBufferLength: 4,
-              maxBufferLength: 8,
-              maxMaxBufferLength: 12,
-              liveSyncDurationCount: 2,
-              liveMaxLatencyDurationCount: 4,
-              maxLiveSyncPlaybackRate: 1.15,
-              liveDurationInfinity: true,
-              highBufferWatchdogPeriod: 2,
-              fragLoadingTimeOut: 15_000,
-              fragLoadingMaxRetry: 4,
-              manifestLoadingTimeOut: 15_000,
-              manifestLoadingMaxRetry: 4,
-              xhrSetup: (xhr, requestUrl) => {
-                const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
-                if (isSameOrigin) {
-                  xhr.withCredentials = true;
-                }
-                if (bearerToken) {
-                  xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-                }
-              },
-            });
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-              playbackStarted = true;
-              lastProgressAt = Date.now();
-              void video.play().catch(() => undefined);
-            });
-            hls.on(Hls.Events.ERROR, (_event, data) => {
-              const statusCode = data.response?.code;
-              if (statusCode && statusCode >= 400) {
-                const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
-                setError(message);
-                setPlayerError(`http_${statusCode}`);
-                reportPlaying(false);
-                setStatus("error");
-                onPlaybackError?.(message);
-                try { hls?.stopLoad(); } catch {}
-                return;
-              }
-              if (!data.fatal) {
-                if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
-                  hls?.startLoad(-1);
-                }
-                return;
-              }
-              if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
-                  if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-                    recoveryAttempts += 1;
-                    lastProgressAt = Date.now();
-                    hls?.startLoad(-1);
-                    return;
-                  }
-                }
-              }
-              if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-                recover("media_error");
-                return;
-              }
-              recover("hls_error");
-            });
-            hls.loadSource(refreshedSource);
-            hls.attachMedia(video);
-          } else {
-            video.src = withToken(refreshedSource, bearerToken);
-            video.load();
-            void video.play().catch(() => undefined);
+          if (streamProtocol === "webrtc" && whepUrl) {
+            void startWebRtc(whepUrl);
+          } else if (url) {
+            startHls(url);
           }
           lastProgressAt = Date.now();
         } catch {
@@ -273,94 +435,11 @@ export function HlsPlayer({
     setStatus("loading");
     setError(null);
 
-    const startNativePlayback = () => {
-      video.src = withToken(url, bearerToken);
-      video.load();
-      void video.play().catch(() => undefined);
-    };
-
-    if (Hls.isSupported()) {
-      try {
-        hls = new Hls({
-          // Keeping a lean buffer window prevents 1-minute drift and browser memory stutter
-          // The edge gateway publishes fMP4 parts; consume them instead
-          // of waiting for whole two-second segments on live cameras.
-          lowLatencyMode: true,
-          backBufferLength: 4,
-          maxBufferLength: 8,
-          maxMaxBufferLength: 12,
-          liveSyncDurationCount: 2,
-          liveMaxLatencyDurationCount: 4,
-          maxLiveSyncPlaybackRate: 1.15,
-          liveDurationInfinity: true,
-          highBufferWatchdogPeriod: 2,
-          fragLoadingTimeOut: 15_000,
-          fragLoadingMaxRetry: 4,
-          manifestLoadingTimeOut: 15_000,
-          manifestLoadingMaxRetry: 4,
-          xhrSetup: (xhr, requestUrl) => {
-            const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
-            if (isSameOrigin) {
-              xhr.withCredentials = true;
-            }
-            if (bearerToken) {
-              xhr.setRequestHeader("Authorization", `Bearer ${bearerToken}`);
-            }
-          },
-        });
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          playbackStarted = true;
-          lastProgressAt = Date.now();
-          void video.play().catch(() => undefined);
-        });
-        hls.on(Hls.Events.ERROR, (_event, data) => {
-          const statusCode = data.response?.code;
-          if (statusCode && statusCode >= 400) {
-            const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
-            setError(message);
-            setPlayerError(`http_${statusCode}`);
-            reportPlaying(false);
-            setStatus("error");
-            onPlaybackError?.(message);
-            try { hls?.stopLoad(); } catch {}
-            return;
-          }
-          if (!data.fatal) {
-            // Non-fatal error: If a segment 404s/slid past buffer, catch up to live edge
-            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
-              hls?.startLoad(-1);
-            }
-            return;
-          }
-
-          // Fatal network error (e.g. fragment 404 after max retries):
-          // Official Hls.js pattern: call startLoad(-1) to refresh playlist and skip past the missing segment to live edge
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
-              if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-                recoveryAttempts += 1;
-                lastProgressAt = Date.now();
-                hls?.startLoad(-1);
-                return;
-              }
-            }
-          }
-
-          if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-            recover("media_error");
-            return;
-          }
-          recover("hls_error");
-        });
-        hls.loadSource(url);
-        hls.attachMedia(video);
-      } catch {
-        setPlayerError("Unable to initialize HLS playback");
-      }
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      startNativePlayback();
-    } else {
-      setPlayerError("This browser does not support HLS playback");
+    // Prioritize WebRTC for sub-second zero latency; fallback automatically to HLS
+    if (streamProtocol === "webrtc" && whepUrl) {
+      void startWebRtc(whepUrl);
+    } else if (url) {
+      startHls(url);
     }
 
     watchdogTimer = setInterval(() => {
@@ -370,10 +449,10 @@ export function HlsPlayer({
         return;
       }
 
-      // Automatically snap to live edge if playback drifted behind
+      // Automatically snap to live edge if HLS playback drifted behind (> 2s)
       if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
         const drift = hls.liveSyncPosition - video.currentTime;
-        if (drift > 8) {
+        if (drift > 2) {
           try {
             video.currentTime = hls.liveSyncPosition;
           } catch {
@@ -381,13 +460,13 @@ export function HlsPlayer({
           }
         }
       }
-    }, 2_000);
+    }, 1_000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible" && video && !video.paused) {
         if (hls && typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
           const drift = hls.liveSyncPosition - video.currentTime;
-          if (drift > 4) {
+          if (drift > 2) {
             try {
               video.currentTime = hls.liveSyncPosition;
             } catch {
@@ -396,9 +475,9 @@ export function HlsPlayer({
           }
         } else if (video.buffered.length > 0) {
           const end = video.buffered.end(video.buffered.length - 1);
-          if (end - video.currentTime > 4) {
+          if (end - video.currentTime > 2) {
             try {
-              video.currentTime = Math.max(0, end - 1);
+              video.currentTime = Math.max(0, end - 0.5);
             } catch {
               // ignore
             }
@@ -413,6 +492,7 @@ export function HlsPlayer({
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (recoveryTimer) clearTimeout(recoveryTimer);
       if (watchdogTimer) clearInterval(watchdogTimer);
+      if (whepTimeoutTimer) clearTimeout(whepTimeoutTimer);
       video.removeEventListener("playing", markProgress);
       video.removeEventListener("timeupdate", markProgress);
       video.removeEventListener("progress", handleProgress);
@@ -420,16 +500,13 @@ export function HlsPlayer({
       video.removeEventListener("waiting", handleWaiting);
       video.removeEventListener("stalled", handleWaiting);
       video.removeEventListener("error", handleVideoError);
-      if (hls) {
-        hls.destroy();
-        hls = null;
-      }
+      cleanupStreaming();
       reportPlaying(false);
       video.pause();
       video.removeAttribute("src");
       video.load();
     };
-  }, [bearerToken, retryNonce, url]);
+  }, [bearerToken, retryNonce, streamProtocol, url, whepUrl]);
 
   const retry = () => {
     setError(null);
@@ -508,7 +585,7 @@ export function HlsPlayer({
                         type="button"
                         onClick={() => {
                           setStreamProtocol("webrtc");
-                          setLatencyMs(290);
+                          setLatencyMs(280);
                           setShowSettings(false);
                         }}
                         className={`p-1 rounded text-center transition-all ${
@@ -587,7 +664,7 @@ export function HlsPlayer({
               title="Click to retry edge stream"
             >
               <RotateCw size={10} className={status === "reconnecting" ? "animate-spin" : ""} />
-              <span>RETRY HLS</span>
+              <span>RETRY</span>
             </button>
           )}
         </div>

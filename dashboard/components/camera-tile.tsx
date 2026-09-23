@@ -337,11 +337,12 @@ function CameraTileComponent({
         }}
       >
         <div className="zoom-stage" style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)` }}>
-          {session?.hls && (!liveError || !isFatalLiveError(liveError)) ? (
+          {(session?.hls || session?.webRtc) && (!liveError || !isFatalLiveError(liveError)) ? (
             <>
               <HlsPlayer
-                url={session.hls.url}
-                bearerToken={session.hls.bearerToken ?? ""}
+                url={session.hls?.url ?? ""}
+                whepUrl={session.webRtc?.whepUrl}
+                bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
                 cameraName={camera.name}
                 cameraId={camera.id}
                 muted={isMuted}
@@ -419,7 +420,7 @@ function CameraTileComponent({
           </button>
         )}
 
-        {!session?.hls && (
+        {!session?.hls && !session?.webRtc && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
             <button type="button" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-xs font-semibold text-white shadow-lg backdrop-blur" onClick={onStart} disabled={loading || !isActive}>
               {loading ? (
@@ -427,7 +428,7 @@ function CameraTileComponent({
               ) : (
                 <Radio size={15} />
               )}
-              {loading ? "Connecting Edge Stream…" : !isActive ? "Camera offline" : "Connect Edge HLS"}
+              {loading ? "Connecting Live Stream…" : !isActive ? "Camera offline" : "Connect Live Stream"}
             </button>
           </div>
         )}

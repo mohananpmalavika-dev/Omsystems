@@ -156,10 +156,11 @@ export function CameraTile({
                 <div className="font-mono text-xs font-semibold text-rose-300">SIGNAL LOST</div>
                 <div className="mt-1 text-[10px] text-slate-500">Camera or recorder channel is unavailable</div>
               </div>
-            ) : session?.hls ? (
+            ) : session?.hls || session?.webRtc ? (
               <HlsPlayer
-                url={session.hls.url}
-                bearerToken={session.hls.bearerToken ?? ""}
+                url={session.hls?.url ?? ""}
+                whepUrl={session.webRtc?.whepUrl}
+                bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
                 cameraName={camera.name}
                 cameraId={camera.cameraId}
               />

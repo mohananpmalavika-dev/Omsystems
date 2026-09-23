@@ -130,7 +130,9 @@ export class AnalyticsPipeline {
   constructor() {
     // Initialize core detectors
     this.motionDetector = new MotionDetector();
-    this.objectDetector = new ObjectDetector();
+    this.objectDetector = new ObjectDetector({
+      confidenceThreshold: environmentProbability("OBJECT_CONFIDENCE_THRESHOLD", 0.35),
+    });
     this.zoneDetector = new ZoneDetector();
     this.healthDetector = new CameraHealthDetector();
     this.cameraTamperDetector = new CameraTamperDetector();
@@ -138,7 +140,7 @@ export class AnalyticsPipeline {
     // Initialize enhanced detectors
     this.personDetector = new PersonDetector();
     this.vehicleDetector = new VehicleDetector();
-    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.5));
+    this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.35));
     this.ppeDetector = new PPEDetector(environmentProbability("PPE_CONFIDENCE_THRESHOLD", 0.6));
     this.fallDetector = new FallDetector();
     this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
@@ -203,6 +205,11 @@ export class AnalyticsPipeline {
       this.bankingAnalytics,
       this.vehicleAnalytics,
       this.safetyAnalytics,
+      this.faceAnalytics,
+      this.humanAnalytics,
+      this.retailAnalytics,
+      this.industrialAnalytics,
+      this.smartCityAnalytics,
       this.aiSearchEngine,
       this.aiInvestigationTools,
       this.aiPredictionEngine,
@@ -1023,6 +1030,11 @@ export class AnalyticsPipeline {
     health.detectors["prediction"] = this.aiPredictionEngine.getHealth();
     health.detectors["reporting"] = this.aiReportingEngine.getHealth();
     health.detectors["assistant"] = this.aiAssistant.getHealth();
+    health.detectors["face-analytics"] = this.faceAnalytics.getHealth();
+    health.detectors["human-analytics"] = this.humanAnalytics.getHealth();
+    health.detectors["retail"] = this.retailAnalytics.getHealth();
+    health.detectors["industrial"] = this.industrialAnalytics.getHealth();
+    health.detectors["smart-city"] = this.smartCityAnalytics.getHealth();
 
     for (const [name, details] of Object.entries({
       "face-analytics": "Provision RetinaFace/ArcFace runtime for face recognition.",

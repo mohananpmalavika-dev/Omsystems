@@ -689,9 +689,9 @@ hlsAddress: 127.0.0.1:8888
 # Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
-hlsSegmentCount: 5
-hlsSegmentDuration: 2s
-hlsPartDuration: 500ms
+hlsSegmentCount: 3
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
 rtsp: no
 rtmp: no
 webrtc: ${config.EDGE_MEDIA_ENABLE_WEBRTC ? "yes" : "no"}

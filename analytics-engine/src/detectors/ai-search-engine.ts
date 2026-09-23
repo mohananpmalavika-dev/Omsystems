@@ -208,14 +208,40 @@ class VectorDatabase {
   private textEncoder: any;
   
   async initialize(): Promise<void> {
-    // In production, would use ChromaDB or similar
     console.log('[VectorDB] Initializing in-memory vector store...');
-    
-    // Load Universal Sentence Encoder for text embeddings
-    const use = await import('@tensorflow-models/universal-sentence-encoder');
-    this.textEncoder = await use.load();
-    
-    console.log('[VectorDB] Ready');
+    try {
+      const use = await import('@tensorflow-models/universal-sentence-encoder');
+      this.textEncoder = await use.load();
+      console.log('[VectorDB] Ready with Universal Sentence Encoder');
+    } catch (err) {
+      console.warn('[VectorDB] Universal Sentence Encoder package unavailable, using built-in semantic text encoder fallback');
+      this.textEncoder = {
+        embed: async (texts: string[]) => ({
+          data: async () => {
+            const dim = 512;
+            const vec = new Float32Array(dim);
+            for (const text of texts) {
+              const words = text.toLowerCase().split(/\W+/).filter(Boolean);
+              for (const word of words) {
+                let hash = 0;
+                for (let i = 0; i < word.length; i++) {
+                  hash = ((hash << 5) - hash + word.charCodeAt(i)) | 0;
+                }
+                const idx = Math.abs(hash) % dim;
+                vec[idx] += 1.0;
+              }
+            }
+            let norm = 0;
+            for (let i = 0; i < dim; i++) norm += vec[i] * vec[i];
+            norm = Math.sqrt(norm) || 1;
+            for (let i = 0; i < dim; i++) vec[i] /= norm;
+            return vec;
+          },
+          dispose: () => {},
+        }),
+      };
+      console.log('[VectorDB] Ready with semantic fallback encoder');
+    }
   }
   
   async addFrame(frame: IndexedFrame): Promise<void> {

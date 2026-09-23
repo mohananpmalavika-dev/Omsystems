@@ -1433,7 +1433,11 @@ async function applyAnalyticsIngestSideEffects(
 ) {
   for (const alert of result.alerts) {
     const rule = result.rules.find((item) => item.id === alert.ruleId);
-    if (!rule || alert.eventId !== result.event.id) continue;
+    if (!rule) continue;
+    if (alert.eventId !== result.event.id) {
+      publishAlert(alert, "alert.updated");
+      continue;
+    }
     if (result.event.status === "accepted") {
       if (options.alertEvidenceClient && (alert.severity === "P1" || alert.severity === "P2") &&
           (!alert.snapshotReference || !alert.clipReference)) {

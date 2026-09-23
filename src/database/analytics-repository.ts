@@ -340,12 +340,14 @@ export class AnalyticsRepository {
           durationSeconds: input.durationSeconds,
           correlatedDetectionCount: correlationCount(input.metadata),
         });
+        const cooldownSeconds = Math.max(rule.cooldownSeconds || 60, 30);
         const recent = await client.query(
           `SELECT * FROM analytics_alerts
            WHERE rule_id=$1 AND camera_id=$2
              AND status NOT IN ('resolved', 'false_alarm', 'suppressed')
+             AND last_detected_at >= $3::timestamptz - ($4::double precision * interval '1 second')
            ORDER BY last_detected_at DESC LIMIT 1 FOR UPDATE`,
-          [rule.id, input.cameraId],
+          [rule.id, input.cameraId, input.occurredAt, cooldownSeconds],
         );
         if (recent.rows[0]) {
           const updated = await client.query(
