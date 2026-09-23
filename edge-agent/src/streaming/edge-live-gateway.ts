@@ -395,13 +395,18 @@ export class EdgeLiveGateway {
     const body = ["POST", "PATCH"].includes(request.method ?? "") ? await readBinaryBody(request, 1_000_000) : undefined;
     const upstream = await fetch(new URL(suffix, this.options.mediaMtxWebRtcUrl), {
       method: request.method ?? "GET",
-      headers: forwardMediaHeaders(request.headers),
+      headers: forwardWebRtcHeaders(request.headers),
       ...(body ? { body } : {}),
     });
     setCorsHeaders(request, response);
     response.statusCode = upstream.status;
-    for (const name of ["content-type", "location", "etag", "accept-patch"]) {
+    for (const name of ["content-type", "etag", "id", "link", "accept-patch"]) {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
+    }
+    const location = upstream.headers.get("location");
+    if (location) {
+      const sessionUrl = new URL(location, "http://edge.local");
+      response.setHeader("location", `/webrtc${sessionUrl.pathname}${sessionUrl.search}`);
     }
     response.end(Buffer.from(await upstream.arrayBuffer()));
   }
@@ -696,6 +701,8 @@ rtsp: no
 rtmp: no
 webrtc: ${config.EDGE_MEDIA_ENABLE_WEBRTC ? "yes" : "no"}
 webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: :8189
+webrtcAllowOrigins: ['*']
 srt: ${config.EDGE_MEDIA_ENABLE_SRT_INGEST ? "yes" : "no"}
 srtAddress: 127.0.0.1:8890
 # UDP/RTP multicast is configured per source path (udp+rtp:// or
@@ -865,6 +872,27 @@ function forwardMediaHeaders(headers: IncomingHttpHeaders) {
   }
   return forwarded;
 }
+function forwardWebRtcHeaders(headers: IncomingHttpHeaders): Record<string, string> {
+  const forwarded: Record<string, string> = {};
+  for (const name of ["accept", "authorization", "content-type", "id", "if-match", "range", "user-agent"]) {
+    const value = headers[name];
+    if (typeof value === "string") {
+      if (name === "content-type") {
+        const lower = value.toLowerCase();
+        if (lower.includes("application/sdp")) {
+          forwarded[name] = "application/sdp";
+          continue;
+        }
+        if (lower.includes("application/trickle-ice-sdpfrag")) {
+          forwarded[name] = "application/trickle-ice-sdpfrag";
+          continue;
+        }
+      }
+      forwarded[name] = value;
+    }
+  }
+  return forwarded;
+}
 function hlsPath(requestUrl: string | undefined) {
   const pathname = new URL(requestUrl ?? "/", "http://edge.local").pathname;
   const match = pathname.match(/^\/hls\/([^/]+)\//);
@@ -945,9 +973,10 @@ function setCorsHeaders(request: IncomingMessage, response: ServerResponse) {
   const requestedHeaders = request.headers["access-control-request-headers"];
   response.setHeader(
     "Access-Control-Allow-Headers",
-    typeof requestedHeaders === "string" ? requestedHeaders : "Authorization, Content-Type, Range",
+    typeof requestedHeaders === "string" ? requestedHeaders : "Authorization, Content-Type, Range, Id, If-Match",
   );
-  response.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS, GET, HEAD");
+  response.setHeader("Access-Control-Expose-Headers", "Location, ETag, Id, Link, Accept-Patch, Content-Type");
+  response.setHeader("Access-Control-Allow-Methods", "POST, PATCH, DELETE, OPTIONS, GET, HEAD");
   if (request.headers["access-control-request-private-network"] === "true") {
     response.setHeader("Access-Control-Allow-Private-Network", "true");
   }

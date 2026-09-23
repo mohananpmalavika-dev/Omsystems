@@ -350,4 +350,67 @@ describe("all-in-one edge live gateway", () => {
       sessionId: "talk-session-1", cameraId: "camera-1", outcome: "success", bytesSent: pcm.byteLength,
     })]);
   });
+
+  it("proxies WebRTC WHEP offers with Content-Type application/sdp and rewrites Location header", async () => {
+    let upstream: Server | undefined;
+    let receivedContentType = "";
+    let receivedBody = "";
+    try {
+      upstream = createServer((request, response) => {
+        receivedContentType = request.headers["content-type"] ?? "";
+        let body = "";
+        request.on("data", (chunk) => { body += chunk; });
+        request.on("end", () => {
+          receivedBody = body;
+          response.writeHead(201, {
+            "content-type": "application/sdp",
+            location: "/camera-camera-1/whep/session-12345",
+            etag: '"session-etag"',
+          });
+          response.end("v=0\r\no=- 0 0 IN IP4 127.0.0.1\r\ns=-\r\n");
+        });
+      });
+      const upstreamAddress = await new Promise<{ port: number }>((resolve, reject) => {
+        upstream!.once("error", reject);
+        upstream!.listen(0, "127.0.0.1", () => resolve(upstream!.address() as { port: number }));
+      });
+      app = buildEdgeLiveGateway({
+        consumer: { consume: async () => ({
+          id: "session-1", cameraId: "camera-1", cameraNodeId: "branch-1", userId: "user-1", tenantId: "tenant-1",
+          connectionSecretRef: "edge://agent-1/camera-1", profiles: [],
+        }) },
+        router: { ensurePath: async () => undefined, removePath: async () => undefined },
+        resolveSecret: () => "rtsp://camera.local/stream",
+        publicBaseUrl: () => "http://127.0.0.1",
+        mediaMtxHlsUrl: "http://127.0.0.1:8888",
+        mediaMtxWebRtcUrl: `http://127.0.0.1:${upstreamAddress.port}`,
+        accessTtlMs: 30_000,
+      });
+      const address = await app.listen({ host: "127.0.0.1", port: 0 });
+      const baseUrl = `http://127.0.0.1:${address.port}`;
+      const started = await fetch(`${baseUrl}/v1/live/start`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ controlPlaneToken: "t".repeat(43) }),
+      });
+      const session = await started.json() as { webRtc: { whepUrl: string; bearerToken: string } };
+
+      const offerSdp = "v=0\r\no=client 0 0 IN IP4 127.0.0.1\r\ns=-\r\n";
+      const whepResponse = await fetch(`${baseUrl}/webrtc/camera-camera-1/whep`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/sdp",
+          authorization: `Bearer ${session.webRtc.bearerToken}`,
+        },
+        body: offerSdp,
+      });
+      expect(whepResponse.status).toBe(201);
+      expect(receivedContentType).toBe("application/sdp");
+      expect(receivedBody).toBe(offerSdp);
+      expect(whepResponse.headers.get("location")).toBe("/webrtc/camera-camera-1/whep/session-12345");
+      expect(whepResponse.headers.get("access-control-expose-headers")).toContain("Location");
+      expect(await whepResponse.text()).toContain("v=0");
+    } finally {
+      await new Promise<void>((resolve) => upstream?.close(() => resolve()) ?? resolve());
+    }
+  });
 });

@@ -222,7 +222,9 @@ function BranchCameraTile({ camera, branchId, session, loading, error, ptzOpen, 
           whepUrl={session.webRtc?.whepUrl}
           bearerToken={session.hls?.bearerToken ?? session.webRtc?.bearerToken ?? ""}
           cameraName={camera.name}
-          onPlaybackError={onStart}
+          onPlaybackError={(reason) => {
+            console.warn(`[CameraWall] Playback issue on camera ${camera.id}:`, reason);
+          }}
         />
       ) : (
         <div className="relative w-full h-full">

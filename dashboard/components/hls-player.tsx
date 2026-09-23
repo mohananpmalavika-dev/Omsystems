@@ -88,6 +88,7 @@ export function HlsPlayer({
     let lastProgressAt = Date.now();
     let playbackStarted = false;
     let reportedPlaying = false;
+    let currentProtocol: "webrtc" | "ll-hls" = streamProtocol;
 
     const reportPlaying = (playing: boolean) => {
       if (reportedPlaying === playing) return;
@@ -173,6 +174,7 @@ export function HlsPlayer({
     const startHls = (sourceUrl: string) => {
       if (disposed || !video) return;
       cleanupStreaming();
+      currentProtocol = "ll-hls";
       setStreamProtocol("ll-hls");
       setLatencyMs(1200);
 
@@ -291,6 +293,7 @@ export function HlsPlayer({
             video.srcObject = event.streams[0];
             void video.play().catch(() => undefined);
             markProgress();
+            currentProtocol = "webrtc";
             setStreamProtocol("webrtc");
             setLatencyMs(280);
           }
@@ -300,6 +303,10 @@ export function HlsPlayer({
           if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
             if (!disposed && url) {
               console.warn("[WebRTC] Connection failed or disconnected, falling back to HLS", pc.iceConnectionState);
+              cleanupStreaming();
+              currentProtocol = "ll-hls";
+              setStreamProtocol("ll-hls");
+              setLatencyMs(1200);
               startHls(url);
             }
           }
@@ -309,6 +316,10 @@ export function HlsPlayer({
         whepTimeoutTimer = setTimeout(() => {
           if (!disposed && !playbackStarted && url) {
             console.warn("[WebRTC] Handshake timed out, falling back to HLS");
+            cleanupStreaming();
+            currentProtocol = "ll-hls";
+            setStreamProtocol("ll-hls");
+            setLatencyMs(1200);
             startHls(url);
           }
         }, 4_000);
@@ -363,6 +374,10 @@ export function HlsPlayer({
       } catch (err) {
         if (!disposed) {
           console.warn("[WebRTC] WHEP initiation error, falling back to HLS:", err);
+          cleanupStreaming();
+          currentProtocol = "ll-hls";
+          setStreamProtocol("ll-hls");
+          setLatencyMs(1200);
           if (url) {
             startHls(url);
           } else {
@@ -403,7 +418,7 @@ export function HlsPlayer({
               return;
             }
           }
-          if (streamProtocol === "webrtc" && whepUrl) {
+          if (currentProtocol === "webrtc" && whepUrl) {
             void startWebRtc(whepUrl);
           } else if (url) {
             startHls(url);
@@ -436,7 +451,7 @@ export function HlsPlayer({
     setError(null);
 
     // Prioritize WebRTC for sub-second zero latency; fallback automatically to HLS
-    if (streamProtocol === "webrtc" && whepUrl) {
+    if (currentProtocol === "webrtc" && whepUrl) {
       void startWebRtc(whepUrl);
     } else if (url) {
       startHls(url);
@@ -506,7 +521,7 @@ export function HlsPlayer({
       video.removeAttribute("src");
       video.load();
     };
-  }, [bearerToken, retryNonce, streamProtocol, url, whepUrl]);
+  }, [bearerToken, retryNonce, url, whepUrl]);
 
   const retry = () => {
     setError(null);
@@ -587,6 +602,7 @@ export function HlsPlayer({
                           setStreamProtocol("webrtc");
                           setLatencyMs(280);
                           setShowSettings(false);
+                          setRetryNonce((v) => v + 1);
                         }}
                         className={`p-1 rounded text-center transition-all ${
                           streamProtocol === "webrtc"
@@ -602,6 +618,7 @@ export function HlsPlayer({
                           setStreamProtocol("ll-hls");
                           setLatencyMs(1200);
                           setShowSettings(false);
+                          setRetryNonce((v) => v + 1);
                         }}
                         className={`p-1 rounded text-center transition-all ${
                           streamProtocol === "ll-hls"
