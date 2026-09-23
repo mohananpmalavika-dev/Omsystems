@@ -10,7 +10,7 @@ import type { Pool } from "pg";
 import { FaceRecognitionService } from "../face/face-recognition.service.js";
 import { FaceEnrollmentService } from "../face/face-enrollment.service.js";
 import { FaceSearchService } from "../face/face-search.service.js";
-import type { FaceRecognitionGovernanceService } from "../banking/governance/face-recognition-governance.service.js";
+import type { FaceRecognitionGovernanceService } from "../../../src/banking/governance/face-recognition-governance.service.js";
 
 // ============================================================================
 // Schema Definitions
@@ -582,7 +582,7 @@ export async function registerFaceRecognitionRoutes(
     const candidates = await searchService.searchPersons({
       tenantId,
       embedding: new Float32Array(body.embedding),
-      minSimilarity: body.minSimilarity,
+      threshold: body.minSimilarity,
       watchlistIds: body.watchlistIds,
       limit: body.limit,
     });

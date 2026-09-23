@@ -516,7 +516,7 @@ export async function registerEdgeGatewayOperationsRoutes(
     if (!options.updateSigningPrivateKey) {
       return reply.code(503).send({ error: "edge_update_signing_not_configured" });
     }
-    const body = z.object({
+    const parsedBody = z.object({
       version: z.string().trim().regex(/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/),
       artifactUrl: z.string().url().refine((value) => {
         const url = new URL(value);
@@ -526,7 +526,9 @@ export async function registerEdgeGatewayOperationsRoutes(
       notes: z.string().trim().max(5_000).default(""),
       rolloutPercentage: z.number().int().min(0).max(100).default(0),
       enabled: z.boolean().default(false),
-    }).parse(request.body);
+    }).safeParse(request.body);
+    if (!parsedBody.success) return reply.code(400).send({ error: "invalid_update_release" });
+    const body = parsedBody.data;
     const manifest = {
       version: body.version!, artifactUrl: body.artifactUrl!, sha256: body.sha256!, notes: body.notes!,
     };

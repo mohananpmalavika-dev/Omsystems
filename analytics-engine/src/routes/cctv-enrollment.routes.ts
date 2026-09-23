@@ -7,7 +7,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Pool } from 'pg';
-import { CCTVEnrollmentService } from '../face/cctv-enrollment.service.js';
+import { CCTVEnrollmentService, type CCTVEnrollmentInput } from '../face/cctv-enrollment.service.js';
 import type { FaceRecognitionService } from '../face/face-recognition.service.js';
 import type { FaceEnrollmentService } from '../face/face-enrollment.service.js';
 
@@ -91,7 +91,7 @@ export async function registerCCTVEnrollmentRoutes(
         frameBuffer,
         body.frameWidth,
         body.frameHeight,
-        body.faceBoundingBox,
+        body.faceBoundingBox as CCTVEnrollmentInput['faceBoundingBox'],
       );
 
       return {
@@ -154,7 +154,7 @@ export async function registerCCTVEnrollmentRoutes(
         frameBuffer,
         frameWidth: body.frameWidth,
         frameHeight: body.frameHeight,
-        faceBoundingBox: body.faceBoundingBox,
+        faceBoundingBox: body.faceBoundingBox as CCTVEnrollmentInput['faceBoundingBox'],
         metadata: body.metadata,
         actorId: user.id,
       });
@@ -226,7 +226,7 @@ export async function registerCCTVEnrollmentRoutes(
         frameBuffer: Buffer.from(enrollment.frameData, 'base64'),
         frameWidth: enrollment.frameWidth,
         frameHeight: enrollment.frameHeight,
-        faceBoundingBox: enrollment.faceBoundingBox,
+        faceBoundingBox: enrollment.faceBoundingBox as CCTVEnrollmentInput['faceBoundingBox'],
         metadata: enrollment.metadata,
         actorId: user.id,
       }));

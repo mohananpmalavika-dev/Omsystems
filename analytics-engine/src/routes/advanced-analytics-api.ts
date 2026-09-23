@@ -806,7 +806,7 @@ export async function registerAdvancedAnalyticsRoutes(
     }).parse(request.body);
 
     const reporting = pipeline.getAIReportingEngine();
-    const report = await reporting.generateWeeklyAnalyticsSummary(new Date(body.weekStart));
+    const report = await reporting.generateWeeklyAnalyticsSummary(body.tenantId ?? 'default', new Date(body.weekStart));
 
     return {
       reportId: report.id,

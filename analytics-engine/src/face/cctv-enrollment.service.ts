@@ -16,7 +16,7 @@
 import type { Pool } from 'pg';
 import type { FaceRecognitionService } from './face-recognition.service.js';
 import type { FaceEnrollmentService } from './face-enrollment.service.js';
-import type { FaceDetection } from './face.types.js';
+import type { FaceDetection, FaceLandmarks } from './face.types.js';
 
 export interface CCTVEnrollmentInput {
   tenantId: string;
@@ -133,10 +133,14 @@ export class CCTVEnrollmentService {
 
       // Create mock detection for quality check
       const detection: FaceDetection = {
-        bbox: faceBoundingBox,
+        boundingBox: {
+          x: faceBoundingBox.x / frameWidth,
+          y: faceBoundingBox.y / frameHeight,
+          width: faceBoundingBox.width / frameWidth,
+          height: faceBoundingBox.height / frameHeight,
+        },
         confidence: 0.9,
-        landmarks: undefined, // Will be detected
-        quality: 0, // Will be calculated
+        landmarks: undefined as unknown as FaceLandmarks,
       };
 
       const quality = qualityService.evaluateForEnrollment(
@@ -145,47 +149,55 @@ export class CCTVEnrollmentService {
         frameHeight,
         faceImage,
       );
+      if (!quality.acceptable) {
+        return {
+          suitable: false,
+          quality: quality.score,
+          reasons: quality.reasons.length ? quality.reasons : ['Face quality could not be verified'],
+          recommendations,
+        };
+      }
 
       // Check overall quality
-      if (quality.overallScore < CCTV_ENROLLMENT_THRESHOLDS.minQuality) {
+      if (quality.score < CCTV_ENROLLMENT_THRESHOLDS.minQuality) {
         reasons.push(
-          `Face quality too low (${(quality.overallScore * 100).toFixed(1)}%). ` +
+          `Face quality too low (${(quality.score * 100).toFixed(1)}%). ` +
           `Minimum ${(CCTV_ENROLLMENT_THRESHOLDS.minQuality * 100).toFixed(0)}% required.`
         );
       }
 
       // Check pose
-      if (quality.pose) {
-        if (Math.abs(quality.pose.yaw) > CCTV_ENROLLMENT_THRESHOLDS.maxYaw) {
-          reasons.push(`Head turned too much sideways (${Math.round(quality.pose.yaw)}°)`);
+      if (quality.metrics.yaw !== undefined && quality.metrics.pitch !== undefined) {
+        if (Math.abs(quality.metrics.yaw) > CCTV_ENROLLMENT_THRESHOLDS.maxYaw) {
+          reasons.push(`Head turned too much sideways (${Math.round(quality.metrics.yaw)}°)`);
           recommendations.push('മുഖം നേരെ camera-യ്ക്ക് നോക്കുക');
         }
-        if (Math.abs(quality.pose.pitch) > CCTV_ENROLLMENT_THRESHOLDS.maxPitch) {
-          reasons.push(`Head tilted too much up/down (${Math.round(quality.pose.pitch)}°)`);
+        if (Math.abs(quality.metrics.pitch) > CCTV_ENROLLMENT_THRESHOLDS.maxPitch) {
+          reasons.push(`Head tilted too much up/down (${Math.round(quality.metrics.pitch)}°)`);
           recommendations.push('തല നേരെ വയ്ക്കുക (മുകളിലേക്കോ താഴേക്കോ കുനിയാതെ)');
         }
       }
 
       // Check sharpness (blur)
-      if (quality.sharpness && quality.sharpness < CCTV_ENROLLMENT_THRESHOLDS.minSharpness) {
+      if (quality.metrics.blur !== undefined && quality.metrics.blur > 100) {
         reasons.push('Image too blurry');
         recommendations.push('വ്യക്തമായ ഫ്രെയിം തിരഞ്ഞെടുക്കുക (നീങ്ങുന്ന സമയത്തല്ല)');
       }
 
       // Check brightness
-      if (quality.brightness) {
-        if (quality.brightness < CCTV_ENROLLMENT_THRESHOLDS.minBrightness) {
+      if (quality.metrics.brightness !== undefined) {
+        if (quality.metrics.brightness < CCTV_ENROLLMENT_THRESHOLDS.minBrightness) {
           reasons.push('Image too dark');
           recommendations.push('കൂടുതൽ വെളിച്ചമുള്ള സമയത്തെ video തിരഞ്ഞെടുക്കുക');
         }
-        if (quality.brightness > CCTV_ENROLLMENT_THRESHOLDS.maxBrightness) {
+        if (quality.metrics.brightness > CCTV_ENROLLMENT_THRESHOLDS.maxBrightness) {
           reasons.push('Image overexposed (too bright)');
           recommendations.push('Exposure കുറവായ സമയത്തെ video തിരഞ്ഞെടുക്കുക');
         }
       }
 
       // Check for occlusions
-      if (quality.occluded) {
+      if (quality.reasons.includes('FACE_OCCLUDED')) {
         reasons.push('Face partially covered (mask, sunglasses, etc.)');
         recommendations.push('മുഖം പൂർണ്ണമായി കാണുന്ന ഫ്രെയിം തിരഞ്ഞെടുക്കുക');
       }
@@ -194,7 +206,7 @@ export class CCTVEnrollmentService {
 
       return {
         suitable,
-        quality: quality.overallScore,
+        quality: quality.score,
         reasons: reasons.length > 0 ? reasons : ['Frame suitable for enrollment'],
         recommendations,
       };
@@ -271,7 +283,7 @@ export class CCTVEnrollmentService {
         actorId: input.actorId,
       });
 
-      if (!enrollmentResult.success) {
+      if (enrollmentResult.acceptedImages === 0) {
         return {
           success: false,
           error: enrollmentResult.failures?.[0]?.reason || 'Enrollment failed',
@@ -285,7 +297,7 @@ export class CCTVEnrollmentService {
       return {
         success: true,
         personId: enrollmentResult.personId,
-        embeddingId: enrollmentResult.embeddingIds?.[0],
+        embeddingId: enrollmentResult.embeddings[0]?.id,
         quality: validation.quality,
         validation,
         capturedImage: faceImage,

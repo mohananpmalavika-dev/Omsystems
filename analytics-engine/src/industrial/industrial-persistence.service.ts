@@ -258,12 +258,20 @@ export class IndustrialPersistenceService {
   }
 
   private mapZoneFromDb(row: any): IndustrialZone {
+    const zoneTypes: Record<IndustrialZone["zoneType"], Zone["type"]> = {
+      restricted: "restricted_zone",
+      "equipment-only": "equipment_only",
+      "pedestrian-only": "pedestrian_only",
+      hazard: "hazard_zone",
+      monitoring: "safe_zone",
+    };
     return {
       id: row.id,
       tenantId: row.tenant_id,
       cameraId: row.camera_id,
       name: row.name,
       zoneType: row.zone_type,
+      type: zoneTypes[row.zone_type as IndustrialZone["zoneType"]] ?? "safe_zone",
       polygon: row.polygon,
       enabled: row.enabled,
       metadata: row.metadata,
@@ -328,7 +336,7 @@ export class IndustrialPersistenceService {
     return result.rows.length > 0 ? this.mapConfigFromDb(result.rows[0]) : null;
   }
 
-  async getDefaultConfig(): CameraIndustrialConfig {
+  async getDefaultConfig(): Promise<CameraIndustrialConfig> {
     return {
       tenantId: "",
       cameraId: "",

@@ -196,7 +196,7 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
         const { FaceRecognitionService } = await import("./face/face-recognition.service.js");
         const { FaceEnrollmentService } = await import("./face/face-enrollment.service.js");
         const { FaceSearchService } = await import("./face/face-search.service.js");
-        const { FaceRecognitionGovernanceService } = await import("./banking/governance/face-recognition-governance.service.js");
+        const { FaceRecognitionGovernanceService } = await import("../../src/banking/governance/face-recognition-governance.service.js");
         
         const recognitionService = new FaceRecognitionService(db);
         const enrollmentService = new FaceEnrollmentService(db, recognitionService);

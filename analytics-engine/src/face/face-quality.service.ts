@@ -116,6 +116,8 @@ export class FaceQualityService {
     // Check landmarks presence
     if (!this.areLandmarksValid(detection.landmarks)) {
       reasons.push('LANDMARKS_MISSING');
+      // Pose cannot be verified without real landmarks; reject enrollment.
+      return { acceptable: false, score: 0, reasons, metrics };
     }
 
     // Estimate pose from landmarks

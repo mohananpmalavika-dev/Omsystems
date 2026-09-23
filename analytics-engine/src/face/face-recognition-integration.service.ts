@@ -7,7 +7,7 @@
 import type { Pool } from "pg";
 import type { FaceRecognitionService } from "./face-recognition.service.js";
 import type { FaceSearchService } from "./face-search.service.js";
-import type { FaceRecognitionGovernanceService } from "../banking/governance/face-recognition-governance.service.js";
+import type { FaceRecognitionGovernanceService } from "../../../src/banking/governance/face-recognition-governance.service.js";
 
 export interface FaceDetectionInput {
   tenantId: string;
@@ -114,22 +114,9 @@ export class FaceRecognitionIntegrationService {
     });
     track.observationCount = track.observations.length;
 
-    // Extract embedding if not provided
-    let embedding = input.embedding;
-    if (!embedding && input.imageBuffer) {
-      try {
-        const extractResult = await this.recognitionService.extractFaceEmbedding(input.imageBuffer);
-        embedding = extractResult.embedding;
-      } catch (err) {
-        return {
-          matched: false,
-          needsReview: false,
-          alertGenerated: false,
-          temporalConfirmation: track,
-        };
-      }
-    }
-
+    // Raw image bytes are not an aligned face embedding. Require the upstream
+    // recognition pipeline to supply a verified embedding; fail closed here.
+    const embedding = input.embedding;
     if (!embedding) {
       return {
         matched: false,
@@ -143,7 +130,7 @@ export class FaceRecognitionIntegrationService {
     const candidates = await this.searchService.searchPersons({
       tenantId: input.tenantId,
       embedding,
-      minSimilarity: 0.60, // Review threshold
+      threshold: 0.60, // Review threshold
       limit: 10,
     });
 
