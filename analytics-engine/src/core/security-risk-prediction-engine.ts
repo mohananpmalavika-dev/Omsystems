@@ -21,13 +21,124 @@
  */
 
 import type { Pool } from 'pg';
-import geohash from 'ngeohash';
+
+// =====================================================
+// EMBEDDED GEOHASH IMPLEMENTATION (Zero external dependency)
+// =====================================================
+
+const BASE32 = '0123456789bcdefghjkmnpqrstuvwxyz';
+const BITS = [16, 8, 4, 2, 1] as const;
+
+const geohash = {
+  encode(latitude: number, longitude: number, precision: number = 9): string {
+    let isEven = true;
+    let minLat = -90.0;
+    let maxLat = 90.0;
+    let minLon = -180.0;
+    let maxLon = 180.0;
+    let bit = 0;
+    let ch = 0;
+    let hash = '';
+
+    while (hash.length < precision) {
+      if (isEven) {
+        const mid = (minLon + maxLon) / 2;
+        if (longitude > mid) {
+          ch |= (BITS[bit] ?? 0);
+          minLon = mid;
+        } else {
+          maxLon = mid;
+        }
+      } else {
+        const mid = (minLat + maxLat) / 2;
+        if (latitude > mid) {
+          ch |= (BITS[bit] ?? 0);
+          minLat = mid;
+        } else {
+          maxLat = mid;
+        }
+      }
+
+      isEven = !isEven;
+      if (bit < 4) {
+        bit++;
+      } else {
+        hash += (BASE32[ch] ?? '');
+        bit = 0;
+        ch = 0;
+      }
+    }
+    return hash;
+  },
+
+  decode_bbox(hash: string): [number, number, number, number] {
+    let isEven = true;
+    let minLat = -90.0;
+    let maxLat = 90.0;
+    let minLon = -180.0;
+    let maxLon = 180.0;
+
+    for (let i = 0; i < hash.length; i++) {
+      const c = hash.charAt(i);
+      const cd = BASE32.indexOf(c);
+      if (cd === -1) continue;
+      for (let j = 0; j < 5; j++) {
+        const mask = BITS[j] ?? 0;
+        if (isEven) {
+          const mid = (minLon + maxLon) / 2;
+          if ((cd & mask) !== 0) {
+            minLon = mid;
+          } else {
+            maxLon = mid;
+          }
+        } else {
+          const mid = (minLat + maxLat) / 2;
+          if ((cd & mask) !== 0) {
+            minLat = mid;
+          } else {
+            maxLat = mid;
+          }
+        }
+        isEven = !isEven;
+      }
+    }
+    return [minLat, minLon, maxLat, maxLon];
+  },
+
+  decode(hash: string): { latitude: number; longitude: number } {
+    const [minLat, minLon, maxLat, maxLon] = this.decode_bbox(hash);
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLon + maxLon) / 2,
+    };
+  },
+
+  neighbors(hash: string): Record<string, string> {
+    const [minLat, minLon, maxLat, maxLon] = this.decode_bbox(hash);
+    const lat = (minLat + maxLat) / 2;
+    const lon = (minLon + maxLon) / 2;
+    const latDelta = maxLat - minLat;
+    const lonDelta = maxLon - minLon;
+    const precision = hash.length;
+
+    return {
+      north: this.encode(lat + latDelta, lon, precision),
+      south: this.encode(lat - latDelta, lon, precision),
+      east: this.encode(lat, lon + lonDelta, precision),
+      west: this.encode(lat, lon - lonDelta, precision),
+      northEast: this.encode(lat + latDelta, lon + lonDelta, precision),
+      northWest: this.encode(lat + latDelta, lon - lonDelta, precision),
+      southEast: this.encode(lat - latDelta, lon + lonDelta, precision),
+      southWest: this.encode(lat - latDelta, lon - lonDelta, precision),
+    };
+  }
+};
 
 // =====================================================
 // TYPES
 // =====================================================
 
-interface RiskCell {
+export interface RiskCell {
   gridCellId: string;
   centerPoint: { lat: number; lon: number };
   bounds: {
@@ -52,7 +163,7 @@ interface RiskCell {
   recentAnomaliesCount: number;
 }
 
-interface RiskHeatMap {
+export interface RiskHeatMap {
   id: string;
   tenantId: string;
   branchId: string;
@@ -65,7 +176,7 @@ interface RiskHeatMap {
   modelVersion: string;
 }
 
-interface IncidentPrediction {
+export interface IncidentPrediction {
   id: string;
   tenantId: string;
   branchId: string;
@@ -90,7 +201,7 @@ interface IncidentPrediction {
   expiresAt: Date;
 }
 
-interface HistoricalIncident {
+export interface HistoricalIncident {
   id: string;
   occurredAt: Date;
   incidentType: string;
@@ -100,7 +211,7 @@ interface HistoricalIncident {
   resolved: boolean;
 }
 
-interface SpatialRiskContext {
+export interface SpatialRiskContext {
   gridCellId: string;
   location: { lat: number; lon: number };
   incidents: HistoricalIncident[];
@@ -110,7 +221,7 @@ interface SpatialRiskContext {
   neighboringRisk: number; // Average risk from neighboring cells
 }
 
-interface RiskPredictionOptions {
+export interface RiskPredictionOptions {
   horizonHours: number;
   gridPrecision: number; // Geohash precision (4-8)
   minIncidentsForPrediction: number;
@@ -471,7 +582,7 @@ export class SecurityRiskPredictionEngine {
       const neighbors = geohash.neighbors(cell.gridCellId);
       const neighborRisks: number[] = [];
       
-      for (const neighborHash of Object.values(neighbors)) {
+      for (const neighborHash of Object.values(neighbors) as string[]) {
         const neighbor = cellMap.get(neighborHash);
         if (neighbor) {
           neighborRisks.push(neighbor.riskScore);
@@ -854,7 +965,7 @@ export class SecurityRiskPredictionEngine {
     let neighboringRisk = 0;
     let neighborCount = 0;
     
-    for (const neighborHash of Object.values(neighbors)) {
+    for (const neighborHash of Object.values(neighbors) as string[]) {
       const cached = this.heatMapCache.get(`${tenantId}:${branchId}:${targetTime.toISOString()}`);
       const neighborCell = cached?.cells.find(c => c.gridCellId === neighborHash);
       if (neighborCell) {

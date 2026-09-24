@@ -29,7 +29,7 @@ import type { RiskHeatMap, RiskCell } from './security-risk-prediction-engine.js
 // TYPES
 // =====================================================
 
-interface PatrolCheckpoint {
+export interface PatrolCheckpoint {
   zoneId: string;
   location: { lat: number; lon: number };
   riskScore: number;
@@ -38,7 +38,7 @@ interface PatrolCheckpoint {
   requiredActions: string[];
 }
 
-interface PatrolRoute {
+export interface PatrolRoute {
   officerId?: string;
   checkpoints: Array<{
     zoneId: string;
@@ -54,7 +54,7 @@ interface PatrolRoute {
   riskCovered: number; // Sum of risk scores
 }
 
-interface PatrolPlan {
+export interface PatrolPlan {
   id: string;
   tenantId: string;
   branchId: string;
@@ -218,16 +218,16 @@ export class PatrolOptimizationEngine {
     
     if (objective === 'minimize_risk') {
       // Focus on highest risk areas
-      cells = heatMap.cells.filter(c => c.riskLevel === 'critical' || c.riskLevel === 'high');
+      cells = heatMap.cells.filter((c: RiskCell) => c.riskLevel === 'critical' || c.riskLevel === 'high');
     } else if (objective === 'maximize_coverage') {
       // Include all areas with some risk
-      cells = heatMap.cells.filter(c => c.riskScore >= 20);
+      cells = heatMap.cells.filter((c: RiskCell) => c.riskScore >= 20);
     } else if (objective === 'rapid_response') {
       // Only critical areas
-      cells = heatMap.cells.filter(c => c.riskLevel === 'critical');
+      cells = heatMap.cells.filter((c: RiskCell) => c.riskLevel === 'critical');
     } else {
       // Balanced: medium risk and above
-      cells = heatMap.cells.filter(c => c.riskScore >= 40);
+      cells = heatMap.cells.filter((c: RiskCell) => c.riskScore >= 40);
     }
     
     // Sort by risk score
