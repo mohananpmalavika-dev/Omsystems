@@ -3,8 +3,8 @@
  * Early warning system for fire hazards
  */
 
-import { BaseDetector, type DetectionFrame, type DetectionResult, getInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
-import { loadObjectInference, modelUnavailableReason, type ObjectFrameInference } from "../inference/configured-model-inference.js";
+import { BaseDetector, type DetectionFrame, type DetectionResult, calculateIoU, getInferenceObjects, hasInferenceObjects, shouldRunLocalSpecialtyInference } from "./base-detector.js";
+import { assertResponsiveObjectInference, loadObjectInference, modelUnavailableReason, type ObjectFrameInference } from "../inference/configured-model-inference.js";
 
 export type HazardType = "smoke" | "fire" | "both";
 export type SeverityLevel = "low" | "medium" | "high" | "critical";
@@ -25,17 +25,27 @@ export class SmokeFireDetector extends BaseDetector {
   private isModelLoaded = false;
   private inference: ObjectFrameInference | null;
   private modelLoadError: string | null = null;
-  private detectionHistory: Array<{ timestamp: Date; hazards: FireHazard[] }> = [];
+  private detectionHistory = new Map<string, Array<{ timestamp: Date; hazards: FireHazard[] }>>();
   
   private readonly MIN_CONFIDENCE: number;
+  private readonly CONFIRMATION_FRAMES: number;
+  private readonly VALIDATE_MODEL_RESPONSIVENESS: boolean;
   private readonly HISTORY_SIZE = 10;
+  private readonly CONFIRMATION_WINDOW_MS = 10_000;
   private readonly AREA_THRESHOLD_LOW = 0.05; // 5% of frame
   private readonly AREA_THRESHOLD_HIGH = 0.20; // 20% of frame
 
-  constructor(inference: ObjectFrameInference | null = null, confidenceThreshold = 0.65) {
+  constructor(
+    inference: ObjectFrameInference | null = null,
+    confidenceThreshold = 0.8,
+    confirmationFrames = 3,
+    validateModelResponsiveness = false,
+  ) {
     super("fire-smoke", "1.0.0");
     this.inference = inference;
     this.MIN_CONFIDENCE = confidenceThreshold;
+    this.CONFIRMATION_FRAMES = Math.max(1, Math.floor(confirmationFrames));
+    this.VALIDATE_MODEL_RESPONSIVENESS = validateModelResponsiveness;
   }
 
   async initialize(): Promise<void> {
@@ -43,6 +53,9 @@ export class SmokeFireDetector extends BaseDetector {
     
     try {
       this.inference ??= await loadObjectInference("fire-smoke", this.MIN_CONFIDENCE);
+      if (this.VALIDATE_MODEL_RESPONSIVENESS) {
+        await assertResponsiveObjectInference(this.inference, "Fire/smoke model");
+      }
       this.isModelLoaded = true;
       this.modelLoadError = null;
       console.log("Smoke and fire detector loaded local ONNX model");
@@ -56,21 +69,29 @@ export class SmokeFireDetector extends BaseDetector {
 
   async detect(frame: DetectionFrame): Promise<DetectionResult[]> {
     const hazards = await this.detectHazardsInFrame(frame);
-    
-    // Store in history for trend analysis
-    this.detectionHistory.push({
+    const streamKey = `${frame.tenantId}:${frame.cameraId}`;
+    const history = this.detectionHistory.get(streamKey) ?? [];
+
+    // History must be isolated per camera. Sharing it allowed observations
+    // from one camera to confirm a detection on another camera.
+    history.push({
       timestamp: frame.timestamp,
       hazards,
     });
 
-    if (this.detectionHistory.length > this.HISTORY_SIZE) {
-      this.detectionHistory.shift();
+    if (history.length > this.HISTORY_SIZE) {
+      history.shift();
     }
+    this.detectionHistory.set(streamKey, history);
+
+    // Do not raise a life-safety alert from one noisy frame. Require the same
+    // hazard in the same area for several consecutive frames.
+    const confirmedHazards = hazards.filter((hazard) => this.isTemporallyConfirmed(hazard, history, frame.timestamp));
 
     const results: DetectionResult[] = [];
 
     // Process fire detections
-    const fires = hazards.filter(h => h.type === "fire" || h.type === "both");
+    const fires = confirmedHazards.filter(h => h.type === "fire" || h.type === "both");
     if (fires.length > 0) {
       const maxSeverity = this.getMaxSeverity(fires);
       
@@ -85,7 +106,7 @@ export class SmokeFireDetector extends BaseDetector {
         metadata: {
           severity: maxSeverity,
           affectedArea: this.calculateTotalArea(fires),
-          spreading: this.isSpreadingFast(),
+          spreading: this.isSpreadingFast(history),
           colorIndicators: fires.map(f => f.color).filter(Boolean),
         },
         requiresAlert: true,
@@ -93,7 +114,7 @@ export class SmokeFireDetector extends BaseDetector {
     }
 
     // Process smoke detections
-    const smokes = hazards.filter(h => h.type === "smoke" || h.type === "both");
+    const smokes = confirmedHazards.filter(h => h.type === "smoke" || h.type === "both");
     if (smokes.length > 0) {
       const maxSeverity = this.getMaxSeverity(smokes);
       
@@ -121,7 +142,8 @@ export class SmokeFireDetector extends BaseDetector {
    * Detect fire and smoke in frame
    */
   private async detectHazardsInFrame(frame: DetectionFrame): Promise<FireHazard[]> {
-    const local = shouldRunLocalSpecialtyInference(frame) && this.inference
+    const ranLocalInference = shouldRunLocalSpecialtyInference(frame) && this.inference !== null;
+    const local = ranLocalInference
       ? await this.inference.run(frame)
       : [];
     const modelHazards = [...getInferenceObjects(frame, ["smoke", "fire"]), ...local]
@@ -139,12 +161,36 @@ export class SmokeFireDetector extends BaseDetector {
         };
       });
 
-    if (modelHazards.length > 0) {
+    // An empty result from a model or authenticated upstream inference is a
+    // valid negative result. The old code overrode that negative with a
+    // color-only heuristic, causing orange objects and gray walls to alert.
+    if (modelHazards.length > 0 || ranLocalInference || hasInferenceObjects(frame)) {
       return modelHazards;
     }
 
-    // Optical chromatic & energy fallback when model is unavailable
-    return this.detectOpticalHazards(frame);
+    // Color alone is not reliable evidence of fire or smoke. If neither a
+    // local model nor upstream detections are available, fail closed.
+    return [];
+  }
+
+  private isTemporallyConfirmed(
+    hazard: FireHazard,
+    history: Array<{ timestamp: Date; hazards: FireHazard[] }>,
+    now: Date,
+  ): boolean {
+    const recent = history
+      .filter((entry) => Math.abs(now.getTime() - entry.timestamp.getTime()) <= this.CONFIRMATION_WINDOW_MS)
+      .slice(-this.CONFIRMATION_FRAMES);
+    if (recent.length < this.CONFIRMATION_FRAMES) return false;
+
+    return recent.every((entry) => entry.hazards.some((candidate) =>
+      this.sameHazardType(candidate.type, hazard.type)
+      && calculateIoU(candidate.boundingBox, hazard.boundingBox) >= 0.15
+    ));
+  }
+
+  private sameHazardType(left: HazardType, right: HazardType): boolean {
+    return left === right || left === "both" || right === "both";
   }
 
   /**
@@ -298,10 +344,10 @@ export class SmokeFireDetector extends BaseDetector {
   /**
    * Check if fire is spreading quickly
    */
-  private isSpreadingFast(): boolean {
-    if (this.detectionHistory.length < 3) return false;
+  private isSpreadingFast(history: Array<{ timestamp: Date; hazards: FireHazard[] }>): boolean {
+    if (history.length < 3) return false;
 
-    const recent = this.detectionHistory.slice(-3);
+    const recent = history.slice(-3);
     const areas = recent.map(h => this.calculateTotalArea(h.hazards));
     
     // Check if area is increasing consistently
@@ -353,16 +399,16 @@ export class SmokeFireDetector extends BaseDetector {
   async cleanup(): Promise<void> {
     this.inference = null;
     this.isModelLoaded = false;
-    this.detectionHistory = [];
+    this.detectionHistory.clear();
     console.log("Smoke and fire detector cleaned up");
   }
 
   getHealth() {
     return {
-      status: "healthy" as const,
+      status: this.isModelLoaded ? ("healthy" as const) : ("degraded" as const),
       details: this.isModelLoaded
-        ? `Local fire/smoke model active; history: ${this.detectionHistory.length} frames`
-        : `Optical chromatic & variance heuristic active (fallback); history: ${this.detectionHistory.length} frames`,
+        ? `Local fire/smoke model active; confirmation: ${this.CONFIRMATION_FRAMES} frames`
+        : `Fire/smoke model unavailable; color-only alert fallback is disabled. ${this.modelLoadError ?? "Model unavailable"}`,
     };
   }
 }

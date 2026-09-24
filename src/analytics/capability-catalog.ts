@@ -308,6 +308,86 @@ export const AI_CAPABILITY_DOMAINS: AiCapabilityDomain[] = [
   ]},
   
   /**
+   * MindSense - Emotional Intelligence & Threat Psychology
+   * 
+   * Production-grade emotional intelligence system combining:
+   * - Micro-expression analysis (40-500ms fleeting expressions)
+   * - Facial Action Unit (FAU) detection
+   * - Behavioral intent recognition
+   * - Threat assessment and scoring
+   * - Real-time de-escalation coaching
+   * 
+   * Architecture:
+   * - EmotionDetector: 7 basic emotions, valence-arousal circumplex, micro-expressions
+   * - IntentRecognitionDetector: Behavioral pattern analysis, threat classification
+   * - DeEscalationService: Real-time coaching, situation-aware playbooks
+   * 
+   * Psychology Framework:
+   * - Paul Ekman's emotion research
+   * - Facial Action Coding System (FACS)
+   * - Crisis Intervention Team (CIT) training
+   * - Verbal Judo techniques
+   * - Trauma-informed practices
+   * 
+   * Differentiates:
+   * - Normal customer behavior
+   * - Nervous but non-threatening
+   * - Suspicious requiring monitoring
+   * - Active threat requiring intervention
+   * 
+   * Status: Core detection complete, requires emotion-recognition ONNX model
+   */
+  { id: "mindsense", name: "MindSense - Emotional Intelligence", description: "Micro-expression analysis, intent recognition, deception detection, and real-time de-escalation coaching", capabilities: [
+    // Core emotion detection (open-model)
+    c("emotion-recognition", "Emotion recognition", "open-model", "P3", "7 basic emotions with confidence scoring"),
+    c("micro-expression-detection", "Micro-expression detection", "open-model", "P2", "Fleeting expressions (40-500ms) revealing true emotions"),
+    c("facial-action-units", "Facial Action Units detection", "open-model", "P3", "17 key action units (FACS system)"),
+    
+    // Emotional state analysis (derived)
+    c("emotional-state-tracking", "Emotional state tracking", "derived", "P3", "Per-person emotional timeline and transitions"),
+    c("valence-arousal-analysis", "Valence-arousal analysis", "derived", "P3", "Emotion circumplex positioning"),
+    c("emotional-stability-score", "Emotional stability scoring", "derived", "P3", "Volatility and consistency measurement"),
+    
+    // Deception and stress indicators (derived)
+    c("deception-detection", "Deception indicators", "derived", "P2", "Micro-expression conflicts, emotional masking"),
+    c("stress-level-detection", "Stress level detection", "derived", "P2", "Multi-factor stress scoring"),
+    c("high-stress-alert", "High stress alert", "derived", "P2", "Extreme stress requiring attention"),
+    
+    // Behavioral intent recognition (derived)
+    c("intent-recognition", "Behavioral intent recognition", "derived", "P2", "Benign/nervous/suspicious/threatening classification"),
+    c("threat-assessment", "Threat assessment", "derived", "P1", "Multi-factor threat level scoring"),
+    c("suspicious-behavior", "Suspicious behavior detection", "derived", "P2", "Behavior warranting monitoring"),
+    c("threatening-behavior", "Threatening behavior detection", "derived", "P1", "Immediate security concern"),
+    c("deceptive-behavior", "Deceptive behavior detection", "derived", "P2", "Concealing true intent"),
+    c("person-in-distress", "Person in distress detection", "derived", "P2", "Potential victim or crisis"),
+    
+    // Movement pattern analysis (derived)
+    c("loitering-analysis", "Loitering analysis", "derived", "P3", "Duration-based presence detection"),
+    c("erratic-movement", "Erratic movement detection", "derived", "P2", "Non-goal-directed behavior"),
+    c("territorial-pacing", "Territorial pacing detection", "derived", "P2", "Repeated back-and-forth patterns"),
+    c("surveillance-behavior", "Surveillance behavior detection", "derived", "P1", "Camera/exit scanning patterns"),
+    c("approach-avoidance", "Approach-avoidance conflict", "derived", "P2", "Hesitation and retreat patterns"),
+    
+    // Aggression and violence indicators (derived)
+    c("aggression-detection", "Aggression detection", "derived", "P1", "Anger with high arousal and intensity"),
+    c("fear-detection", "Fear detection", "derived", "P2", "High fear indicating threat awareness"),
+    c("violent-intent-indicators", "Violent intent indicators", "derived", "P1", "Pre-attack behavioral markers"),
+    
+    // De-escalation support (derived)
+    c("deescalation-coaching", "De-escalation coaching", "derived", "P2", "Real-time guidance for security staff"),
+    c("communication-strategy", "Communication strategy recommendation", "derived", "P3", "Tone, volume, pace, body language guidance"),
+    c("intervention-techniques", "Intervention technique suggestions", "derived", "P2", "Evidence-based de-escalation methods"),
+    c("safety-precautions", "Safety precaution alerts", "derived", "P1", "Risk-based safety guidance"),
+    c("escalation-monitoring", "Escalation monitoring", "derived", "P2", "Risk trajectory tracking"),
+    
+    // Analytics and insights (derived)
+    c("emotional-heatmap", "Emotional heat map", "derived", "P3", "Spatial emotion distribution"),
+    c("stress-hotspots", "Stress hotspot identification", "derived", "P3", "High-stress zones and times"),
+    c("intent-distribution", "Intent distribution analysis", "derived", "P3", "Behavioral pattern statistics"),
+    c("deescalation-effectiveness", "De-escalation effectiveness tracking", "derived", "P3", "Technique success metrics"),
+  ]},
+  
+  /**
    * Security Device Analytics - Unified Physical Security
    * 
    * Comprehensive physical security device integration and event correlation.

@@ -118,7 +118,7 @@ export function useLiveAnnotations(cameraId?: string) {
 
   // Setup WebSocket subscription for live collaborative updates
   useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "http://localhost:8080";
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || (typeof window !== "undefined" ? window.location.origin : "");
     const socket = io(wsUrl, {
       path: "/ws",
       transports: ["websocket", "polling"],

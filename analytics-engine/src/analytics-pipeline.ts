@@ -143,7 +143,11 @@ export class AnalyticsPipeline {
     this.helmetDetector = new HelmetDetector(null, environmentProbability("HELMET_CONFIDENCE_THRESHOLD", 0.7));
     this.ppeDetector = new PPEDetector(environmentProbability("PPE_CONFIDENCE_THRESHOLD", 0.6));
     this.fallDetector = new FallDetector();
-    this.smokeFireDetector = new SmokeFireDetector(null, environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.65));
+    this.smokeFireDetector = new SmokeFireDetector(
+      null,
+      environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.8),
+      environmentInteger("FIRE_CONFIRMATION_FRAMES", 3, 1, 10),
+    );
     this.crowdDensityDetector = new CrowdDensityDetector();
     this.tailgatingDetector = new TailgatingDetector();
     this.unattendedObjectsDetector = new UnattendedObjectsDetector();
@@ -1331,6 +1335,11 @@ export class AnalyticsPipeline {
 function environmentProbability(name: string, fallback: number): number {
   const parsed = Number(process.env[name]);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : fallback;
+}
+
+function environmentInteger(name: string, fallback: number, minimum: number, maximum: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 function isInsideZone(

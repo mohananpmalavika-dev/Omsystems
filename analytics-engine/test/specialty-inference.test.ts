@@ -40,9 +40,49 @@ describe("local specialty model adapters", () => {
   it("produces fire and smoke events without external detections", async () => {
     const detector = new SmokeFireDetector({ run: async () => [object("fire", 0.93)] });
     await detector.initialize();
-    const results = await detector.detect(frame());
+    expect(await detector.detect(frame())).toHaveLength(0);
+    expect(await detector.detect({ ...frame(), timestamp: new Date("2026-07-30T10:00:01.000Z") })).toHaveLength(0);
+    const results = await detector.detect({ ...frame(), timestamp: new Date("2026-07-30T10:00:02.000Z") });
     expect(results).toEqual(expect.arrayContaining([expect.objectContaining({ detectionType: "fire", requiresAlert: true })]));
     expect(detector.getHealth().status).toBe("healthy");
+  });
+
+  it("does not replace a model-negative frame with color-only fire or smoke guesses", async () => {
+    const detector = new SmokeFireDetector({ run: async () => [] });
+    await detector.initialize();
+    const orangeFrame = frame();
+    orangeFrame.imageData = Buffer.alloc(100 * 100 * 3);
+    for (let index = 0; index < orangeFrame.imageData.length; index += 3) {
+      orangeFrame.imageData[index] = 240;
+      orangeFrame.imageData[index + 1] = 140;
+      orangeFrame.imageData[index + 2] = 20;
+    }
+
+    expect(await detector.detect(orangeFrame)).toHaveLength(0);
+  });
+
+  it("rejects a fire model that returns the same alert for every image", async () => {
+    const detector = new SmokeFireDetector(
+      { run: async () => [object("fire", 0.92)] },
+      0.8,
+      3,
+      true,
+    );
+
+    await detector.initialize();
+
+    expect(detector.getHealth()).toMatchObject({ status: "degraded" });
+    expect(await detector.detect(frame())).toHaveLength(0);
+  });
+
+  it("keeps temporal fire confirmation isolated between cameras", async () => {
+    const detector = new SmokeFireDetector({ run: async () => [object("fire", 0.95)] });
+    await detector.initialize();
+    await detector.detect({ ...frame(), cameraId: "camera-a" });
+    await detector.detect({ ...frame(), cameraId: "camera-a", timestamp: new Date("2026-07-30T10:00:01.000Z") });
+
+    const cameraBResults = await detector.detect({ ...frame(), cameraId: "camera-b", timestamp: new Date("2026-07-30T10:00:02.000Z") });
+    expect(cameraBResults).toHaveLength(0);
   });
 
   it("does not turn a visible rider head into a helmet-worn alert", async () => {

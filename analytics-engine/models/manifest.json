@@ -443,6 +443,39 @@
         128,
         128
       ]
+    },
+    {
+      "id": "emotion-recognition",
+      "name": "MindSense Emotion Recognition (FER2013 CNN)",
+      "path": "mindsense/emotion-recognition.onnx",
+      "pathEnvironment": "EMOTION_RECOGNITION_MODEL_PATH",
+      "sourceUrlEnvironment": "EMOTION_MODEL_URL",
+      "sha256Environment": "EMOTION_MODEL_SHA256",
+      "license": "MIT",
+      "sourceProject": "https://github.com/oarriaga/face_classification",
+      "type": "onnx",
+      "priority": "high",
+      "required": false,
+      "warmup": true,
+      "useGPU": true,
+      "task": "emotion-recognition",
+      "preprocessor": "grayscale-normalized",
+      "labels": [
+        "anger",
+        "disgust",
+        "fear",
+        "happiness",
+        "neutral",
+        "sadness",
+        "surprise"
+      ],
+      "inputShape": [
+        1,
+        1,
+        48,
+        48
+      ],
+      "notes": "MindSense core emotion detector. 7 basic emotions (Ekman model). Trained on FER2013 dataset. Supports micro-expression analysis, Facial Action Unit estimation, and valence-arousal circumplex mapping. Foundation for deception detection, stress analysis, and behavioral intent recognition."
     }
   ]
 }

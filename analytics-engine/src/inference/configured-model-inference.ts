@@ -74,6 +74,38 @@ export interface HelmetClassificationFrameInference {
   }>;
 }
 
+export interface EmotionInference {
+  run(
+    frame: DetectionFrame,
+    box: { x: number; y: number; width: number; height: number },
+  ): Promise<{
+    emotion: "neutral" | "happiness" | "sadness" | "anger" | "fear" | "surprise" | "disgust";
+    confidence: number;
+    valence: number;
+    arousal: number;
+    intensity: number;
+    actionUnits: Partial<{
+      AU1_innerBrowRaiser: number;
+      AU2_outerBrowRaiser: number;
+      AU4_browLowerer: number;
+      AU5_upperLidRaiser: number;
+      AU6_cheekRaiser: number;
+      AU7_lidTightener: number;
+      AU9_noseWrinkler: number;
+      AU10_upperLipRaiser: number;
+      AU12_lipCornerPuller: number;
+      AU15_lipCornerDepressor: number;
+      AU17_chinRaiser: number;
+      AU20_lipStretcher: number;
+      AU23_lipTightener: number;
+      AU24_lipPressor: number;
+      AU25_lipsPart: number;
+      AU26_jawDrop: number;
+      AU27_mouthStretch: number;
+    }>;
+  }>;
+}
+
 export async function loadObjectInference(modelId: string, confidenceThreshold: number): Promise<ObjectFrameInference> {
   const manager = getModelManager();
   const config = requiredConfig(modelId);
@@ -87,13 +119,53 @@ export async function loadObjectInference(modelId: string, confidenceThreshold: 
   if (config.decoder === "lpd-yunet") {
     return new LpdYuNetInference(session, confidenceThreshold, 0.3, dimensions.width, dimensions.height);
   }
-  return new YoloDetectionInference(session, {
+  const inference = new YoloDetectionInference(session, {
     labels: config.labelSet === "coco" ? COCO_LABELS : config.labels ?? [],
     ...yoloModelOptions(config),
     confidenceThreshold,
     inputWidth: dimensions.width,
     inputHeight: dimensions.height,
   });
+  if (modelId === "fire-smoke") {
+    await assertResponsiveObjectInference(inference, "Fire/smoke model");
+  }
+  return inference;
+}
+
+/** Rejects placeholder/corrupt detectors with constant non-empty output. */
+export async function assertResponsiveObjectInference(
+  inference: ObjectFrameInference,
+  modelName = "Object model",
+): Promise<void> {
+  const width = 64;
+  const height = 64;
+  const makeFrame = (value: number): DetectionFrame => ({
+    cameraId: "model-self-test",
+    tenantId: "model-self-test",
+    timestamp: new Date(0),
+    width,
+    height,
+    imageData: Buffer.alloc(width * height * 3, value),
+  });
+  const dark = await inference.run(makeFrame(0));
+  const bright = await inference.run(makeFrame(255));
+
+  if (dark.length > 0 && detectionFingerprint(dark) === detectionFingerprint(bright)) {
+    throw new Error(`${modelName} failed responsiveness self-test: identical non-empty detections for black and white frames`);
+  }
+}
+
+function detectionFingerprint(detections: InferenceObject[]): string {
+  return JSON.stringify(detections.map((detection) => ({
+    label: detection.label,
+    confidence: Number(detection.confidence?.toFixed(6)),
+    boundingBox: {
+      x: Number(detection.boundingBox.x.toFixed(6)),
+      y: Number(detection.boundingBox.y.toFixed(6)),
+      width: Number(detection.boundingBox.width.toFixed(6)),
+      height: Number(detection.boundingBox.height.toFixed(6)),
+    },
+  })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))));
 }
 
 /**
@@ -175,7 +247,7 @@ export async function loadPersonVectorInference(modelId: string): Promise<Person
   }
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
-  
+
   // Create dedicated PersonReIdInference with OSNet-appropriate dimensions and preprocessing
   return new PersonReIdInference(
     await manager.getModel(modelId) as InferenceSession,
@@ -193,7 +265,7 @@ export async function loadVehicleVectorInference(modelId: string): Promise<Vehic
   }
   if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
   const dimensions = inputDimensions(config);
-  
+
   // Create dedicated VehicleReIdInference with vehicle-appropriate preprocessing
   return new VehicleReIdInference(
     await manager.getModel(modelId) as InferenceSession,
@@ -229,6 +301,23 @@ export async function loadAttributeInference(modelId: string): Promise<Attribute
   const dimensions = inputDimensions(config);
   
   return new PersonAttributeInference(
+    await manager.getModel(modelId) as InferenceSession,
+    dimensions.width,
+    dimensions.height,
+  );
+}
+
+export async function loadEmotionInference(modelId: string): Promise<EmotionInference> {
+  const manager = getModelManager();
+  const config = requiredConfig(modelId);
+  if (config.task !== "emotion-recognition") {
+    throw new Error(`Model ${modelId} is not configured for emotion recognition (expected task: emotion-recognition)`);
+  }
+  if (!manager.isModelAvailable(modelId)) throw new Error(modelUnavailableReason(modelId));
+  const dimensions = inputDimensions(config);
+
+  const { EmotionRecognitionInference } = await import("./emotion-recognition-inference.js");
+  return new EmotionRecognitionInference(
     await manager.getModel(modelId) as InferenceSession,
     dimensions.width,
     dimensions.height,

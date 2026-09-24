@@ -24,6 +24,12 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
     if (stopped) return;
     socket = new WebSocket(endpoint, { headers: { "x-edge-agent-token": credential }, maxPayload: 12 * 1024 * 1024 });
     const current = socket;
+    const pingTimer = setInterval(() => {
+      if (current.readyState === WebSocket.OPEN) {
+        current.ping();
+      }
+    }, 15_000);
+
     current.on("open", () => logger.info("Self-hosted media relay connected", { agentId }));
     current.on("message", (raw) => {
       let frame: RelayRequest;
@@ -43,8 +49,14 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
         if (current.readyState === WebSocket.OPEN) current.send(JSON.stringify({ id: frame.id, status: 502, body: Buffer.from('{"error":"local_media_unavailable"}').toString("base64") }));
       }).finally(() => { inFlight--; });
     });
-    current.on("error", (error) => logger.warn("Self-hosted media relay connection error", { error: error.message }));
-    current.on("close", () => {
+    current.on("error", (error) => {
+      logger.warn("Self-hosted media relay connection error", { error: error.message });
+      clearInterval(pingTimer);
+      current.terminate();
+    });
+    current.on("close", (code, reason) => {
+      clearInterval(pingTimer);
+      logger.warn("Self-hosted media relay disconnected", { agentId, code, reason: reason?.toString() });
       if (socket === current) socket = undefined;
       if (!stopped) reconnect = setTimeout(connect, 3_000);
     });

@@ -179,7 +179,7 @@ export const FIRE_SMOKE_MODEL: ModelManifest = {
     1: 'smoke',
   },
 
-  confidenceThreshold: 0.65, // Higher threshold for critical safety events
+  confidenceThreshold: 0.8, // Conservative threshold to reduce fire/smoke false alarms
   nmsThreshold: 0.5,
 
   version: '1.0.0',

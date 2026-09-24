@@ -144,7 +144,7 @@ export class SafetyAnalyticsDetector extends BaseDetector {
   
   // Configuration
   private readonly PPE_CONFIDENCE_THRESHOLD = 0.6;
-  private readonly FIRE_CONFIDENCE_THRESHOLD = 0.7;
+  private readonly FIRE_CONFIDENCE_THRESHOLD = 0.8;
   private readonly VIOLATION_GRACE_PERIOD_MS = 10000;  // 10 seconds
   private readonly HAZARD_COOLDOWN_MS = 30000;  // 30 seconds
   

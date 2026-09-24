@@ -174,7 +174,7 @@ export class UnifiedInferencePipeline {
       // Load fire/smoke detector
       if (options.enableFire !== false) {
         try {
-          this.fireDetector = await loadObjectInference("fire-smoke", 0.65);
+          this.fireDetector = await loadObjectInference("fire-smoke", 0.8);
           console.log('✓ Fire/smoke detector loaded');
         } catch (error) {
           console.warn('Fire detector unavailable:', error instanceof Error ? error.message : String(error));

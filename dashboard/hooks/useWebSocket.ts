@@ -60,7 +60,7 @@ export function useWebSocket(options: UseWebSocketOptions) {
   useEffect(() => {
     if (!autoConnect) return;
 
-    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || 'http://localhost:3000';
+    const socketUrl = process.env.NEXT_PUBLIC_WS_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
     const socket = io(socketUrl, {
       path: '/ws',

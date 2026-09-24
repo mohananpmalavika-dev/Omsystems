@@ -50,6 +50,12 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
           validationTimer.unref();
           const connection: Connection = { socket: ws, pending: new Map(), validationTimer };
           connections.set(agentId, connection);
+          app.log.info({ agentId }, "Edge media relay WebSocket connected");
+
+          ws.on("ping", () => {
+            ws.pong();
+          });
+
           ws.on("message", (raw) => {
             let response: RelayResponse;
             try { response = JSON.parse(raw.toString()) as RelayResponse; } catch { ws.close(1003, "invalid frame"); return; }
@@ -62,7 +68,8 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
             clearTimeout(pending.timer);
             pending.resolve(response);
           });
-          ws.on("close", () => {
+          ws.on("close", (code, reason) => {
+            app.log.warn({ agentId, code, reason: reason?.toString() }, "Edge media relay WebSocket closed");
             clearInterval(validationTimer);
             if (connections.get(agentId) === connection) connections.delete(agentId);
             for (const pending of connection.pending.values()) {
@@ -70,6 +77,9 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
               pending.reject(new Error("edge_disconnected"));
             }
             connection.pending.clear();
+          });
+          ws.on("error", (err) => {
+            app.log.warn({ agentId, error: err.message }, "Edge media relay WebSocket error");
           });
         });
       })
