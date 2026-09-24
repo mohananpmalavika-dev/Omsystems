@@ -625,8 +625,13 @@ export async function registerEdgeGatewayOperationsRoutes(
 
   app.get("/v1/edge-agents/:id/updates/next", async (request) => {
     const { id } = agentParams.parse(request.params);
-    const { version } = z.object({ version: z.string().min(1).max(40) }).parse(request.query);
-    return await updateForAgent(id, version) ?? null;
+    let version = (request.query as { version?: string })?.version;
+    if (!version) {
+      const m = decodeURIComponent(request.url).match(/[?&]version=([^&]+)/);
+      if (m) version = m[1];
+    }
+    const validated = z.string().min(1).max(40).safeParse(version);
+    return await updateForAgent(id, validated.success ? validated.data : "0.1.0") ?? null;
   });
 }
 

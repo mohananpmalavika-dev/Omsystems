@@ -3700,7 +3700,11 @@ function extractClientCertificate(request: FastifyRequest): string | undefined {
 }
 
 function isEdgeAgentIngressRoute(method: string, url: string) {
-  const path = url.split("?", 1)[0] ?? url;
+  let path = url;
+  try {
+    path = decodeURIComponent(url);
+  } catch {}
+  path = (path.split("?", 1)[0] ?? path).split("%3F", 1)[0] ?? path;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/heartbeat$/.test(path)) return true;
   if (method === "GET" && /^\/v1\/edge-agents\/[^/]+\/cameras\/monitoring$/.test(path)) return true;
   if (method === "POST" && /^\/v1\/edge-agents\/[^/]+\/live-sessions\/consume$/.test(path)) return true;
@@ -3719,7 +3723,11 @@ function isEdgeAgentIngressRoute(method: string, url: string) {
 }
 
 function edgeAgentIdFromIngress(request: FastifyRequest) {
-  const path = request.url.split("?", 1)[0] ?? request.url;
+  let path = request.url;
+  try {
+    path = decodeURIComponent(request.url);
+  } catch {}
+  path = (path.split("?", 1)[0] ?? path).split("%3F", 1)[0] ?? path;
   const direct = path.match(/^\/v1\/edge-agents\/([^/]+)/)?.[1];
   if (direct) return decodeURIComponent(direct);
   if (/^\/(?:api\/)?v1\/edge\/(?:telemetry|transitions)$/.test(path)) {
