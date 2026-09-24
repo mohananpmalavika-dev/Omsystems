@@ -34,6 +34,28 @@ export interface WorkOrderUpdate {
   timestamp: Date;
 }
 
+export interface VideoWallDispatchEvent {
+  displayCode: string;
+  layout: string;
+  assignedCameras: string[];
+  dispatchedBy?: string;
+  reason?: string;
+  timestamp: string;
+}
+
+export interface CameraAnnotationEvent {
+  id: string;
+  cameraId: string;
+  flagType: string;
+  label: string;
+  note: string;
+  authorName: string;
+  priority?: string;
+  pinned: boolean;
+  createdAt: string;
+  action: 'create' | 'update' | 'resolve';
+}
+
 export class WebSocketService {
   private io: SocketIOServer;
   private store: ControlPlaneStore;
@@ -211,6 +233,37 @@ export class WebSocketService {
       tenantId,
       type: event.type,
       message: event.message,
+    });
+  }
+
+  /**
+   * Broadcast video wall layout and matrix dispatch across SOC screens & operators
+   */
+  broadcastVideoWallDispatch(tenantId: string, dispatch: VideoWallDispatchEvent) {
+    this.io.to(`tenant:${tenantId}`).emit('video-wall:dispatch', dispatch);
+    this.io.to(`wall:${dispatch.displayCode}`).emit('video-wall:dispatch', dispatch);
+    this.io.emit('video-wall:dispatch', dispatch);
+    this.logger.info('Video Wall Dispatch broadcasted via WebSocket:', {
+      tenantId,
+      displayCode: dispatch.displayCode,
+      camerasCount: dispatch.assignedCameras.length,
+      dispatchedBy: dispatch.dispatchedBy,
+    });
+  }
+
+  /**
+   * Broadcast real-time collaborative camera annotation / pin note across all shifts & operators
+   */
+  broadcastCameraAnnotation(tenantId: string, annotation: CameraAnnotationEvent) {
+    this.io.to(`tenant:${tenantId}`).emit('camera:annotation:updated', annotation);
+    this.io.to(`camera:${annotation.cameraId}`).emit('camera:annotation:updated', annotation);
+    this.io.emit('camera:annotation:updated', annotation);
+    this.logger.info('Camera Annotation broadcasted via WebSocket:', {
+      tenantId,
+      cameraId: annotation.cameraId,
+      flagType: annotation.flagType,
+      authorName: annotation.authorName,
+      action: annotation.action,
     });
   }
 

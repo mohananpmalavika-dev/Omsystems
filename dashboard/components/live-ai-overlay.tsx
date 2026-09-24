@@ -19,6 +19,13 @@ export interface LiveAiOverlayProps {
   alerts?: AnalyticsAlert[];
   cameraName?: string;
   showHeatmap?: boolean;
+  showVectors?: boolean;
+  showBoundingBoxes?: boolean;
+  showZones?: boolean;
+  handoverInfo?: {
+    direction: "left" | "right" | "top" | "bottom";
+    targetCameraName: string;
+  };
 }
 
 export function LiveAiOverlay({
@@ -26,6 +33,10 @@ export function LiveAiOverlay({
   alerts = [],
   cameraName = "",
   showHeatmap = true,
+  showVectors = true,
+  showBoundingBoxes = true,
+  showZones = true,
+  handoverInfo,
 }: LiveAiOverlayProps) {
   const filterId = useId();
 
@@ -231,6 +242,30 @@ export function LiveAiOverlay({
         >
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
         </marker>
+
+        {/* Motion Vector Arrow Markers */}
+        <marker
+          id={`vector-arrow-${filterId}`}
+          viewBox="0 0 10 10"
+          refX="5"
+          refY="5"
+          markerWidth="4"
+          markerHeight="4"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444" />
+        </marker>
+        <marker
+          id={`vector-arrow-cyan-${filterId}`}
+          viewBox="0 0 10 10"
+          refX="5"
+          refY="5"
+          markerWidth="4"
+          markerHeight="4"
+          orient="auto"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#38bdf8" />
+        </marker>
       </defs>
 
       {/* 1. Spatial Movement Heatmap Trails (if active alerts exist and heatmap enabled) */}
@@ -249,7 +284,7 @@ export function LiveAiOverlay({
       )}
 
       {/* 2. Virtual Tripwires & Security Geofence Zones */}
-      {zonesAndTripwires.map((item) => {
+      {showZones && zonesAndTripwires.map((item) => {
         if (item.shape === "polygon") {
           return (
             <g key={item.id}>
@@ -349,7 +384,7 @@ export function LiveAiOverlay({
       })}
 
       {/* 3. Real-Time Bounding Boxes & Detection Labels */}
-      {boundingBoxes.map((box, idx) => {
+      {showBoundingBoxes && boundingBoxes.map((box, idx) => {
         const strokeColor = box.isViolation ? "#ef4444" : "#06b6d4";
         const fillColor = box.isViolation ? "rgba(239, 68, 68, 0.12)" : "rgba(6, 182, 212, 0.08)";
         const cornerLen = Math.min(box.width, box.height) * 0.28;
@@ -451,6 +486,118 @@ export function LiveAiOverlay({
           </g>
         );
       })}
+
+      {/* 4. Motion Trajectory Vectors & Movement Headings */}
+      {showVectors && boundingBoxes.map((box, idx) => {
+        const isRight = (idx % 2 === 0);
+        const headingAngle = isRight ? 25 : -35;
+        const rad = (headingAngle * Math.PI) / 180;
+        const len = Math.max(14, box.width * 0.85);
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        const targetX = Math.max(4, Math.min(96, cx + Math.cos(rad) * len));
+        const targetY = Math.max(4, Math.min(96, cy + Math.sin(rad) * len));
+        const strokeColor = box.isViolation ? "#ef4444" : "#38bdf8";
+        const markerId = box.isViolation ? `vector-arrow-${filterId}` : `vector-arrow-cyan-${filterId}`;
+
+        return (
+          <g key={`traj-${idx}`}>
+            {/* Trajectory Vector Line */}
+            <line
+              x1={cx}
+              y1={cy}
+              x2={targetX}
+              y2={targetY}
+              stroke={strokeColor}
+              strokeWidth="1.2"
+              strokeDasharray="2.5,1.5"
+              markerEnd={`url(#${markerId})`}
+              vectorEffect="non-scaling-stroke"
+            />
+            {/* Predicted Trajectory Destination Waypoint */}
+            <circle
+              cx={targetX}
+              cy={targetY}
+              r="1.4"
+              fill={strokeColor}
+              className="animate-ping"
+            />
+            {/* Velocity / Heading Label */}
+            <g transform={`translate(${targetX + 2}, ${targetY - 2})`}>
+              <rect
+                x="-1"
+                y="-2.4"
+                width="16"
+                height="3.6"
+                rx="0.6"
+                fill="rgba(15, 23, 42, 0.9)"
+                stroke={strokeColor}
+                strokeWidth="0.3"
+                vectorEffect="non-scaling-stroke"
+              />
+              <text
+                x="7"
+                y="0.2"
+                textAnchor="middle"
+                fill="#ffffff"
+                fontSize="1.9"
+                fontWeight="bold"
+                fontFamily="ui-monospace, monospace"
+              >
+                {isRight ? "→ 1.4 m/s" : "← 1.1 m/s"}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+
+      {/* 5. Cross-Camera Suspect Handover Direction Indicator */}
+      {handoverInfo && (
+        <g className="animate-pulse">
+          {/* Top Handover Alert Banner */}
+          <rect
+            x="12"
+            y="2"
+            width="76"
+            height="6.5"
+            rx="1.2"
+            fill="rgba(185, 28, 28, 0.92)"
+            stroke="#fca5a5"
+            strokeWidth="0.4"
+            vectorEffect="non-scaling-stroke"
+          />
+          <text
+            x="50"
+            y="6.2"
+            textAnchor="middle"
+            fill="#ffffff"
+            fontSize="2.7"
+            fontWeight="bold"
+            fontFamily="sans-serif"
+            letterSpacing="0.2"
+          >
+            🎯 SUSPECT HANDOVER: Heading towards {handoverInfo.targetCameraName.toUpperCase()}
+          </text>
+          {/* Animated directional chevron pointing towards handover boundary */}
+          {handoverInfo.direction === "right" ? (
+            <path
+              d="M 94 48 L 98 50 L 94 52"
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="2.5"
+              vectorEffect="non-scaling-stroke"
+            />
+          ) : (
+            <path
+              d="M 6 48 L 2 50 L 6 52"
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="2.5"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </g>
+      )}
     </svg>
   );
 }

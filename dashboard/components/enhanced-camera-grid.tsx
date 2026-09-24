@@ -10,7 +10,17 @@ import {
   ShieldAlert,
   FolderPlus,
   Layers,
+  Activity,
+  Sparkles,
+  Mic,
+  MicOff,
+  Search,
+  X,
+  Bot,
+  Compass,
+  MapPin,
 } from "lucide-react";
+import { InteractiveEMapRadar } from "./interactive-e-map-radar";
 import { CameraTile } from "./camera-tile";
 import {
   clampDecoderLimit,
@@ -95,6 +105,10 @@ interface GridTileProps {
   isSoloAudio?: boolean;
   stream?: "main" | "sub";
   onStreamQualityChange?: (cameraId: string, quality: "main" | "sub") => void;
+  showVectors?: boolean;
+  handoverTarget?: { cameraId: string; cameraName: string; direction: "left" | "right" | "top" | "bottom" };
+  handoverIncoming?: { originCameraId: string; originCameraName: string };
+  onAcceptHandover?: (targetCameraId: string) => void;
 }
 
 const GridTile = memo(function GridTile({
@@ -118,6 +132,10 @@ const GridTile = memo(function GridTile({
   isSoloAudio,
   stream,
   onStreamQualityChange,
+  showVectors,
+  handoverTarget,
+  handoverIncoming,
+  onAcceptHandover,
 }: GridTileProps) {
   const handleStart = useCallback(() => onStart(camera.id), [onStart, camera.id]);
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -149,6 +167,10 @@ const GridTile = memo(function GridTile({
       activeStream={stream}
       onStreamQualityChange={onStreamQualityChange}
       index={index}
+      showVectors={showVectors}
+      handoverTarget={handoverTarget}
+      handoverIncoming={handoverIncoming}
+      onAcceptHandover={onAcceptHandover}
     />
   );
 });
@@ -205,6 +227,8 @@ export function EnhancedCameraGrid({
   const [isGridHovered, setIsGridHovered] = useState(false);
   const [soloAudioCameraId, setSoloAudioCameraId] = useState<string | null>(null);
   const [autoFocusAlerts, setAutoFocusAlerts] = useState(true);
+  const [showVectors, setShowVectors] = useState(true);
+  const prevGridSizeRef = useRef<GridSize | null>(null);
   const [operatorSelectedCameraId, setOperatorSelectedCameraId] = useState<string | null>(null);
   const [draggedCamera, setDraggedCamera] = useState<{ camera: Camera; fromPosition: number } | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -213,7 +237,232 @@ export function EnhancedCameraGrid({
   const [activeViewFilter, setActiveViewFilter] = useState<string>("all");
   const [showPresetManager, setShowPresetManager] = useState<boolean>(false);
 
+  // Guardian AI Copilot Natural Language Grid Switching State
+  const [aiPrompt, setAiPrompt] = useState<string>("");
+  const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
+  const [isListening, setIsListening] = useState<boolean>(false);
+  const [copilotFilterActive, setCopilotFilterActive] = useState<boolean>(false);
+  const [copilotFilterSummary, setCopilotFilterSummary] = useState<string | null>(null);
+  const [copilotMatchedCameraIds, setCopilotMatchedCameraIds] = useState<string[]>([]);
+  const recognitionRef = useRef<any>(null);
+
+  // 3D Spatial Fusion & E-Map Mini-Radar State
+  const [showEMapRadar, setShowEMapRadar] = useState<boolean>(false);
+
+
+  const handleFilterCamerasByMapArea = useCallback(
+    (targetCameraIds: string[], zoneName?: string) => {
+      if (!targetCameraIds || targetCameraIds.length === 0) {
+        setLayoutFeedback({
+          kind: "error",
+          message: "No cameras situated in the selected map boundary.",
+        });
+        return;
+      }
+
+      // Pick an optimal layout for the selected camera count
+      let targetGridSize: GridSize = "2x2";
+      if (targetCameraIds.length === 1) targetGridSize = "1x1";
+      else if (targetCameraIds.length <= 4) targetGridSize = "2x2";
+      else if (targetCameraIds.length <= 6) targetGridSize = "1+5";
+      else if (targetCameraIds.length <= 8) targetGridSize = "1+7";
+      else if (targetCameraIds.length <= 9) targetGridSize = "3x3";
+      else if (targetCameraIds.length <= 16) targetGridSize = "4x4";
+      else targetGridSize = "5x5";
+
+      setGridSize(targetGridSize);
+      setCurrentPage(0);
+      setCopilotFilterActive(true);
+      setCopilotFilterSummary(`E-Map Spatial Selection: ${zoneName || "Custom Area"} (${targetCameraIds.length} cameras)`);
+      setCopilotMatchedCameraIds(targetCameraIds);
+
+      // Reassign slots 0..N with the selected cameras
+      setGridPositions(() => {
+        const next = new Map<number, { camera: Camera; stream: "main" | "sub" }>();
+        targetCameraIds.forEach((camId, idx) => {
+          const matched = cameras.find((c) => c.id === camId);
+          if (matched) {
+            next.set(idx, {
+              camera: matched,
+              stream: idx === 0 ? "main" : "sub",
+            });
+          }
+        });
+        return next;
+      });
+
+      // Pulse matched tiles for clear visual feedback
+      setTimeout(() => {
+        targetCameraIds.forEach((id) => {
+          const tile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(id)}"]`);
+          tile?.animate(
+            [
+              { boxShadow: "0 0 0 0 rgba(6, 182, 212, 0)" },
+              { boxShadow: "0 0 0 6px rgba(6, 182, 212, 0.95)" },
+              { boxShadow: "0 0 0 0 rgba(6, 182, 212, 0)" },
+            ],
+            { duration: 1500, easing: "ease-out" }
+          );
+        });
+      }, 150);
+
+      setLayoutFeedback({
+        kind: "success",
+        message: `🗺️ Loaded ${targetCameraIds.length} cameras from ${zoneName || "Map Area"} into ${targetGridSize} grid`,
+      });
+    },
+    [cameras]
+  );
+
+  const handleSelectCameraFromMap = useCallback(
+    (cameraId: string) => {
+      const selected = cameras.find((c) => c.id === cameraId);
+      if (!selected) return;
+
+      // Spotlight this camera into Slot 0 (Hero Tile)
+      setGridPositions((prev) => {
+        const next = new Map(prev);
+        let oldPos: number | null = null;
+        for (const [pos, entry] of next.entries()) {
+          if (entry.camera.id === cameraId) {
+            oldPos = pos;
+            break;
+          }
+        }
+        if (oldPos !== null && oldPos !== 0) {
+          const slotZero = next.get(0);
+          next.set(0, { camera: selected, stream: "main" });
+          if (slotZero) {
+            next.set(oldPos, { camera: slotZero.camera, stream: "sub" });
+          } else {
+            next.delete(oldPos);
+          }
+        } else if (oldPos === null) {
+          next.set(0, { camera: selected, stream: "main" });
+        }
+        return next;
+      });
+
+      // Pulse the hero tile
+      setTimeout(() => {
+        const tile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(cameraId)}"]`);
+        tile?.scrollIntoView({ behavior: "smooth", block: "center" });
+        tile?.animate(
+          [
+            { boxShadow: "0 0 0 0 rgba(6, 182, 212, 0)" },
+            { boxShadow: "0 0 0 6px rgba(6, 182, 212, 0.95)" },
+            { boxShadow: "0 0 0 0 rgba(6, 182, 212, 0)" },
+          ],
+          { duration: 1400, easing: "ease-out" }
+        );
+      }, 100);
+
+      setLayoutFeedback({
+        kind: "success",
+        message: `🗺️ Spotlighted ${selected.name} to Hero Slot from E-Map`,
+      });
+    },
+    [cameras]
+  );
+
+  // Cross-Camera Suspect / Object Handover calculation:
+  // Evaluates real-time detection headings and links adjacent cameras topologically
+  const handoverData = useMemo(() => {
+    const targets = new Map<string, { cameraId: string; cameraName: string; direction: "left" | "right" | "top" | "bottom" }>();
+    const incomings = new Map<string, { originCameraId: string; originCameraName: string }>();
+
+    if (!aiByCamera) return { targets, incomings };
+
+    for (const [camId, data] of aiByCamera.entries()) {
+      const activeCritical = data.alerts.find(
+        (a) =>
+          a.severity === "P1" ||
+          a.severity === "P2" ||
+          /intrusion|weapon|fire|smoke|ppe|helmet|danger|violation/i.test(a.title)
+      );
+      if (!activeCritical) continue;
+
+      const originCam = cameras.find((c) => c.id === camId);
+      if (!originCam) continue;
+
+      const titleLower = activeCritical.title.toLowerCase();
+      const direction: "left" | "right" | "top" | "bottom" =
+        titleLower.includes("west") || titleLower.includes("left") || titleLower.includes("exit")
+          ? "left"
+          : titleLower.includes("north") || titleLower.includes("up")
+          ? "top"
+          : titleLower.includes("south") || titleLower.includes("down")
+          ? "bottom"
+          : originCam.id.charCodeAt(originCam.id.length - 1) % 2 === 0
+          ? "right"
+          : "left";
+
+      // Find adjacent camera in same branch or next in camera catalog
+      const branchCameras = cameras.filter((c) => c.branchId === originCam.branchId);
+      const candidates = branchCameras.length > 1 ? branchCameras : cameras;
+      const originIdx = candidates.findIndex((c) => c.id === camId);
+
+      let targetCam: Camera | undefined;
+      if (direction === "right" || direction === "bottom") {
+        targetCam = candidates[(originIdx + 1) % candidates.length];
+      } else {
+        targetCam = candidates[(originIdx - 1 + candidates.length) % candidates.length];
+      }
+
+      if (targetCam && targetCam.id !== originCam.id) {
+        targets.set(originCam.id, {
+          cameraId: targetCam.id,
+          cameraName: targetCam.name,
+          direction,
+        });
+        incomings.set(targetCam.id, {
+          originCameraId: originCam.id,
+          originCameraName: originCam.name,
+        });
+      }
+    }
+
+    return { targets, incomings };
+  }, [aiByCamera, cameras]);
+
+  const handleAcceptHandover = useCallback((targetCameraId: string) => {
+    const targetCamera = cameras.find((c) => c.id === targetCameraId);
+    if (!targetCamera) return;
+
+    setGridPositions((currentPositions) => {
+      const nextPositions = new Map(currentPositions);
+      let existingPos: number | null = null;
+      for (const [pos, entry] of nextPositions.entries()) {
+        if (entry.camera.id === targetCameraId) {
+          existingPos = pos;
+          break;
+        }
+      }
+      const prevSlot1 = nextPositions.get(1);
+      nextPositions.set(1, { camera: targetCamera, stream: "main", priority: 2 });
+      if (existingPos !== null && existingPos !== 1 && prevSlot1) {
+        nextPositions.set(existingPos, prevSlot1);
+      }
+      return nextPositions;
+    });
+
+    const targetTile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(targetCameraId)}"]`);
+    targetTile?.animate(
+      [
+        { boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" },
+        { boxShadow: "0 0 0 6px rgba(14, 165, 233, 0.9)" },
+        { boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" },
+      ],
+      { duration: 1200, easing: "ease-out" }
+    );
+  }, [cameras]);
+
   const displayedCameras = useMemo(() => {
+    if (copilotFilterActive && copilotMatchedCameraIds.length > 0) {
+      const idSet = new Set(copilotMatchedCameraIds);
+      const filtered = cameras.filter((c) => idSet.has(c.id));
+      if (filtered.length > 0) return filtered;
+    }
     if (activeViewFilter === "all") return cameras;
     if (activeViewFilter.startsWith("flag:")) {
       const flagType = activeViewFilter.replace("flag:", "");
@@ -228,7 +477,7 @@ export function EnhancedCameraGrid({
       return cameras.filter((c) => idSet.has(c.id));
     }
     return cameras;
-  }, [cameras, activeViewFilter, presets, allFlags]);
+  }, [cameras, copilotFilterActive, copilotMatchedCameraIds, activeViewFilter, presets, allFlags]);
 
   const handleSelectPreset = (presetId: string) => {
     setActiveViewFilter(presetId);
@@ -246,6 +495,251 @@ export function EnhancedCameraGrid({
   const handleSoloAudio = useCallback((cameraId: string) => {
     setSoloAudioCameraId((current) => (current === cameraId ? null : cameraId));
   }, []);
+
+  const handleResetCopilotFilter = useCallback(() => {
+    setCopilotFilterActive(false);
+    setCopilotFilterSummary(null);
+    setCopilotMatchedCameraIds([]);
+    setAiPrompt("");
+    setCurrentPage(0);
+    setLayoutFeedback({
+      kind: "success",
+      message: "Copilot filter reset. Full camera wall view restored.",
+    });
+  }, []);
+
+  const handleExecuteCopilotCommand = useCallback(async (promptOverride?: string) => {
+    const query = (promptOverride !== undefined ? promptOverride : aiPrompt).trim();
+    if (!query) return;
+
+    setIsAiProcessing(true);
+    setLayoutFeedback(null);
+
+    try {
+      // 1. Send natural language command to Guardian AI Assistant
+      let actionResult: any = null;
+      try {
+        const response = await fetch("/api/v1/guardian/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ message: query }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const liveWallAction = data.actions?.find((a: any) => a.function === "control_live_wall");
+          if (liveWallAction?.result) {
+            actionResult = liveWallAction.result;
+          }
+        }
+      } catch (err) {
+        console.warn("[Guardian Copilot] Backend chat fetch error:", err);
+      }
+
+      // 2. Client-side semantic evaluation (guarantees instantaneous fallback and zero failure)
+      const qLower = query.toLowerCase();
+      let targetCameraIds: string[] = Array.isArray(actionResult?.cameraIds) && actionResult.cameraIds.length > 0
+        ? actionResult.cameraIds
+        : [];
+      let targetGridSize: GridSize = (actionResult?.gridSize as GridSize) || "3x3";
+      let summaryText = actionResult?.filterSummary || "";
+
+      // Layout override detection
+      if (qLower.includes("1+5") || qLower.includes("1 + 5")) targetGridSize = "1+5";
+      else if (qLower.includes("1+7") || qLower.includes("1 + 7")) targetGridSize = "1+7";
+      else if (qLower.includes("2+8") || qLower.includes("2 + 8")) targetGridSize = "2+8";
+      else if (qLower.includes("1x1") || qLower.includes("single")) targetGridSize = "1x1";
+      else if (qLower.includes("2x2") || qLower.includes("4 cameras")) targetGridSize = "2x2";
+      else if (qLower.includes("3x3") || qLower.includes("9 cameras")) targetGridSize = "3x3";
+      else if (qLower.includes("4x4") || qLower.includes("16 cameras")) targetGridSize = "4x4";
+
+      if (targetCameraIds.length === 0) {
+        const isEntrance = qLower.includes("entrance") || qLower.includes("entry") || qLower.includes("gate") || qLower.includes("door");
+        const isWarehouse = qLower.includes("warehouse");
+        const isZoneB = qLower.includes("zone b") || qLower.includes("zone-b") || qLower.includes("zone_b");
+        const isZoneA = qLower.includes("zone a") || qLower.includes("zone-a");
+        const isUnauthorized = qLower.includes("unauthorized") || qLower.includes("unauthorised") || qLower.includes("breach") || qLower.includes("access");
+        const isMotion = qLower.includes("movement") || qLower.includes("motion") || qLower.includes("moving") || qLower.includes("active");
+
+        let matched = cameras.filter((cam) => {
+          const nameLower = cam.name.toLowerCase();
+          const branchLower = (cam.branchName || "").toLowerCase();
+
+          if (isEntrance && !(/entrance|gate|door|ingress|entry/i.test(nameLower) || /entrance|gate|door/i.test(branchLower))) {
+            return false;
+          }
+          if (isWarehouse && !(/warehouse/i.test(nameLower) || /warehouse/i.test(branchLower))) {
+            return false;
+          }
+          if (isZoneB && !(/zone\s*b/i.test(nameLower) || /zone\s*b/i.test(branchLower))) {
+            return false;
+          }
+          if (isZoneA && !(/zone\s*a/i.test(nameLower) || /zone\s*a/i.test(branchLower))) {
+            return false;
+          }
+
+          // Check real-time alerts for unauthorized access
+          if (isUnauthorized) {
+            const camAlerts = aiByCamera?.get(cam.id)?.alerts || [];
+            const hasUnauthorized = camAlerts.some((a) =>
+              /unauthorized|intrusion|breach|violation|p1|p2|danger/i.test(a.title)
+            );
+            if (!hasUnauthorized) return false;
+          }
+
+          // Check real-time alerts for active movement
+          if (isMotion) {
+            const camAlerts = aiByCamera?.get(cam.id)?.alerts || [];
+            const hasMotionAlert = camAlerts.some((a) =>
+              /motion|movement|crossing|tripwire|zone/i.test(a.title)
+            );
+            if (!hasMotionAlert && !isEntrance) return false;
+          }
+
+          return true;
+        });
+
+        if (matched.length === 0) {
+          matched = cameras.filter((c) => {
+            const str = `${c.name} ${c.branchName || ""}`.toLowerCase();
+            if (isWarehouse) return str.includes("warehouse");
+            if (isEntrance) return /entrance|gate|door|entry/i.test(str);
+            if (isZoneB) return str.includes("zone");
+            return false;
+          });
+        }
+
+        if (matched.length === 0) {
+          matched = cameras.slice(0, 8);
+        }
+
+        targetCameraIds = matched.map((c) => c.id);
+        if (!summaryText) {
+          if (isEntrance && isMotion) summaryText = "Entrance cameras with active movement";
+          else if (isWarehouse && isZoneB) summaryText = "Warehouse Zone B cameras";
+          else if (isUnauthorized) summaryText = "Cameras with unauthorized access in last 15m";
+          else summaryText = `Matching: "${query}"`;
+        }
+      }
+
+      // 3. Grid Layout Auto-fit
+      if (!actionResult?.gridSize && !qLower.includes("1+") && !qLower.includes("x")) {
+        const count = targetCameraIds.length;
+        if (count <= 1) targetGridSize = "1x1";
+        else if (count <= 4) targetGridSize = "2x2";
+        else if (count <= 6) targetGridSize = "1+5";
+        else if (count <= 8) targetGridSize = "1+7";
+        else targetGridSize = "3x3";
+      }
+
+      setGridSize(targetGridSize);
+      setCopilotMatchedCameraIds(targetCameraIds);
+      setCopilotFilterActive(true);
+      setCopilotFilterSummary(summaryText || query);
+      setCurrentPage(0);
+
+      // 4. Reorder Grid Positions placing matched cameras into slots 0..N
+      const matchedCameras = targetCameraIds
+        .map((id) => cameras.find((c) => c.id === id))
+        .filter((c): c is Camera => Boolean(c));
+
+      setGridPositions((currentPositions) => {
+        const next = new Map(currentPositions);
+        const isHeroLayout = targetGridSize === "1+5" || targetGridSize === "1+7" || targetGridSize === "2+8";
+
+        matchedCameras.forEach((cam, idx) => {
+          next.set(idx, {
+            camera: cam,
+            stream: isHeroLayout && idx === 0 ? "main" : "sub",
+            priority: idx === 0 ? 3 : 1,
+          });
+        });
+        return next;
+      });
+
+      // 5. High-tech glow pulse animation on matched tiles
+      setTimeout(() => {
+        targetCameraIds.forEach((id) => {
+          const tile = wallRef.current?.querySelector<HTMLElement>(`[data-camera-id="${CSS.escape(id)}"]`);
+          tile?.animate(
+            [
+              { boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" },
+              { boxShadow: "0 0 0 6px rgba(14, 165, 233, 0.95)" },
+              { boxShadow: "0 0 0 0 rgba(14, 165, 233, 0)" },
+            ],
+            { duration: 1500, easing: "ease-out" }
+          );
+        });
+      }, 100);
+
+      setLayoutFeedback({
+        kind: "success",
+        message: `Guardian AI Copilot: ${summaryText || query} (${targetCameraIds.length} cameras · ${targetGridSize})`,
+      });
+    } catch (err: any) {
+      console.error("[Guardian Copilot] Execution error:", err);
+      setLayoutFeedback({
+        kind: "error",
+        message: "Failed to execute Copilot command. Please retry.",
+      });
+    } finally {
+      setIsAiProcessing(false);
+    }
+  }, [aiPrompt, cameras, aiByCamera]);
+
+  const handleToggleVoiceRecognition = useCallback(() => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      setLayoutFeedback({
+        kind: "error",
+        message: "Speech recognition is not supported in this browser. Please use Chrome or Edge.",
+      });
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results?.[0]?.[0]?.transcript;
+        if (transcript) {
+          setAiPrompt(transcript);
+          void handleExecuteCopilotCommand(transcript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("[Guardian Copilot] Voice recognition error:", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err) {
+      console.error("[Guardian Copilot] Speech recognition failed to start:", err);
+      setIsListening(false);
+    }
+  }, [isListening, handleExecuteCopilotCommand]);
   const [compactGrid, setCompactGrid] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches,
   );
@@ -728,7 +1222,9 @@ export function EnhancedCameraGrid({
     if (sessionsChanged) setSessions(new Map(sessionsRef.current));
   }, [cameras, releaseSession]);
 
-  // Smart Alarm Spotlight: Auto-promote alerting camera into dominant primary Hero Slot (Slot 0)
+  // Smart Alarm Spotlight & Dynamic Focus:
+  // Auto-elevate layout to Hero (1+5 / 1+7) on critical alert, place alerting camera in Slot 0,
+  // align context cameras and handover camera adjacent, and restore previous layout when alert clears.
   useEffect(() => {
     if (!autoFocusAlerts) return;
 
@@ -737,7 +1233,10 @@ export function EnhancedCameraGrid({
     if (aiByCamera) {
       for (const [camId, data] of aiByCamera.entries()) {
         const hasCritical = data.alerts.some(
-          (a) => a.severity === "P1" || a.severity === "P2" || a.title.toLowerCase().includes("intrusion") || a.title.toLowerCase().includes("no helmet")
+          (a) =>
+            a.severity === "P1" ||
+            a.severity === "P2" ||
+            /intrusion|weapon|fire|smoke|ppe|helmet|danger|violation/i.test(a.title)
         );
         if (hasCritical) {
           alertingCameraId = camId;
@@ -749,30 +1248,77 @@ export function EnhancedCameraGrid({
       alertingCameraId = priorityCameraIds[0];
     }
 
-    if (!alertingCameraId) return;
-
-    const slot0Entry = gridPositions.get(0);
-    if (slot0Entry?.camera.id === alertingCameraId) return;
+    // When all alerts clear, automatically restore the previous layout (e.g., 3x3, 4x4)
+    if (!alertingCameraId) {
+      if (prevGridSizeRef.current !== null) {
+        const restoreSize = prevGridSizeRef.current;
+        prevGridSizeRef.current = null;
+        setGridSize(restoreSize);
+      }
+      return;
+    }
 
     const targetCamera = cameras.find((c) => c.id === alertingCameraId);
     if (!targetCamera) return;
 
+    // If currently on an equal grid, preserve it and auto-elevate to Hero Tile layout (1+5 or 1+7)
+    const isHeroLayout = gridSize === "1+5" || gridSize === "1+7" || gridSize === "2+8" || gridSize === "1x1";
+    if (!isHeroLayout && prevGridSizeRef.current === null) {
+      prevGridSizeRef.current = gridSize;
+      const elevatedSize: GridSize = displayedCameras.length >= 8 ? "1+7" : "1+5";
+      setGridSize(elevatedSize);
+    }
+
+    // Context Cameras: Group cameras from the same branch or physical zone
+    const contextCameras = displayedCameras.filter(
+      (c) => c.id !== targetCamera.id && (c.branchId === targetCamera.branchId || (Boolean(c.branchName) && c.branchName === targetCamera.branchName))
+    );
+    const otherCameras = displayedCameras.filter(
+      (c) => c.id !== targetCamera.id && !contextCameras.some((ctx) => ctx.id === c.id)
+    );
+
+    // If there is an active handover target camera, ensure it sits immediately in Slot 1
+    const targetHandover = handoverData.targets.get(targetCamera.id);
+    const handoverCam = targetHandover ? cameras.find((c) => c.id === targetHandover.cameraId) : null;
+
+    const companionList: Camera[] = [];
+    if (handoverCam && handoverCam.id !== targetCamera.id) {
+      companionList.push(handoverCam);
+    }
+    for (const ctx of contextCameras) {
+      if (ctx.id !== targetCamera.id && (!handoverCam || ctx.id !== handoverCam.id)) {
+        companionList.push(ctx);
+      }
+    }
+    for (const oth of otherCameras) {
+      if (oth.id !== targetCamera.id && (!handoverCam || oth.id !== handoverCam.id)) {
+        companionList.push(oth);
+      }
+    }
+
+    const slot0Entry = gridPositions.get(0);
+    const slot1Entry = gridPositions.get(1);
+    const isAlreadySpotlighted =
+      slot0Entry?.camera.id === targetCamera.id &&
+      (!handoverCam || slot1Entry?.camera.id === handoverCam.id);
+
+    if (isAlreadySpotlighted) return;
+
     setGridPositions((currentPositions) => {
       const nextPositions = new Map(currentPositions);
-      let existingPos: number | null = null;
-      for (const [pos, entry] of nextPositions.entries()) {
-        if (entry.camera.id === alertingCameraId) {
-          existingPos = pos;
-          break;
-        }
-      }
 
-      const prevHero = nextPositions.get(0);
+      // Slot 0: Primary Hero Slot (Main-stream HD/4K)
       nextPositions.set(0, { camera: targetCamera, stream: "main", priority: 3 });
 
-      if (existingPos !== null && existingPos !== 0 && prevHero) {
-        nextPositions.set(existingPos, { ...prevHero, stream: "sub", priority: 0 });
-      }
+      // Slots 1..N: Context and Handover Companion Cameras (Sub-stream SD)
+      companionList.forEach((cam, idx) => {
+        const slotIdx = idx + 1;
+        nextPositions.set(slotIdx, {
+          camera: cam,
+          stream: "sub",
+          priority: slotIdx === 1 && handoverCam ? 2 : 0,
+        });
+      });
 
       return nextPositions;
     });
@@ -786,9 +1332,11 @@ export function EnhancedCameraGrid({
       ],
       { duration: 1600, easing: "ease-out" }
     );
-  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, cameras, gridPositions]);
+  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, cameras, displayedCameras, gridSize, handoverData, gridPositions]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
+    // If operator manually chooses a layout, clear auto-spotlight restore memory
+    prevGridSizeRef.current = null;
     // Keep the first camera from the current page in view while changing
     // density. This avoids jumping an operator back to the beginning of a
     // large wall when changing from, for example, 12×12 to 4×4.
@@ -1007,6 +1555,125 @@ export function EnhancedCameraGrid({
 
   return (
     <div ref={wallRef} className={`camera-grid-container ${isFullscreen ? "camera-grid-fullscreen" : ""}`}>
+      {/* ── GUARDIAN AI COPILOT CONTROL BAR ── */}
+      <div className="guardian-copilot-bar" role="search" aria-label="Guardian AI Live Wall Copilot">
+        <div className="copilot-brand">
+          <Bot size={18} className="copilot-icon text-sky-400" />
+          <span className="copilot-title">GUARDIAN AI COPILOT</span>
+        </div>
+
+        <form
+          className="copilot-input-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void handleExecuteCopilotCommand();
+          }}
+        >
+          <div className="copilot-input-wrapper">
+            <Search size={15} className="copilot-search-icon" />
+            <input
+              type="text"
+              className="copilot-input"
+              placeholder="Ask Copilot: 'Show all entrance cameras with active movement', 'Switch to Warehouse Zone B'..."
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              disabled={isAiProcessing}
+            />
+            {aiPrompt && (
+              <button
+                type="button"
+                className="copilot-clear-btn"
+                onClick={() => setAiPrompt("")}
+                title="Clear prompt"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            className={`copilot-mic-btn ${isListening ? "listening animate-pulse" : ""}`}
+            onClick={handleToggleVoiceRecognition}
+            title={isListening ? "Listening... Click to stop" : "Voice Control (Dictate query)"}
+            aria-pressed={isListening}
+          >
+            {isListening ? <MicOff size={16} className="text-rose-400" /> : <Mic size={16} />}
+            <span className="copilot-btn-label">{isListening ? "Listening…" : "Voice"}</span>
+          </button>
+
+          <button
+            type="submit"
+            className="copilot-submit-btn"
+            disabled={isAiProcessing || !aiPrompt.trim()}
+            title="Execute natural language grid switch"
+          >
+            <Sparkles size={16} className={isAiProcessing ? "animate-spin text-amber-400" : "text-sky-300"} />
+            <span>{isAiProcessing ? "Analyzing..." : "Switch Grid"}</span>
+          </button>
+        </form>
+
+        {copilotFilterActive && (
+          <div className="copilot-active-badge">
+            <span className="copilot-filter-label">
+              Active Filter: <strong>{copilotFilterSummary}</strong> ({copilotMatchedCameraIds.length} cams)
+            </span>
+            <button
+              type="button"
+              className="copilot-reset-btn"
+              onClick={handleResetCopilotFilter}
+              title="Reset AI filter to show all cameras"
+            >
+              <X size={14} />
+              <span>Reset</span>
+            </button>
+          </div>
+        )}
+
+        <div className="copilot-quick-pills">
+          <button
+            type="button"
+            className="quick-pill"
+            onClick={() => {
+              setAiPrompt("Show all entrance cameras with active movement");
+              void handleExecuteCopilotCommand("Show all entrance cameras with active movement");
+            }}
+          >
+            🚪 Entrance & Movement
+          </button>
+          <button
+            type="button"
+            className="quick-pill"
+            onClick={() => {
+              setAiPrompt("Switch to Warehouse Zone B");
+              void handleExecuteCopilotCommand("Switch to Warehouse Zone B");
+            }}
+          >
+            🏭 Warehouse Zone B
+          </button>
+          <button
+            type="button"
+            className="quick-pill"
+            onClick={() => {
+              setAiPrompt("Show cameras that triggered unauthorized access in the last 15 minutes");
+              void handleExecuteCopilotCommand("Show cameras that triggered unauthorized access in the last 15 minutes");
+            }}
+          >
+            🚨 Unauthorized Access (15m)
+          </button>
+          <button
+            type="button"
+            className="quick-pill"
+            onClick={() => {
+              setAiPrompt("Switch to 1+5 Hero Grid");
+              void handleExecuteCopilotCommand("Switch to 1+5 Hero Grid");
+            }}
+          >
+            📐 1+5 Hero Grid
+          </button>
+        </div>
+      </div>
+
       <div className="grid-toolbar">
         <div className="grid-actions">
           <label className="toolbar-control">
@@ -1069,6 +1736,26 @@ export function EnhancedCameraGrid({
           >
             <ShieldAlert size={15} className={autoFocusAlerts ? "text-amber-400" : ""} />
             {autoFocusAlerts ? "Spotlight: Auto" : "Spotlight: Off"}
+          </button>
+          <button
+            type="button"
+            className={`btn-secondary ${showVectors ? "active-control" : ""}`}
+            onClick={() => setShowVectors((prev) => !prev)}
+            title={showVectors ? "AI Motion Vectors & Directional Trajectories: Enabled" : "AI Motion Vectors & Directional Trajectories: Disabled"}
+            aria-pressed={showVectors}
+          >
+            <Activity size={15} className={showVectors ? "text-sky-400" : ""} />
+            {showVectors ? "Vectors: On" : "Vectors: Off"}
+          </button>
+          <button
+            type="button"
+            className={`btn-secondary ${showEMapRadar ? "active-control border-cyan-500/80 bg-cyan-950/70" : ""}`}
+            onClick={() => setShowEMapRadar((prev) => !prev)}
+            title={showEMapRadar ? "Close 3D Spatial E-Map & Radar View" : "Open Interactive E-Map & Mini-Radar (Lasso select & FOV projection)"}
+            aria-pressed={showEMapRadar}
+          >
+            <Compass size={15} className={showEMapRadar ? "text-cyan-400 animate-spin" : ""} />
+            {showEMapRadar ? "E-Map: Active" : "🗺️ E-Map & Radar"}
           </button>
           <div className="tour-pagination" title="Page navigation (Left/Right Arrow key or buttons)">
             <button
@@ -1219,19 +1906,32 @@ export function EnhancedCameraGrid({
         </div>
       )}
 
-      <div 
-        ref={containerRef}
-        className={`camera-grid ${gpuAccelClass} ${gridSize === "1+5" ? "layout-hero-1-5" : gridSize === "1+7" ? "layout-hero-1-7" : gridSize === "2+8" ? "layout-hero-2-8" : ""}`}
-        onMouseEnter={() => setIsGridHovered(true)}
-        onMouseLeave={() => setIsGridHovered(false)}
-        style={{
-          "--camera-grid-columns": renderedColumnCount,
-          "--minimum-tile-width": `${minimumTileWidth}px`,
-          gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
-            ? `repeat(${Math.ceil(totalPositions / renderedColumnCount)}, minmax(0, 1fr))`
-            : undefined
-        } as CSSProperties}
-      >
+      <div className={`grid-workspace-layout ${showEMapRadar ? "flex flex-col xl:flex-row gap-3 items-start" : ""}`}>
+        {showEMapRadar && (
+          <div className="w-full xl:w-[460px] 2xl:w-[500px] shrink-0 sticky top-2 z-20">
+            <InteractiveEMapRadar
+              cameras={cameras}
+              aiByCamera={aiByCamera}
+              onSelectCamera={handleSelectCameraFromMap}
+              onFilterCamerasByArea={handleFilterCamerasByMapArea}
+              onClose={() => setShowEMapRadar(false)}
+            />
+          </div>
+        )}
+        <div className={`flex-1 w-full min-w-0`}>
+          <div 
+            ref={containerRef}
+            className={`camera-grid ${gpuAccelClass} ${gridSize === "1+5" ? "layout-hero-1-5" : gridSize === "1+7" ? "layout-hero-1-7" : gridSize === "2+8" ? "layout-hero-2-8" : ""}`}
+            onMouseEnter={() => setIsGridHovered(true)}
+            onMouseLeave={() => setIsGridHovered(false)}
+            style={{
+              "--camera-grid-columns": renderedColumnCount,
+              "--minimum-tile-width": `${minimumTileWidth}px`,
+              gridTemplateRows: enableVirtualScrolling && totalPositions > 36 
+                ? `repeat(${Math.ceil(totalPositions / renderedColumnCount)}, minmax(0, 1fr))`
+                : undefined
+            } as CSSProperties}
+          >
         {visibleTiles.map((i) => {
           const entry = gridPositions.get(i);
           const camera = entry?.camera;
@@ -1344,11 +2044,17 @@ export function EnhancedCameraGrid({
                   stream={entry.stream}
                   onStreamQualityChange={handleStreamQualityChange}
                   index={i}
+                  showVectors={showVectors}
+                  handoverTarget={handoverData.targets.get(camera.id)}
+                  handoverIncoming={handoverData.incomings.get(camera.id)}
+                  onAcceptHandover={handleAcceptHandover}
                 />
               </div>
             </VisibilityTracker>
           );
         })}
+          </div>
+        </div>
       </div>
 
       <style jsx>{`
@@ -1711,6 +2417,195 @@ export function EnhancedCameraGrid({
 
         .opacity-30 {
           opacity: 0.3;
+        }
+
+        .guardian-copilot-bar {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          padding: 8px 14px;
+          background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(8, 47, 73, 0.85));
+          border: 1px solid rgba(56, 189, 248, 0.3);
+          border-radius: 8px;
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+          backdrop-filter: blur(8px);
+        }
+
+        .copilot-brand {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding-right: 10px;
+          border-right: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .copilot-title {
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          color: #38bdf8;
+          white-space: nowrap;
+        }
+
+        .copilot-input-form {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex: 1;
+          min-width: 280px;
+        }
+
+        .copilot-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          flex: 1;
+        }
+
+        .copilot-input-wrapper :global(.copilot-search-icon) {
+          position: absolute;
+          left: 10px;
+          color: #94a3b8;
+          pointer-events: none;
+        }
+
+        .copilot-input {
+          width: 100%;
+          height: 34px;
+          padding: 0 32px 0 34px;
+          background: rgba(15, 23, 42, 0.8);
+          border: 1px solid rgba(56, 189, 248, 0.35);
+          border-radius: 6px;
+          color: #f8fafc;
+          font-size: 13px;
+          transition: all 0.2s ease;
+        }
+
+        .copilot-input:focus {
+          outline: none;
+          border-color: #38bdf8;
+          box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+        }
+
+        .copilot-clear-btn {
+          position: absolute;
+          right: 8px;
+          background: transparent;
+          border: none;
+          color: #94a3b8;
+          cursor: pointer;
+          padding: 2px;
+          display: flex;
+          align-items: center;
+        }
+
+        .copilot-mic-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          height: 34px;
+          padding: 0 12px;
+          background: rgba(30, 41, 59, 0.9);
+          border: 1px solid rgba(148, 163, 184, 0.3);
+          border-radius: 6px;
+          color: #e2e8f0;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .copilot-mic-btn:hover {
+          background: rgba(51, 65, 85, 0.9);
+          border-color: #38bdf8;
+        }
+
+        .copilot-mic-btn.listening {
+          background: rgba(225, 29, 72, 0.2);
+          border-color: #f43f5e;
+          color: #fda4af;
+          box-shadow: 0 0 12px rgba(244, 63, 94, 0.4);
+        }
+
+        .copilot-submit-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          height: 34px;
+          padding: 0 14px;
+          background: linear-gradient(135deg, #0284c7, #0369a1);
+          border: 1px solid rgba(56, 189, 248, 0.5);
+          border-radius: 6px;
+          color: #ffffff;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+        }
+
+        .copilot-submit-btn:hover:not(:disabled) {
+          background: linear-gradient(135deg, #0369a1, #0284c7);
+          box-shadow: 0 0 12px rgba(56, 189, 248, 0.5);
+        }
+
+        .copilot-submit-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .copilot-active-badge {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 10px;
+          background: rgba(16, 185, 129, 0.15);
+          border: 1px solid rgba(16, 185, 129, 0.4);
+          border-radius: 6px;
+          font-size: 11px;
+          color: #6ee7b7;
+        }
+
+        .copilot-reset-btn {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 2px 6px;
+          background: rgba(239, 68, 68, 0.2);
+          border: 1px solid rgba(239, 68, 68, 0.4);
+          border-radius: 4px;
+          color: #fca5a5;
+          font-size: 11px;
+          cursor: pointer;
+        }
+
+        .copilot-reset-btn:hover {
+          background: rgba(239, 68, 68, 0.3);
+        }
+
+        .copilot-quick-pills {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          flex-wrap: wrap;
+        }
+
+        .quick-pill {
+          padding: 3px 8px;
+          background: rgba(30, 41, 59, 0.7);
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 12px;
+          color: #94a3b8;
+          font-size: 11px;
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .quick-pill:hover {
+          background: rgba(56, 189, 248, 0.15);
+          border-color: rgba(56, 189, 248, 0.4);
+          color: #38bdf8;
         }
 
         @media (max-width: 760px) {

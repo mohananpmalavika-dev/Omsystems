@@ -5,6 +5,7 @@ import {
   buildEdgeLiveGateway,
   extractQuickTunnelUrl,
   mediaTunnelOrigin,
+  MediaMtxRouter,
   quickTunnelArgs,
   QuickTunnelSupervisor,
   resolvePrivateMediaGatewayUrl,
@@ -137,6 +138,39 @@ describe("all-in-one edge live gateway", () => {
     expect(shouldReuseExistingMediaMtx(true, true)).toBe(true);
     expect(shouldReuseExistingMediaMtx(true, false)).toBe(false);
     expect(shouldReuseExistingMediaMtx(false, true)).toBe(false);
+  });
+
+  it("does not patch an unchanged MediaMTX path when another viewer starts", async () => {
+    let config: { source: string; runOnDemand?: string } | undefined;
+    let adds = 0;
+    let patches = 0;
+    const api = createServer(async (request, response) => {
+      if (request.method === "GET") {
+        response.writeHead(config ? 200 : 404, { "content-type": "application/json" });
+        response.end(JSON.stringify(config ?? { error: "not found" }));
+        return;
+      }
+      let body = "";
+      for await (const chunk of request) body += chunk;
+      config = JSON.parse(body) as { source: string; runOnDemand?: string };
+      if (request.method === "POST") adds += 1;
+      if (request.method === "PATCH") patches += 1;
+      response.writeHead(200).end();
+    });
+    try {
+      const address = await new Promise<{ port: number }>((resolve, reject) => {
+        api.once("error", reject);
+        api.listen(0, "127.0.0.1", () => resolve(api.address() as { port: number }));
+      });
+      const router = new MediaMtxRouter(`http://127.0.0.1:${address.port}`, "ffmpeg.exe");
+      await router.ensurePath("camera-one", "rtsp://camera.local/one");
+      await router.ensurePath("camera-one", "rtsp://camera.local/one");
+      expect({ adds, patches }).toEqual({ adds: 1, patches: 0 });
+      await router.ensurePath("camera-one", "rtsp://camera.local/two");
+      expect(patches).toBe(1);
+    } finally {
+      await new Promise<void>((resolve) => api.close(() => resolve()));
+    }
   });
 
   it("advertises the physical private network for LAN and routed VPN viewers", () => {

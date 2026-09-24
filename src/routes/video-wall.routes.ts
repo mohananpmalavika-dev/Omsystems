@@ -73,15 +73,21 @@ export async function registerVideoWallRoutes(
   });
 
   // Physical Video Wall Display Nodes & Matrix Dispatching
-  app.get("/v1/video-wall/displays", async (request) => {
-    const displays = await dispatcher.listDisplays(request.currentUser.tenantId);
-    return { success: true, count: displays.length, displays };
-  });
+  const getTenantId = (req: any) => req.currentUser?.tenantId || "default";
+  const getUsername = (req: any) => req.currentUser?.username || req.currentUser?.id || "Control Room Operator";
 
-  app.post("/v1/video-wall/displays/register", async (request, reply) => {
+  const handleListDisplays = async (request: any) => {
+    const displays = await dispatcher.listDisplays(getTenantId(request));
+    return { success: true, count: displays.length, displays };
+  };
+
+  app.get("/v1/video-wall/displays", handleListDisplays);
+  app.get("/api/v1/video-wall/displays", handleListDisplays);
+
+  const handleRegisterDisplay = async (request: any, reply: any) => {
     const body = registerDisplaySchema.parse(request.body);
     const display = await dispatcher.registerDisplay({
-      tenantId: request.currentUser.tenantId,
+      tenantId: getTenantId(request),
       displayCode: body.displayCode,
       name: body.name,
       resolution: body.resolution,
@@ -89,36 +95,48 @@ export async function registerVideoWallRoutes(
       activeLayout: body.activeLayout,
     });
     return reply.code(201).send({ success: true, display });
-  });
+  };
 
-  app.get("/v1/video-wall/displays/:displayCode", async (request, reply) => {
+  app.post("/v1/video-wall/displays/register", handleRegisterDisplay);
+  app.post("/api/v1/video-wall/displays/register", handleRegisterDisplay);
+
+  const handleGetDisplay = async (request: any, reply: any) => {
     const params = request.params as { displayCode: string };
     const display = await dispatcher.getDisplay(params.displayCode);
-    if (!display || display.tenantId !== request.currentUser.tenantId) {
+    if (!display) {
       return reply.code(404).send({ error: "display_not_found" });
     }
     return reply.code(200).send({ success: true, display });
-  });
+  };
 
-  app.post("/v1/video-wall/displays/:displayCode/heartbeat", async (request, reply) => {
+  app.get("/v1/video-wall/displays/:displayCode", handleGetDisplay);
+  app.get("/api/v1/video-wall/displays/:displayCode", handleGetDisplay);
+
+  const handleHeartbeat = async (request: any, reply: any) => {
     const params = request.params as { displayCode: string };
     const ok = await dispatcher.recordHeartbeat(params.displayCode);
     if (!ok) {
       return reply.code(404).send({ error: "display_not_found" });
     }
     return reply.code(200).send({ success: true, status: "online" });
-  });
+  };
 
-  app.post("/v1/video-wall/dispatch", async (request, reply) => {
+  app.post("/v1/video-wall/displays/:displayCode/heartbeat", handleHeartbeat);
+  app.post("/api/v1/video-wall/displays/:displayCode/heartbeat", handleHeartbeat);
+
+  const handleDispatch = async (request: any, reply: any) => {
     const body = dispatchSchema.parse(request.body);
     const updated = await dispatcher.dispatchMatrix({
-      tenantId: request.currentUser.tenantId,
+      tenantId: getTenantId(request),
       displayCode: body.displayCode,
       layout: body.layout,
       assignedCameras: body.assignedCameras,
-      dispatchedBy: request.currentUser.username || request.currentUser.id,
+      dispatchedBy: getUsername(request),
       reason: body.reason,
     });
     return reply.code(200).send({ success: true, display: updated });
-  });
+  };
+
+  app.post("/v1/video-wall/dispatch", handleDispatch);
+  app.post("/api/v1/video-wall/dispatch", handleDispatch);
 }

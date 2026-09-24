@@ -220,18 +220,20 @@ export function HlsPlayer({
 
           hls.on(Hls.Events.ERROR, (_event, data) => {
             const statusCode = data.response?.code;
+            // A live fragment can disappear while a relay request is in flight.
+            // Reload the live playlist instead of permanently blacking out the tile.
+            if (statusCode === 404 || statusCode === 429 || (statusCode && statusCode >= 500)) {
+              try { hls?.stopLoad(); } catch {}
+              recover(`http_${statusCode}`);
+              return;
+            }
             if (statusCode && statusCode >= 400) {
               const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
-              setError(message);
-              setPlayerError(`http_${statusCode}`);
-              reportPlaying(false);
-              setStatus("error");
-              onPlaybackError?.(message);
-              try { hls?.stopLoad(); } catch {}
+              setPlayerError(message);
               return;
             }
             if (!data.fatal) {
-              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && (data.response?.code === 404 || data.response?.code === 0)) {
+              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && data.response?.code === 0) {
                 hls?.startLoad(-1);
               }
               return;

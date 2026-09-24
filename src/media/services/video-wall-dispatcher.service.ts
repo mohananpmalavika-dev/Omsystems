@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { Pool } from 'pg';
+import { getWebSocketService } from '../../services/websocket-service.js';
 
 export interface VideoWallDisplay {
   id: string;
@@ -138,6 +139,13 @@ export class VideoWallDispatcherService {
    * Lists all video wall displays for a tenant
    */
   async listDisplays(tenantId: string): Promise<VideoWallDisplay[]> {
+    const DEFAULT_SOC_DISPLAYS = [
+      { code: 'DISPLAY-01', name: 'Central Video Wall - Primary 4K Display', resolution: '3840x2160', location: 'SOC Main Wall Center', layout: '1+5' },
+      { code: 'DISPLAY-02', name: 'Central Video Wall - Display 2 (East Matrix)', resolution: '3840x2160', location: 'SOC Main Wall East', layout: '2x2' },
+      { code: 'SUPERVISOR-01', name: 'Supervisor Command Screen', resolution: '2560x1440', location: 'Supervisor Console Station', layout: '1+7' },
+      { code: 'CRISIS-01', name: 'Incident Briefing Monitor', resolution: '1920x1080', location: 'Crisis Situation Room', layout: '2x2' },
+    ];
+
     if (this.pool) {
       const res = await this.pool.query(
         `SELECT * FROM video_wall_displays 
@@ -145,6 +153,39 @@ export class VideoWallDispatcherService {
          ORDER BY display_code ASC`,
         [tenantId]
       );
+
+      if (res.rows.length === 0) {
+        for (const item of DEFAULT_SOC_DISPLAYS) {
+          await this.registerDisplay({
+            tenantId,
+            displayCode: item.code,
+            name: item.name,
+            resolution: item.resolution,
+            location: item.location,
+            activeLayout: item.layout,
+          }).catch(() => {});
+        }
+        const refetch = await this.pool.query(
+          `SELECT * FROM video_wall_displays 
+           WHERE tenant_id = $1 
+           ORDER BY display_code ASC`,
+          [tenantId]
+        );
+        return refetch.rows.map((row) => ({
+          id: row.id,
+          tenantId: row.tenant_id,
+          displayCode: row.display_code,
+          name: row.name,
+          resolution: row.resolution,
+          location: row.location,
+          activeLayout: row.active_layout,
+          assignedCameras: Array.isArray(row.assigned_cameras) ? row.assigned_cameras : JSON.parse(row.assigned_cameras || '[]'),
+          isOnline: row.is_online,
+          lastHeartbeat: new Date(row.last_heartbeat),
+          updatedAt: new Date(row.updated_at),
+        }));
+      }
+
       return res.rows.map((row) => ({
         id: row.id,
         tenantId: row.tenant_id,
@@ -158,6 +199,19 @@ export class VideoWallDispatcherService {
         lastHeartbeat: new Date(row.last_heartbeat),
         updatedAt: new Date(row.updated_at),
       }));
+    }
+
+    if (this.inMemoryDisplays.size === 0) {
+      for (const item of DEFAULT_SOC_DISPLAYS) {
+        await this.registerDisplay({
+          tenantId,
+          displayCode: item.code,
+          name: item.name,
+          resolution: item.resolution,
+          location: item.location,
+          activeLayout: item.layout,
+        });
+      }
     }
 
     return Array.from(this.inMemoryDisplays.values()).filter((d) => d.tenantId === tenantId);
@@ -245,9 +299,27 @@ export class VideoWallDispatcherService {
           layout: cmd.layout,
           assignedCameras: cmd.assignedCameras,
           dispatchedBy: cmd.dispatchedBy,
+          reason: cmd.reason,
           timestamp: now.toISOString(),
         })
       );
+    }
+
+    // Broadcast in real-time to all connected WebSocket clients (screens, browsers, supervisor consoles)
+    try {
+      const ws = getWebSocketService();
+      if (ws) {
+        ws.broadcastVideoWallDispatch(cmd.tenantId, {
+          displayCode: cmd.displayCode,
+          layout: cmd.layout,
+          assignedCameras: cmd.assignedCameras,
+          dispatchedBy: cmd.dispatchedBy,
+          reason: cmd.reason,
+          timestamp: now.toISOString(),
+        });
+      }
+    } catch (wsErr) {
+      console.warn('[VideoWallDispatcher] WebSocket broadcast error:', wsErr);
     }
 
     return updated;

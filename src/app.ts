@@ -114,6 +114,7 @@ import { registerOperationalHealthRoutes } from "./routes/operational-health.rou
 import { registerBranchCommandCenterRoutes } from "./routes/branch-command-center.routes.js";
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
+import { registerCameraAnnotationRoutes } from "./routes/camera-annotation.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
 import { initializePredictiveHealthWorker } from "./workers/predictive-health-worker.js";
@@ -2595,6 +2596,7 @@ export async function buildApp(options?: {
   await registerBranchCommandCenterRoutes(app, store);
   await registerEnterpriseInfrastructureRoutes(app, store);
   await registerVideoWallRoutes(app, store);
+  await registerCameraAnnotationRoutes(app);
   await registerFederationRoutes(app, store, federationManager, {
     federationSharedKey,
     localSearchProvider: federationLocalSearchProvider,
@@ -3558,9 +3560,10 @@ export async function buildApp(options?: {
     await registerSloRoutes(app);
     await registerCeoScreenRoutes(app);
     await registerVideoWallRoutes(app, store);
+    await registerCameraAnnotationRoutes(app);
     await registerSmartMotionSearchRoutes(app, store);
     await registerEdgeReplenishmentRoutes(app, store);
-    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, Video Wall, Smart Motion Search, and Edge Replenishment routes registered");
+    app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, Video Wall, Smart Motion Search, Edge Replenishment, and Camera Annotations routes registered");
   } catch (error) {
     app.log.error({ error }, "Failed to register recording index, investigation, storage, and ONVIF routes");
   }

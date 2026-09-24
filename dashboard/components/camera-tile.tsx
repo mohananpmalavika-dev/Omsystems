@@ -8,6 +8,7 @@ import {
   Expand,
   LoaderCircle,
   Maximize2,
+  MessageSquarePlus,
   Move3D,
   Radio,
   Siren,
@@ -30,6 +31,8 @@ import {
   Rewind,
   Play,
   Tag,
+  Crosshair,
+  Target,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -53,6 +56,8 @@ import {
   PREDEFINED_OPERATOR_FLAGS,
 } from "@/lib/camera-operator-flags";
 import { OperatorCameraFlagModal } from "./operator-camera-flag-modal";
+import { CameraAnnotationPanel } from "./camera-annotation-panel";
+import { useLiveAnnotations } from "@/hooks/useLiveAnnotations";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -124,6 +129,10 @@ function CameraTileComponent({
   isSoloAudio,
   activeStream,
   onStreamQualityChange,
+  showVectors = true,
+  handoverTarget,
+  handoverIncoming,
+  onAcceptHandover,
 }: {
   camera: Camera;
   session?: LiveSessionResponse;
@@ -152,6 +161,10 @@ function CameraTileComponent({
   isSoloAudio?: boolean;
   activeStream?: "main" | "sub";
   onStreamQualityChange?: (cameraId: string, quality: "main" | "sub") => void;
+  showVectors?: boolean;
+  handoverTarget?: { cameraId: string; cameraName: string; direction: "left" | "right" | "top" | "bottom" };
+  handoverIncoming?: { originCameraId: string; originCameraName: string };
+  onAcceptHandover?: (targetCameraId: string) => void;
 }) {
   const tileRef = useRef<HTMLElement>(null);
   const isActive = camera.status !== "offline";
@@ -190,14 +203,67 @@ function CameraTileComponent({
   const [showAudioDiagnostic, setShowAudioDiagnostic] = useState(false);
   const [internalVideoElement, setInternalVideoElement] = useState<HTMLVideoElement | null>(null);
   const [dvrOffset, setDvrOffset] = useState<number>(0);
+  const [isTileHovered, setIsTileHovered] = useState<boolean>(false);
+  const [flashbackDismissedAlertId, setFlashbackDismissedAlertId] = useState<string | null>(null);
+  const [flashbackLoopTime, setFlashbackLoopTime] = useState<number>(0);
+  const [flashbackFrameUrl, setFlashbackFrameUrl] = useState<string | null>(null);
   const [showDvrScrubber, setShowDvrScrubber] = useState<boolean>(false);
   const [showFlagModal, setShowFlagModal] = useState<boolean>(false);
+  const [showAnnotationPanel, setShowAnnotationPanel] = useState<boolean>(false);
+  const { annotations: liveAnnotations } = useLiveAnnotations(camera.id);
+  const activeAnnotationCount = liveAnnotations.filter((a) => !a.resolvedAt).length;
   const { cameraFlags } = useCameraOperatorFlags(camera.id);
   const [isRecordingClip, setIsRecordingClip] = useState<boolean>(false);
   const [clipCountdown, setClipCountdown] = useState<number>(15);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const clipTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // PTZ Wall Targeting (Click-to-Center & Drag-to-Zoom)
+  const [isPtzTargetMode, setIsPtzTargetMode] = useState<boolean>(false);
+  const [isPtzBoxDragging, setIsPtzBoxDragging] = useState<boolean>(false);
+  const [ptzBoxStart, setPtzBoxStart] = useState<{ x: number; y: number } | null>(null);
+  const [ptzBoxCurrent, setPtzBoxCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [ptzReticle, setPtzReticle] = useState<{ x: number; y: number; time: number } | null>(null);
+  const [ptzStatusMsg, setPtzStatusMsg] = useState<string | null>(null);
+  const ptzStatusTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showPtzFeedback = useCallback((msg: string) => {
+    setPtzStatusMsg(msg);
+    if (ptzStatusTimeoutRef.current) clearTimeout(ptzStatusTimeoutRef.current);
+    ptzStatusTimeoutRef.current = setTimeout(() => setPtzStatusMsg(null), 3500);
+  }, []);
+
+  const dispatchPtzMove = useCallback(
+    async (x: number, y: number, z: number = 0, type: "relative" | "continuous" = "relative") => {
+      try {
+        const res = await fetch(`/api/v1/cameras/${encodeURIComponent(camera.id)}/ptz/move`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type, x, y, z }),
+        });
+        const data = await res.json().catch(() => null);
+        return data;
+      } catch (err) {
+        console.warn("[PTZ Wall] Move dispatch error:", err);
+        return null;
+      }
+    },
+    [camera.id]
+  );
+
+  const dispatchPtzHome = useCallback(async () => {
+    try {
+      await fetch(`/api/v1/cameras/${encodeURIComponent(camera.id)}/ptz/home`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      resetZoom();
+      showPtzFeedback("PTZ View Reset to Home (0,0,1x)");
+    } catch (err) {
+      console.warn("[PTZ Wall] Home dispatch error:", err);
+    }
+  }, [camera.id, resetZoom, showPtzFeedback]);
 
   const handleVideoElementChange = useCallback((videoElement: HTMLVideoElement | null) => {
     setInternalVideoElement(videoElement);
@@ -365,6 +431,39 @@ function CameraTileComponent({
   ) ?? [];
   const latestAiAlert = activeAiAlerts[0];
 
+  // Synchronized Event Flashback: Capture keyframe when alert triggers
+  useEffect(() => {
+    if (!latestAiAlert) return;
+    if (flashbackDismissedAlertId === latestAiAlert.id) return;
+
+    const video = internalVideoElement || tileRef.current?.querySelector("video");
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      try {
+        const offCanvas = document.createElement("canvas");
+        offCanvas.width = video.videoWidth;
+        offCanvas.height = video.videoHeight;
+        const ctx = offCanvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
+          setFlashbackFrameUrl(offCanvas.toDataURL("image/jpeg", 0.8));
+        }
+      } catch (err) {
+        if (snapshotUrl) setFlashbackFrameUrl(snapshotUrl);
+      }
+    } else if (snapshotUrl) {
+      setFlashbackFrameUrl(snapshotUrl);
+    }
+  }, [latestAiAlert, internalVideoElement, snapshotUrl, flashbackDismissedAlertId]);
+
+  // Synchronized Event Flashback: 5-second cycling loop timer
+  useEffect(() => {
+    if (!latestAiAlert || flashbackDismissedAlertId === latestAiAlert.id) return;
+    const interval = setInterval(() => {
+      setFlashbackLoopTime((t) => (t >= 5 ? 0 : Number((t + 0.25).toFixed(2))));
+    }, 250);
+    return () => clearInterval(interval);
+  }, [latestAiAlert, flashbackDismissedAlertId]);
+
   const scheduleDayOptions = [
     { label: "Sun", value: 0 },
     { label: "Mon", value: 1 },
@@ -493,12 +592,24 @@ function CameraTileComponent({
     link.click();
   };
 
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+
+  const handleSetPlaybackSpeed = useCallback((speed: number) => {
+    setPlaybackSpeed(speed);
+    const video = internalVideoElement || tileRef.current?.querySelector("video");
+    if (video) {
+      video.playbackRate = speed;
+    }
+  }, [internalVideoElement]);
+
   const handleDvrScrub = useCallback((secondsAgo: number) => {
     const video = internalVideoElement || tileRef.current?.querySelector("video");
     if (!video) return;
 
     if (secondsAgo <= 0) {
       setDvrOffset(0);
+      setPlaybackSpeed(1);
+      video.playbackRate = 1;
       if (video.seekable && video.seekable.length > 0) {
         video.currentTime = video.seekable.end(video.seekable.length - 1);
       }
@@ -623,13 +734,40 @@ function CameraTileComponent({
       : "";
 
   return (
-    <article className={`camera-tile ${alertRingClass}`} ref={tileRef} data-camera-id={camera.id}>
+    <article
+      className={`camera-tile ${alertRingClass}`}
+      ref={tileRef}
+      data-camera-id={camera.id}
+      onMouseEnter={() => setIsTileHovered(true)}
+      onMouseLeave={() => setIsTileHovered(false)}
+    >
       <div
         className="feed-stage"
-        style={{ cursor: zoom > 1 ? "grab" : undefined }}
-        onMouseDown={(event) => {
-          if (zoom <= 1 || event.button !== 0) return;
+        style={{ cursor: isPtzTargetMode ? "crosshair" : zoom > 1 ? "grab" : undefined }}
+        onDoubleClick={(event) => {
           if ((event.target as HTMLElement).closest("button, a, input, select")) return;
+          if (isPtzTargetMode) {
+            void dispatchPtzHome();
+          } else if (zoom > 1) {
+            resetZoom();
+          }
+        }}
+        onMouseDown={(event) => {
+          if (event.button !== 0) return;
+          if ((event.target as HTMLElement).closest("button, a, input, select")) return;
+
+          const rect = event.currentTarget.getBoundingClientRect();
+          const relX = event.clientX - rect.left;
+          const relY = event.clientY - rect.top;
+
+          if (isPtzTargetMode) {
+            setIsPtzBoxDragging(true);
+            setPtzBoxStart({ x: relX, y: relY });
+            setPtzBoxCurrent({ x: relX, y: relY });
+            return;
+          }
+
+          if (zoom <= 1) return;
           isDraggingRef.current = true;
           dragStartRef.current = { x: event.clientX, y: event.clientY, panX: pan.x, panY: pan.y };
           if (event.currentTarget) {
@@ -637,6 +775,15 @@ function CameraTileComponent({
           }
         }}
         onMouseMove={(event) => {
+          if (isPtzTargetMode && isPtzBoxDragging && ptzBoxStart) {
+            const rect = event.currentTarget.getBoundingClientRect();
+            setPtzBoxCurrent({
+              x: Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+              y: Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+            });
+            return;
+          }
+
           if (!isDraggingRef.current || zoom <= 1) return;
           const dx = event.clientX - dragStartRef.current.x;
           const dy = event.clientY - dragStartRef.current.y;
@@ -646,15 +793,81 @@ function CameraTileComponent({
           });
         }}
         onMouseUp={(event) => {
+          if (isPtzTargetMode && isPtzBoxDragging && ptzBoxStart) {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const endX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+            const endY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+
+            const boxWidth = Math.abs(endX - ptzBoxStart.x);
+            const boxHeight = Math.abs(endY - ptzBoxStart.y);
+
+            if (boxWidth >= 20 && boxHeight >= 20) {
+              // Bounding Box Drag-to-Zoom (Optical & Digital Zoom Sync)
+              const boxLeft = Math.min(ptzBoxStart.x, endX);
+              const boxTop = Math.min(ptzBoxStart.y, endY);
+              const boxCenterX = boxLeft + boxWidth / 2;
+              const boxCenterY = boxTop + boxHeight / 2;
+
+              const normX = (boxCenterX - rect.width / 2) / (rect.width / 2);
+              const normY = (boxCenterY - rect.height / 2) / (rect.height / 2);
+
+              const zoomRatio = Math.min(4, Math.max(1.2, rect.width / boxWidth));
+              const zVector = Math.min(1.0, (zoomRatio - 1) / 2);
+
+              void dispatchPtzMove(Number(normX.toFixed(2)), Number((-normY).toFixed(2)), Number(zVector.toFixed(2)));
+
+              // Synchronize digital pan and zoom for instantaneous optical/digital fusion
+              setZoom(Number(zoomRatio.toFixed(2)));
+              setPan({
+                x: -(boxCenterX - rect.width / 2),
+                y: -(boxCenterY - rect.height / 2),
+              });
+
+              showPtzFeedback(`🎯 Box Zoom: ${zoomRatio.toFixed(1)}x (Optical/Digital Sync)`);
+            } else {
+              // Click-to-Center from Wall
+              const clickX = ptzBoxStart.x;
+              const clickY = ptzBoxStart.y;
+              const normX = (clickX - rect.width / 2) / (rect.width / 2);
+              const normY = (clickY - rect.height / 2) / (rect.height / 2);
+
+              setPtzReticle({ x: clickX, y: clickY, time: Date.now() });
+
+              void dispatchPtzMove(Number(normX.toFixed(2)), Number((-normY).toFixed(2)), 0);
+
+              // Smooth responsive digital nudge
+              setPan((prev) => ({
+                x: prev.x - (clickX - rect.width / 2),
+                y: prev.y - (clickY - rect.height / 2),
+              }));
+
+              showPtzFeedback(
+                `⌖ Click-to-Center: ${normX >= 0 ? "+" : ""}${(normX * 100).toFixed(0)}% X, ${
+                  normY >= 0 ? "+" : ""
+                }${(normY * 100).toFixed(0)}% Y`
+              );
+            }
+
+            setIsPtzBoxDragging(false);
+            setPtzBoxStart(null);
+            setPtzBoxCurrent(null);
+            return;
+          }
+
           isDraggingRef.current = false;
           if (event.currentTarget) {
-            event.currentTarget.style.cursor = zoom > 1 ? "grab" : "";
+            event.currentTarget.style.cursor = isPtzTargetMode ? "crosshair" : zoom > 1 ? "grab" : "";
           }
         }}
         onMouseLeave={(event) => {
+          if (isPtzTargetMode && isPtzBoxDragging) {
+            setIsPtzBoxDragging(false);
+            setPtzBoxStart(null);
+            setPtzBoxCurrent(null);
+          }
           isDraggingRef.current = false;
           if (event.currentTarget) {
-            event.currentTarget.style.cursor = zoom > 1 ? "grab" : "";
+            event.currentTarget.style.cursor = isPtzTargetMode ? "crosshair" : zoom > 1 ? "grab" : "";
           }
         }}
         onWheel={(event) => {
@@ -667,6 +880,48 @@ function CameraTileComponent({
           });
         }}
       >
+        {/* Reticle for Click-to-Center */}
+        {ptzReticle && (
+          <div
+            key={ptzReticle.time}
+            className="absolute pointer-events-none z-30 flex items-center justify-center -translate-x-1/2 -translate-y-1/2 animate-ping"
+            style={{ left: ptzReticle.x, top: ptzReticle.y }}
+          >
+            <div className="w-10 h-10 rounded-full border-2 border-cyan-400 bg-cyan-500/20 flex items-center justify-center shadow-[0_0_12px_rgba(6,182,212,0.9)]">
+              <div className="w-2 h-2 rounded-full bg-cyan-300" />
+            </div>
+          </div>
+        )}
+
+        {/* Bounding Box for Box-Zoom */}
+        {isPtzBoxDragging && ptzBoxStart && ptzBoxCurrent && (
+          <div
+            className="absolute pointer-events-none z-30 border-2 border-dashed border-cyan-400 bg-cyan-500/20 backdrop-blur-[1px] shadow-[0_0_15px_rgba(6,182,212,0.7)]"
+            style={{
+              left: Math.min(ptzBoxStart.x, ptzBoxCurrent.x),
+              top: Math.min(ptzBoxStart.y, ptzBoxCurrent.y),
+              width: Math.abs(ptzBoxCurrent.x - ptzBoxStart.x),
+              height: Math.abs(ptzBoxCurrent.y - ptzBoxStart.y),
+            }}
+          >
+            <div className="absolute -top-6 left-0 px-1.5 py-0.5 rounded bg-black/90 text-[10px] font-mono text-cyan-300 border border-cyan-500/60 flex items-center gap-1 shadow">
+              <span>🔍 Box Zoom</span>
+              <span>
+                {Math.round(Math.abs(ptzBoxCurrent.x - ptzBoxStart.x))}×
+                {Math.round(Math.abs(ptzBoxCurrent.y - ptzBoxStart.y))}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Live feedback toast */}
+        {ptzStatusMsg && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-full bg-black/95 border border-cyan-500/80 text-cyan-300 text-xs font-semibold shadow-2xl backdrop-blur flex items-center gap-1.5 pointer-events-none">
+            <Crosshair size={13} className="text-cyan-400 animate-spin" />
+            <span>{ptzStatusMsg}</span>
+          </div>
+        )}
+
         <div className="zoom-stage" style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)` }}>
           {(session?.hls || session?.webRtc) && (!liveError || !isFatalLiveError(liveError)) ? (
             <>
@@ -694,6 +949,8 @@ function CameraTileComponent({
                   alerts={aiOverlay?.alerts}
                   cameraName={camera.name}
                   showHeatmap={true}
+                  showVectors={showVectors}
+                  handoverInfo={handoverTarget ? { direction: handoverTarget.direction, targetCameraName: handoverTarget.cameraName } : undefined}
                 />
               )}
             </>
@@ -710,6 +967,8 @@ function CameraTileComponent({
                   alerts={aiOverlay?.alerts}
                   cameraName={camera.name}
                   showHeatmap={true}
+                  showVectors={showVectors}
+                  handoverInfo={handoverTarget ? { direction: handoverTarget.direction, targetCameraName: handoverTarget.cameraName } : undefined}
                 />
               )}
             </>
@@ -729,6 +988,28 @@ function CameraTileComponent({
             <span className="text-[9px] bg-red-800/90 px-1.5 py-0.5 rounded ml-1 font-mono">
               {Math.round(latestAiAlert.confidence * 100)}%
             </span>
+          </div>
+        )}
+
+        {handoverTarget && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onAcceptHandover?.(handoverTarget.cameraId);
+            }}
+            className="absolute top-2.5 right-2.5 z-30 flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/95 hover:bg-amber-400 text-black font-extrabold text-[11px] shadow-2xl animate-pulse border border-amber-300 backdrop-blur cursor-pointer transition-transform hover:scale-105"
+            title={`Cross-Camera Suspect Handover: Suspect heading ${handoverTarget.direction} toward ${handoverTarget.cameraName}. Click to spotlight companion camera.`}
+          >
+            <span>🎯 HANDOVER: {handoverTarget.direction.toUpperCase()} → {handoverTarget.cameraName}</span>
+          </button>
+        )}
+
+        {handoverIncoming && (
+          <div
+            className="absolute top-2.5 left-2.5 z-30 flex items-center gap-1.5 px-2 py-0.5 rounded bg-sky-500/95 text-white font-bold text-[10px] shadow border border-sky-300 backdrop-blur pointer-events-none"
+          >
+            <span>👁️ INCOMING FROM {handoverIncoming.originCameraName}</span>
           </div>
         )}
 
@@ -765,15 +1046,90 @@ function CameraTileComponent({
           </button>
         )}
 
-        {showDvrScrubber && (
+        {/* Synchronized Event Flashback (Instant Mini Picture-in-Picture 5-second Loop) */}
+        {latestAiAlert && flashbackDismissedAlertId !== latestAiAlert.id && (
           <div
-            className="absolute bottom-11 left-2 right-2 z-20 flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs"
+            className={`absolute ${(showDvrScrubber || isTileHovered || dvrOffset > 0) ? "bottom-28" : "bottom-12"} right-2.5 z-30 w-44 sm:w-48 rounded-lg overflow-hidden border-2 border-red-500/90 bg-zinc-950/95 shadow-[0_0_20px_rgba(239,68,68,0.5)] backdrop-blur text-xs animate-in fade-in slide-in-from-bottom-2 duration-300`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDvrScrub(15);
+            }}
+            title="Synchronized Event Flashback (5s loop). Click to rewind main video 15s to this event."
+          >
+            {/* PiP Header */}
+            <div className="flex items-center justify-between px-2 py-1 bg-red-950/90 border-b border-red-800/60">
+              <span className="flex items-center gap-1 text-[10px] font-black text-red-200 tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                FLASHBACK: 5s LOOP
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFlashbackDismissedAlertId(latestAiAlert.id);
+                }}
+                className="text-zinc-400 hover:text-white text-xs px-1 rounded cursor-pointer"
+                title="Dismiss flashback PiP"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* PiP Visual Content (5s Looping Preview) */}
+            <div className="relative aspect-video w-full bg-black overflow-hidden cursor-pointer group">
+              {flashbackFrameUrl ? (
+                <img
+                  src={flashbackFrameUrl}
+                  alt={`Flashback ${latestAiAlert.title}`}
+                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-zinc-900 text-zinc-500 text-[10px]">
+                  <span>Loading Flashback...</span>
+                </div>
+              )}
+
+              {/* Tactical alert reticle overlay */}
+              <div className="absolute inset-0 border border-red-500/40 pointer-events-none flex flex-col justify-between p-1">
+                <div className="flex justify-between items-start">
+                  <span className="bg-red-600/90 text-white text-[9px] font-mono font-bold px-1 rounded truncate max-w-[70%]">
+                    {latestAiAlert.title.toUpperCase()}
+                  </span>
+                  <span className="bg-black/80 text-amber-300 text-[9px] font-mono px-1 rounded">
+                    {Math.round(latestAiAlert.confidence * 100)}%
+                  </span>
+                </div>
+                <div className="flex justify-between items-end">
+                  <span className="bg-black/85 text-emerald-400 text-[9px] font-mono font-bold px-1 rounded">
+                    ▶ REWIND
+                  </span>
+                  <span className="bg-red-900/90 text-white text-[9px] font-mono px-1 rounded font-bold">
+                    00:0{Math.floor(flashbackLoopTime)}s
+                  </span>
+                </div>
+              </div>
+
+              {/* 5-second looping progress bar */}
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
+                <div
+                  className="h-full bg-red-500 transition-all duration-200"
+                  style={{ width: `${(flashbackLoopTime / 5) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Instant Hover Mini Timeline & Time Scrubbing Bar */}
+        {(showDvrScrubber || isTileHovered || dvrOffset > 0) && (
+          <div
+            className="absolute bottom-11 left-2 right-2 z-20 flex flex-col gap-1.5 p-2 rounded-lg bg-zinc-950/95 border border-zinc-700/80 backdrop-blur shadow-2xl text-xs transition-opacity duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between text-[11px] font-semibold text-zinc-300">
               <span className="flex items-center gap-1.5 text-sky-400">
                 <History size={13} />
-                <span>DVR Quick Scrub</span>
+                <span>Hover Timeline Scrub</span>
                 {dvrOffset > 0 ? (
                   <span className="text-amber-400 font-mono font-bold">(-{dvrOffset}s)</span>
                 ) : (
@@ -802,43 +1158,69 @@ function CameraTileComponent({
                 value={dvrOffset}
                 onChange={(e) => handleDvrScrub(Number(e.target.value))}
                 className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-sky-400"
+                title="Drag to scrub back up to 60s"
               />
               <span className="text-[10px] text-emerald-400 font-mono">0s (LIVE)</span>
             </div>
-            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80">
+            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/80 gap-2 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => handleDvrScrub(10)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
                     dvrOffset === 10 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
                   }`}
+                  title="Instant 10-second rewind"
                 >
-                  -10s
+                  ⚡ -10s REWIND
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDvrScrub(30)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors cursor-pointer ${
                     dvrOffset === 30 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
                   }`}
+                  title="Instant 30-second rewind"
                 >
-                  -30s
+                  ⚡ -30s REWIND
                 </button>
                 <button
                   type="button"
                   onClick={() => handleDvrScrub(60)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
                     dvrOffset === 60 ? "border-amber-400 text-amber-300 bg-amber-950/60" : "border-zinc-700 hover:border-zinc-500 text-zinc-300"
                   }`}
                 >
                   -60s
                 </button>
               </div>
+
+              {/* Speed Controls: 0.5x, 1x, 2x */}
+              <div className="flex items-center gap-1 border-l border-zinc-700/80 pl-2">
+                <span className="text-[9px] text-zinc-400 font-mono">SPEED:</span>
+                {[0.5, 1, 2].map((spd) => (
+                  <button
+                    key={spd}
+                    type="button"
+                    onClick={() => handleSetPlaybackSpeed(spd)}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer ${
+                      playbackSpeed === spd
+                        ? "border-sky-400 text-sky-300 bg-sky-950/80 shadow-[0_0_6px_rgba(56,189,248,0.4)]"
+                        : "border-zinc-700 hover:border-zinc-500 text-zinc-400"
+                    }`}
+                  >
+                    {spd}x
+                  </button>
+                ))}
+              </div>
+
               <button
                 type="button"
-                onClick={() => setShowDvrScrubber(false)}
-                className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                onClick={() => {
+                  setShowDvrScrubber(false);
+                  if (dvrOffset > 0) handleDvrScrub(0);
+                }}
+                className="text-[10px] text-zinc-400 hover:text-zinc-200 cursor-pointer ml-auto"
               >
                 Dismiss
               </button>
@@ -922,7 +1304,7 @@ function CameraTileComponent({
                 title="DVR Rewind is active. Click to jump back to live broadcast."
               >
                 <Rewind size={11} />
-                DVR: -{dvrOffset}s · ▶ LIVE
+                DVR: -{dvrOffset}s ({playbackSpeed}x) · ▶ LIVE
               </button>
             )}
           </div>
@@ -1048,6 +1430,29 @@ function CameraTileComponent({
             unsupportedReason={talkbackUnsupportedReason}
             onTalkingChange={handleTalkChange}
           />
+          <button
+            type="button"
+            aria-label="PTZ Click-to-Center & Box Zoom"
+            title={
+              isPtzTargetMode
+                ? "🎯 PTZ Wall Active: Click view to Center, Drag box to Zoom, Double-click to Home (Click to disable)"
+                : "🎯 PTZ Wall Control: Click-to-Center & Box Zoom (Optical/Digital Sync)"
+            }
+            className={
+              isPtzTargetMode
+                ? "text-cyan-400 border-cyan-500/80 bg-cyan-950/80 shadow-[0_0_10px_rgba(6,182,212,0.5)] animate-pulse"
+                : ""
+            }
+            onClick={() => {
+              setIsPtzTargetMode((prev) => !prev);
+              if (!isPtzTargetMode) {
+                showPtzFeedback("🎯 PTZ Wall Mode: Click to Center, Drag box to Zoom");
+              }
+            }}
+            disabled={!canPlayLive}
+          >
+            <Crosshair size={15} />
+          </button>
           {camera.capabilities.ptz && (
             <button type="button" aria-label="PTZ controls" title="PTZ controls" onClick={() => setShowPtzControl(!showPtzControl)} disabled={!canPlayLive}>
               <Move3D size={15} />
@@ -1093,6 +1498,32 @@ function CameraTileComponent({
             disabled={!canPlayLive}
           >
             <Tv size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="Operator Live Notes"
+            title={
+              activeAnnotationCount > 0
+                ? `Live Operator Notes (${activeAnnotationCount} active pin${activeAnnotationCount === 1 ? "" : "s"}) – synced to all operators in real-time. Click to view/add.`
+                : "Pin a live operator note on this camera tile (shift-aware, shift-persistent log)"
+            }
+            className={
+              activeAnnotationCount > 0
+                ? "text-indigo-400 border-indigo-500/80 bg-indigo-950/80 shadow-[0_0_8px_rgba(99,102,241,0.4)] relative"
+                : showAnnotationPanel
+                ? "text-indigo-300 border-indigo-500/60 bg-indigo-950/60"
+                : ""
+            }
+            onClick={() => setShowAnnotationPanel((p) => !p)}
+          >
+            <MessageSquarePlus size={15} />
+            {activeAnnotationCount > 0 && (
+              <span
+                className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] px-[3px] rounded-full bg-indigo-500 text-[9px] font-black text-white flex items-center justify-center border border-zinc-900 pointer-events-none"
+              >
+                {activeAnnotationCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -1417,6 +1848,15 @@ function CameraTileComponent({
           cameraName={camera.name}
           isOpen={showFlagModal}
           onClose={() => setShowFlagModal(false)}
+        />
+      )}
+      {showAnnotationPanel && (
+        <CameraAnnotationPanel
+          cameraId={camera.id}
+          cameraName={camera.name}
+          operatorName={undefined /* will default to "Operator" – pass from auth context if available */}
+          isOpen={showAnnotationPanel}
+          onClose={() => setShowAnnotationPanel(false)}
         />
       )}
     </article>

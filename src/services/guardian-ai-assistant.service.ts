@@ -58,6 +58,39 @@ const GUARDIAN_FUNCTIONS = [
     },
   },
   {
+    name: "control_live_wall",
+    description: "Control, filter, layout, and switch the Sentinel Live Camera Wall based on natural language criteria (e.g., 'Show all entrance cameras with active movement', 'Switch to Warehouse Zone B', 'Show cameras that triggered unauthorized access in the last 15 minutes', 'Switch to 1+5 / 3x3 layout')",
+    parameters: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Filter criteria or target area/zone description",
+        },
+        cameraIds: {
+          type: ["array", "null"],
+          items: { type: "string" },
+          description: "Explicit camera IDs if identified",
+        },
+        gridSize: {
+          type: ["string", "null"],
+          enum: ["1x1", "2x2", "3x3", "4x4", "5x5", "6x6", "1+5", "1+7", "2+8", null],
+          description: "Target layout grid size if specified",
+        },
+        filterType: {
+          type: ["string", "null"],
+          enum: ["location", "motion", "alert", "preset", "all", null],
+          description: "Type of filtering to apply to the live wall",
+        },
+        timeWindowMinutes: {
+          type: ["number", "null"],
+          description: "Time window in minutes for recent alert or movement queries",
+        },
+      },
+      required: ["query"],
+    },
+  },
+  {
     name: "lock_doors",
     description: "Lock doors in specified locations",
     parameters: {
@@ -1088,6 +1121,11 @@ export class GuardianAIAssistant {
           executed = true;
           break;
 
+        case "control_live_wall":
+          functionResult = await this.controlLiveWall(functionArgs, context);
+          executed = true;
+          break;
+
         case "lock_doors":
           functionResult = await this.lockDoors(functionArgs, context);
           executed = true;
@@ -1225,6 +1263,8 @@ export class GuardianAIAssistant {
       const count = functionArgs.cameraIds?.length || functionResult.cameras?.length || 0;
       const layout = functionArgs.layout || functionResult.layout || "grid";
       assistantMessage = `Displaying live feed for ${count} camera(s) in ${layout} view. You can monitor the live streams directly below.`;
+    } else if (functionName === "control_live_wall") {
+      assistantMessage = functionResult.message || `Switched live wall to ${functionResult.gridSize || "grid"} layout.`;
     } else if (functionName === "navigate_to_menu") {
       const label = functionResult.label || functionArgs.target || "requested page";
       assistantMessage = `Opening ${label}. Click below to navigate directly:`;
@@ -1242,6 +1282,7 @@ export class GuardianAIAssistant {
       "dispatch_guard",
       "trigger_alarm",
       "show_camera_feed",
+      "control_live_wall",
       "navigate_to_menu",
     ].includes(functionName);
 
@@ -1340,6 +1381,8 @@ export class GuardianAIAssistant {
       const count = functionArgs.cameraIds?.length || functionResult.cameras?.length || 0;
       const layout = functionArgs.layout || functionResult.layout || "grid";
       assistantMessage = `Displaying live feed for ${count} camera(s) in ${layout} view. You can monitor the live streams directly below.`;
+    } else if (functionName === "control_live_wall") {
+      assistantMessage = functionResult.message || `Switched live wall to ${functionResult.gridSize || "grid"} layout.`;
     } else if (functionName === "navigate_to_menu") {
       const label = functionResult.label || functionArgs.target || "requested page";
       assistantMessage = `Opening ${label}. Click below to navigate directly:`;
@@ -1357,6 +1400,7 @@ export class GuardianAIAssistant {
       "dispatch_guard",
       "trigger_alarm",
       "show_camera_feed",
+      "control_live_wall",
       "navigate_to_menu",
     ].includes(functionName);
 
@@ -1625,6 +1669,205 @@ Personality:
     };
   }
 
+  /**
+   * Control, filter, layout, and switch the Sentinel Live Camera Wall based on natural language criteria.
+   * Supports prompt queries:
+   * - "Show all entrance cameras with active movement"
+   * - "Switch to Warehouse Zone B"
+   * - "Show cameras that triggered unauthorized access in the last 15 minutes"
+   * - Direct layout switches ("1+5", "1+7", "2x2", "3x3", "4x4")
+   */
+  private async controlLiveWall(args: any, context: GuardianContext) {
+    const { query = "", cameraIds: explicitIds, gridSize, filterType, timeWindowMinutes = 15 } = args;
+    const qLower = (query || "").toLowerCase();
+    let matchedCameraIds: string[] = Array.isArray(explicitIds) && explicitIds.length > 0 ? [...explicitIds] : [];
+    let detectedGridSize: string | null = gridSize || null;
+    let filterCategory = filterType || "general";
+    let summary = "";
+
+    // 1. Detect explicit layout requested in query
+    if (!detectedGridSize) {
+      if (qLower.includes("1+5") || qLower.includes("1 + 5")) detectedGridSize = "1+5";
+      else if (qLower.includes("1+7") || qLower.includes("1 + 7")) detectedGridSize = "1+7";
+      else if (qLower.includes("2+8") || qLower.includes("2 + 8")) detectedGridSize = "2+8";
+      else if (qLower.includes("1x1") || qLower.includes("single")) detectedGridSize = "1x1";
+      else if (qLower.includes("2x2") || qLower.includes("4 cameras") || qLower.includes("four cameras")) detectedGridSize = "2x2";
+      else if (qLower.includes("3x3") || qLower.includes("9 cameras") || qLower.includes("nine cameras")) detectedGridSize = "3x3";
+      else if (qLower.includes("4x4") || qLower.includes("16 cameras")) detectedGridSize = "4x4";
+    }
+
+    try {
+      // 2. Classify intent
+      const isSecurityOrAlertQuery =
+        qLower.includes("unauthorized") ||
+        qLower.includes("unauthorised") ||
+        qLower.includes("intrusion") ||
+        qLower.includes("breach") ||
+        qLower.includes("access") ||
+        qLower.includes("alert") ||
+        qLower.includes("alarm") ||
+        qLower.includes("violation") ||
+        qLower.includes("weapon") ||
+        qLower.includes("fire");
+
+      const isMotionQuery =
+        qLower.includes("movement") ||
+        qLower.includes("motion") ||
+        qLower.includes("active movement") ||
+        qLower.includes("activity") ||
+        qLower.includes("moving");
+
+      const locationKeywords: string[] = [];
+      if (qLower.includes("entrance") || qLower.includes("entry") || qLower.includes("gate") || qLower.includes("door")) {
+        locationKeywords.push("entrance", "gate", "door", "entry", "ingress");
+      }
+      if (qLower.includes("warehouse")) {
+        locationKeywords.push("warehouse");
+      }
+      if (qLower.includes("zone b") || qLower.includes("zone-b") || qLower.includes("zone_b")) {
+        locationKeywords.push("zone b", "zone-b", "zone_b");
+      }
+      if (qLower.includes("zone a") || qLower.includes("zone-a") || qLower.includes("zone_a")) {
+        locationKeywords.push("zone a", "zone-a", "zone_a");
+      }
+      if (qLower.includes("vault") || qLower.includes("strong room") || qLower.includes("strongroom")) {
+        locationKeywords.push("vault", "strongroom");
+      }
+      if (qLower.includes("lobby") || qLower.includes("reception")) {
+        locationKeywords.push("lobby", "reception");
+      }
+      if (qLower.includes("cash") || qLower.includes("counter") || qLower.includes("teller")) {
+        locationKeywords.push("cash", "counter", "teller");
+      }
+      if (qLower.includes("parking") || qLower.includes("garage")) {
+        locationKeywords.push("parking", "garage");
+      }
+      if (qLower.includes("perimeter") || qLower.includes("boundary") || qLower.includes("fence")) {
+        locationKeywords.push("perimeter", "boundary", "fence");
+      }
+
+      if (matchedCameraIds.length === 0) {
+        // Query A: Security Alerts & Unauthorized Access in time window
+        if (isSecurityOrAlertQuery) {
+          filterCategory = "alert";
+          const intervalMinutes = Math.max(1, Math.min(1440, Number(timeWindowMinutes) || 15));
+          const alertRes = await this.pool.query(
+            `SELECT DISTINCT c.id, c.name, c.status
+             FROM operational_alerts a
+             JOIN cameras c ON (c.id = a.camera_id OR c.id::text = a.camera_id)
+             WHERE a.occurred_at >= NOW() - ($1 || ' minutes')::interval
+               AND (
+                 a.detection_type ILIKE '%unauthorized%' OR
+                 a.detection_type ILIKE '%intrusion%' OR
+                 a.detection_type ILIKE '%access%' OR
+                 a.detection_type ILIKE '%breach%' OR
+                 a.detection_title ILIKE '%unauthorized%' OR
+                 a.detection_title ILIKE '%intrusion%' OR
+                 a.severity IN ('critical', 'high', 'P1', 'P2')
+               )
+             ORDER BY c.name
+             LIMIT 16`,
+            [String(intervalMinutes)]
+          ).catch(() => ({ rows: [] }));
+
+          matchedCameraIds = alertRes.rows.map((r: any) => r.id);
+          summary = `Cameras with unauthorized access/intrusion alerts in the last ${intervalMinutes}m`;
+        }
+
+        // Query B: Active Motion / Movement
+        if (matchedCameraIds.length === 0 && isMotionQuery) {
+          filterCategory = "motion";
+          const intervalMinutes = Math.max(1, Math.min(1440, Number(timeWindowMinutes) || 15));
+          const motionRes = await this.pool.query(
+            `SELECT DISTINCT c.id, c.name
+             FROM operational_alerts a
+             JOIN cameras c ON (c.id = a.camera_id OR c.id::text = a.camera_id)
+             WHERE a.occurred_at >= NOW() - ($1 || ' minutes')::interval
+               AND (
+                 a.detection_type ILIKE '%motion%' OR
+                 a.detection_type ILIKE '%movement%' OR
+                 a.detection_type ILIKE '%line_crossing%' OR
+                 a.detection_type ILIKE '%zone_intrusion%'
+               )
+             ORDER BY c.name
+             LIMIT 16`,
+            [String(intervalMinutes)]
+          ).catch(() => ({ rows: [] }));
+
+          matchedCameraIds = motionRes.rows.map((r: any) => r.id);
+          if (matchedCameraIds.length > 0) {
+            summary = `Cameras with active motion/movement in the last ${intervalMinutes}m`;
+          }
+        }
+
+        // Query C: Location / Zone matching
+        if (locationKeywords.length > 0) {
+          filterCategory = "location";
+          const likeConditions = locationKeywords.map((_, i) => `(c.name ILIKE $${i + 1} OR rn.name ILIKE $${i + 1} OR rn.path::text ILIKE $${i + 1} OR b.name ILIKE $${i + 1})`).join(" OR ");
+          const likeParams = locationKeywords.map((k) => `%${k}%`);
+
+          const locationRes = await this.pool.query(
+            `SELECT DISTINCT c.id, c.name, c.status
+             FROM cameras c
+             LEFT JOIN resource_nodes rn ON c.resource_node_id = rn.id
+             LEFT JOIN branches b ON (b.id = c.branch_id OR b.id = rn.parent_id)
+             WHERE ${likeConditions}
+             ORDER BY c.name
+             LIMIT 16`,
+            likeParams
+          ).catch(() => ({ rows: [] }));
+
+          const locationCamIds = locationRes.rows.map((r: any) => r.id);
+
+          if (isMotionQuery && matchedCameraIds.length > 0) {
+            const intersected = matchedCameraIds.filter((id) => locationCamIds.includes(id));
+            matchedCameraIds = intersected.length > 0 ? intersected : locationCamIds;
+            summary = `Entrance cameras with active movement`;
+          } else if (locationCamIds.length > 0) {
+            matchedCameraIds = locationCamIds;
+            summary = `Cameras located in ${locationKeywords.slice(0, 2).join(" / ")}`;
+          }
+        }
+
+        // Fallback: If no cameras matched specific criteria, fetch online/registered cameras
+        if (matchedCameraIds.length === 0) {
+          const fallbackRes = await this.pool.query(
+            `SELECT id, name FROM cameras ORDER BY (status = 'online') DESC, name ASC LIMIT 9`
+          ).catch(() => ({ rows: [] }));
+          matchedCameraIds = fallbackRes.rows.map((r: any) => r.id);
+          summary = `Active system cameras`;
+        }
+      }
+    } catch (dbErr) {
+      console.warn("[KryptonAI] controlLiveWall DB query error:", dbErr);
+    }
+
+    // 3. Determine optimal grid size based on matched camera count
+    if (!detectedGridSize) {
+      const count = matchedCameraIds.length;
+      if (count <= 1) detectedGridSize = "1x1";
+      else if (count <= 4) detectedGridSize = "2x2";
+      else if (count <= 6) detectedGridSize = "1+5";
+      else if (count <= 8) detectedGridSize = "1+7";
+      else detectedGridSize = "3x3";
+    }
+
+    const count = matchedCameraIds.length;
+    const msg = `Switched live wall to **${detectedGridSize}** layout displaying **${count} camera(s)** (${summary || query}).`;
+    const msgMl = `ലൈവ് വാൾ **${detectedGridSize}** ലേഔട്ടിലേക്ക് മാറ്റി, **${count} ക്യാമറകൾ** ക്രമീകരിച്ചു (${summary || query}).`;
+
+    return {
+      action: "control_live_wall",
+      cameraIds: matchedCameraIds,
+      gridSize: detectedGridSize,
+      filterCategory,
+      filterSummary: summary || query,
+      totalMatched: count,
+      message: msg,
+      messageMl: msgMl,
+    };
+  }
+
   private async lockDoors(args: any, context: GuardianContext) {
     const { locations, reason } = args;
 
@@ -1845,6 +2088,52 @@ Personality:
     // In pre-login guest mode, handle general questions and prompt login for module/operational data
     if (context.isGuest) {
       return this.processGuestFallbackMessage(message, timestamp);
+    }
+
+    // 0a. Live Wall Natural Language / AI Copilot Command (Prompt-Based Grid Switching)
+    const isLiveWallQuery =
+      (lower.includes("entrance") && (lower.includes("movement") || lower.includes("motion") || lower.includes("camera") || lower.includes("active"))) ||
+      (lower.includes("warehouse") && (lower.includes("zone") || lower.includes("camera") || lower.includes("switch"))) ||
+      (lower.includes("unauthorized") || lower.includes("unauthorised") || (lower.includes("breach") && lower.includes("access"))) ||
+      lower.includes("zone b") ||
+      lower.includes("zone a") ||
+      (lower.includes("switch to") && (lower.includes("zone") || lower.includes("warehouse") || lower.includes("camera") || lower.includes("1+") || lower.includes("x") || lower.includes("grid"))) ||
+      (lower.includes("show") && (lower.includes("entrance") || lower.includes("cameras with") || lower.includes("triggered") || lower.includes("offline camera"))) ||
+      lower.includes("active movement") ||
+      lower.includes("grid switching") ||
+      lower.includes("live wall") ||
+      lower.includes("camera kaanikku") ||
+      lower.includes("switch cheyyu") ||
+      lower.includes("grid maatu");
+
+    if (isLiveWallQuery) {
+      const wallResult = await this.controlLiveWall({ query: message }, context);
+      return {
+        message: wallResult.message,
+        messageMl: wallResult.messageMl,
+        type: "action",
+        actions: [
+          {
+            function: "control_live_wall",
+            parameters: { query: message },
+            executed: true,
+            result: wallResult,
+          },
+        ],
+        suggestions: [
+          "Show all entrance cameras with active movement",
+          "Switch to Warehouse Zone B",
+          "Show cameras that triggered unauthorized access in the last 15 minutes",
+          "Switch to 1+5 layout",
+        ],
+        suggestionsMl: [
+          "പ്രവേശന കവാടങ്ങളിലെ ചലനമുള്ള ക്യാമറകൾ കാണിക്കുക",
+          "വെയർഹൗസ് സോൺ ബി-ലേക്ക് മാറുക",
+          "കഴിഞ്ഞ 15 മിനിറ്റിൽ അനധികൃത പ്രവേശനം ഉണ്ടായ ക്യാമറകൾ കാണിക്കുക",
+          "1+5 ലേഔട്ടിലേക്ക് മാറുക",
+        ],
+        timestamp,
+      };
     }
 
     // 0. Navigation / Open Menu Command

@@ -680,15 +680,37 @@ export class MediaMtxRouter implements MediaRouter {
           sourceOnDemandStartTimeout: "15s",
           sourceOnDemandCloseAfter: "120s",
         };
+    // MediaMTX tears down an active path (including its HLS muxer) when it is
+    // patched. A second viewer of the same camera must not interrupt the first.
+    const matches = (current: { source?: string; runOnDemand?: string }) =>
+      current.source === payload.source &&
+      (payload.source !== "publisher" || current.runOnDemand === payload.runOnDemand);
+    const patchPath = async () => {
+      const patch = await fetch(new URL(`/v3/config/paths/patch/${encodedPath}`, this.apiUrl), {
+        method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
+      });
+      if (!patch.ok) throw new Error(`MediaMTX rejected path update (${patch.status})`);
+    };
+    const existing = await fetch(new URL(`/v3/config/paths/get/${encodedPath}`, this.apiUrl));
+    if (existing.ok) {
+      const current = await existing.json() as { source?: string; runOnDemand?: string };
+      if (!matches(current)) await patchPath();
+      return;
+    } else if (existing.status !== 404) {
+      throw new Error(`MediaMTX path lookup failed (${existing.status})`);
+    }
     const add = await fetch(new URL(`/v3/config/paths/add/${encodedPath}`, this.apiUrl), {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
     });
     if (add.ok) return;
     if (add.status !== 400 && add.status !== 409) throw new Error(`MediaMTX rejected path creation (${add.status})`);
-    const patch = await fetch(new URL(`/v3/config/paths/patch/${encodedPath}`, this.apiUrl), {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
-    });
-    if (!patch.ok) throw new Error(`MediaMTX rejected path update (${patch.status})`);
+    // Another session can win the add race while this one is in flight.
+    const raced = await fetch(new URL(`/v3/config/paths/get/${encodedPath}`, this.apiUrl));
+    if (raced.ok) {
+      const current = await raced.json() as { source?: string; runOnDemand?: string };
+      if (matches(current)) return;
+    }
+    await patchPath();
   }
   async removePath(path: string) {
     const response = await fetch(new URL(`/v3/config/paths/delete/${encodeURIComponent(path)}`, this.apiUrl), { method: "DELETE" });
