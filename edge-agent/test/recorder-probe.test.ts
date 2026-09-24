@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { looksLikeRecorder, probeRecorder, recorderApiFamily, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
+import { looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderApiFamily, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
 
 describe("vendor recorder probes", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -12,6 +12,18 @@ describe("vendor recorder probes", () => {
   it("keeps unvalidated OEM brands on ONVIF unless an API family is explicitly configured", () => {
     expect(recorderApiFamily({ vendor: "uniview" })).toBe("onvif");
     expect(recorderApiFamily({ vendor: "tvt", apiFamily: "dahua-cgi" })).toBe("dahua-cgi");
+  });
+
+  it("reads camera memory-card capacity from a vendor storage endpoint", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(
+      "<Storage><hdd><id>1</id><name>MicroSD</name><capacity>128GB</capacity><freeSpace>32GB</freeSpace><status>ok</status></hdd></Storage>",
+    ));
+    vi.stubGlobal("fetch", fetcher);
+    const cards = await probeCameraMemoryCard({
+      host: "192.0.2.15", port: 80, vendor: "hikvision", username: "operator", password: "secret",
+    }, 1000);
+    expect(fetcher.mock.calls[0]?.[0]).toContain("/ISAPI/ContentMgmt/Storage");
+    expect(cards).toEqual([expect.objectContaining({ capacity: "128GB", freeSpace: "32GB" })]);
   });
 
   it("builds vendor playback probes without exposing them to the control plane", () => {

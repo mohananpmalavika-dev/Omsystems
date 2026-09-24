@@ -14,7 +14,7 @@ import { LocalStreamSecretStore, startSecretProvider } from "./streaming/secret-
 import { uptime } from "node:os";
 import { NetworkCounterSampler, NetworkPathTracker, probeInternetLink } from "./monitoring/internet-probe.js";
 import { EdgeResourceSampler } from "./monitoring/edge-resource-probe.js";
-import { looksLikeRecorder, probeRecorder, recorderPlaybackUri } from "./monitoring/recorder-probe.js";
+import { looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderPlaybackUri } from "./monitoring/recorder-probe.js";
 import { initializeCameraHeartbeat } from "./monitoring/camera-heartbeat.js";
 import { hasArgument, prepareEdgeRuntime } from "./runtime.js";
 import { logger } from "./utils/logger.js";
@@ -663,6 +663,24 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
           },
           reasonCodes: ["onvif_auto_discovered", "recorder_channels_enumerated", "recording_state_vendor_specific"],
         });
+        // Save physical storage as part of discovery. A newly found recorder may
+        // have no approved camera yet, and the regular health poll can run later.
+        try {
+          const storageProbe = await probeRecorder(activeRecorders.get(discoveredId)!, config.RECORDER_PROBE_TIMEOUT_MS);
+          if (storageProbe.hddStatus.length > 0) {
+            await control.submitRecorderHdd(agentId, {
+              branchId, recorderId: discoveredId, observedAt, source: "onvif",
+              quality: "verified",
+              idempotencyKey: `${agentId}:recorder-discovery-hdd:${discoveredId}:${observedAt}`,
+              hddStatus: storageProbe.hddStatus,
+            });
+          }
+        } catch (error) {
+          logger.warn("Recorder storage probe during discovery failed", {
+            recorderId: discoveredId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         submitted += 1;
         for (const channel of channels) {
           const channelFingerprint = createDeviceFingerprint({
@@ -895,6 +913,30 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
       });
       if (persistStreamSecrets && primarySourceUri) {
         await secrets.set(`edge://${agentId}/${discovery.id}`, primarySourceUri);
+      }
+      try {
+        const memoryCards = await probeCameraMemoryCard({
+          host: endpoint.remoteAddress,
+          port: Number(parsedServiceUrl.port || (parsedServiceUrl.protocol === "https:" ? 443 : 80)),
+          secure: parsedServiceUrl.protocol === "https:",
+          vendor: recorderAdapterVendor(device.manufacturer),
+          username: credentials.username,
+          password: credentials.password,
+        }, config.RECORDER_PROBE_TIMEOUT_MS);
+        if (memoryCards.length > 0) {
+          const storageObservedAt = new Date().toISOString();
+          await control.submitRecorderHdd(agentId, {
+            branchId, recorderId: `camera:${discovery.id}:sdcard`,
+            observedAt: storageObservedAt, source: "onvif", quality: "verified",
+            idempotencyKey: `${agentId}:camera-sdcard:${discovery.id}:${storageObservedAt}`,
+            hddStatus: memoryCards,
+          });
+        }
+      } catch (error) {
+        logger.warn("Camera memory-card probe during discovery failed", {
+          discoveryId: discovery.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
       submitted += 1;
       logger.info(`Submitted ${device.manufacturer} ${device.model} as discovery ${discovery.id}`, {

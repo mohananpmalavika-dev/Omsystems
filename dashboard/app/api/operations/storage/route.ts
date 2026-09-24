@@ -146,6 +146,7 @@ export async function GET(request: NextRequest) {
             c.model, 
             c.recorder_id, 
             c.recorder_channel, 
+            c.connection_secret_ref,
             c.capabilities, 
             c.source_type 
           FROM cameras c 
@@ -217,10 +218,16 @@ export async function GET(request: NextRequest) {
 
   const sdCardDisks = rawDisks.filter(isCameraSdCard);
   const recorderDisks = rawDisks.filter((disk) => !isCameraSdCard(disk));
-  const dvrNode = rawStorageNodes.find((node) => node.external_id === "dvr-hdd-primary" || node.name?.toLowerCase().includes("hdd"))
-    ?? aggregateDisks(recorderDisks, "Recorder HDD telemetry");
-  const sdCardNode = rawStorageNodes.find((node) => node.external_id === "cam-sdcard-primary" || /micro\s*sd|sd.?card/i.test(node.name ?? ""))
-    ?? aggregateDisks(sdCardDisks, "Camera SD-card telemetry");
+  const measuredSdCards = sdCardDisks.filter((disk) => Number(disk.capacityBytes) > 0);
+  const measuredRecorderDisks = recorderDisks.filter((disk) => Number(disk.capacityBytes) > 0);
+  const dvrNode = measuredRecorderDisks.length
+    ? aggregateDisks(measuredRecorderDisks, "Recorder HDD telemetry")
+    : rawStorageNodes.find((node) => node.external_id === "dvr-hdd-primary" || node.name?.toLowerCase().includes("hdd"))
+      ?? aggregateDisks([], "Recorder HDD telemetry");
+  const sdCardNode = measuredSdCards.length
+    ? aggregateDisks(measuredSdCards, "Camera SD-card telemetry")
+    : rawStorageNodes.find((node) => node.external_id === "cam-sdcard-primary" || /micro\s*sd|sd.?card/i.test(node.name ?? ""))
+      ?? aggregateDisks([], "Camera SD-card telemetry");
   const cloudNode = rawStorageNodes.find((node) => node.external_id === "cloud-node-primary" || node.name?.toLowerCase().includes("cloud"))
     ?? { name: "Cloud recording telemetry unavailable", capacity_bytes: 0, used_bytes: 0, available_bytes: 0, status: "unknown" };
 
@@ -231,9 +238,12 @@ export async function GET(request: NextRequest) {
     const ip = cam.ip_address || "192.168.29.58";
     const override = runtimeFailoverOverrides.get(camId);
 
+    const discoveryId = String(cam.connection_secret_ref ?? cam.connectionSecretRef ?? "").split("/").pop();
     const cameraSdCard = sdCardDisks.find((disk) => {
       const id = diskId(disk);
-      return id === `${camId}:sdcard` || id === `camera:${camId}:sdcard` || id.includes(`:${camId}:sdcard`);
+      return id === `${camId}:sdcard` || id === `camera:${camId}:sdcard`
+        || id.includes(`:${camId}:sdcard`)
+        || Boolean(discoveryId && id.startsWith(`camera:${discoveryId}:sdcard:`));
     });
     const recorderDisk = cam.recorder_id
       ? recorderDisks.find((disk) => diskId(disk).startsWith(`${cam.recorder_id}:disk:`))
@@ -312,8 +322,10 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  const tier1Count = cameras.filter((c) => c.activeStorageTier === "sd_card").length;
-  const tier2Count = cameras.filter((c) => c.activeStorageTier === "dvr_hdd").length;
+  // A recorder or camera card can be discovered before any camera is approved.
+  // Count measured storage devices independently of camera-to-storage mappings.
+  const tier1Count = measuredSdCards.length;
+  const tier2Count = measuredRecorderDisks.length;
   const tier3Count = cameras.filter((c) => c.activeStorageTier === "online_cloud" && c.cloudStatus === "active").length;
 
   // Filter active storage nodes: local disks are unmounted if no corresponding device exists

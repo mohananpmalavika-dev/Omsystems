@@ -254,6 +254,31 @@ describe("Phase 1 operational health", () => {
     )).toBe(true);
   });
 
+  it("keeps discovered HDD and memory-card telemetry visible before camera approval", async () => {
+    store.cameras.clear();
+    for (const [recorderId, diskNo, capacity] of [
+      ["dvr-pending", 1, "2TB"],
+      ["camera:pending:sdcard", 1, "128GB"],
+    ] as const) {
+      const accepted = await app.inject({
+        method: "POST", url: `/v1/edge-agents/${agentId}/recorder-hdd`, headers: admin,
+        payload: {
+          branchId: "branch-blr-001", recorderId,
+          observedAt: new Date().toISOString(), source: "onvif", quality: "verified",
+          idempotencyKey: `discovery:${recorderId}`,
+          hddStatus: [{ diskNo, state: "normal", capacity }],
+        },
+      });
+      expect(accepted.statusCode).toBe(202);
+    }
+
+    const response = await app.inject({ method: "GET", url: "/v1/operations/health/disks", headers: admin });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.map((disk: { id: string }) => disk.id)).toEqual(expect.arrayContaining([
+      "dvr-pending:disk:1", "camera:pending:sdcard:disk:1",
+    ]));
+  });
+
   it("alerts separately for disk removal, storage-full, RAID, and write failures", async () => {
     const observedAt = new Date(Date.now() + 1_000).toISOString();
     const accepted = await app.inject({

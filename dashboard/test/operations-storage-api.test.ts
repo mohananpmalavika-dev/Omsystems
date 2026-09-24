@@ -59,6 +59,64 @@ describe("Storage Operations Live API", () => {
     }
   });
 
+  it("shows discovered HDD and memory-card capacity before camera approval", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/v1/operations/health/disks")) {
+        return Response.json({ success: true, data: [
+          { id: "recorder-2:disk:1", devicePath: "HDD 1", operationalStatus: "healthy", capacityBytes: 2_000_000_000_000, usedBytes: 500_000_000_000 },
+          { id: "camera:pending:sdcard", devicePath: "MicroSD", operationalStatus: "healthy", capacityBytes: 128_000_000_000, usedBytes: 16_000_000_000 },
+        ] });
+      }
+      return Response.json({ data: [] });
+    });
+
+    try {
+      const res = await GET(new NextRequest("http://localhost:3000/api/operations/storage"));
+      const data = await res.json();
+      expect(data.cameras).toEqual([]);
+      expect(data.summary.tier1SdCardCount).toBe(1);
+      expect(data.summary.tier2DvrHddCount).toBe(1);
+      expect(data.summary.sdCardNode.capacity).toBe("128.0 GB");
+      expect(data.summary.dvrHddNode.capacity).toBe("2.0 TB");
+    } finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
+
+  it("links a discovered memory card to its approved camera", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/v1/operations/health/disks")) {
+        return Response.json({ success: true, data: [{
+          id: "camera:discovery-1:sdcard:disk:1", devicePath: "MicroSD",
+          operationalStatus: "healthy", capacityBytes: 128_000_000_000,
+          usedBytes: 16_000_000_000,
+        }] });
+      }
+      if (url.includes("/v1/cameras")) {
+        return Response.json({ data: [{
+          id: "camera-1", name: "Camera 1", connectionSecretRef: "edge://agent-1/discovery-1",
+        }] });
+      }
+      return Response.json({ data: [] });
+    });
+
+    try {
+      const data = await (await GET(new NextRequest("http://localhost:3000/api/operations/storage"))).json();
+      expect(data.cameras[0].activeStorageTier).toBe("sd_card");
+      expect(data.cameras[0].capacity).toBe("128.0 GB");
+    } finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
+
   it("handles storage tier failover switch via POST", async () => {
     const postReq = new NextRequest("http://localhost:3000/api/operations/storage", {
       method: "POST",

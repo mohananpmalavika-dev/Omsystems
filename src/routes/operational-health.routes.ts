@@ -491,44 +491,13 @@ export async function registerOperationalHealthRoutes(
     const projections = await loadAccessibleProjections(request, store, query.branchId ? [query.branchId] : undefined);
     const branchById = new Map(projections.map((branch) => [branch.id, branch]));
     const branchIds = [...branchById.keys()];
-    const [telemetry, allCameras] = await Promise.all([
-      store.listLatestOperationalTelemetry(request.currentUser.tenantId, branchIds),
-      store.listCameras(request.currentUser.tenantId).catch(() => []),
-    ]);
+    const telemetry = await store.listLatestOperationalTelemetry(request.currentUser.tenantId, branchIds);
 
-    const camerasByBranch = new Map<string, number>();
-    for (const cam of (allCameras as any[])) {
-      const bId = cam.branchId || cam.branch_node_id;
-      if (bId) camerasByBranch.set(bId, (camerasByBranch.get(bId) ?? 0) + 1);
-    }
-
+    // A discovered recorder or camera can report storage before its first camera
+    // is approved. Storage evidence must remain visible independently of the
+    // camera inventory; deletion paths remove telemetry for retired devices.
     let disks = telemetry
-      .filter((item) => {
-        if (item.deviceType !== "disk") return false;
-
-        // MicroSD cards belong to physical cameras; if the camera/branch is gone, storage is removed
-        const isSdCard = item.deviceId.toLowerCase().includes("sdcard") || 
-          item.deviceId.toLowerCase().includes("sd-") ||
-          String((item.metrics as any)?.slot || "").toLowerCase().includes("cam") ||
-          String((item.metrics as any)?.model || "").toLowerCase().includes("microsd");
-
-        if (isSdCard) {
-          if (allCameras.length === 0) return false;
-          if ((camerasByBranch.get(item.branchId) ?? 0) === 0) return false;
-        }
-
-        // DVR disks belong to DVR/NVR channels; if no cameras/recorders exist, storage is removed
-        const isDvrDisk = item.deviceId.toLowerCase().includes("dvr") ||
-          item.deviceId.toLowerCase().includes("sata") ||
-          String((item.metrics as any)?.slot || "").toLowerCase().includes("dvr") ||
-          String((item.metrics as any)?.slot || "").toLowerCase().includes("nvr");
-
-        if (isDvrDisk && allCameras.length === 0) {
-          return false;
-        }
-
-        return true;
-      })
+      .filter((item) => item.deviceType === "disk")
       .flatMap((item) => {
         const branch = branchById.get(item.branchId);
         return branch ? [projectDiskHealth(item, branch)] : [];

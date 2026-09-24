@@ -118,6 +118,26 @@ export function recorderPlaybackUri(config: RecorderConfig, sourceChannel: numbe
   return undefined;
 }
 
+/** Read camera-local storage without assuming the camera has an approved inventory record. */
+export async function probeCameraMemoryCard(
+  config: Pick<RecorderConfig, "host" | "port" | "secure" | "username" | "password" | "vendor">,
+  timeoutMs: number,
+): Promise<Array<Record<string, unknown>>> {
+  const family = recorderApiFamily(config);
+  if (family !== "hikvision-isapi" && family !== "dahua-cgi") return [];
+  const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
+  const path = family === "hikvision-isapi"
+    ? "/ISAPI/ContentMgmt/Storage"
+    : "/cgi-bin/storageDevice.cgi?action=getDeviceAllInfo";
+  const credentials = config.username
+    ? { username: config.username, password: config.password ?? "" }
+    : undefined;
+  const response = await authenticatedFetch(`${base}${path}`, { method: "GET" }, credentials, timeoutMs);
+  if (!response.ok) return [];
+  const body = await response.text();
+  return family === "hikvision-isapi" ? parseHikvisionDisks(body) : parseCgiDisks(body);
+}
+
 export async function probeRecorder(config: RecorderConfig, timeoutMs: number, options: { includeArchive?: boolean } = {}): Promise<RecorderProbeResult> {
   const started = performance.now();
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
