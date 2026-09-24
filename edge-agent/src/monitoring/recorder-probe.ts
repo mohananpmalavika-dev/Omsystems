@@ -777,7 +777,12 @@ function recordingProbeFromMatches(matches: RecordingMatch[], inventory: Channel
   return { status, recordingChannels: aggregateOnlyMatch ? null : recordingChannels, lastRecordedAt, channels, reasonCodes, source: "recent-media-search" };
 }
 
-function dahuaTime(value: Date) { return value.toISOString().replace("T", " ").replace(/\.\d{3}Z$/, ""); }
+function dahuaTime(value: Date) {
+  // Dahua CGI timestamps have no timezone. The edge runs at the camera site,
+  // so send wall-clock time in the same timezone used to parse its reply.
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())} ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`;
+}
 
 async function getOnvifSearchEndpoint(base: string, deviceServicePath: string, credentials: { username: string; password: string } | undefined, timeout: number) {
   try {
@@ -914,4 +919,4 @@ function firstKey(text: string, names: string[]) { return names.map((name) => ke
 function number(value: string | undefined) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; }
 function classifyError(error: unknown) { const message = error instanceof Error ? error.message : String(error); return /timeout|abort/i.test(message) ? "recorder_probe_timeout" : "recorder_unreachable"; }
 function compactUtc(value: Date) { return value.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z"); }
-function dahuaPlaybackTime(value: Date) { return value.toISOString().replace(/[-:]/g, "_").replace("T", "_").replace(/\.\d{3}Z$/, ""); }
+function dahuaPlaybackTime(value: Date) { return dahuaTime(value).replace(/[-: ]/g, "_"); }

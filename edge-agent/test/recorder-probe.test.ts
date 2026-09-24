@@ -49,10 +49,13 @@ describe("vendor recorder probes", () => {
       .mockResolvedValueOnce(new Response("OK"));
     vi.stubGlobal("fetch", fetcher);
     const config = { host: "192.0.2.22", port: 80, vendor: "cp-plus" as const, username: "operator", password: "secret" };
-    const from = new Date("2026-09-24T10:00:00.000Z");
-    const to = new Date("2026-09-24T10:05:00.000Z");
+    const from = new Date(2026, 8, 24, 10, 0, 0);
+    const to = new Date(2026, 8, 24, 10, 5, 0);
     const clips = await searchDeviceArchive(config, from, to, 1000, 2);
-    expect(clips).toHaveLength(1);
+    expect(clips).toEqual([{
+      startTime: new Date(2026, 8, 24, 10, 0, 0).toISOString(),
+      endTime: new Date(2026, 8, 24, 10, 2, 0).toISOString(),
+    }]);
     expect(fetcher.mock.calls[1]?.[0]).toContain("condition.Channel=2");
     expect(deviceArchivePlaybackUri(config, from, to, 2)).toContain("/cam/playback?channel=2");
   });
@@ -70,7 +73,9 @@ describe("vendor recorder probes", () => {
       host: "192.0.2.11", port: 80, username: "operator", password: "safe",
     }, 1, "2026-08-02T10:00:00.000Z");
     expect(dahua).toContain("/cam/playback?channel=1");
-    expect(dahua).toContain("starttime=2026_08_02_09_59_30");
+    const playbackStart = new Date("2026-08-02T09:59:30.000Z");
+    const pad = (value: number) => String(value).padStart(2, "0");
+    expect(dahua).toContain(`starttime=2026_08_02_${pad(playbackStart.getHours())}_${pad(playbackStart.getMinutes())}_${pad(playbackStart.getSeconds())}`);
   });
 
   it("extracts Hikvision identity, channels and storage through ISAPI", async () => {

@@ -10,7 +10,7 @@ export interface ConsumedSession {
   model?: string;
   channel?: number;
   recorderChannel?: number;
-  purpose?: "view" | "talk";
+  purpose?: "view" | "talk" | "playback";
   profiles: Array<{
     name: string;
     codec: string;
