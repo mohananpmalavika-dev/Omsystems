@@ -60,6 +60,23 @@ describe("vendor recorder probes", () => {
     expect(deviceArchivePlaybackUri(config, from, to, 2)).toContain("/cam/playback?channel=2");
   });
 
+  it("finds a common archive API on an unrecognized OEM model", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
+      .mockResolvedValueOnce(new Response("object=4"))
+      .mockResolvedValueOnce(new Response("OK"))
+      .mockResolvedValueOnce(new Response("found=1\nitems[0].Channel=1\nitems[0].StartTime=2026-09-24 10:00:00\nitems[0].EndTime=2026-09-24 10:02:00"))
+      .mockResolvedValueOnce(new Response("found=0"))
+      .mockResolvedValueOnce(new Response("OK"));
+    vi.stubGlobal("fetch", fetcher);
+    const config = { host: "192.0.2.25", port: 80, vendor: "onvif" as const, username: "operator", password: "secret" };
+    const from = new Date(2026, 8, 24, 10, 0, 0);
+    const to = new Date(2026, 8, 24, 10, 5, 0);
+    const clips = await searchDeviceArchive(config, from, to, 1000);
+    expect(clips).toEqual([{ startTime: from.toISOString(), endTime: new Date(2026, 8, 24, 10, 2, 0).toISOString(), apiFamily: "dahua-cgi" }]);
+    expect(deviceArchivePlaybackUri({ ...config, apiFamily: clips[0]!.apiFamily }, from, to)).toContain("/cam/playback?channel=1");
+  });
+
   it("builds vendor playback probes without exposing them to the control plane", () => {
     const hikvision = recorderPlaybackUri({
       id: "hik", name: "NVR", deviceType: "nvr", vendor: "hikvision",

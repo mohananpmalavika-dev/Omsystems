@@ -168,6 +168,25 @@ describe("authorized media startup", () => {
     expect(response.json()).toMatchObject({ error: "stream_secret_unavailable" });
   });
 
+  it("does not let a recording grant start a live stream", async () => {
+    const secrets: StreamSecretProvider = { resolve: vi.fn(async () => "rtsp://camera.local/live") };
+    app = await buildMediaGateway({
+      controlPlane: { consumeLiveSession: vi.fn(async () => ({
+        id: "playback-grant", cameraId: "cam-001", userId: "user-001", tenantId: "tenant-001",
+        connectionSecretRef: "vault://camera", purpose: "playback" as const, profiles: [],
+      })) },
+      router: { ensurePath: vi.fn(async () => undefined), removePath: vi.fn(async () => undefined) },
+      secrets,
+      publicHlsBaseUrl: "https://media.example/hls",
+      publicWebRtcBaseUrl: "https://media.example/webrtc",
+      accessTtlMs: 60_000,
+    });
+    const response = await app.inject({ method: "POST", url: "/v1/live/start", payload: { controlPlaneToken: "a".repeat(43) } });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error).toBe("invalid_live_session");
+    expect(secrets.resolve).not.toHaveBeenCalled();
+  });
+
   it("issues a viewer token for an already-published portable camera", async () => {
     const router: MediaRouter = {
       ensurePath: vi.fn(async () => undefined),

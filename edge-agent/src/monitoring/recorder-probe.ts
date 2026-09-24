@@ -144,18 +144,36 @@ export async function searchDeviceArchive(
   to: Date,
   timeoutMs: number,
   channel = 1,
-): Promise<Array<{ startTime: string; endTime: string }>> {
+): Promise<Array<{ startTime: string; endTime: string; apiFamily?: "hikvision-isapi" | "dahua-cgi" }>> {
   const family = recorderApiFamily(config);
-  if (family !== "hikvision-isapi" && family !== "dahua-cgi") throw new Error("camera_archive_search_unsupported");
   if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) ||
       to <= from || to.getTime() - from.getTime() > 31 * 86_400_000) throw new Error("invalid_archive_range");
   const credentials = config.username
     ? { username: config.username, password: config.password ?? "" }
     : undefined;
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
-  const result = family === "hikvision-isapi"
-    ? await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
-    : await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
+  let selected: "hikvision-isapi" | "dahua-cgi";
+  let result: ArchiveSearchResult;
+  if (family === "hikvision-isapi" || family === "dahua-cgi") {
+    selected = family;
+    result = family === "hikvision-isapi"
+      ? await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
+      : await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
+  } else {
+    // OEM models often expose one of these APIs even when their brand differs.
+    // A successful empty response still identifies the API; an arbitrary HTTP 200 does not.
+    try {
+      result = await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500);
+      selected = "hikvision-isapi";
+    } catch {
+      try {
+        result = await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
+        selected = "dahua-cgi";
+      } catch {
+        throw new Error("camera_archive_search_unavailable_or_unsupported");
+      }
+    }
+  }
   if (!result.coverageComplete) throw new Error(result.reasonCodes[0] ?? "camera_archive_search_incomplete");
   return result.segments
     .filter((segment) => segment.endedAt > segment.startedAt)
@@ -166,6 +184,7 @@ export async function searchDeviceArchive(
         clips.push({
           startTime: new Date(start).toISOString(),
           endTime: new Date(Math.min(start + 10 * 60_000, segment.endedAt, to.getTime())).toISOString(),
+          ...(family !== selected ? { apiFamily: selected } : {}),
         });
       }
       return clips;
@@ -173,7 +192,7 @@ export async function searchDeviceArchive(
 }
 
 export function deviceArchivePlaybackUri(
-  config: Pick<RecorderConfig, "host" | "rtspPort" | "username" | "password" | "vendor">,
+  config: Pick<RecorderConfig, "host" | "rtspPort" | "username" | "password" | "vendor" | "apiFamily">,
   from: Date,
   to: Date,
   channel = 1,
@@ -456,6 +475,7 @@ async function searchHikvisionArchive(base: string, credentials: { username: str
     }, credentials, timeout);
     if (!response.ok) throw new Error(`hikvision_archive_${response.status}`);
     const xml = await response.text();
+    if (!/<(?:[A-Za-z][\w.-]*:)?CMSearchResult\b/.test(xml)) throw new Error("hikvision_archive_invalid_response");
     const page = parseHikvisionArchiveSegments(xml);
     if (page.length === 0) return { segments, coverageComplete: true, reasonCodes: [] };
     segments.push(...page);

@@ -263,8 +263,8 @@ export class EdgeLiveGateway {
           : consumed.vendor === "cp-plus" ? "cp-plus" : "onvif";
       const cameraConfig = {
         host: source.hostname,
-        port: Number(body.httpPort) || (source.protocol === "rtsps:" ? 443 : 80),
-        secure: source.protocol === "rtsps:",
+        port: Number(body.httpPort) || 80,
+        secure: body.httpSecure === true || Number(body.httpPort) === 443,
         rtspPort: Number(source.port) || 554,
         username: decodeURIComponent(source.username),
         password: decodeURIComponent(source.password),
@@ -282,7 +282,9 @@ export class EdgeLiveGateway {
           return sendJson(response, 502, { error: error instanceof Error ? error.message : "camera_archive_search_failed" });
         }
       }
-      const uri = deviceArchivePlaybackUri(cameraConfig, from, to, channel);
+      const apiFamily = body.apiFamily === "hikvision-isapi" || body.apiFamily === "dahua-cgi"
+        ? body.apiFamily : undefined;
+      const uri = deviceArchivePlaybackUri({ ...cameraConfig, ...(vendor === "onvif" && apiFamily ? { apiFamily } : {}) }, from, to, channel);
       if (!uri) return sendJson(response, 409, { error: "camera_archive_playback_unsupported" });
       const path = `camera-archive-${safeIdentifier(consumed.cameraId)}-${randomUUID()}`;
       await this.options.router.ensurePath(path, uri);

@@ -28,7 +28,7 @@ type VmsView = {
   timeline: Availability<{ coverageComplete: boolean; intervals: Array<{ start: string; end: string; state: "RECORDED" | "MISSING" | "UNKNOWN"; segmentId?: string; reason?: string }> }>;
 };
 
-type DeviceClip = { startTime: string; endTime: string };
+type DeviceClip = { startTime: string; endTime: string; apiFamily?: "hikvision-isapi" | "dahua-cgi" };
 type DevicePlayback = { hls: { url: string; bearerToken: string }; sessionId: string };
 type StorageGrant = { token: string; mediaGatewayUrl?: string; localMediaGatewayUrl?: string };
 
@@ -145,7 +145,9 @@ export function RecordingWorkspace() {
         body: JSON.stringify({ controlPlaneToken: grant.token, from: fromIso, to: toIso }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "Device archive search failed.");
+      if (!response.ok) throw new Error(body.error === "camera_archive_search_unavailable_or_unsupported"
+        ? "This device did not expose a supported archive API. Check its recording API, web port, and credentials."
+        : body.error ?? "Device archive search failed.");
       setDeviceClips(Array.isArray(body.clips) ? body.clips : []);
     } catch (reason) {
       setDeviceClips([]);
@@ -159,7 +161,7 @@ export function RecordingWorkspace() {
       const grant = await requestStorageGrant();
       const response = await fetch(storageGatewayUrl(grant, "play"), {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ controlPlaneToken: grant.token, from: clip.startTime, to: clip.endTime }),
+        body: JSON.stringify({ controlPlaneToken: grant.token, from: clip.startTime, to: clip.endTime, apiFamily: clip.apiFamily }),
       });
       const body = await response.json();
       if (!response.ok || !body.hls?.url || !body.hls?.bearerToken) {
