@@ -41,9 +41,10 @@ export function HlsPlayer({
   const [retryNonce, setRetryNonce] = useState(0);
 
   // Sub-Second Zero-Latency & Dynamic Bitrate Switcher State
-  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl ? "webrtc" : "ll-hls");
+  const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
+  const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl && !isEdgeRelay ? "webrtc" : "ll-hls");
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
-  const [latencyMs, setLatencyMs] = useState<number>(whepUrl ? 280 : 1200);
+  const [latencyMs, setLatencyMs] = useState<number>(whepUrl && !isEdgeRelay ? 280 : 1200);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -182,20 +183,20 @@ export function HlsPlayer({
       if (Hls.isSupported()) {
         try {
           hls = new Hls({
-            lowLatencyMode: true,
-            backBufferLength: 2,
-            maxBufferLength: 4,
-            maxMaxBufferLength: 6,
-            startPosition: -1, // Start directly at the live edge to eliminate startup lag
-            liveSyncDuration: 1.5,
-            liveMaxLatencyDuration: 3.5,
-            maxLiveSyncPlaybackRate: 1.3,
+            lowLatencyMode: false,
+            backBufferLength: 10,
+            maxBufferLength: 10,
+            maxMaxBufferLength: 20,
+            startPosition: -1, // Start directly at the live edge
+            liveSyncDuration: 3,
+            liveMaxLatencyDuration: 6,
+            maxLiveSyncPlaybackRate: 1.2,
             liveDurationInfinity: true,
-            highBufferWatchdogPeriod: 1,
-            fragLoadingTimeOut: 10_000,
-            fragLoadingMaxRetry: 4,
-            manifestLoadingTimeOut: 10_000,
-            manifestLoadingMaxRetry: 4,
+            highBufferWatchdogPeriod: 2,
+            fragLoadingTimeOut: 15_000,
+            fragLoadingMaxRetry: 6,
+            manifestLoadingTimeOut: 15_000,
+            manifestLoadingMaxRetry: 6,
             // Fix: MediaMTX fMP4 playlists may omit EXT-X-PROGRAM-DATE-TIME,
             // causing hls.js to throw 'Cannot read properties of undefined (reading programDateTime)'
             xhrSetup: (xhr, requestUrl) => {
@@ -215,43 +216,46 @@ export function HlsPlayer({
             if (typeof hls?.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition) && hls.liveSyncPosition > 0) {
               try { video.currentTime = hls.liveSyncPosition; } catch {}
             }
-            void video.play().catch(() => undefined);
+            void video.play().catch((err) => {
+              console.warn("[HlsPlayer] Autoplay deferred or blocked:", err);
+            });
           });
 
           hls.on(Hls.Events.ERROR, (_event, data) => {
             const statusCode = data.response?.code;
-            // A live fragment can disappear while a relay request is in flight.
-            // Reload the live playlist instead of permanently blacking out the tile.
-            if (statusCode === 404 || statusCode === 429 || (statusCode && statusCode >= 500)) {
-              try { hls?.stopLoad(); } catch {}
-              recover(`http_${statusCode}`);
-              return;
-            }
-            if (statusCode && statusCode >= 400) {
-              const message = statusCode === 404 ? "Camera stream not found" : `Camera stream unavailable (${statusCode})`;
-              setPlayerError(message);
-              return;
-            }
+
+            // Non-fatal errors: in live streaming, a dropped or late fragment should NEVER abort playback.
+            // hls.js will automatically advance to the next live fragment.
             if (!data.fatal) {
-              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR && data.response?.code === 0) {
-                hls?.startLoad(-1);
+              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                // Fragment 404 or drop: let hls.js advance to the next live segment
+                return;
               }
               return;
             }
+
+            // Fatal Network Error handling:
             if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-              if (data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR) {
-                if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-                  recoveryAttempts += 1;
-                  lastProgressAt = Date.now();
-                  hls?.startLoad(-1);
-                  return;
-                }
+              if (statusCode === 404 && (data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR || data.details === Hls.ErrorDetails.LEVEL_LOAD_ERROR)) {
+                recover("manifest_404");
+                return;
+              }
+              if (recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
+                recoveryAttempts += 1;
+                lastProgressAt = Date.now();
+                try { hls?.startLoad(); } catch {}
+                return;
               }
             }
+
+            // Fatal Media Error handling (decoding/codec):
             if (data.type === Hls.ErrorTypes.MEDIA_ERROR && recoveryAttempts < MAX_RECOVERY_ATTEMPTS) {
-              recover("media_error");
+              recoveryAttempts += 1;
+              try { hls?.recoverMediaError(); } catch {}
+              lastProgressAt = Date.now();
               return;
             }
+
             recover("hls_error");
           });
 
@@ -442,11 +446,19 @@ export function HlsPlayer({
     };
     const handleProgress = () => { lastProgressAt = Date.now(); };
     const handleCanPlay = () => { void video.play().catch(() => undefined); };
+    const handleLoadedData = () => {
+      markProgress();
+      if (video.paused) {
+        void video.play().catch(() => undefined);
+      }
+    };
 
     video.addEventListener("playing", markProgress);
     video.addEventListener("timeupdate", markProgress);
     video.addEventListener("progress", handleProgress);
     video.addEventListener("canplay", handleCanPlay);
+    video.addEventListener("loadeddata", handleLoadedData);
+    video.addEventListener("loadedmetadata", handleLoadedData);
     video.addEventListener("waiting", handleWaiting);
     video.addEventListener("stalled", handleWaiting);
     video.addEventListener("error", handleVideoError);
@@ -516,6 +528,8 @@ export function HlsPlayer({
       video.removeEventListener("timeupdate", markProgress);
       video.removeEventListener("progress", handleProgress);
       video.removeEventListener("canplay", handleCanPlay);
+      video.removeEventListener("loadeddata", handleLoadedData);
+      video.removeEventListener("loadedmetadata", handleLoadedData);
       video.removeEventListener("waiting", handleWaiting);
       video.removeEventListener("stalled", handleWaiting);
       video.removeEventListener("error", handleVideoError);
@@ -536,7 +550,15 @@ export function HlsPlayer({
   const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-slate-950" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}>
+    <div
+      className="relative h-full w-full overflow-hidden bg-slate-950 cursor-pointer"
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+      onClick={() => {
+        if (videoRef.current && videoRef.current.paused) {
+          void videoRef.current.play().catch(() => undefined);
+        }
+      }}
+    >
       {isSnapshotFeed ? (
         <img
           src={snapshotSource(url, bearerToken, retryNonce)}
@@ -561,6 +583,7 @@ export function HlsPlayer({
           className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
           aria-label={`Live video from ${cameraName}`}
           muted={muted}
+          defaultMuted={muted}
           playsInline
           autoPlay
         />
