@@ -525,14 +525,14 @@ export class MindSenseDeEscalationService {
    */
   private generateAvoidPhrases(situationType: SituationType, emotionalState: any): string[] {
     return [
-      "Calm down" or "Relax" (invalidating),
-      "You're overreacting" (dismissive),
-      "This is your fault" (blaming),
-      "You need to..." (commanding),
-      "I don't have time for this" (dismissive),
-      "You're being ridiculous" (insulting),
-      "Just do what I say" (authoritarian),
-      "It's not that bad" (minimizing),
+      "Calm down or Relax (invalidating)",
+      "You're overreacting (dismissive)",
+      "This is your fault (blaming)",
+      "You need to... (commanding)",
+      "I don't have time for this (dismissive)",
+      "You're being ridiculous (insulting)",
+      "Just do what I say (authoritarian)",
+      "It's not that bad (minimizing)",
     ];
   }
 
