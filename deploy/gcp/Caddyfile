@@ -87,10 +87,15 @@ http://34.14.220.41, :80 {
         }
     }
 
-    handle /ws/* {
+    @ws {
+        path /ws /ws/*
+    }
+    handle @ws {
         reverse_proxy control-plane:8080 {
-            header_up Upgrade {>Upgrade}
-            header_up Connection {>Connection}
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto https
+            flush_interval -1
         }
     }
 

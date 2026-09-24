@@ -9,6 +9,7 @@ import { CloudflareTunnelManager } from "./platform/cloudflare-tunnel-manager.js
 import { getEventBus } from "./infrastructure/event-bus/event-bus.js";
 import { initializeTelemetry } from "./observability/telemetry.js";
 import { applicationBootstrap } from "./bootstrap/index.js";
+import { initWebSocketService } from "./services/websocket-service.js";
 
 await initializeTelemetry();
 const config = loadConfig();
@@ -113,9 +114,13 @@ const app = await buildApp({
     : {}),
 });
 
+let wsService: ReturnType<typeof initWebSocketService> | undefined;
+
 try {
   await app.listen({ host: config.HOST, port: config.PORT });
   console.log(`✓ Control plane listening on ${config.HOST}:${config.PORT}`);
+  wsService = initWebSocketService(app.server, store, app.log);
+  console.log('✓ WebSocket service initialized on /ws');
 } catch (error) {
   console.error('✗ FATAL: Failed to start server');
   app.log.error(error);
@@ -135,6 +140,10 @@ const gracefulShutdown = async (signal: string) => {
   }, 10000);
 
   try {
+    if (wsService) {
+      console.log("  - Shutting down WebSocket service...");
+      await wsService.shutdown().catch(() => {});
+    }
     console.log("  - Draining active HTTP connections...");
     await app.close();
     console.log("  - Closing event bus connections...");
