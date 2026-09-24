@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getSocket } from "@/lib/socket";
+import { io, Socket } from "socket.io-client";
 
 export interface ActiveIntervention {
   id: string;
   cameraId: string;
-  type: "siren" | "strobe" | "floodlight" | "door_unlock";
+  type: "siren" | "strobe" | "floodlight" | "door_unlock" | "dual";
   mode?: string;
   state: "active" | "completed" | "cancelled";
   durationSeconds: number;
@@ -43,7 +43,13 @@ export function useCameraInterventions(cameraId?: string) {
     void fetchInterventions();
 
     // Setup WebSocket listener
-    const socket = getSocket();
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "";
+    const socket: Socket = io(wsUrl || undefined, {
+      path: "/ws",
+      transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 10,
+    });
     const handleInterventionUpdate = (event: ActiveIntervention) => {
       setActiveInterventions((prev) => {
         const next = { ...prev };
@@ -75,6 +81,7 @@ export function useCameraInterventions(cameraId?: string) {
 
     return () => {
       socket.off("camera:intervention:updated", handleInterventionUpdate);
+      socket.disconnect();
       clearInterval(interval);
     };
   }, [fetchInterventions]);
