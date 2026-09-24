@@ -675,7 +675,7 @@ export class CameraRepository {
     return result.rowCount ? this.findById(cleanId) : undefined;
   }
 
-  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view"): Promise<LiveSession> {
     const cleanCameraId = normalizeCameraUuid(cameraId);
     const camera = await this.findById(cleanCameraId);
     const targetCameraId = camera?.id ?? cleanCameraId;
@@ -790,7 +790,7 @@ export class CameraRepository {
       tenant_id: string;
       connection_secret_ref: string;
       profiles: CameraProfile[];
-      purpose: "view" | "talk";
+      purpose: "view" | "talk" | "playback";
       vendor: Camera["vendor"];
       model: string;
       protocol: Camera["protocol"];

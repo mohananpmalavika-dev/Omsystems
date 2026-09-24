@@ -13,6 +13,7 @@ import { logger } from "../utils/logger.js";
 import { TalkSessionRegistry } from "../talkback/talk-session-registry.js";
 import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
 import { startManagedMediaRelay } from "./managed-media-relay.js";
+import { deviceArchivePlaybackUri, searchDeviceArchive } from "../monitoring/recorder-probe.js";
 
 interface MediaRouter {
   ensurePath(path: string, sourceUri: string): Promise<void>;
@@ -216,6 +217,7 @@ export class EdgeLiveGateway {
     const url = new URL(request.url ?? "/", "http://edge.local");
     const isBrowserMediaRoute = url.pathname === "/v1/live/start"
       || url.pathname.startsWith("/v1/live/")
+      || url.pathname.startsWith("/v1/storage/")
       || url.pathname === "/v1/talk/start"
       || url.pathname.startsWith("/v1/talk/");
     if (isBrowserMediaRoute) {
@@ -237,6 +239,59 @@ export class EdgeLiveGateway {
     if (["GET", "POST", "PATCH", "DELETE", "OPTIONS"].includes(request.method ?? "") && url.pathname.startsWith("/webrtc/")) {
       return this.proxyWebRtc(request, response);
     }
+    if (request.method === "POST" && (url.pathname === "/v1/storage/search" || url.pathname === "/v1/storage/play")) {
+      const body = await readJsonBody(request);
+      if (typeof body.controlPlaneToken !== "string" || body.controlPlaneToken.length < 32) {
+        return sendJson(response, 400, { error: "invalid_request" });
+      }
+      const from = new Date(String(body.from ?? ""));
+      const to = new Date(String(body.to ?? ""));
+      const span = to.getTime() - from.getTime();
+      const maxSpan = url.pathname.endsWith("/play") ? 10 * 60_000 : 31 * 86_400_000;
+      if (!Number.isFinite(span) || span <= 0 || span > maxSpan) {
+        return sendJson(response, 400, { error: "invalid_storage_range" });
+      }
+      const consumed = await this.options.consumer.consume(body.controlPlaneToken);
+      if (consumed.purpose !== "playback") return sendJson(response, 403, { error: "recording_access_required" });
+      const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
+      if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
+      let source: URL;
+      try { source = new URL(sourceUri); }
+      catch { return sendJson(response, 409, { error: "camera_connection_invalid" }); }
+      const vendor = consumed.vendor === "hikvision" ? "hikvision"
+        : consumed.vendor === "dahua" ? "dahua"
+          : consumed.vendor === "cp-plus" ? "cp-plus" : "onvif";
+      const cameraConfig = {
+        host: source.hostname,
+        port: Number(body.httpPort) || (source.protocol === "rtsps:" ? 443 : 80),
+        secure: source.protocol === "rtsps:",
+        rtspPort: Number(source.port) || 554,
+        username: decodeURIComponent(source.username),
+        password: decodeURIComponent(source.password),
+        vendor,
+      } as const;
+      const channel = consumed.recorderChannel ?? consumed.channel ?? 1;
+      if (!cameraConfig.username || !cameraConfig.password) {
+        return sendJson(response, 409, { error: "camera_credentials_unavailable" });
+      }
+      if (url.pathname === "/v1/storage/search") {
+        try {
+          const clips = await searchDeviceArchive(cameraConfig, from, to, 10_000, channel);
+          return sendJson(response, 200, { cameraId: consumed.cameraId, clips });
+        } catch (error) {
+          return sendJson(response, 502, { error: error instanceof Error ? error.message : "camera_archive_search_failed" });
+        }
+      }
+      const uri = deviceArchivePlaybackUri(cameraConfig, from, to, channel);
+      if (!uri) return sendJson(response, 409, { error: "camera_archive_playback_unsupported" });
+      const path = `camera-archive-${safeIdentifier(consumed.cameraId)}-${randomUUID()}`;
+      await this.options.router.ensurePath(path, uri);
+      const session = this.access.issue(path);
+      return sendJson(response, 201, {
+        cameraId: consumed.cameraId, sessionId: session.id, expiresAt: session.expiresAt,
+        hls: { url: `${stripSlash(this.options.publicBaseUrl())}/hls/${path}/index.m3u8`, bearerToken: session.token },
+      });
+    }
     if (request.method === "POST" && url.pathname === "/v1/live/start") {
       try {
         const body = await readJsonBody(request);
@@ -244,7 +299,7 @@ export class EdgeLiveGateway {
           return sendJson(response, 400, { error: "invalid_request" });
         }
         const consumed = await this.options.consumer.consume(body.controlPlaneToken);
-        if (consumed.purpose === "talk") return sendJson(response, 403, { error: "invalid_live_session" });
+        if (consumed.purpose && consumed.purpose !== "view") return sendJson(response, 403, { error: "invalid_live_session" });
         const sourceUri = this.options.resolveSecret(consumed.connectionSecretRef);
         if (!sourceUri) return sendJson(response, 503, { error: "stream_secret_unavailable" });
         if (!isAllowedIngestSource(sourceUri, this.options.allowSrtIngest ?? false, this.options.allowMulticastIngest ?? false)) {

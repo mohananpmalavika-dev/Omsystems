@@ -2547,7 +2547,7 @@ export class MemoryStore {
     return camera;
   }
 
-  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" = "view"): Promise<LiveSession> {
+  async createLiveSession(cameraId: string, userId: string, purpose: "view" | "talk" | "playback" = "view"): Promise<LiveSession> {
     const camera = this.cameras.get(cameraId);
     const mediaGatewayUrl = camera?.edgeAgentId
       ? this.edgeAgents.get(camera.edgeAgentId)?.publicMediaUrl

@@ -143,8 +143,8 @@ export interface ConsumedLiveSession {
   tenantId: string;
   connectionSecretRef: string;
   profiles: Array<{ name: string; codec: string; width: number; height: number }>;
-  purpose?: "view" | "talk";
-  vendor?: "hikvision" | "cp-plus" | "other";
+  purpose?: "view" | "talk" | "playback";
+  vendor?: "hikvision" | "cp-plus" | "dahua" | "other";
   model?: string;
   protocol?: "onvif-t" | "onvif-s" | "rtsp" | "vendor-adapter";
   sourceType?: "ip-camera" | "analog-dvr-channel" | "nvr-channel";

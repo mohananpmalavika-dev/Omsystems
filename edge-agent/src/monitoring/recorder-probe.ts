@@ -138,6 +138,60 @@ export async function probeCameraMemoryCard(
   return family === "hikvision-isapi" ? parseHikvisionDisks(body) : parseCgiDisks(body);
 }
 
+export async function searchDeviceArchive(
+  config: Pick<RecorderConfig, "host" | "port" | "secure" | "username" | "password" | "vendor">,
+  from: Date,
+  to: Date,
+  timeoutMs: number,
+  channel = 1,
+): Promise<Array<{ startTime: string; endTime: string }>> {
+  const family = recorderApiFamily(config);
+  if (family !== "hikvision-isapi" && family !== "dahua-cgi") throw new Error("camera_archive_search_unsupported");
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) ||
+      to <= from || to.getTime() - from.getTime() > 31 * 86_400_000) throw new Error("invalid_archive_range");
+  const credentials = config.username
+    ? { username: config.username, password: config.password ?? "" }
+    : undefined;
+  const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
+  const result = family === "hikvision-isapi"
+    ? await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
+    : await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
+  if (!result.coverageComplete) throw new Error(result.reasonCodes[0] ?? "camera_archive_search_incomplete");
+  return result.segments
+    .filter((segment) => segment.endedAt > segment.startedAt)
+    .sort((left, right) => left.startedAt - right.startedAt)
+    .flatMap((segment) => {
+      const clips: Array<{ startTime: string; endTime: string }> = [];
+      for (let start = Math.max(segment.startedAt, from.getTime()); start < Math.min(segment.endedAt, to.getTime()); start += 10 * 60_000) {
+        clips.push({
+          startTime: new Date(start).toISOString(),
+          endTime: new Date(Math.min(start + 10 * 60_000, segment.endedAt, to.getTime())).toISOString(),
+        });
+      }
+      return clips;
+    });
+}
+
+export function deviceArchivePlaybackUri(
+  config: Pick<RecorderConfig, "host" | "rtspPort" | "username" | "password" | "vendor">,
+  from: Date,
+  to: Date,
+  channel = 1,
+): string | undefined {
+  if (!config.username || !config.password) return undefined;
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) ||
+      to <= from || to.getTime() - from.getTime() > 10 * 60_000) return undefined;
+  const authority = `${encodeURIComponent(config.username)}:${encodeURIComponent(config.password)}@${config.host}:${config.rtspPort ?? 554}`;
+  const family = recorderApiFamily(config);
+  if (family === "hikvision-isapi") {
+    return `rtsp://${authority}/Streaming/tracks/${hikvisionTrackId(channel)}?starttime=${compactUtc(from)}&endtime=${compactUtc(to)}`;
+  }
+  if (family === "dahua-cgi") {
+    return `rtsp://${authority}/cam/playback?channel=${channel}&subtype=0&starttime=${dahuaPlaybackTime(from)}&endtime=${dahuaPlaybackTime(to)}`;
+  }
+  return undefined;
+}
+
 export async function probeRecorder(config: RecorderConfig, timeoutMs: number, options: { includeArchive?: boolean } = {}): Promise<RecorderProbeResult> {
   const started = performance.now();
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;

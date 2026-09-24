@@ -1895,6 +1895,27 @@ export async function buildApp(options?: {
     }
   });
 
+  app.post("/v1/cameras/:id/storage-sessions", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const camera = await store.getCamera(id);
+    if (!camera) return reply.code(404).send({ error: "camera_not_found" });
+    if (!(await requireCameraActionAccess(request, reply, store, camera, "recording:view"))) {
+      await audit(request, store, "camera_storage.access_requested", camera.nodeId, "denied");
+      return;
+    }
+    try {
+      const session = await store.createLiveSession(camera.id, request.currentUser.id, "playback");
+      await audit(request, store, "camera_storage.access_requested", camera.nodeId, "success", { sessionId: session.id });
+      return reply.code(201).send(session);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (message === "edge_agent_not_found" || message === "edge_agent_offline") {
+        return reply.code(503).send({ error: message });
+      }
+      throw error;
+    }
+  });
+
   app.post("/v1/cameras/:id/talk-sessions", async (request, reply) => {
     const { id } = idParams.parse(request.params);
     const camera = await store.getCamera(id);

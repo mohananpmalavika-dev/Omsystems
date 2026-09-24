@@ -959,7 +959,7 @@ export interface LiveSession {
   expiresAt: string;
   mediaGatewayUrl?: string;
   localMediaGatewayUrl?: string;
-  purpose?: "view" | "talk";
+  purpose?: "view" | "talk" | "playback";
 }
 
 export interface ConsumedLiveSession {
@@ -970,7 +970,7 @@ export interface ConsumedLiveSession {
   tenantId: string;
   connectionSecretRef: string;
   profiles: CameraProfile[];
-  purpose?: "view" | "talk";
+  purpose?: "view" | "talk" | "playback";
   vendor?: CameraVendor;
   model?: string;
   protocol?: Camera["protocol"];

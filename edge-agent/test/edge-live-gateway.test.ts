@@ -276,6 +276,41 @@ describe("all-in-one edge live gateway", () => {
     expect(mediaAuth.status).toBe(204);
   });
 
+  it("requires a recording grant before exposing device archive playback", async () => {
+    const paths: Array<{ path: string; source: string }> = [];
+    let purpose: "view" | "playback" = "view";
+    app = buildEdgeLiveGateway({
+      consumer: { consume: async () => ({
+        id: "grant-1", cameraId: "camera-1", cameraNodeId: "node-1",
+        userId: "user-1", tenantId: "tenant-1", connectionSecretRef: "edge://agent/camera-1",
+        profiles: [], purpose, vendor: "hikvision", channel: 1,
+      }) },
+      router: {
+        ensurePath: async (path, source) => { paths.push({ path, source }); },
+        removePath: async () => undefined,
+      },
+      resolveSecret: () => "rtsp://operator:secret@192.0.2.10:554/Streaming/Channels/101",
+      publicBaseUrl: () => "https://media.example.test",
+      mediaMtxHlsUrl: "http://127.0.0.1:8888", accessTtlMs: 30_000,
+    });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const url = `http://127.0.0.1:${address.port}/v1/storage/play`;
+    const body = JSON.stringify({
+      controlPlaneToken: "t".repeat(43),
+      from: "2026-09-24T10:00:00.000Z", to: "2026-09-24T10:02:00.000Z",
+    });
+    expect((await fetch(url, { method: "POST", body })).status).toBe(403);
+    purpose = "playback";
+    const response = await fetch(url, { method: "POST", body });
+    expect(response.status).toBe(201);
+    const result = await response.json() as any;
+    expect(result.hls.url).toContain("/hls/camera-archive-camera-1-");
+    expect(paths).toHaveLength(1);
+    expect(paths[0]!.source).toContain("starttime=20260924T100000Z&endtime=20260924T100200Z");
+    expect(paths[0]!.source).toContain("operator:secret@192.0.2.10");
+    expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
   it("enforces edge authorization before proxying and rewrites private live playlists", async () => {
     let upstream: Server | undefined;
     let upstreamRequests = 0;

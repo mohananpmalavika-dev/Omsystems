@@ -1,7 +1,8 @@
 "use client";
 
+import Hls from "hls.js";
 import { AlertTriangle, CalendarClock, CheckCircle2, Clapperboard, LoaderCircle, Play, RefreshCw, Video } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { Branch, Camera, RecordingJob, RecordingSegment } from "@/lib/types";
 
@@ -27,6 +28,18 @@ type VmsView = {
   timeline: Availability<{ coverageComplete: boolean; intervals: Array<{ start: string; end: string; state: "RECORDED" | "MISSING" | "UNKNOWN"; segmentId?: string; reason?: string }> }>;
 };
 
+type DeviceClip = { startTime: string; endTime: string };
+type DevicePlayback = { hls: { url: string; bearerToken: string }; sessionId: string };
+type StorageGrant = { token: string; mediaGatewayUrl?: string; localMediaGatewayUrl?: string };
+
+function storageGatewayUrl(grant: StorageGrant, action: "search" | "play") {
+  const base = grant.mediaGatewayUrl ?? grant.localMediaGatewayUrl;
+  if (!base) throw new Error("Branch gateway is offline; camera storage cannot be reached.");
+  const parsed = new URL(base);
+  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("Invalid branch gateway address.");
+  return `${base.replace(/\/$/, "")}/v1/storage/${action}`;
+}
+
 export function RecordingWorkspace() {
   const searchParams = useSearchParams();
   const requestedBranchId = searchParams?.get("branchId") ?? "";
@@ -44,6 +57,10 @@ export function RecordingWorkspace() {
   const [selected, setSelected] = useState<RecordingSegment>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  const [deviceClips, setDeviceClips] = useState<DeviceClip[]>([]);
+  const [devicePlayback, setDevicePlayback] = useState<DevicePlayback>();
+  const [storageLoading, setStorageLoading] = useState(false);
+  const [storageError, setStorageError] = useState<string>();
 
   useEffect(() => {
     void fetch("/api/branches", { credentials: "include" })
@@ -69,6 +86,7 @@ export function RecordingWorkspace() {
         setCameras(body.data);
         setCameraId(body.data.some((camera) => camera.id === requestedCameraId) ? requestedCameraId : body.data[0]?.id ?? "");
         setSegments([]); setSelected(undefined); setHealth([]); setJob(undefined); setVms(undefined);
+        setDeviceClips([]); setDevicePlayback(undefined); setStorageError(undefined);
       })
       .catch(() => setError("Cameras for this branch are unavailable."));
   }, [branchId, requestedCameraId]);
@@ -107,6 +125,50 @@ export function RecordingWorkspace() {
       setSelected((current) => current && playback.segments.some((item) => item.id === current.id) ? current : playback.segments.find((item) => item.status === "ready"));
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Recording data could not be loaded. Check recorder and access permissions."); }
     finally { setLoading(false); }
+  };
+
+  const requestStorageGrant = async (): Promise<StorageGrant> => {
+    const response = await fetch(`/api/control/v1/cameras/${encodeURIComponent(cameraId)}/storage-sessions`, { method: "POST" });
+    if (!response.ok) throw new Error("Recording access or branch gateway is unavailable.");
+    return response.json() as Promise<StorageGrant>;
+  };
+
+  const loadDeviceArchive = async () => {
+    if (!cameraId) return;
+    setStorageLoading(true); setStorageError(undefined); setDevicePlayback(undefined);
+    try {
+      const fromIso = new Date(from).toISOString();
+      const toIso = new Date(to).toISOString();
+      const grant = await requestStorageGrant();
+      const response = await fetch(storageGatewayUrl(grant, "search"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ controlPlaneToken: grant.token, from: fromIso, to: toIso }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "Device archive search failed.");
+      setDeviceClips(Array.isArray(body.clips) ? body.clips : []);
+    } catch (reason) {
+      setDeviceClips([]);
+      setStorageError(reason instanceof Error ? reason.message : "Device archive search failed.");
+    } finally { setStorageLoading(false); }
+  };
+
+  const playDeviceClip = async (clip: DeviceClip) => {
+    setStorageLoading(true); setStorageError(undefined); setDevicePlayback(undefined);
+    try {
+      const grant = await requestStorageGrant();
+      const response = await fetch(storageGatewayUrl(grant, "play"), {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ controlPlaneToken: grant.token, from: clip.startTime, to: clip.endTime }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.hls?.url || !body.hls?.bearerToken) {
+        throw new Error(body.error ?? "Device playback is unavailable.");
+      }
+      setDevicePlayback(body as DevicePlayback);
+    } catch (reason) {
+      setStorageError(reason instanceof Error ? reason.message : "Device playback is unavailable.");
+    } finally { setStorageLoading(false); }
   };
 
   const recordingState = vms?.recordingStatus.state === "AVAILABLE"
@@ -158,9 +220,59 @@ export function RecordingWorkspace() {
         </article>
       </section>
 
+      <section className="recording-content" aria-label="Camera and recorder storage">
+        <article className="recording-player-card">
+          <div className="recording-section-heading"><div><Clapperboard size={18} /><h2>Camera SD card / recorder HDD</h2></div></div>
+          <p>Browse footage stored on the device for the selected time range.</p>
+          <button className="primary-button" onClick={() => void loadDeviceArchive()} disabled={!cameraId || storageLoading}>
+            {storageLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Search device storage
+          </button>
+          {storageError && <div className="error-banner"><AlertTriangle size={17} />{storageError}</div>}
+          {devicePlayback && <DeviceArchivePlayer playback={devicePlayback} />}
+        </article>
+        <article className="recording-segment-card">
+          <div className="recording-section-heading"><div><Play size={18} /><h2>Device clips</h2></div><span>{deviceClips.length}</span></div>
+          <div className="segment-list">{deviceClips.length === 0
+            ? <div className="recording-empty"><span>No device clips loaded for this range.</span></div>
+            : deviceClips.map((clip, index) => <button key={`${clip.startTime}-${index}`} className="segment-row" onClick={() => void playDeviceClip(clip)} disabled={storageLoading}>
+              <span className="segment-status ready" /><span><strong>{formatTime(clip.startTime)}</strong><small>{formatTime(clip.endTime)}</small></span><Play size={16} />
+            </button>)}</div>
+        </article>
+      </section>
+
       <section className="recording-health-card"><div className="recording-section-heading"><div><AlertTriangle size={18} /><h2>Recorder events</h2></div><span>Latest 20</span></div>{health.length === 0 ? <div className="recording-empty"><CheckCircle2 size={25} /><span>No recorder events reported for this camera.</span></div> : <div className="health-list">{health.map((event) => <article key={event.id} className={`health-row ${event.severity}`}><span>{event.severity}</span><div><strong>{event.message}</strong><small>{event.eventType} · {formatTime(event.occurredAt)}</small></div></article>)}</div>}</section>
     </main>
   );
+}
+
+function DeviceArchivePlayer({ playback }: { playback: DevicePlayback }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    setError(undefined);
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        lowLatencyMode: false, startPosition: 0,
+        xhrSetup: (xhr) => xhr.setRequestHeader("Authorization", `Bearer ${playback.hls.bearerToken}`),
+      });
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) setError("Device playback stream failed.");
+      });
+      hls.loadSource(playback.hls.url);
+      hls.attachMedia(video);
+      return () => hls.destroy();
+    }
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      const url = new URL(playback.hls.url);
+      url.searchParams.set("token", playback.hls.bearerToken);
+      video.src = url.toString();
+      return () => { video.removeAttribute("src"); video.load(); };
+    }
+    setError("This browser cannot play HLS device footage.");
+  }, [playback]);
+  return <div>{error && <div className="error-banner">{error}</div>}<video ref={videoRef} className="recording-player" controls playsInline preload="metadata" /></div>;
 }
 
 function toLocalInput(value: number) { const date = new Date(value - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); }

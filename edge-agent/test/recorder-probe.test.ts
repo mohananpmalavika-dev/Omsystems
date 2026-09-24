@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderApiFamily, recorderPlaybackUri } from "../src/monitoring/recorder-probe.js";
+import { deviceArchivePlaybackUri, looksLikeRecorder, probeCameraMemoryCard, probeRecorder, recorderApiFamily, recorderPlaybackUri, searchDeviceArchive } from "../src/monitoring/recorder-probe.js";
 
 describe("vendor recorder probes", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -24,6 +24,37 @@ describe("vendor recorder probes", () => {
     }, 1000);
     expect(fetcher.mock.calls[0]?.[0]).toContain("/ISAPI/ContentMgmt/Storage");
     expect(cards).toEqual([expect.objectContaining({ capacity: "128GB", freeSpace: "32GB" })]);
+  });
+
+  it("lists actual device archive intervals and builds channel-specific replay URLs", async () => {
+    const from = new Date("2026-09-24T10:00:00.000Z");
+    const to = new Date("2026-09-24T10:05:00.000Z");
+    const fetcher = vi.fn().mockResolvedValue(new Response(
+      `<CMSearchResult><numOfMatches>1</numOfMatches><matchList><searchMatchItem><trackID>201</trackID><timeSpan><startTime>2026-09-24T10:01:00.000Z</startTime><endTime>2026-09-24T10:03:00.000Z</endTime></timeSpan></searchMatchItem></matchList></CMSearchResult>`,
+    ));
+    vi.stubGlobal("fetch", fetcher);
+    const config = { host: "192.0.2.20", port: 80, vendor: "hikvision" as const, username: "operator", password: "secret" };
+    const clips = await searchDeviceArchive(config, from, to, 1000, 2);
+    expect(clips).toEqual([{ startTime: "2026-09-24T10:01:00.000Z", endTime: "2026-09-24T10:03:00.000Z" }]);
+    expect(fetcher.mock.calls[0]?.[1]?.body).toContain("<trackID>201</trackID>");
+    expect(deviceArchivePlaybackUri(config, from, to, 2)).toContain("/Streaming/tracks/201?starttime=20260924T100000Z");
+  });
+
+  it("lists Dahua-family recorder footage for the mapped channel", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response("object=4"))
+      .mockResolvedValueOnce(new Response("OK"))
+      .mockResolvedValueOnce(new Response("found=1\nitems[0].Channel=2\nitems[0].StartTime=2026-09-24 10:00:00\nitems[0].EndTime=2026-09-24 10:02:00"))
+      .mockResolvedValueOnce(new Response("found=0"))
+      .mockResolvedValueOnce(new Response("OK"));
+    vi.stubGlobal("fetch", fetcher);
+    const config = { host: "192.0.2.22", port: 80, vendor: "cp-plus" as const, username: "operator", password: "secret" };
+    const from = new Date("2026-09-24T10:00:00.000Z");
+    const to = new Date("2026-09-24T10:05:00.000Z");
+    const clips = await searchDeviceArchive(config, from, to, 1000, 2);
+    expect(clips).toHaveLength(1);
+    expect(fetcher.mock.calls[1]?.[0]).toContain("condition.Channel=2");
+    expect(deviceArchivePlaybackUri(config, from, to, 2)).toContain("/cam/playback?channel=2");
   });
 
   it("builds vendor playback probes without exposing them to the control plane", () => {

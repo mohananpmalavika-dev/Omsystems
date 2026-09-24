@@ -46,7 +46,7 @@ export class TalkSessionRegistry {
     try {
       connection = await this.opener({
         sourceUri,
-        ...(consumed.vendor ? { vendor: consumed.vendor } : {}),
+        ...(consumed.vendor ? { vendor: consumed.vendor === "dahua" ? "other" as const : consumed.vendor } : {}),
         ...(consumed.model ? { model: consumed.model } : {}),
         ...(consumed.channel !== undefined ? { channel: consumed.channel } : {}),
         ...(consumed.recorderChannel !== undefined ? { recorderChannel: consumed.recorderChannel } : {}),
