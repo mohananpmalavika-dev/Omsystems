@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DetectionFrame, InferenceObject } from "../src/detectors/base-detector.js";
 import { SmokeFireDetector } from "../src/detectors/smoke-fire-detector.js";
 import { HelmetDetector } from "../src/detectors/helmet-detector.js";
@@ -45,7 +45,7 @@ describe("local specialty model adapters", () => {
     expect(detector.getHealth().status).toBe("healthy");
   });
 
-  it("combines local head inference with tracked rider objects for no-helmet detection", async () => {
+  it("does not turn a visible rider head into a helmet-worn alert", async () => {
     const detector = new HelmetDetector({
       run: async () => [object("head", 0.94, { x: 0.18, y: 0.11, width: 0.12, height: 0.1 })],
     });
@@ -54,7 +54,7 @@ describe("local specialty model adapters", () => {
       object("person", 0.95, { x: 0.1, y: 0.1, width: 0.4, height: 0.8 }),
       object("motorcycle", 0.91, { x: 0.1, y: 0.45, width: 0.5, height: 0.45 }),
     ]));
-    expect(results).toEqual(expect.arrayContaining([expect.objectContaining({ detectionType: "no-helmet", requiresAlert: true })]));
+    expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
     expect(detector.getHealth().status).toBe("healthy");
   });
 
@@ -88,7 +88,7 @@ describe("local specialty model adapters", () => {
     ]));
   });
 
-  it("classifies a rider head crop with the local safety-helmet model", async () => {
+  it("does not turn a rider without a helmet into a helmet-worn alert", async () => {
     const run = async () => ({
       wearingHelmet: false,
       confidence: 0.93,
@@ -102,9 +102,7 @@ describe("local specialty model adapters", () => {
       object("motorcycle", 0.91, { x: 0.1, y: 0.45, width: 0.5, height: 0.45 }),
     ]));
 
-    expect(results).toEqual(expect.arrayContaining([
-      expect.objectContaining({ detectionType: "no-helmet", confidence: expect.closeTo(0.93) }),
-    ]));
+    expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
     expect(detector.getHealth().status).toBe("healthy");
   });
 
@@ -126,6 +124,60 @@ describe("local specialty model adapters", () => {
     expect(results.filter(r => r.detectionType === "no-helmet")).toHaveLength(0);
     expect(results.filter(r => r.detectionType === "helmet-worn")).toHaveLength(0);
     expect(results.filter(r => r.detectionType === "helmet")).toHaveLength(0);
+  });
+
+  it("rejects a low-confidence helmet classification for an indoor person", async () => {
+    const detector = new HelmetDetector(null, 0.7, {
+      run: async () => ({
+        wearingHelmet: true,
+        confidence: 0.9,
+        wearingHelmetConfidence: 0.9,
+        unwearingHelmetConfidence: 0.1,
+      }),
+    });
+    await detector.initialize();
+
+    const results = await detector.detect(frame([object("person", 0.95)]));
+
+    expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
+  });
+
+  it("requires the upper-body and head crops to agree before alerting", async () => {
+    const run = vi.fn()
+      .mockResolvedValueOnce({
+        wearingHelmet: true,
+        confidence: 0.98,
+        wearingHelmetConfidence: 0.98,
+        unwearingHelmetConfidence: 0.02,
+      })
+      .mockResolvedValueOnce({
+        wearingHelmet: false,
+        confidence: 0.97,
+        wearingHelmetConfidence: 0.03,
+        unwearingHelmetConfidence: 0.97,
+      });
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+
+    const results = await detector.detect(frame([object("person", 0.95)]));
+
+    expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
+  });
+
+  it("does not classify the full frame when no person was detected", async () => {
+    const run = vi.fn(async () => ({
+      wearingHelmet: true,
+      confidence: 0.99,
+      wearingHelmetConfidence: 0.99,
+      unwearingHelmetConfidence: 0.01,
+    }));
+    const detector = new HelmetDetector(null, 0.7, { run });
+    await detector.initialize();
+
+    const results = await detector.detect(frame());
+
+    expect(results.filter((result) => result.detectionType === "helmet-worn")).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
   });
 
   it("does NOT trigger helmet-worn inside bank when motorcycle rider outdoors wears a helmet", async () => {

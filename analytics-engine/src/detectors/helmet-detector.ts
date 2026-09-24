@@ -27,6 +27,10 @@ export class HelmetDetector extends BaseDetector {
   private modelLoadError: string | null = null;
   private readonly MIN_CONFIDENCE: number;
   private readonly HEAD_REGION_OVERLAP_THRESHOLD = 0.6;
+  // PaddleClas recommends 0.9167 for the safety-helmet classifier when a
+  // low false-positive rate is required. A helmet-worn security alert should
+  // never use the generic detector's lower object-presence threshold.
+  private readonly HELMET_WORN_ALERT_CONFIDENCE = 0.9167;
 
   constructor(
     inference: ObjectFrameInference | null = null,
@@ -86,7 +90,10 @@ export class HelmetDetector extends BaseDetector {
     const results: DetectionResult[] = [];
 
     // Alert ONLY when helmet is detected / present (no-helmet alert disabled as requested)
-    const helmetWearers = detections.filter(d => d.helmetDetected);
+    // A helmeted motorcycle/bicycle rider is compliant, not a person wearing
+    // a helmet inside the facility. Only unmatched (indoor) persons can raise
+    // this alert.
+    const helmetWearers = detections.filter(d => d.helmetDetected && !d.vehicleType);
     if (helmetWearers.length > 0) {
       const avgConf = this.calculateAverageConfidence(helmetWearers);
       const effectiveConf = avgConf ?? 0.85;
@@ -192,23 +199,10 @@ export class HelmetDetector extends BaseDetector {
       }
       // 2. If classifier is available, run local safety-helmet model
       if (runLocal && this.classifier) {
-        const classified = await this.classifyPersonHelmetCompliance(frame, person);
+        const classified = await this.classifyIndoorHelmetPresence(frame, person);
         if (classified.helmetDetected) {
           indoorHelmetDetections.push(classified);
         }
-      }
-    }
-
-    if (riderMatches.length === 0 && indoorPersons.length === 0 && runLocal && this.classifier) {
-      // Fallback: evaluate frame when safety helmet rules are active but base detector missed seated/occluded person
-      const fullFrameClassification = await this.classifier.run(frame, { x: 0, y: 0, width: 1, height: 1 });
-      if (fullFrameClassification.wearingHelmet && fullFrameClassification.confidence >= 0.75) {
-        return [{
-          personBoundingBox: { x: 0, y: 0, width: 1, height: 1 },
-          helmetDetected: true,
-          confidence: fullFrameClassification.confidence,
-          riskLevel: "violation",
-        }];
       }
     }
 
@@ -344,22 +338,50 @@ export class HelmetDetector extends BaseDetector {
     };
   }
 
-  private async classifyPersonHelmetCompliance(
+  private async classifyIndoorHelmetPresence(
     frame: DetectionFrame,
     person: any,
   ): Promise<HelmetDetection> {
     const personBox = person.boundingBox;
-    const classification = await this.bestHelmetClassification(frame, personBox);
-    const helmetDetected = classification.wearingHelmet && classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.75);
+    const { upperResult, standardResult } = await this.helmetClassifications(frame, personBox);
+    const alertThreshold = Math.max(this.MIN_CONFIDENCE, this.HELMET_WORN_ALERT_CONFIDENCE);
+
+    // Require two independently cropped views to agree. Previously the most
+    // optimistic crop won, so hair, caps, background objects, or a loose crop
+    // could create a helmet-worn alert on an unhelmeted person.
+    const helmetDetected = upperResult.wearingHelmet
+      && standardResult.wearingHelmet
+      && upperResult.wearingHelmetConfidence >= alertThreshold
+      && standardResult.wearingHelmetConfidence >= alertThreshold;
+    const confidence = helmetDetected
+      ? Math.min(upperResult.wearingHelmetConfidence, standardResult.wearingHelmetConfidence)
+      : Math.max(upperResult.unwearingHelmetConfidence, standardResult.unwearingHelmetConfidence);
     return {
       personBoundingBox: person.boundingBox,
       helmetDetected,
-      confidence: classification.confidence,
+      confidence,
       riskLevel: helmetDetected ? "violation" : "compliant",
     };
   }
 
   private async bestHelmetClassification(
+    frame: DetectionFrame,
+    personBox: { x: number; y: number; width: number; height: number },
+  ) {
+    const { upperResult, standardResult } = await this.helmetClassifications(frame, personBox);
+
+    // If either detects wearing a helmet, prefer the helmet detection
+    if (upperResult.wearingHelmet && (!standardResult.wearingHelmet || upperResult.confidence >= standardResult.confidence)) {
+      return upperResult;
+    }
+    if (standardResult.wearingHelmet) {
+      return standardResult;
+    }
+    // Neither detected helmet, return the more confident unwearing result
+    return standardResult.confidence > upperResult.confidence ? standardResult : upperResult;
+  }
+
+  private async helmetClassifications(
     frame: DetectionFrame,
     personBox: { x: number; y: number; width: number; height: number },
   ) {
@@ -375,16 +397,7 @@ export class HelmetDetector extends BaseDetector {
     // 2. Standard head region
     const standardHeadBox = this.headRegion(personBox);
     const standardResult = await this.classifier!.run(frame, standardHeadBox);
-
-    // If either detects wearing a helmet, prefer the helmet detection
-    if (upperResult.wearingHelmet && (!standardResult.wearingHelmet || upperResult.confidence >= standardResult.confidence)) {
-      return upperResult;
-    }
-    if (standardResult.wearingHelmet) {
-      return standardResult;
-    }
-    // Neither detected helmet, return the more confident unwearing result
-    return standardResult.confidence > upperResult.confidence ? standardResult : upperResult;
+    return { upperResult, standardResult };
   }
 
   private headRegion(personBox: { x: number; y: number; width: number; height: number }) {

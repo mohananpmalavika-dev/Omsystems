@@ -193,7 +193,7 @@ describe("analytics engine adapter", () => {
     expect(submitted[0].objects[0].trackId).toBeTruthy();
   });
 
-  it("turns specialized edge observations into a no-helmet event", async () => {
+  it("does not emit helmet-worn for a person without a helmet", async () => {
     const submitted: any[] = [];
     const app = buildAnalyticsEngine({
       sourceSharedKey: sourceKey,
@@ -208,19 +208,17 @@ describe("analytics engine adapter", () => {
         tenantId: "tenant-1", cameraId: "camera-helmet", width: 1280, height: 720,
         detections: [
           { label: "person", confidence: 0.94, boundingBox: { x: 0.2, y: 0.1, width: 0.2, height: 0.7 } },
-          { label: "motorcycle", confidence: 0.91, boundingBox: { x: 0.18, y: 0.45, width: 0.3, height: 0.3 } },
           { label: "head", confidence: 0.92, boundingBox: { x: 0.25, y: 0.12, width: 0.08, height: 0.12 } },
         ],
         rules: [{
-          id: "rule-no-helmet", cameraId: "camera-helmet", detectionType: "no-helmet",
+          id: "rule-helmet-worn", cameraId: "camera-helmet", detectionType: "helmet-worn",
           enabled: true, minConfidence: 0.65, minDurationSeconds: 0,
         }],
       },
     });
 
     expect(response.statusCode).toBe(202);
-    expect(submitted).toHaveLength(1);
-    expect(submitted[0]).toMatchObject({ detectionType: "no-helmet", cameraId: "camera-helmet" });
+    expect(submitted).toHaveLength(0);
   });
 
   it("uses the local ONNX path when frame observations are omitted", async () => {
