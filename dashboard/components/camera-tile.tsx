@@ -33,6 +33,10 @@ import {
   Tag,
   Crosshair,
   Target,
+  Lightbulb,
+  Lock,
+  Unlock,
+  Zap,
 } from "lucide-react";
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type {
@@ -58,6 +62,8 @@ import {
 import { OperatorCameraFlagModal } from "./operator-camera-flag-modal";
 import { CameraAnnotationPanel } from "./camera-annotation-panel";
 import { useLiveAnnotations } from "@/hooks/useLiveAnnotations";
+import { useCameraInterventions } from "@/hooks/useCameraInterventions";
+import { CameraInterventionModal } from "./camera-intervention-modal";
 
 function formatLiveError(reason: string) {
   const labels: Record<string, string> = {
@@ -210,8 +216,10 @@ function CameraTileComponent({
   const [showDvrScrubber, setShowDvrScrubber] = useState<boolean>(false);
   const [showFlagModal, setShowFlagModal] = useState<boolean>(false);
   const [showAnnotationPanel, setShowAnnotationPanel] = useState<boolean>(false);
+  const [showInterventionModal, setShowInterventionModal] = useState<boolean>(false);
   const { annotations: liveAnnotations } = useLiveAnnotations(camera.id);
   const activeAnnotationCount = liveAnnotations.filter((a) => !a.resolvedAt).length;
+  const { isSirenActive, isStrobeActive, isDoorUnlocked } = useCameraInterventions(camera.id);
   const { cameraFlags } = useCameraOperatorFlags(camera.id);
   const [isRecordingClip, setIsRecordingClip] = useState<boolean>(false);
   const [clipCountdown, setClipCountdown] = useState<number>(15);
@@ -1339,6 +1347,44 @@ function CameraTileComponent({
           </div>
         )}
 
+        {(isSirenActive || isDoorUnlocked || isStrobeActive) && (
+          <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 flex-wrap pointer-events-auto">
+            {isSirenActive && (
+              <button
+                type="button"
+                onClick={() => setShowInterventionModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-600/95 text-white font-mono text-[10px] font-bold shadow-lg border border-rose-400 animate-pulse cursor-pointer hover:bg-rose-500"
+                title="🚨 Acoustic Siren / Strobe Deterrence Active! Click to manage or stop"
+              >
+                <Siren size={12} className="animate-spin" />
+                <span>SIREN ACTIVE</span>
+              </button>
+            )}
+            {isDoorUnlocked && (
+              <button
+                type="button"
+                onClick={() => setShowInterventionModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600/95 text-white font-mono text-[10px] font-bold shadow-lg border border-emerald-400 animate-pulse cursor-pointer hover:bg-emerald-500"
+                title="🔓 Access Control Door Released! Click to manage"
+              >
+                <Unlock size={12} />
+                <span>DOOR UNLOCKED</span>
+              </button>
+            )}
+            {isStrobeActive && !isSirenActive && (
+              <button
+                type="button"
+                onClick={() => setShowInterventionModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/95 text-black font-mono text-[10px] font-bold shadow-lg border border-amber-300 cursor-pointer hover:bg-amber-400"
+                title="💡 White Floodlight Deterrence Active! Click to manage"
+              >
+                <Lightbulb size={12} />
+                <span>FLOODLIGHT ON</span>
+              </button>
+            )}
+          </div>
+        )}
+
         {showAiOverlay && activeAiRules.length > 0 && (
           <button
             type="button"
@@ -1430,6 +1476,30 @@ function CameraTileComponent({
             unsupportedReason={talkbackUnsupportedReason}
             onTalkingChange={handleTalkChange}
           />
+          <button
+            type="button"
+            aria-label="Direct Interventions (Siren, Strobe & Door Release)"
+            title={
+              isSirenActive
+                ? "🚨 Siren/Strobe Active! Click to manage or stop"
+                : isDoorUnlocked
+                ? "🔓 Door Unlocked! Click to manage"
+                : "⚡ Direct Operator Interventions: 110dB Edge Siren, Strobe, Floodlight & Door Release"
+            }
+            className={
+              isSirenActive
+                ? "text-rose-400 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse"
+                : isDoorUnlocked
+                ? "text-emerald-400 border-emerald-500/80 bg-emerald-950/80 shadow-[0_0_10px_rgba(16,185,129,0.5)]"
+                : showInterventionModal
+                ? "text-rose-300 border-rose-500/60 bg-rose-950/60"
+                : ""
+            }
+            onClick={() => setShowInterventionModal((prev) => !prev)}
+            disabled={!canPlayLive}
+          >
+            <Zap size={15} />
+          </button>
           <button
             type="button"
             aria-label="PTZ Click-to-Center & Box Zoom"
@@ -1857,6 +1927,14 @@ function CameraTileComponent({
           operatorName={undefined /* will default to "Operator" – pass from auth context if available */}
           isOpen={showAnnotationPanel}
           onClose={() => setShowAnnotationPanel(false)}
+        />
+      )}
+      {showInterventionModal && (
+        <CameraInterventionModal
+          cameraId={camera.id}
+          cameraName={camera.name}
+          isOpen={showInterventionModal}
+          onClose={() => setShowInterventionModal(false)}
         />
       )}
     </article>

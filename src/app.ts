@@ -115,6 +115,7 @@ import { registerBranchCommandCenterRoutes } from "./routes/branch-command-cente
 import { registerEnterpriseInfrastructureRoutes } from "./routes/enterprise-infrastructure.routes.js";
 import { registerVideoWallRoutes } from "./routes/video-wall.routes.js";
 import { registerCameraAnnotationRoutes } from "./routes/camera-annotation.routes.js";
+import { registerCameraInterventionRoutes } from "./routes/camera-intervention.routes.js";
 import { registerAlertCommandCenterRoutes } from "./routes/alert-command-center.routes.js";
 import { registerCommandCenterRoutes } from "./routes/command-center.routes.js";
 import { initializePredictiveHealthWorker } from "./workers/predictive-health-worker.js";
@@ -2597,6 +2598,7 @@ export async function buildApp(options?: {
   await registerEnterpriseInfrastructureRoutes(app, store);
   await registerVideoWallRoutes(app, store);
   await registerCameraAnnotationRoutes(app);
+  await registerCameraInterventionRoutes(app);
   await registerFederationRoutes(app, store, federationManager, {
     federationSharedKey,
     localSearchProvider: federationLocalSearchProvider,
@@ -3561,6 +3563,7 @@ export async function buildApp(options?: {
     await registerCeoScreenRoutes(app);
     await registerVideoWallRoutes(app, store);
     await registerCameraAnnotationRoutes(app);
+    await registerCameraInterventionRoutes(app);
     await registerSmartMotionSearchRoutes(app, store);
     await registerEdgeReplenishmentRoutes(app, store);
     app.log.info("Authoritative RecordingIndex, Unified Investigation Search, Enterprise Storage, Failover, ONVIF, SLO, CEO Screen, Video Wall, Smart Motion Search, Edge Replenishment, and Camera Annotations routes registered");

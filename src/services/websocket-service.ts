@@ -56,6 +56,18 @@ export interface CameraAnnotationEvent {
   action: 'create' | 'update' | 'resolve';
 }
 
+export interface CameraInterventionEvent {
+  id: string;
+  cameraId: string;
+  type: 'siren' | 'strobe' | 'floodlight' | 'door_unlock' | 'all_clear';
+  state: 'active' | 'completed' | 'cancelled';
+  durationSeconds?: number;
+  triggeredBy: string;
+  reason?: string;
+  timestamp: string;
+  expiresAt?: string;
+}
+
 export class WebSocketService {
   private io: SocketIOServer;
   private store: ControlPlaneStore;
@@ -264,6 +276,22 @@ export class WebSocketService {
       flagType: annotation.flagType,
       authorName: annotation.authorName,
       action: annotation.action,
+    });
+  }
+
+  /**
+   * Broadcast real-time direct camera intervention (siren, strobe, floodlight, door unlock)
+   */
+  broadcastCameraIntervention(tenantId: string, event: CameraInterventionEvent) {
+    this.io.to(`tenant:${tenantId}`).emit('camera:intervention:updated', event);
+    this.io.to(`camera:${event.cameraId}`).emit('camera:intervention:updated', event);
+    this.io.emit('camera:intervention:updated', event);
+    this.logger?.info?.('Camera Intervention broadcasted via WebSocket:', {
+      tenantId,
+      cameraId: event.cameraId,
+      type: event.type,
+      state: event.state,
+      triggeredBy: event.triggeredBy,
     });
   }
 
