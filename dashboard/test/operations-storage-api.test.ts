@@ -24,6 +24,41 @@ describe("Storage Operations Live API", () => {
     expect(typeof data.summary.tier3OnlineCloudCount).toBe("number");
   });
 
+  it("forwards the browser session and shows measured recorder storage", async () => {
+    const originalDatabaseUrl = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      expect((init?.headers as Record<string, string>)?.authorization).toBe("Bearer signed-in-session");
+      if (url.endsWith("/v1/operations/health/disks")) {
+        return Response.json({ success: true, data: [{
+          id: "recorder-1:disk:1", devicePath: "HDD 1", model: "Recorder HDD",
+          operationalStatus: "healthy", capacityBytes: 4_000_000_000_000,
+          usedBytes: 1_000_000_000_000, availableBytes: 3_000_000_000_000,
+        }] });
+      }
+      if (url.includes("/v1/cameras")) {
+        return Response.json({ data: [{ id: "camera-1", name: "Camera 1", recorder_id: "recorder-1" }] });
+      }
+      return Response.json({ data: [] });
+    });
+
+    try {
+      const req = new NextRequest("http://localhost:3000/api/operations/storage", {
+        headers: { cookie: "sentinel_access=signed-in-session" },
+      });
+      const res = await GET(req);
+      const data = await res.json();
+      expect(data.summary.tier2DvrHddCount).toBe(1);
+      expect(data.summary.dvrHddNode.capacity).toBe("4.0 TB");
+      expect(data.cameras[0].activeStorageTier).toBe("dvr_hdd");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      if (originalDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  });
+
   it("handles storage tier failover switch via POST", async () => {
     const postReq = new NextRequest("http://localhost:3000/api/operations/storage", {
       method: "POST",

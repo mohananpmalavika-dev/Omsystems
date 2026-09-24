@@ -129,6 +129,14 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
         if (typeof value === "string") reply.header(name, value);
       }
       reply.header("cache-control", "no-store");
+      if (response.body && (path.endsWith(".m3u8") || (response.headers?.["content-type"] && response.headers["content-type"].includes("mpegurl")))) {
+        const raw = Buffer.from(response.body, "base64").toString("utf8");
+        const sanitized = raw
+          .split("\n")
+          .filter((line) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
+          .join("\n");
+        return reply.code(response.status).send(Buffer.from(sanitized, "utf8"));
+      }
       return reply.code(response.status).send(response.body ? Buffer.from(response.body, "base64") : undefined);
     } catch (error) {
       app.log.warn({ err: error, agentId }, "Edge media relay request failed");

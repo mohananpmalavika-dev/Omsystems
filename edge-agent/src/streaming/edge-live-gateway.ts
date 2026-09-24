@@ -801,9 +801,8 @@ function isAllowedIngestSource(sourceUri: string, allowSrt: boolean, allowMultic
 }
 
 function rewriteHlsPlaylist(playlist: string, token: string): string {
-  if (!token) return playlist;
   const appendToken = (uri: string) => {
-    if (!uri || /^(?:https?:|data:)/i.test(uri)) return uri;
+    if (!token || !uri || /^(?:https?:|data:)/i.test(uri)) return uri;
     try {
       const parsed = new URL(uri, "http://edge.local");
       parsed.searchParams.set("token", token);
@@ -814,11 +813,15 @@ function rewriteHlsPlaylist(playlist: string, token: string): string {
       return `${uri}${separator}token=${encodeURIComponent(token)}`;
     }
   };
-  return playlist.split("\n").map((line) => {
-    if (!line || (line.startsWith("#") && !line.includes("URI=\""))) return line;
-    if (line.includes("URI=\"")) return line.replace(/URI=\"([^\"]+)\"/g, (_all, uri) => `URI=\"${appendToken(uri)}\"`);
-    return appendToken(line);
-  }).join("\n");
+  return playlist
+    .split("\n")
+    .filter((line) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
+    .map((line) => {
+      if (!line || (line.startsWith("#") && !line.includes("URI=\""))) return line;
+      if (line.includes("URI=\"")) return line.replace(/URI=\"([^\"]+)\"/g, (_all, uri) => `URI=\"${appendToken(uri)}\"`);
+      return appendToken(line);
+    })
+    .join("\n");
 }
 
 function startManagedProcess(name: string, executable: string, args: string[], cwd: string, environment?: NodeJS.ProcessEnv) {

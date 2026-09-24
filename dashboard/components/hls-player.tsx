@@ -182,7 +182,29 @@ export function HlsPlayer({
       const refreshedSource = sourceUrl;
       if (Hls.isSupported()) {
         try {
+          // Custom playlist loader to sanitize MediaMTX playlists before Hls.js parses them,
+          // preventing "Cannot read properties of undefined (reading 'programDateTime')" crash.
+          class CleanPlaylistLoader extends (Hls.DefaultConfig.loader as any) {
+            load(context: any, config: any, callbacks: any) {
+              const origSuccess = callbacks.onSuccess;
+              const cleanCallbacks = {
+                ...callbacks,
+                onSuccess: (response: any, stats: any, ctx: any, networkDetails: any) => {
+                  if (typeof response?.data === "string") {
+                    response.data = response.data
+                      .split("\n")
+                      .filter((line: string) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
+                      .join("\n");
+                  }
+                  origSuccess(response, stats, ctx, networkDetails);
+                },
+              };
+              super.load(context, config, cleanCallbacks);
+            }
+          }
+
           hls = new Hls({
+            pLoader: CleanPlaylistLoader as any,
             lowLatencyMode: false,
             backBufferLength: 10,
             maxBufferLength: 10,
@@ -198,8 +220,6 @@ export function HlsPlayer({
             manifestLoadingTimeOut: 15_000,
             manifestLoadingMaxRetry: 6,
             pdtOffset: 0,
-            // Fix: MediaMTX fMP4 playlists may omit EXT-X-PROGRAM-DATE-TIME,
-            // causing hls.js to throw 'Cannot read properties of undefined (reading programDateTime)'
             xhrSetup: (xhr, requestUrl) => {
               const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
               if (isSameOrigin) {

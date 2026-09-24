@@ -115,6 +115,17 @@ function aggregateDisks(disks: DiskTelemetry[], name: string) {
   return { name, capacity_bytes: capacityBytes, used_bytes: usedBytes, available_bytes: availableBytes, status };
 }
 
+function controlPlaneHeaders(request: NextRequest): Record<string, string> {
+  const incomingAuthorization = request.headers.get("authorization");
+  const bearerSession = incomingAuthorization?.toLowerCase().startsWith("bearer ")
+    ? incomingAuthorization.slice(7).trim()
+    : undefined;
+  const session = request.cookies.get("sentinel_access")?.value
+    ?? request.headers.get("x-sentinel-session")
+    ?? bearerSession;
+  return session ? { authorization: `Bearer ${session}` } : {};
+}
+
 export async function GET(request: NextRequest) {
   const pool = getPool();
   let rawCameras: any[] = [];
@@ -170,9 +181,7 @@ export async function GET(request: NextRequest) {
   // recorders submit per-disk telemetry through the edge agent.
   try {
     const upstreamBase = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL || "http://control-plane:8080";
-    const incomingAuth = request.headers.get("authorization") || request.headers.get("x-sentinel-session");
-    const headers: Record<string, string> = {};
-    if (incomingAuth) headers["authorization"] = incomingAuth.startsWith("Bearer ") ? incomingAuth : `Bearer ${incomingAuth}`;
+    const headers = controlPlaneHeaders(request);
     const diskRes = await fetch(`${upstreamBase}/v1/operations/health/disks`, { headers, cache: "no-store" }).catch(() => null);
     if (diskRes?.ok) {
       const diskData = await diskRes.json();
@@ -186,9 +195,7 @@ export async function GET(request: NextRequest) {
   if (rawCameras.length === 0 || rawStorageNodes.length === 0) {
     try {
       const upstreamBase = process.env.CONTROL_PLANE_INTERNAL_URL || process.env.CONTROL_PLANE_URL || "http://control-plane:8080";
-      const incomingAuth = request.headers.get("authorization") || request.headers.get("x-sentinel-session");
-      const headers: Record<string, string> = {};
-      if (incomingAuth) headers["authorization"] = incomingAuth.startsWith("Bearer ") ? incomingAuth : `Bearer ${incomingAuth}`;
+      const headers = controlPlaneHeaders(request);
 
       const [camRes, nodeRes] = await Promise.all([
         fetch(`${upstreamBase}/v1/cameras?limit=500`, { headers, cache: "no-store" }).catch(() => null),
