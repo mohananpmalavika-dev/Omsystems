@@ -765,9 +765,9 @@ hlsAddress: 127.0.0.1:8888
 # Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
-hlsSegmentCount: 7
+hlsSegmentCount: 10
 hlsSegmentDuration: 2s
-hlsPartDuration: 1s
+hlsPartDuration: 500ms
 rtsp: yes
 rtspAddress: 127.0.0.1:8554
 rtmp: no
@@ -804,11 +804,18 @@ function rewriteHlsPlaylist(playlist: string, token: string): string {
   if (!token) return playlist;
   const appendToken = (uri: string) => {
     if (!uri || /^(?:https?:|data:)/i.test(uri)) return uri;
-    const separator = uri.includes("?") ? "&" : "?";
-    return `${uri}${separator}token=${encodeURIComponent(token)}`;
+    try {
+      const parsed = new URL(uri, "http://edge.local");
+      parsed.searchParams.set("token", token);
+      const search = parsed.search ? parsed.search : "";
+      return `${parsed.pathname}${search}${parsed.hash}`;
+    } catch {
+      const separator = uri.includes("?") ? "&" : "?";
+      return `${uri}${separator}token=${encodeURIComponent(token)}`;
+    }
   };
   return playlist.split("\n").map((line) => {
-    if (!line || line.startsWith("#") && !line.includes("URI=\"")) return line;
+    if (!line || (line.startsWith("#") && !line.includes("URI=\""))) return line;
     if (line.includes("URI=\"")) return line.replace(/URI=\"([^\"]+)\"/g, (_all, uri) => `URI=\"${appendToken(uri)}\"`);
     return appendToken(line);
   }).join("\n");

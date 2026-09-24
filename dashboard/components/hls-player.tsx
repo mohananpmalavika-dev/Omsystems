@@ -188,8 +188,8 @@ export function HlsPlayer({
             maxBufferLength: 10,
             maxMaxBufferLength: 20,
             startPosition: -1, // Start directly at the live edge
-            liveSyncDuration: 3,
-            liveMaxLatencyDuration: 6,
+            liveSyncDurationCount: 3,
+            liveMaxLatencyDurationCount: 7,
             maxLiveSyncPlaybackRate: 1.2,
             liveDurationInfinity: true,
             highBufferWatchdogPeriod: 2,
@@ -197,6 +197,7 @@ export function HlsPlayer({
             fragLoadingMaxRetry: 6,
             manifestLoadingTimeOut: 15_000,
             manifestLoadingMaxRetry: 6,
+            pdtOffset: 0,
             // Fix: MediaMTX fMP4 playlists may omit EXT-X-PROGRAM-DATE-TIME,
             // causing hls.js to throw 'Cannot read properties of undefined (reading programDateTime)'
             xhrSetup: (xhr, requestUrl) => {
