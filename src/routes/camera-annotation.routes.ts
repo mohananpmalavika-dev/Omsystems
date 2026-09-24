@@ -100,7 +100,7 @@ export async function registerCameraAnnotationRoutes(app: FastifyInstance) {
             resolvedBy: row.resolved_by,
           };
           if (!map[rec.cameraId]) map[rec.cameraId] = [];
-          map[rec.cameraId].push(rec);
+          map[rec.cameraId]!.push(rec);
         }
         return reply.code(200).send({ success: true, count: rows.length, annotations: map });
       } catch (err: any) {
