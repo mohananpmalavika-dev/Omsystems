@@ -24,13 +24,25 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
     if (stopped) return;
     socket = new WebSocket(endpoint, { headers: { "x-edge-agent-token": credential }, maxPayload: 12 * 1024 * 1024 });
     const current = socket;
+    let isAlive = true;
+    current.on("pong", () => { isAlive = true; });
     const pingTimer = setInterval(() => {
       if (current.readyState === WebSocket.OPEN) {
+        if (!isAlive) {
+          logger.warn("Self-hosted media relay ping timed out; terminating zombie connection", { agentId });
+          clearInterval(pingTimer);
+          current.terminate();
+          return;
+        }
+        isAlive = false;
         current.ping();
       }
     }, 15_000);
 
-    current.on("open", () => logger.info("Self-hosted media relay connected", { agentId }));
+    current.on("open", () => {
+      isAlive = true;
+      logger.info("Self-hosted media relay connected", { agentId });
+    });
     current.on("message", (raw) => {
       let frame: RelayRequest;
       try { frame = JSON.parse(raw.toString()) as RelayRequest; } catch { current.close(1003, "invalid frame"); return; }
