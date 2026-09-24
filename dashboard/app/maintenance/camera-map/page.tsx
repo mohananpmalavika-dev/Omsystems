@@ -1,7 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { CameraMapView, BranchClusterMap } from '@/components/maintenance/map-view';
+import dynamic from 'next/dynamic';
+
+const CameraMapView = dynamic(
+  () => import('@/components/maintenance/map-view').then((mod) => mod.CameraMapView),
+  { ssr: false }
+);
+const BranchClusterMap = dynamic(
+  () => import('@/components/maintenance/map-view').then((mod) => mod.BranchClusterMap),
+  { ssr: false }
+);
 
 interface CameraLocation {
   id: string;

@@ -109,23 +109,16 @@ async function checkSession() {
 
       console.warn('Session expired or invalid');
       void redirectToLogin('expired');
-    } else if (response.status === 403) {
-      const error = await response.json().catch(() => ({}));
-      reportApiFailure(403, error, 'Session check was denied. Your workspace remains open.');
     } else if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      reportApiFailure(response.status, error, 'Session check failed; the server may be temporarily unavailable.');
+      // Periodic background session check failure is non-fatal; fail silently without annoying the user
+      console.warn('Background session check returned non-ok status', response.status);
     }
   } catch (error) {
-    console.error('Session check network error:', error);
-    reportApiFailure(
-      (error as { statusCode?: number })?.statusCode ?? 0,
-      { error: 'session_check_unavailable', message: error instanceof Error ? error.message : undefined },
-      'Cannot verify your session right now. Your workspace remains open.',
-    );
+    console.warn('Background session check network error:', error);
   } finally {
     isCheckingSession = false;
   }
+
 }
 
 /**

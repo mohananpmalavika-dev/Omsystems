@@ -12,8 +12,8 @@ import type {
 } from '@/lib/types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || '/api/control';
-const DEFAULT_API_TIMEOUT_MS = 8_000;
-const SESSION_API_TIMEOUT_MS = 3_000;
+const DEFAULT_API_TIMEOUT_MS = 10_000;
+const SESSION_API_TIMEOUT_MS = 15_000;
 let cookieRefreshPromise: Promise<boolean> | null = null;
 export const API_ERROR_EVENT = 'sentinel:api-error';
 
