@@ -4,7 +4,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { existsSync, readdirSync } from "node:fs";
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import type { EdgeConfig } from "../config.js";
 import type { ConsumedLiveSession, GatewayClient } from "../registration/gateway-client.js";
@@ -14,6 +14,7 @@ import { TalkSessionRegistry } from "../talkback/talk-session-registry.js";
 import { TalkbackTransportError } from "../talkback/rtsp-backchannel.js";
 import { startManagedMediaRelay } from "./managed-media-relay.js";
 import { deviceArchivePlaybackUri, searchDeviceArchive } from "../monitoring/recorder-probe.js";
+import { probeRtsp } from "./rtsp-probe.js";
 
 interface MediaRouter {
   ensurePath(path: string, sourceUri: string): Promise<void>;
@@ -519,7 +520,11 @@ export async function startEdgeMediaRuntime(input: EdgeMediaRuntimeInput): Promi
     await waitForHttp(mediaMtxApi, mediaMtx, 30_000);
 
     const resolvedFfmpeg = resolveFfmpegPath(config.FFMPEG_PATH, runtimeDirectory);
-    const router = new MediaMtxRouter(config.MEDIAMTX_API_URL, resolvedFfmpeg);
+    const ffprobePath = resolvedFfmpeg && existsSync(join(dirname(resolvedFfmpeg), "ffprobe.exe"))
+      ? join(dirname(resolvedFfmpeg), "ffprobe.exe")
+      : config.FFPROBE_PATH;
+    const router = new MediaMtxRouter(config.MEDIAMTX_API_URL, resolvedFfmpeg,
+      async (sourceUri) => (await probeRtsp(sourceUri, ffprobePath, 6_000)).codec);
     let resolvedPublicUrl = config.PUBLIC_MEDIA_GATEWAY_URL === "auto"
       ? resolvePrivateMediaGatewayUrlIfAvailable(config.EDGE_LIVE_GATEWAY_PORT)
       : config.PUBLIC_MEDIA_GATEWAY_URL;
@@ -717,15 +722,27 @@ function resolveFfmpegPath(configuredPath: string, runtimeDirectory: string): st
 }
 
 export class MediaMtxRouter implements MediaRouter {
-  constructor(private readonly apiUrl: string, private readonly ffmpegPath?: string) {}
+  constructor(
+    private readonly apiUrl: string,
+    private readonly ffmpegPath?: string,
+    private readonly probeCodec?: (sourceUri: string) => Promise<string | null>,
+  ) {}
   async ensurePath(path: string, sourceUri: string) {
     const encodedPath = encodeURIComponent(path);
     const isRtsp = /^rtsps?:\/\//i.test(sourceUri);
+    // H.265 reaches MediaMTX but cannot play in Chrome's HLS MediaSource path.
+    // Preserve H.264 and convert every other codec, including probe failures.
+    const codec = this.ffmpegPath && isRtsp && this.probeCodec
+      ? await this.probeCodec(sourceUri).catch(() => null)
+      : null;
+    const videoOptions = codec?.toLowerCase() === "h264"
+      ? "-c:v copy"
+      : "-vf \"scale='min(iw,960)':-2,fps=15\" -c:v libopenh264 -pix_fmt yuv420p -b:v 900k -g 30";
     const payload = (this.ffmpegPath && isRtsp)
       ? {
           source: "publisher",
           sourceOnDemand: false,
-          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -i "${sourceUri}" -map 0:v:0 -c:v copy -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp rtsp://127.0.0.1:8554/${path}`,
+          runOnDemand: `"${this.ffmpegPath}" -hide_banner -loglevel warning -rtsp_transport tcp -i "${sourceUri}" -map 0:v:0 ${videoOptions} -map 0:a:0? -c:a aac -b:a 64k -ar 16000 -f rtsp rtsp://127.0.0.1:8554/${path}`,
           runOnDemandRestart: true,
           runOnDemandStartTimeout: "15s",
           runOnDemandCloseAfter: "120s",

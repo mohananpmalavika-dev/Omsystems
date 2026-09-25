@@ -16,7 +16,7 @@ describe("self-hosted edge media relay", () => {
   });
 
   it("forwards health and protected HLS over an outbound edge connection", async () => {
-    const local: Server = createServer((request, response) => {
+    const local: Server = createServer(async (request, response) => {
       if (request.url === "/health") {
         response.setHeader("content-type", "application/json");
         response.end('{"status":"ok"}');
@@ -25,6 +25,17 @@ describe("self-hosted edge media relay", () => {
       if (request.url === "/hls/camera-1/index.m3u8" && request.headers.authorization === "Bearer session-token") {
         response.setHeader("content-type", "application/vnd.apple.mpegurl");
         response.end("#EXTM3U\n#EXTINF:1,\nsegment1.mp4\n");
+        return;
+      }
+      if (request.method === "OPTIONS" && request.url?.startsWith("/v1/storage/")) {
+        response.writeHead(204, { "access-control-allow-origin": "*" }).end();
+        return;
+      }
+      if (request.method === "POST" && ["/v1/storage/search", "/v1/storage/play"].includes(request.url ?? "")) {
+        let body = "";
+        for await (const chunk of request) body += chunk;
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ action: request.url?.split("/").at(-1), token: JSON.parse(body).controlPlaneToken }));
         return;
       }
       response.statusCode = 401;
@@ -63,6 +74,16 @@ describe("self-hosted edge media relay", () => {
     });
     expect(authorized.status).toBe(200);
     expect(await authorized.text()).toContain("#EXTM3U");
+    for (const action of ["search", "play"]) {
+      const preflight = await fetch(`${publicUrl}/v1/storage/${action}`, { method: "OPTIONS" });
+      expect(preflight.status).toBe(204);
+      const storage = await fetch(`${publicUrl}/v1/storage/${action}`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ controlPlaneToken: "grant-token" }),
+      });
+      expect(storage.status).toBe(200);
+      expect(await storage.json()).toEqual({ action, token: "grant-token" });
+    }
     const forbidden = await fetch(`${publicUrl}/internal/mediamtx/auth`);
     expect(forbidden.status).toBe(404);
   });

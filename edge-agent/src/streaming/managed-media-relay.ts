@@ -92,6 +92,7 @@ async function handleRequest(frame: RelayRequest, localPort: number) {
   const allowed = pathname === "/health" && ["GET", "HEAD"].includes(method)
     || pathname === "/v1/live/start" && method === "POST"
     || /^\/v1\/live\/[a-zA-Z0-9_-]+$/.test(pathname) && method === "DELETE"
+    || ["/v1/storage/search", "/v1/storage/play"].includes(pathname) && ["POST", "OPTIONS"].includes(method)
     || pathname === "/v1/talk/start" && method === "POST"
     || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(pathname) && ["POST", "DELETE"].includes(method)
     || /^\/hls\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(pathname) && ["GET", "HEAD", "OPTIONS"].includes(method);

@@ -93,6 +93,7 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
     const allowed = path === "/health" && ["GET", "HEAD"].includes(method)
       || path === "/v1/live/start" && method === "POST"
       || /^\/v1\/live\/[a-zA-Z0-9_-]+$/.test(path) && method === "DELETE"
+      || ["/v1/storage/search", "/v1/storage/play"].includes(path) && ["POST", "OPTIONS"].includes(method)
       || path === "/v1/talk/start" && method === "POST"
       || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(path) && ["POST", "DELETE"].includes(method)
       || /^\/hls\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(path) && ["GET", "HEAD", "OPTIONS"].includes(method);

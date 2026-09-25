@@ -1,752 +1,437 @@
 /**
- * KryptoVision Connect - Communication Telemetry Service
- * 
- * Integrates communication subsystem with existing VMS Prometheus metrics registry.
- * Tracks device presence, call sessions, messaging throughput, and call quality.
- * 
- * Architecture:
- * - Uses existing VmsMetricsRegistry for Prometheus exposition
- * - Provides domain-specific metric recording methods
- * - Supports Grafana dashboards and alerting
- * - Aligned with VMS observability standards
+ * Communication Telemetry Service
+ *
+ * Provides Prometheus metrics for KryptoVision Connect subsystem.
+ *
+ * Metrics categories:
+ * - Device metrics: online count, enrollment rate, revocation rate
+ * - Presence metrics: branch/employee online status
+ * - Call metrics: started, connected, failed, missed, duration
+ * - Call quality metrics: RTT, jitter, packet loss distribution
+ * - Messaging metrics: sent, delivered, read counts
+ * - WebSocket metrics: connection count, signaling events
+ * - WebRTC metrics: session count, participant count
+ *
+ * Integration:
+ * - Uses Prometheus client library
+ * - Metrics exposed via /metrics endpoint
+ * - Tenant-labeled for multi-tenancy observability
+ *
+ * Privacy:
+ * - No PII in metric labels
+ * - No message content
+ * - Device/call/conversation IDs are UUIDs (safe for cardinality)
  */
 
-import type { Logger } from 'pino';
-import { VmsCounter, VmsGauge, VmsHistogram } from '../../observability/vms-metrics-registry.js';
+import type { Registry, Counter, Gauge, Histogram } from 'prom-client';
 import type {
   CommunicationCallStatus,
-  CommunicationCallEndReason,
-  CallQualityStatus,
+  CommunicationPresence,
+  CommunicationDeviceType,
 } from '../domain/types.js';
 
-// ============================================================================
-// COMMUNICATION METRICS REGISTRY
-// ============================================================================
+export interface CommunicationTelemetryService {
+  // Device metrics
+  recordDeviceEnrollment(tenantId: string, deviceType: CommunicationDeviceType): void;
+  recordDeviceRevocation(tenantId: string, deviceType: CommunicationDeviceType): void;
+  recordDeviceHeartbeat(tenantId: string, deviceType: CommunicationDeviceType): void;
+  setDevicesOnline(tenantId: string, count: number): void;
+
+  // Presence metrics
+  setBranchPresence(tenantId: string, branchId: string, presence: CommunicationPresence): void;
+  setEmployeePresence(tenantId: string, employeeId: string, presence: CommunicationPresence): void;
+
+  // Call metrics
+  recordCallStarted(tenantId: string, direction: 'INBOUND' | 'OUTBOUND'): void;
+  recordCallConnected(tenantId: string, setupDuration: number): void;
+  recordCallEnded(tenantId: string, duration: number, quality?: 'GOOD' | 'DEGRADED' | 'POOR'): void;
+  recordCallFailed(tenantId: string, status: CommunicationCallStatus, reason: string): void;
+  recordCallMissed(tenantId: string): void;
+
+  // Call quality metrics
+  recordCallQuality(params: {
+    tenantId: string;
+    callId: string;
+    rtt?: number;
+    jitter?: number;
+    packetLoss?: number;
+  }): void;
+
+  // Messaging metrics
+  recordMessageSent(tenantId: string, conversationType: string): void;
+  recordMessageDelivered(tenantId: string, deliveryLatency: number): void;
+  recordMessageRead(tenantId: string, readLatency: number): void;
+
+  // WebSocket metrics
+  recordWebSocketConnection(tenantId: string, connected: boolean): void;
+  recordSignalingEvent(tenantId: string, event: string): void;
+
+  // WebRTC metrics
+  recordMediaSessionCreated(tenantId: string): void;
+  recordMediaSessionClosed(tenantId: string): void;
+  recordParticipantJoined(tenantId: string): void;
+  recordParticipantLeft(tenantId: string): void;
+
+  // Get current registry for /metrics endpoint
+  getRegistry(): Registry;
+}
+
+export function createCommunicationTelemetryService(
+  registry: Registry,
+  promClient: typeof import('prom-client')
+): CommunicationTelemetryService {
+  // Device metrics
+  const deviceEnrollmentsTotal = new promClient.Counter({
+    name: 'kryptovision_comm_device_enrollments_total',
+    help: 'Total number of device enrollments',
+    labelNames: ['tenant_id', 'device_type'],
+    registers: [registry],
+  });
+
+  const deviceRevocationsTotal = new promClient.Counter({
+    name: 'kryptovision_comm_device_revocations_total',
+    help: 'Total number of device revocations',
+    labelNames: ['tenant_id', 'device_type'],
+    registers: [registry],
+  });
+
+  const deviceHeartbeatsTotal = new promClient.Counter({
+    name: 'kryptovision_comm_device_heartbeats_total',
+    help: 'Total number of device heartbeats received',
+    labelNames: ['tenant_id', 'device_type'],
+    registers: [registry],
+  });
+
+  const devicesOnline = new promClient.Gauge({
+    name: 'kryptovision_comm_devices_online',
+    help: 'Current number of online communication devices',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  // Presence metrics
+  const branchPresence = new promClient.Gauge({
+    name: 'kryptovision_comm_branch_presence',
+    help: 'Branch presence status (1=online, 0=offline)',
+    labelNames: ['tenant_id', 'branch_id'],
+    registers: [registry],
+  });
+
+  const employeePresence = new promClient.Gauge({
+    name: 'kryptovision_comm_employee_presence',
+    help: 'Employee presence status (1=online, 0=offline)',
+    labelNames: ['tenant_id', 'employee_id'],
+    registers: [registry],
+  });
+
+  // Call metrics
+  const callsStartedTotal = new promClient.Counter({
+    name: 'kryptovision_comm_calls_started_total',
+    help: 'Total number of calls started',
+    labelNames: ['tenant_id', 'direction'],
+    registers: [registry],
+  });
+
+  const callsConnectedTotal = new promClient.Counter({
+    name: 'kryptovision_comm_calls_connected_total',
+    help: 'Total number of calls successfully connected',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const callsFailedTotal = new promClient.Counter({
+    name: 'kryptovision_comm_calls_failed_total',
+    help: 'Total number of failed calls',
+    labelNames: ['tenant_id', 'status', 'reason'],
+    registers: [registry],
+  });
+
+  const callsMissedTotal = new promClient.Counter({
+    name: 'kryptovision_comm_calls_missed_total',
+    help: 'Total number of missed calls',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const callSetupDuration = new promClient.Histogram({
+    name: 'kryptovision_comm_call_setup_duration_seconds',
+    help: 'Time from call initiation to connection',
+    labelNames: ['tenant_id'],
+    buckets: [0.5, 1, 2, 3, 5, 10, 15, 30],
+    registers: [registry],
+  });
+
+  const callDuration = new promClient.Histogram({
+    name: 'kryptovision_comm_call_duration_seconds',
+    help: 'Duration of connected calls',
+    labelNames: ['tenant_id', 'quality'],
+    buckets: [10, 30, 60, 120, 300, 600, 1800, 3600],
+    registers: [registry],
+  });
+
+  // Call quality metrics
+  const callRtt = new promClient.Histogram({
+    name: 'kryptovision_comm_call_rtt_milliseconds',
+    help: 'Call round-trip time',
+    labelNames: ['tenant_id'],
+    buckets: [10, 25, 50, 100, 150, 200, 300, 500],
+    registers: [registry],
+  });
+
+  const callJitter = new promClient.Histogram({
+    name: 'kryptovision_comm_call_jitter_milliseconds',
+    help: 'Call jitter',
+    labelNames: ['tenant_id'],
+    buckets: [5, 10, 20, 30, 50, 75, 100, 150],
+    registers: [registry],
+  });
+
+  const callPacketLoss = new promClient.Histogram({
+    name: 'kryptovision_comm_call_packet_loss_percent',
+    help: 'Call packet loss percentage',
+    labelNames: ['tenant_id'],
+    buckets: [0.1, 0.5, 1, 2, 3, 5, 10, 15],
+    registers: [registry],
+  });
+
+  // Messaging metrics
+  const messagesSentTotal = new promClient.Counter({
+    name: 'kryptovision_comm_messages_sent_total',
+    help: 'Total number of messages sent',
+    labelNames: ['tenant_id', 'conversation_type'],
+    registers: [registry],
+  });
+
+  const messagesDeliveredTotal = new promClient.Counter({
+    name: 'kryptovision_comm_messages_delivered_total',
+    help: 'Total number of messages delivered',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const messagesReadTotal = new promClient.Counter({
+    name: 'kryptovision_comm_messages_read_total',
+    help: 'Total number of messages read',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const messageDeliveryLatency = new promClient.Histogram({
+    name: 'kryptovision_comm_message_delivery_latency_seconds',
+    help: 'Time from message sent to delivered',
+    labelNames: ['tenant_id'],
+    buckets: [0.1, 0.5, 1, 2, 5, 10, 30, 60],
+    registers: [registry],
+  });
+
+  const messageReadLatency = new promClient.Histogram({
+    name: 'kryptovision_comm_message_read_latency_seconds',
+    help: 'Time from message sent to read',
+    labelNames: ['tenant_id'],
+    buckets: [1, 5, 10, 30, 60, 300, 600, 1800],
+    registers: [registry],
+  });
+
+  // WebSocket metrics
+  const websocketConnections = new promClient.Gauge({
+    name: 'kryptovision_comm_websocket_connections',
+    help: 'Current number of WebSocket connections',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const signalingEventsTotal = new promClient.Counter({
+    name: 'kryptovision_comm_signaling_events_total',
+    help: 'Total number of signaling events',
+    labelNames: ['tenant_id', 'event'],
+    registers: [registry],
+  });
+
+  // WebRTC metrics
+  const mediaSessionsActive = new promClient.Gauge({
+    name: 'kryptovision_comm_media_sessions_active',
+    help: 'Current number of active WebRTC media sessions',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const mediaSessionsTotal = new promClient.Counter({
+    name: 'kryptovision_comm_media_sessions_total',
+    help: 'Total number of media sessions created',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  const mediaParticipantsActive = new promClient.Gauge({
+    name: 'kryptovision_comm_media_participants_active',
+    help: 'Current number of active WebRTC participants',
+    labelNames: ['tenant_id'],
+    registers: [registry],
+  });
+
+  return {
+    // Device metrics
+    recordDeviceEnrollment(tenantId, deviceType) {
+      deviceEnrollmentsTotal.inc({ tenant_id: tenantId, device_type: deviceType });
+    },
+
+    recordDeviceRevocation(tenantId, deviceType) {
+      deviceRevocationsTotal.inc({ tenant_id: tenantId, device_type: deviceType });
+    },
+
+    recordDeviceHeartbeat(tenantId, deviceType) {
+      deviceHeartbeatsTotal.inc({ tenant_id: tenantId, device_type: deviceType });
+    },
+
+    setDevicesOnline(tenantId, count) {
+      devicesOnline.set({ tenant_id: tenantId }, count);
+    },
+
+    // Presence metrics
+    setBranchPresence(tenantId, branchId, presence) {
+      const value = presence === 'ONLINE' ? 1 : 0;
+      branchPresence.set({ tenant_id: tenantId, branch_id: branchId }, value);
+    },
+
+    setEmployeePresence(tenantId, employeeId, presence) {
+      const value = presence === 'ONLINE' ? 1 : 0;
+      employeePresence.set({ tenant_id: tenantId, employee_id: employeeId }, value);
+    },
+
+    // Call metrics
+    recordCallStarted(tenantId, direction) {
+      callsStartedTotal.inc({ tenant_id: tenantId, direction });
+    },
+
+    recordCallConnected(tenantId, setupDuration) {
+      callsConnectedTotal.inc({ tenant_id: tenantId });
+      callSetupDuration.observe({ tenant_id: tenantId }, setupDuration);
+    },
+
+    recordCallEnded(tenantId, duration, quality = 'GOOD') {
+      callDuration.observe({ tenant_id: tenantId, quality }, duration);
+    },
+
+    recordCallFailed(tenantId, status, reason) {
+      callsFailedTotal.inc({ tenant_id: tenantId, status, reason });
+    },
+
+    recordCallMissed(tenantId) {
+      callsMissedTotal.inc({ tenant_id: tenantId });
+    },
+
+    // Call quality metrics
+    recordCallQuality(params) {
+      if (params.rtt !== undefined) {
+        callRtt.observe({ tenant_id: params.tenantId }, params.rtt);
+      }
+      if (params.jitter !== undefined) {
+        callJitter.observe({ tenant_id: params.tenantId }, params.jitter);
+      }
+      if (params.packetLoss !== undefined) {
+        callPacketLoss.observe({ tenant_id: params.tenantId }, params.packetLoss);
+      }
+    },
+
+    // Messaging metrics
+    recordMessageSent(tenantId, conversationType) {
+      messagesSentTotal.inc({ tenant_id: tenantId, conversation_type: conversationType });
+    },
+
+    recordMessageDelivered(tenantId, deliveryLatency) {
+      messagesDeliveredTotal.inc({ tenant_id: tenantId });
+      messageDeliveryLatency.observe({ tenant_id: tenantId }, deliveryLatency);
+    },
+
+    recordMessageRead(tenantId, readLatency) {
+      messagesReadTotal.inc({ tenant_id: tenantId });
+      messageReadLatency.observe({ tenant_id: tenantId }, readLatency);
+    },
+
+    // WebSocket metrics
+    recordWebSocketConnection(tenantId, connected) {
+      websocketConnections.inc({ tenant_id: tenantId }, connected ? 1 : -1);
+    },
+
+    recordSignalingEvent(tenantId, event) {
+      signalingEventsTotal.inc({ tenant_id: tenantId, event });
+    },
+
+    // WebRTC metrics
+    recordMediaSessionCreated(tenantId) {
+      mediaSessionsTotal.inc({ tenant_id: tenantId });
+      mediaSessionsActive.inc({ tenant_id: tenantId });
+    },
+
+    recordMediaSessionClosed(tenantId) {
+      mediaSessionsActive.dec({ tenant_id: tenantId });
+    },
+
+    recordParticipantJoined(tenantId) {
+      mediaParticipantsActive.inc({ tenant_id: tenantId });
+    },
+
+    recordParticipantLeft(tenantId) {
+      mediaParticipantsActive.dec({ tenant_id: tenantId });
+    },
+
+    getRegistry() {
+      return registry;
+    },
+  };
+}
 
 /**
- * Communication-specific Prometheus metrics registry
- * Extends existing VMS metrics with communication subsystem telemetry
+ * Helper to create standardized metric labels
  */
-export class CommunicationMetricsRegistry {
-  // 1. Device & Presence Metrics
-  public readonly devicesOnline = new VmsGauge(
-    'comm_devices_online',
-    'Number of communication devices currently online by tenant and branch'
-  );
-  
-  public readonly devicesTotal = new VmsGauge(
-    'comm_devices_total',
-    'Total registered communication devices by tenant and status'
-  );
-  
-  public readonly branchesOnline = new VmsGauge(
-    'comm_branches_online',
-    'Number of branches with at least one online communication device'
-  );
-  
-  public readonly employeesOnline = new VmsGauge(
-    'comm_employees_online',
-    'Number of employees with at least one online communication device'
-  );
-  
-  // 2. Call Session Metrics
-  public readonly callsStarted = new VmsCounter(
-    'comm_calls_started_total',
-    'Total number of call sessions initiated by direction and target type'
-  );
-  
-  public readonly callsConnected = new VmsCounter(
-    'comm_calls_connected_total',
-    'Total number of call sessions successfully connected'
-  );
-  
-  public readonly callsFailed = new VmsCounter(
-    'comm_calls_failed_total',
-    'Total number of call sessions that failed by failure reason'
-  );
-  
-  public readonly callsMissed = new VmsCounter(
-    'comm_calls_missed_total',
-    'Total number of call sessions missed (not answered)'
-  );
-  
-  public readonly callsRejected = new VmsCounter(
-    'comm_calls_rejected_total',
-    'Total number of call sessions explicitly rejected'
-  );
-  
-  public readonly callsCancelled = new VmsCounter(
-    'comm_calls_cancelled_total',
-    'Total number of call sessions cancelled before answer'
-  );
-  
-  public readonly callsActive = new VmsGauge(
-    'comm_calls_active',
-    'Number of currently active call sessions by tenant'
-  );
-  
-  public readonly callDuration = new VmsHistogram(
-    'comm_call_duration_seconds',
-    'Distribution of call session duration in seconds',
-    [5, 10, 30, 60, 120, 300, 600, 1800, 3600] // 5s to 1h
-  );
-  
-  public readonly callSetupTime = new VmsHistogram(
-    'comm_call_setup_time_ms',
-    'Time from call initiation to connection in milliseconds',
-    [100, 250, 500, 1000, 2000, 3000, 5000, 10000] // 100ms to 10s
-  );
-  
-  // 3. Messaging Metrics
-  public readonly messagesSent = new VmsCounter(
-    'comm_messages_sent_total',
-    'Total number of messages sent by tenant and message type'
-  );
-  
-  public readonly messagesDelivered = new VmsCounter(
-    'comm_messages_delivered_total',
-    'Total number of messages successfully delivered'
-  );
-  
-  public readonly messagesRead = new VmsCounter(
-    'comm_messages_read_total',
-    'Total number of messages read by recipients'
-  );
-  
-  public readonly messageDeliveryLatency = new VmsHistogram(
-    'comm_message_delivery_latency_ms',
-    'Time from message send to delivery in milliseconds',
-    [10, 50, 100, 250, 500, 1000, 2000, 5000, 10000] // 10ms to 10s
-  );
-  
-  public readonly conversationsActive = new VmsGauge(
-    'comm_conversations_active',
-    'Number of conversations with recent activity by tenant and type'
-  );
-  
-  // 4. Call Quality Metrics
-  public readonly callQuality = new VmsGauge(
-    'comm_call_quality_status',
-    'Current call quality status (1=GOOD, 2=DEGRADED, 3=POOR) by call ID'
-  );
-  
-  public readonly callRttMs = new VmsHistogram(
-    'comm_call_rtt_ms',
-    'WebRTC round-trip time in milliseconds',
-    [10, 25, 50, 100, 150, 200, 300, 500, 1000] // ITU-T G.114 thresholds
-  );
-  
-  public readonly callJitterMs = new VmsHistogram(
-    'comm_call_jitter_ms',
-    'WebRTC jitter in milliseconds',
-    [5, 10, 20, 30, 50, 75, 100, 150, 200]
-  );
-  
-  public readonly callPacketLoss = new VmsHistogram(
-    'comm_call_packet_loss_pct',
-    'WebRTC packet loss percentage',
-    [0.1, 0.5, 1, 2, 3, 5, 10, 15, 20]
-  );
-  
-  // 5. Device Enrollment Metrics
-  public readonly enrollmentCodesGenerated = new VmsCounter(
-    'comm_enrollment_codes_generated_total',
-    'Total number of device enrollment codes generated'
-  );
-  
-  public readonly enrollmentCodesUsed = new VmsCounter(
-    'comm_enrollment_codes_used_total',
-    'Total number of enrollment codes successfully used'
-  );
-  
-  public readonly enrollmentCodesExpired = new VmsCounter(
-    'comm_enrollment_codes_expired_total',
-    'Total number of enrollment codes that expired unused'
-  );
-  
-  public readonly devicesEnrolled = new VmsCounter(
-    'comm_devices_enrolled_total',
-    'Total number of devices enrolled by platform and type'
-  );
-  
-  public readonly devicesRevoked = new VmsCounter(
-    'comm_devices_revoked_total',
-    'Total number of devices revoked by reason'
-  );
-  
-  /**
-   * Format all communication metrics as Prometheus text
-   */
-  public formatPrometheusText(): string {
-    const lines: string[] = [];
-    
-    // Device & Presence
-    lines.push(...this.devicesOnline.format());
-    lines.push('');
-    lines.push(...this.devicesTotal.format());
-    lines.push('');
-    lines.push(...this.branchesOnline.format());
-    lines.push('');
-    lines.push(...this.employeesOnline.format());
-    lines.push('');
-    
-    // Call Sessions
-    lines.push(...this.callsStarted.format());
-    lines.push('');
-    lines.push(...this.callsConnected.format());
-    lines.push('');
-    lines.push(...this.callsFailed.format());
-    lines.push('');
-    lines.push(...this.callsMissed.format());
-    lines.push('');
-    lines.push(...this.callsRejected.format());
-    lines.push('');
-    lines.push(...this.callsCancelled.format());
-    lines.push('');
-    lines.push(...this.callsActive.format());
-    lines.push('');
-    lines.push(...this.callDuration.format());
-    lines.push('');
-    lines.push(...this.callSetupTime.format());
-    lines.push('');
-    
-    // Messaging
-    lines.push(...this.messagesSent.format());
-    lines.push('');
-    lines.push(...this.messagesDelivered.format());
-    lines.push('');
-    lines.push(...this.messagesRead.format());
-    lines.push('');
-    lines.push(...this.messageDeliveryLatency.format());
-    lines.push('');
-    lines.push(...this.conversationsActive.format());
-    lines.push('');
-    
-    // Call Quality
-    lines.push(...this.callQuality.format());
-    lines.push('');
-    lines.push(...this.callRttMs.format());
-    lines.push('');
-    lines.push(...this.callJitterMs.format());
-    lines.push('');
-    lines.push(...this.callPacketLoss.format());
-    lines.push('');
-    
-    // Enrollment
-    lines.push(...this.enrollmentCodesGenerated.format());
-    lines.push('');
-    lines.push(...this.enrollmentCodesUsed.format());
-    lines.push('');
-    lines.push(...this.enrollmentCodesExpired.format());
-    lines.push('');
-    lines.push(...this.devicesEnrolled.format());
-    lines.push('');
-    lines.push(...this.devicesRevoked.format());
-    lines.push('');
-    
-    return lines.join('\n');
+export function createMetricLabels(params: {
+  tenantId: string;
+  branchId?: string;
+  deviceId?: string;
+  callId?: string;
+}): Record<string, string> {
+  const labels: Record<string, string> = {
+    tenant_id: params.tenantId,
+  };
+
+  if (params.branchId) {
+    labels.branch_id = params.branchId;
   }
-}
 
-// Singleton instance
-export const communicationMetrics = new CommunicationMetricsRegistry();
+  // Device/Call IDs are UUIDs - safe for cardinality
+  if (params.deviceId) {
+    labels.device_id = params.deviceId;
+  }
 
-// ============================================================================
-// TELEMETRY SERVICE
-// ============================================================================
+  if (params.callId) {
+    labels.call_id = params.callId;
+  }
 
-export interface RecordCallStartedInput {
-  tenantId: string;
-  callId: string;
-  direction: 'INBOUND' | 'OUTBOUND';
-  sourceType: string;
-  targetType: string;
-  branchId?: string;
-}
-
-export interface RecordCallConnectedInput {
-  tenantId: string;
-  callId: string;
-  setupTimeMs: number;
-  branchId?: string;
-}
-
-export interface RecordCallEndedInput {
-  tenantId: string;
-  callId: string;
-  status: CommunicationCallStatus;
-  durationSeconds?: number;
-  endReason?: CommunicationCallEndReason;
-  branchId?: string;
-}
-
-export interface RecordMessageSentInput {
-  tenantId: string;
-  messageType: string;
-  conversationType: string;
-  branchId?: string;
-}
-
-export interface RecordMessageDeliveredInput {
-  tenantId: string;
-  messageType: string;
-  deliveryLatencyMs: number;
-}
-
-export interface RecordCallQualityInput {
-  tenantId: string;
-  callId: string;
-  quality: CallQualityStatus;
-  rttMs?: number;
-  jitterMs?: number;
-  packetLossPct?: number;
-}
-
-export interface RecordDevicePresenceInput {
-  tenantId: string;
-  branchId: string;
-  onlineDevices: number;
-  totalDevices: number;
+  return labels;
 }
 
 /**
- * Communication telemetry service
- * Provides high-level methods for recording communication metrics
+ * Metric naming conventions:
+ *
+ * kryptovision_comm_<domain>_<metric>_<unit>
+ *
+ * Domains:
+ * - device: Device lifecycle
+ * - call: Call lifecycle
+ * - message: Messaging
+ * - websocket: WebSocket signaling
+ * - media: WebRTC media sessions
+ *
+ * Units:
+ * - _total: Counter
+ * - _seconds: Duration histogram
+ * - _milliseconds: Latency histogram
+ * - _percent: Percentage histogram
+ * - (no suffix): Gauge
+ *
+ * Labels:
+ * - tenant_id: Always present for multi-tenancy
+ * - device_type, direction, status: For filtering
+ * - quality: For quality-based aggregation
+ * - event: For event-type filtering
  */
-export class CommunicationTelemetryService {
-  private readonly metrics: CommunicationMetricsRegistry;
-  private readonly logger: Logger;
-  
-  constructor(logger: Logger, metrics?: CommunicationMetricsRegistry) {
-    this.logger = logger.child({ component: 'CommunicationTelemetry' });
-    this.metrics = metrics || communicationMetrics;
-  }
-  
-  // ============================================================================
-  // CALL TELEMETRY
-  // ============================================================================
-  
-  /**
-   * Record call session initiated
-   */
-  recordCallStarted(input: RecordCallStartedInput): void {
-    try {
-      this.metrics.callsStarted.inc(1, {
-        tenant_id: input.tenantId,
-        direction: input.direction,
-        source_type: input.sourceType,
-        target_type: input.targetType,
-        branch_id: input.branchId,
-      });
-      
-      // Increment active calls
-      this.metrics.callsActive.inc(1, { tenant_id: input.tenantId });
-      
-      this.logger.debug({
-        event: 'call_started',
-        callId: input.callId,
-        tenantId: input.tenantId,
-        direction: input.direction,
-      }, 'Recorded call started metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record call started metric');
-    }
-  }
-  
-  /**
-   * Record call successfully connected
-   */
-  recordCallConnected(input: RecordCallConnectedInput): void {
-    try {
-      this.metrics.callsConnected.inc(1, {
-        tenant_id: input.tenantId,
-        branch_id: input.branchId,
-      });
-      
-      // Record setup time
-      if (input.setupTimeMs > 0) {
-        this.metrics.callSetupTime.observe(input.setupTimeMs, {
-          tenant_id: input.tenantId,
-        });
-      }
-      
-      this.logger.debug({
-        event: 'call_connected',
-        callId: input.callId,
-        setupTimeMs: input.setupTimeMs,
-      }, 'Recorded call connected metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record call connected metric');
-    }
-  }
-  
-  /**
-   * Record call ended
-   */
-  recordCallEnded(input: RecordCallEndedInput): void {
-    try {
-      // Decrement active calls
-      this.metrics.callsActive.dec(1, { tenant_id: input.tenantId });
-      
-      // Increment status-specific counter
-      const labels = {
-        tenant_id: input.tenantId,
-        branch_id: input.branchId,
-        end_reason: input.endReason,
-      };
-      
-      switch (input.status) {
-        case 'FAILED':
-          this.metrics.callsFailed.inc(1, labels);
-          break;
-        case 'MISSED':
-          this.metrics.callsMissed.inc(1, labels);
-          break;
-        case 'REJECTED':
-          this.metrics.callsRejected.inc(1, labels);
-          break;
-        case 'CANCELLED':
-          this.metrics.callsCancelled.inc(1, labels);
-          break;
-        case 'ENDED':
-          // Successfully completed call
-          if (input.durationSeconds && input.durationSeconds > 0) {
-            this.metrics.callDuration.observe(input.durationSeconds, {
-              tenant_id: input.tenantId,
-            });
-          }
-          break;
-      }
-      
-      this.logger.debug({
-        event: 'call_ended',
-        callId: input.callId,
-        status: input.status,
-        durationSeconds: input.durationSeconds,
-      }, 'Recorded call ended metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record call ended metric');
-    }
-  }
-  
-  /**
-   * Record call quality metrics
-   */
-  recordCallQuality(input: RecordCallQualityInput): void {
-    try {
-      // Map quality status to numeric value for gauge
-      const qualityValue = {
-        GOOD: 1,
-        DEGRADED: 2,
-        POOR: 3,
-      }[input.quality] || 0;
-      
-      this.metrics.callQuality.set(qualityValue, {
-        tenant_id: input.tenantId,
-        call_id: input.callId,
-      });
-      
-      // Record quality metrics histograms
-      if (input.rttMs !== undefined) {
-        this.metrics.callRttMs.observe(input.rttMs, {
-          tenant_id: input.tenantId,
-        });
-      }
-      
-      if (input.jitterMs !== undefined) {
-        this.metrics.callJitterMs.observe(input.jitterMs, {
-          tenant_id: input.tenantId,
-        });
-      }
-      
-      if (input.packetLossPct !== undefined) {
-        this.metrics.callPacketLoss.observe(input.packetLossPct, {
-          tenant_id: input.tenantId,
-        });
-      }
-      
-      this.logger.debug({
-        event: 'call_quality',
-        callId: input.callId,
-        quality: input.quality,
-        rttMs: input.rttMs,
-      }, 'Recorded call quality metrics');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record call quality metrics');
-    }
-  }
-  
-  // ============================================================================
-  // MESSAGING TELEMETRY
-  // ============================================================================
-  
-  /**
-   * Record message sent
-   */
-  recordMessageSent(input: RecordMessageSentInput): void {
-    try {
-      this.metrics.messagesSent.inc(1, {
-        tenant_id: input.tenantId,
-        message_type: input.messageType,
-        conversation_type: input.conversationType,
-        branch_id: input.branchId,
-      });
-      
-      this.logger.debug({
-        event: 'message_sent',
-        tenantId: input.tenantId,
-        messageType: input.messageType,
-      }, 'Recorded message sent metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record message sent metric');
-    }
-  }
-  
-  /**
-   * Record message delivered
-   */
-  recordMessageDelivered(input: RecordMessageDeliveredInput): void {
-    try {
-      this.metrics.messagesDelivered.inc(1, {
-        tenant_id: input.tenantId,
-        message_type: input.messageType,
-      });
-      
-      // Record delivery latency
-      if (input.deliveryLatencyMs > 0) {
-        this.metrics.messageDeliveryLatency.observe(input.deliveryLatencyMs, {
-          tenant_id: input.tenantId,
-        });
-      }
-      
-      this.logger.debug({
-        event: 'message_delivered',
-        tenantId: input.tenantId,
-        latencyMs: input.deliveryLatencyMs,
-      }, 'Recorded message delivered metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record message delivered metric');
-    }
-  }
-  
-  /**
-   * Record message read
-   */
-  recordMessageRead(tenantId: string, messageType: string): void {
-    try {
-      this.metrics.messagesRead.inc(1, {
-        tenant_id: tenantId,
-        message_type: messageType,
-      });
-      
-      this.logger.debug({
-        event: 'message_read',
-        tenantId,
-      }, 'Recorded message read metric');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record message read metric');
-    }
-  }
-  
-  // ============================================================================
-  // DEVICE & PRESENCE TELEMETRY
-  // ============================================================================
-  
-  /**
-   * Update device presence metrics
-   */
-  updateDevicePresence(input: RecordDevicePresenceInput): void {
-    try {
-      this.metrics.devicesOnline.set(input.onlineDevices, {
-        tenant_id: input.tenantId,
-        branch_id: input.branchId,
-      });
-      
-      this.metrics.devicesTotal.set(input.totalDevices, {
-        tenant_id: input.tenantId,
-        branch_id: input.branchId,
-      });
-      
-      this.logger.debug({
-        event: 'device_presence_updated',
-        tenantId: input.tenantId,
-        branchId: input.branchId,
-        onlineDevices: input.onlineDevices,
-      }, 'Updated device presence metrics');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to update device presence metrics');
-    }
-  }
-  
-  /**
-   * Record branch online status
-   */
-  setBranchOnline(tenantId: string, branchId: string, online: boolean): void {
-    try {
-      if (online) {
-        this.metrics.branchesOnline.inc(1, {
-          tenant_id: tenantId,
-          branch_id: branchId,
-        });
-      } else {
-        this.metrics.branchesOnline.dec(1, {
-          tenant_id: tenantId,
-          branch_id: branchId,
-        });
-      }
-      
-      this.logger.debug({
-        event: 'branch_presence_changed',
-        tenantId,
-        branchId,
-        online,
-      }, 'Updated branch online status');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to update branch online status');
-    }
-  }
-  
-  /**
-   * Record employee online status
-   */
-  setEmployeeOnline(tenantId: string, employeeId: string, online: boolean): void {
-    try {
-      if (online) {
-        this.metrics.employeesOnline.inc(1, {
-          tenant_id: tenantId,
-          employee_id: employeeId,
-        });
-      } else {
-        this.metrics.employeesOnline.dec(1, {
-          tenant_id: tenantId,
-          employee_id: employeeId,
-        });
-      }
-      
-      this.logger.debug({
-        event: 'employee_presence_changed',
-        tenantId,
-        employeeId,
-        online,
-      }, 'Updated employee online status');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to update employee online status');
-    }
-  }
-  
-  // ============================================================================
-  // ENROLLMENT TELEMETRY
-  // ============================================================================
-  
-  /**
-   * Record enrollment code generated
-   */
-  recordEnrollmentCodeGenerated(tenantId: string, branchId: string): void {
-    try {
-      this.metrics.enrollmentCodesGenerated.inc(1, {
-        tenant_id: tenantId,
-        branch_id: branchId,
-      });
-      
-      this.logger.debug({
-        event: 'enrollment_code_generated',
-        tenantId,
-        branchId,
-      }, 'Recorded enrollment code generated');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record enrollment code generated');
-    }
-  }
-  
-  /**
-   * Record enrollment code used
-   */
-  recordEnrollmentCodeUsed(tenantId: string, branchId: string): void {
-    try {
-      this.metrics.enrollmentCodesUsed.inc(1, {
-        tenant_id: tenantId,
-        branch_id: branchId,
-      });
-      
-      this.logger.debug({
-        event: 'enrollment_code_used',
-        tenantId,
-        branchId,
-      }, 'Recorded enrollment code used');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record enrollment code used');
-    }
-  }
-  
-  /**
-   * Record device enrolled
-   */
-  recordDeviceEnrolled(tenantId: string, platform: string, deviceType: string): void {
-    try {
-      this.metrics.devicesEnrolled.inc(1, {
-        tenant_id: tenantId,
-        platform,
-        device_type: deviceType,
-      });
-      
-      this.logger.debug({
-        event: 'device_enrolled',
-        tenantId,
-        platform,
-        deviceType,
-      }, 'Recorded device enrolled');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record device enrolled');
-    }
-  }
-  
-  /**
-   * Record device revoked
-   */
-  recordDeviceRevoked(tenantId: string, reason: string): void {
-    try {
-      this.metrics.devicesRevoked.inc(1, {
-        tenant_id: tenantId,
-        revocation_reason: reason,
-      });
-      
-      this.logger.debug({
-        event: 'device_revoked',
-        tenantId,
-        reason,
-      }, 'Recorded device revoked');
-    } catch (error) {
-      this.logger.warn({ error }, 'Failed to record device revoked');
-    }
-  }
-  
-  /**
-   * Get metrics snapshot for debugging/dashboards
-   */
-  getMetricsSnapshot(): Record<string, unknown> {
-    return {
-      timestamp: new Date().toISOString(),
-      devices: {
-        online: this.metrics.devicesOnline.entries().reduce((sum, e) => sum + e.value, 0),
-        total: this.metrics.devicesTotal.entries().reduce((sum, e) => sum + e.value, 0),
-      },
-      branches: {
-        online: this.metrics.branchesOnline.entries().reduce((sum, e) => sum + e.value, 0),
-      },
-      employees: {
-        online: this.metrics.employeesOnline.entries().reduce((sum, e) => sum + e.value, 0),
-      },
-      calls: {
-        active: this.metrics.callsActive.entries().reduce((sum, e) => sum + e.value, 0),
-        started: this.metrics.callsStarted.entries().reduce((sum, e) => sum + e.value, 0),
-        connected: this.metrics.callsConnected.entries().reduce((sum, e) => sum + e.value, 0),
-        failed: this.metrics.callsFailed.entries().reduce((sum, e) => sum + e.value, 0),
-      },
-      messages: {
-        sent: this.metrics.messagesSent.entries().reduce((sum, e) => sum + e.value, 0),
-        delivered: this.metrics.messagesDelivered.entries().reduce((sum, e) => sum + e.value, 0),
-        read: this.metrics.messagesRead.entries().reduce((sum, e) => sum + e.value, 0),
-      },
-    };
-  }
-}

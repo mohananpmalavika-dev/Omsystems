@@ -162,12 +162,16 @@ describe("all-in-one edge live gateway", () => {
         api.once("error", reject);
         api.listen(0, "127.0.0.1", () => resolve(api.address() as { port: number }));
       });
-      const router = new MediaMtxRouter(`http://127.0.0.1:${address.port}`, "ffmpeg.exe");
+      const router = new MediaMtxRouter(`http://127.0.0.1:${address.port}`, "ffmpeg.exe",
+        async (source) => source.endsWith("/one") ? "h264" : "hevc");
       await router.ensurePath("camera-one", "rtsp://camera.local/one");
+      expect(config?.runOnDemand).toContain("-c:v copy");
       await router.ensurePath("camera-one", "rtsp://camera.local/one");
       expect({ adds, patches }).toEqual({ adds: 1, patches: 0 });
       await router.ensurePath("camera-one", "rtsp://camera.local/two");
       expect(patches).toBe(1);
+      expect(config?.runOnDemand).toContain("-c:v libopenh264");
+      expect(config?.runOnDemand).toContain("fps=15");
     } finally {
       await new Promise<void>((resolve) => api.close(() => resolve()));
     }
