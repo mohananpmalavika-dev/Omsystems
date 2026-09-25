@@ -91,9 +91,6 @@ export function LiveAiOverlay({
     alerts.forEach((alert, alertIdx) => {
       const isCriticalOrHigh = alert.severity === "P1" || alert.severity === "P2";
       const titleLower = alert.title.toLowerCase();
-      const objectClasses = alert.objectClasses && alert.objectClasses.length > 0
-        ? alert.objectClasses
-        : [alert.title];
 
       const rawAlert = alert as any;
 
@@ -140,75 +137,12 @@ export function LiveAiOverlay({
         return;
       }
 
-      // When bounding boxes are derived from active AI alert classes (e.g. Helmet, Vest, Intrusion Person, Vehicle)
-      // Ground coordinates deterministically from alert event ID or rule zone
-      const matchedRule = rules.find((r) => r.id === alert.ruleId);
-      let posX = 35 + ((alertIdx * 23) % 40);
-      let posY = 25 + ((alertIdx * 17) % 35);
-      let boxW = 20;
-      let boxH = 45;
-
-      if (matchedRule?.zone?.points && matchedRule.zone.points.length > 0) {
-        const norm = normalizePoints(matchedRule.zone.points);
-        posX = norm[0].x;
-        posY = norm[0].y;
-      }
-
-      objectClasses.forEach((cls, clsIdx) => {
-        const isHelmet = cls.toLowerCase().includes("helmet");
-        const isVest = cls.toLowerCase().includes("vest");
-        const isVehicle = cls.toLowerCase().includes("vehicle") || cls.toLowerCase().includes("car") || cls.toLowerCase().includes("truck");
-
-        if (isHelmet) {
-          boxes.push({
-            x: Math.max(5, Math.min(80, posX + 4)),
-            y: Math.max(5, Math.min(80, posY)),
-            width: 12,
-            height: 14,
-            label: titleLower.includes("no") ? "NO HELMET VIOLATION" : "HELMET DETECTED",
-            confidence: alert.confidence,
-            isViolation: titleLower.includes("no") || isCriticalOrHigh,
-            trackId: `PPE-H-${alertIdx}-${clsIdx}`,
-          });
-        } else if (isVest) {
-          boxes.push({
-            x: Math.max(5, Math.min(75, posX + 2)),
-            y: Math.max(5, Math.min(75, posY + 12)),
-            width: 16,
-            height: 20,
-            label: titleLower.includes("no") ? "NO SAFETY VEST" : "SAFETY VEST",
-            confidence: alert.confidence,
-            isViolation: titleLower.includes("no") || isCriticalOrHigh,
-            trackId: `PPE-V-${alertIdx}-${clsIdx}`,
-          });
-        } else if (isVehicle) {
-          boxes.push({
-            x: Math.max(5, Math.min(65, posX - 5)),
-            y: Math.max(5, Math.min(65, posY + 10)),
-            width: 34,
-            height: 28,
-            label: "VEHICLE DETECTED",
-            confidence: alert.confidence,
-            isViolation: isCriticalOrHigh,
-            trackId: `VEH-${alertIdx}-${clsIdx}`,
-          });
-        } else {
-          boxes.push({
-            x: Math.max(5, Math.min(75, posX)),
-            y: Math.max(5, Math.min(50, posY)),
-            width: boxW,
-            height: boxH,
-            label: alert.title.toUpperCase(),
-            confidence: alert.confidence,
-            isViolation: isCriticalOrHigh || titleLower.includes("intrusion"),
-            trackId: `OBJ-${alertIdx}-${clsIdx}`,
-          });
-        }
-      });
+      // Alerts without measured coordinates remain available in the alert
+      // center. Inventing positions here makes a blank camera look analyzed.
     });
 
     return boxes;
-  }, [alerts, rules]);
+  }, [alerts]);
 
   return (
     <svg

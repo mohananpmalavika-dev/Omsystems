@@ -875,27 +875,10 @@ function isAllowedIngestSource(sourceUri: string, allowSrt: boolean, allowMultic
 }
 
 function rewriteHlsPlaylist(playlist: string, token: string): string {
-  const appendToken = (uri: string) => {
-    if (!token || !uri || /^(?:https?:|data:)/i.test(uri)) return uri;
-    try {
-      const parsed = new URL(uri, "http://edge.local");
-      parsed.searchParams.set("token", token);
-      const search = parsed.search ? parsed.search : "";
-      return `${parsed.pathname}${search}${parsed.hash}`;
-    } catch {
-      const separator = uri.includes("?") ? "&" : "?";
-      return `${uri}${separator}token=${encodeURIComponent(token)}`;
-    }
-  };
-  return playlist
+  return rewriteHlsPlaylistTokens(playlist
     .split("\n")
     .filter((line) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
-    .map((line) => {
-      if (!line || (line.startsWith("#") && !line.includes("URI=\""))) return line;
-      if (line.includes("URI=\"")) return line.replace(/URI=\"([^\"]+)\"/g, (_all, uri) => `URI=\"${appendToken(uri)}\"`);
-      return appendToken(line);
-    })
-    .join("\n");
+    .join("\n"), token);
 }
 
 function startManagedProcess(name: string, executable: string, args: string[], cwd: string, environment?: NodeJS.ProcessEnv) {
@@ -1095,16 +1078,13 @@ function appendQueryToken(uri: string, token: string) {
   // Never disclose a media credential to an absolute or protocol-relative
   // third-party URI that may appear in a malformed/untrusted playlist.
   if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(uri)) return uri;
-  try {
-    const base = "http://edge.local";
-    const parsed = new URL(uri, base);
-    parsed.searchParams.set("token", token);
-    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-  } catch {
-    // A malformed URI will be rejected by the HLS client; leave it unchanged
-    // rather than producing an invalid manifest here.
-    return uri;
-  }
+  const hashAt = uri.indexOf("#");
+  const beforeHash = hashAt < 0 ? uri : uri.slice(0, hashAt);
+  const hash = hashAt < 0 ? "" : uri.slice(hashAt);
+  const separator = beforeHash.includes("?") ? "&" : "?";
+  // Keep a relative URI relative. Turning init.mp4 into /init.mp4 drops both
+  // the camera path and the managed relay prefix, so every fragment is 404.
+  return `${beforeHash}${separator}token=${encodeURIComponent(token)}${hash}`;
 }
 async function readBinaryBody(request: IncomingMessage, maximumBytes: number) {
   const chunks: Buffer[] = []; let length = 0;

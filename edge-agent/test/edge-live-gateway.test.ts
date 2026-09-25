@@ -197,9 +197,12 @@ describe("all-in-one edge live gateway", () => {
       "https://untrusted.example/segment.m4s",
       "",
     ].join("\n"), "session-token");
-    expect(rewritten).toContain('URI="/init.mp4?token=session-token"');
-    expect(rewritten).toContain("/segment-1.m4s?token=session-token");
-    expect(rewritten).toContain('URI="/keys/key.bin?version=1&token=session-token"');
+    expect(rewritten).toContain('URI="init.mp4?token=session-token"');
+    expect(rewritten).toContain("segment-1.m4s?token=session-token");
+    expect(rewritten).toContain('URI="keys/key.bin?version=1&token=session-token"');
+    const playlistUrl = "https://example.test/v1/edge-media/agent-1/hls/camera-1/index.m3u8";
+    expect(new URL("init.mp4?token=session-token", playlistUrl).pathname)
+      .toBe("/v1/edge-media/agent-1/hls/camera-1/init.mp4");
     expect(rewritten).toContain("https://untrusted.example/segment.m4s");
     expect(rewritten).not.toContain("untrusted.example/segment.m4s?token=");
   });
@@ -355,7 +358,10 @@ describe("all-in-one edge live gateway", () => {
       });
       expect(playlist.status).toBe(200);
       expect(playlist.headers.get("cache-control")).toBe("no-store, private");
-      expect(await playlist.text()).toContain(`segment-1.m4s?token=${session.hls.bearerToken}`);
+      const playlistBody = await playlist.text();
+      expect(playlistBody).toContain(`URI="init.mp4?token=${session.hls.bearerToken}"`);
+      expect(playlistBody).toContain(`segment-1.m4s?token=${session.hls.bearerToken}`);
+      expect(playlistBody).not.toContain(`URI="/init.mp4`);
     } finally {
       await new Promise<void>((resolve) => upstream?.close(() => resolve()) ?? resolve());
     }

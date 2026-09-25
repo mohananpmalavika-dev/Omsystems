@@ -58,6 +58,7 @@
     "src/security-devices/**",
     "src/edge-management/**",
     "src/intelligence/**",
+    "src/communications/**",
     "src/services/voice-processing.service.ts",
 
     // Example files (not needed for production)

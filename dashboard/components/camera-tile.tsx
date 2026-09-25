@@ -434,9 +434,9 @@ function CameraTileComponent({
 
   const showCredentialUpdate = shouldOfferCredentialUpdate(liveError);
   const activeAiRules = aiOverlay?.rules.filter((rule) => rule.enabled) ?? [];
-  const activeAiAlerts = aiOverlay?.alerts.filter((alert) =>
+  const activeAiAlerts = hasLiveFrame ? aiOverlay?.alerts.filter((alert) =>
     !["resolved", "false_alarm", "suppressed"].includes(alert.status)
-  ) ?? [];
+  ) ?? [] : [];
   const latestAiAlert = activeAiAlerts[0];
 
   // Synchronized Event Flashback: Capture keyframe when alert triggers
@@ -951,7 +951,7 @@ function CameraTileComponent({
                   onClose={() => setShowFisheyeDewarp(false)}
                 />
               )}
-              {showAiOverlay && (
+              {showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
                   alerts={aiOverlay?.alerts}
@@ -969,7 +969,7 @@ function CameraTileComponent({
                 alt={`Latest snapshot from ${camera.name}`}
                 className="live-video"
               />
-              {showAiOverlay && (
+              {showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
                   rules={aiOverlay?.rules}
                   alerts={aiOverlay?.alerts}
