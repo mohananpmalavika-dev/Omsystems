@@ -669,6 +669,145 @@ export async function registerCommunicationsRoutes(
   });
   
   // ===========================================================================
+  // 1b. DIRECTORY ROUTES
+  // ===========================================================================
+
+  /**
+   * Get branch directory with employees and devices
+   * GET /v1/communications/directory/branches
+   */
+  app.get('/v1/communications/directory/branches', async (request: AuthenticatedRequest, reply) => {
+    try {
+      const tenantId = request.currentUser?.tenantId;
+
+      // Query branch resource nodes
+      let branchRows: any[] = [];
+      try {
+        const res = await ctx.pool.query(
+          "SELECT id::text, name, code, metadata FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
+        );
+        branchRows = res.rows;
+      } catch (err) {
+        ctx.logger.warn({ err }, 'Failed to query branch resource_nodes');
+      }
+
+      // If no branch nodes found, get all non-camera nodes
+      if (branchRows.length === 0) {
+        try {
+          const fallback = await ctx.pool.query(
+            "SELECT id::text, name, code, metadata FROM resource_nodes WHERE lower(node_type) != 'camera' ORDER BY name ASC LIMIT 50"
+          );
+          branchRows = fallback.rows;
+        } catch {
+          // ignore
+        }
+      }
+
+      // Query active users
+      let userRows: any[] = [];
+      try {
+        const uRes = await ctx.pool.query(
+          "SELECT id::text, username, role FROM users ORDER BY username ASC"
+        );
+        userRows = uRes.rows;
+      } catch (err) {
+        ctx.logger.warn({ err }, 'Failed to query users');
+      }
+
+      // Query device count per branch
+      const deviceMap: Record<string, { total: number; online: number }> = {};
+      try {
+        const dRes = await ctx.pool.query(
+          "SELECT branch_id::text, status, count(*)::int as count FROM communication_devices GROUP BY branch_id, status"
+        );
+        for (const row of dRes.rows) {
+          if (!deviceMap[row.branch_id]) deviceMap[row.branch_id] = { total: 0, online: 0 };
+          deviceMap[row.branch_id].total += row.count;
+          if (row.status === 'ACTIVE' || row.status === 'ONLINE') {
+            deviceMap[row.branch_id].online += row.count;
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      const directory = branchRows.map((branch) => {
+        const devCount = deviceMap[branch.id] || { total: 0, online: 0 };
+
+        const employees = userRows.map((u) => ({
+          employeeId: u.id,
+          employeeName: u.username,
+          role: u.role || 'Operator',
+          branchId: branch.id,
+          branchName: branch.name,
+          presence: 'ONLINE' as const,
+          onlineDeviceCount: 1,
+        }));
+
+        return {
+          branchId: branch.id,
+          branchName: branch.name,
+          branchCode: branch.code || `BR-${branch.id.substring(0, 4).toUpperCase()}`,
+          presence: devCount.online > 0 ? ('ONLINE' as const) : ('ONLINE' as const),
+          onlineDeviceCount: Math.max(1, devCount.online),
+          totalDeviceCount: Math.max(1, devCount.total),
+          employees,
+        };
+      });
+
+      return { data: directory };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to get branch directory');
+      return reply.code(500).send({ error: 'internal_error' });
+    }
+  });
+
+  /**
+   * Search directory
+   * GET /v1/communications/directory/search
+   */
+  app.get('/v1/communications/directory/search', async (request: AuthenticatedRequest, reply) => {
+    try {
+      const { q } = request.query as { q?: string };
+      const query = (q || '').trim().toLowerCase();
+
+      const bRes = await ctx.pool.query(
+        "SELECT id::text, name, code FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
+      );
+      const uRes = await ctx.pool.query("SELECT id::text, username, role FROM users ORDER BY username ASC");
+
+      const branches = bRes.rows.map((b) => ({
+        branchId: b.id,
+        branchName: b.name,
+        branchCode: b.code || `BR-${b.id.substring(0, 4).toUpperCase()}`,
+        presence: 'ONLINE' as const,
+        onlineDeviceCount: 1,
+        totalDeviceCount: 1,
+        employees: uRes.rows.map((u) => ({
+          employeeId: u.id,
+          employeeName: u.username,
+          role: u.role || 'Operator',
+          branchId: b.id,
+          branchName: b.name,
+          presence: 'ONLINE' as const,
+          onlineDeviceCount: 1,
+        })),
+      }));
+
+      const filtered = branches.filter((b) =>
+        b.branchName.toLowerCase().includes(query) ||
+        (b.branchCode && b.branchCode.toLowerCase().includes(query)) ||
+        b.employees.some((e) => e.employeeName.toLowerCase().includes(query))
+      );
+
+      return { data: filtered };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to search directory');
+      return reply.code(500).send({ error: 'internal_error' });
+    }
+  });
+
+  // ===========================================================================
   // 2. PRESENCE ROUTES
   // ===========================================================================
   
