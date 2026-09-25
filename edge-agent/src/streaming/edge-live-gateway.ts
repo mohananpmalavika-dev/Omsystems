@@ -284,7 +284,7 @@ export class EdgeLiveGateway {
       }
       const apiFamily = body.apiFamily === "hikvision-isapi" || body.apiFamily === "dahua-cgi"
         ? body.apiFamily : undefined;
-      const uri = deviceArchivePlaybackUri({ ...cameraConfig, ...(vendor === "onvif" && apiFamily ? { apiFamily } : {}) }, from, to, channel);
+      const uri = deviceArchivePlaybackUri({ ...cameraConfig, ...(apiFamily ? { apiFamily } : {}) }, from, to, channel);
       if (!uri) return sendJson(response, 409, { error: "camera_archive_playback_unsupported" });
       const path = `camera-archive-${safeIdentifier(consumed.cameraId)}-${randomUUID()}`;
       await this.options.router.ensurePath(path, uri);

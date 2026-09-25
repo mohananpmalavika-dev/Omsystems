@@ -77,6 +77,21 @@ describe("vendor recorder probes", () => {
     expect(deviceArchivePlaybackUri({ ...config, apiFamily: clips[0]!.apiFamily }, from, to)).toContain("/cam/playback?channel=1");
   });
 
+  it("falls back to Hikvision archive search on a CP PLUS OEM recorder", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response("not found", { status: 404 }))
+      .mockResolvedValueOnce(new Response(
+        "<CMSearchResult><numOfMatches>1</numOfMatches><searchMatchItem><trackID>701</trackID><startTime>2026-09-24T10:01:00.000Z</startTime><endTime>2026-09-24T10:03:00.000Z</endTime></searchMatchItem></CMSearchResult>",
+      ));
+    vi.stubGlobal("fetch", fetcher);
+    const config = { host: "192.0.2.26", port: 80, vendor: "cp-plus" as const, username: "operator", password: "secret" };
+    const clips = await searchDeviceArchive(config, new Date("2026-09-24T10:00:00Z"), new Date("2026-09-24T10:05:00Z"), 1000, 7);
+    expect(clips).toEqual([{ startTime: "2026-09-24T10:01:00.000Z", endTime: "2026-09-24T10:03:00.000Z", apiFamily: "hikvision-isapi" }]);
+    expect(fetcher.mock.calls[1]?.[1]?.body).toContain("<trackID>701</trackID>");
+    expect(deviceArchivePlaybackUri({ ...config, apiFamily: clips[0]!.apiFamily }, new Date(clips[0]!.startTime), new Date(clips[0]!.endTime), 7))
+      .toContain("/Streaming/tracks/701?");
+  });
+
   it("builds vendor playback probes without exposing them to the control plane", () => {
     const hikvision = recorderPlaybackUri({
       id: "hik", name: "NVR", deviceType: "nvr", vendor: "hikvision",

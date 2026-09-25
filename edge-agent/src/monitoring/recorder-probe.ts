@@ -152,26 +152,24 @@ export async function searchDeviceArchive(
     ? { username: config.username, password: config.password ?? "" }
     : undefined;
   const base = `${config.secure ? "https" : "http"}://${config.host}:${config.port}`;
-  let selected: "hikvision-isapi" | "dahua-cgi";
+  // CP PLUS and other OEM brands can ship either API. Try the advertised family
+  // first, then the other one if its endpoint is unavailable or unrecognized.
+  const preferred = family === "dahua-cgi" ? "dahua-cgi" : "hikvision-isapi";
+  const alternate = preferred === "dahua-cgi" ? "hikvision-isapi" : "dahua-cgi";
+  let selected: "hikvision-isapi" | "dahua-cgi" = preferred;
   let result: ArchiveSearchResult;
-  if (family === "hikvision-isapi" || family === "dahua-cgi") {
-    selected = family;
-    result = family === "hikvision-isapi"
-      ? await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
-      : await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
-  } else {
-    // OEM models often expose one of these APIs even when their brand differs.
-    // A successful empty response still identifies the API; an arbitrary HTTP 200 does not.
+  const searchFamily = (candidate: typeof selected) => candidate === "hikvision-isapi"
+    ? searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500)
+    : searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
+  try {
+    result = await searchFamily(preferred);
+  } catch (firstError) {
     try {
-      result = await searchHikvisionArchive(base, credentials, timeoutMs, hikvisionTrackId(channel), from, to, 500);
-      selected = "hikvision-isapi";
+      result = await searchFamily(alternate);
+      selected = alternate;
     } catch {
-      try {
-        result = await searchDahuaArchive(base, credentials, timeoutMs, channel, from, to, 500);
-        selected = "dahua-cgi";
-      } catch {
-        throw new Error("camera_archive_search_unavailable_or_unsupported");
-      }
+      if (family === "hikvision-isapi" || family === "dahua-cgi") throw firstError;
+      throw new Error("camera_archive_search_unavailable_or_unsupported");
     }
   }
   if (!result.coverageComplete) throw new Error(result.reasonCodes[0] ?? "camera_archive_search_incomplete");
