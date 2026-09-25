@@ -132,9 +132,10 @@ class CommunicationAPIClient {
     };
     
     if (typeof window !== 'undefined') {
-      const token = localStorage.getItem('accessToken');
+      const token = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
       if (token) {
         headers['x-sentinel-session'] = token;
+        headers['Authorization'] = `Bearer ${token}`;
       }
     }
     

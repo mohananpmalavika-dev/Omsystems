@@ -53,6 +53,8 @@ import {
   Package,
   PanelLeftClose,
   PanelLeftOpen,
+  Phone,
+  PhoneCall,
   Play,
   Plus,
   Radar,
@@ -126,6 +128,7 @@ function sectionLabel(label: string) {
   const labels: Record<string, string> = {
     "WORKSPACE": "Branch operations",
     "SURVEILLANCE & INVESTIGATION": "Investigate & respond",
+    "COMMUNICATIONS": "Communications & Intercom",
     "DEVICE HEALTH & MAINTENANCE": "Branch uptime",
     "INTELLIGENCE & AI": "Risk intelligence",
     "AUDIT, MIS & COMPLIANCE": "Evidence & assurance",
@@ -157,6 +160,14 @@ export const navigation: NavGroup[] = [
       { label: "Security alerts", href: "/analytics/alerts", icon: BellRing },
       { label: "Device health alerts", href: "/operations/alerts", icon: Radio },
       { label: "Incident Response", href: "/incidents", icon: Siren, badge: "incidents" },
+    ],
+  },
+  {
+    label: "COMMUNICATIONS",
+    icon: PhoneCall,
+    items: [
+      { label: "Voice Calling & Intercom", href: "/communications/calls", icon: PhoneCall },
+      { label: "KryptoVision Connect", href: "/communications/connect", icon: Radio },
     ],
   },
   {
@@ -234,6 +245,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/storage",
     "/operations/cameras",
     "/operations/recording",
+    "/communications/calls",
+    "/communications/connect",
   ],
   security_officer: [
     "/",
@@ -252,8 +265,10 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/cameras",
     "/operations/recording",
     "/recordings",
+    "/communications/calls",
+    "/communications/connect",
   ],
-  viewer: ["/", "/modules", "/control-room", "/video-search", "/playback/synced", "/recordings"],
+  viewer: ["/", "/modules", "/control-room", "/video-search", "/playback/synced", "/recordings", "/communications/calls"],
   branch_manager: [
     "/",
     "/modules",
@@ -267,6 +282,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/edge-agents",
     "/maintenance/workorders",
     "/maintenance/health",
+    "/communications/calls",
+    "/communications/connect",
   ],
   zone_manager: [
     "/",
@@ -282,6 +299,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/maintenance/workorders",
     "/maintenance/health",
     "/reports",
+    "/communications/calls",
+    "/communications/connect",
   ],
   region_manager: [
     "/",
@@ -297,6 +316,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/maintenance/workorders",
     "/maintenance/health",
     "/reports",
+    "/communications/calls",
+    "/communications/connect",
   ],
   area_manager: [
     "/",
@@ -311,6 +332,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/operations/edge-agents",
     "/maintenance/workorders",
     "/maintenance/health",
+    "/communications/calls",
+    "/communications/connect",
   ],
   auditor: [
     "/",
@@ -326,6 +349,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/audit/health",
     "/audit/maintenance",
     "/reports",
+    "/communications/calls",
   ],
   admin: [
     "/",
@@ -349,6 +373,8 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/maintenance/device-management",
     "/admin/system",
     "/account/security",
+    "/communications/calls",
+    "/communications/connect",
   ],
 };
 
@@ -426,6 +452,7 @@ function effectiveMenuAccess(user: MenuAccessUser | null | undefined): Set<strin
 
 
 export const quickActions: NavItem[] = [
+  { label: "Voice Calling & Intercom", href: "/communications/calls", icon: PhoneCall },
   { label: "Security alert intelligence", href: "/analytics/alerts", icon: BarChart3 },
   { label: "Predictive operations", href: "/analytics/predictions", icon: TrendingUp },
   { label: "Investigation workspace", href: "/analytics/investigation", icon: Route },
@@ -455,6 +482,9 @@ const pageMeta = [
     section: group.label,
     title: item.label,
   }))),
+  { path: "/communications", section: "Communications", title: "Communications" },
+  { path: "/communications/calls", section: "Communications", title: "Voice Calling & Intercom" },
+  { path: "/communications/connect", section: "Communications", title: "KryptoVision Connect" },
   { path: "/operations/branches", section: "Operations", title: "Branch health" },
   { path: "/camera-detail", section: "Infrastructure health", title: "Camera details" },
   { path: "/maintenance/camera-map", section: "Fleet maintenance", title: "Camera Location Map" },
@@ -648,6 +678,8 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
   const commandResults = useMemo(() => {
     const query = commandQuery.trim().toLowerCase();
     const searchAliases: Record<string, string[]> = {
+      "/communications/calls": ["call", "calling", "phone", "voice", "audio", "intercom", "dial", "soc", "operator call", "telephone"],
+      "/communications/connect": ["enroll", "connect", "device", "terminal", "pairing", "handset"],
       "/maintenance/device-configuration": ["golden", "templates", "hardware", "onvif", "ptz", "ntp", "imaging", "profiles", "standard"],
       "/control-room": ["wall", "tour", "grid", "presentation", "matrix", "cctv", "auto-rotation"],
       "/evidence": ["redaction", "blur", "custody", "forensic", "court", "export", "hash", "tamper"],
@@ -982,6 +1014,9 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
           {visibleHrefs.has("/operations/alerts") && <Link href="/operations/alerts" prefetch={false} className={isActive("/operations/alerts") ? "active" : ""} onClick={handleNavClick("/operations/alerts")}>
             <Radar size={15} /><span>Alerts</span>
           </Link>}
+          {visibleHrefs.has("/communications/calls") && <Link href="/communications/calls" prefetch={false} className={isActive("/communications/calls") ? "active" : ""} onClick={handleNavClick("/communications/calls")}>
+            <PhoneCall size={15} /><span>Calling</span>
+          </Link>}
         </div>
 
         <div className="nav-utility">
@@ -1150,6 +1185,15 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
               )}
             </div>
             <button type="button" className="topbar-icon" aria-label="Search modules" onClick={() => setCommandOpen(true)}><Search size={18} /></button>
+            <Link
+              href="/communications/calls"
+              aria-label="Voice Calling & Intercom"
+              title="Voice Calling & Intercom"
+              className={`topbar-icon ${isActive("/communications/calls") ? "active text-emerald-400" : ""}`}
+              onClick={handleNavClick("/communications/calls")}
+            >
+              <PhoneCall size={18} />
+            </Link>
             <Link
               href="/operations/alerts"
               aria-label="Notifications"

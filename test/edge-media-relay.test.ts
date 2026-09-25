@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
+import { WebSocketServer } from "ws";
 import type { ControlPlaneStore } from "../src/control-plane-store.js";
 import { registerEdgeMediaRelay } from "../src/services/edge-media-relay.js";
 import { startManagedMediaRelay } from "../edge-agent/src/streaming/managed-media-relay.js";
@@ -87,4 +88,54 @@ describe("self-hosted edge media relay", () => {
     const forbidden = await fetch(`${publicUrl}/internal/mediamtx/auth`);
     expect(forbidden.status).toBe(404);
   });
+
+  it("reconnects when the control plane loses a socket without closing the edge socket", async () => {
+    let relayVisible = true;
+    let connections = 0;
+    let disconnections = 0;
+    const server = createServer((_request, response) => {
+      response.writeHead(relayVisible ? 200 : 503).end();
+    });
+    const sockets = new WebSocketServer({ noServer: true });
+    server.on("upgrade", (request, socket, head) => {
+      if (request.url !== `/v1/edge-media/connect/${agentId}`) {
+        socket.destroy();
+        return;
+      }
+      sockets.handleUpgrade(request, socket, head, (ws) => {
+        connections += 1;
+        ws.on("close", () => { disconnections += 1; });
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    cleanup.push(async () => {
+      for (const client of sockets.clients) client.terminate();
+      await new Promise<void>((resolve) => sockets.close(() => resolve()));
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    });
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("relay listener unavailable");
+    const relay = startManagedMediaRelay(
+      `http://127.0.0.1:${address.port}/v1/edge-media/${agentId}`,
+      agentId,
+      credential,
+      1,
+      { healthProbeIntervalMs: 20, reconnectDelayMs: 20 },
+    );
+    cleanup.push(async () => relay.stop());
+
+    await waitFor(() => connections === 1);
+    relayVisible = false;
+    await waitFor(() => disconnections >= 1);
+    relayVisible = true;
+    await waitFor(() => connections >= 2);
+  });
 });
+
+async function waitFor(condition: () => boolean) {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error("relay did not recover within two seconds");
+}

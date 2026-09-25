@@ -11,6 +11,7 @@ import { ApiErrorNotifier } from "@/components/api-error-notifier";
 import { GuardianFAB } from "@/components/guardian-ai/guardian-fab";
 import "./globals.css";
 import "./workspace.css";
+import "./premium.css";
 
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",

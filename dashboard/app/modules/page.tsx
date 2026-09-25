@@ -17,6 +17,7 @@ import { authApi } from "@/lib/api-client";
 
 const groupDescriptions: Record<string, string> = {
   WORKSPACE: "Start with the NBFC operating playbook, then use the full directory only when a specialist workflow is required.",
+  COMMUNICATIONS: "Branch voice calling, SOC operator voice dispatch, employee phone directory, and KryptoVision Connect device enrollment.",
   OPERATIONS: "Live control room, branch fleet, alert dispatch, incident response, and media streaming pipeline.",
   "DEVICE HEALTH & MAINTENANCE": "Camera, recorder, storage, gateway, power, and network health with diagnostics and recovery tools.",
   "INVESTIGATE & PLAYBACK": "AI semantic video search, synchronized multi-camera playback, recording archives, and chain of custody evidence.",

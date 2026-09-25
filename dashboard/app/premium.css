@@ -1,0 +1,302 @@
+/* KryptonVision's shared visual system. Keep this after legacy route styles. */
+:root,
+html[data-theme="light"] {
+  --canvas: #f4f6f5;
+  --surface: #ffffff;
+  --surface-soft: #f7f9f8;
+  --surface-strong: #ecf1ef;
+  --card-bg: #ffffff;
+  --card-border: #dfe8e4;
+  --line: #dfe8e4;
+  --line-strong: #cbd9d3;
+  --ink: #172b32;
+  --muted: #657980;
+  --blue: #087f78;
+  --blue-dark: #05645f;
+  --blue-soft: #e7f5f1;
+  --cyan: #1a9b95;
+  --green: #16866c;
+  --amber: #bb8543;
+  --red: #c34f56;
+  --ui-accent: #087f78;
+  --ui-accent-hover: #05645f;
+  --ui-focus: #32a99e;
+  --ui-radius: 14px;
+  --shadow-sm: 0 1px 2px rgb(16 45 47 / 4%), 0 14px 34px rgb(16 45 47 / 5%);
+  --shadow-panel: 0 20px 55px -35px rgb(17 55 53 / 33%);
+}
+
+html[data-theme="dark"] {
+  --canvas: #0b141b;
+  --surface: #14232b;
+  --surface-soft: #192d35;
+  --surface-strong: #203840;
+  --card-bg: #14232b;
+  --card-border: #2c444a;
+  --line: #2c444a;
+  --line-strong: #3b555a;
+  --ink: #f1f6f3;
+  --muted: #a6b9ba;
+  --blue: #6bd1c4;
+  --blue-dark: #9ae2d7;
+  --blue-soft: #163b3b;
+  --ui-accent: #36ab9c;
+  --ui-accent-hover: #238d81;
+  --ui-focus: #80ddd0;
+}
+
+html[data-theme="navy"] {
+  --canvas: #09131e;
+  --surface: #122438;
+  --surface-soft: #182d43;
+  --surface-strong: #20394e;
+  --card-bg: #122438;
+  --card-border: #294357;
+  --line: #294357;
+  --line-strong: #385771;
+  --ink: #f1f6f8;
+  --muted: #a1b7c8;
+  --blue: #81cdd7;
+  --blue-dark: #a9e4e8;
+  --blue-soft: #183c49;
+  --ui-accent: #278f9e;
+  --ui-accent-hover: #227b89;
+  --ui-focus: #8dd9df;
+}
+
+html[data-theme="emerald"] {
+  --canvas: #091713;
+  --surface: #142820;
+  --surface-soft: #193328;
+  --surface-strong: #224334;
+  --card-bg: #142820;
+  --card-border: #315544;
+  --line: #315544;
+  --line-strong: #456b55;
+  --ink: #f2f8f2;
+  --muted: #aec5b6;
+  --blue: #80d8ac;
+  --blue-dark: #a9ebc6;
+  --blue-soft: #1a4533;
+  --ui-accent: #348e62;
+  --ui-accent-hover: #26734e;
+  --ui-focus: #91dfae;
+}
+
+html,
+body {
+  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+body { color: var(--ink); background: var(--canvas); }
+button, input, select, textarea { font: inherit; }
+::selection { background: color-mix(in srgb, var(--blue) 25%, transparent); }
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 3px;
+}
+
+/* A quiet, fixed navigation rail gives every product area the same frame. */
+.app-shell .sidebar {
+  background:
+    radial-gradient(350px 350px at -18% -11%, rgb(29 132 124 / 25%), transparent 72%),
+    linear-gradient(165deg, #112932 0%, #0c2029 48%, #081923 100%);
+  border-right: 1px solid rgb(196 224 216 / 12%);
+  box-shadow: 14px 0 44px rgb(8 25 35 / 10%);
+}
+.app-shell .sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, #c6a16b, #53b5a5 66%, transparent);
+  pointer-events: none;
+}
+.app-shell .sidebar .brand { padding-bottom: 20px; border-bottom: 1px solid rgb(211 232 225 / 10%); }
+.app-shell .sidebar .brand-mark {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgb(211 232 225 / 22%);
+  border-radius: 13px;
+  background: linear-gradient(145deg, #218e86, #105951);
+  box-shadow: 0 10px 28px rgb(1 13 17 / 22%), inset 0 1px rgb(255 255 255 / 18%);
+}
+.app-shell .sidebar .brand-copy strong { color: #f8fcf9 !important; font-size: 16px; font-weight: 720; letter-spacing: -.035em; }
+.app-shell .sidebar .brand-copy span { color: #8daaa7 !important; font-size: 10px; letter-spacing: .08em; }
+.app-shell .sidebar .command-search {
+  min-height: 43px;
+  border: 1px solid rgb(192 224 216 / 15%) !important;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 5%) !important;
+  color: #b8ceca !important;
+}
+.app-shell .sidebar .command-search:hover { background: rgb(255 255 255 / 9%) !important; border-color: rgb(120 211 194 / 42%) !important; }
+.app-shell .sidebar .command-search kbd { color: #a2b9b6 !important; background: rgb(255 255 255 / 7%) !important; border-color: rgb(192 224 216 / 13%) !important; }
+.app-shell .sidebar .nav-shortcuts a {
+  border: 1px solid rgb(192 224 216 / 10%);
+  background: rgb(255 255 255 / 4%);
+  border-radius: 11px;
+  color: #abc2be;
+}
+.app-shell .sidebar .nav-utility > :where(a, button) { background: rgb(255 255 255 / 3%); border-color: rgb(192 224 216 / 10%); }
+.app-shell .sidebar :is(.main-nav a, .nav-group summary, .sidebar-help, .nav-utility > a, .nav-utility > button) { color: #a6bfbb; }
+.app-shell .sidebar .nav-group summary { color: #809e9c; font-size: 11px; font-weight: 670; }
+.app-shell .sidebar .nav-group[open] summary { color: #dfefeb !important; }
+.app-shell .sidebar .nav-group[open] summary .nav-group-label > svg { color: #80d5c6; }
+.app-shell .sidebar .main-nav a { min-height: 41px; border-radius: 10px; font-size: 12.5px; }
+.app-shell .sidebar :is(.main-nav a, .nav-shortcuts a, .nav-utility > a):hover { background: rgb(117 202 185 / 10%); color: #fff; }
+.app-shell .sidebar :is(.main-nav a.active, .nav-shortcuts a.active, .nav-utility > a.active) {
+  color: #fff;
+  border-color: rgb(107 212 190 / 22%);
+  background: linear-gradient(90deg, rgb(35 149 135 / 28%), rgb(35 149 135 / 9%));
+  box-shadow: inset 3px 0 #78d4c1;
+}
+.app-shell .sidebar .sidebar-status { background: rgb(255 255 255 / 5%) !important; border-color: rgb(192 224 216 / 12%) !important; }
+.app-shell .sidebar :is(.sidebar-status strong, .sidebar-user strong) { color: #eef8f4 !important; }
+.app-shell .sidebar :is(.sidebar-status span, .sidebar-user span, .sidebar-legal) { color: #8ca7a6 !important; }
+
+/* The canvas, title bar and reusable panels stay legible in every theme. */
+.app-shell .topbar {
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 5px 20px rgb(17 51 48 / 3%);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+.app-shell .topbar-title { color: var(--ink); font-size: 19px; font-weight: 720; letter-spacing: -.035em; }
+.app-shell .breadcrumbs { color: var(--muted); font-size: 11px; }
+.app-shell .route-surface {
+  background:
+    radial-gradient(780px 330px at 88% -12%, color-mix(in srgb, var(--blue) 9%, transparent), transparent 76%),
+    linear-gradient(180deg, color-mix(in srgb, var(--canvas) 92%, var(--surface)) 0, var(--canvas) 32rem);
+}
+.app-shell .content { padding: 28px 30px 52px; }
+.app-scope-pill, .workspace-context-label {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.app-scope-pill svg, .workspace-context-label svg { color: var(--blue); }
+.app-shell :is(.topbar-icon, .menu-button, .top-avatar, .theme-switcher-trigger) {
+  color: var(--muted) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 11px;
+  background: var(--surface) !important;
+  box-shadow: 0 1px 2px rgb(17 51 48 / 3%);
+}
+.app-shell :is(.topbar-icon, .menu-button, .top-avatar, .theme-switcher-trigger):hover { color: var(--blue) !important; border-color: color-mix(in srgb, var(--blue) 34%, var(--line)) !important; background: var(--blue-soft) !important; }
+.app-shell .create-menu-trigger, .ui-button-primary, .btn-primary, .primary-button, .primary-action {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: #fff;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--ui-accent) 16%, transparent);
+}
+.app-shell .create-menu-trigger:hover, .ui-button-primary:hover:not(:disabled), .btn-primary:hover:not(:disabled), .primary-button:hover:not(:disabled), .primary-action:hover:not(:disabled) { background: var(--ui-accent-hover); border-color: var(--ui-accent-hover); }
+
+.app-shell :is(.page-hero, .module-hero) {
+  padding: 28px 30px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    radial-gradient(450px 230px at 100% 0%, color-mix(in srgb, var(--blue) 10%, transparent), transparent 72%),
+    var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+.app-shell :is(.page-hero, .module-hero)::after { display: none; }
+.app-shell :is(.page-hero h1, .module-hero h1) { color: var(--ink); font-weight: 720; letter-spacing: -.045em; line-height: 1.18; }
+.app-shell :is(.page-hero-description, .module-description) { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.app-shell :is(.page-hero-eyebrow, .module-eyebrow, .eyebrow-label) { color: var(--blue); font-size: 10px; font-weight: 760; letter-spacing: .1em !important; text-transform: uppercase; }
+.app-shell :is(.page-hero-icon, .module-icon) { color: var(--blue); background: var(--blue-soft); border: 1px solid color-mix(in srgb, var(--blue) 16%, var(--line)); box-shadow: none; }
+.app-shell .page-hero-status { background: var(--surface-soft); border-color: var(--line); color: var(--ink); }
+.app-shell .page-hero-status strong { color: var(--ink); }
+.app-shell .page-hero-status span { color: var(--muted); }
+.app-shell :is(.module-panel, .ui-card) { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.app-shell .route-surface :where(.rounded-xl.border, .rounded-2xl.border) { border-color: var(--line); box-shadow: var(--shadow-sm); }
+.app-shell .route-surface :where(.rounded-xl.border, .rounded-2xl.border):hover { border-color: color-mix(in srgb, var(--blue) 25%, var(--line)); }
+.app-shell .route-surface :is(.bg-blue-600, .bg-blue-500, .bg-indigo-600) { background-color: var(--ui-accent) !important; }
+.app-shell .route-surface :is(.text-blue-600, .text-blue-500, .text-indigo-600) { color: var(--blue) !important; }
+.app-shell .route-surface :is(.border-blue-500, .border-blue-600) { border-color: var(--blue) !important; }
+
+/* Dense data stays crisp while controls retain generous hit targets. */
+.app-shell .workspace :where(table) { border-color: var(--line); }
+.app-shell .workspace :where(th) { color: var(--muted); font-size: 11px; font-weight: 680; letter-spacing: .035em; }
+.app-shell .workspace :where(td) { color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.app-shell .workspace :where(thead) { background: var(--surface-soft); }
+.app-shell .workspace :where(tr) { border-color: var(--line); }
+.app-shell .workspace :where(tbody tr:hover) { background: color-mix(in srgb, var(--blue-soft) 45%, var(--surface)); }
+.app-shell .route-surface :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .ui-select-trigger) {
+  border-radius: 10px;
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(17 51 48 / 3%);
+}
+.app-shell .route-surface :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, .ui-select-trigger):focus-visible { border-color: var(--blue); }
+.app-shell :is(.ui-button, .ui-tab, .ui-select-trigger) { border-radius: 10px; }
+.app-shell .ui-tabs-list { background: var(--surface-strong); border: 1px solid var(--line); border-radius: 12px; }
+.app-shell .ui-tab[aria-selected="true"] { color: var(--blue); background: var(--surface); box-shadow: 0 2px 6px rgb(17 51 48 / 8%); }
+.app-shell .command-dialog, .app-shell .create-menu-panel, .app-shell .theme-switcher-panel { border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: 0 22px 70px rgb(5 28 31 / 20%); }
+
+/* The first screen sets the visual tone for the rest of the workspace. */
+.command-center-hero {
+  border: 1px solid rgb(149 216 198 / 19%) !important;
+  background:
+    radial-gradient(370px 230px at 91% 17%, rgb(92 192 171 / 22%), transparent 77%),
+    linear-gradient(124deg, #173b43, #102b36 55%, #0b202c) !important;
+  box-shadow: 0 24px 55px -34px rgb(6 35 37 / 62%) !important;
+}
+.command-center-kicker { color: #a7dbca !important; }
+.command-center-metrics > div, .command-center-ai-bar, .command-center-workflow { border: 1px solid var(--line) !important; background: var(--surface) !important; box-shadow: var(--shadow-sm) !important; }
+.command-center-metrics > div::after { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.command-center-metrics > div:hover { border-color: color-mix(in srgb, var(--blue) 35%, var(--line)) !important; transform: translateY(-2px); }
+.command-center-ai-bar form > button { background: var(--ui-accent) !important; }
+.command-center-ai-bar form > button:hover { background: var(--ui-accent-hover) !important; }
+.command-center-workflow-intro > span { color: var(--blue); }
+.overview-heading { border-color: rgb(149 216 198 / 19%); background: linear-gradient(125deg, #173b43, #102b36 65%, #0b202c); }
+.overview-heading .eyebrow-label { color: #a7dbca; }
+
+/* A considered sign-in experience without introducing decorative assets. */
+.login-workspace { background: var(--surface); }
+.login-introduction {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(650px 520px at 108% 18%, rgb(54 154 142 / 29%), transparent 75%),
+    linear-gradient(145deg, #183c43, #0a222d 72%);
+}
+.login-introduction::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  right: -190px;
+  top: 24%;
+  width: 520px;
+  height: 520px;
+  border: 1px solid rgb(181 227 213 / 18%);
+  border-radius: 50%;
+  box-shadow: 0 0 0 72px rgb(181 227 213 / 4%), 0 0 0 146px rgb(181 227 213 / 3%);
+}
+.login-introduction::after { content: ""; position: absolute; inset: 0 0 auto; height: 3px; background: linear-gradient(90deg, #c6a16b, #53b5a5, transparent); }
+.login-introduction-brand svg, .login-introduction li svg { color: #a6ddc9; }
+.login-kicker { color: #bdcfaa; }
+.login-introduction-copy > p:not(.login-kicker) { color: #c2d8d2; }
+.login-workspace .login-button { background: var(--ui-accent); box-shadow: 0 8px 22px color-mix(in srgb, var(--ui-accent) 18%, transparent); }
+.login-workspace .login-button:hover:not(:disabled) { background: var(--ui-accent-hover); }
+.login-workspace .login-input { border-radius: 10px; background: var(--surface); }
+.login-workspace .auth-mode-selector { background: var(--surface-strong); border-radius: 11px; }
+
+@media (max-width: 991px) {
+  .app-shell .content { padding: 22px; }
+}
+@media (max-width: 680px) {
+  .app-shell .content { padding: 16px; }
+  .app-shell :is(.page-hero, .module-hero) { padding: 22px 18px; border-radius: 15px; }
+  .app-shell .topbar-title { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .command-center-metrics > div:hover { transform: none; }
+}

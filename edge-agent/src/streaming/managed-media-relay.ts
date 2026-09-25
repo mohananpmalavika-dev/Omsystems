@@ -3,15 +3,28 @@ import { logger } from "../utils/logger.js";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const MAX_CONCURRENT = 32;
+const HEALTH_PROBE_INTERVAL_MS = 15_000;
+const HEALTH_PROBE_TIMEOUT_MS = 5_000;
+const HEALTH_PROBE_FAILURE_LIMIT = 2;
+const RECONNECT_DELAY_MS = 3_000;
 
 type RelayRequest = { id: string; method: string; path: string; headers?: Record<string, string>; body?: string };
 
 /** The connector only dials the HTTPS control plane and only fetches loopback media. */
-export function startManagedMediaRelay(publicUrl: string, agentId: string, credential: string, localPort: number) {
+export function startManagedMediaRelay(
+  publicUrl: string,
+  agentId: string,
+  credential: string,
+  localPort: number,
+  options: { healthProbeIntervalMs?: number; reconnectDelayMs?: number } = {},
+) {
   const endpoint = new URL(publicUrl);
   if (endpoint.protocol !== "https:" && endpoint.hostname !== "localhost" && endpoint.hostname !== "127.0.0.1") {
     throw new Error("managed_media_relay_requires_https");
   }
+  const healthEndpoint = new URL(publicUrl);
+  healthEndpoint.pathname = `${healthEndpoint.pathname.replace(/\/$/, "")}/health`;
+  healthEndpoint.search = "";
   endpoint.protocol = endpoint.protocol === "https:" ? "wss:" : "ws:";
   endpoint.pathname = `/v1/edge-media/connect/${encodeURIComponent(agentId)}`;
   endpoint.search = "";
@@ -25,6 +38,8 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
     socket = new WebSocket(endpoint, { headers: { "x-edge-agent-token": credential }, maxPayload: 12 * 1024 * 1024 });
     const current = socket;
     let isAlive = true;
+    let healthProbeInFlight = false;
+    let healthProbeFailures = 0;
     current.on("pong", () => { isAlive = true; });
     const pingTimer = setInterval(() => {
       if (current.readyState === WebSocket.OPEN) {
@@ -38,6 +53,27 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
         current.ping();
       }
     }, 15_000);
+    // A proxy or server restart can drop the server-side connection while the
+    // edge socket still looks open. Check the relay route independently so a
+    // stale socket cannot keep live video offline until the agent restarts.
+    const healthTimer = setInterval(() => {
+      if (current.readyState !== WebSocket.OPEN || healthProbeInFlight) return;
+      healthProbeInFlight = true;
+      void fetch(healthEndpoint, {
+        headers: { "cache-control": "no-store" },
+        signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+      }).then((response) => {
+        healthProbeFailures = response.ok ? 0 : healthProbeFailures + 1;
+      }).catch(() => {
+        healthProbeFailures += 1;
+      }).finally(() => {
+        healthProbeInFlight = false;
+        if (healthProbeFailures >= HEALTH_PROBE_FAILURE_LIMIT && current.readyState === WebSocket.OPEN) {
+          logger.warn("Self-hosted media relay is absent from the control plane; reconnecting", { agentId });
+          current.terminate();
+        }
+      });
+    }, options.healthProbeIntervalMs ?? HEALTH_PROBE_INTERVAL_MS);
 
     current.on("open", () => {
       isAlive = true;
@@ -64,13 +100,15 @@ export function startManagedMediaRelay(publicUrl: string, agentId: string, crede
     current.on("error", (error) => {
       logger.warn("Self-hosted media relay connection error", { error: error.message });
       clearInterval(pingTimer);
+      clearInterval(healthTimer);
       current.terminate();
     });
     current.on("close", (code, reason) => {
       clearInterval(pingTimer);
+      clearInterval(healthTimer);
       logger.warn("Self-hosted media relay disconnected", { agentId, code, reason: reason?.toString() });
       if (socket === current) socket = undefined;
-      if (!stopped) reconnect = setTimeout(connect, 3_000);
+      if (!stopped) reconnect = setTimeout(connect, options.reconnectDelayMs ?? RECONNECT_DELAY_MS);
     });
   };
   connect();

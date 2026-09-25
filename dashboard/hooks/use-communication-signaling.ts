@@ -92,7 +92,9 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
   
   // Initialize Socket.IO connection
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    const token = typeof window !== 'undefined'
+      ? (sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken'))
+      : null;
     
     if (!token) {
       console.warn('[CommunicationSignaling] No access token found, deferring connection');
