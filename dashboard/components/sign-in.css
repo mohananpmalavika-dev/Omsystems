@@ -113,3 +113,85 @@ html body .auth-entry .login-footer p { color: #78869a !important; }
   .auth-entry .login-introduction { padding: 32px; }
   .auth-entry .login-introduction-copy { padding: 32px 0; }
 }
+
+/* Match the standalone sign-in surface to the product palette. */
+html body .auth-entry.login-container {
+  --ink: #172b32;
+  --muted: #657980;
+  --surface-soft: #f7f9f8;
+  --line: #dfe8e4;
+  --blue: #087f78;
+  --blue-dark: #05645f;
+  --blue-soft: #e7f5f1;
+  --card-border: #dfe8e4;
+  color: #172b32;
+  background: radial-gradient(750px 400px at 94% -8%, #d7eee8, transparent 72%), #f4f6f5 !important;
+  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+.auth-entry-layout {
+  border-color: #dfe8e4;
+  box-shadow: 0 30px 80px -38px rgb(17 55 53 / 32%);
+}
+.auth-entry .login-introduction {
+  background:
+    radial-gradient(350px 300px at 82% 25%, rgb(87 176 157 / 23%), transparent 78%),
+    linear-gradient(145deg, #183c43 0%, #0e2b35 58%, #0a202b 100%);
+}
+.auth-entry .login-introduction::before {
+  border-color: rgb(181 227 213 / 20%);
+  box-shadow: 0 0 0 54px rgb(181 227 213 / 5%), 0 0 0 110px rgb(181 227 213 / 3%);
+}
+.auth-entry .login-introduction::after { background: rgb(47 149 130 / 12%); }
+.auth-brand-mark {
+  background: linear-gradient(145deg, #2ca393, #105951);
+  border-color: rgb(189 232 214 / 42%);
+  box-shadow: 0 10px 24px rgb(1 25 28 / 28%);
+}
+.auth-entry .login-kicker { color: #b6d5bf; }
+.auth-entry .login-introduction h2 em { color: #9bdfcc; text-shadow: none; }
+.auth-entry .login-introduction-copy > p:not(.login-kicker) { color: #c4dbd3; }
+.auth-entry .login-introduction li { color: #e2f0eb; }
+.auth-entry .login-introduction li svg { color: #91ddc6; }
+.auth-visual-grid {
+  background-image: linear-gradient(rgb(154 224 202 / 14%) 1px, transparent 1px), linear-gradient(90deg, rgb(154 224 202 / 14%) 1px, transparent 1px);
+}
+.auth-orbit { border-color: rgb(154 224 202 / 48%); }
+.auth-orbit-one { box-shadow: 0 0 18px rgb(104 207 177 / 14%); }
+.auth-orbit-two { border-color: rgb(176 231 212 / 34%); }
+.auth-core {
+  color: #edfff7;
+  background: radial-gradient(circle at 35% 30%, #48bda5, #167e75 52%, #124b51);
+  border-color: rgb(194 235 217 / 70%);
+  box-shadow: 0 0 0 9px rgb(104 207 177 / 9%), 0 0 36px rgb(59 179 148 / 39%);
+}
+.auth-signal { background: #9ce4cb; box-shadow: 0 0 14px #69cbaa; }
+.auth-visual-caption { color: #a4cdbf; }
+.auth-entry .login-introduction-footer { color: #a7c9bd; }
+.auth-entry .auth-entry-eyebrow { color: #087f78 !important; }
+.auth-entry .login-header h1 { color: #172b32 !important; }
+.auth-entry .login-header > p { color: #657980; }
+.auth-entry .auth-mode-selector { border-color: #dfe8e4; background: #f4f7f5; border-radius: 10px; }
+.auth-entry .auth-mode-btn { color: #657980; border-radius: 7px; }
+.auth-entry .auth-mode-btn.active { color: #087f78; }
+html body .auth-entry .login-form .form-group label { color: #274149 !important; }
+html body .auth-entry .login-form .login-input {
+  border-color: #d4e1db !important;
+  border-radius: 9px;
+  color: #172b32 !important;
+  -webkit-text-fill-color: #172b32;
+  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif !important;
+}
+html body .auth-entry .login-form .login-input:focus { outline-color: #a9dcd3; border-color: #087f78 !important; }
+.auth-entry :is(.forgot-password-link, .support-link) { color: #087f78; }
+.auth-entry .login-button {
+  border-color: #087f78;
+  border-radius: 9px;
+  background: #087f78;
+  box-shadow: 0 5px 16px rgb(8 127 120 / 16%);
+}
+.auth-entry .login-button:hover:not(:disabled) { background: #05645f; }
+.auth-entry .login-info { color: #086c66; background: #eef8f4; border-color: #cde8df; }
+.auth-entry :is(a, button, summary, input):focus-visible { outline-color: #32a99e; }
+@media (prefers-reduced-motion: reduce) {
+  .auth-orbit-one, .auth-orbit-two, .auth-core, .auth-signal { animation: none; }
+}

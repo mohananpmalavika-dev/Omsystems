@@ -223,7 +223,7 @@ button, input, select, textarea { font: inherit; }
 /* Dense data stays crisp while controls retain generous hit targets. */
 .app-shell .workspace :where(table) { border-color: var(--line); }
 .app-shell .workspace :where(th) { color: var(--muted); font-size: 11px; font-weight: 680; letter-spacing: .035em; }
-.app-shell .workspace :where(td) { color: var(--ink); font-size: 13px; font-variant-numeric: tabular-nums; }
+.app-shell .workspace :where(td) { font-size: 13px; font-variant-numeric: tabular-nums; }
 .app-shell .workspace :where(thead) { background: var(--surface-soft); }
 .app-shell .workspace :where(tr) { border-color: var(--line); }
 .app-shell .workspace :where(tbody tr:hover) { background: color-mix(in srgb, var(--blue-soft) 45%, var(--surface)); }

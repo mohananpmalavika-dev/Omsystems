@@ -3,7 +3,7 @@ import { discoverOnvifDevices, type DiscoveredOnvifEndpoint } from "./discovery/
 import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
-import { discoverRtspDevices, recorderIdForHost } from "./discovery/rtsp-network-scan.js";
+import { discoverRtspDevices, recorderIdForHost, runWithConcurrency } from "./discovery/rtsp-network-scan.js";
 import { fallbackCredentialsRequired, rtspOnvifExclusions } from "./discovery/onvif-fallback-policy.js";
 import { targetFromScanJob, targetedOnvifEndpoint, type DeviceScanTarget } from "./discovery/targeted-scan.js";
 import { attachCredentials, OnvifClient } from "./devices/onvif-client.js";
@@ -36,6 +36,7 @@ import {
 } from "./updates/signed-update.js";
 import { readFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
+import { isIP } from "node:net";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { CameraCredentialVault, openSealedCommand, type SealedCommandEnvelope } from "./security/camera-credential-vault.js";
@@ -324,6 +325,7 @@ const networkPathTracker = new NetworkPathTracker(config.INTERNET_PATH_WINDOW_MS
 const edgeResourceSampler = new EdgeResourceSampler();
 let edgeMediaRuntime: EdgeMediaRuntime | undefined;
 let lastMediaRuntimeStartAttemptAt = 0;
+const streamSecretRecoveryAttempts = new Map<string, number>();
 let lastRecorderProbeAt = 0;
 let lastRecorderArchiveScanAt = 0;
 const activeRecorders = new Map<string, RecorderConfig>(
@@ -1314,6 +1316,38 @@ function resolveLocalMediaUrl() {
 
 async function syncCameraHeartbeatConfig() {
   const cameras = await control.listMonitoringCameras(agentId, config.EDGE_AGENT_VERSION);
+  const missing = new Map(cameras
+    .filter((camera) => camera.connectionSecretRef.startsWith(`edge://${agentId}/`) &&
+      !secrets.get(camera.connectionSecretRef) && camera.ipAddress && isIP(camera.ipAddress))
+    .map((camera) => [camera.connectionSecretRef, camera]));
+  await runWithConcurrency([...missing.values()], 2, async (camera) => {
+    const reference = camera.connectionSecretRef;
+    const now = Date.now();
+    if (now - (streamSecretRecoveryAttempts.get(reference) ?? 0) < 5 * 60_000) return;
+    streamSecretRecoveryAttempts.set(reference, now);
+    try {
+      const credentials = await discoveryCredentials(camera.ipAddress!);
+      if (!credentials.username && !credentials.password) return;
+      const recovered = await probeVendorStream({
+        host: camera.ipAddress!,
+        vendor: identifyVendorFamily(camera.vendor, camera.name),
+        credentials,
+        channel: camera.recorderChannel ?? 1,
+        ports: [554],
+        preferredRole: "sub",
+        probe: (uri) => probeRtsp(uri, config.FFPROBE_PATH, 6_000),
+      });
+      if (!recovered.candidate) return;
+      await secrets.set(reference, recovered.candidate.uri);
+      streamSecretRecoveryAttempts.delete(reference);
+      logger.info("Recovered missing camera stream secret from verified branch credentials", { cameraId: camera.id });
+    } catch (error) {
+      logger.warn("Camera stream secret recovery failed", {
+        cameraId: camera.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
   cameraHeartbeat.replaceCameras(cameras.map((camera) => {
     const rtspUrl = secrets.get(camera.connectionSecretRef);
     return {

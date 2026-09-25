@@ -262,6 +262,72 @@ export function CommandCenterView() {
   const workflowContext = selectedBranchWorkspace?.branchId
     ? `?branchId=${encodeURIComponent(selectedBranchWorkspace.branchId)}&source=command-center`
     : "?source=command-center";
+  const liveIncidentCount = Array.isArray(summary?.liveIncidents) ? summary.liveIncidents.length : 0;
+  const focusItems = [
+    ...(liveIncidentCount > 0 ? [{
+      title: "Verify active incidents",
+      detail: `${liveIncidentCount} live ${liveIncidentCount === 1 ? "incident needs" : "incidents need"} an operator decision.`,
+      action: "Open incident response",
+      href: "/incidents",
+      icon: Siren,
+      tone: "critical",
+    }] : []),
+    ...(hasCameraCountData && !cameraTelemetryUnavailable && cameraTotals.notWorking > 0 ? [{
+      title: "Restore camera coverage",
+      detail: `${cameraTotals.notWorking} of ${totalCamerasCount} cameras are not working.`,
+      action: "Inspect affected cameras",
+      href: "/operations/cameras",
+      icon: Camera,
+      tone: "warning",
+    }] : []),
+    ...(hasRiskData && atRiskBranchesCount > 0 ? [{
+      title: "Review branches at risk",
+      detail: `${atRiskBranchesCount} ${atRiskBranchesCount === 1 ? "branch has" : "branches have"} an elevated risk level.`,
+      action: "Open branch operations",
+      href: "/operations/branches",
+      icon: Building2,
+      tone: "warning",
+    }] : []),
+    ...(hasSummaryData && Number(summary?.predictedFailuresSummary?.total ?? 0) > 0 ? [{
+      title: "Prevent a likely failure",
+      detail: `${summary.predictedFailuresSummary.total} predicted ${summary.predictedFailuresSummary.total === 1 ? "failure" : "failures"} in the next 72 hours.`,
+      action: "Review work orders",
+      href: "/maintenance/workorders",
+      icon: Wrench,
+      tone: "watch",
+    }] : []),
+  ].slice(0, 3);
+  const readyItems = hasAnyConfirmedData && totalBranchesCount > 0 ? [
+    { title: "Watch live coverage", detail: "Open the live wall to verify the branches on shift.", action: "Open live wall", href: "/control-room", icon: Play, tone: "ready" },
+    { title: "Investigate an event", detail: "Find the video and build the incident timeline.", action: "Search video", href: "/video-search", icon: Search, tone: "ready" },
+    { title: "Preserve the record", detail: "Review evidence and its custody history.", action: "Open evidence", href: "/evidence", icon: FileCheck2, tone: "ready" },
+  ] : [{
+    title: hasAnyConfirmedData ? "Start branch coverage" : "Check branch operations",
+    detail: hasAnyConfirmedData ? "Add a branch to begin live monitoring." : "Priorities will appear when branch telemetry is available.",
+    action: hasAnyConfirmedData ? "Onboard a branch" : "Open branch operations",
+    href: hasAnyConfirmedData ? "/admin/branch-onboarding" : "/operations/branches",
+    icon: hasAnyConfirmedData ? Building2 : RefreshCw,
+    tone: "ready",
+  }];
+  const visibleFocusItems = focusItems.length > 0 ? focusItems : readyItems;
+  const attentionBranches = branches.map((branch) => {
+    const cameras = branch.cameras;
+    const total = Number(cameras?.total ?? 0);
+    const working = cameras?.working ?? cameras?.healthy;
+    const notWorking = cameras?.notWorking != null
+      ? Math.max(0, Number(cameras.notWorking))
+      : working != null ? Math.max(0, total - Number(working)) : 0;
+    const risk = branch.risk?.level;
+    const recordingIssue = branch.recording?.status && !["HEALTHY", "UNKNOWN"].includes(branch.recording.status);
+    const signals = [
+      ...(risk === "HIGH" ? ["High risk"] : risk === "MEDIUM" ? ["Elevated risk"] : []),
+      ...(notWorking > 0 ? [`${notWorking} ${notWorking === 1 ? "camera" : "cameras"} down`] : []),
+      ...(recordingIssue ? ["Recording needs review"] : []),
+    ];
+    return { branch, signals, priority: (risk === "HIGH" ? 4 : risk === "MEDIUM" ? 2 : 0) + (notWorking > 0 ? 3 : 0) + (recordingIssue ? 1 : 0) };
+  }).filter((item) => item.signals.length > 0)
+    .sort((left, right) => right.priority - left.priority || String(left.branch.name ?? "").localeCompare(String(right.branch.name ?? "")))
+    .slice(0, 3);
 
   return (
     <ErrorBoundary fallback={<div className="p-6 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 text-sm">Failed to render Surveillance Command Center. Please refresh or check connection.</div>}>
@@ -330,6 +396,48 @@ export function CommandCenterView() {
         </div>
       </div>
 
+      <section className="command-center-focus" aria-labelledby="command-center-focus-title">
+        <div className="command-center-focus-heading">
+          <div>
+            <p className="command-center-focus-eyebrow"><span /> OPERATIONS PULSE</p>
+            <h2 id="command-center-focus-title">Focus now</h2>
+            <p>{focusItems.length > 0 ? "Operational signals are sorted into the next actions for your team." : "Choose the next step in your security workflow."}</p>
+          </div>
+          <span className="command-center-focus-count">{focusItems.length > 0 ? `${focusItems.length} ${focusItems.length === 1 ? "priority" : "priorities"}` : hasAnyConfirmedData ? "Ready for action" : "Awaiting data"}</span>
+        </div>
+        <div className="command-center-focus-grid">
+          {visibleFocusItems.map(({ title, detail, action, href, icon: Icon, tone }, index) => (
+            <Link href={href} onClick={navigateTo(href)} className={`command-center-focus-card is-${tone}`} key={title}>
+              <div className="command-center-focus-card-top">
+                <span className="command-center-focus-icon"><Icon size={20} /></span>
+                <span className="command-center-focus-order">{String(index + 1).padStart(2, "0")}</span>
+              </div>
+              <div><h3>{title}</h3><p>{detail}</p></div>
+              <span className="command-center-focus-action">{action} <ArrowUpRight size={16} /></span>
+            </Link>
+          ))}
+        </div>
+        {attentionBranches.length > 0 && <div className="command-center-attention">
+          <div className="command-center-attention-heading">
+            <strong>Branches to review</strong>
+            <span>Open a branch without leaving this screen</span>
+          </div>
+          <div className="command-center-attention-list">
+            {attentionBranches.map(({ branch, signals }) => <button
+              type="button"
+              key={branch.branchId}
+              onClick={() => setSelectedBranchWorkspace(branch)}
+              className="command-center-attention-item"
+              aria-label={`Review ${branch.name}: ${signals.join(", ")}`}
+            >
+              <span className="command-center-attention-branch"><strong>{branch.name}</strong><small>{branch.branchCode} · {branch.region}</small></span>
+              <span className="command-center-attention-signals">{signals.map((signal) => <span key={signal}>{signal}</span>)}</span>
+              <ChevronRight size={18} aria-hidden="true" />
+            </button>)}
+          </div>
+        </div>}
+      </section>
+
       <nav className="command-center-workflow" aria-label="Security operations workflow">
         <div className="command-center-workflow-intro">
           <span>WORKFLOW</span>
@@ -370,9 +478,9 @@ export function CommandCenterView() {
         </div>
       )}
 
-
-
       {/* Row 1 & 2: Operational Intelligence Cards Grid */}
+      <details className="command-center-diagnostics">
+        <summary><span><Activity size={18} /> Fleet telemetry</span><span>View detailed health metrics <ChevronRight size={18} /></span></summary>
       <div className="command-center-metrics grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
         {/* 1. Fleet Health Score */}
         <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-1">
@@ -494,6 +602,7 @@ export function CommandCenterView() {
           </div>
         </div>
       </div>
+      </details>
 
       {/* Signature Predicted Failures Card if Failures Predicted */}
       {predicted && (
@@ -820,7 +929,9 @@ export function CommandCenterView() {
                 <p className="text-xs text-slate-400">{selectedBranchWorkspace.region}</p>
               </div>
               <button
+                type="button"
                 onClick={() => setSelectedBranchWorkspace(null)}
+                aria-label="Close branch workspace"
                 className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
               >
                 <X className="w-5 h-5" />

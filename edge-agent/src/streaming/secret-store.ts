@@ -1,10 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { createServer, type Server } from "node:http";
 
 export class LocalStreamSecretStore {
   private values: Record<string, string> = {};
+  private pendingWrite: Promise<void> = Promise.resolve();
 
   constructor(private readonly path: string) {}
 
@@ -18,8 +19,16 @@ export class LocalStreamSecretStore {
 
   async set(reference: string, sourceUri: string) {
     this.values[reference] = sourceUri;
-    await mkdir(dirname(this.path), { recursive: true });
-    await writeFile(this.path, JSON.stringify(this.values), { encoding: "utf8", mode: 0o600 });
+    // Discovery reports channels concurrently. Serialize whole-store writes so
+    // an older snapshot cannot finish last and erase newer camera references.
+    const write = this.pendingWrite.catch(() => undefined).then(async () => {
+      await mkdir(dirname(this.path), { recursive: true });
+      const temporary = `${this.path}.${process.pid}.tmp`;
+      await writeFile(temporary, JSON.stringify(this.values), { encoding: "utf8", mode: 0o600 });
+      await rename(temporary, this.path);
+    });
+    this.pendingWrite = write;
+    await write;
   }
 
   get(reference: string) {

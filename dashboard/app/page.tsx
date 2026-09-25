@@ -1,6 +1,7 @@
 import { AppLayout } from "@/components/app-layout";
 import { CommandCenterView } from "@/components/operations/command-center-view";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import "./command-center-focus.css";
 
 export const dynamic = "force-dynamic";
 

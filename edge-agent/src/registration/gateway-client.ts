@@ -119,6 +119,8 @@ export interface MonitoringCamera {
   id: string;
   name: string;
   connectionSecretRef: string;
+  ipAddress?: string;
+  vendor?: string;
   analyticsEnabled?: boolean;
   profiles: Array<{
     name: string;
