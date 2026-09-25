@@ -93,8 +93,9 @@ export async function startLive(
         mediaGatewayUrl?: string;
         localMediaGatewayUrl?: string;
         expiresAt?: string;
+        error?: string;
       };
-      if (!session.token) throw new Error("stream_secret_unavailable");
+      if (!session.token) throw new Error(session.error || "stream_secret_unavailable");
       return { ...session, token: session.token };
     };
     let controlSession = await requestControlSession();
@@ -144,9 +145,15 @@ export async function startLive(
       ? publicMediaGatewayUrl ?? sessionMediaGatewayUrl ?? internalMediaGateway
       : controlSession.mediaGatewayUrl ?? internalMediaGateway;
 
+    const isEdgeRelay = (url?: string) => Boolean(url && url.includes("/v1/edge-media/"));
+
     const gatewayCandidates = [
       primaryGateway,
-      ...(primaryGateway !== internalMediaGateway ? [internalMediaGateway] : []),
+      ...(isEdgeRelay(primaryGateway)
+        ? [primaryGateway]
+        : primaryGateway !== internalMediaGateway
+          ? [internalMediaGateway]
+          : []),
     ];
 
     let mediaResponse: Response | undefined;
@@ -158,7 +165,10 @@ export async function startLive(
       // Live authorizations are single-use. A gateway can consume a token
       // before failing later while resolving a secret or starting MediaMTX,
       // so every fallback must receive a fresh control-plane grant.
-      if (index > 0) controlSession = await requestControlSession();
+      if (index > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        controlSession = await requestControlSession();
+      }
       const fetchTargetUrl = resolveInternalFetchGatewayUrl(gwUrl);
       try {
         const res = await fetch(

@@ -194,9 +194,12 @@ export function HlsPlayer({
                     response.data = response.data
                       .split("\n")
                       .map((line: string) => {
-                        const trimmed = line.trim();
+                        const isCrLf = line.endsWith("\r");
+                        const trimmed = (isCrLf ? line.slice(0, -1) : line).trim();
                         if (/^\?token=[^#\s]+$/.test(trimmed)) return "";
-                        return line.replace(/^\?token=[^#\s]+(?=#)/, "");
+                        let stripped = trimmed.replace(/^\?token=[a-zA-Z0-9_\-\.%]+/, "");
+                        stripped = stripped.replace(/URI="\?token=[a-zA-Z0-9_\-\.%]+([^"]+)"/g, 'URI="$1"');
+                        return isCrLf ? `${stripped}\r` : stripped;
                       })
                       .filter((line: string) => {
                         const trimmed = line.trim();
