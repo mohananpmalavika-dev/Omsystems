@@ -8,5 +8,5 @@ export function getLiveSessionToken(input: {
   authorization?: string | null;
 }) {
   const bearerToken = input.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
-  return input.cookieToken || input.sentinelSession || bearerToken;
+  return bearerToken || input.sentinelSession || input.cookieToken;
 }

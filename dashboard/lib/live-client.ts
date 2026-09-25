@@ -66,13 +66,30 @@ export async function releaseLiveSession(session: LiveSessionResponse | undefine
   }
 }
 
+function getBrowserStoredToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const token = sessionStorage.getItem("accessToken");
+      if (token) return token;
+    }
+  } catch {}
+  try {
+    if (typeof localStorage !== "undefined") {
+      const token = localStorage.getItem("accessToken");
+      if (token) return token;
+    }
+  } catch {}
+  return null;
+}
+
 async function requestLiveAuthorization(
   cameraId: string,
   profile: "main" | "sub",
   routePreference: "auto" | "public",
   signal: AbortSignal,
 ): Promise<LiveSessionResponse | BrowserDirectLiveStart> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("accessToken") : null;
+  const token = getBrowserStoredToken();
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (token) {
     headers["x-sentinel-session"] = token;
