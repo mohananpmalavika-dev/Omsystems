@@ -37,4 +37,17 @@ describe("DatabaseCredentialProvider", () => {
     await expect(provider.get("10.42.5.20")).resolves.toMatchObject({ username: "new-user" });
     expect(getDiscoveryBootstrap).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps the newest credentials when a host has duplicate records", async () => {
+    const getDiscoveryBootstrap = vi.fn(async () => ({
+      credentials: [
+        { host: "10.42.5.20", username: "new-user", password: "new-password", updatedAt: "2026-08-08T00:01:00.000Z" },
+        { host: "10.42.5.20", username: "old-user", password: "old-password", updatedAt: "2026-08-08T00:00:00.000Z" },
+      ],
+      vpnScanNetworks: [],
+    }));
+    const provider = new DatabaseCredentialProvider({ getDiscoveryBootstrap }, "edge-001");
+
+    await expect(provider.get("10.42.5.20")).resolves.toMatchObject({ username: "new-user" });
+  });
 });

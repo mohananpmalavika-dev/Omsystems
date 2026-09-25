@@ -11,7 +11,8 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>📤 Bulk Data Upload</h1>
+                <p class="eyebrow">DATA OPERATIONS / IMPORT</p>
+                <h1>Bulk Data Upload</h1>
                 <p class="subtitle">Mass import branches and employees via CSV</p>
             </div>
             <div class="stats-bar">
@@ -28,10 +29,10 @@
 
         <!-- Navigation -->
         <div class="tabs">
-            <button class="tab-btn active" data-tab="branches">🏢 Bulk Branches</button>
-            <button class="tab-btn" data-tab="employees">👥 Bulk Employees</button>
+            <button class="tab-btn active" data-tab="branches">Bulk Branches</button>
+            <button class="tab-btn" data-tab="employees">Bulk Employees</button>
             <a href="index.html" class="tab-btn" style="text-decoration: none; display: inline-block;">
-                🔐 Credentials Manager
+                Credentials Manager
             </a>
         </div>
 
@@ -41,7 +42,7 @@
                 <h2>Bulk Branch Upload</h2>
                 
                 <div class="upload-instructions">
-                    <h3>📝 CSV Format for Branches:</h3>
+                    <h3>CSV Format for Branches</h3>
                     <ul>
                         <li>Headers: <code>name,parent_id,branch_type,address,city,state,country,postal_code,phone,email,manager_name,latitude,longitude</code></li>
                         <li><strong>Required:</strong> <code>name</code></li>
@@ -50,7 +51,7 @@
                     </ul>
                     
                     <button class="btn btn-secondary" onclick="downloadBranchTemplate()">
-                        ⬇️ Download Branch Template
+                        Download Branch Template
                     </button>
                 </div>
 
@@ -58,17 +59,17 @@
                     <div class="file-upload-wrapper">
                         <input type="file" id="branchesFile" name="file" accept=".csv" required>
                         <label for="branchesFile" class="file-upload-label">
-                            <span class="file-icon">🏢</span>
+                            <span class="file-icon" aria-hidden="true">↑</span>
                             <span class="file-text">Choose branches CSV or drag here</span>
                         </label>
                     </div>
 
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="validateBranches()">
-                            ✓ Validate Only
+                            Validate Only
                         </button>
                         <button type="submit" class="btn btn-primary btn-large">
-                            🚀 Upload & Create Branches
+                            Upload &amp; Create Branches
                         </button>
                     </div>
                 </form>
@@ -90,7 +91,7 @@
                 <h2>Bulk Employee Upload</h2>
                 
                 <div class="upload-instructions">
-                    <h3>📝 CSV Format for Employees:</h3>
+                    <h3>CSV Format for Employees</h3>
                     <ul>
                         <li>Headers: <code>email,full_name,role,branch_id,phone,employee_id,department,designation</code></li>
                         <li><strong>Required:</strong> <code>email</code>, <code>full_name</code>, <code>role</code>, <code>branch_id</code></li>
@@ -100,7 +101,7 @@
                     </ul>
                     
                     <button class="btn btn-secondary" onclick="downloadEmployeeTemplate()">
-                        ⬇️ Download Employee Template
+                        Download Employee Template
                     </button>
                 </div>
 
@@ -108,17 +109,17 @@
                     <div class="file-upload-wrapper">
                         <input type="file" id="employeesFile" name="file" accept=".csv" required>
                         <label for="employeesFile" class="file-upload-label">
-                            <span class="file-icon">👥</span>
+                            <span class="file-icon" aria-hidden="true">↑</span>
                             <span class="file-text">Choose employees CSV or drag here</span>
                         </label>
                     </div>
 
                     <div class="form-actions">
                         <button type="button" class="btn btn-secondary" onclick="validateEmployees()">
-                            ✓ Validate Only
+                            Validate Only
                         </button>
                         <button type="submit" class="btn btn-primary btn-large">
-                            🚀 Upload & Create Employees
+                            Upload &amp; Create Employees
                         </button>
                     </div>
                 </form>

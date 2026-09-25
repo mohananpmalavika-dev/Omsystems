@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { FleetFilterBar } from "@/components/ui/fleet-filter-bar";
+import "../../command-center-focus.css";
 
 type NullableNumber = number | null;
 
@@ -198,6 +199,22 @@ export default function FleetBranchesPage() {
   const retentionDeficitBranches = branches.filter(
     (b) => b.retention.breaches !== null && b.retention.breaches > 0 || b.retention.compliant === false,
   );
+  const triageBranches = branches.map((branch) => {
+    const criticalAlerts = branch.alerts.critical ?? 0;
+    const cameraGap = branch.cameras.total !== null && branch.cameras.healthy !== null
+      ? Math.max(0, branch.cameras.total - branch.cameras.healthy) : 0;
+    const retentionIssue = (branch.retention.breaches ?? 0) > 0 || branch.retention.compliant === false;
+    const networkIssue = !["HEALTHY", "UNKNOWN"].includes(branch.internet.state);
+    const signals = [
+      ...(criticalAlerts > 0 ? [`${criticalAlerts} critical ${criticalAlerts === 1 ? "alert" : "alerts"}`] : []),
+      ...(cameraGap > 0 ? [`${cameraGap} ${cameraGap === 1 ? "camera" : "cameras"} need review`] : []),
+      ...(retentionIssue ? ["Retention deficit"] : []),
+      ...(networkIssue ? ["Network issue"] : []),
+    ];
+    return { branch, signals, score: (criticalAlerts > 0 ? 5 : 0) + (cameraGap > 0 ? 3 : 0) + (retentionIssue ? 2 : 0) + (networkIssue ? 1 : 0) };
+  }).filter((item) => item.signals.length > 0)
+    .sort((left, right) => right.score - left.score || left.branch.name.localeCompare(right.branch.name))
+    .slice(0, 4);
 
   const regionOptions = [
     { label: "All Regions", value: "ALL" },
@@ -298,13 +315,13 @@ export default function FleetBranchesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-2xl font-bold text-white tracking-tight">Fleet Branches Status Board</h1>
+            <h1 className="text-2xl font-bold text-white tracking-tight">Branch operations</h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-950 text-emerald-400 border border-emerald-800">
               {branches.length} Accessible Branches
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Live branch inventory and telemetry from the control plane
+            Review affected branches first, then inspect the full fleet when needed.
           </p>
         </div>
 
@@ -340,30 +357,33 @@ export default function FleetBranchesPage() {
         </div>
       </div>
 
-      {/* Retention Deficit Banner if Violations Exist */}
-      {retentionDeficitBranches.length > 0 && (
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-rose-950/40 border border-rose-600/60 rounded-xl shadow-lg shadow-rose-950/40 animate-pulse">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-rose-600/30 text-rose-300">
-              <AlertTriangle className="w-5 h-5 text-rose-400" />
-            </div>
-            <div>
-              <div className="font-bold text-rose-200 text-sm">
-                Verified Retention Breaches Detected ({retentionDeficitBranches.length} {retentionDeficitBranches.length === 1 ? "Branch" : "Branches"})
-              </div>
-              <div className="text-xs text-rose-300/80 mt-0.5">
-                Recording evidence for these branches is below the configured policy.
-              </div>
-            </div>
+      <section className="command-center-focus" aria-labelledby="branch-triage-title">
+        <div className="command-center-focus-heading">
+          <div>
+            <p className="command-center-focus-eyebrow"><span /> BRANCH PULSE</p>
+            <h2 id="branch-triage-title">Branches to review</h2>
+            <p>Open the branch with the strongest available signals first.</p>
           </div>
-          <button
-            onClick={() => setSelectedStatus("RETENTION_DEFICIT")}
-            className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs shadow transition-colors self-start sm:self-auto"
-          >
-            View Non-Compliant Branches ({retentionDeficitBranches.length})
-          </button>
+          <span className="command-center-focus-count">{loading ? "Updating" : `${triageBranches.length} shown`}</span>
         </div>
-      )}
+        {triageBranches.length > 0 ? <div className="command-center-focus-grid">
+          {triageBranches.map(({ branch, signals }, index) => <Link
+            key={branch.branchId}
+            href={`/operations/branches/${encodeURIComponent(branch.branchId)}`}
+            className={`command-center-focus-card ${signals.some((signal) => signal.includes("critical")) ? "is-critical" : "is-warning"}`}
+          >
+            <div className="command-center-focus-card-top"><span className="command-center-focus-icon"><ShieldAlert size={20} /></span><span className="command-center-focus-order">{String(index + 1).padStart(2, "0")}</span></div>
+            <div><h3>{branch.name}</h3><p>{branch.branchCode} · {branch.region}</p><p>{signals.join(" · ")}</p></div>
+            <span className="command-center-focus-action">Open branch workspace <ArrowUpRight size={16} /></span>
+          </Link>)}
+        </div> : <p className="branch-triage-empty">{loading ? "Loading branch signals…" : error ? "Branch telemetry is unavailable." : branches.length === 0 ? "No branches are available yet." : "No branch exceptions were reported in the available telemetry."}</p>}
+        {retentionDeficitBranches.length > 0 && <button type="button" className="branch-triage-filter" onClick={() => {
+          setSelectedStatus(RETENTION_DEFICIT);
+          document.getElementById("branch-fleet-inventory")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }}>
+          <AlertTriangle size={15} /> Show all {retentionDeficitBranches.length} retention exceptions <ArrowUpRight size={14} />
+        </button>}
+      </section>
 
       {error && (
         <div className="p-4 bg-amber-950/40 border border-amber-500/50 rounded-xl text-amber-300 text-xs flex items-center gap-2">
@@ -386,7 +406,7 @@ export default function FleetBranchesPage() {
         onExport={branches.length > 0 ? exportHealthCsv : undefined}
       />
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
+      <div id="branch-fleet-inventory" className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden shadow-xl">
         <table className="w-full text-left text-xs text-slate-300">
           <thead className="bg-slate-950 text-slate-400 uppercase tracking-wider font-semibold border-b border-slate-800">
             <tr>

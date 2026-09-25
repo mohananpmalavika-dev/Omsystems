@@ -11,7 +11,8 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1>📹 Camera Credential Manager</h1>
+                <p class="eyebrow">DEVICE ACCESS / ADMINISTRATION</p>
+                <h1>Camera Credential Manager</h1>
                 <p class="subtitle">Manage 400+ locations • 4000+ cameras</p>
             </div>
             <div class="stats-bar">
@@ -36,11 +37,11 @@
 
         <!-- Tab Navigation -->
         <div class="tabs">
-            <button class="tab-btn active" data-tab="single">➕ Add Single</button>
-            <button class="tab-btn" data-tab="bulk">📤 Bulk Upload</button>
-            <button class="tab-btn" data-tab="list">📋 View All</button>
+            <button class="tab-btn active" data-tab="single">Add Credential</button>
+            <button class="tab-btn" data-tab="bulk">Bulk Upload</button>
+            <button class="tab-btn" data-tab="list">View All</button>
             <a href="bulk-upload.html" class="tab-btn" style="text-decoration: none; display: inline-block;">
-                🏢 Bulk Branches & Employees
+                Branches &amp; Employees
             </a>
         </div>
 
@@ -86,10 +87,10 @@
 
                     <div class="form-actions">
                         <button type="submit" class="btn btn-primary">
-                            ✅ Add Credential
+                            Add Credential
                         </button>
                         <button type="reset" class="btn btn-secondary">
-                            🔄 Clear Form
+                            Clear Form
                         </button>
                     </div>
                 </form>
@@ -103,7 +104,7 @@
                 <h2>Bulk CSV Upload</h2>
                 
                 <div class="upload-instructions">
-                    <h3>📝 CSV Format Requirements:</h3>
+                    <h3>CSV Format Requirements</h3>
                     <ul>
                         <li>First row must be headers: <code>branch_id,edge_agent_id,ip_address,username,password,location_name</code></li>
                         <li>Leave <code>ip_address</code> empty for branch-wide defaults</li>
@@ -111,7 +112,7 @@
                     </ul>
                     
                     <button class="btn btn-secondary" onclick="downloadTemplate()">
-                        ⬇️ Download CSV Template
+                        Download CSV Template
                     </button>
                 </div>
 
@@ -119,13 +120,13 @@
                     <div class="file-upload-wrapper">
                         <input type="file" id="csvFile" name="file" accept=".csv" required>
                         <label for="csvFile" class="file-upload-label">
-                            <span class="file-icon">📁</span>
+                            <span class="file-icon" aria-hidden="true">↑</span>
                             <span class="file-text">Choose CSV file or drag here</span>
                         </label>
                     </div>
 
                     <button type="submit" class="btn btn-primary btn-large">
-                        🚀 Upload & Import
+                        Upload &amp; Import
                     </button>
                 </form>
 
@@ -146,13 +147,13 @@
                 <div class="list-header">
                     <h2>All Credentials</h2>
                     <div class="filters">
-                        <input type="text" id="searchInput" placeholder="🔍 Search IP or username..." 
+                        <input type="text" id="searchInput" placeholder="Search IP or username..."
                                class="search-input">
                         <select id="branchFilter" class="branch-filter">
                             <option value="">All Branches</option>
                         </select>
                         <button class="btn btn-primary" onclick="loadCredentials()">
-                            🔄 Refresh
+                            Refresh
                         </button>
                     </div>
                 </div>
@@ -207,7 +208,7 @@
                     </div>
 
                     <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+                        <button type="submit" class="btn btn-primary">Save Changes</button>
                         <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
                     </div>
                 </form>

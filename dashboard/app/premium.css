@@ -40,8 +40,8 @@ html[data-theme="dark"] {
   --blue: #6bd1c4;
   --blue-dark: #9ae2d7;
   --blue-soft: #163b3b;
-  --ui-accent: #36ab9c;
-  --ui-accent-hover: #238d81;
+  --ui-accent: #0c756b;
+  --ui-accent-hover: #095f57;
   --ui-focus: #80ddd0;
 }
 
@@ -59,8 +59,8 @@ html[data-theme="navy"] {
   --blue: #81cdd7;
   --blue-dark: #a9e4e8;
   --blue-soft: #183c49;
-  --ui-accent: #278f9e;
-  --ui-accent-hover: #227b89;
+  --ui-accent: #126a77;
+  --ui-accent-hover: #10535e;
   --ui-focus: #8dd9df;
 }
 
@@ -78,8 +78,8 @@ html[data-theme="emerald"] {
   --blue: #80d8ac;
   --blue-dark: #a9ebc6;
   --blue-soft: #1a4533;
-  --ui-accent: #348e62;
-  --ui-accent-hover: #26734e;
+  --ui-accent: #26734e;
+  --ui-accent-hover: #1c6241;
   --ui-focus: #91dfae;
 }
 

@@ -187,6 +187,41 @@
 .command-center-diagnostics > summary > span:last-child svg { transition: transform .18s ease; }
 .command-center-diagnostics[open] > summary > span:last-child svg { transform: rotate(90deg); }
 .command-center-diagnostics .command-center-metrics { padding: 0 14px 14px; }
+.branch-triage-empty {
+  margin: 0;
+  padding: 22px;
+  border: 1px dashed rgb(193 230 221 / 25%);
+  border-radius: 12px;
+  color: #b8cecc;
+  background: rgb(255 255 255 / 4%);
+  font-size: 13px;
+}
+.branch-triage-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  margin-top: 16px;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 171 158 / 40%);
+  border-radius: 9px;
+  background: rgb(255 171 158 / 10%);
+  color: #ffbeb3;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.branch-triage-filter:hover { background: rgb(255 171 158 / 17%); }
+#branch-fleet-inventory { scroll-margin-top: 90px; }
+.command-center-fleet { overflow: hidden; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); box-shadow: var(--shadow-sm); }
+.command-center-fleet > summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 44px; padding: 4px 5px; color: var(--ink); cursor: pointer; list-style: none; }
+.command-center-fleet > summary::-webkit-details-marker { display: none; }
+.command-center-fleet > summary > span { display: inline-flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 720; }
+.command-center-fleet > summary > span:first-child svg { color: var(--blue); }
+.command-center-fleet > summary > span:last-child { color: var(--muted); font-size: 11px; font-weight: 600; }
+.command-center-fleet > summary > span:last-child svg { transition: transform .18s ease; }
+.command-center-fleet[open] > summary > span:last-child svg { transform: rotate(90deg); }
+.command-center-fleet[open] > summary { margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 @media (max-width: 640px) {
   .command-center-focus { border-radius: 16px; }
   .command-center-focus-heading { align-items: flex-start; flex-direction: column; }

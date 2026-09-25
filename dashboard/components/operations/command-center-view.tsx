@@ -42,6 +42,7 @@ import {
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
+import { useDialogFocus } from "@/hooks/use-dialog-focus";
 import { getTelemetryFreshness } from "@/lib/telemetry-freshness";
 
 export function CommandCenterView() {
@@ -55,7 +56,18 @@ export function CommandCenterView() {
   const [selectedRegion, setSelectedRegion] = useState("ALL");
   const [selectedBranchWorkspace, setSelectedBranchWorkspace] = useState<any | null>(null);
   const pendingLoad = useRef<AbortController | null>(null);
+  const branchDialogRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  useDialogFocus(branchDialogRef, selectedBranchWorkspace !== null);
+
+  useEffect(() => {
+    if (!selectedBranchWorkspace) return;
+    const onEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedBranchWorkspace(null);
+    };
+    document.addEventListener("keydown", onEscape);
+    return () => document.removeEventListener("keydown", onEscape);
+  }, [selectedBranchWorkspace]);
 
   const handleQuickAction = (action: string, branchId: string) => {
     if (action === "DISPATCH_TECH") {
@@ -189,6 +201,11 @@ export function CommandCenterView() {
   const totalCamerasCount = cameraTotals.total;
   const workingCamerasCount = cameraTotals.working;
   const cameraTelemetryUnavailable = totalCamerasCount > 0 && cameraTotals.unknown >= totalCamerasCount;
+  const knownCameraFailures = hasBranchData
+    ? branches.reduce((count, branch) => count + Math.max(0, Number(
+        branch.cameras?.notWorking ?? (Number(branch.cameras?.offline ?? 0) + Number(branch.cameras?.degraded ?? 0)),
+      )), 0)
+    : Math.max(0, Number(summary?.cameras?.notWorking ?? (cameraTotals.offline + cameraTotals.degraded)));
   const freshness = getTelemetryFreshness(summary?.lastTelemetryTimestamp);
 
   const regionOptions = useMemo(() => {
@@ -272,9 +289,9 @@ export function CommandCenterView() {
       icon: Siren,
       tone: "critical",
     }] : []),
-    ...(hasCameraCountData && !cameraTelemetryUnavailable && cameraTotals.notWorking > 0 ? [{
+    ...(hasCameraCountData && !cameraTelemetryUnavailable && knownCameraFailures > 0 ? [{
       title: "Restore camera coverage",
-      detail: `${cameraTotals.notWorking} of ${totalCamerasCount} cameras are not working.`,
+      detail: `${knownCameraFailures} of ${totalCamerasCount} cameras are not working.`,
       action: "Inspect affected cameras",
       href: "/operations/cameras",
       icon: Camera,
@@ -296,7 +313,7 @@ export function CommandCenterView() {
       icon: Wrench,
       tone: "watch",
     }] : []),
-  ].slice(0, 3);
+  ];
   const readyItems = hasAnyConfirmedData && totalBranchesCount > 0 ? [
     { title: "Watch live coverage", detail: "Open the live wall to verify the branches on shift.", action: "Open live wall", href: "/control-room", icon: Play, tone: "ready" },
     { title: "Investigate an event", detail: "Find the video and build the incident timeline.", action: "Search video", href: "/video-search", icon: Search, tone: "ready" },
@@ -312,11 +329,9 @@ export function CommandCenterView() {
   const visibleFocusItems = focusItems.length > 0 ? focusItems : readyItems;
   const attentionBranches = branches.map((branch) => {
     const cameras = branch.cameras;
-    const total = Number(cameras?.total ?? 0);
-    const working = cameras?.working ?? cameras?.healthy;
     const notWorking = cameras?.notWorking != null
       ? Math.max(0, Number(cameras.notWorking))
-      : working != null ? Math.max(0, total - Number(working)) : 0;
+      : Math.max(0, Number(cameras?.offline ?? 0) + Number(cameras?.degraded ?? 0));
     const risk = branch.risk?.level;
     const recordingIssue = branch.recording?.status && !["HEALTHY", "UNKNOWN"].includes(branch.recording.status);
     const signals = [
@@ -726,12 +741,12 @@ export function CommandCenterView() {
       </div>
 
       {/* Fleet Branch Operational Board */}
-      <div className="command-center-fleet space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-bold text-white">Fleet Operational Board</h2>
-          </div>
-
+      <details className="command-center-fleet space-y-3">
+        <summary className="command-center-fleet-summary">
+          <span><Building2 size={19} /> Fleet Operational Board</span>
+          <span>{hasBranchData ? `${branches.length} branches` : "Branch inventory"} <ChevronRight size={18} /></span>
+        </summary>
+        <div className="flex justify-end">
           <Link
             href="/operations/branches"
             className="text-xs text-blue-400 hover:text-blue-300 font-medium transition-colors"
@@ -911,12 +926,12 @@ export function CommandCenterView() {
               </table>
             </div>
           </div>
-      </div>
+      </details>
 
       {/* Deep Branch 360 Workspace Drawer */}
       {selectedBranchWorkspace && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex justify-end animate-fade-in">
-          <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full overflow-y-auto p-6 space-y-6 shadow-2xl">
+          <div ref={branchDialogRef} role="dialog" aria-modal="true" aria-labelledby="branch-workspace-title" className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full overflow-y-auto p-6 space-y-6 shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-800 pb-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -925,7 +940,7 @@ export function CommandCenterView() {
                   </span>
                   <StatusBadge status={selectedBranchWorkspace.operationalState} size="sm" />
                 </div>
-                <h2 className="text-xl font-bold text-white mt-1">{selectedBranchWorkspace.name}</h2>
+                <h2 id="branch-workspace-title" className="text-xl font-bold text-white mt-1">{selectedBranchWorkspace.name}</h2>
                 <p className="text-xs text-slate-400">{selectedBranchWorkspace.region}</p>
               </div>
               <button

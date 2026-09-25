@@ -59,7 +59,11 @@ export class DatabaseCredentialProvider {
         password: item.password ?? "",
         updatedAt: item.updatedAt,
       };
-      this.cache.set(`host:${item.host}`, credential);
+      const key = `host:${item.host}`;
+      const current = this.cache.get(key);
+      if (!current || Date.parse(credential.updatedAt) > Date.parse(current.updatedAt)) {
+        this.cache.set(key, credential);
+      }
     }
     this.vpnScanNetworks = bootstrap.vpnScanNetworks;
     this.lastRefresh = Date.now();
