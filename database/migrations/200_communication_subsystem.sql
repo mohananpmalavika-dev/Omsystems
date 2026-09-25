@@ -658,6 +658,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_comm_device_updated_at ON communication_devices;
 CREATE TRIGGER trg_comm_device_updated_at
   BEFORE UPDATE ON communication_devices
   FOR EACH ROW
@@ -674,6 +675,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_comm_message_update_conversation ON communication_messages;
 CREATE TRIGGER trg_comm_message_update_conversation
   AFTER INSERT ON communication_messages
   FOR EACH ROW
@@ -690,6 +692,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_comm_call_compute_duration ON communication_call_sessions;
 CREATE TRIGGER trg_comm_call_compute_duration
   BEFORE UPDATE ON communication_call_sessions
   FOR EACH ROW
