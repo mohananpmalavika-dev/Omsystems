@@ -83,13 +83,7 @@ CREATE TABLE IF NOT EXISTS communication_devices (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
   CONSTRAINT fk_comm_device_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id),
-  CONSTRAINT fk_comm_device_branch FOREIGN KEY (branch_id) REFERENCES resource_nodes(id),
-  CONSTRAINT ck_comm_device_branch_type CHECK (
-    EXISTS (
-      SELECT 1 FROM resource_nodes 
-      WHERE id = branch_id AND node_type = 'branch'
-    )
-  )
+  CONSTRAINT fk_comm_device_branch FOREIGN KEY (branch_id) REFERENCES resource_nodes(id)
 );
 
 -- Indexes for device queries
