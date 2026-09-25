@@ -380,6 +380,14 @@ export class WebSocketService {
   }
 
   /**
+   * Get the underlying Socket.IO server instance
+   * Used by subsystems that need direct access to Socket.IO (e.g., communications)
+   */
+  getSocketIOServer(): SocketIOServer {
+    return this.io;
+  }
+
+  /**
    * Shutdown WebSocket server
    */
   async shutdown() {

@@ -99,6 +99,7 @@ import { registerHsmSigningRoutes } from "./routes/hsm-signing.routes.js";
 import { registerVideoSearchRoutes } from "./routes/video-search.routes.js";
 import { registerSynchronizedPlaybackRoutes } from "./routes/synchronized-playback.routes.js";
 import { registerAIVideoSearchRoutes } from "./routes/ai-video-search.routes.js";
+import { registerCommunicationsRoutes } from "./communications/routes/communications.routes.js";
 import { registerDeviceInventoryRoutes } from "./routes/device-inventory.routes.js";
 import { registerDeviceManagementRoutes } from "./routes/device-management.routes.js";
 import { registerDeviceConfigurationRoutes } from "./routes/device-configuration.routes.js";
@@ -3494,6 +3495,14 @@ export async function buildApp(options?: {
     app.log.info("Capacity & Performance Benchmark routes registered");
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register performance benchmark routes");
+  }
+
+  // Register KryptoVision Connect Communication Subsystem routes
+  try {
+    await registerCommunicationsRoutes(app, store);
+    app.log.info("KryptoVision Connect communication subsystem routes registered");
+  } catch (err: unknown) {
+    app.log.error({ err }, "failed to register communication routes");
   }
 
   const alertWorker = setInterval(() => {

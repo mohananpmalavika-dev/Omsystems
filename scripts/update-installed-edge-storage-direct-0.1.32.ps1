@@ -9,7 +9,7 @@ $source = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\edge-agent\release
 $resultPath = Join-Path $PSScriptRoot '..\edge-live-update-result.json'
 $taskName = 'Sentinel Grid Edge Agent'
 $expectedOldHash = '42B726292ED6E3CC11B06F786CCB29A320FADA3F33934F936619F1362409F20A'
-$expectedNewHash = '94D358B5FAFCB0C2E4A0C68AAAF8E4CDAE9FF892A58E2A6589528DEA660B2CC5'
+$expectedNewHash = '124EBABFCE04FE20A78DC577967ACD0BCB3CB679E767BF95E362B18B58B83D25'
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ')
 $backupExe = Join-Path $install "edge-agent.exe.before-0.1.32-direct.$stamp.bak"
 $backupConfig = Join-Path $install "config\edge-agent.env.before-0.1.32-direct.$stamp.bak"
@@ -27,12 +27,14 @@ function Write-Result([bool]$updated, [bool]$healthy, [bool]$rolledBack, [string
 }
 
 function Stop-InstalledAgent {
-  $instances = @(Get-CimInstance Win32_Process | Where-Object {
-    $_.Name -eq 'edge-agent.exe' -and $_.ExecutablePath -and
-      [IO.Path]::GetFullPath($_.ExecutablePath) -eq $exe
-  })
-  foreach ($instance in $instances) { Stop-Process -Id $instance.ProcessId -Force }
-  Start-Sleep -Seconds 2
+  $instances = @(Get-Process -Name 'edge-agent' -ErrorAction SilentlyContinue)
+  if ($instances.Count -gt 1) { throw 'Multiple Edge Agent processes found; refusing ambiguous update' }
+  foreach ($instance in $instances) {
+    Stop-Process -Id $instance.Id -Force -ErrorAction Stop
+    try { Wait-Process -Id $instance.Id -Timeout 15 -ErrorAction Stop } catch {
+      if (Get-Process -Id $instance.Id -ErrorAction SilentlyContinue) { throw }
+    }
+  }
 }
 
 function Start-InstalledAgent {

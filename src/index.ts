@@ -121,6 +121,10 @@ try {
   console.log(`✓ Control plane listening on ${config.HOST}:${config.PORT}`);
   wsService = initWebSocketService(app.server, store, app.log);
   console.log('✓ WebSocket service initialized on /ws');
+  
+  // Attach Socket.IO instance to app for subsystems (e.g., communications)
+  (app as any).io = wsService.getSocketIOServer();
+  console.log('✓ Socket.IO instance attached to app');
 } catch (error) {
   console.error('✗ FATAL: Failed to start server');
   app.log.error(error);
