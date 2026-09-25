@@ -1055,7 +1055,7 @@ function CameraTileComponent({
         )}
 
         {/* Synchronized Event Flashback (Instant Mini Picture-in-Picture 5-second Loop) */}
-        {latestAiAlert && flashbackDismissedAlertId !== latestAiAlert.id && (
+        {hasLiveFrame && Boolean(flashbackFrameUrl) && latestAiAlert && flashbackDismissedAlertId !== latestAiAlert.id && (
           <div
             className={`absolute ${(showDvrScrubber || isTileHovered || dvrOffset > 0) ? "bottom-28" : "bottom-12"} right-2.5 z-30 w-44 sm:w-48 rounded-lg overflow-hidden border-2 border-red-500/90 bg-zinc-950/95 shadow-[0_0_20px_rgba(239,68,68,0.5)] backdrop-blur text-xs animate-in fade-in slide-in-from-bottom-2 duration-300`}
             onClick={(e) => {

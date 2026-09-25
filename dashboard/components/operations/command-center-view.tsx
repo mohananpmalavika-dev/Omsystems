@@ -389,7 +389,7 @@ export function CommandCenterView() {
         </div>
 
         {/* 2. Recording Health */}
-        <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-1">
+        <Link href="/recordings" aria-label="Open recording playback and device storage footage" className="block p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 transition-all space-y-1">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-[11px] font-semibold tracking-wider uppercase">Recording</span>
             <Activity className="w-3.5 h-3.5 text-blue-400" />
@@ -400,7 +400,7 @@ export function CommandCenterView() {
           <div className="text-[11px] text-slate-400 font-medium">
             {totalCamerasCount === 0 ? "0 Streams" : `${summary?.recording?.totalRecording ?? 0} Active Rec`}
           </div>
-        </div>
+        </Link>
 
         {/* 3. At Risk Branches */}
         <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/40 hover:border-amber-700/60 transition-all space-y-1">
@@ -467,7 +467,7 @@ export function CommandCenterView() {
         </div>
 
         {/* 7. Storage Health */}
-        <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-1">
+        <Link href="/operations/storage" aria-label="Open camera SD card and recorder HDD storage details" className="block p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400 transition-all space-y-1">
           <div className="flex items-center justify-between text-slate-400">
             <span className="text-[11px] font-semibold tracking-wider uppercase">Storage Health</span>
             <Database className="w-3.5 h-3.5 text-slate-400" />
@@ -476,9 +476,9 @@ export function CommandCenterView() {
             {Number(summary?.storage?.totalDisks ?? 0) === 0 ? "—" : `${summary?.storage?.healthyPct ?? 0}%`}
           </div>
           <div className="text-[11px] text-slate-400 font-medium">
-            {Number(summary?.storage?.totalDisks ?? 0) === 0 ? "0 Disks" : `${summary?.storage?.healthy ?? 0} Healthy`}
+            {Number(summary?.storage?.totalDisks ?? 0) === 0 ? "No disk telemetry" : `${summary?.storage?.healthy ?? 0} Healthy`}
           </div>
-        </div>
+        </Link>
 
         {/* 8. Retention Compliance */}
         <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 hover:border-slate-700 transition-all space-y-1">

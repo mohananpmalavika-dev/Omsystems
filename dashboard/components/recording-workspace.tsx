@@ -145,9 +145,11 @@ export function RecordingWorkspace() {
         body: JSON.stringify({ controlPlaneToken: grant.token, from: fromIso, to: toIso }),
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error === "camera_archive_search_unavailable_or_unsupported"
-        ? "This device did not expose a supported archive API. Check its recording API, web port, and credentials."
-        : body.error ?? "Device archive search failed.");
+      if (!response.ok) throw new Error(body.error === "not_found"
+        ? "The branch edge agent needs an update before it can search device storage."
+        : body.error === "camera_archive_search_unavailable_or_unsupported"
+          ? "This device did not expose a supported archive API. Check its recording API, web port, and credentials."
+          : body.error ?? "Device archive search failed.");
       setDeviceClips(Array.isArray(body.clips) ? body.clips : []);
     } catch (reason) {
       setDeviceClips([]);
@@ -183,7 +185,7 @@ export function RecordingWorkspace() {
   return (
     <main className="recording-workspace">
       <header className="recording-header">
-        <div><span className="eyebrow">RECORDING OPERATIONS</span><h1>Recording playback</h1><p>Review branch-recorder footage on demand and retain only important incident evidence off-site.</p></div>
+        <div><span className="eyebrow">RECORDING OPERATIONS</span><h1>Recording playback</h1><p>Search footage on camera SD cards and recorder hard disks, or review indexed recordings.</p></div>
         <a href="/" className="secondary-button"><Video size={15} />Live wall</a>
       </header>
 
@@ -192,10 +194,32 @@ export function RecordingWorkspace() {
         <label>Camera<select value={cameraId} onChange={(event) => setCameraId(event.target.value)}>{cameras.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label>From<input type="datetime-local" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="datetime-local" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-        <button className="primary-button" onClick={() => void loadRecording()} disabled={!cameraId || loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Load recording</button>
+        <button className="primary-button" onClick={() => void loadRecording()} disabled={!cameraId || loading}>{loading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Load indexed footage</button>
       </section>
 
       {error && <div className="error-banner"><AlertTriangle size={17} />{typeof error === "string" ? error : JSON.stringify(error)}</div>}
+      <section className="recording-content" aria-label="Camera and recorder storage">
+        <article className="recording-player-card">
+          <div className="recording-section-heading"><div><Clapperboard size={18} /><h2>Camera SD card / recorder HDD</h2></div></div>
+          <div className="recording-device-actions">
+            <p>Browse footage stored on the device for the selected time range.</p>
+            <button className="primary-button" onClick={() => void loadDeviceArchive()} disabled={!cameraId || storageLoading}>
+              {storageLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Search device storage
+            </button>
+            {storageError && <div className="error-banner"><AlertTriangle size={17} />{storageError}</div>}
+          </div>
+          {devicePlayback && <DeviceArchivePlayer playback={devicePlayback} />}
+        </article>
+        <article className="recording-segment-card">
+          <div className="recording-section-heading"><div><Play size={18} /><h2>Device clips</h2></div><span>{deviceClips.length}</span></div>
+          <div className="segment-list">{deviceClips.length === 0
+            ? <div className="recording-empty"><span>No device clips loaded for this range.</span></div>
+            : deviceClips.map((clip, index) => <button key={`${clip.startTime}-${index}`} className="segment-row" onClick={() => void playDeviceClip(clip)} disabled={storageLoading}>
+              <span className="segment-status ready" /><span><strong>{formatTime(clip.startTime)}</strong><small>{formatTime(clip.endTime)}</small></span><Play size={16} />
+            </button>)}</div>
+        </article>
+      </section>
+
       {job && <section className="recording-summary">
         <article><span>Primary recorder</span><strong>{job.primaryRecordingStorage === "recorder-local" ? "Branch DVR/NVR" : "KryptonVision"}</strong><small>{job.mode} recording at source</small></article>
         <article><span>{job.primaryRecordingStorage === "recorder-local" ? "Recorder evidence" : "Coverage"}</span><strong>{job.primaryRecordingStorage === "recorder-local" ? recordingState : `${coverage}%`}</strong><small>{job.primaryRecordingStorage === "recorder-local" ? (archiveSummary?.newestPlayableAt ? `Latest archive ${formatTime(archiveSummary.newestPlayableAt)}` : availabilityMessage(vms?.recordingSearch)) : `${segments.length} indexed segments in selected range`}</small></article>
@@ -219,26 +243,6 @@ export function RecordingWorkspace() {
         <article className="recording-segment-card">
           <div className="recording-section-heading"><div><Play size={18} /><h2>{vms?.source === "RECORDER" ? "Playable recorder clips" : "Indexed segments"}</h2></div><span>{segments.length}</span></div>
           <div className="segment-list">{segments.length === 0 ? <div className="recording-empty"><CheckCircle2 size={25} /><span>{vms?.source === "RECORDER" ? "No browser-deliverable recorder clips were returned. This does not mean footage is absent." : "No indexed footage in this window."}</span></div> : segments.map((segment) => <button key={segment.id} className={`segment-row ${selected?.id === segment.id ? "selected" : ""}`} onClick={() => setSelected(segment)} disabled={segment.status !== "ready"}><span className={`segment-status ${segment.status}`} /><span><strong>{formatTime(segment.startedAt)}</strong><small>{segment.codec?.toUpperCase() ?? "MP4"} · {formatBytes(segment.sizeBytes)}</small></span><span>{Math.max(1, Math.round((Date.parse(segment.endedAt) - Date.parse(segment.startedAt)) / 1000))}s</span></button>)}</div>
-        </article>
-      </section>
-
-      <section className="recording-content" aria-label="Camera and recorder storage">
-        <article className="recording-player-card">
-          <div className="recording-section-heading"><div><Clapperboard size={18} /><h2>Camera SD card / recorder HDD</h2></div></div>
-          <p>Browse footage stored on the device for the selected time range.</p>
-          <button className="primary-button" onClick={() => void loadDeviceArchive()} disabled={!cameraId || storageLoading}>
-            {storageLoading ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}Search device storage
-          </button>
-          {storageError && <div className="error-banner"><AlertTriangle size={17} />{storageError}</div>}
-          {devicePlayback && <DeviceArchivePlayer playback={devicePlayback} />}
-        </article>
-        <article className="recording-segment-card">
-          <div className="recording-section-heading"><div><Play size={18} /><h2>Device clips</h2></div><span>{deviceClips.length}</span></div>
-          <div className="segment-list">{deviceClips.length === 0
-            ? <div className="recording-empty"><span>No device clips loaded for this range.</span></div>
-            : deviceClips.map((clip, index) => <button key={`${clip.startTime}-${index}`} className="segment-row" onClick={() => void playDeviceClip(clip)} disabled={storageLoading}>
-              <span className="segment-status ready" /><span><strong>{formatTime(clip.startTime)}</strong><small>{formatTime(clip.endTime)}</small></span><Play size={16} />
-            </button>)}</div>
         </article>
       </section>
 

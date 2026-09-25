@@ -1122,6 +1122,8 @@ button { cursor: pointer; }
 .vms-legend i.recorded { background: #1b9a70; }.vms-legend i.missing { background: #d04b57; }.vms-legend i.unknown { background: #9aa5b4; }.vms-legend em { margin-left: auto; font-style: normal; }
 .recording-content { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(300px, .75fr); gap: 15px; margin-top: 16px; }
 .recording-player-card, .recording-segment-card { min-height: 390px; overflow: hidden; }
+.recording-device-actions { display: grid; justify-items: start; gap: 12px; padding: 16px; }
+.recording-device-actions p { margin: 0; color: var(--muted); font-size: 13px; }
 .recording-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 0 16px; border-bottom: 1px solid #edf0f4; color: #758196; font-size: 10px; }
 .recording-section-heading > div { display: flex; align-items: center; gap: 8px; color: var(--ink); }
 .recording-section-heading h2 { margin: 0; font-size: 14px; }

@@ -386,16 +386,17 @@ export function EnhancedCameraGrid({
       if (!originCam) continue;
 
       const titleLower = activeCritical.title.toLowerCase();
-      const direction: "left" | "right" | "top" | "bottom" =
-        titleLower.includes("west") || titleLower.includes("left") || titleLower.includes("exit")
-          ? "left"
-          : titleLower.includes("north") || titleLower.includes("up")
-          ? "top"
-          : titleLower.includes("south") || titleLower.includes("down")
-          ? "bottom"
-          : originCam.id.charCodeAt(originCam.id.length - 1) % 2 === 0
-          ? "right"
-          : "left";
+      let direction: "left" | "right" | "top" | "bottom" | null = null;
+      if (titleLower.includes("west") || titleLower.includes("left") || titleLower.includes("exit")) {
+        direction = "left";
+      } else if (titleLower.includes("east") || titleLower.includes("right")) {
+        direction = "right";
+      } else if (titleLower.includes("north") || titleLower.includes("up")) {
+        direction = "top";
+      } else if (titleLower.includes("south") || titleLower.includes("down")) {
+        direction = "bottom";
+      }
+      if (!direction) continue;
 
       // Find adjacent camera in same branch or next in camera catalog
       const branchCameras = cameras.filter((c) => c.branchId === originCam.branchId);

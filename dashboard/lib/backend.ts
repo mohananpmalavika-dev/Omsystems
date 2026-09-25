@@ -159,9 +159,10 @@ export async function startLive(
       // before failing later while resolving a secret or starting MediaMTX,
       // so every fallback must receive a fresh control-plane grant.
       if (index > 0) controlSession = await requestControlSession();
+      const fetchTargetUrl = resolveInternalFetchGatewayUrl(gwUrl);
       try {
         const res = await fetch(
-          mediaEndpoint(gwUrl, "/v1/live/start"),
+          mediaEndpoint(fetchTargetUrl, "/v1/live/start"),
           {
             method: "POST",
             headers: bridgeHeaders(),
@@ -385,7 +386,8 @@ export async function startTalk(
       },
     };
   }
-  const response = await fetch(mediaEndpoint(mediaGatewayUrl, "/v1/talk/start"), {
+  const fetchTargetUrl = resolveInternalFetchGatewayUrl(mediaGatewayUrl);
+  const response = await fetch(mediaEndpoint(fetchTargetUrl, "/v1/talk/start"), {
     method: "POST",
     headers: bridgeHeaders(),
     body: JSON.stringify({ controlPlaneToken: controlSession.token }),
@@ -396,6 +398,22 @@ export async function startTalk(
     throw new Error(typeof body.error === "string" ? body.error : "talkback_unavailable");
   }
   return await response.json() as TalkSessionResponse;
+}
+
+function resolveInternalFetchGatewayUrl(gwUrl: string): string {
+  try {
+    const url = new URL(normalizeHttpOrigin(gwUrl));
+    if (url.pathname.includes("/v1/edge-media/")) {
+      const internalBase = runtimeEnv(
+        ["CONTROL_PLANE_INTERNAL_URL", "CONTROL_PLANE_URL"],
+        process.env.NODE_ENV === "production" ? "http://control-plane:8080" : "http://localhost:8080"
+      );
+      const internalUrl = new URL(normalizeHttpOrigin(internalBase));
+      internalUrl.pathname = url.pathname;
+      return internalUrl.toString();
+    }
+  } catch {}
+  return gwUrl;
 }
 
 function normalizeHttpOrigin(value: string) {
