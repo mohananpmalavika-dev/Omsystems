@@ -134,7 +134,15 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
         const raw = Buffer.from(response.body, "base64").toString("utf8");
         const sanitized = raw
           .split("\n")
-          .filter((line) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
+          .map((line) => {
+            const trimmed = line.trim();
+            if (/^\?token=[^#\s]+$/.test(trimmed)) return "";
+            return line.replace(/^\?token=[^#\s]+(?=#)/, "");
+          })
+          .filter((line) => {
+            const trimmed = line.trim();
+            return trimmed.length > 0 && !trimmed.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !trimmed.startsWith("#EXT-X-DATERANGE");
+          })
           .join("\n");
         return reply.code(response.status).send(Buffer.from(sanitized, "utf8"));
       }

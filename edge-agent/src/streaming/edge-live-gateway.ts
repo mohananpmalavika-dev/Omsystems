@@ -1064,15 +1064,21 @@ async function readUpstreamText(response: Response, maximumBytes: number) {
   }
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
 }
-/** Add a token to URI lines and URI attributes (EXT-X-MAP/KEY/MEDIA). */
 export function rewriteHlsPlaylistTokens(playlist: string, token: string) {
   if (!token) return playlist;
   const rewrite = (uri: string) => appendQueryToken(uri, token);
-  return playlist.split(/(\r?\n)/).map((line) => {
-    if (!line || /^\r?$/.test(line)) return line;
-    if (!line.startsWith("#")) return rewrite(line);
-    return line.replace(/URI="([^"]+)"/g, (_match, uri: string) => `URI="${rewrite(uri)}"`);
-  }).join("");
+  return playlist.split("\n").map((rawLine) => {
+    const isCrLf = rawLine.endsWith("\r");
+    const line = isCrLf ? rawLine.slice(0, -1) : rawLine;
+    if (!line || line.trim() === "") return rawLine;
+    let modified = line;
+    if (!line.startsWith("#")) {
+      modified = rewrite(line);
+    } else {
+      modified = line.replace(/URI="([^"]+)"/g, (_match, uri: string) => `URI="${rewrite(uri)}"`);
+    }
+    return isCrLf ? `${modified}\r` : modified;
+  }).join("\n");
 }
 function appendQueryToken(uri: string, token: string) {
   // Never disclose a media credential to an absolute or protocol-relative

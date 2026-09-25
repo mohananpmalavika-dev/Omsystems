@@ -205,6 +205,8 @@ describe("all-in-one edge live gateway", () => {
       .toBe("/v1/edge-media/agent-1/hls/camera-1/init.mp4");
     expect(rewritten).toContain("https://untrusted.example/segment.m4s");
     expect(rewritten).not.toContain("untrusted.example/segment.m4s?token=");
+    expect(rewritten).not.toContain("?token=session-token#EXT");
+    expect(rewritten.startsWith("#EXTM3U\n")).toBe(true);
   });
 
   it("authorizes a dashboard session and creates a path from the branch-local secret", async () => {

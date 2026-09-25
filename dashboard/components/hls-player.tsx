@@ -193,7 +193,15 @@ export function HlsPlayer({
                   if (typeof response?.data === "string") {
                     response.data = response.data
                       .split("\n")
-                      .filter((line: string) => !line.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !line.startsWith("#EXT-X-DATERANGE"))
+                      .map((line: string) => {
+                        const trimmed = line.trim();
+                        if (/^\?token=[^#\s]+$/.test(trimmed)) return "";
+                        return line.replace(/^\?token=[^#\s]+(?=#)/, "");
+                      })
+                      .filter((line: string) => {
+                        const trimmed = line.trim();
+                        return trimmed.length > 0 && !trimmed.startsWith("#EXT-X-PROGRAM-DATE-TIME") && !trimmed.startsWith("#EXT-X-DATERANGE");
+                      })
                       .join("\n");
                   }
                   origSuccess(response, stats, ctx, networkDetails);
