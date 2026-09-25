@@ -124,10 +124,12 @@ CREATE TABLE IF NOT EXISTS communication_device_employees (
   unlinked_at TIMESTAMPTZ,
   unlinked_by UUID REFERENCES users(id),
   
-  CONSTRAINT uq_comm_device_employee UNIQUE (device_id, employee_id),
-  CONSTRAINT ck_comm_one_primary_per_device UNIQUE (device_id) 
-    WHERE is_primary = TRUE AND unlinked_at IS NULL
+  CONSTRAINT uq_comm_device_employee UNIQUE (device_id, employee_id)
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_comm_one_primary_per_device
+  ON communication_device_employees(device_id) 
+  WHERE is_primary = TRUE AND unlinked_at IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_comm_device_employees_device 
   ON communication_device_employees(device_id) 
@@ -180,7 +182,7 @@ CREATE INDEX IF NOT EXISTS idx_comm_enrollment_codes_expires
 
 CREATE INDEX IF NOT EXISTS idx_comm_enrollment_codes_active 
   ON communication_enrollment_codes(tenant_id, branch_id, expires_at) 
-  WHERE consumed_at IS NULL AND expires_at > NOW();
+  WHERE consumed_at IS NULL;
 
 -- ============================================================================
 -- PART 2: CALL SESSIONS & PARTICIPANTS
