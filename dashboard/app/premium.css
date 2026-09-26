@@ -300,3 +300,38 @@ button, input, select, textarea { font: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .command-center-metrics > div:hover { transform: none; }
 }
+
+/* Player canvases and controls keep their own contrast in every workspace theme. */
+.app-shell .route-surface .live-player-stage {
+  background: #071522 !important;
+  color: #e8f0fb !important;
+}
+.live-player-state {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 12px;
+  pointer-events: none;
+}
+.live-player-state > * { pointer-events: auto; }
+.camera-tile .tile-topline {
+  position: relative;
+  inset: auto;
+  min-height: 34px;
+  padding: 6px 8px;
+  gap: 6px;
+  color: #e8f0fb;
+  background: #071522;
+}
+.camera-tile .tile-status-badges {
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.camera-tile .tile-topline .status-pill { flex-shrink: 0; }
+
+.camera-tile:fullscreen { display: flex; flex-direction: column; }
+.camera-tile:fullscreen .feed-stage { flex: 1; min-height: 0; height: auto; }

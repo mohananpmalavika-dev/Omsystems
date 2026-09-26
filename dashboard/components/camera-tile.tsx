@@ -749,6 +749,94 @@ function CameraTileComponent({
       onMouseEnter={() => setIsTileHovered(true)}
       onMouseLeave={() => setIsTileHovered(false)}
     >
+      <div className="tile-topline">
+        <div className="tile-status-badges flex items-center gap-1.5">
+          {typeof index === "number" && (
+            <span className="slot-index-badge" title={`Video Wall Slot ${index + 1}`}>
+              #{String(index + 1).padStart(2, "0")}
+            </span>
+          )}
+          <span className={`status-pill ${hasLiveFrame ? "online" : (liveError && isFatalLiveError(liveError)) ? "offline" : camera.status}`}>
+            <i />
+            {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
+          </span>
+          {!effectiveMuted && (
+            <span
+              className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
+                loudNoiseAlert?.active
+                  ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
+                  : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
+              }`}
+              title={`Live Audio: ${audioLevel}% (~${Math.round(45 + audioLevel * 0.45)} dB)`}
+            >
+              <Volume2
+                size={12}
+                className={loudNoiseAlert?.active ? "text-rose-400 animate-bounce" : audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"}
+              />
+              <span className="text-[10px] font-mono font-bold tracking-tight">
+                {loudNoiseAlert?.active ? "LOUD NOISE!" : "AUDIO"}
+              </span>
+
+              {/* Live 7-Band Equalizer Waveform */}
+              <span className="inline-flex items-end gap-[1.5px] h-3 px-1 py-[1px] bg-slate-950/80 rounded border border-emerald-500/30 overflow-hidden">
+                {audioWaveform.map((band, idx) => (
+                  <span
+                    key={idx}
+                    className={`w-[2.5px] rounded-[0.5px] transition-all duration-75 ${
+                      band > 75 ? "bg-rose-500" : band > 35 ? "bg-amber-400" : "bg-emerald-400"
+                    }`}
+                    style={{ height: `${Math.max(15, band)}%` }}
+                  />
+                ))}
+              </span>
+              <span className="text-[9px] font-mono opacity-85">
+                {Math.round(45 + audioLevel * 0.45)}dB
+              </span>
+            </span>
+          )}
+          {isSoloAudio && (
+            <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
+              SOLO AUDIO
+            </span>
+          )}
+          {activeStream && (
+            <button
+              type="button"
+              onClick={() => onStreamQualityChange?.(camera.id, activeStream === "main" ? "sub" : "main")}
+              className={`status-pill font-mono font-bold text-[9px] cursor-pointer transition-all ${
+                activeStream === "main"
+                  ? "text-sky-300 border-sky-500/70 bg-sky-950/80 shadow-[0_0_8px_rgba(14,165,233,0.35)]"
+                  : "text-zinc-400 border-zinc-700 bg-zinc-900/80 hover:text-zinc-200"
+              }`}
+              title={
+                activeStream === "main"
+                  ? "Adaptive Dual-Stream: Main-stream HD (1080p / 4K) active. Click to switch to Sub-stream."
+                  : "Adaptive Dual-Stream: Sub-stream SD (D1 / 720p) active to conserve bandwidth. Fullscreen auto-elevates to Main-stream HD. Click to switch manually."
+              }
+            >
+              {activeStream === "main" ? "HD MAIN" : "SD SUB"}
+            </button>
+          )}
+          {dvrOffset > 0 && (
+            <button
+              type="button"
+              onClick={() => handleDvrScrub(0)}
+              className="status-pill flex items-center gap-1 bg-amber-950/90 border-amber-500/80 text-amber-300 font-bold animate-pulse hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500 cursor-pointer"
+              title="DVR Rewind is active. Click to jump back to live broadcast."
+            >
+              <Rewind size={11} />
+              DVR: -{dvrOffset}s ({playbackSpeed}x) · ▶ LIVE
+            </button>
+          )}
+        </div>
+        {onToggleRecording && (
+          <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
+            {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
+            {recordingLoading ? "…" : recording?.enabled ? "REC" : "REC OFF"}
+          </button>
+        )}
+      </div>
+
       <div
         className="feed-stage"
         style={{ cursor: isPtzTargetMode ? "crosshair" : zoom > 1 ? "grab" : undefined }}
@@ -1235,94 +1323,6 @@ function CameraTileComponent({
             </div>
           </div>
         )}
-
-        <div className="tile-topline">
-          <div className="flex items-center gap-1.5">
-            {typeof index === "number" && (
-              <span className="slot-index-badge" title={`Video Wall Slot ${index + 1}`}>
-                #{String(index + 1).padStart(2, "0")}
-              </span>
-            )}
-            <span className={`status-pill ${hasLiveFrame ? "online" : (liveError && isFatalLiveError(liveError)) ? "offline" : camera.status}`}>
-              <i />
-              {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
-            </span>
-            {!effectiveMuted && (
-              <span
-                className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
-                  loudNoiseAlert?.active
-                    ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
-                    : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
-                }`}
-                title={`Live Audio: ${audioLevel}% (~${Math.round(45 + audioLevel * 0.45)} dB)`}
-              >
-                <Volume2
-                  size={12}
-                  className={loudNoiseAlert?.active ? "text-rose-400 animate-bounce" : audioLevel > 5 ? "animate-pulse text-emerald-400" : "text-emerald-400/70"}
-                />
-                <span className="text-[10px] font-mono font-bold tracking-tight">
-                  {loudNoiseAlert?.active ? "LOUD NOISE!" : "AUDIO"}
-                </span>
-
-                {/* Live 7-Band Equalizer Waveform */}
-                <span className="inline-flex items-end gap-[1.5px] h-3 px-1 py-[1px] bg-slate-950/80 rounded border border-emerald-500/30 overflow-hidden">
-                  {audioWaveform.map((band, idx) => (
-                    <span
-                      key={idx}
-                      className={`w-[2.5px] rounded-[0.5px] transition-all duration-75 ${
-                        band > 75 ? "bg-rose-500" : band > 35 ? "bg-amber-400" : "bg-emerald-400"
-                      }`}
-                      style={{ height: `${Math.max(15, band)}%` }}
-                    />
-                  ))}
-                </span>
-                <span className="text-[9px] font-mono opacity-85">
-                  {Math.round(45 + audioLevel * 0.45)}dB
-                </span>
-              </span>
-            )}
-            {isSoloAudio && (
-              <span className="status-pill text-amber-300 border-amber-500/60 bg-amber-950/80 font-bold" title="Solo Audio is isolated to this camera">
-                SOLO AUDIO
-              </span>
-            )}
-            {activeStream && (
-              <button
-                type="button"
-                onClick={() => onStreamQualityChange?.(camera.id, activeStream === "main" ? "sub" : "main")}
-                className={`status-pill font-mono font-bold text-[9px] cursor-pointer transition-all ${
-                  activeStream === "main"
-                    ? "text-sky-300 border-sky-500/70 bg-sky-950/80 shadow-[0_0_8px_rgba(14,165,233,0.35)]"
-                    : "text-zinc-400 border-zinc-700 bg-zinc-900/80 hover:text-zinc-200"
-                }`}
-                title={
-                  activeStream === "main"
-                    ? "Adaptive Dual-Stream: Main-stream HD (1080p / 4K) active. Click to switch to Sub-stream."
-                    : "Adaptive Dual-Stream: Sub-stream SD (D1 / 720p) active to conserve bandwidth. Fullscreen auto-elevates to Main-stream HD. Click to switch manually."
-                }
-              >
-                {activeStream === "main" ? "HD MAIN" : "SD SUB"}
-              </button>
-            )}
-            {dvrOffset > 0 && (
-              <button
-                type="button"
-                onClick={() => handleDvrScrub(0)}
-                className="status-pill flex items-center gap-1 bg-amber-950/90 border-amber-500/80 text-amber-300 font-bold animate-pulse hover:bg-emerald-950 hover:text-emerald-300 hover:border-emerald-500 cursor-pointer"
-                title="DVR Rewind is active. Click to jump back to live broadcast."
-              >
-                <Rewind size={11} />
-                DVR: -{dvrOffset}s ({playbackSpeed}x) · ▶ LIVE
-              </button>
-            )}
-          </div>
-          {onToggleRecording && (
-            <button type="button" className={`recording-pill ${recording?.enabled ? "active" : ""}`} onClick={onToggleRecording} disabled={recordingLoading} title={recording?.enabled ? "Stop recording" : "Start continuous recording"}>
-              {recording?.enabled ? <CircleStop size={12} /> : <Radio size={12} />}
-              {recordingLoading ? "…" : recording?.enabled ? "REC" : "REC OFF"}
-            </button>
-          )}
-        </div>
 
         {cameraFlags.length > 0 && (
           <div className="absolute top-11 left-2.5 z-20 flex flex-wrap items-center gap-1.5 pointer-events-auto">

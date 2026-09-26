@@ -59,6 +59,7 @@ export function HlsPlayer({
     const video = videoRef.current;
     if (!video) return;
     video.muted = muted;
+    video.defaultMuted = muted;
     video.volume = volume;
     if (!muted && video.paused) {
       void video.play().catch(() => undefined);
@@ -230,7 +231,6 @@ export function HlsPlayer({
             fragLoadingMaxRetry: 6,
             manifestLoadingTimeOut: 15_000,
             manifestLoadingMaxRetry: 6,
-            pdtOffset: 0,
             xhrSetup: (xhr, requestUrl) => {
               const isSameOrigin = typeof window !== "undefined" && new URL(requestUrl, window.location.origin).origin === window.location.origin;
               if (isSameOrigin) {
@@ -583,7 +583,7 @@ export function HlsPlayer({
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden bg-slate-950 cursor-pointer"
+      className="live-player-stage relative h-full w-full overflow-hidden cursor-pointer"
       style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
       onClick={() => {
         if (videoRef.current && videoRef.current.paused) {
@@ -615,7 +615,6 @@ export function HlsPlayer({
           className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
           aria-label={`Live video from ${cameraName}`}
           muted={muted}
-          defaultMuted={muted}
           playsInline
           autoPlay
         />
@@ -725,11 +724,11 @@ export function HlsPlayer({
           </div>
         </>
       ) : (
-        <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+        <div className="live-player-state" role="status" aria-live="polite">
           {status === "loading" && (
             <div className="flex items-center gap-1.5 rounded bg-black/70 px-2 py-1 text-[9px] font-mono text-cyan-300 border border-cyan-500/30 backdrop-blur">
               <Loader2 className="animate-spin text-cyan-400" size={11} />
-              <span>CONNECTING STREAM…</span>
+              <span>Connecting to camera…</span>
             </div>
           )}
           {(status === "error" || status === "reconnecting") && (
@@ -740,7 +739,7 @@ export function HlsPlayer({
               title="Click to retry edge stream"
             >
               <RotateCw size={10} className={status === "reconnecting" ? "animate-spin" : ""} />
-              <span>RETRY</span>
+              <span>{status === "reconnecting" ? "Reconnecting… Retry now" : "Stream unavailable · Retry"}</span>
             </button>
           )}
         </div>

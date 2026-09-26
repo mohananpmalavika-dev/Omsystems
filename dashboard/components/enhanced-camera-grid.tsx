@@ -2367,7 +2367,7 @@ export function EnhancedCameraGrid({
 
         .grid-camera-slot {
           position: relative;
-          aspect-ratio: 16/9;
+          min-width: 0;
           cursor: move;
           transition: transform 0.2s, box-shadow 0.2s;
         }
@@ -2379,12 +2379,14 @@ export function EnhancedCameraGrid({
         }
 
         .slot-controls {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-          z-index: 10;
           display: flex;
+          justify-content: flex-end;
+          align-items: center;
           gap: 4px;
+          min-height: 34px;
+          padding: 4px 8px;
+          background: #071522;
+          border-radius: 10px 10px 0 0;
         }
 
         .stream-toggle,
