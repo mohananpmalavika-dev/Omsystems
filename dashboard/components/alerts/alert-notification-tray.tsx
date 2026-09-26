@@ -101,9 +101,18 @@ export function AlertNotificationTray() {
     e.stopPropagation();
     setAcknowledging(notificationKey(alert));
     try {
-      if (alert.source === "AI") await analyticsApi.acknowledge(alert.id, "Acknowledged from HO alert popup");
-      else await acknowledgeAlert(alert.id, { comment: "Acknowledged from HO alert popup" });
+      if (alert.source === "AI") {
+        await analyticsApi.acknowledge(alert.id, "Acknowledged from HO alert popup").catch((err) => {
+          console.warn("Failed to acknowledge AI alert on server:", err);
+        });
+      } else {
+        await acknowledgeAlert(alert.id, { comment: "Acknowledged from HO alert popup" }).catch((err) => {
+          console.warn("Failed to acknowledge operational alert on server:", err);
+        });
+      }
       setNotifications((current) => current.filter((item) => notificationKey(item) !== notificationKey(alert)));
+    } catch (error) {
+      console.warn("Acknowledge error:", error);
     } finally {
       setAcknowledging(null);
     }

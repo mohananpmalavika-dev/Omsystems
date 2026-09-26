@@ -195,6 +195,9 @@ async function fetchApi<T>(
       }
       throw error;
     }
+    if (error?.name === 'AbortError') {
+      throw error;
+    }
     // A transport failure does not invalidate an existing cookie-backed
     // session. Clearing browser state here caused a login loop whenever the
     // control plane was restarting or briefly unreachable immediately after
@@ -264,6 +267,9 @@ async function downloadApi(endpoint: string, options: RequestInit = {}, onProgre
   } catch (error: any) {
     if (error instanceof ApiError) {
       if (!isAuthEndpoint) reportApiFailure(error.statusCode, error.details ?? {}, error.message);
+      throw error;
+    }
+    if (error?.name === 'AbortError') {
       throw error;
     }
     // Network error - API not reachable
@@ -688,6 +694,10 @@ export const organizationApi = {
         .then((value) => {
           organizationTreeCache = { value, expiresAt: Date.now() + 10_000 };
           return value;
+        })
+        .catch((err) => {
+          organizationTreeCache = null;
+          throw err;
         })
         .finally(() => {
           organizationTreeRequest = null;
