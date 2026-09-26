@@ -2,10 +2,10 @@ import { WebSocket } from "ws";
 import { logger } from "../utils/logger.js";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
-const MAX_CONCURRENT = 32;
-const HEALTH_PROBE_INTERVAL_MS = 15_000;
-const HEALTH_PROBE_TIMEOUT_MS = 5_000;
-const HEALTH_PROBE_FAILURE_LIMIT = 2;
+const MAX_CONCURRENT = 128;
+const HEALTH_PROBE_INTERVAL_MS = 30_000;
+const HEALTH_PROBE_TIMEOUT_MS = 15_000;
+const HEALTH_PROBE_FAILURE_LIMIT = 5;
 const RECONNECT_DELAY_MS = 3_000;
 
 type RelayRequest = { id: string; method: string; path: string; headers?: Record<string, string>; body?: string };
@@ -16,7 +16,7 @@ export function startManagedMediaRelay(
   agentId: string,
   credential: string,
   localPort: number,
-  options: { healthProbeIntervalMs?: number; reconnectDelayMs?: number } = {},
+  options: { healthProbeIntervalMs?: number; healthProbeTimeoutMs?: number; reconnectDelayMs?: number } = {},
 ) {
   const endpoint = new URL(publicUrl);
   if (endpoint.protocol !== "https:" && endpoint.hostname !== "localhost" && endpoint.hostname !== "127.0.0.1") {
@@ -58,10 +58,15 @@ export function startManagedMediaRelay(
     // stale socket cannot keep live video offline until the agent restarts.
     const healthTimer = setInterval(() => {
       if (current.readyState !== WebSocket.OPEN || healthProbeInFlight) return;
+      // If we are actively serving media requests, the socket is proven alive.
+      if (inFlight > 0) {
+        healthProbeFailures = 0;
+        return;
+      }
       healthProbeInFlight = true;
       void fetch(healthEndpoint, {
         headers: { "cache-control": "no-store" },
-        signal: AbortSignal.timeout(HEALTH_PROBE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(options.healthProbeTimeoutMs ?? HEALTH_PROBE_TIMEOUT_MS),
       }).then((response) => {
         healthProbeFailures = response.ok ? 0 : healthProbeFailures + 1;
       }).catch(() => {
@@ -80,6 +85,7 @@ export function startManagedMediaRelay(
       logger.info("Self-hosted media relay connected", { agentId });
     });
     current.on("message", (raw) => {
+      isAlive = true;
       let frame: RelayRequest;
       try { frame = JSON.parse(raw.toString()) as RelayRequest; } catch { current.close(1003, "invalid frame"); return; }
       if (!frame || typeof frame.id !== "string" || typeof frame.path !== "string" || typeof frame.method !== "string") {

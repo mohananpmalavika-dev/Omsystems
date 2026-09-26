@@ -5,7 +5,7 @@ import type { ControlPlaneStore } from "../control-plane-store.js";
 
 const MAX_BODY_BYTES = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 40_000;
-const MAX_PENDING_PER_AGENT = 32;
+const MAX_PENDING_PER_AGENT = 128;
 const ALLOWED_HEADERS = ["authorization", "content-type", "range", "accept"] as const;
 const RESPONSE_HEADERS = ["content-type", "cache-control", "accept-ranges", "content-range", "access-control-allow-origin", "access-control-allow-headers", "access-control-allow-methods", "vary"] as const;
 
