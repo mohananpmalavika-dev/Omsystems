@@ -3500,10 +3500,12 @@ export async function buildApp(options?: {
 
   // Register KryptoVision Connect Communication Subsystem routes
   try {
-    const commModule = await import("./communications/routes/communications.routes.js" as any).catch(() => null);
+    const commModule = await import("./communications/routes/communications.routes.js" as any);
     if (commModule?.registerCommunicationsRoutes) {
       await commModule.registerCommunicationsRoutes(app, store);
       app.log.info("KryptoVision Connect communication subsystem routes registered");
+    } else {
+      app.log.warn("registerCommunicationsRoutes not found in communications.routes.js");
     }
   } catch (err: unknown) {
     app.log.error({ err }, "failed to register communication routes");

@@ -10,6 +10,14 @@
 
 export const DEVICE_HEARTBEAT_INTERVAL_SECONDS = 60;
 export const DEVICE_PRESENCE_TTL_SECONDS = 90;
+export const PRESENCE_TTL_SECONDS = {
+  DEVICE: 90,
+  EMPLOYEE: 90,
+  BRANCH: 90,
+  OPERATOR: 90,
+  CALL_STATE: 300,
+} as const;
+export const PRESENCE_HEARTBEAT_INTERVAL_MS = 30000;
 export const DEVICE_CREDENTIAL_LENGTH = 32; // 256 bits
 export const ENROLLMENT_CODE_LENGTH = 16;
 export const ENROLLMENT_DEFAULT_EXPIRY_MINUTES = 30;
@@ -24,6 +32,14 @@ export const CALL_MAX_DURATION_SECONDS = 3600; // 1 hour
 export const CALL_RECONNECT_TIMEOUT_SECONDS = 30;
 export const CALL_ANSWER_LOCK_TTL_SECONDS = 30;
 export const CALL_QUALITY_UPDATE_INTERVAL_SECONDS = 5;
+
+export const CALL_STATE_TIMEOUT_MS = {
+  INITIATING: 60000,
+  RINGING: 60000,
+  CONNECTING: 30000,
+  ACTIVE: 3600000, // 1 hour
+  RECONNECTING: 30000,
+} as const;
 
 // Valid call state transitions
 export const VALID_CALL_TRANSITIONS: Record<string, string[]> = {
@@ -73,6 +89,12 @@ export const REDIS_KEYS = {
   
   OPERATOR_PRESENCE: (tenantId: string, operatorId: string) => 
     `comm:presence:operator:${tenantId}:${operatorId}`,
+
+  EMPLOYEE_IN_CALL: (tenantId: string, employeeId: string) => 
+    `comm:presence:employee-in-call:${tenantId}:${employeeId}`,
+
+  OPERATOR_IN_CALL: (tenantId: string, operatorId: string) => 
+    `comm:presence:operator-in-call:${tenantId}:${operatorId}`,
   
   // Call state
   CALL_STATE: (tenantId: string, callId: string) => 
@@ -181,16 +203,45 @@ export const ERROR_CODES = {
 } as const;
 
 // ============================================================================
-// WEBSOCKET ROOM NAMES
+// WEBSOCKET EVENTS & ROOM NAMES
 // ============================================================================
 
-export const WS_ROOMS = {
+export const WEBSOCKET_EVENTS = {
+  // Call events
+  CALL_INVITE: 'CALL_INVITE',
+  CALL_RINGING: 'CALL_RINGING',
+  CALL_ACCEPT: 'CALL_ACCEPT',
+  CALL_ACCEPTED_ELSEWHERE: 'CALL_ACCEPTED_ELSEWHERE',
+  CALL_REJECT: 'CALL_REJECT',
+  CALL_CANCEL: 'CALL_CANCEL',
+  CALL_CONNECTING: 'CALL_CONNECTING',
+  CALL_CONNECTED: 'CALL_CONNECTED',
+  CALL_MUTE: 'CALL_MUTE',
+  CALL_UNMUTE: 'CALL_UNMUTE',
+  CALL_RECONNECTING: 'CALL_RECONNECTING',
+  CALL_END: 'CALL_END',
+  CALL_FAILED: 'CALL_FAILED',
+  // Message events
+  MESSAGE_CREATED: 'MESSAGE_CREATED',
+  MESSAGE_DELIVERED: 'MESSAGE_DELIVERED',
+  MESSAGE_READ: 'MESSAGE_READ',
+  // Presence events
+  DEVICE_ONLINE: 'DEVICE_ONLINE',
+  DEVICE_OFFLINE: 'DEVICE_OFFLINE',
+  PRESENCE_CHANGED: 'PRESENCE_CHANGED',
+} as const;
+
+export const WEBSOCKET_ROOMS = {
   TENANT: (tenantId: string) => `tenant:${tenantId}`,
   BRANCH: (tenantId: string, branchId: string) => `branch:${tenantId}:${branchId}`,
   DEVICE: (tenantId: string, deviceId: string) => `device:${tenantId}:${deviceId}`,
+  EMPLOYEE: (tenantId: string, employeeId: string) => `employee:${tenantId}:${employeeId}`,
   OPERATOR: (tenantId: string, operatorId: string) => `operator:${tenantId}:${operatorId}`,
   CALL: (tenantId: string, callId: string) => `call:${tenantId}:${callId}`,
+  CONVERSATION: (tenantId: string, conversationId: string) => `conversation:${tenantId}:${conversationId}`,
 } as const;
+
+export const WS_ROOMS = WEBSOCKET_ROOMS;
 
 // ============================================================================
 // PERMISSIONS
