@@ -88,7 +88,7 @@ http://34.14.220.41, :80 {
     }
 
     @ws {
-        path /ws /ws/*
+        path /ws /ws/* /socket.io /socket.io/*
     }
     handle @ws {
         reverse_proxy control-plane:8080 {

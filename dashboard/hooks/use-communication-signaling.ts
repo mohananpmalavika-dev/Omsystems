@@ -103,7 +103,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
     
     // Connect to Socket.IO server
     const socket = io({
-      path: '/socket.io',
+      path: '/ws',
       auth: {
         token,
       },

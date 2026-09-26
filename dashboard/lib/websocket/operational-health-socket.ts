@@ -161,9 +161,11 @@ let socketInstance: OperationalHealthSocket | null = null;
 
 export function getOperationalHealthSocket(): OperationalHealthSocket {
   if (!socketInstance) {
+    const isClient = typeof window !== 'undefined';
+    const proto = isClient && window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || 
-                  (typeof window !== 'undefined' 
-                    ? `ws://${window.location.host}/ws`
+                  (isClient 
+                    ? `${proto}//${window.location.host}/ws`
                     : 'ws://localhost:3000/ws');
     
     socketInstance = new OperationalHealthSocket(wsUrl);

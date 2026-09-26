@@ -554,7 +554,7 @@ export class ActivityTrackingRepository {
     await this.pool.query(
       `UPDATE control_room_monitoring_activity
        SET monitoring_end_time = CURRENT_TIMESTAMP,
-           duration_seconds = EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - monitoring_start_time))::INT,
+           duration_seconds = COALESCE($3::INT, EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - monitoring_start_time))::INT),
            alert_count = $4,
            incident_count = $5,
            camera_switch_count = $6,

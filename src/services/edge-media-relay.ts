@@ -96,7 +96,8 @@ export function registerEdgeMediaRelay(app: FastifyInstance, store: ControlPlane
       || ["/v1/storage/search", "/v1/storage/play"].includes(path) && ["POST", "OPTIONS"].includes(method)
       || path === "/v1/talk/start" && method === "POST"
       || /^\/v1\/talk\/[a-zA-Z0-9_-]+(?:\/audio)?$/.test(path) && ["POST", "DELETE"].includes(method)
-      || /^\/hls\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9_.-]+$/.test(path) && ["GET", "HEAD", "OPTIONS"].includes(method);
+      || /^\/hls\/[a-zA-Z0-9_-]+\/.+$/.test(path) && ["GET", "HEAD", "OPTIONS"].includes(method)
+      || /^\/webrtc\/[a-zA-Z0-9_-]+(?:\/.+)?$/.test(path) && ["GET", "POST", "PATCH", "OPTIONS"].includes(method);
     if (!allowed || !/^[0-9a-f-]{36}$/.test(agentId)) return reply.code(404).send({ error: "not_found" });
     const connection = connections.get(agentId);
     if (!connection || connection.socket.readyState !== WebSocket.OPEN) return reply.code(503).send({ error: "edge_media_offline" });
