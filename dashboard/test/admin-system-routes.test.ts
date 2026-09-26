@@ -153,6 +153,34 @@ describe("admin system routes", () => {
     await expect(stats.json()).resolves.toEqual(expect.objectContaining({ gateways: 1 }));
   });
 
+  it("normalizes branch address objects and empty objects into strings or null", async () => {
+    process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("organization/nodes")) {
+        return Response.json({
+          data: [
+            { id: "b-1", name: "North Zone", address: {} },
+            { id: "b-2", name: "South Zone", address: { street: "123 Main St", city: "Kochi", state: "Kerala" } },
+            { id: "b-3", name: "West Zone", address: "Custom string address" },
+            { id: "b-4", name: "East Zone", address: null },
+          ],
+        });
+      }
+      return Response.json({ data: [] });
+    }));
+
+    const response = await getBranches(authenticatedRequest("/api/admin/system/branches"));
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data).toEqual([
+      { id: "b-1", name: "North Zone", address: null, gateway_count: 0 },
+      { id: "b-2", name: "South Zone", address: "123 Main St, Kochi, Kerala", gateway_count: 0 },
+      { id: "b-3", name: "West Zone", address: "Custom string address", gateway_count: 0 },
+      { id: "b-4", name: "East Zone", address: null, gateway_count: 0 },
+    ]);
+  });
+
   it("supports GET on /api/admin/system/cameras/all, branches/all, and gateways/all without 405 Method Not Allowed", async () => {
     process.env.CONTROL_PLANE_INTERNAL_URL = "http://control.internal:8080";
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {

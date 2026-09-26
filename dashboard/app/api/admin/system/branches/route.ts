@@ -36,12 +36,13 @@ export async function GET(request: NextRequest) {
       if (!agent.branchId || agent.credentialStatus === 'revoked') continue;
       agentsByBranch.set(agent.branchId, (agentsByBranch.get(agent.branchId) ?? 0) + 1);
     }
+
     const branches = (branchesData.data ?? []).map((value) => {
-      const branch = value as { id?: string; name?: string; address?: string | null };
+      const branch = value as { id?: string; name?: string; address?: unknown };
       return {
         id: branch.id,
         name: branch.name,
-        address: branch.address ?? null,
+        address: formatBranchAddress(branch.address),
         gateway_count: branch.id ? agentsByBranch.get(branch.id) ?? 0 : 0,
       };
     });
@@ -51,6 +52,22 @@ export async function GET(request: NextRequest) {
     console.error('Error fetching branches:', error);
     return NextResponse.json({ error: 'control_plane_unavailable' }, { status: 503 });
   }
+}
+
+function formatBranchAddress(address: unknown): string | null {
+  if (!address) return null;
+  if (typeof address === 'string') {
+    const trimmed = address.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof address === 'object') {
+    const addr = address as Record<string, unknown>;
+    const parts = [addr.street, addr.city, addr.state, addr.postalCode, addr.country]
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      .map((p) => p.trim());
+    return parts.length > 0 ? parts.join(', ') : null;
+  }
+  return null;
 }
 
 function upstreamFailure(response: Response, resource: string) {

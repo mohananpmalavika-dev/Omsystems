@@ -30,7 +30,7 @@ type CameraType = {
 type Branch = {
   id: string;
   name: string;
-  address: string | null;
+  address: string | Record<string, unknown> | null;
   gateway_count: number;
 };
 
@@ -45,6 +45,22 @@ type Stats = {
 type ManagedResource = "gateway" | "camera";
 
 const CAMERA_PAGE_SIZE = 100;
+
+function formatBranchAddress(address: unknown): string {
+  if (!address) return 'N/A';
+  if (typeof address === 'string') {
+    const trimmed = address.trim();
+    return trimmed.length > 0 ? trimmed : 'N/A';
+  }
+  if (typeof address === 'object') {
+    const addr = address as Record<string, unknown>;
+    const parts = [addr.street, addr.city, addr.state, addr.postalCode, addr.country]
+      .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      .map((p) => p.trim());
+    return parts.length > 0 ? parts.join(', ') : 'N/A';
+  }
+  return 'N/A';
+}
 
 function getDeleteErrorMessage(body: { error?: string; message?: string; details?: string | { error?: string; message?: string } } | null, fallback = 'Failed to delete. Please try again.') {
   const nestedDetails = typeof body?.details === 'string'
@@ -528,11 +544,11 @@ export default function SystemManagementPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {branches.map((branch) => (
-                          <tr key={branch.id} style={{ borderBottom: '1px solid var(--line)' }}>
-                            <td style={{ padding: '1rem', fontWeight: '600', color: 'var(--ink)' }}>{branch.name}</td>
-                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{branch.address || 'N/A'}</td>
-                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{branch.gateway_count}</td>
+                        {branches.map((branch, index) => (
+                          <tr key={branch.id || index} style={{ borderBottom: '1px solid var(--line)' }}>
+                            <td style={{ padding: '1rem', fontWeight: '600', color: 'var(--ink)' }}>{String(branch.name || 'Unnamed Branch')}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{formatBranchAddress(branch.address)}</td>
+                            <td style={{ padding: '1rem', color: 'var(--ink)' }}>{branch.gateway_count ?? 0}</td>
                             <td style={{ padding: '1rem', fontFamily: 'monospace', fontSize: '0.875rem', color: 'var(--ink)' }}>
                               {branch.id}
                             </td>
