@@ -7,14 +7,26 @@ authHTTPExclude:
   - action: api
   - action: metrics
   - action: pprof
+  - action: publish
 hls: yes
 hlsAddress: 127.0.0.1:8888
+# Fragmented MP4 supports both H.264 and H.265 (HEVC) streams across tunnels
 hlsVariant: fmp4
 hlsAllowOrigins: ['*']
-hlsSegmentCount: 5
+hlsSegmentCount: 10
 hlsSegmentDuration: 2s
 hlsPartDuration: 500ms
+rtsp: yes
+rtspAddress: 127.0.0.1:8554
+rtmp: no
 webrtc: no
+webrtcAddress: 127.0.0.1:8889
+webrtcLocalUDPAddress: :8189
+webrtcAllowOrigins: ['*']
+srt: no
+srtAddress: 127.0.0.1:8890
+# UDP/RTP multicast is configured per source path (udp+rtp:// or
+# udp+mpegts://). It is intentionally not exposed as a public listener.
 pathDefaults:
   sourceOnDemand: yes
   sourceOnDemandStartTimeout: 15s

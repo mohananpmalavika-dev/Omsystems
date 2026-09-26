@@ -435,13 +435,17 @@ export class EdgeLiveGateway {
       });
     }
     response.statusCode = upstream.status;
-    for (const name of ["accept-ranges", "cache-control", "content-length", "content-type"]) {
+    for (const name of ["accept-ranges", "cache-control", "content-type"]) {
       const value = upstream.headers.get(name); if (value) response.setHeader(name, value);
     }
     if (request.method === "HEAD" || upstream.status === 204) { response.end(); return; }
     const body = Buffer.from(await upstream.arrayBuffer());
     const contentType = upstream.headers.get("content-type") ?? "";
-    response.end(contentType.includes("mpegurl") ? rewriteHlsPlaylist(body.toString("utf8"), token) : body);
+    const payload = contentType.includes("mpegurl")
+      ? Buffer.from(rewriteHlsPlaylist(body.toString("utf8"), token), "utf8")
+      : body;
+    response.setHeader("content-length", String(payload.length));
+    response.end(payload);
   }
 
   private async proxyWebRtc(request: IncomingMessage, response: ServerResponse) {
