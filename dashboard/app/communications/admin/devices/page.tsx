@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { communicationApi } from '@/services/communication-api';
+import { communicationApi, communicationAPI } from '@/services/communication-api';
 import type {
   CommunicationDevice,
   CommunicationEnrollmentCode,
@@ -53,23 +53,24 @@ export default function DeviceManagementPage() {
   }, []);
 
   const loadData = async () => {
+    const api = communicationApi || communicationAPI;
     try {
       setLoading(true);
       setError(null);
 
       const [devicesRes, codesRes, branchesRes, employeesRes] = await Promise.all([
-        communicationApi.listDevices(),
-        communicationApi.listEnrollmentCodes(),
-        communicationApi.getBranchDirectory(),
-        communicationApi.getEmployeeDirectory(),
+        api.listDevices(),
+        api.listEnrollmentCodes(),
+        api.getBranchDirectory(),
+        api.getEmployeeDirectory(),
       ]);
 
-      setDevices(devicesRes.data);
-      setEnrollmentCodes(codesRes.data);
-      setBranches(branchesRes.data);
-      setEmployees(employeesRes.data);
+      setDevices(devicesRes?.data || []);
+      setEnrollmentCodes(codesRes?.data || []);
+      setBranches(branchesRes?.data || []);
+      setEmployees(employeesRes?.data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load data');
+      setError(err?.message || 'Failed to load data');
     } finally {
       setLoading(false);
     }

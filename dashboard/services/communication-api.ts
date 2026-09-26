@@ -482,3 +482,5 @@ class CommunicationAPIClient {
 // ============================================================================
 
 export const communicationAPI = new CommunicationAPIClient();
+export const communicationApi = communicationAPI;
+export default communicationAPI;
