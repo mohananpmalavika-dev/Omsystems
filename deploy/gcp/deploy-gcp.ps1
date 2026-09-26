@@ -186,7 +186,7 @@ if ([string]::IsNullOrWhiteSpace($existingVm)) {
 
     Write-Host "Monitoring build and restart progress on $InstanceName..." -ForegroundColor Cyan
     $completed = $false
-    $timeoutSeconds = 600
+    $timeoutSeconds = 1200
     $startTime = [DateTime]::UtcNow
     while (-not $completed -and ([DateTime]::UtcNow - $startTime).TotalSeconds -lt $timeoutSeconds) {
         Start-Sleep -Seconds 4
