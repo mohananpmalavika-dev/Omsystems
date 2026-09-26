@@ -396,6 +396,85 @@ class CommunicationAPIClient {
       }
     );
   }
+  
+  // ============================================================================
+  // ADMIN - ENROLLMENT CODE MANAGEMENT
+  // ============================================================================
+  
+  async generateEnrollmentCode(params: {
+    branchId: string;
+    expiresInHours: number;
+    note?: string;
+  }): Promise<CommunicationEnrollmentCode> {
+    const response = await this.request<{ data: CommunicationEnrollmentCode }>(
+      '/v1/communications/enrollment-codes',
+      {
+        method: 'POST',
+        body: JSON.stringify(params),
+      }
+    );
+    return response.data;
+  }
+  
+  async listEnrollmentCodes(): Promise<{ data: CommunicationEnrollmentCode[] }> {
+    const response = await this.request<{ data: CommunicationEnrollmentCode[] }>(
+      '/v1/communications/enrollment-codes',
+      {
+        method: 'GET',
+      }
+    );
+    return response;
+  }
+  
+  async revokeEnrollmentCode(codeId: string): Promise<void> {
+    await this.request(
+      `/v1/communications/enrollment-codes/${encodeURIComponent(codeId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+  
+  // ============================================================================
+  // ADMIN - DEVICE MANAGEMENT
+  // ============================================================================
+  
+  async listDevices(): Promise<{ data: CommunicationDevice[] }> {
+    const response = await this.request<{ data: CommunicationDevice[] }>(
+      '/v1/communications/devices',
+      {
+        method: 'GET',
+      }
+    );
+    return response;
+  }
+  
+  async revokeDevice(deviceId: string): Promise<void> {
+    await this.request(
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
+  
+  async linkEmployeeToDevice(deviceId: string, employeeId: string): Promise<void> {
+    await this.request(
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/employees/${encodeURIComponent(employeeId)}`,
+      {
+        method: 'POST',
+      }
+    );
+  }
+  
+  async unlinkEmployeeFromDevice(deviceId: string, employeeId: string): Promise<void> {
+    await this.request(
+      `/v1/communications/devices/${encodeURIComponent(deviceId)}/employees/${encodeURIComponent(employeeId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+  }
 }
 
 // ============================================================================

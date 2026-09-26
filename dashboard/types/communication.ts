@@ -163,3 +163,45 @@ export interface PresenceEvent {
   entityId: string;
   presence: CommunicationPresence;
 }
+
+
+// ============================================================================
+// DEVICE MANAGEMENT TYPES
+// ============================================================================
+
+export interface CommunicationDevice {
+  deviceId: string;
+  tenantId: string;
+  branchId: string;
+  branchName?: string;
+  deviceName: string;
+  deviceType: CommunicationDeviceType;
+  platform: string;
+  status: CommunicationDeviceStatus;
+  linkedEmployeeIds: string[];
+  lastSeenAt?: string;
+  enrolledAt: string;
+  revokedAt?: string;
+}
+
+export interface CommunicationEnrollmentCode {
+  codeId: string;
+  tenantId: string;
+  branchId: string;
+  code: string;
+  status: 'active' | 'used' | 'revoked' | 'expired';
+  expiresAt: string;
+  createdAt: string;
+  usedAt?: string;
+  revokedAt?: string;
+  note?: string;
+}
+
+export interface CommunicationEmployee {
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  branchId: string;
+  branchName: string;
+  presence: CommunicationPresence;
+}

@@ -168,6 +168,7 @@ export const navigation: NavGroup[] = [
     items: [
       { label: "Voice Calling & Intercom", href: "/communications/calls", icon: PhoneCall },
       { label: "KryptoVision Connect", href: "/communications/connect", icon: Radio },
+      { label: "Device Management", href: "/communications/admin/devices", icon: Settings },
     ],
   },
   {
@@ -375,6 +376,7 @@ const legacyRoleWorkspacePaths: Record<string, string[]> = {
     "/account/security",
     "/communications/calls",
     "/communications/connect",
+    "/communications/admin/devices",
   ],
 };
 
