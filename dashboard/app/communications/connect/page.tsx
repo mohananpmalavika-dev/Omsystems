@@ -11,7 +11,7 @@ import {
 import { communicationAPI } from '@/services/communication-api';
 import { useCommunicationSignaling } from '@/hooks/use-communication-signaling';
 import { useWebRTCCall, type CallModality } from '@/hooks/use-webrtc-call';
-import type { CallSession } from '@/services/communication-api';
+import type { CallSession, WebRTCCredentials } from '@/services/communication-api';
 import type { CallInviteEvent } from '@/hooks/use-communication-signaling';
 
 interface BranchOption {
@@ -25,6 +25,7 @@ interface ActiveCall {
   session: CallSession;
   startTime: Date;
   modality: CallModality;
+  credentials: WebRTCCredentials;
 }
 
 function formatCallDuration(seconds: number): string {
@@ -290,7 +291,38 @@ export default function KryptoVisionConnectPage() {
     const unsubInvite = signaling.onCallInvite((event) => {
       console.log('[Connect Device] Incoming call received:', event);
       if (event.direction === 'INBOUND') {
+        void signaling.joinCall(event.callId).catch(() => setError('Unable to join call signaling. Reconnect this device and try again.'));
         setIncomingCall(event);
+      }
+    });
+
+    const unsubAccepted = signaling.onCallAccepted((event) => {
+      if (!activeCall || event.callId !== activeCall.session.id) return;
+    });
+
+    const unsubMediaReady = signaling.onCallMediaReady((event) => {
+      if (!activeCall || event.callId !== activeCall.session.id) return;
+      void (async () => {
+        const offer = await webrtc.createOffer(activeCall.credentials, activeCall.modality, (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+        if (offer) signaling.sendWebRtcOffer(event.callId, offer);
+      })().catch((signalError) => setError(signalError instanceof Error ? signalError.message : 'Unable to start call media'));
+    });
+
+    const unsubOffer = signaling.onWebRtcOffer((event) => {
+      if (!activeCall || event.callId !== activeCall.session.id || !event.description) return;
+      void (async () => {
+        const answer = await webrtc.createAnswer(activeCall.credentials, event.description!, activeCall.modality, (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+        if (answer) signaling.sendWebRtcAnswer(event.callId, answer);
+      })().catch((signalError) => setError(signalError instanceof Error ? signalError.message : 'Unable to answer call media'));
+    });
+    const unsubAnswer = signaling.onWebRtcAnswer((event) => {
+      if (activeCall?.session.id === event.callId && event.description) {
+        void webrtc.applyAnswer(event.description).catch(() => setError('Unable to complete call media negotiation'));
+      }
+    });
+    const unsubIce = signaling.onWebRtcIceCandidate((event) => {
+      if (activeCall?.session.id === event.callId && event.candidate) {
+        void webrtc.addIceCandidate(event.candidate).catch(() => setError('Unable to apply call network candidate'));
       }
     });
 
@@ -331,13 +363,18 @@ export default function KryptoVisionConnectPage() {
 
     return () => {
       unsubInvite();
+      unsubAccepted();
+      unsubMediaReady();
+      unsubOffer();
+      unsubAnswer();
+      unsubIce();
       unsubConnected();
       unsubEnded();
       unsubElsewhere();
       unsubRejected();
       unsubCancelled();
     };
-  }, [signaling, activeCall, incomingCall, deviceEnrolled]);
+  }, [signaling, activeCall, incomingCall, deviceEnrolled, webrtc]);
 
   // 5. Timer
   useEffect(() => {
@@ -408,8 +445,9 @@ export default function KryptoVisionConnectPage() {
       });
       if (!stream) return;
 
-      const session = await communicationAPI.callVMS(linkedEmployee?.id);
-      setActiveCall({ session, startTime: new Date(), modality });
+      const started = await communicationAPI.callVMS(linkedEmployee?.id);
+      await signaling.joinCall(started.call.id);
+      setActiveCall({ session: started.call, credentials: started.credentials, startTime: new Date(), modality });
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -443,12 +481,14 @@ export default function KryptoVisionConnectPage() {
 
       setActiveCall({
         session: call,
+        credentials,
         startTime: new Date(),
         modality,
       });
 
       setIncomingCall(null);
-      await webrtc.connect(credentials, undefined, modality);
+      await signaling.joinCall(call.id);
+      signaling.sendCallMediaReady(call.id);
     } catch (err: any) {
       console.error('[Connect Device] Failed to accept call:', err);
       setError(err.message || 'Failed to accept call');

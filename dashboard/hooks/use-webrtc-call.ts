@@ -97,6 +97,10 @@ export interface UseWebRTCCallReturn {
   // Actions
   initializeMedia: (options: { audio?: boolean; video?: boolean }) => Promise<MediaStream | null>;
   connect: (credentials: WebRTCCredentials, remoteParticipantId?: string, modality?: CallModality) => Promise<void>;
+  createOffer: (credentials: WebRTCCredentials, modality: CallModality, onIceCandidate: (candidate: RTCIceCandidateInit) => void) => Promise<RTCSessionDescriptionInit | null>;
+  createAnswer: (credentials: WebRTCCredentials, offer: RTCSessionDescriptionInit, modality: CallModality, onIceCandidate: (candidate: RTCIceCandidateInit) => void) => Promise<RTCSessionDescriptionInit | null>;
+  applyAnswer: (answer: RTCSessionDescriptionInit) => Promise<void>;
+  addIceCandidate: (candidate: RTCIceCandidateInit) => Promise<void>;
   disconnect: () => void;
   toggleMute: () => void;
   toggleCamera: () => Promise<void>;
@@ -145,6 +149,7 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const pendingRemoteCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
   const cameraTrackRef = useRef<MediaStreamTrack | null>(null);
   const statsIntervalRef = useRef<number | null>(null);
@@ -270,8 +275,11 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
     }, 2500);
   }, []);
 
-  // Connect via WebRTC
-  const connect = useCallback(async (credentials: WebRTCCredentials, _remoteParticipantId?: string, modality: CallModality = 'audio') => {
+  const createPeerConnection = useCallback(async (
+    credentials: WebRTCCredentials,
+    modality: CallModality,
+    onIceCandidate: (candidate: RTCIceCandidateInit) => void,
+  ): Promise<RTCPeerConnection | null> => {
     try {
       setState('CONNECTING');
       setError(null);
@@ -286,7 +294,7 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
         });
         if (!stream) {
           setState('FAILED');
-          return;
+          return null;
         }
       }
 
@@ -297,6 +305,9 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
         ],
       });
       peerConnectionRef.current = pc;
+      pc.onicecandidate = (event) => {
+        if (event.candidate) onIceCandidate(event.candidate.toJSON());
+      };
 
       // Add local audio and video tracks
       stream.getTracks().forEach((track) => {
@@ -330,20 +341,71 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
         }
       };
 
-      // Create offer
-      const offer = await pc.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
-      await pc.setLocalDescription(offer);
-      
-      console.log('[WebRTCCall] Peer connection ready with modality:', modality);
+      return pc;
     } catch (err: any) {
       console.error('[WebRTCCall] Connection setup failed:', err);
       setState('FAILED');
       setError(err.message || 'Failed to establish call media');
+      return null;
     }
   }, [localStream, initializeMedia, startQualityMonitoring]);
+
+  // Backward-compatible local connection setup. New call screens use
+  // createOffer/createAnswer to relay SDP through the authenticated socket.
+  const connect = useCallback(async (credentials: WebRTCCredentials, _remoteParticipantId?: string, modality: CallModality = 'audio') => {
+    const pc = await createPeerConnection(credentials, modality, () => undefined);
+    if (!pc) return;
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+    await pc.setLocalDescription(offer);
+  }, [createPeerConnection]);
+
+  const createOffer = useCallback(async (
+    credentials: WebRTCCredentials,
+    modality: CallModality,
+    onIceCandidate: (candidate: RTCIceCandidateInit) => void,
+  ): Promise<RTCSessionDescriptionInit | null> => {
+    const pc = await createPeerConnection(credentials, modality, onIceCandidate);
+    if (!pc) return null;
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+    await pc.setLocalDescription(offer);
+    return { type: offer.type, sdp: offer.sdp };
+  }, [createPeerConnection]);
+
+  const createAnswer = useCallback(async (
+    credentials: WebRTCCredentials,
+    offer: RTCSessionDescriptionInit,
+    modality: CallModality,
+    onIceCandidate: (candidate: RTCIceCandidateInit) => void,
+  ): Promise<RTCSessionDescriptionInit | null> => {
+    const pc = await createPeerConnection(credentials, modality, onIceCandidate);
+    if (!pc) return null;
+    await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    for (const candidate of pendingRemoteCandidatesRef.current.splice(0)) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    return { type: answer.type, sdp: answer.sdp };
+  }, [createPeerConnection]);
+
+  const applyAnswer = useCallback(async (answer: RTCSessionDescriptionInit) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) throw new Error('No active WebRTC offer exists');
+    await pc.setRemoteDescription(new RTCSessionDescription(answer));
+    for (const candidate of pendingRemoteCandidatesRef.current.splice(0)) {
+      await pc.addIceCandidate(new RTCIceCandidate(candidate));
+    }
+  }, []);
+
+  const addIceCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {
+    const pc = peerConnectionRef.current;
+    if (!pc) return;
+    if (!pc.remoteDescription) {
+      pendingRemoteCandidatesRef.current.push(candidate);
+      return;
+    }
+    await pc.addIceCandidate(new RTCIceCandidate(candidate));
+  }, []);
 
   // Screen Sharing
   const startScreenShare = useCallback(async (): Promise<boolean> => {
@@ -732,6 +794,7 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+    pendingRemoteCandidatesRef.current = [];
 
     setRemoteStream(null);
     setIsScreenSharing(false);
@@ -833,6 +896,10 @@ export function useWebRTCCall(): UseWebRTCCallReturn {
     togglePiP,
     initializeMedia,
     connect,
+    createOffer,
+    createAnswer,
+    applyAnswer,
+    addIceCandidate,
     disconnect,
     toggleMute,
     toggleCamera,

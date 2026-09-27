@@ -252,7 +252,7 @@ class LazySignalingGateway {
     const io = (this.getApp() as any).io;
     if (!io) return null;
     try {
-      this.gateway = new CommunicationSignalingGateway(io);
+      this.gateway = new CommunicationSignalingGateway(io, this.pool);
       return this.gateway;
     } catch {
       return null;
@@ -995,17 +995,22 @@ export async function registerCommunicationsRoutes(
         return;
       }
       
-      const input: InitiateCallInput = {
-        initiatorType: 'OPERATOR',
-        initiatorId: request.currentUser.id,
+      const input = {
+        direction: 'OUTBOUND' as const,
+        sourceType: 'OPERATOR' as const,
+        sourceOperatorId: request.currentUser.id,
         targetType: 'BRANCH',
-        targetId: branchId,
+        targetBranchId: branchId,
         tenantId: request.currentUser.tenantId,
-        context: body.context,
+        initiatedBy: request.currentUser.id,
       };
       
       const callSession = await ctx.callService.initiateCall(input);
       
+      const mediaSession = await ctx.mediaProvider.createSession({ callId: callSession.id, tenantId: request.currentUser.tenantId, maxParticipants: 2 });
+      await ctx.pool.query('UPDATE communication_call_sessions SET media_session_id = $1, media_provider = $2 WHERE id = $3 AND tenant_id = $4', [mediaSession.sessionId, 'self-hosted', callSession.id, request.currentUser.tenantId]);
+      callSession.mediaSessionId = mediaSession.sessionId;
+      const participant = await ctx.mediaProvider.createParticipantToken({ sessionId: mediaSession.sessionId, participantId: request.currentUser.id, participantType: 'operator', canPublish: true, canSubscribe: true });
       // Broadcast call invite to all branch devices
       await ctx.signalingGateway.broadcastCallInvite(
         request.currentUser.tenantId,
@@ -1031,11 +1036,7 @@ export async function registerCommunicationsRoutes(
         details: { callId: callSession.id, targetBranchId: branchId },
       });
       
-      return reply.code(201).send({
-        callId: callSession.id,
-        status: callSession.status,
-        createdAt: callSession.createdAt,
-      });
+      return reply.code(201).send({ data: { call: callSession, credentials: { participantToken: participant.token, turnServers: mediaSession.turnServers, iceServers: mediaSession.turnServers } } });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to initiate branch call');
       return reply.code(400).send({ error: error.message || 'call_initiation_failed' });
@@ -1055,17 +1056,22 @@ export async function registerCommunicationsRoutes(
         return;
       }
       
-      const input: InitiateCallInput = {
-        initiatorType: 'OPERATOR',
-        initiatorId: request.currentUser.id,
+      const input = {
+        direction: 'OUTBOUND' as const,
+        sourceType: 'OPERATOR' as const,
+        sourceOperatorId: request.currentUser.id,
         targetType: 'EMPLOYEE',
-        targetId: employeeId,
+        targetEmployeeId: employeeId,
         tenantId: request.currentUser.tenantId,
-        context: body.context,
+        initiatedBy: request.currentUser.id,
       };
       
       const callSession = await ctx.callService.initiateCall(input);
       
+      const mediaSession = await ctx.mediaProvider.createSession({ callId: callSession.id, tenantId: request.currentUser.tenantId, maxParticipants: 2 });
+      await ctx.pool.query('UPDATE communication_call_sessions SET media_session_id = $1, media_provider = $2 WHERE id = $3 AND tenant_id = $4', [mediaSession.sessionId, 'self-hosted', callSession.id, request.currentUser.tenantId]);
+      callSession.mediaSessionId = mediaSession.sessionId;
+      const participant = await ctx.mediaProvider.createParticipantToken({ sessionId: mediaSession.sessionId, participantId: request.currentUser.id, participantType: 'operator', canPublish: true, canSubscribe: true });
       // Broadcast call invite to employee devices
       await ctx.signalingGateway.broadcastCallInvite(
         request.currentUser.tenantId,
@@ -1091,11 +1097,7 @@ export async function registerCommunicationsRoutes(
         details: { callId: callSession.id, targetEmployeeId: employeeId },
       });
       
-      return reply.code(201).send({
-        callId: callSession.id,
-        status: callSession.status,
-        createdAt: callSession.createdAt,
-      });
+      return reply.code(201).send({ data: { call: callSession, credentials: { participantToken: participant.token, turnServers: mediaSession.turnServers, iceServers: mediaSession.turnServers } } });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to initiate employee call');
       return reply.code(400).send({ error: error.message || 'call_initiation_failed' });
@@ -1106,7 +1108,7 @@ export async function registerCommunicationsRoutes(
    * Call VMS (Branch/Employee → SOC Queue)
    * POST /v1/communications/calls/soc
    */
-  app.post('/v1/communications/calls/soc', async (request: AuthenticatedRequest, reply) => {
+  app.post('/v1/communications/calls/soc', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
     try {
       // Authenticate device
       if (!(await authenticateDevice(request, reply, ctx))) {
@@ -1119,18 +1121,25 @@ export async function registerCommunicationsRoutes(
         context?: any;
       };
       
-      const input: InitiateCallInput = {
-        initiatorType: body.actorType === 'EMPLOYEE' ? 'EMPLOYEE' : 'DEVICE',
-        initiatorId: body.actorType === 'EMPLOYEE' ? body.actorEmployeeId! : request.deviceContext!.deviceId,
-        initiatorDeviceId: request.deviceContext!.deviceId,
+      if (body.actorType === 'EMPLOYEE' && !body.actorEmployeeId) {
+        return reply.code(400).send({ error: 'employee_identity_required' });
+      }
+      const input = {
+        direction: 'OUTBOUND' as const,
+        sourceType: 'DEVICE' as const,
+        sourceDeviceId: request.deviceContext!.deviceId,
+        sourceEmployeeId: body.actorType === 'EMPLOYEE' ? body.actorEmployeeId : undefined,
         targetType: 'SOC_QUEUE',
-        targetId: 'default', // TODO: Routing to specific SOC queues
         tenantId: request.deviceContext!.tenantId,
-        context: body.context,
+        initiatedBy: body.actorType === 'EMPLOYEE' ? body.actorEmployeeId! : request.deviceContext!.deviceId,
       };
       
       const callSession = await ctx.callService.initiateCall(input);
       
+      const mediaSession = await ctx.mediaProvider.createSession({ callId: callSession.id, tenantId: request.deviceContext!.tenantId, maxParticipants: 2 });
+      await ctx.pool.query('UPDATE communication_call_sessions SET media_session_id = $1, media_provider = $2 WHERE id = $3 AND tenant_id = $4', [mediaSession.sessionId, 'self-hosted', callSession.id, request.deviceContext!.tenantId]);
+      callSession.mediaSessionId = mediaSession.sessionId;
+      const participant = await ctx.mediaProvider.createParticipantToken({ sessionId: mediaSession.sessionId, participantId: request.deviceContext!.deviceId, participantType: 'device', canPublish: true, canSubscribe: true });
       // Broadcast call invite to available SOC operators
       await ctx.signalingGateway.broadcastCallInvite(
         request.deviceContext!.tenantId,
@@ -1139,7 +1148,7 @@ export async function registerCommunicationsRoutes(
           callId: callSession.id,
           caller: {
             type: body.actorType,
-            id: input.initiatorId,
+            id: request.deviceContext!.deviceId,
             branchId: request.deviceContext!.branchId,
             name: 'Branch Device', // TODO: Get from device/employee profile
           },
@@ -1161,11 +1170,7 @@ export async function registerCommunicationsRoutes(
         },
       });
       
-      return reply.code(201).send({
-        callId: callSession.id,
-        status: callSession.status,
-        createdAt: callSession.createdAt,
-      });
+      return reply.code(201).send({ data: { call: callSession, credentials: { participantToken: participant.token, turnServers: mediaSession.turnServers, iceServers: mediaSession.turnServers } } });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to initiate SOC call');
       return reply.code(400).send({ error: error.message || 'call_initiation_failed' });
@@ -1180,57 +1185,36 @@ export async function registerCommunicationsRoutes(
     try {
       const { callId } = request.params as { callId: string };
       
-      let acceptorType: 'DEVICE' | 'OPERATOR';
-      let acceptorId: string;
-      let acceptorDeviceId: string | undefined;
-      let tenantId: string;
-      
-      // Determine acceptor type (device or operator)
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        // Device authentication
-        if (!(await authenticateDevice(request, reply, ctx))) {
-          return;
-        }
-        acceptorType = 'DEVICE';
-        acceptorId = request.deviceContext!.deviceId;
-        acceptorDeviceId = request.deviceContext!.deviceId;
-        tenantId = request.deviceContext!.tenantId;
-      } else {
-        // Operator authentication
-        acceptorType = 'OPERATOR';
-        acceptorId = request.currentUser.id;
-        acceptorDeviceId = undefined;
-        tenantId = request.currentUser.tenantId;
-      }
+      if (!request.currentUser?.id) return reply.code(401).send({ error: 'unauthenticated' });
+      const acceptorType = 'OPERATOR' as const;
+      const acceptorId = request.currentUser.id;
+      const tenantId = request.currentUser.tenantId;
       
       // Accept call (atomic first-answer-wins via Redis)
-      const callSession = await ctx.callService.acceptCall(
-        callId,
-        acceptorType,
-        acceptorId,
-        acceptorDeviceId
-      );
+      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, operatorId: acceptorId, mediaSessionId: callId });
+      if (!acceptance.success || !acceptance.call) return reply.code(409).send({ error: acceptance.reason || 'call_already_accepted' });
+      const callSession = acceptance.call;
       
       // If this acceptor won the race, create WebRTC participant token
-      let participantToken: string | undefined;
-      let turnConfig: any;
+      let credentials: any;
       
       if (callSession.status === 'CONNECTING' || callSession.status === 'CONNECTED') {
         // Generate WebRTC credentials
         const mediaSessionId = callSession.mediaSessionId || callSession.id;
         
-        participantToken = await ctx.mediaProvider.createParticipantToken({
+        const participant = await ctx.mediaProvider.createParticipantToken({
           sessionId: mediaSessionId,
           participantId: acceptorId,
-          participantType: acceptorType,
+          participantType: 'operator',
+          canPublish: true,
+          canSubscribe: true,
         });
-        
-        turnConfig = {
-          urls: [process.env.COMM_TURN_SERVER_URL],
-          username: process.env.COMM_TURN_USERNAME,
-          credential: process.env.COMM_TURN_CREDENTIAL,
+        const turnServer = {
+          urls: process.env.COMM_TURN_SERVER_URL || 'stun:stun.l.google.com:19302',
+          username: process.env.COMM_TURN_USERNAME || '',
+          credential: process.env.COMM_TURN_CREDENTIAL || '',
         };
+        credentials = { participantToken: participant.token, turnServers: [turnServer], iceServers: [turnServer] };
         
         // Broadcast call accepted to caller
         await ctx.signalingGateway.broadcastCallAccept(tenantId, callId, {
@@ -1258,12 +1242,7 @@ export async function registerCommunicationsRoutes(
         },
       });
       
-      return {
-        callId: callSession.id,
-        status: callSession.status,
-        participantToken,
-        turnConfig,
-      };
+      return reply.send({ data: { call: callSession, credentials } });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to accept call');
       
@@ -1271,6 +1250,27 @@ export async function registerCommunicationsRoutes(
         return reply.code(409).send({ error: 'call_already_accepted' });
       }
       
+      return reply.code(400).send({ error: error.message || 'call_accept_failed' });
+    }
+  });
+
+  // Device calls bypass user-session middleware but always authenticate the
+  // signed device credential inside the handler.
+  app.post('/v1/communications/device-calls/:callId/accept', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      if (!(await authenticateDevice(request, reply, ctx))) return;
+      const { callId } = request.params as { callId: string };
+      const deviceId = request.deviceContext!.deviceId;
+      const tenantId = request.deviceContext!.tenantId;
+      const acceptance = await ctx.callService.acceptCall({ callId, tenantId, deviceId, mediaSessionId: callId });
+      if (!acceptance.success || !acceptance.call) return reply.code(409).send({ error: acceptance.reason || 'call_already_accepted' });
+      const participant = await ctx.mediaProvider.createParticipantToken({ sessionId: acceptance.call.mediaSessionId || callId, participantId: deviceId, participantType: 'device', canPublish: true, canSubscribe: true });
+      const turnServer = { urls: process.env.COMM_TURN_SERVER_URL || 'stun:stun.l.google.com:19302', username: process.env.COMM_TURN_USERNAME || '', credential: process.env.COMM_TURN_CREDENTIAL || '' };
+      await ctx.signalingGateway.broadcastCallAccept(tenantId, callId, { acceptedBy: deviceId, acceptedByType: 'DEVICE' });
+      await ctx.signalingGateway.broadcastCallAcceptedElsewhere(tenantId, callId, deviceId);
+      return reply.send({ data: { call: acceptance.call, credentials: { participantToken: participant.token, turnServers: [turnServer], iceServers: [turnServer] } } });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to accept device call');
       return reply.code(400).send({ error: error.message || 'call_accept_failed' });
     }
   });

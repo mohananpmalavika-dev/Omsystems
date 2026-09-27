@@ -55,6 +55,12 @@ export interface PresenceEvent {
   presence: CommunicationPresence;
 }
 
+export interface WebRtcSignalEvent {
+  callId: string;
+  description?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}
+
 export interface CommunicationSignalingHook {
   socket: Socket | null;
   connected: boolean;
@@ -76,6 +82,15 @@ export interface CommunicationSignalingHook {
   onMessageRead: (handler: (event: { messageId: string }) => void) => () => void;
   
   onPresenceChanged: (handler: (event: PresenceEvent) => void) => () => void;
+  onWebRtcOffer: (handler: (event: WebRtcSignalEvent) => void) => () => void;
+  onWebRtcAnswer: (handler: (event: WebRtcSignalEvent) => void) => () => void;
+  onWebRtcIceCandidate: (handler: (event: WebRtcSignalEvent) => void) => () => void;
+  onCallMediaReady: (handler: (event: { callId: string }) => void) => () => void;
+  joinCall: (callId: string) => Promise<void>;
+  sendWebRtcOffer: (callId: string, description: RTCSessionDescriptionInit) => void;
+  sendWebRtcAnswer: (callId: string, description: RTCSessionDescriptionInit) => void;
+  sendWebRtcIceCandidate: (callId: string, candidate: RTCIceCandidateInit) => void;
+  sendCallMediaReady: (callId: string) => void;
   
   // Cleanup
   cleanup: () => void;
@@ -223,6 +238,18 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       console.log('[CommunicationSignaling] PRESENCE_CHANGED:', event);
       handlersRef.current.get('presenceChanged')?.forEach(handler => handler(event));
     });
+    socket.on('comm:webrtc:offer', (event: WebRtcSignalEvent) => {
+      handlersRef.current.get('webrtcOffer')?.forEach(handler => handler(event));
+    });
+    socket.on('comm:webrtc:answer', (event: WebRtcSignalEvent) => {
+      handlersRef.current.get('webrtcAnswer')?.forEach(handler => handler(event));
+    });
+    socket.on('comm:webrtc:ice', (event: WebRtcSignalEvent) => {
+      handlersRef.current.get('webrtcIce')?.forEach(handler => handler(event));
+    });
+    socket.on('comm:call-media-ready', (event: { callId: string }) => {
+      handlersRef.current.get('callMediaReady')?.forEach(handler => handler(event));
+    });
     
     // Cleanup on unmount
     return () => {
@@ -302,6 +329,23 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
   const onPresenceChanged = useCallback((handler: (event: PresenceEvent) => void) => {
     return registerHandler('presenceChanged', handler);
   }, [registerHandler]);
+
+  const onWebRtcOffer = useCallback((handler: (event: WebRtcSignalEvent) => void) => registerHandler('webrtcOffer', handler), [registerHandler]);
+  const onWebRtcAnswer = useCallback((handler: (event: WebRtcSignalEvent) => void) => registerHandler('webrtcAnswer', handler), [registerHandler]);
+  const onWebRtcIceCandidate = useCallback((handler: (event: WebRtcSignalEvent) => void) => registerHandler('webrtcIce', handler), [registerHandler]);
+  const onCallMediaReady = useCallback((handler: (event: { callId: string }) => void) => registerHandler('callMediaReady', handler), [registerHandler]);
+
+  const joinCall = useCallback((callId: string) => new Promise<void>((resolve, reject) => {
+    const socket = socketRef.current;
+    if (!socket?.connected) return reject(new Error('Call signaling is offline'));
+    socket.emit('comm:join-call', { callId }, (result: { ok?: boolean; error?: string }) => {
+      if (result?.ok) resolve(); else reject(new Error(result?.error || 'Unable to join call signaling'));
+    });
+  }), []);
+  const sendWebRtcOffer = useCallback((callId: string, description: RTCSessionDescriptionInit) => socketRef.current?.emit('comm:webrtc:offer', { callId, description }), []);
+  const sendWebRtcAnswer = useCallback((callId: string, description: RTCSessionDescriptionInit) => socketRef.current?.emit('comm:webrtc:answer', { callId, description }), []);
+  const sendWebRtcIceCandidate = useCallback((callId: string, candidate: RTCIceCandidateInit) => socketRef.current?.emit('comm:webrtc:ice', { callId, candidate }), []);
+  const sendCallMediaReady = useCallback((callId: string) => socketRef.current?.emit('comm:call-media-ready', { callId }), []);
   
   const cleanup = useCallback(() => {
     if (socketRef.current) {
@@ -328,6 +372,15 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
     onMessageDelivered,
     onMessageRead,
     onPresenceChanged,
+    onWebRtcOffer,
+    onWebRtcAnswer,
+    onWebRtcIceCandidate,
+    onCallMediaReady,
+    joinCall,
+    sendWebRtcOffer,
+    sendWebRtcAnswer,
+    sendWebRtcIceCandidate,
+    sendCallMediaReady,
     cleanup,
   };
 }

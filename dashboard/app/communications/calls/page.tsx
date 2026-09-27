@@ -17,6 +17,7 @@ import type {
   EmployeeContact, 
   CommunicationEmployee,
   CallSession,
+  WebRTCCredentials,
   CommunicationPresence,
   CommunicationCallStatus 
 } from '@/services/communication-api';
@@ -38,6 +39,7 @@ interface ActiveCall {
   session: CallSession;
   startTime: Date;
   modality?: CallModality;
+  credentials: WebRTCCredentials;
 }
 
 // ============================================================================
@@ -243,6 +245,7 @@ export default function CommunicationsCallsPage() {
     const unsubInvite = signaling.onCallInvite((event) => {
       console.log('[Communications] Incoming call:', event);
       if (event.direction === 'INBOUND') {
+        void signaling.joinCall(event.callId).catch(() => setError('Unable to join secure call signaling'));
         setIncomingCall(event);
       }
     });
@@ -256,6 +259,28 @@ export default function CommunicationsCallsPage() {
           session: { ...prev.session, status: 'CONNECTED' as CommunicationCallStatus }
         } : null);
       }
+    });
+    const unsubMediaReady = signaling.onCallMediaReady((event) => {
+      if (activeCall && event.callId === activeCall.session.id) {
+        void (async () => {
+          const offer = await webrtc.createOffer(activeCall.credentials, activeCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+          if (offer) signaling.sendWebRtcOffer(event.callId, offer);
+        })().catch(() => setError('Unable to start call media'));
+      }
+    });
+
+    const unsubOffer = signaling.onWebRtcOffer((event) => {
+      if (!activeCall || activeCall.session.id !== event.callId || !event.description) return;
+      void (async () => {
+        const answer = await webrtc.createAnswer(activeCall.credentials, event.description!, activeCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+        if (answer) signaling.sendWebRtcAnswer(event.callId, answer);
+      })().catch(() => setError('Unable to answer call media'));
+    });
+    const unsubAnswer = signaling.onWebRtcAnswer((event) => {
+      if (activeCall?.session.id === event.callId && event.description) void webrtc.applyAnswer(event.description).catch(() => setError('Unable to complete call media negotiation'));
+    });
+    const unsubIce = signaling.onWebRtcIceCandidate((event) => {
+      if (activeCall?.session.id === event.callId && event.candidate) void webrtc.addIceCandidate(event.candidate).catch(() => setError('Unable to apply call network candidate'));
     });
     
     // Call accepted elsewhere (first-answer-wins)
@@ -342,6 +367,10 @@ export default function CommunicationsCallsPage() {
     
     return () => {
       unsubInvite();
+      unsubMediaReady();
+      unsubOffer();
+      unsubAnswer();
+      unsubIce();
       unsubAccepted();
       unsubElsewhere();
       unsubConnected();
@@ -351,7 +380,7 @@ export default function CommunicationsCallsPage() {
       unsubFailed();
       unsubPresence();
     };
-  }, [signaling, activeCall, incomingCall]);
+  }, [signaling, activeCall, incomingCall, currentUserId, webrtc]);
   
   // ============================================================================
   // CALL DURATION TIMER
@@ -390,8 +419,9 @@ export default function CommunicationsCallsPage() {
       });
       if (!stream) return;
       
-      const session = await communicationAPI.callBranch(branch.branchId, 'VMS operator calling');
-      setActiveCall({ session, startTime: new Date(), modality });
+      const started = await communicationAPI.callBranch(branch.branchId, 'VMS operator calling');
+      await signaling.joinCall(started.call.id);
+      setActiveCall({ session: started.call, credentials: started.credentials, startTime: new Date(), modality });
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -402,7 +432,7 @@ export default function CommunicationsCallsPage() {
       console.error('[Communications] Failed to call branch:', err);
       setError(err.message || 'Failed to initiate call');
     }
-  }, [webrtc]);
+  }, [webrtc, signaling]);
   
   const handleCallEmployee = useCallback(async (
     target: { employeeId: string; employeeName?: string; branchName?: string; role?: string; employeeRole?: string }, 
@@ -416,14 +446,16 @@ export default function CommunicationsCallsPage() {
       });
       if (!stream) return;
       
-      const session = await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
+      const started = await communicationAPI.callEmployee(target.employeeId, 'VMS operator calling');
+      await signaling.joinCall(started.call.id);
+      const session = started.call;
       const enhancedSession: CallSession = {
         ...session,
         targetEmployeeId: target.employeeId,
         targetEmployeeName: target.employeeName || session.targetEmployeeName || 'Internal VMS Operator',
         targetBranchName: target.branchName || session.targetBranchName || (target.role || target.employeeRole ? `SOC (${target.role || target.employeeRole})` : 'Central SOC'),
       };
-      setActiveCall({ session: enhancedSession, startTime: new Date(), modality });
+      setActiveCall({ session: enhancedSession, credentials: started.credentials, startTime: new Date(), modality });
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -434,7 +466,7 @@ export default function CommunicationsCallsPage() {
       console.error('[Communications] Failed to call operator/employee:', err);
       setError(err.message || 'Failed to initiate call');
     }
-  }, [webrtc]);
+  }, [webrtc, signaling]);
   
   const handleAcceptCall = useCallback(async (modality: CallModality = 'video') => {
     if (!incomingCall) return;
@@ -444,16 +476,16 @@ export default function CommunicationsCallsPage() {
       await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
       
-      await webrtc.connect(credentials, call.id, modality);
-      
-      setActiveCall({ session: call, startTime: new Date(), modality });
+      await signaling.joinCall(call.id);
+      setActiveCall({ session: call, credentials, startTime: new Date(), modality });
+      signaling.sendCallMediaReady(call.id);
       setIncomingCall(null);
     } catch (err: any) {
       console.error('[Communications] Failed to accept call:', err);
       setError(err.message || 'Failed to accept call');
       setIncomingCall(null);
     }
-  }, [incomingCall, webrtc]);
+  }, [incomingCall, webrtc, signaling]);
   
   const handleRejectCall = useCallback(async () => {
     if (!incomingCall) return;

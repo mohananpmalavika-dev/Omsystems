@@ -95,6 +95,11 @@ export interface WebRTCCredentials {
   iceServers: RTCIceServer[];
 }
 
+export interface StartedCall {
+  call: CallSession;
+  credentials: WebRTCCredentials;
+}
+
 export interface Conversation {
   id: string;
   type: 'BRANCH_SOC' | 'EMPLOYEE_SOC' | 'INCIDENT';
@@ -271,8 +276,8 @@ class CommunicationAPIClient {
   // CALL OPERATIONS
   // ============================================================================
   
-  async callBranch(branchId: string, context?: string): Promise<CallSession> {
-    const response = await this.request<{ data: CallSession }>(
+  async callBranch(branchId: string, context?: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
       `/v1/communications/calls/branch/${encodeURIComponent(branchId)}`,
       {
         method: 'POST',
@@ -282,8 +287,8 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async callEmployee(employeeId: string, context?: string): Promise<CallSession> {
-    const response = await this.request<{ data: CallSession }>(
+  async callEmployee(employeeId: string, context?: string): Promise<StartedCall> {
+    const response = await this.request<{ data: StartedCall }>(
       `/v1/communications/calls/employee/${encodeURIComponent(employeeId)}`,
       {
         method: 'POST',
@@ -293,14 +298,14 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async callVMS(employeeId?: string, context?: string): Promise<CallSession> {
+  async callVMS(employeeId?: string, context?: string): Promise<StartedCall> {
     const payload: { actorType: 'BRANCH_DEVICE' | 'EMPLOYEE'; actorEmployeeId?: string; context?: string } = {
       actorType: employeeId ? 'EMPLOYEE' : 'BRANCH_DEVICE',
       ...(employeeId ? { actorEmployeeId: employeeId } : {}),
       ...(context ? { context } : {}),
     };
 
-    const response = await this.request<{ data: CallSession }>(
+    const response = await this.request<{ data: StartedCall }>(
       '/v1/communications/calls/soc',
       {
         method: 'POST',
@@ -311,8 +316,11 @@ class CommunicationAPIClient {
   }
   
   async acceptCall(callId: string): Promise<{ call: CallSession; credentials: WebRTCCredentials }> {
+    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
     const response = await this.request<{ data: { call: CallSession; credentials: WebRTCCredentials } }>(
-      `/v1/communications/calls/${encodeURIComponent(callId)}/accept`,
+      isDevice
+        ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/accept`
+        : `/v1/communications/calls/${encodeURIComponent(callId)}/accept`,
       {
         method: 'POST',
       }

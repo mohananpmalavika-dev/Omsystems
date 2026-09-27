@@ -217,6 +217,13 @@ export class CommunicationCallService {
     // Transition to RINGING
     await this.stateMachine.transition(call.id, tenantId, 'RINGING');
 
+    // The caller is also a call participant. This is required both for the
+    // media state machine and for authenticated WebRTC signaling.
+    const sourceParticipantId = sourceDeviceId || sourceOperatorId;
+    if (sourceParticipantId) {
+      await this.addParticipant(call.id, tenantId, sourceParticipantId, 'CONNECTING');
+    }
+
     // Add participants (all eligible endpoints for ringing)
     const participantIds = await this.resolveTargetParticipants(
       tenantId,
@@ -605,14 +612,15 @@ export class CommunicationCallService {
 
     await this.pool.query(
       `INSERT INTO communication_call_participants (
-        id, call_id, participant_type,
+        id, call_id, tenant_id, participant_type,
         device_id, operator_id,
         connection_status, joined_at
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, NOW()
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW()
       )`,
       [
         callId,
+        tenantId,
         participantType,
         isDevice ? participantId : null,
         isDevice ? null : participantId,

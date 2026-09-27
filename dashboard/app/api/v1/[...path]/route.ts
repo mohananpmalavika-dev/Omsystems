@@ -21,6 +21,7 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     "communications/devices/enroll",
     "communications/devices/quick-register",
   ]).has(pathString) || pathString.startsWith("communications/devices/enroll");
+  const isDeviceCommunicationPath = pathString === "communications/calls/soc" || pathString.startsWith("communications/device-calls/");
 
   // Routes that work with or without authentication (e.g. KryptonAI pre-login chat & suggestions, communications)
   const isOptionalAuthPath = new Set([
@@ -72,6 +73,11 @@ async function proxyApiV1Request(request: NextRequest, context: RouteContext) {
     // access cookie as a bearer token; refresh receives its dedicated cookie
     // payload from the compatibility proxy's caller.
     headers.delete("authorization");
+    headers.delete("x-user-id");
+  } else if (isDeviceCommunicationPath && bearerSession) {
+    // Device calls intentionally use the registered device bearer token. A
+    // browser's operator cookie must never replace it.
+    headers.set("authorization", `Bearer ${bearerSession}`);
     headers.delete("x-user-id");
   } else if (employeeSession) {
     headers.set("authorization", `Bearer ${employeeSession}`);

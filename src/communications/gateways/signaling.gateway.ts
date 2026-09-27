@@ -28,6 +28,7 @@
 
 import type { Server as SocketIOServer } from 'socket.io';
 import type { Socket } from 'socket.io';
+import type { Pool } from 'pg';
 import type {
   CallSession,
   Message,
@@ -42,7 +43,7 @@ import { WEBSOCKET_EVENTS, WEBSOCKET_ROOMS } from '../domain/constants.js';
  * Communication Signaling Gateway
  */
 export class CommunicationSignalingGateway {
-  constructor(private readonly io: SocketIOServer) {
+  constructor(private readonly io: SocketIOServer, private readonly pool: Pool) {
     this.setupCommunicationHandlers();
   }
 
@@ -142,6 +143,71 @@ export class CommunicationSignalingGateway {
         socket.join(WEBSOCKET_ROOMS.CONVERSATION(socket.data.tenantId, conversationId));
         socket.emit('comm:conversation-subscribed', { conversationId });
       });
+
+      socket.on('comm:join-call', async (data: { callId?: string }, acknowledge?: (result: { ok: boolean; error?: string }) => void) => {
+        const callId = data?.callId;
+        if (!callId || !socket.data.tenantId) {
+          acknowledge?.({ ok: false, error: 'invalid_call' });
+          return;
+        }
+        try {
+          const userId = socket.data.identityType === 'operator' ? socket.data.userId : null;
+          const deviceId = socket.data.identityType === 'device' ? socket.data.deviceId : null;
+          const result = await this.pool.query(
+            `SELECT 1
+             FROM communication_call_sessions c
+             WHERE c.id = $1 AND c.tenant_id = $2
+               AND (
+                 c.source_device_id = $3 OR c.source_operator_id = $4
+                 OR EXISTS (
+                   SELECT 1 FROM communication_call_participants p
+                   WHERE p.call_id = c.id AND p.tenant_id = c.tenant_id
+                     AND (p.device_id = $3 OR p.operator_id = $4)
+                 )
+               )
+             LIMIT 1`,
+            [callId, socket.data.tenantId, deviceId, userId]
+          );
+          if (!result.rowCount) {
+            acknowledge?.({ ok: false, error: 'call_access_denied' });
+            return;
+          }
+          socket.join(WEBSOCKET_ROOMS.CALL(socket.data.tenantId, callId));
+          socket.emit('comm:call-joined', { callId });
+          acknowledge?.({ ok: true });
+        } catch {
+          acknowledge?.({ ok: false, error: 'call_join_failed' });
+        }
+      });
+
+      const relayWebRtc = (eventName: 'comm:webrtc:offer' | 'comm:webrtc:answer' | 'comm:webrtc:ice') => {
+        socket.on(eventName, (data: { callId?: string; description?: unknown; candidate?: unknown }) => {
+          const callId = data?.callId;
+          const tenantId = socket.data.tenantId as string | undefined;
+          if (!callId || !tenantId || !socket.rooms.has(WEBSOCKET_ROOMS.CALL(tenantId, callId))) {
+            socket.emit('error', { message: 'Call signaling is not authorized' });
+            return;
+          }
+          socket.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit(eventName, {
+            callId,
+            description: data.description,
+            candidate: data.candidate,
+          });
+        });
+      };
+      relayWebRtc('comm:webrtc:offer');
+      relayWebRtc('comm:webrtc:answer');
+      relayWebRtc('comm:webrtc:ice');
+
+      socket.on('comm:call-media-ready', (data: { callId?: string }) => {
+        const callId = data?.callId;
+        const tenantId = socket.data.tenantId as string | undefined;
+        if (!callId || !tenantId || !socket.rooms.has(WEBSOCKET_ROOMS.CALL(tenantId, callId))) {
+          socket.emit('error', { message: 'Call signaling is not authorized' });
+          return;
+        }
+        socket.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit('comm:call-media-ready', { callId });
+      });
     });
   }
 
@@ -230,8 +296,8 @@ export class CommunicationSignalingGateway {
 
     // Broadcast to call room
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, call.id)).emit(
-      WEBSOCKET_EVENTS.CALL_ACCEPT,
-      event
+      'comm:call:accepted',
+      { ...event, acceptedBy }
     );
   }
 
@@ -264,7 +330,7 @@ export class CommunicationSignalingGateway {
     for (const deviceId of notifyDeviceIds) {
       if (deviceId !== acceptedBy) {
         this.io.to(WEBSOCKET_ROOMS.DEVICE(tenantId, deviceId)).emit(
-          WEBSOCKET_EVENTS.CALL_ACCEPTED_ELSEWHERE,
+          'comm:call:accepted-elsewhere',
           event
         );
       }
@@ -274,7 +340,7 @@ export class CommunicationSignalingGateway {
     for (const operatorId of notifyOperatorIds) {
       if (operatorId !== acceptedBy) {
         this.io.to(WEBSOCKET_ROOMS.OPERATOR(tenantId, operatorId)).emit(
-          WEBSOCKET_EVENTS.CALL_ACCEPTED_ELSEWHERE,
+          'comm:call:accepted-elsewhere',
           event
         );
       }
@@ -301,7 +367,7 @@ export class CommunicationSignalingGateway {
     };
 
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit(
-      WEBSOCKET_EVENTS.CALL_REJECT,
+      'comm:call:rejected',
       event
     );
   }
@@ -326,7 +392,7 @@ export class CommunicationSignalingGateway {
     };
 
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit(
-      WEBSOCKET_EVENTS.CALL_CANCEL,
+      'comm:call:cancelled',
       event
     );
   }
@@ -346,7 +412,7 @@ export class CommunicationSignalingGateway {
     };
 
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, call.id)).emit(
-      WEBSOCKET_EVENTS.CALL_CONNECTING,
+      'comm:call:connected',
       event
     );
   }
@@ -371,7 +437,7 @@ export class CommunicationSignalingGateway {
     };
 
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit(
-      WEBSOCKET_EVENTS.CALL_END,
+      'comm:call:ended',
       event
     );
   }
@@ -396,7 +462,7 @@ export class CommunicationSignalingGateway {
     };
 
     this.io.to(WEBSOCKET_ROOMS.CALL(tenantId, callId)).emit(
-      WEBSOCKET_EVENTS.CALL_FAILED,
+      'comm:call:failed',
       event
     );
   }
