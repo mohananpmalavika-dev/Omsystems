@@ -2,13 +2,17 @@
   "name": "omsystems-camera-scanner",
   "version": "1.0.0",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/build-communications.mjs",
-    "build:tsc": "tsc -p tsconfig.json",
+    "build": "npx tsc -p tsconfig.json && node scripts/build-communications.mjs",
+    "build:tsc": "npx tsc -p tsconfig.json",
     "scan-cameras": "ts-node cli/scan-cameras.ts",
     "scan-cameras:quick": "ts-node cli/scan-cameras.ts --quick",
     "find-camera": "ts-node cli/scan-cameras.ts"
   },
   "bin": {
     "scan-cameras": "./cli/scan-cameras.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.14.0"
   }
 }
