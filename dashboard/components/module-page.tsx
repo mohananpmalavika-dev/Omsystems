@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, LoaderCircle, Plus, RefreshCw } from "lucide
 import { FieldVisual } from "@/components/field-visual";
 
 type ModulePageProps = {
+  presentation?: "default" | "registry" | "board";
   eyebrow: string;
   title: string;
   description: string;
@@ -23,6 +24,7 @@ type ModulePageProps = {
 };
 
 export function ModulePage({
+  presentation = "default",
   eyebrow,
   title,
   description,
@@ -41,7 +43,7 @@ export function ModulePage({
 }: ModulePageProps) {
   return (
     <div className="module-page">
-      <header className="module-hero field-hero">
+      <header className={presentation === "default" ? "module-hero field-hero" : `module-hero module-workspace-heading module-workspace-${presentation}`}>
         <div className="module-hero-copy">
           <div className="module-icon"><Icon size={21} /></div>
           <div>
@@ -50,7 +52,7 @@ export function ModulePage({
             <p className="module-description">{description}</p>
           </div>
         </div>
-        <FieldVisual />
+        {presentation === "default" && <FieldVisual />}
         <div className="module-hero-actions">
           {typeof count === "number" && (
             <div className="module-count">

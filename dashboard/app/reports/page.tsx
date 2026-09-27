@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight, Sparkles } from "lucide-react";
+import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
 import { WorkflowNav } from "@/components/workflow-nav";
 

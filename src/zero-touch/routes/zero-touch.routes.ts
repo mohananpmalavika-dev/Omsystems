@@ -293,7 +293,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
   });
 
   // 12. Supply Credentials for Discovered Appliance
-  app.post("/api/v1/zero-touch/devices/:deviceId/credentials", async (request, reply) => {
+  app.post("/api/v1/zero-touch/devices/:deviceId/credentials", async (request: any, reply: any) => {
     const { deviceId } = request.params as { deviceId: string };
     const body = z.object({
       branchId: z.string(),
@@ -310,7 +310,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
   });
 
   // 13. Approve Specific Channels on Device
-  app.post("/api/v1/zero-touch/devices/:deviceId/approve", async (request, reply) => {
+  app.post("/api/v1/zero-touch/devices/:deviceId/approve", async (request: any, reply: any) => {
     const { deviceId } = request.params as { deviceId: string };
     const body = z.object({
       branchId: z.string(),
@@ -322,7 +322,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
   });
 
   // 14. Batch Approve All Channels on Branch
-  app.post("/api/v1/zero-touch/branches/:branchId/batch-approve", async (request, reply) => {
+  app.post("/api/v1/zero-touch/branches/:branchId/batch-approve", async (request: any, reply: any) => {
     const { branchId } = request.params as { branchId: string };
     const result = zeroTouchDeviceReviewService.batchApproveBranch(branchId);
     return reply.code(200).send(result);
@@ -400,7 +400,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
   app.get("/api/v1/zero-touch/diagnostics/:branchId", diagnosticsHandler);
 
   // Backward compatibility routes for legacy callers
-  app.post("/api/zero-touch/branches/create-and-enroll", async (_request, reply) => {
+  app.post("/api/zero-touch/branches/create-and-enroll", async (_request: any, reply: any) => {
     return reply.code(410).send({
       success: false,
       error: "legacy_zero_touch_disabled",
@@ -408,7 +408,7 @@ export async function registerZeroTouchRoutes(app: FastifyInstance, store: Contr
     });
   });
 
-  app.post("/api/zero-touch/enrollment/exchange", async (_request, reply) => {
+  app.post("/api/zero-touch/enrollment/exchange", async (_request: any, reply: any) => {
     return reply.code(410).send({
       success: false,
       error: "legacy_zero_touch_disabled",

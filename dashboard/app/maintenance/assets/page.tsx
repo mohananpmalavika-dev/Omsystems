@@ -4,12 +4,15 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Boxes, Download, Filter, Search } from "lucide-react";
 import { ModulePage, ModuleStatus } from "@/components/module-page";
+import { RecordBrowser } from "@/components/record-browser";
+import { WorkflowNav } from "@/components/workflow-nav";
 import { maintenanceApi, organizationApi } from "@/lib/api-client";
 import type { MaintenanceAsset, MaintenanceVendor } from "@/lib/types";
 
 type BranchOption = { id: string; name: string };
 
 export default function AssetsListPage() {
+  const [view, setView] = useState("browse");
   const [assets, setAssets] = useState<MaintenanceAsset[]>([]);
   const [vendors, setVendors] = useState<MaintenanceVendor[]>([]);
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -154,6 +157,7 @@ export default function AssetsListPage() {
 
   return (
     <ModulePage
+      presentation="registry"
       eyebrow="Fleet operations"
       title="Asset registry"
       description="Track every camera, recorder, storage node, network device, and supporting asset across the estate."
@@ -169,11 +173,14 @@ export default function AssetsListPage() {
       emptyDescription="Register your first field device to begin lifecycle, ownership, and service tracking."
       onRetry={loadData}
     >
-      <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "4px 0" }}>
+      <div className="asset-registry-workspace">
+      <WorkflowNav label="Asset registry view" value={view} onChange={setView} items={[{id:"browse",label:"Explore assets"},{id:"table",label:"Record view"}]} />
+      <div className="asset-registry-filters" style={{ display: "flex", flexWrap: "wrap", gap: "12px", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", padding: "4px 0" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", alignItems: "center", flex: 1 }}>
           <div style={{ position: "relative", minWidth: "240px", maxWidth: "340px", flex: 1 }}>
             <Search size={15} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)", color: "var(--muted, #888)" }} />
             <input
+              aria-label="Search asset registry"
               type="text"
               placeholder="Search assets, make, serial, vendor, branch…"
               value={searchQuery}
@@ -191,6 +198,7 @@ export default function AssetsListPage() {
           </div>
 
           <select
+            aria-label="Asset category"
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             style={{
@@ -212,6 +220,7 @@ export default function AssetsListPage() {
           </select>
 
           <select
+            aria-label="Asset status"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             style={{
@@ -257,7 +266,8 @@ export default function AssetsListPage() {
         </button>
       </div>
 
-      <div className="module-table-wrap" style={{ overflowX: "auto" }}>
+      <section hidden={view!=="browse"}><RecordBrowser label="Asset records" records={filteredAssets.map(asset=>({id:asset.id,title:[asset.make,asset.model].filter(Boolean).join(" ")||asset.assetType,subtitle:`${asset.assetType} · ${asset.serialNumber||asset.id}`,status:asset.status,href:`/maintenance/assets/${asset.id}`,fields:[{label:"Branch",value:asset.branchNodeId?branchMap.get(asset.branchNodeId)||asset.branchNodeId:"Tenant-level"},{label:"Location",value:asset.location},{label:"Vendor",value:asset.vendorId?vendorMap.get(asset.vendorId)||asset.vendorId:undefined},{label:"Firmware",value:asset.firmwareVersion},{label:"Installed",value:asset.installationDate?.split("T")[0]},{label:"Warranty expires",value:asset.warrantyExpiresAt?.split("T")[0]}],actionHref:`/maintenance/workorders/new?assetId=${encodeURIComponent(asset.id)}`,actionLabel:"Plan service for this asset"}))}/></section>
+      <div hidden={view!=="table"} className="module-table-wrap" style={{ overflowX: "auto" }}>
         <table>
           <thead>
             <tr>
@@ -314,6 +324,7 @@ export default function AssetsListPage() {
             )}
           </tbody>
         </table>
+      </div>
       </div>
     </ModulePage>
   );

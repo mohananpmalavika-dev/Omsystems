@@ -4,11 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ArrowUpRight,
-  CheckCircle2,
-  LayoutGrid,
   Search,
-  Sparkles,
-  Workflow,
 } from "lucide-react";
 import { AppLayout, getVisibleNavigation, menuKey, quickActions, type MenuAccessUser } from "@/components/app-layout";
 import { WorkflowNav } from "@/components/workflow-nav";

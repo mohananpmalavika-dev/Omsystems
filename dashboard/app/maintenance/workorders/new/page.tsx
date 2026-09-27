@@ -1,6 +1,5 @@
 "use client";
 
-import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { maintenanceApi, cameraInventoryApi } from "@/lib/api-client";
@@ -104,16 +103,17 @@ export default function NewWorkOrderPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero workspace-heading">
+      <header className="service-intake-heading">
         <div>
           <span>Field service</span>
           <h1>Create work order</h1>
           <p>Define the problem, severity, affected asset, SLA due date, and expected service schedule.</p>
         </div>
-      <FieldVisual /></header>
+      </header>
 
-      <form className="work-order-form" onSubmit={handleSubmit}>
-        <div className="work-order-form-grid">
+      <form className="work-order-form service-intake-composer" onSubmit={handleSubmit}>
+        <div className="work-order-form-grid service-intake-grid">
+          <section className="service-intake-context"><p className="workflow-kicker">01 / DESCRIBE & LOCATE</p><h2>What needs attention?</h2>
           <label className="work-order-field work-order-field-wide">
             <span>Problem and required work <em>Required</em></span>
             <textarea
@@ -152,18 +152,8 @@ export default function NewWorkOrderPage() {
               ))}
             </select>
           </label>
-          <label className="work-order-field">
-            <span>Severity</span>
-            <select
-              value={severity}
-              onChange={(event) => handleSeverityChange(event.target.value as WorkOrder["severity"])}
-            >
-              <option value="low">Low (72h SLA)</option>
-              <option value="medium">Medium (24h SLA)</option>
-              <option value="high">High (12h SLA)</option>
-              <option value="critical">Critical (4h SLA)</option>
-            </select>
-          </label>
+          </section><aside className="service-intake-response"><p className="workflow-kicker">02 / PLAN THE RESPONSE</p><h2>Set the service window.</h2><div className="service-urgency" role="radiogroup" aria-label="Service severity">{(["low","medium","high","critical"] as WorkOrder["severity"][]).map(level=><button type="button" role="radio" aria-checked={severity===level} key={level} onClick={()=>handleSeverityChange(level)}><strong>{level}</strong><span>{level==="critical"?4:level==="high"?12:level==="medium"?24:72}h recommended SLA</span></button>)}</div>
+
           <label className="work-order-field work-order-schedule-field">
             <span>SLA Due Date <em>Recommended {slaWindowHours}h</em></span>
             <input
@@ -181,6 +171,7 @@ export default function NewWorkOrderPage() {
               onChange={(event) => setEta(event.target.value)}
             />
           </label>
+          <div className="service-window-note"><strong>{slaWindowHours} hour response window</strong><p>Changing severity updates the suggested SLA deadline. Adjust the date if the agreed service window differs.</p></div></aside>
         </div>
 
         {error && <p className="work-order-form-error" role="alert">{error}</p>}
