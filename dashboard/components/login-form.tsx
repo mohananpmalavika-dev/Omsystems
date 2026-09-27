@@ -582,11 +582,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
             } else {
               const userObj = response.user;
               const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-              const nonRootMenus = allowedMenus.filter((m: string) => m && m !== "/");
-              if (nonRootMenus.length > 0) {
-                window.location.href = nonRootMenus[0];
+              if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
+                window.location.href = allowedMenus[0];
               } else {
-                window.location.href = "/control-room";
+                window.location.href = "/";
               }
             }
           }
@@ -743,11 +742,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
           } else {
             const userObj = response.user;
             const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-            const nonRootMenus = allowedMenus.filter((m: string) => m && m !== "/");
-            if (nonRootMenus.length > 0) {
-              window.location.href = nonRootMenus[0];
+            if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
+              window.location.href = allowedMenus[0];
             } else {
-              window.location.href = "/control-room";
+              window.location.href = "/";
             }
           }
         }
@@ -957,11 +955,10 @@ function LoginFormInner({ onSuccess }: LoginFormProps) {
         } else {
           const userObj = (response as any)?.user;
           const allowedMenus = Array.isArray(userObj?.menuAccess) ? userObj.menuAccess : [];
-          const nonRootMenus = allowedMenus.filter((m: string) => m && m !== "/");
-          if (nonRootMenus.length > 0) {
-            window.location.href = nonRootMenus[0];
+          if (allowedMenus.length > 0 && !allowedMenus.includes("/")) {
+            window.location.href = allowedMenus[0];
           } else {
-            window.location.href = "/control-room";
+            window.location.href = "/";
           }
         }
       }

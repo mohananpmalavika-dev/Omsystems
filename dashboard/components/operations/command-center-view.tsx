@@ -354,7 +354,7 @@ export function CommandCenterView() {
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
               <ShieldCheck className="w-6 h-6 text-blue-400" />
-              Branch protection overview
+              Surveillance Command Center
             </h1>
             <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}>
               <span className="telemetry-truth-dot" />
