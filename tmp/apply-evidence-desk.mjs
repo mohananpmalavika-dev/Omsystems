@@ -1,0 +1,27 @@
+import fs from 'node:fs';
+const path='dashboard/app/compliance/evidence/page.tsx';
+let s=fs.readFileSync(path,'utf8').replaceAll('\r\n','\n');
+s=s.replace('import { FieldVisual } from "@/components/field-visual";', 'import { EvidenceReviewDesk } from "@/components/compliance/evidence-review-desk";');
+s=s.replace('  const [items, setItems]', '  const [verifyingId,setVerifyingId] = useState<string|null>(null);\n  const [items, setItems]');
+s=s.replace('async function verify(item: Evidence) { setError(null);', 'async function verify(item: Pick<Evidence,"id">) { setVerifyingId(item.id); setError(null);');
+const verifyStart=s.indexOf('  async function verify(');
+const verifyEnd=s.indexOf('\n  const verified',verifyStart);
+let verify=s.slice(verifyStart,verifyEnd);
+verify=verify.replace("'Unable to verify evidence.'); } }", "'Unable to verify evidence.'); } finally { setVerifyingId(null); } }");
+s=s.slice(0,verifyStart)+verify+s.slice(verifyEnd);
+const hero=s.indexOf('    <div className="mb-8 flex');
+const heroEnd=s.indexOf('    <ComplianceHubNav',hero);
+s=s.slice(0,hero)+`    <header className="evidence-desk-heading"><div><p className="workflow-kicker">ASSURANCE / PROOFING DESK</p><h1>Evidence, under review.</h1><p>Inspect the reference. Check its context. Verify the proof.</p></div><div className="workflow-heading-actions"><button onClick={()=>void load(true)} disabled={refreshing} className="btn-secondary"><RefreshCw size={16}/>Refresh</button><button onClick={()=>setOpen(true)} className="btn-primary"><Plus size={16}/>Register evidence</button></div></header>
+`+s.slice(heroEnd);
+const statsStart=s.indexOf('<div className="mb-6 grid gap-4 sm:grid-cols-3">');
+const statsEnd=s.indexOf('<div className="mb-6 grid gap-3',statsStart);
+s=s.slice(0,statsStart)+s.slice(statsEnd);
+s=s.replace('md:grid-cols-[1fr_200px_200px]', 'md:grid-cols-[1fr_240px]');
+const select=s.indexOf('<select value={status}');
+const selectEnd=s.indexOf('</select>',select)+9;
+s=s.slice(0,select)+s.slice(selectEnd);
+const listStart=s.indexOf('{loading ?');
+const listEnd=s.indexOf('{open &&',listStart);
+if(listStart<0||listEnd<0)throw Error('Evidence desk boundaries missing');
+s=s.slice(0,listStart)+`<EvidenceReviewDesk items={items} filtered={filtered} status={status} onStatus={setStatus} onVerify={item=>void verify(item)} verifyingId={verifyingId} loading={loading} unavailable={Boolean(error)}/>`+s.slice(listEnd);
+fs.writeFileSync(path,s);

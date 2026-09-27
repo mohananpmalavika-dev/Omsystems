@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+const p='dashboard/app/maintenance/page.tsx';
+let s=fs.readFileSync(p,'utf8');
+s=s.replace('error?"Update feed unavailable or empty."','feedErrors.includes("Firmware updates")?"Update feed unavailable."').replace('error?"Stock feed unavailable or empty."','feedErrors.includes("Parts stock")?"Stock feed unavailable."').replace('<p>Handle rotation, configuration and address assignments.</p>','<p>Handle rotation, configuration and address assignments.</p><span className="fleet-device-count">Pending rotations: {pendingRotations??"—"} · IP conflicts: {ipConflictCount??"—"}</span>');
+fs.writeFileSync(p,s);
+const evidence='dashboard/app/compliance/evidence/page.tsx';
+s=fs.readFileSync(evidence,'utf8').replace(/const date = .*?;\r?\n/,'').replace(/const expired = .*?;\r?\n/,'').replace(/  const verified = .*?; const stale = .*?;\r?\n/,'').replace(/function Stat\(.*?\r?\n/,'');
+s=s.replace('CheckCircle2, ExternalLink, FileText, Loader2, Plus, RefreshCw, Search, ShieldCheck, XCircle','Loader2, Plus, RefreshCw, Search');
+fs.writeFileSync(evidence,s);
+const modules='dashboard/app/modules/page.tsx';
+s=fs.readFileSync(modules,'utf8').replace('  CheckCircle2,\n','').replace('  LayoutGrid,\n','').replace('  Sparkles,\n','').replace('  Workflow,\n','');fs.writeFileSync(modules,s);
+const reports='dashboard/app/reports/page.tsx';
+s=fs.readFileSync(reports,'utf8').replace('ArrowRight, Sparkles','ArrowRight');fs.writeFileSync(reports,s);

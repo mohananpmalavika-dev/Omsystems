@@ -1,0 +1,10 @@
+import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+const result=spawnSync(process.execPath,['dashboard/node_modules/typescript/bin/tsc','-p','dashboard/tsconfig.typecheck.json','--noEmit'],{encoding:'utf8',maxBuffer:4*1024*1024});
+const output=(result.stdout??'')+(result.stderr??'');
+fs.writeFileSync('tmp/experience-qa/workflow-typecheck.log',output);
+const edited=['app/reports/','app/modules/','app/maintenance/page.tsx','app/maintenance/workorders/','app/maintenance/assets/page.tsx','app/maintenance/vendors/page.tsx','app/maintenance/amc/page.tsx','app/compliance/evidence/page.tsx','app/compliance/risks/page.tsx','components/module-page.tsx','components/record-browser.tsx','components/workflow-nav.tsx','components/maintenance/task-desk.tsx','components/compliance/risk-map.tsx','components/compliance/evidence-review-desk.tsx'];
+const errors=output.split('\n').filter(line=>line.includes('error TS'));
+const newErrors=errors.filter(line=>edited.some(file=>line.includes(file)));
+console.log(JSON.stringify({projectExitCode:result.status,errorCount:errors.length,errorsInRedesignFiles:newErrors,otherErrorFiles:[...new Set(errors.map(line=>line.split('(')[0]))],log:'tmp/experience-qa/workflow-typecheck.log'},null,2));
+if(newErrors.length||result.error)process.exitCode=1;

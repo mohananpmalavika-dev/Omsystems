@@ -10,6 +10,7 @@ type EvidenceType = typeof types[number];
 type Evidence = { id: string; requirementId?: string | null; controlId?: string | null; evidenceType: EvidenceType; title: string; description?: string | null; fileUrl?: string | null; collectionDate?: string | null; expiryDate?: string | null; sensitivity?: 'public' | 'internal' | 'confidential' | 'restricted'; validated: boolean };
 type Form = { title: string; evidenceType: EvidenceType; description: string; fileUrl: string; requirementId: string; controlId: string; expiryDate: string; sensitivity: NonNullable<Evidence['sensitivity']> };
 const empty: Form = { title: '', evidenceType: 'document', description: '', fileUrl: '', requirementId: '', controlId: '', expiryDate: '', sensitivity: 'internal' };
+const expired = (item: Evidence) => Boolean(item.expiryDate && Date.parse(item.expiryDate) < Date.now());
 
 export default function EvidencePage() {
   const [verifyingId,setVerifyingId] = useState<string|null>(null);
