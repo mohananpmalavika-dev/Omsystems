@@ -128,7 +128,7 @@ export class AnalyticsEngine {
       
       // 1. Human Analytics
       if (enabledModules.includes('human')) {
-        const humanDetections = await this.humanAnalytics.detect(frame, metadata);
+        const humanDetections = await this.humanAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...humanDetections);
         
         // Extract person embeddings for search
@@ -147,7 +147,7 @@ export class AnalyticsEngine {
       
       // 2. Vehicle Analytics
       if (enabledModules.includes('vehicle')) {
-        const vehicleDetections = await this.vehicleAnalytics.detect(frame, metadata);
+        const vehicleDetections = await this.vehicleAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...vehicleDetections);
         
         // Process ANPR results
@@ -161,7 +161,7 @@ export class AnalyticsEngine {
       
       // 3. Face Analytics
       if (enabledModules.includes('face')) {
-        const faceDetections = await this.faceAnalytics.detect(frame, metadata);
+        const faceDetections = await this.faceAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...faceDetections);
         
         // Handle watchlist matches
@@ -176,7 +176,7 @@ export class AnalyticsEngine {
       
       // 4. Safety Analytics
       if (enabledModules.includes('safety')) {
-        const safetyDetections = await this.safetyAnalytics.detect(frame, metadata);
+        const safetyDetections = await this.safetyAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...safetyDetections);
         
         // Handle safety violations
@@ -196,7 +196,7 @@ export class AnalyticsEngine {
       
       // 5. Banking Analytics
       if (enabledModules.includes('banking')) {
-        const bankingDetections = await this.bankingAnalytics.detect(frame, metadata);
+        const bankingDetections = await this.bankingAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...bankingDetections);
         
         // Handle banking compliance
@@ -210,24 +210,24 @@ export class AnalyticsEngine {
       
       // 6. Security Analytics
       if (enabledModules.includes('security')) {
-        const securityDetections = await this.securityAnalytics.detect(frame, metadata);
+        const securityDetections = await this.securityAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...securityDetections);
         
         // Handle security incidents
         for (const detection of securityDetections) {
-          if (detection.type === 'intrusion') {
+          if (detection.detectionType === 'intrusion') {
             console.log(`[Security] Intrusion detected on camera ${cameraId}`);
             await this.handleSecurityAlert(cameraId, detection);
           }
           
-          if (detection.type === 'camera_health_issue') {
-            console.log(`[CameraHealth] Issue detected on camera ${cameraId}: ${detection.attributes?.issues?.[0]?.type}`);
+          if (detection.detectionType === 'camera_health_issue') {
+            console.log(`[CameraHealth] Issue detected on camera ${cameraId}: ${(detection.metadata?.issues as Array<{type:string}>)?.[0]?.type}`);
             // Update hardware health for prediction engine
             this.predictionEngine.updateHardwareHealth(
               cameraId,
               'camera',
-              detection.attributes?.healthMetrics?.healthScore || 0,
-              detection.attributes?.healthMetrics
+              (detection.metadata?.healthMetrics as {healthScore?: number})?.healthScore || 0,
+              detection.metadata?.healthMetrics as Record<string, unknown>
             );
           }
         }
@@ -236,7 +236,7 @@ export class AnalyticsEngine {
       // 7. Retail Analytics
       if (enabledModules.includes('retail')) {
         metadata.detections = allDetections; // Pass previous detections
-        const retailDetections = await this.retailAnalytics.detect(frame, metadata);
+        const retailDetections = await this.retailAnalytics.detect(frame, metadata) as any[];
         allDetections.push(...retailDetections);
       }
       
