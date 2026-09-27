@@ -44,7 +44,7 @@ export function HlsPlayer({
   const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
   const [streamProtocol, setStreamProtocol] = useState<"webrtc" | "ll-hls">(whepUrl && !isEdgeRelay ? "webrtc" : "ll-hls");
   const [resolution, setResolution] = useState<"1080p" | "720p" | "480p" | "240p">("1080p");
-  const [latencyMs, setLatencyMs] = useState<number>(whepUrl && !isEdgeRelay ? 280 : 1200);
+  const [latencyMs, setLatencyMs] = useState<number>(whepUrl && !isEdgeRelay ? 280 : 800);
   const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
@@ -178,7 +178,7 @@ export function HlsPlayer({
       cleanupStreaming();
       currentProtocol = "ll-hls";
       setStreamProtocol("ll-hls");
-      setLatencyMs(1200);
+      setLatencyMs(800);
 
       const refreshedSource = sourceUrl;
       if (Hls.isSupported()) {
@@ -217,14 +217,16 @@ export function HlsPlayer({
 
           hls = new Hls({
             pLoader: CleanPlaylistLoader as any,
-            lowLatencyMode: false,
-            backBufferLength: 10,
-            maxBufferLength: 10,
-            maxMaxBufferLength: 20,
+            // LL-HLS: fetch 200ms parts as soon as available via blocking playlist reload
+            lowLatencyMode: true,
+            backBufferLength: 3,
+            maxBufferLength: 4,
+            maxMaxBufferLength: 8,
             startPosition: -1, // Start directly at the live edge
-            liveSyncDurationCount: 2,
-            liveMaxLatencyDurationCount: 4,
-            maxLiveSyncPlaybackRate: 1.2,
+            // Fixed 0.5s sync window — player stays within ~0.5s of live edge
+            liveSyncDuration: 0.5,
+            liveMaxLatencyDuration: 3,
+            maxLiveSyncPlaybackRate: 1.5,
             liveDurationInfinity: true,
             highBufferWatchdogPeriod: 2,
             fragLoadingTimeOut: 15_000,
