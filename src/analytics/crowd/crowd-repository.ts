@@ -6,6 +6,7 @@
  */
 
 import type { Pool } from 'pg';
+import { randomBytes } from 'node:crypto';
 import type {
   CrowdZoneRecord,
   CounterQueueRecord,
@@ -50,7 +51,7 @@ export class CrowdRepository {
 
   public async createZone(zone: Omit<CrowdZoneRecord, 'id' | 'created_at' | 'updated_at'>): Promise<CrowdZoneRecord> {
     const now = new Date();
-    const id = `zone-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id = `zone-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
     if (this.pool) {
       try {
@@ -216,7 +217,7 @@ export class CrowdRepository {
     queue: Omit<CounterQueueRecord, 'id' | 'created_at' | 'updated_at'>
   ): Promise<CounterQueueRecord> {
     const now = new Date();
-    const id = `queue-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id = `queue-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
     if (this.pool) {
       try {
@@ -386,7 +387,7 @@ export class CrowdRepository {
     snapshot: Omit<CrowdDensitySnapshotRecord, 'id' | 'created_at'>
   ): Promise<CrowdDensitySnapshotRecord> {
     const now = new Date();
-    const id = `snap-d-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id = `snap-d-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
     if (this.pool) {
       try {
@@ -440,7 +441,7 @@ export class CrowdRepository {
     snapshot: Omit<CounterQueueSnapshotRecord, 'id' | 'created_at'>
   ): Promise<CounterQueueSnapshotRecord> {
     const now = new Date();
-    const id = `snap-q-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id = `snap-q-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
     if (this.pool) {
       try {
@@ -605,7 +606,7 @@ export class CrowdRepository {
     incident: Omit<CrowdQueueIncidentRecord, 'id' | 'created_at'>
   ): Promise<CrowdQueueIncidentRecord> {
     const now = new Date();
-    const id = `inc-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const id = `inc-${Date.now()}-${randomBytes(4).toString('hex')}`;
 
     if (this.pool) {
       try {

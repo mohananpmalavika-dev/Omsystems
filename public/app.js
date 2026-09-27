@@ -4,6 +4,16 @@ const API_BASE_URL = window.location.origin;
 let currentPage = 1;
 const itemsPerPage = 50;
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
@@ -188,7 +198,7 @@ async function submitBulkUpload(form) {
                         View ${result.errors.length} error(s)
                     </summary>
                     <ul style="margin-top: 10px; padding-left: 20px;">
-                        ${result.errors.map(e => `<li>Line ${e.index + 2}: ${e.error}</li>`).join('')}
+                        ${result.errors.map(e => `<li>Line ${Number(e.index) + 2}: ${escapeHtml(e.error)}</li>`).join('')}
                     </ul>
                 </details>
             `;
@@ -208,7 +218,7 @@ async function submitBulkUpload(form) {
         resultsDiv.innerHTML = `
             <div class="result-summary error">
                 <h3>❌ Upload Failed</h3>
-                <p>${error.message}</p>
+                <p>${escapeHtml(error.message)}</p>
             </div>
         `;
     }
@@ -246,17 +256,17 @@ async function loadCredentials(page = 1) {
 
         tableBody.innerHTML = credentials.map(cred => `
             <tr>
-                <td><code>${cred.branch_id.substring(0, 8)}...</code></td>
-                <td>${cred.ip_address || '<em>Default</em>'}</td>
-                <td>${cred.username}</td>
+                <td><code>${escapeHtml(cred.branch_id ? cred.branch_id.substring(0, 8) : '')}...</code></td>
+                <td>${cred.ip_address ? escapeHtml(cred.ip_address) : '<em>Default</em>'}</td>
+                <td>${escapeHtml(cred.username)}</td>
                 <td class="password-mask">••••••••</td>
-                <td><span class="scope-badge ${cred.scope}">${cred.scope}</span></td>
-                <td>${new Date(cred.created_at).toLocaleDateString()}</td>
+                <td><span class="scope-badge ${escapeHtml(cred.scope)}">${escapeHtml(cred.scope)}</span></td>
+                <td>${escapeHtml(new Date(cred.created_at).toLocaleDateString())}</td>
                 <td>
-                    <button class="btn btn-primary btn-small" onclick="openEditModal('${cred.id}', '${cred.ip_address || ''}', '${cred.username}')">
+                    <button class="btn btn-primary btn-small" onclick="openEditModal('${escapeHtml(cred.id)}', '${escapeHtml(cred.ip_address || '')}', '${escapeHtml(cred.username)}')">
                         ✏️ Edit
                     </button>
-                    <button class="btn btn-danger btn-small" onclick="deleteCredential('${cred.id}')">
+                    <button class="btn btn-danger btn-small" onclick="deleteCredential('${escapeHtml(cred.id)}')">
                         🗑️ Delete
                     </button>
                 </td>
@@ -266,7 +276,7 @@ async function loadCredentials(page = 1) {
         renderPagination(data.pagination);
 
     } catch (error) {
-        tableBody.innerHTML = `<tr><td colspan="7" class="loading">Error: ${error.message}</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="7" class="loading">Error: ${escapeHtml(error.message)}</td></tr>`;
     }
 }
 

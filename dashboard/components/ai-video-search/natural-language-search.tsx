@@ -288,7 +288,7 @@ export function NaturalLanguageSearch() {
               <div className="flex-1">
                 <p className="text-sm text-slate-300">
                   <span className="font-medium text-indigo-400">AI Understanding:</span>{" "}
-                  <span dangerouslySetInnerHTML={{ __html: queryUnderstanding }} />
+                  <span>{queryUnderstanding}</span>
                 </p>
                 {processingTime > 0 && (
                   <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">

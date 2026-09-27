@@ -6,6 +6,7 @@
  */
 
 import type { Pool } from "pg";
+import { randomBytes } from "node:crypto";
 import type { DurableAlert, AlertActionRecord, DurableAlertStatus } from "../domain/monitoring-queue.types.js";
 
 export class DurableAlertRepository {
@@ -58,7 +59,7 @@ export class DurableAlertRepository {
     }
 
     await this.recordAction({
-      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `act-${Date.now()}-${randomBytes(3).toString('hex')}`,
       alertId: full.id,
       action: "CREATED",
       actorType: "SYSTEM",
@@ -136,7 +137,7 @@ export class DurableAlertRepository {
       if (res.rowCount === 0) return null;
       const updated = this.mapRow(res.rows[0]);
       await this.recordAction({
-        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `act-${Date.now()}-${randomBytes(3).toString('hex')}`,
         alertId,
         action: "CLAIMED",
         actorType: "OPERATOR",
@@ -158,7 +159,7 @@ export class DurableAlertRepository {
       alert.updatedAt = now;
 
       await this.recordAction({
-        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `act-${Date.now()}-${randomBytes(3).toString('hex')}`,
         alertId,
         action: "CLAIMED",
         actorType: "OPERATOR",
@@ -196,7 +197,7 @@ export class DurableAlertRepository {
       if (res.rowCount === 0) return null;
       const updated = this.mapRow(res.rows[0]);
       await this.recordAction({
-        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `act-${Date.now()}-${randomBytes(3).toString('hex')}`,
         alertId,
         action: "ACKNOWLEDGED",
         actorType: "OPERATOR",
@@ -219,7 +220,7 @@ export class DurableAlertRepository {
       alert.updatedAt = now;
 
       await this.recordAction({
-        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `act-${Date.now()}-${randomBytes(3).toString('hex')}`,
         alertId,
         action: "ACKNOWLEDGED",
         actorType: "OPERATOR",

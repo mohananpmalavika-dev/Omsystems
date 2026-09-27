@@ -1,6 +1,16 @@
 // API Base URL
 const API_BASE_URL = window.location.origin;
 
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
@@ -147,8 +157,8 @@ async function validateBranches() {
                     </summary>
                     <ul style="margin-top: 10px; padding-left: 20px;">
                         ${result.errors.map(e => `
-                            <li><strong>Row ${e.index + 2}</strong> (${e.name}): 
-                                <ul>${e.errors.map(err => `<li>${err}</li>`).join('')}</ul>
+                            <li><strong>Row ${Number(e.index) + 2}</strong> (${escapeHtml(e.name)}): 
+                                <ul>${e.errors.map(err => `<li>${escapeHtml(err)}</li>`).join('')}</ul>
                             </li>
                         `).join('')}
                     </ul>
@@ -159,7 +169,7 @@ async function validateBranches() {
         resultsDiv.innerHTML = `
             <div class="result-summary error">
                 <h3>❌ Validation Failed</h3>
-                <p>${error.message}</p>
+                <p>${escapeHtml(error.message)}</p>
             </div>
         `;
     }
@@ -254,7 +264,7 @@ async function uploadBranches() {
                     </summary>
                     <ul style="margin-top: 10px; padding-left: 20px;">
                         ${result.errors.map(e => `
-                            <li><strong>Row ${e.index + 2}</strong> (${e.name}): ${e.error}</li>
+                            <li><strong>Row ${Number(e.index) + 2}</strong> (${escapeHtml(e.name)}): ${escapeHtml(e.error)}</li>
                         `).join('')}
                     </ul>
                 </details>
@@ -272,7 +282,7 @@ async function uploadBranches() {
         resultsDiv.innerHTML = `
             <div class="result-summary error">
                 <h3>❌ Upload Failed</h3>
-                <p>${error.message}</p>
+                <p>${escapeHtml(error.message)}</p>
             </div>
         `;
     }
@@ -341,8 +351,8 @@ async function validateEmployees() {
                     </summary>
                     <ul style="margin-top: 10px; padding-left: 20px;">
                         ${result.errors.map(e => `
-                            <li><strong>Row ${e.index + 2}</strong> (${e.email}): 
-                                <ul>${e.errors.map(err => `<li>${err}</li>`).join('')}</ul>
+                            <li><strong>Row ${Number(e.index) + 2}</strong> (${escapeHtml(e.email)}): 
+                                <ul>${e.errors.map(err => `<li>${escapeHtml(err)}</li>`).join('')}</ul>
                             </li>
                         `).join('')}
                     </ul>
@@ -353,7 +363,7 @@ async function validateEmployees() {
         resultsDiv.innerHTML = `
             <div class="result-summary error">
                 <h3>❌ Validation Failed</h3>
-                <p>${error.message}</p>
+                <p>${escapeHtml(error.message)}</p>
             </div>
         `;
     }
