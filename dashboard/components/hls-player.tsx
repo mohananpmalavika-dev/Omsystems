@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw, Sliders, Zap, ChevronDown } from "lucide-react";
 
 const MAX_RECOVERY_ATTEMPTS = 25;
-const STALL_TIMEOUT_MS = 15_000;
+const STALL_TIMEOUT_MS = 20_000;
 const RECOVERY_DELAY_MS = 1_200;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
@@ -222,8 +222,8 @@ export function HlsPlayer({
             maxBufferLength: 10,
             maxMaxBufferLength: 20,
             startPosition: -1, // Start directly at the live edge
-            liveSyncDurationCount: 3,
-            liveMaxLatencyDurationCount: 7,
+            liveSyncDurationCount: 2,
+            liveMaxLatencyDurationCount: 4,
             maxLiveSyncPlaybackRate: 1.2,
             liveDurationInfinity: true,
             highBufferWatchdogPeriod: 2,
@@ -243,7 +243,9 @@ export function HlsPlayer({
           });
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            playbackStarted = true;
+            // Reset the stall clock so the watchdog doesn't fire prematurely
+            // during initial HLS buffer build-up. playbackStarted is only set
+            // to true when a real video frame arrives (markProgress).
             lastProgressAt = Date.now();
             if (typeof hls?.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition) && hls.liveSyncPosition > 0) {
               try { video.currentTime = hls.liveSyncPosition; } catch {}
