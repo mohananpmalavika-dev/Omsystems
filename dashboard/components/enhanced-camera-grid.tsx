@@ -97,6 +97,7 @@ interface GridTileProps {
   index: number;
   onStart: (cameraId: string) => void;
   onVideoElementChange: (cameraId: string, videoElement: HTMLVideoElement | null) => void;
+  onPlaybackStateChange: (cameraId: string, playing: boolean) => void;
   onPlaybackError: (cameraId: string, reason?: string) => void;
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay: boolean;
@@ -124,6 +125,7 @@ const GridTile = memo(function GridTile({
   index,
   onStart,
   onVideoElementChange,
+  onPlaybackStateChange,
   onPlaybackError,
   aiOverlay,
   showAiOverlay,
@@ -145,6 +147,9 @@ const GridTile = memo(function GridTile({
   const handlePlaybackError = useCallback((reason?: string) => {
     onPlaybackError(camera.id, reason);
   }, [onPlaybackError, camera.id]);
+  const handlePlaybackStateChange = useCallback((playing: boolean) => {
+    onPlaybackStateChange(camera.id, playing);
+  }, [onPlaybackStateChange, camera.id]);
 
   return (
     <CameraTile
@@ -158,6 +163,7 @@ const GridTile = memo(function GridTile({
       snapshotUrl={snapshotUrl}
       liveError={liveError}
       onVideoElementChange={handleVideoElementChange}
+      onPlaybackStateChange={handlePlaybackStateChange}
       onPlaybackError={handlePlaybackError}
       aiOverlay={aiOverlay}
       showAiOverlay={showAiOverlay}
@@ -216,6 +222,7 @@ export function EnhancedCameraGrid({
   const [sessions, setSessions] = useState<Map<string, LiveSessionResponse>>(
     new Map()
   );
+  const [playingCameraIds, setPlayingCameraIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [liveErrors, setLiveErrors] = useState<Map<string, string>>(new Map());
   const [showLayoutMenu, setShowLayoutMenu] = useState(false);
@@ -892,12 +899,15 @@ export function EnhancedCameraGrid({
 
   const prevActiveDecoderCountRef = useRef<number | undefined>(undefined);
   useEffect(() => {
-    const activeSessionCount = sessions.size;
-    if (prevActiveDecoderCountRef.current !== activeSessionCount) {
-      prevActiveDecoderCountRef.current = activeSessionCount;
-      onActiveStreamsChange?.(activeSessionCount);
+    // A signed session is only an authorization. Report a stream as active
+    // after the browser has rendered a frame, rather than when its request
+    // was accepted by the gateway.
+    const activePlaybackCount = playingCameraIds.size;
+    if (prevActiveDecoderCountRef.current !== activePlaybackCount) {
+      prevActiveDecoderCountRef.current = activePlaybackCount;
+      onActiveStreamsChange?.(activePlaybackCount);
     }
-  }, [onActiveStreamsChange, sessions.size]);
+  }, [onActiveStreamsChange, playingCameraIds]);
 
   const prevMonitoredIdsRef = useRef<string>("");
   useEffect(() => {
@@ -914,6 +924,27 @@ export function EnhancedCameraGrid({
     attachVideoElement(cameraId, videoElement);
   }, [attachVideoElement]);
 
+  const handleTilePlaybackStateChange = useCallback((cameraId: string, playing: boolean) => {
+    setPlayingCameraIds((current) => {
+      const alreadyPlaying = current.has(cameraId);
+      if (alreadyPlaying === playing) return current;
+      const next = new Set(current);
+      if (playing) next.add(cameraId);
+      else next.delete(cameraId);
+      return next;
+    });
+    if (playing) {
+      markPlaybackActive(cameraId);
+      updateStreamState(
+        cameraId,
+        activeStreamTypesRef.current.get(cameraId) === "main" ? "LIVE_MAINSTREAM" : "LIVE_SUBSTREAM",
+      );
+    } else if (sessionsRef.current.has(cameraId)) {
+      markPlaybackDeferred(cameraId);
+      updateStreamState(cameraId, "CONNECTING");
+    }
+  }, [markPlaybackActive, markPlaybackDeferred, updateStreamState]);
+
   const handleTilePlaybackError = useCallback((cameraId: string, reason?: string) => {
     const errorMsg = reason ?? "HLS playback failed";
     setLiveErrors((current) => {
@@ -924,8 +955,13 @@ export function EnhancedCameraGrid({
     });
     reportPlaybackFailure(cameraId, reason);
 
-    // Auto-recover after cooldown: clear error and request a fresh live stream
-    const timer = setTimeout(() => {
+    // Keep only one recovery timer per tile. Multiple media-error events are
+    // normal during a short edge interruption and must not spawn parallel
+    // session grants or stale retries.
+    const existing = recoveryTimersRef.current.get(cameraId);
+    if (existing) window.clearTimeout(existing);
+    const timer = window.setTimeout(() => {
+      recoveryTimersRef.current.delete(cameraId);
       setLiveErrors((current) => {
         if (!current.has(cameraId)) return current;
         const next = new Map(current);
@@ -935,16 +971,26 @@ export function EnhancedCameraGrid({
       const stream = activeStreamTypesRef.current.get(cameraId) ?? "sub";
       void handleStartLive(cameraId, stream, true);
     }, 12_000);
-    return () => clearTimeout(timer);
+    recoveryTimersRef.current.set(cameraId, timer);
   }, [reportPlaybackFailure]);
 
   const sessionsRef = useRef<Map<string, LiveSessionResponse>>(new Map());
   const loadingRef = useRef<Set<string>>(new Set());
+  const recoveryTimersRef = useRef<Map<string, number>>(new Map());
 
   const releaseSession = useCallback((cameraId: string) => {
     const session = sessionsRef.current.get(cameraId);
     sessionsRef.current.delete(cameraId);
     activeStreamTypesRef.current.delete(cameraId);
+    const recoveryTimer = recoveryTimersRef.current.get(cameraId);
+    if (recoveryTimer) window.clearTimeout(recoveryTimer);
+    recoveryTimersRef.current.delete(cameraId);
+    setPlayingCameraIds((current) => {
+      if (!current.has(cameraId)) return current;
+      const next = new Set(current);
+      next.delete(cameraId);
+      return next;
+    });
     setSessions(new Map(sessionsRef.current));
     void releaseLiveSession(session);
     void closeSession(cameraId);
@@ -981,6 +1027,7 @@ export function EnhancedCameraGrid({
     try {
       updateStreamState(cameraId, "CONNECTING");
       const session = await startLiveFromBrowser(cameraId, stream, controller.signal);
+      const previousSession = sessionsRef.current.get(cameraId);
       sessionsRef.current.set(cameraId, session);
       setSessions(new Map(sessionsRef.current));
       setLiveErrors((current) => {
@@ -990,12 +1037,10 @@ export function EnhancedCameraGrid({
         return next;
       });
       activeStreamTypesRef.current.set(cameraId, stream);
-      markPlaybackActive(cameraId);
-
-      const streamState: TileStreamState = stream === "main" 
-        ? "LIVE_MAINSTREAM" 
-        : "LIVE_SUBSTREAM";
-      updateStreamState(cameraId, streamState);
+      // Replacing a refreshed session without closing the old one exhausts
+      // MediaMTX viewer slots over time. The current video remains visible
+      // until React swaps to the freshly authorized source.
+      if (previousSession && previousSession !== session) void releaseLiveSession(previousSession);
     } catch (error) {
       const reason = error instanceof Error ? error.message : "Unknown error";
       setLiveErrors((current) => {
@@ -1031,6 +1076,10 @@ export function EnhancedCameraGrid({
     for (const controller of liveStartControllersRef.current.values()) {
       controller.abort();
     }
+    for (const timer of recoveryTimersRef.current.values()) {
+      window.clearTimeout(timer);
+    }
+    recoveryTimersRef.current.clear();
     pendingLiveStartsRef.current.clear();
     for (const cameraId of sessionsRef.current.keys()) {
       releaseSession(cameraId);
@@ -1403,9 +1452,11 @@ export function EnhancedCameraGrid({
   };
 
   useEffect(() => {
-    // The scheduler starts asynchronously. Do not tear down sessions created
-    // by the initial visible-tile batch while its first schedule is empty.
-    if (!isInitialized || schedule.size === 0) return;
+    // The scheduler starts asynchronously. Once it is initialized, keep
+    // evaluating visible tiles even if it has no profile-based entries:
+    // legacy and edge-discovered cameras may not advertise streamProfiles,
+    // but can still provide a valid live source through the gateway.
+    if (!isInitialized) return;
 
     const desiredLive = new Map(
       Array.from(schedule.values())
@@ -1976,15 +2027,21 @@ export function EnhancedCameraGrid({
 
           const scheduledCamera = schedule.get(camera.id);
           const playbackState = playbackStates.get(camera.id);
-          const viewerStreamState: TileStreamState = sessions.has(camera.id)
+          // A live-session grant only permits playback; it does not prove the
+          // browser received a video frame. Keep the tile in CONNECTING until
+          // the player reports real playback so operators never see a false
+          // LIVE badge over an empty wall tile.
+          const viewerStreamState: TileStreamState = playingCameraIds.has(camera.id)
             ? activeStreamTypesRef.current.get(camera.id) === "main"
               ? "LIVE_MAINSTREAM"
               : "LIVE_SUBSTREAM"
-            : scheduledCamera?.mode === "MAIN_STREAM" || scheduledCamera?.mode === "SUB_STREAM"
-              ? "QUEUED"
-              : scheduledCamera?.mode === "SNAPSHOT" || scheduledCamera?.mode === "ROTATING"
-                ? "PAUSED"
-                : tileStates.get(camera.id)?.streamState || "METADATA_ONLY";
+            : sessions.has(camera.id)
+              ? "CONNECTING"
+              : scheduledCamera?.mode === "MAIN_STREAM" || scheduledCamera?.mode === "SUB_STREAM"
+                ? "QUEUED"
+                : scheduledCamera?.mode === "SNAPSHOT" || scheduledCamera?.mode === "ROTATING"
+                  ? "PAUSED"
+                  : tileStates.get(camera.id)?.streamState || "METADATA_ONLY";
           const viewerReason = playbackState?.degradationReason;
 
           return (
@@ -2038,6 +2095,7 @@ export function EnhancedCameraGrid({
                   liveError={liveErrors.get(camera.id)}
                   onStart={handleRequestLive}
                   onVideoElementChange={handleTileVideoElementChange}
+                  onPlaybackStateChange={handleTilePlaybackStateChange}
                   onPlaybackError={handleTilePlaybackError}
                   aiOverlay={aiByCamera?.get(camera.id)}
                   showAiOverlay={showAiOverlay}

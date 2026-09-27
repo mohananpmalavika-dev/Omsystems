@@ -127,6 +127,7 @@ function CameraTileComponent({
   snapshotUrl,
   liveError,
   onVideoElementChange,
+  onPlaybackStateChange,
   onPlaybackError,
   aiOverlay,
   showAiOverlay = true,
@@ -159,6 +160,7 @@ function CameraTileComponent({
   snapshotUrl?: string;
   liveError?: string;
   onVideoElementChange?: (videoElement: HTMLVideoElement | null) => void;
+  onPlaybackStateChange?: (playing: boolean) => void;
   onPlaybackError?: (reason?: string) => void;
   aiOverlay?: { rules: AnalyticsRule[]; alerts: AnalyticsAlert[] };
   showAiOverlay?: boolean;
@@ -281,7 +283,8 @@ function CameraTileComponent({
   }, [onVideoElementChange]);
   const handlePlaybackStateChange = useCallback((playing: boolean) => {
     setHasLiveFrame(playing);
-  }, []);
+    onPlaybackStateChange?.(playing);
+  }, [onPlaybackStateChange]);
   useEffect(() => {
     setHasLiveFrame(false);
   }, [session?.sessionId, session?.hls?.url]);

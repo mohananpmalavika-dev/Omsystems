@@ -14,7 +14,7 @@
  * - Custom emotion classification models
  */
 
-import type { InferenceSession, Tensor } from "onnxruntime-node";
+import { Tensor, type InferenceSession } from "onnxruntime-node";
 import type { DetectionFrame } from "../detectors/base-detector.js";
 import sharp from "sharp";
 

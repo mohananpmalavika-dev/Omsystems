@@ -101,9 +101,9 @@ export interface MicroExpression {
   startTime: number;
   endTime: number;
   duration: number;               // milliseconds
-  emotion: BasicEmotion;
+  emotion: BasicEmotion | CompoundEmotion;
   confidence: number;
-  maskedBy?: BasicEmotion;        // The macro expression that followed
+  maskedBy?: BasicEmotion | CompoundEmotion;        // The macro expression that followed
   actionUnits: Partial<FacialActionUnits>;
   isGenuine: boolean;             // Not contradicted by macro expression
 }
@@ -780,16 +780,23 @@ export class EmotionDetector extends BaseDetector {
   /**
    * Assess if micro-expression is genuine
    */
-  private assessGenuineness(microEmotion: BasicEmotion, macroEmotion: BasicEmotion): boolean {
+  private assessGenuineness(microEmotion: BasicEmotion | CompoundEmotion, macroEmotion?: BasicEmotion | CompoundEmotion): boolean {
+    if (!macroEmotion) return true;
     // Compatible emotions (not contradictory)
-    const compatible: Record<BasicEmotion, BasicEmotion[]> = {
+    const compatible: Record<string, string[]> = {
       "neutral": ["surprise", "happiness"],
       "happiness": ["neutral", "surprise"],
       "sadness": ["neutral", "fear", "disgust"],
-      "anger": ["disgust", "contempt" as any],
-      "fear": ["sadness", "surprise"],
+      "anger": ["disgust", "contempt", "frustration"],
+      "fear": ["sadness", "surprise", "anxiety"],
       "surprise": ["happiness", "fear", "neutral"],
-      "disgust": ["anger", "sadness"],
+      "disgust": ["anger", "sadness", "contempt"],
+      "contempt": ["anger", "disgust"],
+      "anxiety": ["fear", "sadness"],
+      "frustration": ["anger", "sadness"],
+      "confusion": ["surprise", "fear"],
+      "relief": ["happiness", "surprise"],
+      "suspicion": ["anger", "fear"],
     };
 
     return compatible[microEmotion]?.includes(macroEmotion) ?? false;

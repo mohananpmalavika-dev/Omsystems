@@ -23,11 +23,8 @@
     "../src/middleware/**/*",
     "src/analytics-integration-example.ts",
     "src/detectors/enhanced-security-analytics.ts",
-    "src/banking/integration/**/*.ts",
-    "src/banking/banking-analytics-activation.ts",
     "src/journey/**/*.ts",
     "src/routes/journey-api.ts",
-    "src/**/*.example.ts",
     "src/assistant/test-chatgpt.example.ts"
   ]
 }

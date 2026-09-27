@@ -31,7 +31,7 @@ export interface ModelConfig {
   preprocessor?: 'rgb-normalized-stretch' | 'yolox-letterbox-bgr' | 'opencv-bgr-stretch' | 'opencv-crnn-gray' | 'sface-rgb-align' | 'paddleclas-imagenet';
   postprocessor?: string;
   required?: boolean;
-  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation' | 'helmet-classification';
+  task?: 'object-detection' | 'face-embedding' | 'ctc-text-recognition' | 'person-reid' | 'vehicle-reid' | 'pose-estimation' | 'attribute-estimation' | 'helmet-classification' | 'emotion-recognition';
   decoder?: 'yolov8' | 'yolov5' | 'yolox' | 'xyxy' | 'yunet-face' | 'lpd-yunet';
   labelSet?: 'coco';
   labels?: string[];

@@ -152,6 +152,8 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
         } catch (error) {
           app.log.warn({ err: error }, "Banking analytics activation failed - system will remain inactive");
         }
+      }).catch((err) => {
+        app.log.warn({ err }, "Failed to import banking analytics module");
       });
     }
   }).catch(() => {
@@ -165,6 +167,8 @@ export function buildAnalyticsEngine(options: AnalyticsEngineOptions) {
     } catch (error) {
       app.log.warn({ err: error }, "Statistics service initialization failed - endpoint will be unavailable");
     }
+  }).catch((err) => {
+    app.log.warn({ err }, "Failed to import statistics service module");
   });
 
   // Register lazily loaded route modules through Fastify's plugin lifecycle so
