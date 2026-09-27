@@ -1,0 +1,102 @@
+/* Command Field language across fleet, intelligence, service and governance. */
+.experience-surface { --field-accent: #a9c7ff; --field-muted: #a3b7da; --field-line: #a3baff26; --field-bg: #0b152a; }
+html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) {
+  position: relative; isolation: isolate; overflow: hidden; min-height: 235px; padding: 56px 28px 27px; border: 1px solid #a3baff30 !important; border-radius: 26px !important;
+  background: radial-gradient(ellipse at 78% 70%, #3562c22e, transparent 55%), radial-gradient(ellipse at 15% 130%, #466ad830, transparent 60%), #0b152a !important;
+  color: #eef4ff !important; box-shadow: 0 25px 55px -35px #17264e80 !important;
+}
+html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero)::before {
+  content: "KRYPTON / WORKSPACE"; position: absolute; inset: 0 0 auto; width: auto; height: 35px; padding: 11px 28px; border-bottom: 1px solid #9dbbff20; border-radius: 0; background: #070e1c40; color: #7f9bc7; font: 8px/1.5 ui-monospace, monospace; letter-spacing: .13em; pointer-events: none;
+}
+html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero)::after { content: ""; position: absolute; inset: 35px 0 0; z-index: -1; background-image: linear-gradient(#adc8ff08 1px, transparent 1px), linear-gradient(90deg, #adc8ff08 1px, transparent 1px); background-size: 36px 36px; mask-image: linear-gradient(90deg, transparent, #000); pointer-events: none; }
+html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) h1 { color: #eef4ff !important; font-size: clamp(30px, 3.4vw, 49px) !important; font-weight: 650; letter-spacing: -.055em; line-height: 1.1; overflow-wrap: anywhere; }
+html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) p { color: #a7badb !important; font-size: 12px; line-height: 1.75; }
+.field-visual { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #9bbcff; pointer-events: none; user-select: none; }
+.field-visual svg { width: 100%; height: 170px; overflow: visible; }
+.field-visual-coordinate, .field-visual-caption { color: #7c98c4; font: 7px/1.5 ui-monospace, monospace; letter-spacing: .13em; }
+.field-visual-coordinate { align-self: flex-end; }.field-visual-caption { margin-top: -8px; }
+.field-visual :is(.field-art-spectrum, .field-art-proof, .field-art-pulse) { display: none; }
+.experience-surface:is([data-area="analytics"], [data-area="video-search"], [data-area="reports"]) .field-art-orbit { display: none; }
+.experience-surface:is([data-area="analytics"], [data-area="video-search"], [data-area="reports"]) .field-art-spectrum { display: block; }
+.experience-surface:is([data-area="compliance"], [data-area="audit"], [data-area="evidence"], [data-area="account"], [data-area="incidents"]) .field-art-orbit { display: none; }
+.experience-surface:is([data-area="compliance"], [data-area="audit"], [data-area="evidence"], [data-area="account"], [data-area="incidents"]) .field-art-proof { display: block; }
+.experience-surface:is([data-area="maintenance"], [data-area="performance"], [data-area="security-devices"], [data-area="communications"]) .field-art-orbit { display: none; }
+.experience-surface:is([data-area="maintenance"], [data-area="performance"], [data-area="security-devices"], [data-area="communications"]) .field-art-pulse { display: block; }
+.field-hero { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 16px 26px; align-items: center; }
+.field-hero :is(.page-hero-copy, .module-hero-copy) { display: block; min-width: 0; }
+.field-hero :is(.page-hero-icon, .module-icon) { float: left; width: 31px; height: 31px; margin: -5px 10px 0 0; padding: 7px; border-radius: 8px; color: #bbd2ff !important; background: #94b7ff18 !important; border: 1px solid #9dbbff2e; }
+.field-hero :is(.page-hero-icon, .module-icon) svg { width: 17px; height: 17px; }
+.field-hero :is(.page-hero-eyebrow, .module-eyebrow) { color: #a9c7ff !important; margin-bottom: 17px; font: 9px/1.5 ui-monospace, monospace; letter-spacing: .13em; min-height: 23px; padding-top: 2px; }
+.field-hero h1 { clear: both; max-width: 640px; margin-bottom: 14px; }
+.field-hero :is(.page-hero-description, .module-description) { max-width: 65ch; }
+.field-hero > .field-visual { grid-column: 2; grid-row: 1; }
+.field-hero :is(.page-hero-actions, .module-hero-actions) { grid-column: 1 / -1; justify-content: flex-start; flex-wrap: wrap; border-top: 1px solid #9dbbff26; padding-top: 16px; gap: 10px; }
+.field-hero :is(.page-hero-actions, .module-hero-actions) > :last-child { margin-left: auto; }
+html[data-theme] .app-shell .experience-surface .field-hero :is(.page-hero-back, .module-count) { color: #c4d8f8 !important; background: #9dbbff08 !important; border-color: #9dbbff2b !important; }
+.field-hero .module-count { display: flex; gap: 10px; align-items: center; min-height: 38px; padding: 7px 12px; border: 1px solid; border-radius: 9px; }
+.field-hero .module-count :is(strong, span) { color: #d3e3ff; }
+.field-hero .module-count strong { font-size: 22px; }
+.field-hero .module-count span { font: 9px/1.5 ui-monospace, monospace; }
+html[data-theme] .app-shell .experience-surface .workspace-heading { padding-right: 255px; align-items: flex-start; }
+.workspace-heading > .field-visual { position: absolute; right: 24px; top: 49px; bottom: 18px; width: 210px; }
+.workspace-heading > :not(.field-visual) { position: relative; z-index: 1; }
+html[data-theme] .app-shell .experience-surface .workspace-heading :is(h1 svg, .header-icon, .comm-icon) { color: #a9c7ff !important; }
+html[data-theme] .app-shell .experience-surface .workspace-heading :is(.header-subtitle, .text-gray-500, .text-gray-600, .text-slate-400) { color: #a7badb !important; }
+html[data-theme] .app-shell .experience-surface .workspace-heading :is(.btn-secondary, .secondary-button, .record-form-back, .admin-back) { color: #c7d9f7 !important; background: #9dbbff0c !important; border-color: #9dbbff2b !important; }
+html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .field-hero) :is(.btn-primary, .primary-button) { color: #112447 !important; background: #bed4ff !important; border-color: #bed4ff !important; box-shadow: 0 8px 26px #789eff20; }
+.workspace-heading :is(.header-content, .header-title) { min-width: 0; flex-wrap: wrap; gap: 15px; }
+.workspace-heading .comm-brand p { max-width: 60ch; }
+
+/* Connected metric strips replace separated dashboard boxes. */
+html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) {
+  gap: 0 !important; overflow: hidden; border: 1px solid #a3baff26; border-radius: 18px; background: #101c34; box-shadow: 0 18px 40px -30px #17264e80;
+}
+html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) > :is(article, div, a) {
+  background: transparent !important; color: #dce9ff !important; border: 0 !important; border-right: 1px solid #a3baff26 !important; border-radius: 0 !important; box-shadow: none !important; transform: none !important; padding: 22px;
+}
+html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) :is(strong, .metric-value, .stat-value, p:nth-child(2)) { color: #e6efff !important; font-size: 32px; font-weight: 550; letter-spacing: -.04em; }
+html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) :is(small, .metric-label, .stat-label, p:first-child, p:last-child) { color: #a3b7da !important; }
+html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary) svg { color: #a9c7ff; }
+.experience-surface :is(.directory-summary article, .recording-summary article)::after { display: none; }
+
+/* Capability catalog, service panels and forms share a deliberate frame. */
+.experience-surface :is(.directory-toolbar, .device-toolbar, .recording-filters, .fleet-filter-bar) { border-radius: 12px; border-left: 3px solid var(--blue); }
+.experience-surface :is(.module-panel, .admin-panel, .record-form-panel, .record-form-card, .device-card, .analytics-card, .chart-card, .metric-chart, .directory-group, .account-card, .security-card) { border-radius: 22px; }
+.experience-surface :is(.directory-group, .admin-panel, .device-card, .record-form-panel, .record-form-card) > :is(header, .panel-header, .admin-panel-heading, .card-header) { padding-bottom: 17px; border-bottom: 1px solid var(--line); }
+.experience-surface :is(.directory-group, .admin-panel, .module-panel) h2 { font-size: 22px; letter-spacing: -.035em; }
+.experience-surface .directory-module-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; }
+.experience-surface .directory-module-grid > a { min-height: 89px; border-radius: 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; box-shadow: none; padding: 17px; }
+.experience-surface .directory-module-grid > a:nth-child(2n + 1) { border-right: 1px solid var(--line); }
+.experience-surface .directory-module-grid > a:hover { transform: none; background: var(--blue-soft); box-shadow: none; }
+.experience-surface .directory-module-grid strong { font-size: 12px; }
+.experience-surface .directory-module-grid small { font-size: 9px; }
+.experience-surface .directory-module-icon { border-radius: 50%; }
+.experience-surface .directory-quick-actions > header { background: #111e37; border-color: #a3baff26; padding: 23px; }
+html[data-theme] .app-shell .experience-surface .directory-quick-actions header h2 { color: #e8f1ff !important; }
+.app-shell .experience-surface .directory-quick-actions header :is(span, p) { color: #a9c7ff; }
+.experience-surface .directory-quick-actions > div > a { border-radius: 0; min-height: 65px; }
+.app-shell .experience-surface .directory-sidebar { border-radius: 22px; border-color: var(--line); }
+.app-shell .experience-surface .contact-panel { border-radius: 22px; }
+.experience-surface :is(.filter-tabs, .admin-tabs, .view-tabs, .account-tabs) { border-radius: 11px; padding: 4px; }
+.experience-surface :is(.filter-tabs, .admin-tabs, .view-tabs, .account-tabs) > :is(a, button) { border-radius: 7px; }
+
+/* Public recovery/legal screens borrow the blue framing without changing login. */
+.public-experience:not([data-area="login"]) { --blue: #4966e8; --ui-accent: #4966e8; --ui-accent-hover: #344fc5; }
+.public-experience:is([data-area="privacy"], [data-area="terms"]) h1 { padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.public-experience .login-container:not(.auth-entry) .login-card { border-top: 4px solid #91b7ff; border-radius: 24px; }
+
+@media (max-width: 1100px) { .field-hero { grid-template-columns: minmax(0, 1fr) 210px; } html[data-theme] .app-shell .experience-surface .workspace-heading { padding-right: 210px; } .workspace-heading > .field-visual { width: 165px; right: 20px; } }
+@media (max-width: 760px) {
+  html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) { padding: 53px 22px 22px; min-height: 0; border-radius: 22px !important; }
+  html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) h1 { font-size: clamp(27px, 7vw, 39px) !important; }
+  .field-hero { grid-template-columns: minmax(0, 1fr); gap: 15px; }
+  .field-hero > .field-visual { display: none; }
+  .workspace-heading > .field-visual { display: none; }
+  .field-hero :is(.page-hero-actions, .module-hero-actions) { grid-column: 1; }
+  .field-hero :is(.page-hero-actions, .module-hero-actions) > :last-child { margin-left: 0; }
+  .experience-surface .directory-module-grid { grid-template-columns: 1fr; }
+  .experience-surface .directory-module-grid > a:nth-child(2n + 1) { border-right: 0; }
+  html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  html[data-theme] .app-shell .experience-surface :is(.directory-summary, .recording-summary, .maintenance-summary-grid, .device-summary, .analytics-summary, .intelligence-summary, .stats-grid, .summary-grid) > :is(article, div, a) { padding: 17px; border-bottom: 1px solid #a3baff26 !important; }
+}
+@media print { html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading, .admin-header, .recording-header, .record-form-hero) { padding: 20px; background: white !important; color: black !important; min-height: 0; } html[data-theme] .app-shell .experience-surface :is(.field-hero, .workspace-heading) :is(h1, p) { color: black !important; } .field-visual, .field-hero::before, .workspace-heading::before { display: none !important; } }

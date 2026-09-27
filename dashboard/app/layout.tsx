@@ -14,6 +14,7 @@ import "./workspace.css";
 import "./rich.css";
 import "./dashboard-rich.css";
 import "./experience.css";
+import "./field-experience.css";
 import "./command-atlas.css";
 
 export const metadata: Metadata = {

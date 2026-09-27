@@ -22,3 +22,18 @@ body:has(.upload-zone), body:has(.drop-zone) { background: radial-gradient(900px
 :where(button, a, input, select, textarea):focus-visible { outline: 2px solid #7773ec; outline-offset: 3px; }
 input, select, textarea { border-color: #e2e6f3; }
 @media (max-width: 680px) { body { padding: 14px; } .header, header { padding: 24px 20px; border-radius: 18px; } .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The standalone tools now use the same Command Field framing. */
+:root { --accent-blue: #91b7ff; --accent: #91b7ff; --accent2: #618beb; --accent3: #a9d9ff; }
+.header, header { isolation: isolate; overflow: hidden; min-height: 215px; padding: 58px 32px 28px; border-radius: 26px; border-color: #9dbbff30; background: radial-gradient(ellipse at 80% 70%, #3562c22e, transparent 55%), #0b152a; }
+.header::before, header::before { content: "KRYPTON / FIELD"; position: absolute; inset: 0 0 auto; height: 35px; padding: 11px 32px; border-bottom: 1px solid #9dbbff26; color: #8da8d2; background: #070e1c40; font: 8px/1.5 monospace; letter-spacing: .13em; }
+.header::after, header::after { content: ""; position: absolute; right: 28px; top: 60px; width: 175px; height: 105px; border: 1px solid #9dbbff45; border-radius: 50%; transform: rotate(-25deg); box-shadow: 0 0 0 20px #9dbbff06, 0 0 0 38px #9dbbff04; pointer-events: none; z-index: -1; }
+.header h1, header h1 { max-width: 780px; font-size: clamp(32px, 4vw, 54px); font-weight: 650; letter-spacing: -.06em; line-height: 1.1; }
+.header .eyebrow { color: #a9c7ff; }
+.stats-bar { gap: 0; border: 1px solid #9dbbff26; background: #101c34; border-radius: 16px; overflow: hidden; }
+.stats-bar .stat-card { border: 0; border-radius: 0; border-right: 1px solid #9dbbff26; background: transparent; box-shadow: none; }
+.stats-bar .stat-value { color: #e6efff; font-weight: 550; }
+.stats-bar .stat-label { color: #a3b7da; }
+.btn-primary { background: #bed4ff; color: #112447; box-shadow: none; }
+.btn-primary:hover { background: #91b7ff; }
+@media (max-width: 680px) { .header, header { padding: 55px 22px 24px; min-height: 0; } .header::after, header::after { display: none; } .header::before, header::before { padding-inline: 22px; } .stats-bar .stat-card { border-bottom: 1px solid #9dbbff26; } }
