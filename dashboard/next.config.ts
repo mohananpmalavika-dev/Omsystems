@@ -90,10 +90,14 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  serverExternalPackages: ["playwright", "playwright-core", "@playwright/test", "pg"],
   // Silence the "webpack config present but no turbopack config" warning introduced in Next.js 16.
   // The webpack block below is retained for explicit --webpack builds and webpack-only plugins.
   turbopack: {},
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = [...(config.externals || []), "playwright", "playwright-core", "@playwright/test"];
+    }
     config.resolve = config.resolve || {};
     config.resolve.extensionAlias = {
       ...(config.resolve.extensionAlias || {}),
