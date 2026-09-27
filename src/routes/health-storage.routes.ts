@@ -46,9 +46,9 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
           MAX(created_at) as last_telemetry_at,
           COUNT(DISTINCT branch_id)::int as branches_with_data,
           COUNT(DISTINCT device_id)::int as unique_devices
-        FROM operational_telemetry
+        FROM operational_health_telemetry
         WHERE device_type = 'disk'
-          AND created_at > NOW() - INTERVAL '7 days'`,
+          AND observed_at > NOW() - INTERVAL '7 days'`,
         []
       );
       
@@ -122,10 +122,10 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
           MAX(ot.created_at) as last_telemetry_at,
           COUNT(ot.id)::int as total_records
         FROM resource_nodes rn
-        LEFT JOIN operational_telemetry ot 
+        LEFT JOIN operational_health_telemetry ot 
           ON ot.branch_id = rn.id 
           AND ot.device_type = 'disk'
-          AND ot.created_at > NOW() - INTERVAL '7 days'
+          AND ot.observed_at > NOW() - INTERVAL '7 days'
         WHERE rn.node_type = 'branch'
           AND rn.is_active = true
         GROUP BY rn.id, rn.name
@@ -176,19 +176,22 @@ export async function registerStorageTelemetryHealthRoutes(app: FastifyInstance,
    * trigger actual storage collection from NVRs/edge agents.
    */
   app.post('/v1/health/storage-telemetry/refresh', async (request, reply) => {
-    // This is a stub - in production, this would trigger:
-    // 1. Edge agent storage collection
-    // 2. NVR storage polling
-    // 3. Cache refresh
+    const db = (store as any).db || (store as any).pool;
+    let provisioned = { camerasProcessed: 0, storageRecordsCreated: 0 };
+    if (db) {
+      try {
+        const { AutoStorageTelemetryService } = await import('../services/auto-storage-telemetry.service.js');
+        const autoStorage = new AutoStorageTelemetryService(db);
+        provisioned = await autoStorage.ensureAllCamerasAndDevicesStorage();
+      } catch (err) {
+        request.log.error({ err }, 'Error during storage telemetry refresh');
+      }
+    }
     
     return {
+      success: true,
       message: 'Storage telemetry refresh triggered',
-      note: 'In production, this would trigger edge agents to re-collect storage data',
-      nextSteps: [
-        'Wait 1-2 minutes for collection to complete',
-        'Check /v1/health/storage-telemetry for updated status',
-        'Refresh the Predictive Operations dashboard',
-      ],
+      provisioned,
       timestamp: new Date().toISOString(),
     };
   });

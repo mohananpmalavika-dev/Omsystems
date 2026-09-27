@@ -58,6 +58,7 @@ import { registerBranchLifecycleRoutes } from "./routes/branch-lifecycle.routes.
 import { registerUserRoutes } from "./routes/user.routes.js";
 import { registerAnalyticsRoutes } from "./routes/analytics.routes.js";
 import { ensureCameraAiBundle } from "./analytics/camera-ai-bundle.js";
+import { AutoStorageTelemetryService } from "./services/auto-storage-telemetry.service.js";
 import { registerReportsRoutes } from "./routes/reports.routes.js";
 import { registerLiveOperationsRoutes } from "./routes/live-operations.routes.js";
 import { registerMediaSessionRoutes } from "./routes/media-session.routes.js";
@@ -1811,6 +1812,20 @@ export async function buildApp(options?: {
       await ensureCameraAiBundle(store, request.currentUser.tenantId, camera.id, request.currentUser.id);
     } catch {
       // Best effort AI bundle initialization
+    }
+    if (pool) {
+      try {
+        const autoStorage = new AutoStorageTelemetryService(pool);
+        await autoStorage.collectStorageTelemetryForCamera({
+          ...camera,
+          tenantId: request.currentUser.tenantId,
+          recorderId: parsed.recorderId,
+        }, {
+          storageTier: parsed.storageTier as any,
+        });
+      } catch (storageErr) {
+        app.log.warn({ storageErr, cameraId: camera.id }, "Auto-provision storage telemetry deferred");
+      }
     }
     await audit(request, store, "camera.approved", camera.nodeId, "success", {
       cameraId: camera.id,

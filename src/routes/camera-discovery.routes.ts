@@ -10,6 +10,7 @@ import {
 } from "../services/camera-auto-provision.js";
 import { sealEdgeCommandPayload } from "../security/edge-command-envelope.js";
 import { ensureCameraAiBundle } from "../analytics/camera-ai-bundle.js";
+import { AutoStorageTelemetryService } from "../services/auto-storage-telemetry.service.js";
 
 const branchParams = z.object({ branchId: z.string().min(1) });
 const discoveryParams = z.object({ 
@@ -373,6 +374,21 @@ export async function registerCameraDiscoveryRoutes(
       request.currentUser.id,
     ).catch((err) => request.log.warn({ err }, "Auto-enable AI bundle deferred for newly approved camera"));
 
+    if (pool) {
+      try {
+        const autoStorage = new AutoStorageTelemetryService(pool);
+        await autoStorage.collectStorageTelemetryForCamera({
+          ...camera,
+          tenantId: branch.tenantId,
+          recorderId: discovered.recorderId,
+        }, {
+          storageTier: recorderBacked ? 'dvr_hdd' : 'both',
+        });
+      } catch (err) {
+        request.log.warn({ err }, "Auto-provision storage telemetry deferred for approved camera");
+      }
+    }
+
     return {
       success: true,
       cameraId: camera.id,
@@ -545,6 +561,14 @@ export async function registerCameraDiscoveryRoutes(
       createdBy: request.currentUser.id,
     });
     const { credentialsRequired: _credentialsRequired, pendingVerification: _pendingVerification, ...summary } = outcome.summary;
+    if (pool) {
+      try {
+        const autoStorage = new AutoStorageTelemetryService(pool);
+        await autoStorage.ensureAllCamerasAndDevicesStorage(branch.tenantId);
+      } catch (err) {
+        request.log.warn({ err }, "Auto-provision storage telemetry deferred for approved cameras batch");
+      }
+    }
     return reply.code(201).send({ summary, results: outcome.results });
   });
 

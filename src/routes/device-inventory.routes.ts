@@ -147,15 +147,15 @@ export async function registerDeviceInventoryRoutes(
       lifecycleState: body.lifecycleState,
     });
 
-    // Automatically collect storage telemetry for NVR/DVR/Storage devices
-    if (autoStorageService && ['nvr', 'dvr', 'storage-device'].includes(body.deviceType)) {
+    // Automatically collect storage telemetry (Memory Card and/or Hard Disk) for all devices
+    if (autoStorageService) {
       try {
         const telemetryCount = await autoStorageService.collectStorageTelemetryForDevice(record);
         app.log.info({
           deviceId: record.deviceId,
           deviceType: record.deviceType,
           telemetryCount,
-        }, 'Auto-collected storage telemetry for new device');
+        }, 'Auto-collected storage telemetry (Memory Card & HDD) for new device');
       } catch (error) {
         app.log.error({ error, deviceId: record.deviceId }, 'Failed to auto-collect storage telemetry');
         // Don't fail the device creation if telemetry collection fails
@@ -199,8 +199,7 @@ export async function registerDeviceInventoryRoutes(
     // If lifecycle state changed to operational, collect storage telemetry
     if (autoStorageService && 
         body.lifecycleState === 'operational' && 
-        existing.lifecycleState !== 'operational' &&
-        ['nvr', 'dvr', 'storage-device'].includes(existing.deviceType)) {
+        existing.lifecycleState !== 'operational') {
       try {
         const telemetryCount = await autoStorageService.collectStorageTelemetryForDevice({
           ...existing,

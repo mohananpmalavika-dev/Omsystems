@@ -85,23 +85,43 @@ export default function StoragePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const switchCameraToCloud = async (id: string) => {
+  const provisionAllStorage = async () => {
+    try {
+      setRefreshing(true);
+      await fetch("/api/operations/storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "provision_all" }),
+      });
+      await loadStorageData();
+    } catch (err) {
+      console.error("Failed to auto-provision all storage:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const switchCameraStorageTier = async (id: string, targetTier: "sd_card" | "dvr_hdd" | "online_cloud") => {
     try {
       const res = await fetch("/api/operations/storage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           cameraId: id,
-          targetTier: "online_cloud",
-          reason: "Operator manual failover to online cloud recording pool",
+          targetTier,
+          reason: `Operator manual switch to ${targetTier}`,
         }),
       });
       if (res.ok) {
         await loadStorageData();
       }
     } catch (err) {
-      console.error("Failed to switch camera storage tier to cloud:", err);
+      console.error("Failed to switch camera storage tier:", err);
     }
+  };
+
+  const switchCameraToCloud = async (id: string) => {
+    await switchCameraStorageTier(id, "online_cloud");
   };
 
   const filteredCameras = cameras.filter((c) => {
@@ -150,6 +170,15 @@ export default function StoragePage() {
               <Sliders className="w-3.5 h-3.5" />
               Multi-Cam Playback
             </Link>
+            <button
+              onClick={() => void provisionAllStorage()}
+              disabled={refreshing}
+              className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 transition-all font-medium disabled:opacity-50"
+              title="Automatically detect and create both MicroSD and SATA HDD storage for all devices"
+            >
+              <HardDrive className="w-3.5 h-3.5" />
+              Auto-Provision Storage
+            </button>
             <button
               onClick={() => void loadStorageData()}
               disabled={refreshing}
@@ -335,13 +364,16 @@ export default function StoragePage() {
                               className="px-2.5 py-1 rounded bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 text-[11px] font-medium border border-purple-500/30 transition-all"
                               title="Failover to online cloud recording"
                             >
-                              Enable Cloud Fallback
+                              Cloud Fallback
                             </button>
                           ) : (
-                            <span className="text-[11px] text-emerald-400 font-mono flex items-center justify-end gap-1">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              Cloud Active
-                            </span>
+                            <button
+                              onClick={() => void switchCameraStorageTier(cam.cameraId, "sd_card")}
+                              className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 text-[11px] font-medium border border-emerald-500/30 transition-all"
+                              title="Restore to camera local MicroSD storage"
+                            >
+                              Use SD Card
+                            </button>
                           )}
                         </div>
                       </td>

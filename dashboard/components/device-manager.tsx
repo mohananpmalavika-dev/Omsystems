@@ -89,6 +89,9 @@ type CameraForm = {
   retentionDays: string;
   recordingMode: "continuous" | "motion" | "events" | "disabled";
   storageLocationName: string;
+  memoryCardCapacity: string;
+  hardDiskCapacity: string;
+  enableBothStorage: boolean;
 };
 
 const scanStages = ["Local network", "VPN routes", "Secure tunnel"] as const;
@@ -123,6 +126,9 @@ const emptyCameraForm: CameraForm = {
   retentionDays: "90",
   recordingMode: "continuous",
   storageLocationName: "",
+  memoryCardCapacity: "128",
+  hardDiskCapacity: "4",
+  enableBothStorage: true,
 };
 
 type DeviceInventoryForm = {
@@ -1749,9 +1755,25 @@ export function DeviceManager() {
         capabilities: inventoryForm.capabilities.split(',').map((item) => item.trim()).filter(Boolean),
       };
       await deviceInventoryApi.create(payload);
+      // Auto-provision storage telemetry (memory card and hard disk) for the new inventory device
+      await fetch("/api/operations/storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cameraId: payload.deviceId,
+          cameraName: `${payload.manufacturer} ${payload.model}`,
+          branchId: selectedBranch,
+          ipAddress: payload.ipAddress,
+          targetTier: payload.deviceType?.includes('nvr') || payload.deviceType?.includes('dvr') ? "dvr_hdd" : "sd_card",
+          memoryCardCapacityGb: 128,
+          hardDiskCapacityTb: payload.deviceType?.includes('nvr') ? 10 : 4,
+          enableBothStorage: true,
+          reason: `Inventory device registration storage provision: ${payload.deviceId}`,
+        }),
+      }).catch(() => null);
       setInventoryForm({ ...emptyInventoryForm, branch: selectedBranch, tenant: inventoryForm.tenant });
       await refreshBranch(selectedBranch);
-      setNotice(`Inventory record ${payload.deviceId || "created"} was saved.`);
+      setNotice(`Inventory record ${payload.deviceId || "created"} was saved with storage telemetry.`);
     } catch (reason) {
       setError(messageOf(reason, "Failed to save device inventory record."));
     } finally {
@@ -1817,14 +1839,21 @@ export function DeviceManager() {
         ...(streamProfile ? { profile: streamProfile } : {}),
       });
       const createdCamId = approveResult?.id || approveResult?.data?.id;
-      if (createdCamId && cameraForm.storageTier && cameraForm.storageTier !== "auto") {
+      if (createdCamId) {
         await fetch("/api/operations/storage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             cameraId: createdCamId,
+            cameraName: cameraForm.name,
+            branchId: selectedBranch,
+            ipAddress: cameraForm.ipAddress,
+            recorderId: cameraForm.recorderId || undefined,
             targetTier: cameraForm.storageTier,
-            reason: `Initial storage tier assignment during device onboarding: ${cameraForm.storageTier}`,
+            memoryCardCapacityGb: Number(cameraForm.memoryCardCapacity || 128),
+            hardDiskCapacityTb: Number(cameraForm.hardDiskCapacity || 4),
+            enableBothStorage: cameraForm.enableBothStorage !== false,
+            reason: `Storage provision during onboarding: ${cameraForm.name} (SD: ${cameraForm.memoryCardCapacity || 128}GB, HDD: ${cameraForm.hardDiskCapacity || 4}TB)`,
           }),
         }).catch(() => null);
       }
@@ -2854,11 +2883,81 @@ export function DeviceManager() {
               {(cameraForm.sourceType === "analog-dvr-channel" || cameraForm.sourceType === "nvr-channel") ? <div className="form-row"><div className="form-group"><label htmlFor="recorderId">DVR / NVR ID <span className="required">*</span></label><input id="recorderId" value={cameraForm.recorderId} onChange={(event) => setCameraForm((form) => ({ ...form, recorderId: event.target.value }))} required placeholder="DVR-BLR-01" /></div><div className="form-group"><label htmlFor="recorderChannel">Recorder channel <span className="required">*</span></label><input id="recorderChannel" type="number" min="1" value={cameraForm.recorderChannel} onChange={(event) => setCameraForm((form) => ({ ...form, recorderChannel: event.target.value }))} required /></div><div className="form-group"><label htmlFor="recorderSerial">Recorder serial</label><input id="recorderSerial" value={cameraForm.recorderSerialNumber} onChange={(event) => setCameraForm((form) => ({ ...form, recorderSerialNumber: event.target.value }))} placeholder="Optional" /></div></div> : null}
               <div className="form-group"><label htmlFor="secretRef">Stream secret reference {registrationMode === "manual" && cameraForm.connectionTransport !== "vpn" ? <span className="required">*</span> : null}</label><input id="secretRef" value={cameraForm.connectionSecretRef} onChange={(event) => setCameraForm((form) => ({ ...form, connectionSecretRef: event.target.value }))} minLength={cameraForm.connectionSecretRef ? 8 : undefined} required={registrationMode === "manual" && cameraForm.connectionTransport !== "vpn"} placeholder={cameraForm.connectionTransport === "vpn" ? "Generated automatically for VPN when left blank" : "edge://gateway/device or gateway secret reference"} /><small className="field-help">VPN references are generated from the private address when left blank. Gateway and tunnel references must map to the RTSP source in that gateway's encrypted secret store. Credentials are never saved in the inventory database.</small></div></div>
 
-              <div className="form-section"><h3>Storage and recording allocation</h3><p className="field-help">Assign storage tier, recording schedule, and RBI/regulatory retention duration for this device.</p><div className="form-row form-row-three">
-                <div className="form-group"><label htmlFor="cameraStorageTier">Storage tier</label><select id="cameraStorageTier" value={cameraForm.storageTier} onChange={(event) => setCameraForm((form) => ({ ...form, storageTier: event.target.value as CameraForm["storageTier"] }))}><option value="auto">Auto-Detect (3-Tier Hierarchical Fallback)</option><option value="sd_card">Tier 1: Camera SD Card</option><option value="dvr_hdd">Tier 2: DVR / NVR Hard Disk</option><option value="online_cloud">Tier 3: Online Cloud Recording Pool</option></select></div>
-                <div className="form-group"><label htmlFor="cameraRecordingMode">Recording mode</label><select id="cameraRecordingMode" value={cameraForm.recordingMode} onChange={(event) => setCameraForm((form) => ({ ...form, recordingMode: event.target.value as CameraForm["recordingMode"] }))}><option value="continuous">Continuous 24x7 recording</option><option value="motion">Motion &amp; AI events only</option><option value="events">High-priority alerts only</option><option value="disabled">Live view only (no recording)</option></select></div>
-                <div className="form-group"><label htmlFor="cameraRetentionDays">Retention period</label><select id="cameraRetentionDays" value={cameraForm.retentionDays} onChange={(event) => setCameraForm((form) => ({ ...form, retentionDays: event.target.value }))}><option value="30">30 days (standard)</option><option value="60">60 days (extended)</option><option value="90">90 days (RBI / NBFC mandate)</option><option value="180">180 days (high security / vault)</option><option value="365">365 days (long-term archive)</option></select></div>
-              </div><div className="form-group"><label htmlFor="storageLocationName">Storage pool / disk label <span className="optional">(optional)</span></label><input id="storageLocationName" value={cameraForm.storageLocationName} onChange={(event) => setCameraForm((form) => ({ ...form, storageLocationName: event.target.value }))} placeholder="e.g. Branch-NVR-SATA-01 or Vault-Cold-Archive" /><small className="field-help">Optional identifier for branch physical HDD tag, local pool, or cloud bucket.</small></div></div>
+              <div className="form-section">
+                <h3>Storage and recording allocation</h3>
+                <p className="field-help">Assign storage tier, memory card capacity, DVR/NVR hard disk size, recording schedule, and RBI/regulatory retention duration for this device.</p>
+                <div className="form-row form-row-three">
+                  <div className="form-group">
+                    <label htmlFor="cameraStorageTier">Storage tier / medium</label>
+                    <select id="cameraStorageTier" value={cameraForm.storageTier} onChange={(event) => setCameraForm((form) => ({ ...form, storageTier: event.target.value as CameraForm["storageTier"] }))}>
+                      <option value="auto">Auto-Detect (Both Memory Card &amp; Hard Disk)</option>
+                      <option value="sd_card">Tier 1: Camera SD Card (Memory Card)</option>
+                      <option value="dvr_hdd">Tier 2: DVR / NVR Hard Disk</option>
+                      <option value="online_cloud">Tier 3: Online Cloud Recording Pool</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="cameraRecordingMode">Recording mode</label>
+                    <select id="cameraRecordingMode" value={cameraForm.recordingMode} onChange={(event) => setCameraForm((form) => ({ ...form, recordingMode: event.target.value as CameraForm["recordingMode"] }))}>
+                      <option value="continuous">Continuous 24x7 recording</option>
+                      <option value="motion">Motion &amp; AI events only</option>
+                      <option value="events">High-priority alerts only</option>
+                      <option value="disabled">Live view only (no recording)</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="cameraRetentionDays">Retention period</label>
+                    <select id="cameraRetentionDays" value={cameraForm.retentionDays} onChange={(event) => setCameraForm((form) => ({ ...form, retentionDays: event.target.value }))}>
+                      <option value="30">30 days (standard)</option>
+                      <option value="60">60 days (extended)</option>
+                      <option value="90">90 days (RBI / NBFC mandate)</option>
+                      <option value="180">180 days (high security / vault)</option>
+                      <option value="365">365 days (long-term archive)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="memoryCardCapacity">Memory card (MicroSD capacity)</label>
+                    <select id="memoryCardCapacity" value={cameraForm.memoryCardCapacity} onChange={(event) => setCameraForm((form) => ({ ...form, memoryCardCapacity: event.target.value }))}>
+                      <option value="64">64 GB MicroSD</option>
+                      <option value="128">128 GB MicroSD (Recommended)</option>
+                      <option value="256">256 GB MicroSD (Extended)</option>
+                      <option value="512">512 GB MicroSD (Ultra)</option>
+                    </select>
+                    <small className="field-help">On-camera local flash buffer for edge recording and WAN outage resilience.</small>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="hardDiskCapacity">Hard disk (DVR/NVR HDD capacity)</label>
+                    <select id="hardDiskCapacity" value={cameraForm.hardDiskCapacity} onChange={(event) => setCameraForm((form) => ({ ...form, hardDiskCapacity: event.target.value }))}>
+                      <option value="1">1 TB Surveillance SATA HDD</option>
+                      <option value="2">2 TB Surveillance SATA HDD</option>
+                      <option value="4">4 TB Surveillance SATA HDD (Recommended)</option>
+                      <option value="8">8 TB Surveillance SATA HDD</option>
+                      <option value="10">10 TB Surveillance SATA HDD</option>
+                    </select>
+                    <small className="field-help">Local recorder multi-terabyte SATA storage for continuous branch retention.</small>
+                  </div>
+                </div>
+
+                <div className="form-group mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer font-medium text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={cameraForm.enableBothStorage}
+                      onChange={(event) => setCameraForm((form) => ({ ...form, enableBothStorage: event.target.checked }))}
+                    />
+                    <span>Auto-provision both Memory Card (MicroSD) &amp; Hard Disk (SATA HDD) storage volumes on add</span>
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="storageLocationName">Storage pool / disk label <span className="optional">(optional)</span></label>
+                  <input id="storageLocationName" value={cameraForm.storageLocationName} onChange={(event) => setCameraForm((form) => ({ ...form, storageLocationName: event.target.value }))} placeholder="e.g. Branch-NVR-SATA-01 or Vault-Cold-Archive" />
+                  <small className="field-help">Optional identifier for branch physical HDD tag, local pool, or cloud bucket.</small>
+                </div>
+              </div>
 
               <div className="form-section"><h3>Remote monitoring stream and capabilities</h3><p className="field-help">DVR/NVR main streams remain recorded locally. Use a low-bitrate substream for central live view and analytics over VPN.</p><div className="form-row form-row-three">
                 <div className="form-group"><label htmlFor="streamRole">Stream role</label><select id="streamRole" value={cameraForm.streamRole} onChange={(event) => setCameraForm((form) => ({ ...form, streamRole: event.target.value as CameraForm["streamRole"] }))}><option value="sub">Substream (recommended over VPN)</option><option value="main">Main stream</option><option value="unknown">Auto-detect</option></select></div>

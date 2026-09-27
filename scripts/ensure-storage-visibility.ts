@@ -65,7 +65,7 @@ async function checkStorageHealth(): Promise<HealthCheckResult> {
       MAX(created_at) as last_telemetry_at,
       COUNT(DISTINCT branch_id)::int as branches_with_data,
       COUNT(DISTINCT device_id)::int as unique_devices
-    FROM operational_telemetry
+    FROM operational_health_telemetry
     WHERE device_type = 'disk'
       AND created_at > NOW() - INTERVAL '7 days'
   `;
@@ -225,29 +225,32 @@ async function seedStorageTelemetry(): Promise<number> {
       const metrics = calculateMetrics(device);
       const quality = device.smartStatus === 'HEALTHY' ? 'verified' : device.smartStatus === 'WARNING' ? 'estimated' : 'degraded';
       
+      const deviceId = `${branch.id.slice(0, 8)}-${device.deviceId}`;
+      const idempotencyKey = `script-storage:${tenant.id}:${branch.id}:${deviceId}`;
       const telemetryRecord = {
-        id: randomUUID(),
         tenant_id: tenant.id,
         branch_id: branch.id,
         edge_agent_id: agent.id,
         device_type: 'disk',
-        device_id: `${branch.id.slice(0, 8)}-${device.deviceId}`,
+        device_id: deviceId,
         metrics: JSON.stringify(metrics),
         quality,
+        source: 'system',
+        idempotency_key: idempotencyKey,
+        reason_codes: '[]',
         observed_at: observedAt.toISOString(),
         received_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
       };
       
       await sql`
-        INSERT INTO operational_telemetry ${sql(telemetryRecord)}
-        ON CONFLICT (tenant_id, branch_id, device_type, device_id) 
+        INSERT INTO operational_health_telemetry ${sql(telemetryRecord)}
+        ON CONFLICT (tenant_id, idempotency_key) 
         DO UPDATE SET
           metrics = EXCLUDED.metrics,
           quality = EXCLUDED.quality,
+          source = EXCLUDED.source,
           observed_at = EXCLUDED.observed_at,
-          received_at = EXCLUDED.received_at,
-          created_at = EXCLUDED.created_at
+          received_at = EXCLUDED.received_at
       `;
       
       totalRecords++;

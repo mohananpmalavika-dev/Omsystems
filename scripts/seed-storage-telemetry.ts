@@ -166,37 +166,40 @@ async function seedStorageTelemetry() {
       const metrics = calculateMetrics(device);
       const quality = device.smartStatus === 'HEALTHY' ? 'verified' : device.smartStatus === 'WARNING' ? 'estimated' : 'degraded';
       
+      const diskDeviceId = `${branch.id.slice(0, 8)}-${device.deviceId}`;
+      const idempotencyKey = `seed-storage:${tenant.id}:${branch.id}:${diskDeviceId}`;
       const telemetryRecord = {
-        id: randomUUID(),
         tenant_id: tenant.id,
         branch_id: branch.id,
         edge_agent_id: agent.id,
         device_type: 'disk',
-        device_id: `${branch.id.slice(0, 8)}-${device.deviceId}`,
+        device_id: diskDeviceId,
         metrics: JSON.stringify(metrics),
         quality,
+        source: 'system',
+        idempotency_key: idempotencyKey,
+        reason_codes: '[]',
         observed_at: observedAt.toISOString(),
         received_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
       };
       
       await sql`
-        INSERT INTO operational_telemetry ${sql(telemetryRecord)}
-        ON CONFLICT (tenant_id, branch_id, device_type, device_id) 
+        INSERT INTO operational_health_telemetry ${sql(telemetryRecord)}
+        ON CONFLICT (tenant_id, idempotency_key) 
         DO UPDATE SET
           metrics = EXCLUDED.metrics,
           quality = EXCLUDED.quality,
+          source = EXCLUDED.source,
           observed_at = EXCLUDED.observed_at,
-          received_at = EXCLUDED.received_at,
-          created_at = EXCLUDED.created_at
+          received_at = EXCLUDED.received_at
       `;
       
       const daysRemaining = metrics.estimatedDaysRemaining;
       const statusIcon = device.smartStatus === 'HEALTHY' ? '✅' : device.smartStatus === 'WARNING' ? '⚠️' : '❌';
       
       console.log(
-        `    ${statusIcon} ${device.name}: ${profile.capacityTb}TB, ` +
-        `${profile.usedPercent}% used, ${daysRemaining} days remaining`
+        `    ${statusIcon} ${device.name}: ${device.capacityTb}TB, ` +
+        `${device.usedPercent}% used, ${daysRemaining} days remaining`
       );
       
       totalRecords++;
@@ -215,7 +218,7 @@ async function seedStorageTelemetry() {
       COUNT(DISTINCT branch_id) as branches_with_data,
       COUNT(DISTINCT device_id) as unique_devices,
       MAX(created_at) as latest_record
-    FROM operational_telemetry
+    FROM operational_health_telemetry
     WHERE tenant_id = ${tenant.id}
       AND device_type = 'disk'
       AND created_at > NOW() - INTERVAL '5 minutes'
