@@ -105,11 +105,11 @@ if (fs.existsSync(helmetPath)) {
     if (startIdx !== -1 && endIdx !== -1) {
         const replacementDetectBody = `        const detections = await this.detectHelmetsInFrame(frame);
         const results = [];
-        // Alert ONLY when helmet is detected / present (no-helmet alert disabled)
-        const helmetWearers = detections.filter(d => d.helmetDetected);
+        // Strict confidence filter (>= 0.88) to prevent false positives from bare heads, caps, or hair
+        const helmetWearers = detections.filter(d => d.helmetDetected && (d.confidence === null || d.confidence >= 0.88));
         if (helmetWearers.length > 0) {
             const avgConf = this.calculateAverageConfidence(helmetWearers);
-            const effectiveConf = avgConf ?? 0.85;
+            const effectiveConf = avgConf ?? 0.90;
             const compliantObjects = helmetWearers.flatMap(detection => [
                 {
                     label: "helmet",
@@ -167,13 +167,14 @@ if (fs.existsSync(helmetPath)) {
         }`;
 
         helmetCode = helmetCode.substring(0, startIdx) + replacementDetectBody + '\n' + helmetCode.substring(endIdx);
-        console.log('Successfully patched detect() in helmet-detector.js to alert ONLY when helmet is present');
+        console.log('Successfully patched detect() in helmet-detector.js with high-confidence filter (0.88)');
     }
 
-    // Set threshold in classifyPersonHelmetCompliance to 0.75 (real helmet gives 0.85-0.95, bare head gives ~0.55-0.61)
-    helmetCode = helmetCode.replace(/classification\.confidence >= Math\.max\(this\.MIN_CONFIDENCE,\s*0\.\d+\);/g, 'classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.75);');
-    helmetCode = helmetCode.replace(/fullFrameClassification\.confidence >= 0\.\d+/g, 'fullFrameClassification.confidence >= 0.75');
-    console.log('Successfully adjusted helmet detection confidence thresholds to 0.75');
+    // Set threshold in classifyPersonHelmetCompliance to 0.88 (bare heads/caps give ~0.55-0.70)
+    helmetCode = helmetCode.replace(/classification\.confidence >= Math\.max\(this\.MIN_CONFIDENCE,\s*0\.\d+\);/g, 'classification.confidence >= Math.max(this.MIN_CONFIDENCE, 0.88);');
+    helmetCode = helmetCode.replace(/fullFrameClassification\.confidence >= 0\.\d+/g, 'fullFrameClassification.confidence >= 0.88');
+    helmetCode = helmetCode.replace(/this\.MIN_CONFIDENCE = confidenceThreshold;/g, 'this.MIN_CONFIDENCE = Math.max(confidenceThreshold, 0.88);');
+    console.log('Successfully adjusted helmet detection confidence thresholds to 0.88');
 
     fs.writeFileSync(helmetPath, helmetCode, 'utf8');
 }

@@ -34,7 +34,7 @@ export class HelmetDetector extends BaseDetector {
 
   constructor(
     inference: ObjectFrameInference | null = null,
-    confidenceThreshold = 0.75,
+    confidenceThreshold = 0.88,
     classifier: HelmetClassificationFrameInference | null = null,
   ) {
     super("helmet", "1.0.0");
