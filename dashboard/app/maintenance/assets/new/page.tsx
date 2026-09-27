@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -92,9 +93,7 @@ export default function NewAssetPage() {
         </div>
       <FieldVisual /></header>
 
-      <form className="work-order-form" onSubmit={handleSubmit}>
-        <div className="work-order-form-grid">
-          <label className="work-order-field">
+      <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Identity", description: "Identify the hardware that joins your fleet.", content: <><label className="work-order-field">
             <span>Asset type <em>Required</em></span>
             <input
               value={assetType}
@@ -105,7 +104,7 @@ export default function NewAssetPage() {
               required
             />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Category</span>
             <select
               value={category}
@@ -119,23 +118,23 @@ export default function NewAssetPage() {
               <option value="accessory">Accessory</option>
             </select>
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Make <em>Optional</em></span>
             <input value={make} onChange={(event) => setMake(event.target.value)} maxLength={200} />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Model <em>Optional</em></span>
             <input value={model} onChange={(event) => setModel(event.target.value)} maxLength={200} />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Serial number <em>Optional</em></span>
             <input value={serialNumber} onChange={(event) => setSerialNumber(event.target.value)} maxLength={200} />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Firmware version <em>Optional</em></span>
             <input value={firmwareVersion} onChange={(event) => setFirmwareVersion(event.target.value)} maxLength={200} />
-          </label>
-          <label className="work-order-field">
+          </label></> },
+{ title: "Deployment", description: "Place the asset and connect its service ownership.", content: <><label className="work-order-field">
             <span>Branch <em>Optional</em></span>
             <select
               value={branchNodeId}
@@ -148,7 +147,7 @@ export default function NewAssetPage() {
               ))}
             </select>
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Vendor <em>Optional</em></span>
             <select
               value={vendorId}
@@ -161,7 +160,7 @@ export default function NewAssetPage() {
               ))}
             </select>
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Physical location <em>Optional</em></span>
             <input
               value={location}
@@ -170,7 +169,7 @@ export default function NewAssetPage() {
               placeholder="e.g. Main entrance, north wall"
             />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Status</span>
             <select
               value={status}
@@ -182,20 +181,20 @@ export default function NewAssetPage() {
               <option value="offline">Offline</option>
               <option value="retired">Retired</option>
             </select>
-          </label>
-          <label className="work-order-field">
+          </label></> },
+{ title: "Lifecycle", description: "Record the dates and context for its service life.", content: <><label className="work-order-field">
             <span>Purchase date <em>Optional</em></span>
             <input type="date" value={purchaseDate} onChange={(event) => setPurchaseDate(event.target.value)} />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Installation date <em>Optional</em></span>
             <input type="date" value={installationDate} onChange={(event) => setInstallationDate(event.target.value)} />
           </label>
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Warranty expires <em>Optional</em></span>
             <input type="date" value={warrantyExpiresAt} onChange={(event) => setWarrantyExpiresAt(event.target.value)} />
           </label>
-          <label className="work-order-field work-order-field-wide">
+<label className="work-order-field work-order-field-wide">
             <span>Notes <em>Optional</em></span>
             <textarea
               value={notes}
@@ -203,19 +202,13 @@ export default function NewAssetPage() {
               maxLength={2000}
               rows={4}
             />
-          </label>
-        </div>
-
-        {directoryError && <p className="work-order-form-error" role="alert">Directory unavailable: {directoryError}</p>}
-        {error && <p className="work-order-form-error" role="alert">{error}</p>}
-
-        <footer className="work-order-form-footer">
+          </label></> }]} notices={<>{directoryError && <p className="work-order-form-error" role="alert">Directory unavailable: {directoryError}</p>}
+{error && <p className="work-order-form-error" role="alert">{error}</p>}</>} footer={<footer className="work-order-form-footer">
           <p>Only branches and vendors available to your signed-in account can be linked.</p>
           <button type="submit" disabled={loading || assetType.trim().length < 2}>
             {loading ? "Registering…" : "Register asset"}
           </button>
-        </footer>
-      </form>
+        </footer>} />
     </main>
   );
 }

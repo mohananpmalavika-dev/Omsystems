@@ -1,0 +1,4278 @@
+[
+  {
+    "file": "dashboard/app/account/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/account/security/page.tsx",
+    "lines": 1258,
+    "redirect": false,
+    "owner": [
+      "import { useCallback",
+      "import {\r\n  AlertTriangle",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { VoiceEnrollmentCard"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Profile Information "
+      },
+      {
+        "tag": "h2",
+        "text": "Change Password "
+      },
+      {
+        "tag": "h2",
+        "text": "Alert & Notification Preferences "
+      },
+      {
+        "tag": "h2",
+        "text": "Active Devices & Sessions "
+      },
+      {
+        "tag": "h3",
+        "text": "Sign out from all devices? "
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 5,
+        "heads": [
+          "\r\n                  Profile Information\r\n                ",
+          "\r\n                  Change Password\r\n                ",
+          "\r\n                  Alert & Notification Preferences\r\n                ",
+          "\r\n                Active Devices & Sessions\r\n              ",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/activity-report/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { EmployeeActivityReport"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/ai-quality/page.tsx",
+    "lines": 23,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { AppLayout",
+      "import { AIQualityRegistry"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "AI Model Quality & Certification Registry"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/branch-onboarding/page.tsx",
+    "lines": 20,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { AppLayout",
+      "import { DeviceManager",
+      "import styles"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Branch camera onboarding"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/camera-import-export/page.tsx",
+    "lines": 348,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { AppLayout",
+      "import { CameraImportExportModal",
+      "import {\r\n  FileSpreadsheet"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<FileSpreadsheet className=\"h-7 w-7 text-blue-600 dark:text-blue-400\" />Camera D"
+      },
+      {
+        "tag": "h2",
+        "text": "Bulk Camera Import"
+      },
+      {
+        "tag": "h2",
+        "text": "Export Camera Inventory"
+      },
+      {
+        "tag": "h2",
+        "text": "<Camera className=\"w-4 h-4 text-blue-500\" />Current Camera Inventory "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/database/page.tsx",
+    "lines": 971,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import {\r\n  Database",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Database Table Explorer & Manager"
+      },
+      {
+        "tag": "h2",
+        "text": "{currentTable?.name || selectedTableId}"
+      },
+      {
+        "tag": "h3",
+        "text": "Delete Record Confirmation"
+      },
+      {
+        "tag": "h3",
+        "text": "<FileJson className=\"w-4 h-4\" /><span>{viewingJson.title}</span>"
+      },
+      {
+        "tag": "h3",
+        "text": "{isEditing ? `Edit Record (${initialData[table.primaryKey]})` : `Add New Record "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/features/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import { FeatureManagementDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/ha-topology/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { HAClusterView"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/media-gateway-failover/page.tsx",
+    "lines": 1009,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import { AppLayout",
+      "import {\n  mediaGatewayFailoverApi",
+      "import {\n  Server"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Automatic Media Gateway Failover <span className=\"text-xs px-2.5 py-0.5 rounded-"
+      },
+      {
+        "tag": "h2",
+        "text": "<Server className=\"h-4 w-4 text-blue-400\" />Cluster Gateway Instances ({nodes.le"
+      },
+      {
+        "tag": "h2",
+        "text": "<Radio className=\"h-4 w-4 text-emerald-400\" />Active Stream Routing Table ({rout"
+      },
+      {
+        "tag": "h2",
+        "text": "<Activity className=\"h-4 w-4 text-purple-400\" />Failover & Redirection Audit Log"
+      },
+      {
+        "tag": "h3",
+        "text": "<Server className=\"h-5 w-5 text-blue-400\" />Register Media Gateway "
+      },
+      {
+        "tag": "h3",
+        "text": "<Sliders className=\"h-5 w-5 text-purple-400\" />Failover Policy Settings "
+      },
+      {
+        "tag": "h3",
+        "text": "<ArrowRightLeft className=\"h-5 w-5 text-emerald-400\" />Redirect Camera Stream "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/organization/page.tsx",
+    "lines": 3509,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { useSearchParams",
+      "import {\r\n  Building2",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Multi-Client Enterprise Hierarchy & Location-Based RBAC "
+      },
+      {
+        "tag": "h2",
+        "text": "<FolderTree size={18} className=\"text-emerald-400\" />Dynamic Organization Tree "
+      },
+      {
+        "tag": "h3",
+        "text": "<ScanFace size={16} className=\"text-amber-400\" />Facial Recognition in Restricte"
+      },
+      {
+        "tag": "h3",
+        "text": "<Camera size={16} className=\"text-blue-400\" />Cameras by Location "
+      },
+      {
+        "tag": "h2",
+        "text": "<Building2 size={18} className=\"text-emerald-400\" />Organization Branding"
+      },
+      {
+        "tag": "h2",
+        "text": "<Users size={18} className=\"text-emerald-400\" />Employee Directory & Facial Biom"
+      },
+      {
+        "tag": "h2",
+        "text": "<Shield size={18} className=\"text-emerald-400\" />Role vs Menu Permissions (Role-"
+      },
+      {
+        "tag": "h3",
+        "text": "<Shield size={14} className=\"text-emerald-400\" />{role.name}"
+      },
+      {
+        "tag": "h3",
+        "text": "<Shield size={16} className=\"text-emerald-400\" />{editingRole ? `Configure Menus"
+      },
+      {
+        "tag": "h3",
+        "text": "<Plus size={16} className=\"text-emerald-400\" />Add {newNodeType.toUpperCase()}"
+      },
+      {
+        "tag": "h3",
+        "text": "<Edit2 size={16} className=\"text-amber-400\" />Edit {editingNode.type.toUpperCase"
+      },
+      {
+        "tag": "h3",
+        "text": "<ScanFace size={18} className=\"text-emerald-400\" />Enroll Employee & Capture Fac"
+      },
+      {
+        "tag": "h3",
+        "text": "<Shield size={16} className=\"text-indigo-400\" />Location Scopes & Role: {selecte"
+      },
+      {
+        "tag": "h3",
+        "text": "<Edit2 size={16} className=\"text-amber-400\" />Edit Employee: {editingEmp.display"
+      },
+      {
+        "tag": "h3",
+        "text": "<Key size={16} className=\"text-cyan-400\" />Reset Password "
+      },
+      {
+        "tag": "h3",
+        "text": "Drop Organization"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/page.tsx",
+    "lines": 373,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { AlertTriangle",
+      "import { useEffect",
+      "import { AppLayout",
+      "import { CameraPermissionManager"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Organization & access"
+      },
+      {
+        "tag": "h1",
+        "text": "Organization & access"
+      },
+      {
+        "tag": "h2",
+        "text": "We couldn&apos;t load the organization"
+      },
+      {
+        "tag": "h1",
+        "text": "Organization & access"
+      },
+      {
+        "tag": "h2",
+        "text": "Organization access required"
+      },
+      {
+        "tag": "h1",
+        "text": "Organization Setup"
+      },
+      {
+        "tag": "h2",
+        "text": "No organization has been configured"
+      },
+      {
+        "tag": "h1",
+        "text": "Organization & access"
+      },
+      {
+        "tag": "h2",
+        "text": "Company structure"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/platform/capabilities/page.tsx",
+    "lines": 556,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import {\r\n  ShieldCheck",
+      "import { useCapabilities",
+      "import {\r\n  CapabilityMaturity"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Platform Capability Truth Matrix <span className=\"text-xs font-semibold px-2 py-"
+      },
+      {
+        "tag": "h2",
+        "text": "{capability.name}"
+      },
+      {
+        "tag": "h3",
+        "text": "Description "
+      },
+      {
+        "tag": "h3",
+        "text": "Runtime Diagnostics "
+      },
+      {
+        "tag": "h3",
+        "text": "Implementation Artifacts "
+      },
+      {
+        "tag": "h3",
+        "text": "Verification & Automated Tests "
+      },
+      {
+        "tag": "h3",
+        "text": "System Dependencies "
+      },
+      {
+        "tag": "h3",
+        "text": "Operational Limitations "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/qa/ui-audit/compare/page.tsx",
+    "lines": 250,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import { useSearchParams",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Compare QA Runs"
+      },
+      {
+        "tag": "h1",
+        "text": "<span>{baseId}</span><ArrowRight className=\"h-5 w-5 text-slate-500\" /><span>{tar"
+      },
+      {
+        "tag": "h2",
+        "text": "<Bug className=\"h-4 w-4 text-red-400\" />New Issues Introduced in {targetId}"
+      },
+      {
+        "tag": "h2",
+        "text": "<CheckCircle2 className=\"h-4 w-4 text-emerald-400\" />Issues Resolved in {targetI"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/qa/ui-audit/page.tsx",
+    "lines": 919,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import Link",
+      "import { useRouter",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Sparkles className=\"h-6 w-6 text-blue-400\" />Automated User Flow Recorder & QA "
+      },
+      {
+        "tag": "h2",
+        "text": "<Terminal className=\"h-4 w-4 text-blue-400\" />Target & Credentials "
+      },
+      {
+        "tag": "h2",
+        "text": "<Activity className=\"h-4 w-4 text-emerald-400\" />Audit Inspection Matrix "
+      },
+      {
+        "tag": "h3",
+        "text": "No Active Audit In Progress"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/qa/ui-audit/[runId]/page.tsx",
+    "lines": 571,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import { AppLayout",
+      "import {\n  ArrowLeft"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Audit Report Not Found"
+      },
+      {
+        "tag": "h1",
+        "text": "{run.target_url}"
+      },
+      {
+        "tag": "h3",
+        "text": "{issue.title}"
+      },
+      {
+        "tag": "h3",
+        "text": "Discovered User Flow Topology"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/recording-failover/page.tsx",
+    "lines": 872,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import { AppLayout",
+      "import {\n  recordingFailoverApi",
+      "import {\n  Server"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Recording Engine N+1 Failover Console "
+      },
+      {
+        "tag": "h2",
+        "text": "<Server className=\"w-4 h-4 text-sky-400\" />Active Recording Nodes ({activeNodes."
+      },
+      {
+        "tag": "h2",
+        "text": "<ShieldCheck className=\"w-4 h-4 text-emerald-400\" />Hot Standby Recording Nodes "
+      },
+      {
+        "tag": "h2",
+        "text": "<Video className=\"w-4 h-4 text-sky-400\" />Stream Ingest Assignments ({assignment"
+      },
+      {
+        "tag": "h2",
+        "text": "<Clock className=\"w-4 h-4 text-sky-400\" />Failover Audit Trail & SLA Telemetry ("
+      },
+      {
+        "tag": "h3",
+        "text": "Register Recording Engine Node"
+      },
+      {
+        "tag": "h3",
+        "text": "Assign Camera Stream Ingest"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/roles/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/signed-configuration/page.tsx",
+    "lines": 946,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import { AppLayout",
+      "import {\n  signedConfigApi",
+      "import {\n  Shield"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Signed Edge Config Bundles <span className=\"text-xs px-2 py-0.5 rounded-full bg-"
+      },
+      {
+        "tag": "h2",
+        "text": "Cryptographic Key Registry"
+      },
+      {
+        "tag": "h2",
+        "text": "Target Gateway"
+      },
+      {
+        "tag": "h2",
+        "text": "Cryptographic Envelope & Payload"
+      },
+      {
+        "tag": "h2",
+        "text": "Authoritative Hardware Drift & Tamper Testing"
+      },
+      {
+        "tag": "h2",
+        "text": "Cryptographic Audit Trail"
+      },
+      {
+        "tag": "h3",
+        "text": "Generate Cryptographic Signing Key"
+      },
+      {
+        "tag": "h3",
+        "text": "Sign Configuration Bundle"
+      },
+      {
+        "tag": "h3",
+        "text": "Public Key PEM: {viewPemKey.keyId}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/storage-failover/page.tsx",
+    "lines": 603,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import { AppLayout",
+      "import {\n  storageFailoverApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Storage Target Failover Console"
+      },
+      {
+        "tag": "h2",
+        "text": "Configured Mount Targets & Priority Cascade"
+      },
+      {
+        "tag": "h3",
+        "text": "{t.targetName}"
+      },
+      {
+        "tag": "h2",
+        "text": "Failover & Spillover Audit Events"
+      },
+      {
+        "tag": "h3",
+        "text": "Configure Storage Mount Target"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/stream-settings/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/system/page.tsx",
+    "lines": 659,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { ArrowLeft",
+      "import { AppLayout",
+      "import { AdminStreamPreferenceCard"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "System Management"
+      },
+      {
+        "tag": "h2",
+        "text": "{tab === 'gateways' && 'Edge Gateways'}{tab === 'cameras' && 'Cameras'}{tab === "
+      },
+      {
+        "tag": "h3",
+        "text": "Confirm Deletion"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/zero-touch/diagnostics/page.tsx",
+    "lines": 59,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import Link",
+      "import { Activity"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Activity className=\"text-indigo-400\" size={20} />ZTP fleet diagnostics"
+      },
+      {
+        "tag": "h2",
+        "text": "<AlertTriangle size={17} />Action required"
+      },
+      {
+        "tag": "h2",
+        "text": "Recent authenticated telemetry"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/admin/zero-touch/page.tsx",
+    "lines": 30,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { ZeroTouchOnboardingView",
+      "import { ErrorBoundary"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Zero-Touch Provisioning Control Plane "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/abandoned-objects/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { AbandonedObjectWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/alerts/page.tsx",
+    "lines": 1196,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { PageHero",
+      "import { IncidentMediaModal",
+      "import {\r\n  BellRing"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "Dismiss Alert as False Alarm"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/anpr/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { AnprWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/anpr-logistics/page.tsx",
+    "lines": 526,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import {\r\n  Truck",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Cash-Van Fleet Tracking"
+      },
+      {
+        "tag": "h3",
+        "text": "{session.violations[0]?.message || `Vehicle ${session.vehiclePlate} flagged for "
+      },
+      {
+        "tag": "h2",
+        "text": "Active cash-van movements"
+      },
+      {
+        "tag": "h2",
+        "text": "{session.vehiclePlate}"
+      },
+      {
+        "tag": "h3",
+        "text": "Detection points"
+      },
+      {
+        "tag": "h3",
+        "text": "Violations"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 2,
+        "heads": [
+          "dynamic",
+          "\r\n                      "
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/banking/authorized-persons/page.tsx",
+    "lines": 569,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import {\r\n  AlertTriangle",
+      "import { FormEvent",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "CCTV Identification & Secure Area Authorizations "
+      },
+      {
+        "tag": "h2",
+        "text": "<ShieldCheck size={18} className=\"text-emerald-400\" />Today’s Active Authorizati"
+      },
+      {
+        "tag": "h2",
+        "text": "Date-wise Authorization Report"
+      },
+      {
+        "tag": "h2",
+        "text": "<AlertTriangle size={18} />Locker Authorization Change Alerts "
+      },
+      {
+        "tag": "h2",
+        "text": "<UserPlus size={18} className=\"text-emerald-400\" />Authorized Person Registratio"
+      },
+      {
+        "tag": "h2",
+        "text": "<Users size={18} className=\"text-blue-400\" />Daily Assignment / Handover "
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 2,
+        "heads": [
+          "Date-wise Authorization Report",
+          "\r\n                    "
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/banking/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { BankingAnalyticsDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/behavioral/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { BehavioralAnalyticsWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/branch-comparison/page.tsx",
+    "lines": 381,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import {\r\n  TrendingUp",
+      "import Link",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Branch Comparison"
+      },
+      {
+        "tag": "h2",
+        "text": "Branch performance metrics"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 3,
+        "heads": [
+          "dynamic",
+          "Branch performance metrics",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/camera-obstruction/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { CameraObstructionWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/camera-tamper/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { CameraTamperWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/crowd/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { CrowdAnalyticsWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/dashboard/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/face/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsDomainWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/face-recognition/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { IdentityWatchlistWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/fall/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { FallDetectionWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/industrial/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsDomainWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/investigation/page.tsx",
+    "lines": 350,
+    "redirect": false,
+    "owner": [
+      "import { useCallback",
+      "import Link",
+      "import {\r\n  AlertTriangle",
+      "import { PageHero",
+      "import { Badge"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/nbfc-watchlist/page.tsx",
+    "lines": 568,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import {\r\n  Users",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Watchlist Management"
+      },
+      {
+        "tag": "h3",
+        "text": "Cross-Branch Counterfeit Gold Syndicate Detected"
+      },
+      {
+        "tag": "h2",
+        "text": "Recognition entries"
+      },
+      {
+        "tag": "h2",
+        "text": "{entry.fullName}"
+      },
+      {
+        "tag": "h3",
+        "text": "Area access"
+      },
+      {
+        "tag": "h3",
+        "text": "Validity"
+      },
+      {
+        "tag": "h3",
+        "text": "Last detection"
+      },
+      {
+        "tag": "h3",
+        "text": "Reason"
+      },
+      {
+        "tag": "h3",
+        "text": "Notes"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 2,
+        "heads": [
+          "dynamic",
+          "Cross-Branch Counterfeit Gold Syndicate Detected"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/analytics/page.tsx",
+    "lines": 10,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsConsole"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/people/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsDomainWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/predictions/page.tsx",
+    "lines": 264,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import {\r\n  Activity",
+      "import { PageHero",
+      "import { Badge"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/reid/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import { PersonReIdWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/retail/page.tsx",
+    "lines": 246,
+    "redirect": false,
+    "owner": [
+      "import { PageHero",
+      "import { Card",
+      "import { Badge",
+      "import { ShoppingBag"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/rules/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import { NbfcRulesWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/tailgating/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { TailgatingDetectionWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/analytics/vehicles/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { AnalyticsDomainWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/audit/branch-compliance/page.tsx",
+    "lines": 445,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { useRouter",
+      "import { ComplianceHubNav",
+      "import { ShieldCheck"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Branch Compliance & RBI Audit Summary"
+      },
+      {
+        "tag": "h3",
+        "text": "{branch.branchName}"
+      },
+      {
+        "tag": "h2",
+        "text": "Certificate of Surveillance Compliance "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/audit/health/page.tsx",
+    "lines": 410,
+    "redirect": false,
+    "owner": [
+      "import { useState",
+      "import { Camera",
+      "import { PageHero",
+      "import { useSearchParams"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Overall Health Score"
+      },
+      {
+        "tag": "h3",
+        "text": "{camera.cameraName}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/audit/maintenance/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import MaintenanceAuditClient"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/command-center/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/communications/admin/devices/page.tsx",
+    "lines": 599,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { \n  Smartphone",
+      "import { communicationAPI",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Device Management "
+      },
+      {
+        "tag": "h3",
+        "text": "Enrollment Codes"
+      },
+      {
+        "tag": "h3",
+        "text": "Enrolled Devices"
+      },
+      {
+        "tag": "h3",
+        "text": "Link Employee to Device "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/communications/calls/page.tsx",
+    "lines": 1867,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { \n  Phone",
+      "import { communicationAPI",
+      "import { useCommunicationSignaling"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "KryptoVision Communications"
+      },
+      {
+        "tag": "h2",
+        "text": "{selectedContact.branch.branchName}"
+      },
+      {
+        "tag": "h3",
+        "text": "Employees"
+      },
+      {
+        "tag": "h2",
+        "text": "{selectedContact.employee.employeeName}"
+      },
+      {
+        "tag": "h3",
+        "text": "Select a branch or employee"
+      },
+      {
+        "tag": "h2",
+        "text": "Call History"
+      },
+      {
+        "tag": "h3",
+        "text": "{activeCall.session.targetBranchName || 'Branch'}"
+      },
+      {
+        "tag": "h3",
+        "text": "{activeCall.session.targetEmployeeName || 'Employee'}"
+      },
+      {
+        "tag": "h2",
+        "text": "Incoming Call"
+      },
+      {
+        "tag": "h3",
+        "text": "{incomingCall.sourceBranchName || 'Branch'}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/communications/connect/page.tsx",
+    "lines": 984,
+    "redirect": false,
+    "owner": [
+      "import { useState",
+      "import { \n  Phone",
+      "import { communicationAPI",
+      "import { useCommunicationSignaling",
+      "import { useWebRTCAudio"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "KryptoVision Connect"
+      },
+      {
+        "tag": "h1",
+        "text": "KryptoVision Connect"
+      },
+      {
+        "tag": "h2",
+        "text": "{branchName || 'Branch'}"
+      },
+      {
+        "tag": "h3",
+        "text": "Who is calling VMS?"
+      },
+      {
+        "tag": "h2",
+        "text": "KryptoVision VMS Team"
+      },
+      {
+        "tag": "h2",
+        "text": "Incoming Call"
+      },
+      {
+        "tag": "h3",
+        "text": "VMS Team"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/communications/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/assessments/page.tsx",
+    "lines": 270,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import { useRouter",
+      "import { complianceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance Assessments"
+      },
+      {
+        "tag": "h2",
+        "text": "New assessment"
+      },
+      {
+        "tag": "h3",
+        "text": "{assessment.frameworkName || 'Assessment'}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/assessments/[id]/page.tsx",
+    "lines": 83,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { usePathname",
+      "import { complianceApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Assessment detail"
+      },
+      {
+        "tag": "h2",
+        "text": "{assessment.id}"
+      },
+      {
+        "tag": "h2",
+        "text": "Certificate history"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/certificates/page.tsx",
+    "lines": 25,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import { useCallback",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance certificates"
+      },
+      {
+        "tag": "h2",
+        "text": "{certificate.title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/controls/page.tsx",
+    "lines": 335,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import Link",
+      "import { Shield",
+      "import { PageHero",
+      "import { ComplianceHubNav"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "{control.title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/controls/[id]/page.tsx",
+    "lines": 10,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import { ComplianceRecordDetail"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/dashboard/page.tsx",
+    "lines": 292,
+    "redirect": false,
+    "owner": [
+      "import { useCallback",
+      "import Link",
+      "import { Shield",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance dashboard"
+      },
+      {
+        "tag": "h3",
+        "text": "{framework.frameworkName}"
+      },
+      {
+        "tag": "h3",
+        "text": "No Frameworks Found"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/evidence/page.tsx",
+    "lines": 31,
+    "redirect": false,
+    "owner": [
+      "import { EvidenceReviewDesk",
+      "import { FormEvent",
+      "import { Loader2",
+      "import { ComplianceHubNav"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Evidence, under review."
+      },
+      {
+        "tag": "h2",
+        "text": "Register evidence"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/findings/page.tsx",
+    "lines": 326,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import Link",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance Findings"
+      },
+      {
+        "tag": "h3",
+        "text": "{finding.title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/findings/[id]/page.tsx",
+    "lines": 10,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import { ComplianceRecordDetail"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/overview/page.tsx",
+    "lines": 145,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import {\r\n  Activity",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Compliance operations"
+      },
+      {
+        "tag": "h3",
+        "text": "{label}"
+      },
+      {
+        "tag": "h2",
+        "text": "Built for continuous compliance"
+      },
+      {
+        "tag": "h3",
+        "text": "{label}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 3,
+        "heads": [
+          "dynamic",
+          "Compliance operations",
+          "Built for continuous compliance"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/compliance/page.tsx",
+    "lines": 639,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import Link",
+      "import { \r\n  Shield",
+      "import { complianceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance Frameworks"
+      },
+      {
+        "tag": "h2",
+        "text": "Create New Framework"
+      },
+      {
+        "tag": "h2",
+        "text": "All Frameworks <span className=\"count-badge\">{frameworks.length}</span>"
+      },
+      {
+        "tag": "h3",
+        "text": "No compliance frameworks found"
+      },
+      {
+        "tag": "h3",
+        "text": "{framework.name}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/policies/page.tsx",
+    "lines": 66,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { ScrollText",
+      "import { ModulePage",
+      "import { complianceApi",
+      "import type"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/recording/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { RetentionComplianceDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/requirements/new/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { ComplianceCreateForm"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/requirements/page.tsx",
+    "lines": 294,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import { Shield"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance Requirements"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/requirements/[id]/page.tsx",
+    "lines": 10,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import { ComplianceRecordDetail"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/risks/new/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { ComplianceCreateForm"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/risks/page.tsx",
+    "lines": 194,
+    "redirect": false,
+    "owner": [
+      "import { RiskMap",
+      "import { useCallback",
+      "import Link",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Risk, in perspective."
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/risks/[id]/page.tsx",
+    "lines": 10,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import { ComplianceRecordDetail"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/compliance/[id]/page.tsx",
+    "lines": 121,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { usePathname",
+      "import { complianceApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Compliance framework"
+      },
+      {
+        "tag": "h2",
+        "text": "{framework.name}"
+      },
+      {
+        "tag": "h2",
+        "text": "Policies"
+      },
+      {
+        "tag": "h2",
+        "text": "Assessments"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/control-room/display-node/page.tsx",
+    "lines": 188,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { useSearchParams",
+      "import { Tv",
+      "import { HlsPlayer"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "CONNECTING SOC DISPLAY: {displayCode}"
+      },
+      {
+        "tag": "h3",
+        "text": "Display Standby Mode"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/control-room/page.tsx",
+    "lines": 1905,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useSearchParams",
+      "import { Suspense",
+      "import {\r\n  Activity",
+      "import { EnhancedCameraGrid"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "{detachedCam?.name || `Camera Feed (${detachedCameraId})`}"
+      },
+      {
+        "tag": "h1",
+        "text": "Live video wall"
+      },
+      {
+        "tag": "h3",
+        "text": "{activeSingleBranch.branchName}"
+      },
+      {
+        "tag": "h2",
+        "text": "No cameras match current filter"
+      },
+      {
+        "tag": "h2",
+        "text": "Camera inventory is unavailable"
+      },
+      {
+        "tag": "h2",
+        "text": "No cameras available"
+      },
+      {
+        "tag": "h2",
+        "text": "Emergency Panic &amp; Branch Lockdown Cockpit "
+      },
+      {
+        "tag": "h3",
+        "text": "EMERGENCY LOCKDOWN ACTIVE"
+      },
+      {
+        "tag": "h2",
+        "text": "Two-Way Audio Deterrence &amp; Live Voice Strobe "
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 4,
+        "heads": [
+          "dynamic",
+          "dynamic",
+          "dynamic",
+          "No cameras match current filter"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/dashboards/page.tsx",
+    "lines": 524,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "<span>{icon}</span>{title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/diagnostics/page.tsx",
+    "lines": 257,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "System Diagnostics"
+      },
+      {
+        "tag": "h3",
+        "text": "{result.name}"
+      },
+      {
+        "tag": "h2",
+        "text": "Common Solutions"
+      },
+      {
+        "tag": "h2",
+        "text": "Authentication Debug Info"
+      },
+      {
+        "tag": "h2",
+        "text": "Next Steps"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/digital-twin/branches/page.tsx",
+    "lines": 2,
+    "redirect": false,
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/digital-twin/branches/[branchId]/editor/page.tsx",
+    "lines": 5,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import OperationalTwin"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/digital-twin/branches/[branchId]/page.tsx",
+    "lines": 5,
+    "redirect": false,
+    "owner": [
+      "import { useParams",
+      "import OperationalTwin"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/digital-twin/buildings/[buildingId]/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { useParams",
+      "import { Loader2"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/digital-twin/page.tsx",
+    "lines": 13,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import Link",
+      "import { AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Branch Digital Twins"
+      },
+      {
+        "tag": "h2",
+        "text": "{item.branch.name}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/evidence/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import { Suspense",
+      "import { AppLayout",
+      "import { EvidenceManager",
+      "import { InvestigationFlowNav"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/federation/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { GlobalCommandCenter"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/forgot-password/page.tsx",
+    "lines": 613,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { useRouter",
+      "import {\r\n  ShieldCheck",
+      "import { authApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "{branding.orgName || \"KryptonVision\"}"
+      },
+      {
+        "tag": "h2",
+        "text": "Password Reset Complete "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/incidents/create/page.tsx",
+    "lines": 193,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useRouter",
+      "import { useState",
+      "import { ArrowLeft",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Initial response record"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/incidents/page.tsx",
+    "lines": 464,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { Plus"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/incidents/[id]/page.tsx",
+    "lines": 2463,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useParams",
+      "import { AppLayout",
+      "import {\r\n  Camera"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "{incident.incidentNumber}"
+      },
+      {
+        "tag": "h3",
+        "text": "<Shield size={18} />Closure Readiness Evaluation "
+      },
+      {
+        "tag": "h3",
+        "text": "Armed Quick Response Team (QRT) Live GPS Telemetry "
+      },
+      {
+        "tag": "h2",
+        "text": "Incident Summary"
+      },
+      {
+        "tag": "h3",
+        "text": "<Camera size={16} />Incident Visual Evidence Snapshot "
+      },
+      {
+        "tag": "h2",
+        "text": "Investigation Tasks"
+      },
+      {
+        "tag": "h2",
+        "text": "Preserved Video Evidence"
+      },
+      {
+        "tag": "h2",
+        "text": "Evidence Repository"
+      },
+      {
+        "tag": "h2",
+        "text": "Investigation & Post-Incident Reports"
+      },
+      {
+        "tag": "h2",
+        "text": "Incident Timeline & Audit Trail"
+      },
+      {
+        "tag": "h3",
+        "text": "Edit Incident Details"
+      },
+      {
+        "tag": "h3",
+        "text": "Confirm State Transition "
+      },
+      {
+        "tag": "h3",
+        "text": "<CheckCircle2 size={20} color=\"#059669\" />Close Incident "
+      },
+      {
+        "tag": "h3",
+        "text": "<RotateCcw size={20} color=\"#f59e0b\" />Reopen Incident "
+      },
+      {
+        "tag": "h3",
+        "text": "<AlertOctagon size={20} />Mark as False Positive "
+      },
+      {
+        "tag": "h3",
+        "text": "Complete Investigation Task "
+      },
+      {
+        "tag": "h3",
+        "text": "Add Investigation Task "
+      },
+      {
+        "tag": "h2",
+        "text": "OFFICIAL POLICE COMPLAINT &amp; FIR EVIDENCE DOSSIER "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/infrastructure-twin/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { DigitalTwinPage"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/live-incident/[token]/page.tsx",
+    "lines": 226,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { useParams",
+      "import {\r\n  AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Incident link unavailable"
+      },
+      {
+        "tag": "h1",
+        "text": "{incident.alertType.replaceAll(\"_\", \" \")}"
+      },
+      {
+        "tag": "h2",
+        "text": "Field responder status"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/login/page.tsx",
+    "lines": 17,
+    "redirect": false,
+    "owner": [
+      "import { Suspense",
+      "import { LoginForm"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/alerts/page.tsx",
+    "lines": 182,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { AlertTriangle",
+      "import { AlertCard",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "Total alerts"
+      },
+      {
+        "tag": "h3",
+        "text": "Critical"
+      },
+      {
+        "tag": "h3",
+        "text": "Warning"
+      },
+      {
+        "tag": "h3",
+        "text": "Informational"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 2,
+        "heads": [
+          "Total alerts",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/maintenance/amc/new/page.tsx",
+    "lines": 160,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useRouter",
+      "import Link",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Create AMC contract"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/amc/page.tsx",
+    "lines": 87,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { FileClock",
+      "import { ModulePage",
+      "import { RecordBrowser"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/amc/[id]/page.tsx",
+    "lines": 171,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { useParams",
+      "import Link",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "AMC contract {contract.id}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/assets/new/page.tsx",
+    "lines": 222,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useRouter",
+      "import { maintenanceApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Register asset"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/assets/page.tsx",
+    "lines": 333,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { Boxes",
+      "import { ModulePage",
+      "import { RecordBrowser"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/assets/[id]/page.tsx",
+    "lines": 235,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useParams",
+      "import { maintenanceApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Asset details"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/camera-map/page.tsx",
+    "lines": 382,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import dynamic"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "Error Loading Map"
+      },
+      {
+        "tag": "h1",
+        "text": "Camera Location Map"
+      },
+      {
+        "tag": "h3",
+        "text": "📍 Location Detection Methods"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/compatibility/page.tsx",
+    "lines": 235,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { PageHero",
+      "import {\r\n  Server",
+      "import { RecorderProfileInspector",
+      "import { CompatibilityCatalogViewer"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/device-configuration/page.tsx",
+    "lines": 13,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { DeviceConfigurationCenter"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/device-management/page.tsx",
+    "lines": 472,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import Link",
+      "import {\r\n  Server",
+      "import { DeviceSelector"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Server className=\"w-6 h-6 mr-2.5 text-indigo-400\" />Device Management &amp; Har"
+      },
+      {
+        "tag": "h3",
+        "text": "New: Hardware Device Configuration Center "
+      },
+      {
+        "tag": "h2",
+        "text": "<Cpu className=\"w-3.5 h-3.5 mr-1.5 text-indigo-400\" />Select Branch Device / Rec"
+      },
+      {
+        "tag": "h2",
+        "text": "{selectedDevice.deviceId}"
+      },
+      {
+        "tag": "h3",
+        "text": "Hardware Specifications &amp; Capabilities "
+      },
+      {
+        "tag": "h3",
+        "text": "IP Address Management &amp; Subnet Reservation"
+      },
+      {
+        "tag": "h3",
+        "text": "Configuration Drift &amp; Security Template Compliance"
+      },
+      {
+        "tag": "h3",
+        "text": "Device Configuration &amp; Credential Audit Log "
+      },
+      {
+        "tag": "h3",
+        "text": "<Activity className=\"w-3.5 h-3.5 mr-1.5 text-indigo-400\" />Active Hardware Confi"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/dvr-nvr-monitor/page.tsx",
+    "lines": 16,
+    "redirect": false,
+    "owner": [
+      "import { RecorderFleetWidget",
+      "import { PageHero",
+      "import { Server"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/health/page.tsx",
+    "lines": 345,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useCallback",
+      "import type",
+      "import {\r\n  Activity"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Device health, made actionable."
+      },
+      {
+        "tag": "h2",
+        "text": "Fleet readiness"
+      },
+      {
+        "tag": "h2",
+        "text": "Active alerts"
+      },
+      {
+        "tag": "h3",
+        "text": "No active alerts"
+      },
+      {
+        "tag": "h2",
+        "text": "Signal collection"
+      },
+      {
+        "tag": "h2",
+        "text": "Keep the next action clear."
+      },
+      {
+        "tag": "h3",
+        "text": "{title}"
+      },
+      {
+        "tag": "h3",
+        "text": "{title}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 4,
+        "heads": [
+          "dynamic",
+          "dynamic",
+          "Fleet readiness",
+          "Signal collection"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/maintenance/page.tsx",
+    "lines": 256,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { Activity",
+      "import { maintenanceApi",
+      "import { WorkflowNav"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Keep the fleet<br/><em>moving forward.</em>"
+      },
+      {
+        "tag": "h2",
+        "text": "Fleet health score"
+      },
+      {
+        "tag": "h2",
+        "text": "Device operations"
+      },
+      {
+        "tag": "h2",
+        "text": "Firmware lab"
+      },
+      {
+        "tag": "h3",
+        "text": "Devices requiring updates"
+      },
+      {
+        "tag": "h3",
+        "text": "Registered packages"
+      },
+      {
+        "tag": "h2",
+        "text": "Firmware upgrade planner"
+      },
+      {
+        "tag": "h2",
+        "text": "Stock watch"
+      },
+      {
+        "tag": "h2",
+        "text": "Coverage & partners"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 4,
+        "heads": [
+          "dynamic",
+          "Fleet health score",
+          "Firmware lab",
+          "Stock watch"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/maintenance/predictive/page.tsx",
+    "lines": 545,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import {\r\n  TrendingUp",
+      "import { ModulePage",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "<HardDrive className=\"w-7 h-7 text-red-500\" />Western Digital Gold 8TB Enterpris"
+      },
+      {
+        "tag": "h3",
+        "text": "<HardDrive className=\"w-5 h-5 text-gray-400\" />NVR Storage Health Matrix across "
+      },
+      {
+        "tag": "h2",
+        "text": "<Droplets className=\"w-7 h-7 text-amber-500\" />Internal Dome Condensation & Fogg"
+      },
+      {
+        "tag": "h3",
+        "text": "PTZ Pan-Tilt Stepper Motor Gear Backlash & Torque Stall"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/breaches/new/page.tsx",
+    "lines": 154,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useRouter",
+      "import Link",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Report a Privacy Breach"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/breaches/page.tsx",
+    "lines": 26,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import { useCallback",
+      "import { AlertTriangle",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Privacy breach incident log"
+      },
+      {
+        "tag": "h2",
+        "text": "{breach.breachType.replaceAll('_', ' ')}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/cameras/page.tsx",
+    "lines": 90,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { Camera",
+      "import { ModulePage",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "{branchName}<span>{cameras.length} cameras</span>"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/cameras/[cameraId]/purposes/page.tsx",
+    "lines": 174,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useParams",
+      "import Link",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Assign a Purpose to Camera"
+      },
+      {
+        "tag": "h2",
+        "text": "Assigned purposes"
+      },
+      {
+        "tag": "h3",
+        "text": "{assignment.purpose?.name ?? assignment.purposeId}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/controls/page.tsx",
+    "lines": 19,
+    "redirect": false,
+    "owner": [
+      "import { FormEvent",
+      "import { Camera",
+      "import { PageHero",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Protection settings"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/page.tsx",
+    "lines": 101,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { Camera",
+      "import { PageHero",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Active purposes"
+      },
+      {
+        "tag": "h2",
+        "text": "Assigned camera purposes"
+      },
+      {
+        "tag": "h2",
+        "text": "Open breaches"
+      },
+      {
+        "tag": "h2",
+        "text": "Purpose register"
+      },
+      {
+        "tag": "h3",
+        "text": "{purpose.name}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 2,
+        "heads": [
+          "Purpose register",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/purposes/new/page.tsx",
+    "lines": 135,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useRouter",
+      "import Link",
+      "import { privacyApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "New Privacy Purpose"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/privacy/purposes/page.tsx",
+    "lines": 55,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { FileCheck2",
+      "import { ModulePage",
+      "import { privacyApi"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/reports/page.tsx",
+    "lines": 246,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { ReportGenerationForm"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Maintenance Reports"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/vendors/new/page.tsx",
+    "lines": 73,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useRouter",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Add vendor"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/vendors/page.tsx",
+    "lines": 75,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { Handshake",
+      "import { ModulePage",
+      "import { RecordBrowser"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/vendors/[id]/page.tsx",
+    "lines": 80,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { useRouter",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Vendor {vendor.id}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/workorders/new/page.tsx",
+    "lines": 189,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { useRouter",
+      "import { maintenanceApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Create work order"
+      },
+      {
+        "tag": "h2",
+        "text": "What needs attention?"
+      },
+      {
+        "tag": "h2",
+        "text": "Set the service window."
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/workorders/page.tsx",
+    "lines": 134,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import { ClipboardCheck",
+      "import { ModulePage",
+      "import { WorkflowNav"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "{lane.title}<span>{lane.items.length}</span>"
+      },
+      {
+        "tag": "h3",
+        "text": "{item.problem}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/maintenance/workorders/[id]/page.tsx",
+    "lines": 312,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useParams",
+      "import { AlertCircle",
+      "import { maintenanceApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Work order details"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/mis-dashboard/page.tsx",
+    "lines": 524,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { \r\n  LayoutDashboard",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "<TrendingUp size={20} />Incident Trend (7 Days) "
+      },
+      {
+        "tag": "h3",
+        "text": "Branch Performance"
+      },
+      {
+        "tag": "h3",
+        "text": "<Zap size={20} className=\"text-yellow-400\" />AI Insights & Recommendations "
+      },
+      {
+        "tag": "h3",
+        "text": "<AlertTriangle size={20} className=\"text-red-400\" />Attention Required ({data.at"
+      },
+      {
+        "tag": "h3",
+        "text": "Quick Actions"
+      },
+      {
+        "tag": "h3",
+        "text": "<DollarSign size={20} />Advanced MIS Reports "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/mobile/page.tsx",
+    "lines": 8,
+    "redirect": false,
+    "owner": [
+      "import { MobileCommandCenter"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/modules/page.tsx",
+    "lines": 118,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useCallback",
+      "import {\n  ArrowUpRight",
+      "import { AppLayout",
+      "import { WorkflowNav"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "What’s the<br/><em>mission today?</em>"
+      },
+      {
+        "tag": "h2",
+        "text": "{selectedMission.title}"
+      },
+      {
+        "tag": "h2",
+        "text": "{selectedGroup.label}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/nbfc-operations/page.tsx",
+    "lines": 1175,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useEffect",
+      "import { AppLayout",
+      "import { hasUnrestrictedMenuAccess",
+      "import { defaultRoleWorkspace"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "Cash-in-Transit (CIT) Ingress Protocol "
+      },
+      {
+        "tag": "h3",
+        "text": "{activeThreat ? \"High-Priority Watchlist Match\" : \"Perimeter Watchlist Monitor\"}"
+      },
+      {
+        "tag": "h3",
+        "text": "Strong Room Multi-Party Time-Lock &amp; Anti-Duress Protocol "
+      },
+      {
+        "tag": "h3",
+        "text": "Daily Branch Opening &amp; Closing Two-Person Custody Audit Ledger "
+      },
+      {
+        "tag": "h2",
+        "text": "From signal to accountable outcome"
+      },
+      {
+        "tag": "h3",
+        "text": "{title}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 4,
+        "heads": [
+          "dynamic",
+          "\r\n                      Cash-in-Transit (CIT) Ingress Protocol\r\n                    ",
+          "From signal to accountable outcome",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/operations/ai-command-center/page.tsx",
+    "lines": 244,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useSearchParams",
+      "import { FormEvent",
+      "import {\r\n  AlertTriangle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "AI Command Center"
+      },
+      {
+        "tag": "h2",
+        "text": "<MessageSquareText size={17}/>Ask operations"
+      },
+      {
+        "tag": "h3",
+        "text": "{diagnosis.rootCause.label}"
+      },
+      {
+        "tag": "h2",
+        "text": "{icon}{title}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 2,
+        "heads": [
+          "dynamic",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/operations/alert-command-center/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/alert-notification-policy/page.tsx",
+    "lines": 743,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { Bell",
+      "import { ModulePage",
+      "import { alertPolicyApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "RBI Master Direction: Multi-Tier SOP Incident Escalation Hierarchy <span classNa"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "div",
+        "sections": 6,
+        "heads": [
+          "dynamic",
+          "dynamic",
+          "dynamic",
+          "dynamic",
+          "dynamic",
+          "\r\n                  RBI Master Direction: Multi-Tier SOP Incident Escalation Hierarchy\r\n                  "
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/operations/alerts/page.tsx",
+    "lines": 345,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import { \r\n  AlertTriangle",
+      "import { \r\n  OperationalAlert",
+      "import { \r\n  fetchOperationalAlerts"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Operational Alerts"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/assets/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { AssetReplacementManager"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/branches/page.tsx",
+    "lines": 521,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import Link",
+      "import {\r\n  Wifi",
+      "import { StatusBadge"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Branch operations"
+      },
+      {
+        "tag": "h2",
+        "text": "Branches to review"
+      },
+      {
+        "tag": "h3",
+        "text": "{branch.name}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/branches/[branchId]/page.tsx",
+    "lines": 423,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { useParams",
+      "import Link",
+      "import {\r\n  Building2"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "{branch?.name || \"Branch Workspace\"}"
+      },
+      {
+        "tag": "h3",
+        "text": "Channel Streaming Matrix ({workspace?.cameras?.length ?? 0}Cameras)"
+      },
+      {
+        "tag": "h3",
+        "text": "{rec.model ?? rec.recorderId}"
+      },
+      {
+        "tag": "h3",
+        "text": "Branch WAN Telemetry"
+      },
+      {
+        "tag": "h3",
+        "text": "Active Branch Alarms ({workspace?.activeAlerts?.length || 0})"
+      },
+      {
+        "tag": "h3",
+        "text": "Active Root-Cause Incidents ({workspace?.activeIncidents?.length || 0})"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/cameras/page.tsx",
+    "lines": 3,
+    "redirect": false,
+    "owner": [
+      "import { ComponentDetailPage"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/device-connectivity/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { DeviceConnectivityView"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/edge-agents/page.tsx",
+    "lines": 26,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { BranchEdgeProductView"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Edge Gateways & Fleet Control "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/edge-fleet/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { EdgeFleetManager"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/ha-failover/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { HaFailoverView"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "High Availability & Automated Camera Failover "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/infrastructure/page.tsx",
+    "lines": 6,
+    "redirect": false,
+    "owner": [
+      "import { InfrastructureHealthDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/maintenance/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { MaintenanceCommandCenter"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/media-pipeline/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { MediaPipelineSchedulerView"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/network/page.tsx",
+    "lines": 4,
+    "redirect": false,
+    "owner": [
+      "import { ComponentDetailPage",
+      "import { InternetFleetWidget"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/observability/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { VmsObservabilityView"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "VMS-Grade Observability & Prometheus Metrics "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/page.tsx",
+    "lines": 4,
+    "redirect": false,
+    "owner": [
+      "import OperationalHealthDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/rca-analysis/page.tsx",
+    "lines": 284,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { Activity",
+      "import { RCADiagnosisPanel"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Enhanced RCA Engine"
+      },
+      {
+        "tag": "h3",
+        "text": "<Sparkles size={16} /><span>About Autonomous RCA</span>"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 2,
+        "heads": [
+          "dynamic",
+          "dynamic"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/operations/recording/archive/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { ColdCloudArchiveWorkspace",
+      "import { Suspense"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/recording/page.tsx",
+    "lines": 42,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { HardDrive",
+      "import { ComponentDetailPage",
+      "import { RetentionFleetWidget"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "3-Tier Storage Auto-Detection &amp; Cloud Fallback Architecture <span className="
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/recording/recovery/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { RecordingRecoveryWorkspace",
+      "import { Suspense"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/storage/page.tsx",
+    "lines": 363,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import Link",
+      "import {\r\n  HardDrive",
+      "import { ComponentDetailPage",
+      "import { HddFleetWidget"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "3-Tier Storage Auto-Detection & Fallback Engine <span className=\"text-[10px] upp"
+      },
+      {
+        "tag": "h3",
+        "text": "<Layers className=\"w-4 h-4 text-amber-400\" />Camera Storage Detection & Resoluti"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/ups/page.tsx",
+    "lines": 380,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import {\n  Zap",
+      "import { ModulePage",
+      "import { cameraInventoryApi",
+      "import type"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "LiFePO4 Rack BMS Cell Balancing Telemetry "
+      },
+      {
+        "tag": "h3",
+        "text": "Clean Agent Fire Suppression (FM-200)"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/operations/video-wall/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/page.tsx",
+    "lines": 25,
+    "redirect": true,
+    "owner": [
+      "import { cookies",
+      "import { redirect",
+      "import { CommandCenterView",
+      "import { ErrorBoundary"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/performance/page.tsx",
+    "lines": 29,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { Metadata",
+      "import { PerformanceObservabilityDashboard",
+      "import { AppLayout"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Performance Observability"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/playback/bookmarks/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { VideoBookmarksWorkspace",
+      "import { Suspense"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/playback/synced/page.tsx",
+    "lines": 501,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import React",
+      "import { SyncedPlaybackView",
+      "import { NotificationsProvider",
+      "import { InvestigationFlowNav"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Synchronized timeline playback "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/portable-camera/enroll/page.tsx",
+    "lines": 1057,
+    "redirect": false,
+    "owner": [
+      "import React",
+      "import { portableDeviceHeaders",
+      "import {\r\n  Camera"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "PORTABLE CAMERA"
+      },
+      {
+        "tag": "h2",
+        "text": "Enroll Portable Device"
+      },
+      {
+        "tag": "h2",
+        "text": "Camera Session Concluded"
+      },
+      {
+        "tag": "h2",
+        "text": "Enrollment Error"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/privacy/page.tsx",
+    "lines": 24,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { LockKeyhole",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "{title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/recordings/page.tsx",
+    "lines": 18,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { RecordingWorkspace",
+      "import { InvestigationFlowNav",
+      "import { Suspense"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/ai-analytics/compare/page.tsx",
+    "lines": 768,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { Card",
+      "import { Button",
+      "import { Badge"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "AI Capability Comparison"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/ai-analytics/roi/page.tsx",
+    "lines": 911,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { Card",
+      "import { Button",
+      "import { Input"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "AI ROI Calculator"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/benchmarking/page.tsx",
+    "lines": 495,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { \r\n  BarChart3",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "🏆 Top Performer: {data.summary.topPerformer.branch}"
+      },
+      {
+        "tag": "h3",
+        "text": "Performance Distribution"
+      },
+      {
+        "tag": "h3",
+        "text": "Branch Performance Rankings"
+      },
+      {
+        "tag": "h3",
+        "text": "<AlertTriangle size={20} />Branches Requiring Attention "
+      },
+      {
+        "tag": "h3",
+        "text": "Key Insights"
+      },
+      {
+        "tag": "h3",
+        "text": "<Target size={20} className=\"text-purple-400\" />Improvement Recommendations "
+      },
+      {
+        "tag": "h3",
+        "text": "Related MIS Reports"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/compliance/page.tsx",
+    "lines": 632,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { \r\n  ShieldCheck",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "<FileCheck2 size={20} className=\"text-indigo-400\" />RBI Cyber Security &amp; Mas"
+      },
+      {
+        "tag": "h3",
+        "text": "<Key className=\"text-emerald-400\" size={20} />Merkle Tree Audit Immortality & Ze"
+      },
+      {
+        "tag": "h3",
+        "text": "{name}"
+      },
+      {
+        "tag": "h3",
+        "text": "<AlertTriangle size={20} />Compliance Gaps Requiring Attention ({data.gaps.lengt"
+      },
+      {
+        "tag": "h3",
+        "text": "<Target size={20} className=\"text-blue-400\" />Remediation Action Plan "
+      },
+      {
+        "tag": "h3",
+        "text": "✓ Fully Compliant "
+      },
+      {
+        "tag": "h3",
+        "text": "Related MIS Reports"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/financial/page.tsx",
+    "lines": 713,
+    "redirect": false,
+    "owner": [
+      "import { useEffect",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { \r\n  DollarSign",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h3",
+        "text": "<PieChart size={20} />Cost Breakdown by Category "
+      },
+      {
+        "tag": "h3",
+        "text": "Cost Efficiency Metrics"
+      },
+      {
+        "tag": "h3",
+        "text": "CapEx Breakdown"
+      },
+      {
+        "tag": "h3",
+        "text": "OpEx Breakdown"
+      },
+      {
+        "tag": "h3",
+        "text": "Hidden Costs"
+      },
+      {
+        "tag": "h3",
+        "text": "<BarChart3 size={20} />Cost by Branch "
+      },
+      {
+        "tag": "h3",
+        "text": "<Zap size={20} className=\"text-yellow-400\" />Cost Optimization Recommendations "
+      },
+      {
+        "tag": "h3",
+        "text": "Investment Breakdown"
+      },
+      {
+        "tag": "h3",
+        "text": "Quantified Benefits"
+      },
+      {
+        "tag": "h3",
+        "text": "ROI Calculation"
+      },
+      {
+        "tag": "h3",
+        "text": "ROI Analysis Insights"
+      },
+      {
+        "tag": "h3",
+        "text": "Related MIS Reports"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/mis/page.tsx",
+    "lines": 887,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import Link",
+      "import { AppLayout",
+      "import {\r\n  ShieldAlert"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Executive MIS Reports & Multi-Dimensional Analytics "
+      },
+      {
+        "tag": "h3",
+        "text": "<Mail size={18} className=\"text-sky-400\" />Automated C-Suite Scorecard Dispatch "
+      },
+      {
+        "tag": "h2",
+        "text": "{groupBy.toUpperCase()}-WISE SURVEILLANCE & PERFORMANCE COMPARISON "
+      },
+      {
+        "tag": "h3",
+        "text": "All-In-One Unified Master Data Table"
+      },
+      {
+        "tag": "h2",
+        "text": "Date-wise & Shift-wise Alert Activity"
+      },
+      {
+        "tag": "h2",
+        "text": "Threats by Shift"
+      },
+      {
+        "tag": "h2",
+        "text": "Branch-wise & Area-wise Camera Uptime"
+      },
+      {
+        "tag": "h2",
+        "text": "Date-wise Footfall Trend"
+      },
+      {
+        "tag": "h2",
+        "text": "Area & Branch Staff Attendance Matrix"
+      },
+      {
+        "tag": "h2",
+        "text": "Incident SLA Compliance by Branch"
+      },
+      {
+        "tag": "h2",
+        "text": "Statutory 90-Day Video Retention Status"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/reports/page.tsx",
+    "lines": 358,
+    "redirect": false,
+    "owner": [
+      "import { useCallback",
+      "import Link",
+      "import { CalendarClock",
+      "import { AppLayout",
+      "import { WorkflowNav"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Make insight.<br/><em>Deliver clarity.</em>"
+      },
+      {
+        "tag": "h2",
+        "text": "{[\"What should this report explain?\",\"Focus on what matters.\",\"Choose how it rea"
+      },
+      {
+        "tag": "h3",
+        "text": "{selectedTemplateInfo?.name}"
+      },
+      {
+        "tag": "h3",
+        "text": "{selectedTemplateInfo?.name}"
+      },
+      {
+        "tag": "h2",
+        "text": "Saved schedules"
+      },
+      {
+        "tag": "h2",
+        "text": "Run history"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 3,
+        "heads": [
+          "dynamic",
+          "Saved schedules",
+          "Run history"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/reset-password/page.tsx",
+    "lines": 41,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { FormEvent",
+      "import { useSearchParams",
+      "import { ShieldCheck",
+      "import { authApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Choose a new password"
+      },
+      {
+        "tag": "h1",
+        "text": "Loading..."
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/role-dashboard/page.tsx",
+    "lines": 64,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useEffect",
+      "import { AppLayout",
+      "import { PageHero",
+      "import { authApi"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Attention, action, proof"
+      },
+      {
+        "tag": "h3",
+        "text": "{title}"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 2,
+        "heads": [
+          "dynamic",
+          "Attention, action, proof"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/security/device-health/page.tsx",
+    "lines": 465,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useEffect",
+      "import Link",
+      "import {\r\n  Activity",
+      "import { cameraInventoryApi"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Security Device Health"
+      },
+      {
+        "tag": "h2",
+        "text": "Correlated device status"
+      },
+      {
+        "tag": "h2",
+        "text": "{branch.branchName}"
+      },
+      {
+        "tag": "h3",
+        "text": "Critical issues"
+      },
+      {
+        "tag": "h3",
+        "text": "Correlated events"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/branch-posture/page.tsx",
+    "lines": 461,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { \r\n  Shield",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Building2 className=\"w-8 h-8 text-blue-600\" />Branch Security Posture "
+      },
+      {
+        "tag": "h3",
+        "text": "{branch.branchName || branch.branchId}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/devices/page.tsx",
+    "lines": 56,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import { useCallback",
+      "import { useSearchParams",
+      "import { ArrowLeft"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "{type || 'All'}devices"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/discovery/page.tsx",
+    "lines": 663,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { \r\n  Search",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Network className=\"w-8 h-8 text-blue-600\" />Device Discovery "
+      },
+      {
+        "tag": "h2",
+        "text": "Pending Device Approvals ({pendingDevices}) "
+      },
+      {
+        "tag": "h2",
+        "text": "Discovery Jobs"
+      },
+      {
+        "tag": "h3",
+        "text": "No Discovery Jobs"
+      },
+      {
+        "tag": "h3",
+        "text": "Start Discovery Job"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/integrations/page.tsx",
+    "lines": 132,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import { useCallback",
+      "import { AlertCircle"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Hikvision AX PRO"
+      },
+      {
+        "tag": "h2",
+        "text": "Configured AX PRO integrations"
+      },
+      {
+        "tag": "h3",
+        "text": "{integration.name}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/page.tsx",
+    "lines": 367,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { Suspense",
+      "import { useSearchParams",
+      "import { \r\n  Shield",
+      "import Link"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "<Shield className=\"w-8 h-8 text-blue-600\" />Security Device Hub "
+      },
+      {
+        "tag": "h2",
+        "text": "Device Breakdown by Type"
+      },
+      {
+        "tag": "h3",
+        "text": "Device Discovery"
+      },
+      {
+        "tag": "h3",
+        "text": "Branch Security Posture"
+      },
+      {
+        "tag": "h3",
+        "text": "Integrations"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-devices/[deviceId]/page.tsx",
+    "lines": 650,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { useState",
+      "import { \r\n  Shield",
+      "import Link",
+      "import { useParams"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Device Not Found"
+      },
+      {
+        "tag": "h1",
+        "text": "{device.name}"
+      },
+      {
+        "tag": "h2",
+        "text": "Device Commands"
+      },
+      {
+        "tag": "h2",
+        "text": "Technical Details"
+      },
+      {
+        "tag": "h2",
+        "text": "Recent Events"
+      },
+      {
+        "tag": "h3",
+        "text": "{command.label}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/security-operations/page.tsx",
+    "lines": 11,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import SecurityDashboard"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/settings/features/page.tsx",
+    "lines": 27,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import { FeatureList"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "My Features "
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/settings/integrations/hikvision/ax-pro/page.tsx",
+    "lines": 92,
+    "redirect": false,
+    "owner": [
+      "import { FieldVisual",
+      "import Link",
+      "import { FormEvent"
+    ],
+    "heads": [
+      {
+        "tag": "h1",
+        "text": "Hikvision AX PRO"
+      },
+      {
+        "tag": "h2",
+        "text": "ISAPI endpoints"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/settings/page.tsx",
+    "lines": 6,
+    "redirect": true,
+    "owner": [
+      "import { redirect"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/support/page.tsx",
+    "lines": 126,
+    "redirect": false,
+    "owner": [
+      "import Link",
+      "import { useEffect",
+      "import { Activity",
+      "import { getVisibleNavigation",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "Resolve or diagnose an issue"
+      },
+      {
+        "tag": "h2",
+        "text": "What each page is for"
+      },
+      {
+        "tag": "h2",
+        "text": "Include the page, time, and affected branch"
+      }
+    ],
+    "groups": [
+      {
+        "tag": "main",
+        "sections": 3,
+        "heads": [
+          "Resolve or diagnose an issue",
+          "What each page is for",
+          "Include the page, time, and affected branch"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "dashboard/app/terms/page.tsx",
+    "lines": 23,
+    "redirect": false,
+    "owner": [
+      "import { FileText",
+      "import { PageHero"
+    ],
+    "heads": [
+      {
+        "tag": "h2",
+        "text": "{title}"
+      }
+    ],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/video/audio/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { AudioStreamMonitoringWorkspace"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/video-search/ai/page.tsx",
+    "lines": 15,
+    "redirect": false,
+    "owner": [
+      "import { AppLayout",
+      "import { NaturalLanguageSearch"
+    ],
+    "heads": [],
+    "groups": []
+  },
+  {
+    "file": "dashboard/app/video-search/page.tsx",
+    "lines": 23,
+    "redirect": false,
+    "owner": [
+      "import { Suspense",
+      "import { AppLayout",
+      "import { AIChatWithVideo",
+      "import { InvestigationFlowNav",
+      "import { PageHero"
+    ],
+    "heads": [],
+    "groups": []
+  }
+]

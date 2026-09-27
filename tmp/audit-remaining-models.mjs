@@ -1,0 +1,9 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import ts from '../dashboard/node_modules/typescript/lib/typescript.js';
+const files=[];function walk(dir){for(const item of fs.readdirSync(dir,{withFileTypes:true})){const full=path.join(dir,item.name);if(item.isDirectory())walk(full);else if(item.name==='page.tsx')files.push(full);}}walk('dashboard/app');
+const report=files.map(file=>{const text=fs.readFileSync(file,'utf8'),ast=ts.createSourceFile(file,text,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);const heads=[],groups=[];function scan(node){if(ts.isJsxElement(node)){const tag=node.openingElement.tagName.getText(ast);if(['h1','h2','h3'].includes(tag))heads.push({tag,text:node.children.map(n=>n.getText(ast)).join('').replace(/\s+/g,' ').slice(0,80)});const children=node.children.filter(n=>ts.isJsxElement(n)||ts.isJsxSelfClosingElement(n)||ts.isJsxExpression(n)&&n.expression);const sections=children.filter(n=>ts.isJsxElement(n)&&n.openingElement.tagName.getText(ast)==='section');if(sections.length>=2)groups.push({tag,sections:sections.length,heads:sections.map(n=>n.getText(ast).match(/<h[23][^>]*>([^<{]+)/)?.[1]??'dynamic')});}ts.forEachChild(node,scan);}scan(ast);return{file:file.replaceAll('\\','/'),lines:text.split('\n').length,redirect:/redirect\(/.test(text)&&text.length<1800,owner:text.match(/import\s+(?:\{\s*)?([\w]+)/g)?.slice(0,5),heads,groups};});
+fs.writeFileSync('tmp/experience-qa/remaining-model-audit.json',JSON.stringify(report,null,2));
+console.log('Routes:',report.length,'redirects:',report.filter(r=>r.redirect).length,'thin shared views:',report.filter(r=>r.lines<45&&!r.redirect).length);
+console.log(JSON.stringify(report.filter(r=>r.groups.length).map(({file,groups})=>({file,groups})),null,2));
+console.log('Forms:',report.filter(r=>r.file.includes('/new/')||r.file.includes('/create/')).map(r=>r.file));

@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -58,8 +59,7 @@ export default function PrivacyBreachNewPage() {
 
       {error && <div role="alert" style={{ marginBottom: 20, color: "#b91c1c" }}>{error}</div>}
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14, maxWidth: 700 }}>
-        <label>
+      <RecordComposer onSubmit={handleSubmit} busy={submitting} chapters={[{ title: "Affected scope", description: "Identify the branch and camera when known.", content: <><label>
           <div style={{ marginBottom: 6 }}>Branch node ID (optional)</div>
           <input
             value={branchNodeId}
@@ -68,8 +68,7 @@ export default function PrivacyBreachNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Camera ID (optional)</div>
           <input
             value={cameraId}
@@ -77,9 +76,8 @@ export default function PrivacyBreachNewPage() {
             placeholder="Camera UUID"
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-        </label>
-
-        <label>
+        </label></> },
+{ title: "Event & impact", description: "Record the breach, discovery time and immediate impact.", content: <><label>
           <div style={{ marginBottom: 6 }}>Breach type</div>
           <input
             value={breachType}
@@ -90,8 +88,7 @@ export default function PrivacyBreachNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Severity</div>
           <select
             value={severity}
@@ -104,8 +101,7 @@ export default function PrivacyBreachNewPage() {
             <option value="critical">Critical</option>
           </select>
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Discovered at</div>
           <input
             type="datetime-local"
@@ -115,8 +111,7 @@ export default function PrivacyBreachNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Description</div>
           <textarea
             value={description}
@@ -127,9 +122,8 @@ export default function PrivacyBreachNewPage() {
             minLength={10}
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-        </label>
-
-        <label>
+        </label></> },
+{ title: "Response", description: "Document the planned containment and prevention.", content: <><label>
           <div style={{ marginBottom: 6 }}>Remediation plan</div>
           <textarea
             value={remediation}
@@ -138,16 +132,13 @@ export default function PrivacyBreachNewPage() {
             placeholder="Outline next steps for containment and prevention."
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-        </label>
-
-        <button
+        </label></> }]} notices={<></>} footer={<button
           type="submit"
           disabled={submitting}
           style={{ padding: "12px 18px", borderRadius: 8, border: "none", background: "#1d4ed8", color: "#fff", cursor: submitting ? "not-allowed" : "pointer" }}
         >
           {submitting ? "Reporting…" : "Report breach"}
-        </button>
-      </form>
+        </button>} />
     </div>
   );
 }

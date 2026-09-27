@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -38,35 +39,31 @@ export default function NewVendorPage() {
       <header className="record-form-hero workspace-heading">
         <div><span>Service network</span><h1>Add vendor</h1><p>Onboard a maintenance partner and record the primary escalation contact.</p></div>
       <FieldVisual /></header>
-      <form onSubmit={handleSubmit} style={{ maxWidth: 640 }}>
-        <div style={{ marginBottom: 8 }}>
+      <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Partner", description: "Name the service partner.", content: <><div style={{ marginBottom: 8 }}>
           <label>Name<br />
             <input value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
-        </div>
-        <div style={{ marginBottom: 8 }}>
+        </div></> },
+{ title: "Escalation contact", description: "Keep the people and channels needed for escalation together.", content: <><div style={{ marginBottom: 8 }}>
           <label>Primary contact<br />
             <input value={contact} onChange={(e) => setContact(e.target.value)} />
           </label>
         </div>
-        <div style={{ marginBottom: 8 }}>
+<div style={{ marginBottom: 8 }}>
           <label>Email<br />
             <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" />
           </label>
         </div>
-        <div style={{ marginBottom: 8 }}>
+<div style={{ marginBottom: 8 }}>
           <label>Phone<br />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} />
           </label>
-        </div>
-        <div style={{ marginBottom: 8 }}>
+        </div></> },
+{ title: "Service footprint", description: "Record the service centres available to your team.", content: <><div style={{ marginBottom: 8 }}>
           <label>Service centres <small>(one per line)</small><br />
             <textarea value={serviceCenters} onChange={(e) => setServiceCenters(e.target.value)} rows={3} />
           </label>
-        </div>
-        {error && <p style={{ color: 'red' }}>{error}</p>}
-        <button type="submit" disabled={loading}>{loading ? 'Saving…' : 'Save'}</button>
-      </form>
+        </div></> }]} notices={<>{error && <p style={{ color: 'red' }}>{error}</p>}</>} footer={<button type="submit" disabled={loading}>{loading ? 'Saving…' : 'Save'}</button>} />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import { FieldVisual } from "@/components/field-visual";
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -55,8 +56,7 @@ export default function PrivacyPurposeNewPage() {
 
       {error && <div style={{ color: "#b91c1c", marginBottom: 16 }}>{error}</div>}
 
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14, maxWidth: 620 }}>
-        <label>
+      <RecordComposer onSubmit={handleSubmit} busy={submitting} chapters={[{ title: "Processing purpose", description: "Explain why this processing is needed and its lawful basis.", content: <><label>
           <div style={{ marginBottom: 6 }}>Purpose name</div>
           <input
             value={name}
@@ -66,8 +66,7 @@ export default function PrivacyPurposeNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Lawful basis</div>
           <input
             value={lawfulBasis}
@@ -77,8 +76,7 @@ export default function PrivacyPurposeNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Description</div>
           <textarea
             value={description}
@@ -86,9 +84,8 @@ export default function PrivacyPurposeNewPage() {
             rows={5}
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
-        </label>
-
-        <label>
+        </label></> },
+{ title: "Safeguards", description: "Define the risk, data categories and policy availability.", content: <><label>
           <div style={{ marginBottom: 6 }}>Risk level</div>
           <select
             value={riskLevel}
@@ -101,8 +98,7 @@ export default function PrivacyPurposeNewPage() {
             <option value="critical">Critical</option>
           </select>
         </label>
-
-        <label>
+<label>
           <div style={{ marginBottom: 6 }}>Data categories</div>
           <input
             value={dataCategories}
@@ -111,24 +107,20 @@ export default function PrivacyPurposeNewPage() {
             style={{ width: "100%", padding: 12, borderRadius: 8, border: "1px solid #d1d5db" }}
           />
         </label>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 12 }}>
+<label style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <input
             type="checkbox"
             checked={active}
             onChange={(e) => setActive(e.target.checked)}
           />
           <span>Active for current retention policy</span>
-        </label>
-
-        <button
+        </label></> }]} notices={<></>} footer={<button
           type="submit"
           disabled={submitting}
           style={{ padding: "12px 18px", borderRadius: 8, border: "none", background: "#1d4ed8", color: "#fff", cursor: submitting ? "not-allowed" : "pointer" }}
         >
           {submitting ? "Creating…" : "Create purpose"}
-        </button>
-      </form>
+        </button>} />
     </div>
   );
 }

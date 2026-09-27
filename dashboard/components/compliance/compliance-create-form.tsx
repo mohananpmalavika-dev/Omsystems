@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowLeft, FileCheck2, Save } from "lucide-react";
@@ -80,24 +81,17 @@ export function ComplianceCreateForm({ kind }: { kind: CreateKind }) {
         icon={Icon}
         actions={<Link href={listHref} className="btn-secondary"><ArrowLeft size={15} /> Cancel</Link>}
       />
-      <form className="compliance-create-form" onSubmit={submit}>
-        {error && <div className="compliance-form-error" role="alert"><AlertTriangle size={16} /><span>{error}</span></div>}
-        <section>
-          <header><span>Core details</span><h2>{isRequirement ? "Requirement definition" : "Risk definition"}</h2></header>
-          <div className="compliance-form-grid">
-            <label><span>{isRequirement ? "Framework" : "Framework (optional)"}</span><select name="frameworkId" required={isRequirement} defaultValue=""><option value="">Select a framework</option>{frameworks.map((framework) => <option key={framework.id} value={framework.id}>{framework.name ?? framework.frameworkName ?? framework.code ?? framework.id}</option>)}</select></label>
-            <label><span>{isRequirement ? "Requirement code" : "Risk number"}</span><input name="recordNumber" required maxLength={100} placeholder={isRequirement ? "ISO-A.8.1" : "RISK-2026-001"} /></label>
-            <label className="wide"><span>Title</span><input name="title" required minLength={2} maxLength={500} placeholder={`Enter ${kind} title`} /></label>
-            <label className="wide"><span>Description</span><textarea name="description" required rows={5} placeholder={`Describe the ${kind}, scope, and operational context`} /></label>
-            <label><span>Category</span>{isRequirement ? <input name="category" maxLength={200} placeholder="Access control" /> : <select name="category" defaultValue="compliance"><option value="operational">Operational</option><option value="compliance">Compliance</option><option value="financial">Financial</option><option value="reputational">Reputational</option><option value="strategic">Strategic</option><option value="technology">Technology</option><option value="third_party">Third party</option><option value="legal">Legal</option></select>}</label>
-            {isRequirement ? <label><span>Control type</span><select name="controlType" defaultValue="preventive"><option value="preventive">Preventive</option><option value="detective">Detective</option><option value="corrective">Corrective</option><option value="compensating">Compensating</option><option value="directive">Directive</option></select></label> : <><label><span>Likelihood</span><RiskScale name="likelihood" /></label><label><span>Impact</span><RiskScale name="impact" /></label><label><span>Treatment</span><select name="riskTreatment" defaultValue="mitigate"><option value="mitigate">Mitigate</option><option value="accept">Accept</option><option value="transfer">Transfer</option><option value="avoid">Avoid</option></select></label><label className="wide"><span>Treatment plan</span><textarea name="treatmentPlan" rows={3} placeholder="Describe planned controls and accountable actions" /></label></>}
-            {isRequirement && <label><span>Owner role</span><input name="owner" maxLength={200} placeholder="Compliance manager" /></label>}
-            <label><span>Status</span><select name="status" defaultValue={isRequirement ? "active" : "identified"}>{isRequirement ? <><option value="active">Active</option><option value="draft">Draft</option><option value="deprecated">Deprecated</option><option value="archived">Archived</option></> : <><option value="identified">Identified</option><option value="assessed">Assessed</option><option value="treated">Treated</option><option value="monitored">Monitored</option><option value="closed">Closed</option></>}</select></label>
-            {isRequirement && <div className="compliance-form-checks"><label><input type="checkbox" name="isMandatory" defaultChecked /> Mandatory</label><label><input type="checkbox" name="evidenceRequired" defaultChecked /> Evidence required</label></div>}
-          </div>
-        </section>
-        <footer><Link href={listHref} className="btn-secondary">Cancel</Link><button type="submit" className="btn-primary" disabled={submitting}><Save size={15} /> {submitting ? "Saving…" : `Create ${kind}`}</button></footer>
-      </form>
+      <RecordComposer onSubmit={submit} busy={submitting} notices={<>{error && <div className="compliance-form-error" role="alert"><AlertTriangle size={16} /><span>{error}</span></div>}</>} chapters={[
+ { title: "Definition", description: "Connect the record to its framework and explain its scope.", content: <><label><span>{isRequirement ? "Framework" : "Framework (optional)"}</span><select name="frameworkId" required={isRequirement} defaultValue=""><option value="">Select a framework</option>{frameworks.map((framework) => <option key={framework.id} value={framework.id}>{framework.name ?? framework.frameworkName ?? framework.code ?? framework.id}</option>)}</select></label>
+<label><span>{isRequirement ? "Requirement code" : "Risk number"}</span><input name="recordNumber" required maxLength={100} placeholder={isRequirement ? "ISO-A.8.1" : "RISK-2026-001"} /></label>
+<label className="wide"><span>Title</span><input name="title" required minLength={2} maxLength={500} placeholder={`Enter ${kind} title`} /></label>
+<label className="wide"><span>Description</span><textarea name="description" required rows={5} placeholder={`Describe the ${kind}, scope, and operational context`} /></label>
+<label><span>Category</span>{isRequirement ? <input name="category" maxLength={200} placeholder="Access control" /> : <select name="category" defaultValue="compliance"><option value="operational">Operational</option><option value="compliance">Compliance</option><option value="financial">Financial</option><option value="reputational">Reputational</option><option value="strategic">Strategic</option><option value="technology">Technology</option><option value="third_party">Third party</option><option value="legal">Legal</option></select>}</label></> },
+ { title: isRequirement ? "Accountability" : "Exposure & treatment", description: isRequirement ? "Set the control, owner and evidence expectations." : "Assess likelihood and impact, then define the response.", content: <>{isRequirement ? <label><span>Control type</span><select name="controlType" defaultValue="preventive"><option value="preventive">Preventive</option><option value="detective">Detective</option><option value="corrective">Corrective</option><option value="compensating">Compensating</option><option value="directive">Directive</option></select></label> : <><label><span>Likelihood</span><RiskScale name="likelihood" /></label><label><span>Impact</span><RiskScale name="impact" /></label><label><span>Treatment</span><select name="riskTreatment" defaultValue="mitigate"><option value="mitigate">Mitigate</option><option value="accept">Accept</option><option value="transfer">Transfer</option><option value="avoid">Avoid</option></select></label><label className="wide"><span>Treatment plan</span><textarea name="treatmentPlan" rows={3} placeholder="Describe planned controls and accountable actions" /></label></>}
+{isRequirement && <label><span>Owner role</span><input name="owner" maxLength={200} placeholder="Compliance manager" /></label>}
+<label><span>Status</span><select name="status" defaultValue={isRequirement ? "active" : "identified"}>{isRequirement ? <><option value="active">Active</option><option value="draft">Draft</option><option value="deprecated">Deprecated</option><option value="archived">Archived</option></> : <><option value="identified">Identified</option><option value="assessed">Assessed</option><option value="treated">Treated</option><option value="monitored">Monitored</option><option value="closed">Closed</option></>}</select></label>
+{isRequirement && <div className="compliance-form-checks"><label><input type="checkbox" name="isMandatory" defaultChecked /> Mandatory</label><label><input type="checkbox" name="evidenceRequired" defaultChecked /> Evidence required</label></div>}</> }
+]} footer={<footer><Link href={listHref} className="btn-secondary">Cancel</Link><button type="submit" className="btn-primary" disabled={submitting}><Save size={15} /> {submitting ? "Saving…" : `Create ${kind}`}</button></footer>} />
     </main>
   );
 }

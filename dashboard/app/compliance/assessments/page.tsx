@@ -1,6 +1,7 @@
 'use client';
 
-import { FieldVisual } from "@/components/field-visual";
+import Link from "next/link";
+import { WorkflowNav } from "@/components/workflow-nav";
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { complianceApi } from '@/lib/api-client';
@@ -41,14 +42,16 @@ export default function AssessmentsPage() {
   const [periodEnd, setPeriodEnd] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   const fetchAssessments = useCallback(async () => {
     setLoading(true);
     try {
       const response = await complianceApi.listAssessments(status ? { status } : undefined);
+      setFeedError(null);
       setAssessments(Array.isArray(response.data) ? response.data as Assessment[] : []);
     } catch (error) {
-      console.error('Failed to fetch assessments:', error);
+      setFeedError(error instanceof Error ? error.message : 'Assessments unavailable.');
       setAssessments([]);
     } finally {
       setLoading(false);
@@ -56,19 +59,6 @@ export default function AssessmentsPage() {
   }, [status]);
 
   useEffect(() => { void fetchAssessments(); }, [fetchAssessments]);
-
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'compliant':
-        return 'bg-green-100 text-green-800';
-      case 'exception':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'non-compliant':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
   const formatDate = (dateString?: string | null) => {
     if (!dateString || Number.isNaN(new Date(dateString).getTime())) return 'Not set';
@@ -106,34 +96,10 @@ export default function AssessmentsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center workspace-heading">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Compliance Assessments</h1>
-            <p className="text-gray-600 mt-1">
-              Manage and track compliance assessments across frameworks and branches
-            </p>
-          </div>
-          <button
-            onClick={handleCreateAssessment}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            + New Assessment
-          </button>
-        <FieldVisual /></div>
-      </div>
-
+    <div className="assessment-runway-page page-container">
+      <header className="workflow-heading"><div><p className="workflow-kicker">ASSURANCE / ASSESSMENT RUNWAY</p><h1>From review to assurance.</h1><p>Follow the assessment states. Open a review to record findings and advance its actual outcome.</p></div><button className="btn-primary" onClick={handleCreateAssessment}>New assessment</button></header>
+      {feedError && <p role="alert" className="work-order-form-error">{feedError}</p>}
       {error && <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</div>}
 
       {showCreateModal && (
@@ -153,117 +119,16 @@ export default function AssessmentsPage() {
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <div className="field-metric-strip grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status
-            </label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as AssessmentStatus | '')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="incomplete">Incomplete</option>
-              <option value="compliant">Compliant</option>
-              <option value="exception">Exception</option>
-              <option value="non-compliant">Non-compliant</option>
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Assessment List */}
-      <div className="space-y-4">
-        {assessments.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-12 text-center">
-            <div className="text-gray-400 text-lg mb-2">No assessments found</div>
-            <p className="text-gray-500 mb-4">Create your first compliance assessment to get started</p>
-            <button
-              onClick={handleCreateAssessment}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Create Assessment
-            </button>
-          </div>
-        ) : (
-          assessments.map((assessment) => (
-            <div
-              key={assessment.id}
-              className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-6 cursor-pointer"
-              onClick={() => router.push(`/compliance/assessments/${assessment.id}`)}
-            >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      {assessment.frameworkName || 'Assessment'}
-                    </h3>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass(
-                        assessment.status
-                      )}`}
-                    >
-                      {statusLabels[assessment.status]}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                    {assessment.branchName && (
-                      <div className="flex items-center gap-1">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        {assessment.branchName}
-                      </div>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      {formatDate(assessment.assessmentPeriodStart)} - {formatDate(assessment.assessmentPeriodEnd)}
-                    </div>
-                  </div>
-
-                  {assessment.summary && (
-                    <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-2">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {assessment.summary.compliancePercentage?.toFixed(1)}%
-                        </div>
-                        <div className="text-sm text-gray-600">Compliance Score</div>
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {assessment.summary.compliantRequirements} / {assessment.summary.totalRequirements} Requirements Met
-                      </div>
-                      {(assessment.summary.criticalFindings || 0) > 0 && (
-                        <div className="text-sm text-red-600 font-medium">
-                          {assessment.summary.criticalFindings} Critical Findings
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      router.push(`/compliance/assessments/${assessment.id}`);
-                    }}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm"
-                  >
-                    View Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+      <WorkflowNav label="Assessment scope" value={status} onChange={value => setStatus(value as AssessmentStatus | '')} items={[{id:"",label:"All reviews"},{id:"incomplete",label:"In progress"},{id:"non-compliant",label:"Action required"},{id:"exception",label:"Exceptions"},{id:"compliant",label:"Assured"}]} />
+      {loading ? <div className="workflow-empty">Loading assessment runway…</div> : feedError ? <div className="workflow-empty">Assessment data is unavailable.</div> : <div className="assessment-runway">{([
+        {id:"incomplete",title:"01 / In review",hint:"Complete the requirement checks."},
+        {id:"non-compliant",title:"02 / Action required",hint:"Resolve the recorded compliance gaps."},
+        {id:"exception",title:"03 / Exceptions",hint:"Review accepted exceptions and their context."},
+        {id:"compliant",title:"04 / Assured",hint:"Review completed assurance outcomes."}
+      ] as const).filter(lane => !status || lane.id === status).map(lane => {
+        const records = assessments.filter(record => record.status === lane.id);
+        return <section key={lane.id} className="assessment-lane"><header><p className="workflow-kicker">{lane.title}</p><strong>{records.length}</strong><p>{lane.hint}</p></header>{records.length ? records.map(record => <Link key={record.id} href={"/compliance/assessments/"+record.id}><span>{statusLabels[record.status]}</span><h2>{record.frameworkName || "Assessment"}</h2><p>{record.branchName || "Framework scope"}</p><small>{formatDate(record.assessmentPeriodStart)} → {formatDate(record.assessmentPeriodEnd)}</small><dl><div><dt>Compliance</dt><dd>{record.summary?.compliancePercentage == null ? "Not scored" : record.summary.compliancePercentage.toFixed(1)+"%"}</dd></div><div><dt>Requirements met</dt><dd>{record.summary ? (record.summary.compliantRequirements ?? "—")+" / "+(record.summary.totalRequirements ?? "—") : "Not reported"}</dd></div><div><dt>Critical findings</dt><dd>{record.summary?.criticalFindings ?? "Not reported"}</dd></div></dl><b>Open review ↗</b></Link>) : <p className="workflow-empty">No reviews in this state.</p>}</section>;
+      })}</div>}
     </div>
   );
 }

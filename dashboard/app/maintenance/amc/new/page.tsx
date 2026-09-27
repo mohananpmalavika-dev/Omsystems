@@ -1,5 +1,6 @@
 "use client";
 
+import { RecordComposer } from "@/components/record-composer";
 import { FieldVisual } from "@/components/field-visual";
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -69,14 +70,11 @@ export default function NewAmcContractPage() {
         <Link href="/maintenance/amc">Back to AMC contracts</Link>
       <FieldVisual /></header>
 
-      <form className="work-order-form" onSubmit={handleSubmit}>
-        <div className="work-order-form-grid">
-          <label className="work-order-field">
+      <RecordComposer onSubmit={handleSubmit} busy={loading} chapters={[{ title: "Agreement", description: "Set the partner, contract window and value.", content: <><label className="work-order-field">
             <span>Contract number <em>Required</em></span>
             <input value={contractNumber} onChange={(e) => setContractNumber(e.target.value)} placeholder="AMC-2026-001" required />
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Vendor <em>Required</em></span>
             <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
               <option value="">Select vendor</option>
@@ -85,18 +83,15 @@ export default function NewAmcContractPage() {
               ))}
             </select>
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Start date <em>Required</em></span>
             <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} required />
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>End date <em>Required</em></span>
             <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required min={startDate || undefined} />
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Status</span>
             <select value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="pending">pending</option>
@@ -105,55 +100,41 @@ export default function NewAmcContractPage() {
               <option value="suspended">suspended</option>
             </select>
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Cost</span>
             <input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="0.00" />
-          </label>
-
-          <label className="work-order-field work-order-field-wide">
+          </label></> },
+{ title: "Coverage", description: "Define what the agreement protects and excludes.", content: <><label className="work-order-field work-order-field-wide">
             <span>Warranty</span>
             <input value={warranty} onChange={(e) => setWarranty(e.target.value)} placeholder="12 months, parts included, labor support" />
           </label>
-
-          <label className="work-order-field work-order-field-wide">
+<label className="work-order-field work-order-field-wide">
             <span>Coverage <em>Required</em></span>
             <textarea rows={3} value={coverage} onChange={(e) => setCoverage(e.target.value)} placeholder="List the supported devices, response windows, maintenance coverage scope, and service regions." minLength={5} required />
           </label>
-
-          <label className="work-order-field work-order-field-wide">
+<label className="work-order-field work-order-field-wide">
             <span>Exclusions</span>
             <textarea rows={3} value={exclusions} onChange={(e) => setExclusions(e.target.value)} placeholder="Parts not covered, emergency callouts excluded, physical damage exclusions, etc." />
-          </label>
-
-          <label className="work-order-field">
+          </label></> },
+{ title: "Service commitments", description: "Capture service expectations and renewal arrangements.", content: <><label className="work-order-field">
             <span>Payment terms</span>
             <input value={paymentTerms} onChange={(e) => setPaymentTerms(e.target.value)} placeholder="Annual, quarterly, per service" />
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>Renewal</span>
             <input value={renewal} onChange={(e) => setRenewal(e.target.value)} placeholder="90-day renewal window" />
           </label>
-
-          <label className="work-order-field">
+<label className="work-order-field">
             <span>SLA</span>
             <input value={sla} onChange={(e) => setSla(e.target.value)} placeholder="4h critical, 12h high" />
           </label>
-
-          <label className="work-order-field work-order-field-wide">
+<label className="work-order-field work-order-field-wide">
             <span>Notes</span>
             <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes, escalation instructions, or renewal reminders." />
-          </label>
-        </div>
-
-        {error && <p className="work-order-form-error" role="alert">{error}</p>}
-
-        <footer className="work-order-form-footer">
+          </label></> }]} notices={<>{error && <p className="work-order-form-error" role="alert">{error}</p>}</>} footer={<footer className="work-order-form-footer">
           <p>AMC records are governed by vendor SLA coverage, renewal windows, and support commitments.</p>
           <button type="submit" disabled={loading}>{loading ? "Saving…" : "Create AMC contract"}</button>
-        </footer>
-      </form>
+        </footer>} />
     </main>
   );
 }
