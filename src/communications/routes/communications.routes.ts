@@ -330,6 +330,12 @@ export async function registerCommunicationsRoutes(
   }
   
   const logger = app.log?.child ? app.log.child({ module: 'communications' }) : console as any;
+  if (process.env.NODE_ENV === 'production') {
+    const turnUrl = process.env.COMM_TURN_SERVER_URL;
+    if (!turnUrl?.startsWith('turn:') || !process.env.COMM_TURN_USERNAME || !process.env.COMM_TURN_CREDENTIAL) {
+      throw new Error('Production communications requires COMM_TURN_SERVER_URL (turn:), COMM_TURN_USERNAME, and COMM_TURN_CREDENTIAL');
+    }
+  }
   
   // Initialize all services
   const enrollmentService = new DeviceEnrollmentService(pool);
@@ -1123,6 +1129,16 @@ export async function registerCommunicationsRoutes(
       
       if (body.actorType === 'EMPLOYEE' && !body.actorEmployeeId) {
         return reply.code(400).send({ error: 'employee_identity_required' });
+      }
+      if (body.actorType === 'EMPLOYEE') {
+        const link = await ctx.pool.query(
+          `SELECT 1 FROM communication_device_employees
+           WHERE device_id = $1 AND employee_id = $2 AND tenant_id = $3
+             AND unlinked_at IS NULL AND can_make_calls = true
+           LIMIT 1`,
+          [request.deviceContext!.deviceId, body.actorEmployeeId, request.deviceContext!.tenantId]
+        );
+        if (!link.rowCount) return reply.code(403).send({ error: 'employee_device_link_required' });
       }
       const input = {
         direction: 'OUTBOUND' as const,

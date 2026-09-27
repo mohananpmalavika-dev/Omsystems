@@ -103,10 +103,11 @@ export class CommunicationSignalingGateway {
       });
 
       // Join operator communication room
-      socket.on('comm:register-operator', (data: { operatorId: string; tenantId: string }) => {
-        const { operatorId, tenantId } = data;
+      socket.on('comm:register-operator', (data?: { operatorId?: string; tenantId?: string }) => {
+        const operatorId = socket.data.userId as string | undefined;
+        const tenantId = socket.data.tenantId as string | undefined;
 
-        if (socket.data.identityType !== 'operator' || !socket.data.userId || socket.data.userId !== operatorId || socket.data.tenantId !== tenantId) {
+        if (socket.data.identityType !== 'operator' || !operatorId || !tenantId || (data?.operatorId && data.operatorId !== operatorId) || (data?.tenantId && data.tenantId !== tenantId)) {
           socket.emit('error', { message: 'Authentication failed' });
           return;
         }
