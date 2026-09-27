@@ -4,7 +4,8 @@
  */
 
 import { Server as SocketIOServer } from 'socket.io';
-import { verify } from 'jsonwebtoken';
+import jsonwebtoken from 'jsonwebtoken';
+const { verify } = jsonwebtoken;
 import type { Server as HTTPServer } from 'http';
 import type { ControlPlaneStore } from '../control-plane-store.js';
 import { CommunicationSignalingGateway } from '../communications/gateways/signaling.gateway.js';
