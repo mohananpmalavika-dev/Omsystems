@@ -662,8 +662,15 @@ export class CommunicationCallService {
     const result = await this.pool.query<{ allRejected: boolean }>(
       `SELECT
         COUNT(*) FILTER (WHERE connection_status != 'REJECTED') = 0 as "allRejected"
-      FROM communication_call_participants
-      WHERE call_id = $1`,
+      FROM communication_call_participants p
+      INNER JOIN communication_call_sessions c ON c.id = p.call_id
+      WHERE p.call_id = $1
+        -- The caller is recorded as CONNECTING to authorize WebRTC signaling,
+        -- but must not keep a declined target call alive forever.
+        AND NOT (
+          (p.device_id IS NOT NULL AND p.device_id = c.source_device_id)
+          OR (p.operator_id IS NOT NULL AND p.operator_id = c.source_operator_id)
+        )`,
       [callId]
     );
 

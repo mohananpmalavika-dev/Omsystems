@@ -140,6 +140,7 @@ export default function CommunicationsCallsPage() {
   
   // Call state
   const [activeCall, setActiveCall] = useState<ActiveCall | null>(null);
+  const activeCallRef = useRef<ActiveCall | null>(null);
   const [incomingCall, setIncomingCall] = useState<CallInviteEvent | null>(null);
   const [callDuration, setCallDuration] = useState(0);
   const [callHistory, setCallHistory] = useState<CallSession[]>([]);
@@ -261,26 +262,28 @@ export default function CommunicationsCallsPage() {
       }
     });
     const unsubMediaReady = signaling.onCallMediaReady((event) => {
-      if (activeCall && event.callId === activeCall.session.id) {
+      const currentCall = activeCallRef.current;
+      if (currentCall && event.callId === currentCall.session.id) {
         void (async () => {
-          const offer = await webrtc.createOffer(activeCall.credentials, activeCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+          const offer = await webrtc.createOffer(currentCall.credentials, currentCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
           if (offer) signaling.sendWebRtcOffer(event.callId, offer);
         })().catch(() => setError('Unable to start call media'));
       }
     });
 
     const unsubOffer = signaling.onWebRtcOffer((event) => {
-      if (!activeCall || activeCall.session.id !== event.callId || !event.description) return;
+      const currentCall = activeCallRef.current;
+      if (!currentCall || currentCall.session.id !== event.callId || !event.description) return;
       void (async () => {
-        const answer = await webrtc.createAnswer(activeCall.credentials, event.description!, activeCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
+        const answer = await webrtc.createAnswer(currentCall.credentials, event.description!, currentCall.modality || 'audio', (candidate) => signaling.sendWebRtcIceCandidate(event.callId, candidate));
         if (answer) signaling.sendWebRtcAnswer(event.callId, answer);
       })().catch(() => setError('Unable to answer call media'));
     });
     const unsubAnswer = signaling.onWebRtcAnswer((event) => {
-      if (activeCall?.session.id === event.callId && event.description) void webrtc.applyAnswer(event.description).catch(() => setError('Unable to complete call media negotiation'));
+      if (activeCallRef.current?.session.id === event.callId && event.description) void webrtc.applyAnswer(event.description).catch(() => setError('Unable to complete call media negotiation'));
     });
     const unsubIce = signaling.onWebRtcIceCandidate((event) => {
-      if (activeCall?.session.id === event.callId && event.candidate) void webrtc.addIceCandidate(event.candidate).catch(() => setError('Unable to apply call network candidate'));
+      if (activeCallRef.current?.session.id === event.callId && event.candidate) void webrtc.addIceCandidate(event.candidate).catch(() => setError('Unable to apply call network candidate'));
     });
     
     // Call accepted elsewhere (first-answer-wins)
@@ -421,7 +424,9 @@ export default function CommunicationsCallsPage() {
       
       const started = await communicationAPI.callBranch(branch.branchId, 'VMS operator calling');
       await signaling.joinCall(started.call.id);
-      setActiveCall({ session: started.call, credentials: started.credentials, startTime: new Date(), modality });
+      const nextCall = { session: started.call, credentials: started.credentials, startTime: new Date(), modality };
+      activeCallRef.current = nextCall;
+      setActiveCall(nextCall);
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -455,7 +460,9 @@ export default function CommunicationsCallsPage() {
         targetEmployeeName: target.employeeName || session.targetEmployeeName || 'Internal VMS Operator',
         targetBranchName: target.branchName || session.targetBranchName || (target.role || target.employeeRole ? `SOC (${target.role || target.employeeRole})` : 'Central SOC'),
       };
-      setActiveCall({ session: enhancedSession, credentials: started.credentials, startTime: new Date(), modality });
+      const nextCall = { session: enhancedSession, credentials: started.credentials, startTime: new Date(), modality };
+      activeCallRef.current = nextCall;
+      setActiveCall(nextCall);
 
       if (modality === 'screenshare') {
         setTimeout(async () => {
@@ -477,7 +484,9 @@ export default function CommunicationsCallsPage() {
       const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
       
       await signaling.joinCall(call.id);
-      setActiveCall({ session: call, credentials, startTime: new Date(), modality });
+      const nextCall = { session: call, credentials, startTime: new Date(), modality };
+      activeCallRef.current = nextCall;
+      setActiveCall(nextCall);
       signaling.sendCallMediaReady(call.id);
       setIncomingCall(null);
     } catch (err: any) {
@@ -525,6 +534,7 @@ export default function CommunicationsCallsPage() {
   
   const handleCallEnd = useCallback(() => {
     webrtc.disconnect();
+    activeCallRef.current = null;
     setActiveCall(null);
     setCallDuration(0);
     

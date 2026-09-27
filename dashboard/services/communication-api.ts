@@ -329,8 +329,11 @@ class CommunicationAPIClient {
   }
   
   async rejectCall(callId: string, reason?: string): Promise<CallSession> {
+    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
     const response = await this.request<{ data: CallSession }>(
-      `/v1/communications/calls/${encodeURIComponent(callId)}/reject`,
+      isDevice
+        ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/reject`
+        : `/v1/communications/calls/${encodeURIComponent(callId)}/reject`,
       {
         method: 'POST',
         body: JSON.stringify({ reason }),
@@ -340,8 +343,11 @@ class CommunicationAPIClient {
   }
   
   async cancelCall(callId: string): Promise<CallSession> {
+    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
     const response = await this.request<{ data: CallSession }>(
-      `/v1/communications/calls/${encodeURIComponent(callId)}/cancel`,
+      isDevice
+        ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/cancel`
+        : `/v1/communications/calls/${encodeURIComponent(callId)}/cancel`,
       {
         method: 'POST',
       }
@@ -350,8 +356,11 @@ class CommunicationAPIClient {
   }
   
   async endCall(callId: string): Promise<CallSession> {
+    const isDevice = typeof window !== 'undefined' && Boolean(localStorage.getItem('commDeviceToken'));
     const response = await this.request<{ data: CallSession }>(
-      `/v1/communications/calls/${encodeURIComponent(callId)}/end`,
+      isDevice
+        ? `/v1/communications/device-calls/${encodeURIComponent(callId)}/end`
+        : `/v1/communications/calls/${encodeURIComponent(callId)}/end`,
       {
         method: 'POST',
       }

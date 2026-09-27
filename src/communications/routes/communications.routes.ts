@@ -332,8 +332,8 @@ export async function registerCommunicationsRoutes(
   const logger = app.log?.child ? app.log.child({ module: 'communications' }) : console as any;
   if (process.env.NODE_ENV === 'production') {
     const turnUrl = process.env.COMM_TURN_SERVER_URL;
-    if (!turnUrl?.startsWith('turn:') || !process.env.COMM_TURN_USERNAME || !process.env.COMM_TURN_CREDENTIAL) {
-      throw new Error('Production communications requires COMM_TURN_SERVER_URL (turn:), COMM_TURN_USERNAME, and COMM_TURN_CREDENTIAL');
+    if ((!turnUrl?.startsWith('turn:') && !turnUrl?.startsWith('turns:')) || !process.env.COMM_TURN_USERNAME || !process.env.COMM_TURN_CREDENTIAL) {
+      throw new Error('Production communications requires COMM_TURN_SERVER_URL (turn: or turns:), COMM_TURN_USERNAME, and COMM_TURN_CREDENTIAL');
     }
   }
   
@@ -1290,50 +1290,82 @@ export async function registerCommunicationsRoutes(
       return reply.code(400).send({ error: error.message || 'call_accept_failed' });
     }
   });
+
+  /** Device-only lifecycle endpoints keep device credentials separate from user sessions. */
+  app.post('/v1/communications/device-calls/:callId/reject', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      if (!(await authenticateDevice(request, reply, ctx))) return;
+      const { callId } = request.params as { callId: string };
+      const body = request.body as { reason?: string };
+      const { deviceId, tenantId } = request.deviceContext!;
+      const participant = await ctx.pool.query(
+        `SELECT 1 FROM communication_call_participants
+         WHERE call_id = $1 AND tenant_id = $2 AND device_id = $3 LIMIT 1`,
+        [callId, tenantId, deviceId]
+      );
+      if (!participant.rowCount) return reply.code(403).send({ error: 'not_a_call_participant' });
+      await ctx.callService.rejectCall({ callId, tenantId, participantId: deviceId, reason: body.reason });
+      await ctx.signalingGateway.broadcastCallReject(tenantId, callId, { rejectedBy: deviceId });
+      return reply.send({ data: await ctx.callService.getCall(callId, tenantId) });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to reject device call');
+      return reply.code(400).send({ error: error.message || 'call_reject_failed' });
+    }
+  });
+
+  app.post('/v1/communications/device-calls/:callId/cancel', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      if (!(await authenticateDevice(request, reply, ctx))) return;
+      const { callId } = request.params as { callId: string };
+      const { deviceId, tenantId } = request.deviceContext!;
+      const call = await ctx.callService.getCall(callId, tenantId);
+      if (!call || call.sourceDeviceId !== deviceId) return reply.code(403).send({ error: 'only_the_caller_can_cancel' });
+      await ctx.callService.cancelCall(callId, tenantId);
+      await ctx.signalingGateway.broadcastCallCancel(tenantId, callId, { cancelledBy: deviceId });
+      return reply.send({ data: await ctx.callService.getCall(callId, tenantId) });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to cancel device call');
+      return reply.code(400).send({ error: error.message || 'call_cancel_failed' });
+    }
+  });
+
+  app.post('/v1/communications/device-calls/:callId/end', { config: { noAuth: true } }, async (request: AuthenticatedRequest, reply) => {
+    try {
+      if (!(await authenticateDevice(request, reply, ctx))) return;
+      const { callId } = request.params as { callId: string };
+      const body = request.body as { reason?: string };
+      const { deviceId, tenantId } = request.deviceContext!;
+      const call = await ctx.callService.getCall(callId, tenantId);
+      if (!call || (call.sourceDeviceId !== deviceId && call.answeredDeviceId !== deviceId)) {
+        return reply.code(403).send({ error: 'not_a_call_participant' });
+      }
+      await ctx.callService.endCall(callId, tenantId, body.reason || 'normal_hangup');
+      await ctx.mediaProvider.closeSession(call.mediaSessionId || callId);
+      await ctx.signalingGateway.broadcastCallEnd(tenantId, callId, { endReason: body.reason || 'normal_hangup' });
+      return reply.send({ data: await ctx.callService.getCall(callId, tenantId) });
+    } catch (error: any) {
+      ctx.logger.error({ error }, 'Failed to end device call');
+      return reply.code(400).send({ error: error.message || 'call_end_failed' });
+    }
+  });
   
-  /**
-   * Reject call
-   * POST /v1/communications/calls/:callId/reject
-   */
+  /** Reject a ringing call as the authenticated VMS operator. */
   app.post('/v1/communications/calls/:callId/reject', async (request: AuthenticatedRequest, reply) => {
     try {
       const { callId } = request.params as { callId: string };
       const body = request.body as { reason?: string };
-      
-      // Authenticate (device or operator)
-      let rejectingDeviceId: string | undefined;
-      let tenantId: string;
-      
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        if (!(await authenticateDevice(request, reply, ctx))) {
-          return;
-        }
-        rejectingDeviceId = request.deviceContext!.deviceId;
-        tenantId = request.deviceContext!.tenantId;
-      } else {
-        tenantId = request.currentUser.tenantId;
-      }
-      
-      await ctx.callService.rejectCall(callId, body.reason);
-      
-      // Broadcast call rejected
-      await ctx.signalingGateway.broadcastCallReject(tenantId, callId, {
-        callId,
-        reason: body.reason,
-      });
-      
-      await store.writeAudit({
-        tenantId,
-        actorUserId: request.currentUser?.id,
-        action: 'COMM_CALL_REJECTED',
-        resourceNodeId: null,
-        outcome: 'success',
-        sourceIp: request.ip,
-        details: { callId, reason: body.reason },
-      });
-      
-      return reply.code(204).send();
+      const tenantId = request.currentUser.tenantId;
+      const participant = await ctx.pool.query(
+        `SELECT 1 FROM communication_call_participants
+         WHERE call_id = $1 AND tenant_id = $2 AND operator_id = $3 LIMIT 1`,
+        [callId, tenantId, request.currentUser.id]
+      );
+      if (!participant.rowCount) return reply.code(403).send({ error: 'not_a_call_participant' });
+
+      await ctx.callService.rejectCall({ callId, tenantId, participantId: request.currentUser.id, reason: body.reason });
+      await ctx.signalingGateway.broadcastCallReject(tenantId, callId, { rejectedBy: request.currentUser.id });
+      await store.writeAudit({ tenantId, actorUserId: request.currentUser.id, action: 'COMM_CALL_REJECTED', resourceNodeId: null, outcome: 'success', sourceIp: request.ip, details: { callId, reason: body.reason } });
+      return reply.send({ data: await ctx.callService.getCall(callId, tenantId) });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to reject call');
       return reply.code(400).send({ error: error.message || 'call_reject_failed' });
@@ -1347,13 +1379,14 @@ export async function registerCommunicationsRoutes(
   app.post('/v1/communications/calls/:callId/cancel', async (request: AuthenticatedRequest, reply) => {
     try {
       const { callId } = request.params as { callId: string };
-      
-      await ctx.callService.cancelCall(callId);
+      const call = await ctx.callService.getCall(callId, request.currentUser.tenantId);
+      if (!call || call.sourceOperatorId !== request.currentUser.id) {
+        return reply.code(403).send({ error: 'only_the_caller_can_cancel' });
+      }
+      await ctx.callService.cancelCall(callId, request.currentUser.tenantId);
       
       // Broadcast call cancelled to all ringing endpoints
-      await ctx.signalingGateway.broadcastCallCancel(request.currentUser.tenantId, callId, {
-        callId,
-      });
+      await ctx.signalingGateway.broadcastCallCancel(request.currentUser.tenantId, callId, { cancelledBy: request.currentUser.id });
       
       await store.writeAudit({
         tenantId: request.currentUser.tenantId,
@@ -1365,7 +1398,7 @@ export async function registerCommunicationsRoutes(
         details: { callId },
       });
       
-      return reply.code(204).send();
+      return reply.send({ data: await ctx.callService.getCall(callId, request.currentUser.tenantId) });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to cancel call');
       return reply.code(400).send({ error: error.message || 'call_cancel_failed' });
@@ -1381,33 +1414,22 @@ export async function registerCommunicationsRoutes(
       const { callId } = request.params as { callId: string };
       const body = request.body as { reason?: string };
       
-      // Authenticate (device or operator)
-      let tenantId: string;
-      
-      const authHeader = request.headers.authorization;
-      if (authHeader?.startsWith('Bearer ')) {
-        if (!(await authenticateDevice(request, reply, ctx))) {
-          return;
-        }
-        tenantId = request.deviceContext!.tenantId;
-      } else {
-        tenantId = request.currentUser.tenantId;
+      const tenantId = request.currentUser.tenantId;
+      const call = await ctx.callService.getCall(callId, tenantId);
+      if (!call || (call.sourceOperatorId !== request.currentUser.id && call.answeredOperatorId !== request.currentUser.id)) {
+        return reply.code(403).send({ error: 'not_a_call_participant' });
       }
-      
-      await ctx.callService.endCall(callId, body.reason);
+      await ctx.callService.endCall(callId, tenantId, body.reason || 'normal_hangup');
       
       // Close WebRTC media session
       try {
-        await ctx.mediaProvider.closeSession(callId);
+        await ctx.mediaProvider.closeSession(call.mediaSessionId || callId);
       } catch (error) {
         ctx.logger.warn({ error, callId }, 'Failed to close media session');
       }
       
       // Broadcast call ended to all participants
-      await ctx.signalingGateway.broadcastCallEnd(tenantId, callId, {
-        callId,
-        reason: body.reason,
-      });
+      await ctx.signalingGateway.broadcastCallEnd(tenantId, callId, { endReason: body.reason || 'normal_hangup' });
       
       await store.writeAudit({
         tenantId,
@@ -1419,7 +1441,7 @@ export async function registerCommunicationsRoutes(
         details: { callId, reason: body.reason },
       });
       
-      return reply.code(204).send();
+      return reply.send({ data: await ctx.callService.getCall(callId, tenantId) });
     } catch (error: any) {
       ctx.logger.error({ error }, 'Failed to end call');
       return reply.code(400).send({ error: error.message || 'call_end_failed' });

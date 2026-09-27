@@ -105,6 +105,21 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
   const [deviceToken, setDeviceToken] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef<Map<string, Set<Function>>>(new Map());
+  // React re-renders after an answer is accepted. Keep a small, in-memory
+  // buffer so an offer/ICE candidate arriving during that handoff is not lost.
+  const pendingCallSignalsRef = useRef<Map<string, unknown[]>>(new Map());
+
+  const dispatchCallSignal = useCallback((eventType: string, event: unknown) => {
+    const handlers = handlersRef.current.get(eventType);
+    if (handlers?.size) {
+      handlers.forEach(handler => handler(event));
+      return;
+    }
+    const pending = pendingCallSignalsRef.current.get(eventType) || [];
+    pending.push(event);
+    // A disconnected or abandoned call must not grow this buffer indefinitely.
+    pendingCallSignalsRef.current.set(eventType, pending.slice(-32));
+  }, []);
   
   // Initialize Socket.IO connection
   useEffect(() => {
@@ -240,16 +255,16 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       handlersRef.current.get('presenceChanged')?.forEach(handler => handler(event));
     });
     socket.on('comm:webrtc:offer', (event: WebRtcSignalEvent) => {
-      handlersRef.current.get('webrtcOffer')?.forEach(handler => handler(event));
+      dispatchCallSignal('webrtcOffer', event);
     });
     socket.on('comm:webrtc:answer', (event: WebRtcSignalEvent) => {
-      handlersRef.current.get('webrtcAnswer')?.forEach(handler => handler(event));
+      dispatchCallSignal('webrtcAnswer', event);
     });
     socket.on('comm:webrtc:ice', (event: WebRtcSignalEvent) => {
-      handlersRef.current.get('webrtcIce')?.forEach(handler => handler(event));
+      dispatchCallSignal('webrtcIce', event);
     });
     socket.on('comm:call-media-ready', (event: { callId: string }) => {
-      handlersRef.current.get('callMediaReady')?.forEach(handler => handler(event));
+      dispatchCallSignal('callMediaReady', event);
     });
     
     // Cleanup on unmount
@@ -258,8 +273,9 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       socket.disconnect();
       socketRef.current = null;
       handlersRef.current.clear();
+      pendingCallSignalsRef.current.clear();
     };
-  }, [deviceToken]);
+  }, [deviceToken, dispatchCallSignal]);
   
   // Event registration helper
   const registerHandler = useCallback((eventType: string, handler: Function) => {
@@ -267,6 +283,11 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       handlersRef.current.set(eventType, new Set());
     }
     handlersRef.current.get(eventType)!.add(handler);
+    const pending = pendingCallSignalsRef.current.get(eventType);
+    if (pending?.length) {
+      pendingCallSignalsRef.current.delete(eventType);
+      pending.forEach(event => handler(event));
+    }
     
     // Return cleanup function
     return () => {
@@ -354,6 +375,7 @@ export function useCommunicationSignaling(): CommunicationSignalingHook {
       socketRef.current = null;
     }
     handlersRef.current.clear();
+    pendingCallSignalsRef.current.clear();
   }, []);
   
   return {
