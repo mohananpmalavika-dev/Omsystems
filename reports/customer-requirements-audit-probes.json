@@ -1,0 +1,23 @@
+{
+  "localOnly": true,
+  "rejectedEmail": {
+    "providerAccepted": false,
+    "providerState": "FAILED",
+    "workerReportedSuccess": true,
+    "savedStatus": "SENT"
+  },
+  "defaultVoice": {
+    "accepted": true,
+    "state": "SENT",
+    "provider": "voice-asterisk",
+    "generatedCallId": "call-1790534668315-cync"
+  },
+  "voiceHealth": {
+    "provider": "voice-asterisk",
+    "channel": "voice",
+    "status": "HEALTHY",
+    "latencyMs": 25.4,
+    "consecutiveFailures": 0,
+    "observedAt": "2026-09-27T18:44:28.315Z"
+  }
+}
