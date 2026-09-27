@@ -844,6 +844,49 @@ export async function registerCommunicationsRoutes(
   });
 
   /**
+   * Get employee directory
+   * GET /v1/communications/directory/employees
+   */
+  app.get('/v1/communications/directory/employees', async (request: AuthenticatedRequest, reply) => {
+    try {
+      let userRows: any[] = [];
+      try {
+        const uRes = await ctx.pool.query(
+          "SELECT id::text, username, role FROM users ORDER BY username ASC"
+        );
+        userRows = uRes.rows;
+      } catch (err) {
+        ctx.logger.warn({ err }, 'Failed to query users');
+      }
+
+      let branchRows: any[] = [];
+      try {
+        const bRes = await ctx.pool.query(
+          "SELECT id::text, name FROM resource_nodes WHERE lower(node_type) = 'branch' ORDER BY name ASC"
+        );
+        branchRows = bRes.rows;
+      } catch {
+        // ignore
+      }
+
+      const defaultBranch = branchRows[0] || { id: 'default', name: 'Main Branch' };
+      const employees = userRows.map((u) => ({
+        employeeId: u.id,
+        employeeName: u.username,
+        employeeRole: u.role || 'Operator',
+        branchId: defaultBranch.id,
+        branchName: defaultBranch.name,
+        presence: 'ONLINE' as const,
+      }));
+
+      return { data: employees };
+    } catch (error) {
+      ctx.logger.error({ error }, 'Failed to get employee directory');
+      return reply.code(500).send({ error: 'internal_error' });
+    }
+  });
+
+  /**
    * Search directory
    * GET /v1/communications/directory/search
    */

@@ -28,6 +28,15 @@ export interface BranchContact {
   employees: EmployeeContact[];
 }
 
+export interface CommunicationEmployee {
+  employeeId: string;
+  employeeName: string;
+  employeeRole: string;
+  branchId: string;
+  branchName: string;
+  presence: CommunicationPresence;
+}
+
 export interface EmployeeContact {
   employeeId: string;
   employeeName: string;
@@ -177,6 +186,38 @@ class CommunicationAPIClient {
       '/v1/communications/directory/branches'
     );
     return response.data;
+  }
+  
+  async getEmployeeDirectory(): Promise<{ data: CommunicationEmployee[] }> {
+    try {
+      const response = await this.request<{ data: CommunicationEmployee[] }>(
+        '/v1/communications/directory/employees'
+      );
+      if (response && response.data) return response;
+    } catch {
+      // Fallback: derive from branch directory
+    }
+    const branches = await this.getBranchDirectory();
+    const allEmployees: CommunicationEmployee[] = [];
+    const seen = new Set<string>();
+    for (const b of (Array.isArray(branches) ? branches : [])) {
+      if (Array.isArray(b.employees)) {
+        for (const emp of b.employees) {
+          if (!seen.has(emp.employeeId)) {
+            seen.add(emp.employeeId);
+            allEmployees.push({
+              employeeId: emp.employeeId,
+              employeeName: emp.employeeName,
+              employeeRole: emp.role || 'Operator',
+              branchId: emp.branchId || b.branchId,
+              branchName: emp.branchName || b.branchName,
+              presence: (emp.presence as any) || 'ONLINE',
+            });
+          }
+        }
+      }
+    }
+    return { data: allEmployees };
   }
   
   async getBranchPresence(branchId: string): Promise<{ presence: CommunicationPresence; devices: any[] }> {
