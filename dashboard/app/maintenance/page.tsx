@@ -4,14 +4,11 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Activity, ClipboardCheck, Wrench } from "lucide-react";
 import { maintenanceApi, deviceManagementApi } from "@/lib/api-client";
-import { PageHero } from "@/components/page-hero";
-import {
-  AlertList,
-  HealthMetricDisplay,
-  WorkOrderCard,
-} from "@/components/maintenance/dashboard-components";
+import { WorkflowNav } from "@/components/workflow-nav";
+import { MaintenanceTaskDesk, type MaintenanceTask } from "@/components/maintenance/task-desk";
 
 export default function MaintenancePage() {
+  const [workspace, setWorkspace] = useState("attention");
   const [status, setStatus] = useState<any>(null);
   const [health, setHealth] = useState<any>(null);
   const [firmwareUpdates, setFirmwareUpdates] = useState<any[]>([]);
@@ -21,7 +18,7 @@ export default function MaintenancePage() {
   const [pendingRotations, setPendingRotations] = useState<number>(0);
   const [ipConflictCount, setIpConflictCount] = useState<number>(0);
   const [compliance, setCompliance] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [upgradePlanSubmitting, setUpgradePlanSubmitting] = useState(false);
   const [upgradePlanResult, setUpgradePlanResult] = useState<any>(null);
@@ -50,7 +47,7 @@ export default function MaintenancePage() {
     setLoading(true);
     setError(null);
 
-    void Promise.all([
+    void Promise.allSettled([
       maintenanceApi.getDashboardStatus(),
       maintenanceApi.getDashboardHealth(),
       maintenanceApi.listFirmwareUpdatesRequired(),
@@ -61,16 +58,18 @@ export default function MaintenancePage() {
       deviceManagementApi.listPasswordRotations(),
       deviceManagementApi.getIpConflicts(),
     ])
-      .then(([statusData, healthData, firmware, firmwareCatalogData, lowStock, highRisk, metrics, rotations, conflicts]) => {
-        setStatus(statusData);
-        setHealth(healthData);
-        setFirmwareUpdates(firmware.data ?? []);
-        setFirmwareCatalog(firmwareCatalogData.data ?? []);
-        setLowStockParts(lowStock.data ?? []);
-        setHighRiskAssets(highRisk.data ?? []);
-        setCompliance(metrics ?? null);
-        setPendingRotations((rotations.data ?? []).filter((item: any) => item.status !== "completed").length);
-        setIpConflictCount((conflicts.data ?? []).length);
+      .then((results) => {
+        const setters = [
+          (data:any)=>setStatus(data), (data:any)=>setHealth(data),
+          (data:any)=>setFirmwareUpdates(data.data??[]), (data:any)=>setFirmwareCatalog(data.data??[]),
+          (data:any)=>setLowStockParts(data.data??[]), (data:any)=>setHighRiskAssets(data.data??[]),
+          (data:any)=>setCompliance(data??null),
+          (data:any)=>setPendingRotations((data.data??[]).filter((item:any)=>item.status!=="completed").length),
+          (data:any)=>setIpConflictCount((data.data??[]).length),
+        ];
+        results.forEach((result,index)=>{if(result.status==="fulfilled")setters[index]!(result.value);});
+        const missing=results.filter(result=>result.status==="rejected").length;
+        if(missing)setError(`${missing} maintenance feeds are unavailable. Available tasks are still shown.`);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Unable to load maintenance dashboard.");
@@ -87,21 +86,11 @@ export default function MaintenancePage() {
     }
   }, [firmwareCatalog, upgradePayload.firmwareVersionId]);
 
-  const alertItems = (status?.predictiveAlerts ?? []).slice(0, 6).map((item: any) => ({
-    id: item.id,
-    severity:
-      item.score > 0.8
-        ? "critical"
-        : item.score > 0.5
-        ? "warning"
-        : "info",
-    title: item.alertType || item.type || "Predictive alert",
-    description: item.details?.summary || item.details?.message || `Risk score ${item.score}`,
-    timestamp: item.detectedAt ? new Date(item.detectedAt) : new Date(),
-    acknowledged: item.status !== "open",
-  }));
-
-  const recentWorkOrders = (status?.workOrders ?? []).slice(0, 4);
+  const tasks:MaintenanceTask[] = [
+    ...(status?.predictiveAlerts??[]).filter((item:any)=>item.status==="open").map((item:any)=>({id:`alert-${item.id}`,kind:"Alert" as const,title:item.alertType||item.type||"Predictive alert",description:item.details?.summary||item.details?.message||`Risk score ${item.score??"unavailable"}`,priority:item.score>0.8?"critical":item.score>0.5?"high":"medium",reference:item.id,assetId:item.assetId,status:item.status,href:"/maintenance/predictive",actionLabel:"Inspect predictive alert"})),
+    ...highRiskAssets.map((item:any)=>({id:`risk-${item.id}`,kind:"Asset risk" as const,title:item.deviceType||item.assetId||"Asset risk",description:item.details?.summary||item.details?.message||`Risk score ${item.score??"unavailable"}`,priority:item.score>0.8?"critical":"high",reference:item.id,assetId:item.assetId,href:item.assetId?`/maintenance/assets/${encodeURIComponent(item.assetId)}`:"/maintenance/predictive",actionLabel:"Inspect affected asset"})),
+    ...(status?.workOrders??[]).filter((item:any)=>!["resolved","closed","cancelled"].includes(item.status)).map((item:any)=>({id:`work-${item.id}`,kind:"Work order" as const,title:item.problem||item.title||"Service task",description:item.actionTaken||item.rootCause||"Review this order and coordinate the next service action.",priority:item.severity||"medium",reference:item.workOrderNumber||item.id,assetId:item.assetId,status:item.status,owner:item.technician||item.assignedTo,dueAt:item.slaDueAt,href:`/maintenance/workorders/${encodeURIComponent(item.id)}`,actionLabel:"Open service order"})),
+  ].sort((a,b)=>["critical","high","medium","low"].indexOf(a.priority)-["critical","high","medium","low"].indexOf(b.priority));
 
   const handleCreateUpgradePlan = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -138,165 +127,20 @@ export default function MaintenancePage() {
   };
 
   return (
-    <div className="content maintenance-dashboard-page">
-        <div className="maintenance-page-inner" style={{ padding: 20, maxWidth: 1300, margin: "0 auto" }}>
-      <PageHero
-        eyebrow="Fleet readiness"
-        title="Maintenance command center"
-        description="Coordinate asset health, predictive alerts, firmware readiness, work orders and service coverage from one operational workspace."
-        icon={Wrench}
-        actions={<>
-          <Link href="/maintenance/health" className="btn-secondary"><Activity size={15} />Run health checks</Link>
-          <Link href="/maintenance/workorders/new" className="btn-primary"><ClipboardCheck size={15} />New work order</Link>
-        </>}
-      />
-
-      {error && (
-        <div className="page-alert error" style={{ marginBottom: 20, padding: 16, background: "#fee", border: "1px solid #fbb", color: "#800" }}>
-          {error}
-        </div>
-      )}
-
-      <section className="maintenance-summary-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
-        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 12 }}>Assets</h2>
-          <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.totalAssets ?? "—"}</p>
-          <p style={{ color: "#666" }}>Total tracked assets</p>
-        </div>
-        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 12 }}>Open work orders</h2>
-          <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.workOrdersOpen ?? "—"}</p>
-          <p style={{ color: "#666" }}>Pending and active maintenance tasks</p>
-        </div>
-        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 12 }}>AMC contracts</h2>
-          <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : status?.amcContractsActive ?? "—"}</p>
-          <p style={{ color: "#666" }}>Active coverage agreements</p>
-        </div>
-        <div className="maintenance-summary-card" style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 12 }}>Firmware updates</h2>
-          <p style={{ fontSize: 32, margin: 0 }}>{loading ? "…" : firmwareUpdates.length}</p>
-          <p style={{ color: "#666" }}>Devices needing firmware action</p>
-        </div>
-      </section>
-        <section className="maintenance-device-panel">
-          <h2 style={{ marginBottom: 12 }}>Device management</h2>
-          <p style={{ margin: 0, color: "#374151" }}>Secure rotation, templates, and IP assignments</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12, marginTop: 16 }}>
-            <div style={{ padding: 14, border: "1px solid #e5e7eb", borderRadius: 10, background: "#fafafa" }}>
-              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Pending rotations</p>
-              <p style={{ margin: 8, fontSize: 24, fontWeight: 700 }}>{loading ? "…" : pendingRotations}</p>
-            </div>
-            <div style={{ padding: 14, border: "1px solid #e5e7eb", borderRadius: 10, background: "#fafafa" }}>
-              <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>IP conflicts</p>
-              <p style={{ margin: 8, fontSize: 24, fontWeight: 700 }}>{loading ? "…" : ipConflictCount}</p>
-            </div>
-          </div>
-          <Link href="/maintenance/device-management" style={{ display: "inline-block", marginTop: 16, color: "#2563eb" }}>
-            Open device management
-          </Link>
+    <main className="content maintenance-dashboard-page maintenance-action-workspace">
+      <div className="maintenance-page-inner">
+        <header className="workflow-heading maintenance-desk-heading"><div><p className="workflow-kicker">SERVICE DESK / FLEET READINESS</p><h1>Keep the fleet<br/><em>moving forward.</em></h1><p>Pick the next issue. Understand it. Take action.</p></div><div className="workflow-heading-actions"><Link href="/maintenance/health" className="btn-secondary"><Activity size={16}/>Run health checks</Link><Link href="/maintenance/workorders/new" className="btn-primary"><ClipboardCheck size={16}/>New work order</Link></div></header>
+        <WorkflowNav label="Maintenance workspace" value={workspace} onChange={setWorkspace} items={[{id:"attention",label:"Attention queue"},{id:"health",label:"Fleet pulse"},{id:"firmware",label:"Firmware lab"},{id:"inventory",label:"Parts & coverage"}]} />
+        {error&&<div className="module-alert" role="alert">{error}</div>}
+        <section hidden={workspace!=="attention"}><MaintenanceTaskDesk tasks={tasks} loading={loading} unavailable={Boolean(error)}/></section>
+        <section hidden={workspace!=="health"} className="fleet-pulse-workspace">
+          <div className="fleet-pulse-feature"><p className="workflow-kicker">CURRENT HEALTH</p><strong>{loading?"…":health?.healthPercentage!=null?`${health.healthPercentage}%`:"—"}</strong><h2>Fleet health score</h2><p>{health?"From the latest maintenance health feed.":"Waiting for an available health feed."}</p><Link className="btn-secondary" href="/maintenance/health">Open diagnostics</Link></div>
+          <div className="fleet-pulse-measures">{[["Tracked assets",status?.totalAssets],["Open work orders",status?.workOrdersOpen],["Overdue visits",health?.overdueVisits],["Active AMC contracts",status?.amcContractsActive],["Maintenance visits pending",status?.visitsPending],["AMCs expiring soon",status?.amcContractsExpiring]].map(([label,value])=><div key={String(label)}><span>{label}</span><strong>{loading?"…":value??"—"}</strong></div>)}</div>
+          <div className="fleet-device-actions"><h2>Device operations</h2><p>Handle rotation, configuration and address assignments.</p><Link href="/maintenance/device-management" className="btn-primary">Open device management</Link><Link href="/maintenance/camera-map" className="btn-secondary">Explore camera locations</Link></div>
         </section>
-
-      <section style={{ display: "grid", gap: 16, marginBottom: 24 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-          <HealthMetricDisplay
-            label="Health score"
-            value={health?.healthPercentage ?? 0}
-            unit="%"
-            status={health?.healthPercentage >= 90 ? "healthy" : health?.healthPercentage >= 70 ? "warning" : "critical"}
-            trend="stable"
-          />
-          <HealthMetricDisplay
-            label="Overdue visits"
-            value={health?.overdueVisits ?? 0}
-            unit=""
-            status={health?.overdueVisits > 0 ? "critical" : "healthy"}
-          />
-          <HealthMetricDisplay
-            label="Open issues"
-            value={health?.openWorkOrders ?? 0}
-            unit=""
-            status={health?.openWorkOrders > 5 ? "critical" : health?.openWorkOrders > 0 ? "warning" : "healthy"}
-          />
-        </div>
-      </section>
-
-      <section style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 16, marginBottom: 24 }}>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h2>Recent alerts</h2>
-            <Link href="/maintenance/predictive" style={{ color: "#2563eb" }}>View all</Link>
-          </div>
-          <AlertList alerts={alertItems} />
-        </div>
-
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 16 }}>Upcoming actions</h2>
-          <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ padding: 16, border: "1px solid #d1d5db", borderRadius: 10 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "#6b7280" }}>Maintenance due</p>
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{status?.visitsPending ?? 0}</p>
-            </div>
-            <div style={{ padding: 16, border: "1px solid #d1d5db", borderRadius: 10 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "#6b7280" }}>AMCs expiring soon</p>
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{status?.amcContractsExpiring ?? 0}</p>
-            </div>
-            <div style={{ padding: 16, border: "1px solid #d1d5db", borderRadius: 10 }}>
-              <p style={{ margin: 0, fontSize: 14, color: "#6b7280" }}>Low stock parts</p>
-              <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{lowStockParts.length}</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 16 }}>Firmware updates required</h2>
-          {firmwareUpdates.length === 0 ? (
-            <p style={{ color: "#4b5563" }}>No devices require firmware updates.</p>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {firmwareUpdates.slice(0, 5).map((item) => (
-                <li key={item.id} style={{ marginBottom: 12 }}>
-                  <strong>{item.deviceType}</strong> • {item.currentVersion} → {item.latestVersion ?? "unknown"}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 16 }}>Firmware inventory</h2>
-          {firmwareCatalog.length === 0 ? (
-            <p style={{ color: "#4b5563" }}>No firmware packages are registered yet.</p>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {firmwareCatalog.slice(0, 5).map((item) => (
-                <li key={item.id} style={{ marginBottom: 12 }}>
-                  <strong>{item.vendor} {item.model}</strong> • {item.version} • {item.status}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-          <h2 style={{ marginBottom: 16 }}>Low stock parts</h2>
-          {lowStockParts.length === 0 ? (
-            <p style={{ color: "#4b5563" }}>Stock levels are healthy.</p>
-          ) : (
-            <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
-              {lowStockParts.slice(0, 5).map((part) => (
-                <li key={part.id} style={{ marginBottom: 12 }}>
-                  <strong>{part.partName}</strong> • Qty {part.quantity} / Reorder {part.reorderLevel}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", marginBottom: 24 }}>
+        <section hidden={workspace!=="firmware"} className="firmware-lab-workspace">
+          <div className="firmware-lab-context"><p className="workflow-kicker">ROLLOUT / PLAN BEFORE DEPLOYMENT</p><h2>Firmware lab</h2><p>Inspect the update requirement, then prepare a rollout with the safety checks below.</p><div className="firmware-readiness-list"><h3>Devices requiring updates</h3>{firmwareUpdates.map(item=><div key={item.id}><strong>{item.deviceType||item.id}</strong><span>{item.currentVersion} → {item.latestVersion??"Unknown"}</span></div>)}{!firmwareUpdates.length&&<p>{loading?"Loading…":error?"Update feed unavailable or empty.":"No devices currently require updates."}</p>}</div><div className="firmware-readiness-list"><h3>Registered packages</h3>{firmwareCatalog.map(item=><button key={item.id} type="button" aria-pressed={upgradePayload.firmwareVersionId===item.id} onClick={()=>setUpgradePayload(previous=>({...previous,firmwareVersionId:item.id}))}><strong>{item.vendor} {item.model}</strong><span>{item.version} / {item.status}</span></button>)}{!firmwareCatalog.length&&<p>{loading?"Loading…":"No registered packages available in the current feed."}</p>}</div></div>
+          <div className="firmware-plan-surface">      <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", marginBottom: 24 }}>
         <h2 style={{ marginBottom: 16 }}>Firmware upgrade planner</h2>
         <p style={{ color: "#4b5563", marginTop: 0, marginBottom: 16 }}>
           Create a safety-gated rollout plan that checks package verification, compatibility, maintenance windows, and rollback readiness before deployment.
@@ -361,7 +205,7 @@ export default function MaintenancePage() {
                 <label key={field} style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     type="checkbox"
-                    checked={upgradePayload.safetyContext[key]}
+                    checked={key === "activeIncidentsPresent" ? !upgradePayload.safetyContext[key] : upgradePayload.safetyContext[key]}
                     onChange={() => toggleSafetyCheck(key)}
                   />
                   <span>{label}</span>
@@ -400,49 +244,10 @@ export default function MaintenancePage() {
             )}
           </div>
         )}
-      </section>
-
-      <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2>Recent work orders</h2>
-          <Link href="/maintenance/workorders" style={{ color: "#2563eb" }}>View all</Link>
-        </div>
-        <div style={{ display: "grid", gap: 16 }}>
-          {recentWorkOrders.length === 0 ? (
-            <p style={{ color: "#4b5563" }}>No active work orders available.</p>
-          ) : (
-            recentWorkOrders.map((wo: any) => (
-              <WorkOrderCard
-                key={wo.id}
-                id={wo.id}
-                title={wo.problem || wo.title || "Maintenance task"}
-                description={wo.actionTaken || wo.rootCause || "Pending maintenance work order."}
-                status={wo.status === "in_progress" ? "in-progress" : wo.status || "open"}
-                priority={wo.severity || "medium"}
-                assignedTo={wo.technician ?? wo.assignedTo}
-                dueDate={wo.slaDueAt ? new Date(wo.slaDueAt) : undefined}
-                createdDate={new Date(wo.createdAt ?? Date.now())}
-              />
-            ))
-          )}
-        </div>
-      </section>
-
-      <section style={{ padding: 20, border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff" }}>
-        <h2 style={{ marginBottom: 16 }}>Quick actions</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          <Link href="/maintenance/assets">Assets</Link>
-          <Link href="/maintenance/workorders">Work orders</Link>
-          <Link href="/maintenance/vendors">Vendors</Link>
-          <Link href="/maintenance/amc">AMC contracts</Link>
-          <Link href="/maintenance/device-management">Device management</Link>
-          <Link href="/maintenance/camera-map">📍 Camera locations map</Link>
-          <Link href="/maintenance/privacy">Privacy & data</Link>
-          <Link href="/reports">Reports</Link>
-          <Link href="/maintenance/predictive">Predictive alerts</Link>
-          </div>
+      </section></div>
         </section>
+        <section hidden={workspace!=="inventory"} className="parts-coverage-workspace"><div><p className="workflow-kicker">PARTS / REPLENISHMENT</p><h2>Stock watch</h2><p>Parts below the reorder threshold.</p>{lowStockParts.map(part=><article key={part.id}><strong>{part.partName}</strong><span>Quantity {part.quantity} / Reorder {part.reorderLevel}</span></article>)}{!lowStockParts.length&&<p>{loading?"Loading parts…":error?"Stock feed unavailable or empty.":"No parts are below the reorder threshold."}</p>}<Link href="/maintenance/assets" className="btn-secondary">Browse hardware assets</Link></div><aside><p className="workflow-kicker">SERVICE NETWORK</p><h2>Coverage & partners</h2><Link href="/maintenance/amc">AMC contracts<span>{status?.amcContractsActive??"—"}</span></Link><Link href="/maintenance/vendors">Vendor directory<Wrench size={16}/></Link><Link href="/maintenance/workorders">Service work orders<ClipboardCheck size={16}/></Link><Link href="/maintenance/privacy">Privacy & data<Activity size={16}/></Link></aside></section>
       </div>
-    </div>
+    </main>
   );
 }

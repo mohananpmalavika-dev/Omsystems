@@ -43,6 +43,12 @@ export default function NewWorkOrderPage() {
       .then(([assetRes, branchRes]) => {
         if (!active) return;
         setAssets(assetRes.data);
+        const requestedAssetId = new URLSearchParams(window.location.search).get("assetId");
+        const requestedAsset = assetRes.data.find((asset) => asset.id === requestedAssetId);
+        if (requestedAsset) {
+          setAssetId(requestedAsset.id);
+          if (requestedAsset.branchNodeId) setBranchNodeId(requestedAsset.branchNodeId);
+        }
         if (Array.isArray(branchRes?.data)) {
           setBranches(branchRes.data.map((b: any) => ({ id: b.id, name: b.name || b.id })));
         }

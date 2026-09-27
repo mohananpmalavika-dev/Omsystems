@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { CalendarClock, CheckCircle2, Download, LoaderCircle, Play, RefreshCw, Trash2, FileText, BarChart3, ArrowRight, Sparkles } from "lucide-react";
 import { AppLayout } from "@/components/app-layout";
-import { PageHero } from "@/components/page-hero";
+import { WorkflowNav } from "@/components/workflow-nav";
 
 type Format="csv"|"xlsx"|"pdf";
 type Template="daily_surveillance_health"|"comprehensive"|"branch_health_summary"|"camera_availability"|"alert_summary"|"recorder_status"|"hdd_health"|"retention_compliance";
@@ -27,6 +27,9 @@ const REPORT_TEMPLATES: Array<{id: Template; name: string; description: string}>
 ];
 
 export default function ReportsPage(){
+  const[workspace,setWorkspace]=useState("compose");
+  const[step,setStep]=useState(0);
+  const[deliveryMode,setDeliveryMode]=useState("once");
   const[schedules,setSchedules]=useState<Schedule[]>([]);
   const[runs,setRuns]=useState<Run[]>([]);
   const[loading,setLoading]=useState(true);
@@ -95,7 +98,7 @@ export default function ReportsPage(){
       body:JSON.stringify({name,timezone,dailyAt,...payload(),enabled:true})
     });
     if(!response.ok)throw new Error(await responseError(response,"Could not save schedule."));
-    setMessage("Daily schedule saved.");
+    setMessage("Daily schedule saved.");setWorkspace("schedules");
     if(response.ok)await load();
     }catch(cause){setError(cause instanceof Error?cause.message:"Could not save schedule.");}finally{setSubmitting(null);}
   };
@@ -110,7 +113,7 @@ export default function ReportsPage(){
       body:JSON.stringify(payload())
     });
     if(!response.ok)throw new Error(await responseError(response,"Could not queue report."));
-    setMessage("Report queued for generation.");
+    setMessage("Report queued for generation.");setWorkspace("history");
     if(response.ok)await load();
     }catch(cause){setError(cause instanceof Error?cause.message:"Could not queue report.");}finally{setSubmitting(null);}
   };
@@ -124,60 +127,27 @@ export default function ReportsPage(){
       credentials: "include",
     });if(!response.ok)throw new Error(await responseError(response,"Could not delete schedule."));setMessage("Schedule deleted.");await load();}catch(cause){setError(cause instanceof Error?cause.message:"Could not delete schedule.");}finally{setSubmitting(null);}
   };
-  const validateRequest=(requireScheduleName:boolean)=>{if(!formats.length){setError("Select at least one export format.");return false;}if(requireScheduleName&&!name.trim()){setError("Provide a schedule name.");return false;}const invalid=recipients.split(",").map((item)=>item.trim()).filter(Boolean).find((item)=>!/^\S+@\S+\.\S+$/.test(item));if(invalid){setError(`Invalid recipient email: ${invalid}`);return false;}return true;};
+  const validateRequest=(requireScheduleName:boolean)=>{if(filters.from&&filters.to&&new Date(filters.from)>new Date(filters.to)){setError("The end of the reporting period must follow its start.");setStep(1);return false;}if(!formats.length){setError("Select at least one export format.");return false;}if(requireScheduleName&&!name.trim()){setError("Provide a schedule name.");return false;}const invalid=recipients.split(",").map((item)=>item.trim()).filter(Boolean).find((item)=>!/^\S+@\S+\.\S+$/.test(item));if(invalid){setError(`Invalid recipient email: ${invalid}`);return false;}return true;};
   
   const selectedTemplateInfo = templates.find(t => t.id === template);
   
   return <AppLayout><main className="content reports-page p-6 space-y-6 max-w-[1500px] mx-auto">
-    <PageHero
-      eyebrow="Reporting & assurance"
-      title="Daily surveillance reports"
-      description="Create scheduled and on-demand reports with controlled exports, delivery readiness and a complete audit history."
-      icon={FileText}
-      actions={<button className="btn-secondary" onClick={()=>void load()}><RefreshCw size={16}/>Refresh data</button>}
-    />
-    
-    <div className="field-report-link bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/30 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg backdrop-blur">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
-          <BarChart3 size={24} />
-        </div>
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-sm font-bold text-white">Executive MIS Reports & Graphical Analytics Hub</span>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
-              <Sparkles size={10} /> Live Graphs
-            </span>
-          </div>
-          <p className="text-xs text-slate-300">
-            Interactive multi-branch charts for Threat Trends, System Health Uptime %, Footfall, Staff Attendance, and SLA Response.
-          </p>
-        </div>
-      </div>
-      <Link
-        href="/reports/mis"
-        className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-white text-xs font-semibold shadow-md shadow-sky-500/20 transition-all shrink-0"
-      >
-        <span>Open MIS Dashboard</span>
-        <ArrowRight size={14} />
-      </Link>
-    </div>
-
+    <header className="workflow-heading report-studio-heading">
+      <div><p className="workflow-kicker">REPORT STUDIO / ASSURANCE</p><h1>Make insight.<br/><em>Deliver clarity.</em></h1><p>Choose a story, set its scope, then build your report.</p></div>
+      <div className="workflow-heading-actions"><Link href="/reports/mis" className="btn-secondary"><BarChart3 size={16}/>Explore MIS analytics<ArrowRight size={14}/></Link><button className="workflow-icon-button" aria-label="Refresh report data" onClick={()=>void load()}><RefreshCw size={18}/></button></div>
+    </header>
+    <WorkflowNav label="Report workspace" value={workspace} onChange={setWorkspace} items={[{id:"compose",label:"Compose"},{id:"schedules",label:"Schedules",count:schedules.length},{id:"history",label:"Run history",count:runs.length}]} />
     {message&&<div className="card py-3 text-sm" role="status">{message}</div>}
     {error&&<div className="card border-red-500/50 py-3 text-sm text-red-300" role="alert">{error}</div>}
     
-    <section className="grid xl:grid-cols-[1fr_1.2fr] gap-5">
-      <div className="card space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold">Create report</h2>
-          <p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p>
-        </div>
-
-        <div className={`field-delivery-state rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-500/40 bg-emerald-950/40 text-emerald-300":"border-amber-500/40 bg-amber-950/40 text-amber-300"}`}>
-          {deliveryConfiguration===null?"Checking report email delivery…":deliveryConfiguration.configured?`Email delivery is configured through ${deliveryConfiguration.provider.toUpperCase()}. Recipients receive signed report-download links.`:"Email delivery is not configured. Reports remain available in Run history; configure SMTP, SendGrid, SES, or a webhook before adding recipients."}
-        </div>
-        
-        <div>
+    <section hidden={workspace!=="compose"} className="report-studio">
+      <div className="report-builder">
+        <nav className="report-steps" aria-label="Report creation steps">
+          {["Story","Scope","Delivery","Review"].map((label,index)=><button type="button" key={label} aria-current={step===index?"step":undefined} onClick={()=>setStep(index)}><span>{String(index+1).padStart(2,"0")}</span><strong>{label}</strong></button>)}
+        </nav>
+        <div className="report-step-body">
+          <div className="report-step-intro"><p className="workflow-kicker">STEP {step+1} OF 4</p><h2>{["What should this report explain?","Focus on what matters.","Choose how it reaches you.","Ready to build your report?"][step]}</h2><p>{["Pick the question you want your data to answer.","Leave filters empty to include the full estate.","Generate once or establish a daily reporting rhythm.","Review the configuration below before submitting."][step]}</p></div>
+          <div hidden={step!==0}>        <div>
           <label className="text-sm font-medium flex items-center gap-2 mb-2">
             <FileText size={16}/>
             Report Template
@@ -195,48 +165,8 @@ export default function ReportsPage(){
           )}
         </div>
         
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="text-sm">
-            Schedule name
-            <input className="input w-full mt-1" value={name} onChange={(e)=>setName(e.target.value)}/>
-          </label>
-          <label className="text-sm">
-            Recipients (email)
-            <input 
-              className="input w-full mt-1" 
-              value={recipients} 
-              onChange={(e)=>setRecipients(e.target.value)} 
-              placeholder="soc@example.com, manager@example.com"
-            />
-          </label>
-          <label className="text-sm">
-            Timezone
-            <input className="input w-full mt-1" value={timezone} onChange={(e)=>setTimezone(e.target.value)}/>
-          </label>
-          <label className="text-sm">
-            Daily time
-            <input className="input w-full mt-1" type="time" value={dailyAt} onChange={(e)=>setDailyAt(e.target.value)}/>
-          </label>
-        </div>
-        
-        <div>
-          <span className="text-sm">Formats</span>
-          <div className="flex gap-2 mt-1">
-            {(["csv","xlsx","pdf"] as Format[]).map((format)=>(
-              <button type="button"
-                key={format} 
-                onClick={()=>setFormats((current)=>
-                  current.includes(format)?current.filter((item)=>item!==format):[...current,format]
-                )} 
-                className={`px-3 py-2 rounded border text-sm uppercase ${formats.includes(format)?"bg-blue-700 text-white":"bg-white"}`}
-              >
-                {format}
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        <div className="grid md:grid-cols-3 gap-3">
+</div>
+          <div hidden={step!==1}>        <div className="grid md:grid-cols-3 gap-3">
           <Filter label="Region" value={filters.region} set={(value)=>setFilters({...filters,region:value})}/>
           <Filter label="Branch ID" value={filters.branchId} set={(value)=>setFilters({...filters,branchId:value})}/>
           <label className="text-sm">
@@ -268,17 +198,63 @@ export default function ReportsPage(){
           </label>
         </div>
         
-        <div className="flex gap-2">
-          <button disabled={!formats.length||submitting!==null} onClick={()=>void runNow()} className="btn-primary flex gap-2">
-            {submitting==="run"?<LoaderCircle size={15} className="animate-spin"/>:<Play size={15}/>}Run now
-          </button>
-          <button disabled={!formats.length||submitting!==null} onClick={()=>void createSchedule()} className="btn-secondary flex gap-2">
-            {submitting==="schedule"?<LoaderCircle size={15} className="animate-spin"/>:<CalendarClock size={15}/>}Save daily schedule
-          </button>
+</div>
+          <div hidden={step!==2} className="report-delivery-step">
+            <div className="workflow-choice-pair"><button type="button" aria-pressed={deliveryMode==="once"} onClick={()=>setDeliveryMode("once")}><Play size={20}/><strong>Generate once</strong><span>Build an on-demand export.</span></button><button type="button" aria-pressed={deliveryMode==="daily"} onClick={()=>setDeliveryMode("daily")}><CalendarClock size={20}/><strong>Every day</strong><span>Save a repeatable reporting rhythm.</span></button></div>
+                    <div>
+          <span className="text-sm">Formats</span>
+          <div className="flex gap-2 mt-1">
+            {(["csv","xlsx","pdf"] as Format[]).map((format)=>(
+              <button type="button"
+                aria-pressed={formats.includes(format)} key={format} 
+                onClick={()=>setFormats((current)=>
+                  current.includes(format)?current.filter((item)=>item!==format):[...current,format]
+                )} 
+                className={`px-3 py-2 rounded border text-sm uppercase ${formats.includes(format)?"bg-blue-700 text-white":"bg-white"}`}
+              >
+                {format}
+              </button>
+            ))}
+          </div>
         </div>
+        
+        <div className="grid md:grid-cols-2 gap-3">
+          <label hidden={deliveryMode!=="daily"} className="text-sm">
+            Schedule name
+            <input className="input w-full mt-1" value={name} onChange={(e)=>setName(e.target.value)}/>
+          </label>
+          <label className="text-sm">
+            Recipients (email)
+            <input 
+              className="input w-full mt-1" 
+              value={recipients} 
+              onChange={(e)=>setRecipients(e.target.value)} 
+              placeholder="soc@example.com, manager@example.com"
+            />
+          </label>
+          <label hidden={deliveryMode!=="daily"} className="text-sm">
+            Timezone
+            <input className="input w-full mt-1" value={timezone} onChange={(e)=>setTimezone(e.target.value)}/>
+          </label>
+          <label hidden={deliveryMode!=="daily"} className="text-sm">
+            Daily time
+            <input className="input w-full mt-1" type="time" value={dailyAt} onChange={(e)=>setDailyAt(e.target.value)}/>
+          </label>
+        </div>
+        
+
+            <div className="field-delivery-state">{deliveryConfiguration===null?(loading?"Checking email delivery…":"Email delivery status unavailable."):deliveryConfiguration.configured?`Email delivery configured through ${deliveryConfiguration.provider.toUpperCase()}.`:"Email delivery is not configured. Reports remain available in Run history."}</div>
+          </div>
+          <div hidden={step!==3} className="report-review"><FileText size={32}/><h3>{selectedTemplateInfo?.name}</h3><p>{selectedTemplateInfo?.description}</p><dl><div><dt>Coverage</dt><dd>{Object.keys(clean(filters)).length?Object.entries(clean(filters)).map(([key,value])=>`${key}: ${value}`).join(" · "):"Full estate · all statuses"}</dd></div><div><dt>Files</dt><dd>{formats.map(f=>f.toUpperCase()).join(" + ")||"Select an export format"}</dd></div><div><dt>Recipients</dt><dd>{recipients||"In-app downloads"}</dd></div><div><dt>Timing</dt><dd>{deliveryMode==="daily"?`${name} · Daily ${dailyAt} / ${timezone}`:"Generate on demand"}</dd></div></dl></div>
+        </div>
+        <footer className="report-builder-footer"><button className="btn-secondary" type="button" disabled={step===0} onClick={()=>setStep(step-1)}>Back</button><span>Your choices stay while you move between steps.</span>{step<3?<button className="btn-primary" type="button" onClick={()=>setStep(step+1)}>Continue<ArrowRight size={15}/></button>:<button className="btn-primary" disabled={!formats.length||submitting!==null} onClick={()=>void(deliveryMode==="daily"?createSchedule():runNow())}>{submitting?<LoaderCircle size={15} className="animate-spin"/>:<Play size={15}/>} {deliveryMode==="daily"?"Save daily schedule":"Generate report"}</button>}</footer>
       </div>
-      
-      <div className="card">
+      <aside className="report-packet" aria-label="Report configuration preview">
+        <p className="workflow-kicker">YOUR REPORT / CONFIGURATION</p><div className="report-paper"><span className="report-paper-mark">KV /</span><FileText size={30}/><h3>{selectedTemplateInfo?.name}</h3><p>{selectedTemplateInfo?.description}</p><div className="report-paper-lines" aria-hidden="true"><i/><i/><i/><i/></div><strong>{formats.map(f=>f.toUpperCase()).join(" / ")||"No format selected"}</strong><small>Layout illustration · actual output is generated after submission</small></div>
+        <dl><div><dt>Scope</dt><dd>{filters.branchId||filters.region||"Full estate"}</dd></div><div><dt>Filters</dt><dd>{Object.keys(clean(filters)).length} applied</dd></div><div><dt>Rhythm</dt><dd>{deliveryMode==="daily"?`Daily · ${dailyAt}`:"On demand"}</dd></div></dl>
+      </aside>
+    </section>
+    <section hidden={workspace!=="schedules"} className="report-schedule-workspace">      <div className="card">
         <h2 className="text-lg font-semibold mb-3">Saved schedules</h2>
         {schedules.length===0?<p className="text-gray-500 text-sm">No saved schedules.</p>:(
           <div className="space-y-2">
@@ -302,9 +278,8 @@ export default function ReportsPage(){
           </div>
         )}
       </div>
-    </section>
-    
-    <section className="card overflow-auto">
+</section>
+    <section hidden={workspace!=="history"} className="card overflow-auto report-history-workspace">
       <h2 className="text-lg font-semibold mb-3">Run history</h2>
       {loading?<p><LoaderCircle className="animate-spin inline"/> Loading…</p>:(
         <table className="w-full text-sm">

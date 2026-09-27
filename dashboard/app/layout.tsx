@@ -16,6 +16,7 @@ import "./dashboard-rich.css";
 import "./experience.css";
 import "./field-experience.css";
 import "./command-atlas.css";
+import "./workflow-experience.css";
 
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",
