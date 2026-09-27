@@ -132,7 +132,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-          </header>
+          <FieldVisual /></header>
           <section className="admin-panel">
             <div role="alert" style={{ maxWidth: 640, margin: "3rem auto", textAlign: "center" }}>
               <AlertTriangle size={42} style={{ color: "#dc2626", marginBottom: "1rem" }} />
@@ -174,7 +174,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-          </header>
+          <FieldVisual /></header>
           <section className="admin-panel">
             <div role="status" style={{ maxWidth: 680, margin: "3rem auto", textAlign: "center" }}>
               <ShieldCheck size={46} style={{ color: "#d97706", marginBottom: "1rem" }} />
@@ -208,7 +208,7 @@ export default function AdminPage() {
                 </div>
               </div>
             </div>
-          </header>
+          <FieldVisual /></header>
           <section className="admin-panel">
             {canCreateRoot ? (
               <CreateOrganizationForm onSuccess={handleOrganizationCreated} />
@@ -261,7 +261,7 @@ export default function AdminPage() {
             <Server size={16} /> System Management
           </a>
         </div>
-      </header>
+      <FieldVisual /></header>
 
       <nav className="admin-tabs" aria-label="Administration sections">
         <button

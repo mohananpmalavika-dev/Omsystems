@@ -72,24 +72,6 @@
     "errors": []
   },
   {
-    "route": "/operations/storage",
-    "status": 200,
-    "desktop": {
-      "width": 1440,
-      "scrollWidth": 1440,
-      "headings": [
-        "Storage and disk health"
-      ],
-      "styledHeadings": 1,
-      "errorPage": false
-    },
-    "mobile": {
-      "width": 390,
-      "scrollWidth": 390
-    },
-    "errors": []
-  },
-  {
     "route": "/operations/edge-agents",
     "status": 200,
     "desktop": {
@@ -108,13 +90,13 @@
     "errors": []
   },
   {
-    "route": "/operations/recording",
+    "route": "/operations/storage",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Recording and retention health"
+        "Storage and disk health"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -133,6 +115,24 @@
       "scrollWidth": 1440,
       "headings": [
         "Operational Alerts"
+      ],
+      "styledHeadings": 1,
+      "errorPage": false
+    },
+    "mobile": {
+      "width": 390,
+      "scrollWidth": 390
+    },
+    "errors": []
+  },
+  {
+    "route": "/operations/recording",
+    "status": 200,
+    "desktop": {
+      "width": 1440,
+      "scrollWidth": 1440,
+      "headings": [
+        "Recording and retention health"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -217,13 +217,13 @@
     "errors": []
   },
   {
-    "route": "/analytics/banking/authorized-persons",
+    "route": "/analytics/face",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "CCTV Identification & Secure Area Authorizations"
+        "Face Recognition Analytics"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -235,13 +235,13 @@
     "errors": []
   },
   {
-    "route": "/analytics/face",
+    "route": "/analytics/banking/authorized-persons",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Face Recognition Analytics"
+        "CCTV Identification & Secure Area Authorizations"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -325,13 +325,13 @@
     "errors": []
   },
   {
-    "route": "/maintenance/privacy",
+    "route": "/maintenance/workorders/new",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Privacy & data protection"
+        "Create work order"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -343,13 +343,13 @@
     "errors": []
   },
   {
-    "route": "/maintenance/workorders/new",
+    "route": "/maintenance/privacy",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Create work order"
+        "Privacy & data protection"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -438,8 +438,10 @@
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
-      "headings": [],
-      "styledHeadings": 0,
+      "headings": [
+        "Compliance Assessments"
+      ],
+      "styledHeadings": 1,
       "errorPage": false
     },
     "mobile": {
@@ -454,8 +456,10 @@
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
-      "headings": [],
-      "styledHeadings": 0,
+      "headings": [
+        "Branch Compliance & RBI Audit Summary"
+      ],
+      "styledHeadings": 1,
       "errorPage": false
     },
     "mobile": {
@@ -501,13 +505,13 @@
     "errors": []
   },
   {
-    "route": "/admin/branch-onboarding",
+    "route": "/admin/ai-quality",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Branch camera onboarding"
+        "AI Model Quality & Certification Registry"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -519,13 +523,13 @@
     "errors": []
   },
   {
-    "route": "/admin/ai-quality",
+    "route": "/admin/branch-onboarding",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "AI Model Quality & Certification Registry"
+        "Branch camera onboarding"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -573,13 +577,13 @@
     "errors": []
   },
   {
-    "route": "/security-devices/branch-posture",
+    "route": "/security-devices/discovery",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Branch Security Posture"
+        "Device Discovery"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -591,13 +595,13 @@
     "errors": []
   },
   {
-    "route": "/security-devices/discovery",
+    "route": "/security-devices/branch-posture",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Device Discovery"
+        "Branch Security Posture"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -825,13 +829,13 @@
     "errors": []
   },
   {
-    "route": "/performance",
+    "route": "/digital-twin",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Performance Observability"
+        "Branch Digital Twins"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -843,13 +847,13 @@
     "errors": []
   },
   {
-    "route": "/digital-twin",
+    "route": "/performance",
     "status": 200,
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
       "headings": [
-        "Branch Digital Twins"
+        "Performance Observability"
       ],
       "styledHeadings": 1,
       "errorPage": false
@@ -884,8 +888,10 @@
     "desktop": {
       "width": 1440,
       "scrollWidth": 1440,
-      "headings": [],
-      "styledHeadings": 0,
+      "headings": [
+        "Global Command Center"
+      ],
+      "styledHeadings": 1,
       "errorPage": false
     },
     "mobile": {
