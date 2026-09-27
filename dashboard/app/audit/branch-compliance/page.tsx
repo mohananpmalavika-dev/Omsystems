@@ -131,7 +131,7 @@ export default function BranchCompliancePage() {
       )}
 
       {/* Overall Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <div className="field-metric-strip grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-white rounded-lg shadow p-6">
           <div className="text-sm text-gray-600 mb-1">Total Branches</div>
           <div className="text-3xl font-bold text-gray-900">{branches.length}</div>

@@ -16,9 +16,9 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
   {
     id: "dark",
     name: "Graphite",
-    description: "Midnight graphite with electric violet details",
+    description: "Midnight graphite with luminous blue details",
     previewBg: "#0b1020",
-    previewAccent: "#a6a2ff",
+    previewAccent: "#a9c7ff",
   },
   {
     id: "navy",
@@ -30,9 +30,9 @@ export const AVAILABLE_THEMES: ThemeConfig[] = [
   {
     id: "light",
     name: "Prism",
-    description: "Bright pearl surfaces with vivid indigo accents",
+    description: "Bright pearl surfaces with Command Field blue accents",
     previewBg: "#f3f4fc",
-    previewAccent: "#5854db",
+    previewAccent: "#416bc8",
   },
   {
     id: "emerald",

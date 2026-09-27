@@ -137,7 +137,7 @@ export default function ReportsPage(){
       actions={<button className="btn-secondary" onClick={()=>void load()}><RefreshCw size={16}/>Refresh data</button>}
     />
     
-    <div className="bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/30 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg backdrop-blur">
+    <div className="field-report-link bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/60 border border-sky-500/30 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg backdrop-blur">
       <div className="flex items-center gap-3">
         <div className="p-3 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
           <BarChart3 size={24} />
@@ -173,7 +173,7 @@ export default function ReportsPage(){
           <p className="text-xs text-gray-500">Run immediately or persist as a daily schedule.</p>
         </div>
 
-        <div className={`rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-500/40 bg-emerald-950/40 text-emerald-300":"border-amber-500/40 bg-amber-950/40 text-amber-300"}`}>
+        <div className={`field-delivery-state rounded-lg border p-3 text-xs ${deliveryConfiguration?.configured?"border-emerald-500/40 bg-emerald-950/40 text-emerald-300":"border-amber-500/40 bg-amber-950/40 text-amber-300"}`}>
           {deliveryConfiguration===null?"Checking report email delivery…":deliveryConfiguration.configured?`Email delivery is configured through ${deliveryConfiguration.provider.toUpperCase()}. Recipients receive signed report-download links.`:"Email delivery is not configured. Reports remain available in Run history; configure SMTP, SendGrid, SES, or a webhook before adding recipients."}
         </div>
         

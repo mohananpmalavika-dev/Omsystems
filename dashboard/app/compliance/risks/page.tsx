@@ -128,7 +128,7 @@ export default function RisksPage() {
         {error && <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">{error} <button type="button" className="font-semibold underline" onClick={() => void fetchRisks()}>Try again</button></div>}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <div className="field-metric-strip grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-red-500">
             <div className="flex items-center justify-between">
               <div>
