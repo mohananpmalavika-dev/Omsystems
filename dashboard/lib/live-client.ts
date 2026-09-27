@@ -1,4 +1,5 @@
 import type { LiveSessionResponse } from "@/lib/types";
+import { rewriteLiveMediaUrls } from "./live-media-urls";
 
 interface BrowserDirectLiveStart {
   cameraId: string;
@@ -33,7 +34,7 @@ export async function startLiveFromBrowser(
   try {
     const publicRoute = await requestLiveAuthorization(cameraId, profile, "public", signal);
     if (!isBrowserDirectLiveStart(publicRoute)) return publicRoute;
-    const publicDirect = await startDirectSession(publicRoute, signal);
+    const publicDirect = await startDirectSession(publicRoute, signal, LIVE_START_TIMEOUT_MS);
     if (publicDirect.session) return publicDirect.session;
     if (publicDirect.error) throw new Error(publicDirect.error);
   } catch (error) {
@@ -116,6 +117,7 @@ async function requestLiveAuthorization(
 async function startDirectSession(
   authorization: BrowserDirectLiveStart,
   signal: AbortSignal,
+  attemptTimeoutMs = DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS,
 ): Promise<DirectSessionAttempt> {
   const candidate = authorization.direct;
   if (!isAllowedGatewayForCurrentPage(candidate.url)) return {};
@@ -124,7 +126,7 @@ async function startDirectSession(
   try {
     const attemptSignal = AbortSignal.any([
       signal,
-      AbortSignal.timeout(DIRECT_GATEWAY_ATTEMPT_TIMEOUT_MS),
+      AbortSignal.timeout(attemptTimeoutMs),
     ]);
     localResponse = await fetch(candidate.url, {
       method: "POST",
@@ -173,28 +175,6 @@ function isAllowedGatewayForCurrentPage(value: string) {
   } catch {
     return false;
   }
-}
-
-function rewriteLiveMediaUrls(session: LiveSessionResponse, gatewayUrl: string): LiveSessionResponse {
-  let gateway: URL;
-  try { gateway = new URL(gatewayUrl); } catch { return session; }
-  if (gateway.protocol !== "https:") return session;
-
-  const rewrite = (value: string) => {
-    try {
-      const source = new URL(value);
-      if (source.protocol !== "http:") return value;
-      return new URL(`${source.pathname}${source.search}`, gateway).toString();
-    } catch {
-      return value;
-    }
-  };
-
-  return {
-    ...session,
-    ...(session.hls ? { hls: { ...session.hls, url: rewrite(session.hls.url) } } : {}),
-    ...(session.webRtc ? { webRtc: { ...session.webRtc, whepUrl: rewrite(session.webRtc.whepUrl) } } : {}),
-  };
 }
 
 function timeoutError(error: unknown) {

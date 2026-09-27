@@ -16,7 +16,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Box, Card, CardContent, Typography, Slider, Button, Chip, Stack, IconButton, Tooltip } from '@mui/material';
 import { Download, ZoomIn, ZoomOut, RotateRight, Info } from '@mui/icons-material';
 
@@ -74,7 +74,7 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const meshesRef = useRef<THREE.Mesh[]>([]);
+  const meshesRef = useRef<THREE.Mesh<THREE.BoxGeometry, THREE.MeshPhongMaterial>[]>([]);
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseRef = useRef<THREE.Vector2>(new THREE.Vector2());
   
@@ -233,7 +233,10 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
         setTooltipPosition({ x: event.clientX, y: event.clientY });
         
         // Highlight hovered cell
-        (intersects[0]!.object as THREE.Mesh).material.emissiveIntensity = 0.5;
+        const hovered = intersects[0]!.object;
+        if (hovered instanceof THREE.Mesh && hovered.material instanceof THREE.MeshPhongMaterial) {
+          hovered.material.emissiveIntensity = 0.5;
+        }
       } else {
         setHoveredCell(null);
         setShowTooltip(false);
@@ -307,7 +310,7 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
   return (
     <Card>
       <CardContent>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
+        <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Box>
             <Typography variant="h6">3D Risk Heat Map</Typography>
             <Typography variant="body2" color="text.secondary">
@@ -383,7 +386,7 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
               Recent Anomalies: {hoveredCell.recentAnomaliesCount}
             </Typography>
             {hoveredCell.contributingFactors.length > 0 && (
-              <Box mt={1}>
+              <Box sx={{ mt: 1 }}>
                 <Typography variant="caption" color="text.secondary">
                   Factors:
                 </Typography>
@@ -401,7 +404,7 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
         )}
 
         {/* Controls */}
-        <Stack direction="row" spacing={1} mt={2} justifyContent="space-between" alignItems="center">
+        <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'space-between', alignItems: 'center' }}>
           <Stack direction="row" spacing={1}>
             <Tooltip title="Zoom In">
               <IconButton size="small" onClick={handleZoomIn}>
@@ -425,21 +428,21 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
             </Tooltip>
           </Stack>
 
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Box display="flex" alignItems="center" gap={1}>
-              <Box width={20} height={20} bgcolor="#00ff00" borderRadius={0.5} />
+          <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 20, height: 20, bgcolor: '#00ff00', borderRadius: 0.5 }} />
               <Typography variant="caption">Low</Typography>
             </Box>
-            <Box display="flex" alignItems="center" gap={1}>
-              <Box width={20} height={20} bgcolor="#ffcc00" borderRadius={0.5} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 20, height: 20, bgcolor: '#ffcc00', borderRadius: 0.5 }} />
               <Typography variant="caption">Medium</Typography>
             </Box>
-            <Box display="flex" alignItems="center" gap={1}>
-              <Box width={20} height={20} bgcolor="#ff6600" borderRadius={0.5} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 20, height: 20, bgcolor: '#ff6600', borderRadius: 0.5 }} />
               <Typography variant="caption">High</Typography>
             </Box>
-            <Box display="flex" alignItems="center" gap={1}>
-              <Box width={20} height={20} bgcolor="#ff0000" borderRadius={0.5} />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={{ width: 20, height: 20, bgcolor: '#ff0000', borderRadius: 0.5 }} />
               <Typography variant="caption">Critical</Typography>
             </Box>
           </Stack>
@@ -451,7 +454,7 @@ export const RiskHeatMap3D: React.FC<RiskHeatMap3DProps> = ({
             <Typography variant="subtitle2" gutterBottom>
               Selected Zone Details
             </Typography>
-            <Stack direction="row" spacing={2} flexWrap="wrap">
+            <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap' }}>
               <Box>
                 <Typography variant="caption" color="text.secondary">
                   Zone ID

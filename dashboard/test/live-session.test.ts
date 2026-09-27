@@ -225,10 +225,10 @@ describe("dashboard live session startup", () => {
     const base = "https://gcp.example/v1/edge-media/c8921284-3240-4bd5-8d73-21acbe7eef11";
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("control.internal")) {
+      if (url.endsWith("/live-sessions")) {
         return Response.json({ token: "t".repeat(43), mediaGatewayUrl: base }, { status: 201 });
       }
-      expect(url).toBe(`${base}/v1/live/start`);
+      expect(url).toBe("http://control.internal:8080/v1/edge-media/c8921284-3240-4bd5-8d73-21acbe7eef11/v1/live/start");
       return Response.json({
         cameraId: "camera-1",
         sessionId: "session-1",

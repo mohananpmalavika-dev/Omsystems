@@ -399,7 +399,7 @@ export async function registerCommunicationsRoutes(
       const result = await ctx.enrollmentService.enrollDevice(input);
       
       // Generate device tokens
-      const tokens = await ctx.credentialService.createDeviceTokens(result.device.id);
+      const tokens = await ctx.credentialService.createDeviceTokens(result.device);
       
       // Audit event
       await store.writeAudit({

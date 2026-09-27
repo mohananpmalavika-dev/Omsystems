@@ -182,10 +182,17 @@ export class DeviceCredentialService {
    * @returns Device tokens
    */
   async createDeviceTokens(
-    device: CommunicationDevice
+    device: CommunicationDevice | string
   ): Promise<DeviceTokenResult> {
-    // Generate tokens
-    const accessToken = this.generateAccessToken();
+    const deviceRecord = typeof device === 'string'
+      ? await this.resolveDevice(device)
+      : device;
+
+    if (!deviceRecord) {
+      throw new Error('DEVICE_NOT_FOUND');
+    }
+
+    const accessToken = this.generateAccessToken(deviceRecord.id, deviceRecord.deviceUuid);
     const refreshToken = this.generateRefreshToken();
 
     // Hash refresh token for storage
@@ -214,8 +221,8 @@ export class DeviceCredentialService {
         expires_at = EXCLUDED.expires_at,
         created_at = NOW()`,
       [
-        device.id,
-        device.tenantId,
+        deviceRecord.id,
+        deviceRecord.tenantId,
         refreshTokenHash,
         refreshTokenExpiresAt,
       ]
@@ -226,11 +233,11 @@ export class DeviceCredentialService {
       `UPDATE communication_devices
       SET last_seen_at = NOW(), updated_at = NOW()
       WHERE id = $1`,
-      [device.id]
+      [deviceRecord.id]
     );
 
     return {
-      deviceId: device.id,
+      deviceId: deviceRecord.id,
       accessToken,
       refreshToken,
       accessTokenExpiresAt,
@@ -251,9 +258,7 @@ export class DeviceCredentialService {
     accessToken: string
   ): Promise<CredentialVerification> {
     try {
-      // In production, this would verify JWT signature
-      // For now, we do basic token lookup
-      const deviceId = this.extractDeviceId(accessToken);
+      const deviceId = await this.extractDeviceId(accessToken);
 
       if (!deviceId) {
         return {
@@ -408,9 +413,38 @@ export class DeviceCredentialService {
    * @returns Access token
    * @private
    */
-  private generateAccessToken(): string {
-    // In production: sign JWT with device ID and expiry
-    return randomBytes(32).toString('base64url');
+  private generateAccessToken(deviceId: string, deviceUuid?: string): string {
+    const payload = {
+      typ: 'device-access',
+      deviceId,
+      deviceUuid,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + this.ACCESS_TOKEN_LIFETIME,
+    };
+
+    return `jwt-device-${Buffer.from(JSON.stringify(payload)).toString('base64url')}`;
+  }
+
+  private async resolveDevice(deviceId: string): Promise<CommunicationDevice | null> {
+    const result = await this.pool.query<CommunicationDevice>(
+      `SELECT
+        id, tenant_id as "tenantId", branch_id as "branchId",
+        device_name as "deviceName", device_uuid as "deviceUuid",
+        device_type as "deviceType", platform,
+        public_key as "publicKey", certificate_id as "certificateId",
+        credential_hash as "credentialHash",
+        status, status_reason as "statusReason",
+        app_version as "appVersion", last_seen_at as "lastSeenAt",
+        last_ip as "lastIp", device_capabilities as "deviceCapabilities",
+        registered_at as "registeredAt", approved_at as "approvedAt",
+        approved_by as "approvedBy", revoked_at as "revokedAt",
+        revoked_by as "revokedBy", revoke_reason as "revokeReason",
+        created_at as "createdAt", updated_at as "updatedAt"
+      FROM communication_devices WHERE id = $1 LIMIT 1`,
+      [deviceId]
+    );
+
+    return result.rows[0] ?? null;
   }
 
   /**
@@ -457,9 +491,37 @@ export class DeviceCredentialService {
    * @returns Device ID or null
    * @private
    */
-  private extractDeviceId(token: string): string | null {
-    // In production: verify JWT and extract device ID from claims
-    // For now, return null to force lookup
-    return null;
+  private async extractDeviceId(token: string): Promise<string | null> {
+    try {
+      const match = /^jwt-device-(.+)$/i.exec(token.trim());
+      if (!match) {
+        return null;
+      }
+
+      const payload = JSON.parse(Buffer.from(match[1], 'base64url').toString('utf8')) as {
+        deviceId?: string;
+        deviceUuid?: string;
+      };
+
+      if (payload.deviceId) {
+        const result = await this.pool.query<{ id: string }>(
+          `SELECT id FROM communication_devices WHERE id = $1 LIMIT 1`,
+          [payload.deviceId]
+        );
+        return result.rows[0]?.id ?? null;
+      }
+
+      if (!payload.deviceUuid) {
+        return null;
+      }
+
+      const result = await this.pool.query<{ id: string }>(
+        `SELECT id FROM communication_devices WHERE device_uuid = $1 LIMIT 1`,
+        [payload.deviceUuid]
+      );
+      return result.rows[0]?.id ?? null;
+    } catch {
+      return null;
+    }
   }
 }

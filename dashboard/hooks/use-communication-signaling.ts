@@ -60,22 +60,22 @@ export interface CommunicationSignalingHook {
   connected: boolean;
   
   // Event listeners
-  onCallInvite: (handler: (event: CallInviteEvent) => void) => void;
-  onCallRinging: (handler: (event: CallStatusEvent) => void) => void;
-  onCallAccepted: (handler: (event: CallStatusEvent) => void) => void;
-  onCallAcceptedElsewhere: (handler: (event: CallStatusEvent) => void) => void;
-  onCallConnected: (handler: (event: CallStatusEvent) => void) => void;
-  onCallReconnecting: (handler: (event: CallStatusEvent) => void) => void;
-  onCallRejected: (handler: (event: CallStatusEvent) => void) => void;
-  onCallCancelled: (handler: (event: CallStatusEvent) => void) => void;
-  onCallEnded: (handler: (event: CallStatusEvent) => void) => void;
-  onCallFailed: (handler: (event: CallStatusEvent) => void) => void;
+  onCallInvite: (handler: (event: CallInviteEvent) => void) => () => void;
+  onCallRinging: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallAccepted: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallAcceptedElsewhere: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallConnected: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallReconnecting: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallRejected: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallCancelled: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallEnded: (handler: (event: CallStatusEvent) => void) => () => void;
+  onCallFailed: (handler: (event: CallStatusEvent) => void) => () => void;
   
-  onMessageCreated: (handler: (event: MessageEvent) => void) => void;
-  onMessageDelivered: (handler: (event: { messageId: string }) => void) => void;
-  onMessageRead: (handler: (event: { messageId: string }) => void) => void;
+  onMessageCreated: (handler: (event: MessageEvent) => void) => () => void;
+  onMessageDelivered: (handler: (event: { messageId: string }) => void) => () => void;
+  onMessageRead: (handler: (event: { messageId: string }) => void) => () => void;
   
-  onPresenceChanged: (handler: (event: PresenceEvent) => void) => void;
+  onPresenceChanged: (handler: (event: PresenceEvent) => void) => () => void;
   
   // Cleanup
   cleanup: () => void;

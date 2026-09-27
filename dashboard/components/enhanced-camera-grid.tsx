@@ -1182,6 +1182,7 @@ export function EnhancedCameraGrid({
 
   // Keyboard navigation shortcuts for presentation/monitoring mode
   useEffect(() => {
+    if (compactStage) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       if (activeTag === "input" || activeTag === "textarea" || activeTag === "select") {
@@ -1210,7 +1211,7 @@ export function EnhancedCameraGrid({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [totalPages]);
+  }, [totalPages, compactStage]);
 
   useEffect(() => {
     const camerasById = new Map(cameras.map((camera) => [camera.id, camera]));
@@ -1229,7 +1230,7 @@ export function EnhancedCameraGrid({
   // Auto-elevate layout to Hero (1+5 / 1+7) on critical alert, place alerting camera in Slot 0,
   // align context cameras and handover camera adjacent, and restore previous layout when alert clears.
   useEffect(() => {
-    if (!autoFocusAlerts) return;
+    if (compactStage || !autoFocusAlerts) return;
 
     // Find any camera with active critical P1/P2 alert or detected intrusion/safety violation
     let alertingCameraId: string | null = null;
@@ -1335,7 +1336,7 @@ export function EnhancedCameraGrid({
       ],
       { duration: 1600, easing: "ease-out" }
     );
-  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, cameras, displayedCameras, gridSize, handoverData, gridPositions]);
+  }, [aiByCamera, priorityCameraIds, autoFocusAlerts, compactStage, cameras, displayedCameras, gridSize, handoverData, gridPositions]);
 
   const handleGridSizeChange = (newSize: GridSize) => {
     // If operator manually chooses a layout, clear auto-spotlight restore memory

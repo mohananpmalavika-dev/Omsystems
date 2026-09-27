@@ -1,5 +1,6 @@
 import type { Branch, Camera, LiveSessionResponse, RecordingJob, RecordingSegment, TalkSessionResponse } from "./types";
 import { isBrowserDirectMediaUrl } from "./media-routing";
+import { rewriteLiveMediaUrls } from "./live-media-urls";
 
 // Render -> public tunnel -> local media gateway can take longer than a
 // normal API request while the tunnel wakes up or the camera path is created.
@@ -347,31 +348,6 @@ function isHttpsUrl(value?: string): boolean {
   } catch {
     return false;
   }
-}
-
-function rewriteLiveMediaUrls(session: LiveSessionResponse, mediaGatewayUrl: string): LiveSessionResponse {
-  let gateway: URL;
-  try { gateway = new URL(mediaGatewayUrl); } catch { return session; }
-  if (gateway.protocol !== "https:") return session;
-
-  const rewrite = (value: string) => {
-    try {
-      const source = new URL(value);
-      if (source.protocol !== "http:") return value;
-      const prefix = gateway.pathname.replace(/\/$/, "");
-      const path = prefix && prefix !== "/" && !source.pathname.startsWith(`${prefix}/`)
-        ? `${prefix}${source.pathname}` : source.pathname;
-      return new URL(`${path}${source.search}`, gateway).toString();
-    } catch {
-      return value;
-    }
-  };
-
-  return {
-    ...session,
-    ...(session.hls ? { hls: { ...session.hls, url: rewrite(session.hls.url) } } : {}),
-    ...(session.webRtc ? { webRtc: { ...session.webRtc, whepUrl: rewrite(session.webRtc.whepUrl) } } : {}),
-  };
 }
 
 export async function startTalk(

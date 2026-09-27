@@ -84,11 +84,26 @@ export function GlobalAlertCenter() {
       const nextAlerts = (body.data ?? []) as CommandAlert[];
       if (hasLoadedAlerts.current) {
         const previousIds = new Set(alertsRef.current.map((alert) => alert.id));
-        const newAlert = nextAlerts.find((alert) => !previousIds.has(alert.id));
+        const newAlerts = activeDashboardQueue(nextAlerts).filter((alert) => !previousIds.has(alert.id));
+        const newAlert = newAlerts[0];
         if (newAlert && alertToastEnabled) {
           if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
           setNotificationAlert(newAlert);
           notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
+        }
+        for (const alert of newAlerts) {
+          if (alert.status === "acknowledged") continue;
+          void alertAudioService.playAlert({
+            alertId: alert.id,
+            severity: (alert.severity ?? "P3") as AlertSeverity,
+            title: alert.title,
+            branchName: alert.branchName,
+            cameraName: alert.cameraName,
+            detectionType: alert.detectionType,
+          });
+        }
+        for (const alert of nextAlerts) {
+          if (alert.status === "acknowledged" || terminalAlertStatus(alert.status)) alertAudioService.stopAlert(alert.id);
         }
       }
       hasLoadedAlerts.current = true;
@@ -97,7 +112,7 @@ export function GlobalAlertCenter() {
     } catch {
       // SSE reconnect and polling fallback
     }
-  }, [enabledForRoute]);
+  }, [enabledForRoute, alertToastEnabled]);
 
   useEffect(() => {
     if (!enabledForRoute) return;
@@ -124,7 +139,9 @@ export function GlobalAlertCenter() {
         const next = (body.data ?? []) as CommandAlert[];
         if (next.length === 0) return;
         const newAlert = next[0];
-        if (alertToastEnabled) {
+        if (activeDashboardQueue([newAlert]).length === 0) return;
+        const alreadyPresent = alertsRef.current.some((alert) => alert.id === newAlert.id);
+        if (!alreadyPresent && alertToastEnabled) {
           if (notificationTimer.current) window.clearTimeout(notificationTimer.current);
           setNotificationAlert(newAlert);
           notificationTimer.current = window.setTimeout(() => setNotificationAlert(undefined), 8_000);
@@ -137,7 +154,7 @@ export function GlobalAlertCenter() {
         });
 
         // Trigger centralized alert audio
-        void alertAudioService.playAlert({
+        if (!alreadyPresent && newAlert.status !== "acknowledged") void alertAudioService.playAlert({
           alertId: newAlert.id,
           severity: (newAlert.severity ?? "P3") as AlertSeverity,
           title: newAlert.title,
@@ -164,9 +181,10 @@ export function GlobalAlertCenter() {
         const body = await response.json();
         const updated = (body.data ?? [])[0] as CommandAlert | undefined;
         if (!updated) return;
+        alertsRef.current = alertsRef.current.map((alert) => alert.id === updated.id ? updated : alert);
         setAlerts((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
 
-        if (updated.status === "acknowledged" || updated.status === "resolved") {
+        if (updated.status === "acknowledged" || terminalAlertStatus(updated.status)) {
           alertAudioService.stopAlert(updated.id);
         }
       } catch { }

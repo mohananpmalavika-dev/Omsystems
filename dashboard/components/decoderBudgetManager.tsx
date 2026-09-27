@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { clampDecoderLimit, DECODER_CAPACITY_OPTIONS } from "./enhanced-camera-grid-model";
 
 export type DecoderBudget = {
@@ -67,7 +67,9 @@ export function useDecoderBudgetManager({
     setDecoderBudget((prev) => ({ ...prev, maxActiveDecoders: clamped }));
   };
 
-  const setActiveCount = (count: number) => setDecoderBudget((prev) => ({ ...prev, currentActiveDecoders: count }));
+  const setActiveCount = useCallback((count: number) => setDecoderBudget((prev) =>
+    prev.currentActiveDecoders === count ? prev : { ...prev, currentActiveDecoders: count }
+  ), []);
 
   return {
     decoderBudget,

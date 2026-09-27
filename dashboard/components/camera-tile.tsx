@@ -84,6 +84,7 @@ function formatLiveError(reason: string) {
     local_media_gateway_unavailable: "The local camera gateway is unreachable",
     live_session_unavailable: "Live authorization is unavailable",
     live_session_timeout: "Live authorization timed out",
+    playback_start_timeout: "The camera did not send playable video. Reconnecting…",
     "Failed to fetch": "The live gateway could not be reached",
     "TypeError: Failed to fetch": "The live gateway could not be reached",
     "HLS playback failed": "The stream could not be played",
@@ -183,10 +184,11 @@ function CameraTileComponent({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, []);
-  const [isMuted, setIsMuted] = useState(false); // Audio unmuted by default for live camera wall
+  const [isMuted, setIsMuted] = useState(true); // Start video without browser-blocked audio autoplay.
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [audioWaveform, setAudioWaveform] = useState<number[]>([0, 0, 0, 0, 0, 0, 0]);
-  const [loudNoiseAlert, setLoudNoiseAlert] = useState<{ active: boolean; decibels: number; timestamp: number } | null>(null);
+  const [loudNoiseAlert, setLoudNoiseAlert] = useState<{ active: boolean; level: number; timestamp: number } | null>(null);
+  const [failedSnapshotUrl, setFailedSnapshotUrl] = useState<string>();
   const loudNoiseThresholdRef = useRef<{ consecutiveHighFrames: number; lastAlertTime: number }>({ consecutiveHighFrames: 0, lastAlertTime: 0 });
   const [isTalking, setIsTalking] = useState(false);
   const [hasLiveFrame, setHasLiveFrame] = useState(false);
@@ -373,15 +375,14 @@ function CameraTileComponent({
             ]);
           }
 
-          // Automated Loud Noise / Panic Sound Detection (>76% / ~82dB threshold)
+          // This is a relative browser signal level, not calibrated sound pressure.
           if (currentLevel > 76) {
             loudNoiseThresholdRef.current.consecutiveHighFrames += 1;
             if (loudNoiseThresholdRef.current.consecutiveHighFrames >= 10 || currentLevel > 90) {
               const now = Date.now();
               if (now - loudNoiseThresholdRef.current.lastAlertTime > 6000) {
                 loudNoiseThresholdRef.current.lastAlertTime = now;
-                const estimatedDb = Math.round(50 + (currentLevel * 0.45));
-                setLoudNoiseAlert({ active: true, decibels: estimatedDb, timestamp: now });
+                setLoudNoiseAlert({ active: true, level: currentLevel, timestamp: now });
               }
             }
           } else {
@@ -758,16 +759,16 @@ function CameraTileComponent({
           )}
           <span className={`status-pill ${hasLiveFrame ? "online" : (liveError && isFatalLiveError(liveError)) ? "offline" : camera.status}`}>
             <i />
-            {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? "Snapshot fallback" : session?.hls ? "Connecting" : camera.status === "online" ? "Ready" : camera.status}
+            {hasLiveFrame ? "Live HLS" : (liveError && isFatalLiveError(liveError)) ? (snapshotUrl && snapshotUrl !== failedSnapshotUrl ? "Snapshot fallback" : "Stream unavailable") : session?.hls ? "Connecting" : camera.status === "online" ? "Device online" : camera.status}
           </span>
-          {!effectiveMuted && (
+          {!effectiveMuted && hasLiveFrame && internalVideoElement && (
             <span
               className={`status-pill flex items-center gap-1.5 transition-all duration-200 ${
                 loudNoiseAlert?.active
                   ? "text-rose-300 border-rose-500/80 bg-rose-950/90 shadow-[0_0_12px_rgba(244,63,94,0.5)] animate-pulse font-bold"
                   : "text-emerald-400 border-emerald-500/40 bg-emerald-950/70"
               }`}
-              title={`Live Audio: ${audioLevel}% (~${Math.round(45 + audioLevel * 0.45)} dB)`}
+              title={`Relative audio signal: ${audioLevel}% (not calibrated dB)`}
             >
               <Volume2
                 size={12}
@@ -790,7 +791,7 @@ function CameraTileComponent({
                 ))}
               </span>
               <span className="text-[9px] font-mono opacity-85">
-                {Math.round(45 + audioLevel * 0.45)}dB
+                {audioLevel}%
               </span>
             </span>
           )}
@@ -1050,12 +1051,13 @@ function CameraTileComponent({
                 />
               )}
             </>
-          ) : snapshotUrl ? (
+          ) : snapshotUrl && snapshotUrl !== failedSnapshotUrl ? (
             <>
               <img
                 src={snapshotUrl}
                 alt={`Latest snapshot from ${camera.name}`}
                 className="live-video"
+                onError={() => setFailedSnapshotUrl(snapshotUrl)}
               />
               {showAiOverlay && hasLiveFrame && (
                 <LiveAiOverlay
@@ -1112,7 +1114,7 @@ function CameraTileComponent({
         {hasAudioPanic && (
           <div className="absolute top-10 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-600/95 text-white text-[11px] font-black tracking-wide shadow-2xl border border-rose-300/80 backdrop-blur animate-bounce pointer-events-none">
             <Volume2 size={13} className="text-white animate-pulse" />
-            <span>PANIC AUDIO: LOUD NOISE DETECTED ({loudNoiseAlert?.decibels} dB)</span>
+            <span>HIGH AUDIO SIGNAL ({loudNoiseAlert?.level}% relative level)</span>
           </div>
         )}
 

@@ -3147,7 +3147,7 @@ export async function buildApp(options?: {
 
   // Register Consolidated Multi-Channel Notification Subsystem routes
   try {
-    await registerNotificationRoutes(app);
+    await registerNotificationRoutes(app, pool);
     app.log.info('Consolidated notification subsystem routes registered');
   } catch (err: unknown) {
     app.log.error({ err }, 'failed to register notification subsystem routes');

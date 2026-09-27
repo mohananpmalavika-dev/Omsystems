@@ -10,11 +10,15 @@ export async function loadCameraInventory<T extends { id: string }>(
   while (first.total === undefined ? pageLength === limit : offset < first.total) {
     const page = await fetchPage(offset, limit);
     pageLength = page.cameras.length;
+    if (!pageLength && first.total === undefined) break;
     if (!pageLength || page.cameras.every(camera => cameras.has(camera.id))) {
       throw new Error("Camera inventory pagination is incomplete. Refresh the scope.");
     }
     page.cameras.forEach(camera => cameras.set(camera.id, camera));
     offset += pageLength;
+  }
+  if (first.total !== undefined && cameras.size < first.total) {
+    throw new Error("Camera inventory pagination is incomplete. Refresh the scope.");
   }
   return [...cameras.values()];
 }

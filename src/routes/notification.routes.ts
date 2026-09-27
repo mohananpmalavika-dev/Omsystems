@@ -3,6 +3,7 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import type { Pool } from "pg";
 import {
   notificationService,
   notificationOutbox,
@@ -15,7 +16,18 @@ const voiceTokens = process.env.VOICE_TOKEN_SECRET
   ? new VoiceCallbackTokens(process.env.VOICE_TOKEN_SECRET)
   : undefined;
 
-export async function registerNotificationRoutes(app: FastifyInstance) {
+export async function registerNotificationRoutes(app: FastifyInstance, pool?: Pool) {
+  if (pool) notificationOutbox.setPool(pool);
+  // Retry persisted jobs even when no new alerts arrive; do not overlap drains.
+  let draining = false;
+  const timer = setInterval(() => {
+    if (draining) return;
+    draining = true;
+    void notificationService.processOutbox().catch(error => app.log.error({ error }, "Notification outbox drain failed"))
+      .finally(() => { draining = false; });
+  }, 5_000);
+  timer.unref();
+  app.addHook("onClose", async () => { clearInterval(timer); });
   /**
    * POST /api/v1/notifications/dispatch & /v1/notifications/dispatch
    */

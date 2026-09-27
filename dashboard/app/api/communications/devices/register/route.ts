@@ -132,10 +132,13 @@ export async function POST(req: NextRequest) {
     const publicKey = `pub-${randomBytes(32).toString("base64")}`;
     const deviceType = isEmployeeSpecific ? "EMPLOYEE_MOBILE" : "BRANCH_SHARED";
     const deviceToken = `jwt-device-${Buffer.from(JSON.stringify({
-      uuid: deviceUuid,
+      deviceUuid,
+      deviceId: null,
       branchId,
       employeeId: isEmployeeSpecific ? employeeId : undefined,
-      t: Date.now(),
+      deviceType,
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
     })).toString("base64url")}`;
 
     const pool = getPool();

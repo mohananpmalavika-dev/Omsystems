@@ -397,17 +397,10 @@ export default function KryptoVisionConnectPage() {
     try {
       setError(null);
       await webrtc.initializeMedia({ audio: true, video: modality === 'video' });
-      const credentials = await communicationAPI.acceptCall(incomingCall.callId);
+      const { call, credentials } = await communicationAPI.acceptCall(incomingCall.callId);
 
       setActiveCall({
-        session: {
-          id: incomingCall.callId,
-          tenantId: incomingCall.tenantId,
-          direction: 'INBOUND',
-          status: 'CONNECTED',
-          sourceBranchName: 'VMS Command Center',
-          createdAt: new Date().toISOString(),
-        },
+        session: call,
         startTime: new Date(),
         modality,
       });

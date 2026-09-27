@@ -3,10 +3,12 @@
 import Hls from "hls.js";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, RotateCw, Sliders, Zap, ChevronDown } from "lucide-react";
+import { isSnapshotSource, playLiveVideo } from "@/lib/live-playback";
 
 const MAX_RECOVERY_ATTEMPTS = 25;
 const STALL_TIMEOUT_MS = 20_000;
 const RECOVERY_DELAY_MS = 1_200;
+const STARTUP_TIMEOUT_MS = 45_000;
 
 type PlayerStatus = "idle" | "loading" | "live" | "reconnecting" | "error";
 
@@ -39,6 +41,7 @@ export function HlsPlayer({
   const [status, setStatus] = useState<PlayerStatus>(url || whepUrl ? "loading" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [autoplayMuted, setAutoplayMuted] = useState(false);
 
   // Sub-Second Zero-Latency & Dynamic Bitrate Switcher State
   const isEdgeRelay = Boolean((url && url.includes("/edge-media/")) || (whepUrl && whepUrl.includes("/edge-media/")));
@@ -89,6 +92,9 @@ export function HlsPlayer({
     let recoveryAttempts = 0;
     let lastProgressAt = Date.now();
     let playbackStarted = false;
+    let failed = false;
+    const startupAt = Date.now();
+    let lastMediaTime = -1;
     let reportedPlaying = false;
     let currentProtocol: "webrtc" | "ll-hls" = streamProtocol;
 
@@ -106,7 +112,7 @@ export function HlsPlayer({
       return;
     }
 
-    const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
+    const isSnapshotFeed = isSnapshotSource(url);
     if (isSnapshotFeed) {
       setStatus("loading");
       setError(null);
@@ -126,6 +132,9 @@ export function HlsPlayer({
     const setPlayerError = (reason: string) => {
       if (disposed) return;
       cleanupStreaming();
+      failed = true;
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      if (watchdogTimer) clearInterval(watchdogTimer);
       setError(reason);
       setStatus("error");
       reportPlaying(false);
@@ -163,14 +172,22 @@ export function HlsPlayer({
     };
 
     const markProgress = () => {
-      if (disposed) return;
+      if (disposed || failed || video.paused || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (playbackStarted && video.currentTime === lastMediaTime) return;
+      lastMediaTime = video.currentTime;
       playbackStarted = true;
       lastProgressAt = Date.now();
       recoveryAttempts = 0;
       setError(null);
       setStatus("live");
       reportPlaying(true);
+      if (whepTimeoutTimer) {
+        clearTimeout(whepTimeoutTimer);
+        whepTimeoutTimer = undefined;
+      }
     };
+
+    const playVideo = () => playLiveVideo(video, () => !disposed && !failed, () => setAutoplayMuted(true));
 
     // Low Latency HLS Playback Logic
     const startHls = (sourceUrl: string) => {
@@ -245,16 +262,11 @@ export function HlsPlayer({
           });
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            // Reset the stall clock so the watchdog doesn't fire prematurely
-            // during initial HLS buffer build-up. playbackStarted is only set
-            // to true when a real video frame arrives (markProgress).
-            lastProgressAt = Date.now();
+            // Playlist metadata is not proof that a video frame has arrived.
             if (typeof hls?.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition) && hls.liveSyncPosition > 0) {
               try { video.currentTime = hls.liveSyncPosition; } catch {}
             }
-            void video.play().catch((err) => {
-              console.warn("[HlsPlayer] Autoplay deferred or blocked:", err);
-            });
+            void playVideo();
           });
 
           hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -303,7 +315,7 @@ export function HlsPlayer({
       } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
         video.src = withToken(refreshedSource, bearerToken);
         video.load();
-        void video.play().catch(() => undefined);
+        void playVideo();
       } else {
         setPlayerError("This browser does not support live video playback");
       }
@@ -313,6 +325,7 @@ export function HlsPlayer({
     const startWebRtc = async (targetWhepUrl: string) => {
       if (disposed || !video) return;
       cleanupStreaming();
+      playbackStarted = false;
 
       whepAbortController = new AbortController();
       const signal = whepAbortController.signal;
@@ -330,13 +343,8 @@ export function HlsPlayer({
         pc.ontrack = (event) => {
           if (disposed || signal.aborted) return;
           if (event.streams && event.streams[0]) {
-            if (whepTimeoutTimer) {
-              clearTimeout(whepTimeoutTimer);
-              whepTimeoutTimer = undefined;
-            }
             video.srcObject = event.streams[0];
-            void video.play().catch(() => undefined);
-            markProgress();
+            void playVideo();
             currentProtocol = "webrtc";
             setStreamProtocol("webrtc");
             setLatencyMs(280);
@@ -358,7 +366,11 @@ export function HlsPlayer({
 
         // Fallback timer: if WebRTC does not receive media within 4 seconds, fallback to HLS
         whepTimeoutTimer = setTimeout(() => {
-          if (!disposed && !playbackStarted && url) {
+          if (!disposed && !playbackStarted) {
+            if (!url) {
+              setPlayerError("playback_start_timeout");
+              return;
+            }
             console.warn("[WebRTC] Handshake timed out, falling back to HLS");
             cleanupStreaming();
             currentProtocol = "ll-hls";
@@ -416,7 +428,7 @@ export function HlsPlayer({
           sdp: answerSdp,
         });
       } catch (err) {
-        if (!disposed) {
+        if (!disposed && !signal.aborted) {
           console.warn("[WebRTC] WHEP initiation error, falling back to HLS:", err);
           cleanupStreaming();
           currentProtocol = "ll-hls";
@@ -432,7 +444,7 @@ export function HlsPlayer({
     };
 
     const recover = (reason: string) => {
-      if (disposed || recoveryTimer) return;
+      if (disposed || failed || recoveryTimer) return;
       if (recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
         setPlayerError(reason);
         return;
@@ -457,7 +469,7 @@ export function HlsPlayer({
               if (typeof hls.liveSyncPosition === "number" && !isNaN(hls.liveSyncPosition)) {
                 try { video.currentTime = hls.liveSyncPosition; } catch {}
               }
-              void video.play().catch(() => undefined);
+              void playVideo();
               lastProgressAt = Date.now();
               return;
             }
@@ -480,21 +492,18 @@ export function HlsPlayer({
         recover("playback_stalled");
       }
     };
-    const handleProgress = () => { lastProgressAt = Date.now(); };
-    const handleCanPlay = () => { void video.play().catch(() => undefined); };
+    const handleCanPlay = () => { void playVideo(); };
     const handleLoadedData = () => {
       markProgress();
       if (video.paused) {
-        void video.play().catch(() => undefined);
+        void playVideo();
       }
     };
 
     video.addEventListener("playing", markProgress);
     video.addEventListener("timeupdate", markProgress);
-    video.addEventListener("progress", handleProgress);
     video.addEventListener("canplay", handleCanPlay);
     video.addEventListener("loadeddata", handleLoadedData);
-    video.addEventListener("loadedmetadata", handleLoadedData);
     video.addEventListener("waiting", handleWaiting);
     video.addEventListener("stalled", handleWaiting);
     video.addEventListener("error", handleVideoError);
@@ -503,14 +512,20 @@ export function HlsPlayer({
     setError(null);
 
     // Prioritize WebRTC for sub-second zero latency; fallback automatically to HLS
-    if (currentProtocol === "webrtc" && whepUrl) {
+    if (whepUrl && (currentProtocol === "webrtc" || !url)) {
       void startWebRtc(whepUrl);
     } else if (url) {
       startHls(url);
     }
 
     watchdogTimer = setInterval(() => {
-      if (!playbackStarted || video.paused) return;
+      if (disposed || failed) return;
+      // Network progress and SDP tracks do not prove that video is playing.
+      // Bound startup even if playlists keep loading or autoplay is paused.
+      if (!playbackStarted && Date.now() - startupAt >= STARTUP_TIMEOUT_MS) {
+        setPlayerError("playback_start_timeout");
+        return;
+      }
       if (Date.now() - lastProgressAt >= STALL_TIMEOUT_MS) {
         recover("playback_stalled");
         return;
@@ -562,10 +577,8 @@ export function HlsPlayer({
       if (whepTimeoutTimer) clearTimeout(whepTimeoutTimer);
       video.removeEventListener("playing", markProgress);
       video.removeEventListener("timeupdate", markProgress);
-      video.removeEventListener("progress", handleProgress);
       video.removeEventListener("canplay", handleCanPlay);
       video.removeEventListener("loadeddata", handleLoadedData);
-      video.removeEventListener("loadedmetadata", handleLoadedData);
       video.removeEventListener("waiting", handleWaiting);
       video.removeEventListener("stalled", handleWaiting);
       video.removeEventListener("error", handleVideoError);
@@ -583,7 +596,7 @@ export function HlsPlayer({
     setRetryNonce((value) => value + 1);
   };
 
-  const isSnapshotFeed = Boolean(url && (url.includes("snapshot") || url.includes("relay") || /\.(jpe?g|png|webp)($|\?)/i.test(url)));
+  const isSnapshotFeed = isSnapshotSource(url);
 
   return (
     <div
@@ -618,10 +631,24 @@ export function HlsPlayer({
           ref={videoRef}
           className={`live-video absolute inset-0 z-10 h-full w-full object-cover transition-opacity duration-300 ${status === "live" ? "opacity-100" : "opacity-0 pointer-events-none"}`}
           aria-label={`Live video from ${cameraName}`}
-          muted={muted}
+          muted={muted || autoplayMuted}
           playsInline
           autoPlay
         />
+      )}
+
+      {autoplayMuted && !muted && (
+        <button type="button" className="absolute bottom-2 right-2 z-30 rounded bg-black/80 px-2 py-1 text-xs text-white"
+          onClick={(event) => {
+            event.stopPropagation();
+            setAutoplayMuted(false);
+            if (videoRef.current) {
+              videoRef.current.muted = false;
+              void videoRef.current.play().catch(() => undefined);
+            }
+          }}>
+          Enable audio
+        </button>
       )}
 
       {status === "live" ? (

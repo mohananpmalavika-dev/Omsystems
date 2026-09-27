@@ -9,6 +9,8 @@
  * - Device enrollment
  */
 
+import type { CommunicationDevice, CommunicationEnrollmentCode } from '@/types/communication';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -141,9 +143,12 @@ class CommunicationAPIClient {
     };
     
     if (typeof window !== 'undefined') {
-      const token = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
+      const deviceToken = localStorage.getItem('commDeviceToken');
+      const sessionToken = sessionStorage.getItem('activityAccessToken') || sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken');
+      const token = deviceToken || sessionToken;
       if (token) {
         headers['x-sentinel-session'] = token;
+        headers['x-device-token'] = token;
         headers['Authorization'] = `Bearer ${token}`;
       }
     }
@@ -267,12 +272,18 @@ class CommunicationAPIClient {
     return response.data;
   }
   
-  async callVMS(employeeId?: string): Promise<CallSession> {
+  async callVMS(employeeId?: string, context?: string): Promise<CallSession> {
+    const payload: { actorType: 'BRANCH_DEVICE' | 'EMPLOYEE'; actorEmployeeId?: string; context?: string } = {
+      actorType: employeeId ? 'EMPLOYEE' : 'BRANCH_DEVICE',
+      ...(employeeId ? { actorEmployeeId: employeeId } : {}),
+      ...(context ? { context } : {}),
+    };
+
     const response = await this.request<{ data: CallSession }>(
       '/v1/communications/calls/soc',
       {
         method: 'POST',
-        body: JSON.stringify({ employeeId }),
+        body: JSON.stringify(payload),
       }
     );
     return response.data;

@@ -50,21 +50,23 @@ export class NotificationWorker {
   ) {}
 
   async processBatch(limit = 50): Promise<{ processed: number; succeeded: number; failed: number }> {
-    const jobs = await this.outbox.claimPending(limit);
-    let succeeded = 0;
-    let failed = 0;
+    if (this.isRunning) return { processed: 0, succeeded: 0, failed: 0 };
+    this.isRunning = true;
+    try {
+      const jobs = await this.outbox.claimPending(limit);
+      let succeeded = 0;
+      let failed = 0;
 
-    for (const job of jobs) {
-      const ok = await this.processJob(job);
-      if (ok) succeeded++;
-      else failed++;
+      for (const job of jobs) {
+        const ok = await this.processJob(job);
+        if (ok) succeeded++;
+        else failed++;
+      }
+
+      return { processed: jobs.length, succeeded, failed };
+    } finally {
+      this.isRunning = false;
     }
-
-    return {
-      processed: jobs.length,
-      succeeded,
-      failed,
-    };
   }
 
   async processJob(job: NotificationJob): Promise<boolean> {

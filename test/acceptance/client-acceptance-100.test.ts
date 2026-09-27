@@ -739,7 +739,7 @@ describe("KryptoVision — 100/100 Client Acceptance Test (All 19 Requirements)"
       async placeCall(_input) {
         return { id: "CA_test_call_sid_123456" };
       },
-    });
+    }, "https://voice.fixture.invalid", "acceptance-fixture-voice-secret");
     const voiceJob = {
       id: "job-voice-01",
       tenantId,

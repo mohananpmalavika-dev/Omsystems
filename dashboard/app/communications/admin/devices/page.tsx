@@ -80,7 +80,7 @@ export default function DeviceManagementPage() {
 
       setDevices(Array.isArray(devicesRes) ? devicesRes : devicesRes?.data || []);
       setEnrollmentCodes(Array.isArray(codesRes) ? codesRes : codesRes?.data || []);
-      setBranches(Array.isArray(branchesRes) ? branchesRes : branchesRes?.data || []);
+      setBranches(branchesRes);
       setEmployees(Array.isArray(employeesRes) ? employeesRes : employeesRes?.data || []);
     } catch (err: any) {
       setError(err?.message || 'Failed to load data');
