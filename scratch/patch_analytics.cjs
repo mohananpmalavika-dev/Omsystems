@@ -189,3 +189,13 @@ if (fs.existsSync(ppePath)) {
         console.log('Successfully disabled no-helmet in ppe-detector.js');
     }
 }
+
+// Patch 5: smoke-fire-detector.js - eliminate false fire alarms with high confidence & temporal confirmation
+const firePath = '/app/dist/analytics-engine/src/detectors/smoke-fire-detector.js';
+if (fs.existsSync(firePath)) {
+    let fireCode = fs.readFileSync(firePath, 'utf8');
+    fireCode = fireCode.replace(/this\.MIN_CONFIDENCE = confidenceThreshold;/g, 'this.MIN_CONFIDENCE = Math.max(confidenceThreshold, 0.90);');
+    fireCode = fireCode.replace(/this\.CONFIRMATION_FRAMES = Math\.max\(1,\s*Math\.floor\(confirmationFrames\)\);/g, 'this.CONFIRMATION_FRAMES = Math.max(5, Math.floor(confirmationFrames));');
+    fs.writeFileSync(firePath, fireCode, 'utf8');
+    console.log('Successfully patched smoke-fire-detector.js with 0.90 confidence and 5 confirmation frames');
+}

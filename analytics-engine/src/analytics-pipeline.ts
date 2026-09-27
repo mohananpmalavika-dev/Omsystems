@@ -145,8 +145,8 @@ export class AnalyticsPipeline {
     this.fallDetector = new FallDetector();
     this.smokeFireDetector = new SmokeFireDetector(
       null,
-      environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.8),
-      environmentInteger("FIRE_CONFIRMATION_FRAMES", 3, 1, 10),
+      environmentProbability("FIRE_CONFIDENCE_THRESHOLD", 0.90),
+      environmentInteger("FIRE_CONFIRMATION_FRAMES", 5, 1, 10),
     );
     this.crowdDensityDetector = new CrowdDensityDetector();
     this.tailgatingDetector = new TailgatingDetector();

@@ -37,8 +37,8 @@ export class SmokeFireDetector extends BaseDetector {
 
   constructor(
     inference: ObjectFrameInference | null = null,
-    confidenceThreshold = 0.8,
-    confirmationFrames = 3,
+    confidenceThreshold = 0.90,
+    confirmationFrames = 5,
     validateModelResponsiveness = false,
   ) {
     super("fire-smoke", "1.0.0");
