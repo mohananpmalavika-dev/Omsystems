@@ -32,12 +32,37 @@ import type { Pool } from 'pg';
 import type {
   CallSession,
   Message,
-  CommunicationPresence,
-  CallSignalingEvent,
-  MessageSignalingEvent,
-  PresenceSignalingEvent,
+  PresenceStatus,
 } from '../domain/types.js';
 import { WEBSOCKET_EVENTS, WEBSOCKET_ROOMS } from '../domain/constants.js';
+
+type CallSignalingEvent = {
+  type: string;
+  callId: string;
+  call?: CallSession;
+  acceptedBy?: string;
+  rejectedBy?: string;
+  cancelledBy?: string;
+  endReason?: string;
+  reason?: string;
+  timestamp: string;
+};
+type MessageSignalingEvent = {
+  type: string;
+  conversationId: string;
+  message?: Message;
+  messageId?: string;
+  deliveredBy?: string;
+  readBy?: string;
+  timestamp: string;
+};
+type PresenceSignalingEvent = {
+  type: string;
+  entityType: 'device' | 'employee' | 'branch' | 'operator';
+  entityId: string;
+  status: PresenceStatus;
+  timestamp: string;
+};
 
 /**
  * Communication Signaling Gateway
@@ -585,7 +610,7 @@ export class CommunicationSignalingGateway {
     tenantId: string,
     entityType: 'device' | 'employee' | 'branch' | 'operator',
     entityId: string,
-    status: CommunicationPresence
+    status: PresenceStatus
   ): void {
     const event: PresenceSignalingEvent = {
       type: WEBSOCKET_EVENTS.PRESENCE_CHANGED,
