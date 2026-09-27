@@ -183,7 +183,7 @@ export function DVRNVRMonitorDashboard() {
   return (
     <div className="dvr-nvr-monitor-dashboard">
       <div className="dashboard-header">
-        <div>
+        <div className="workspace-heading">
           <h1>DVR/NVR Monitoring</h1>
           <p>Real-time device health and status monitoring</p>
         </div>

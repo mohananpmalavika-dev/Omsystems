@@ -1,0 +1,422 @@
+[
+  {
+    "file": "dashboard\\components\\abandoned-object-workspace.tsx",
+    "start": 9951,
+    "end": 9956,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white flex items-center gap-2\">\n                Abandoned & Unattended Objec"
+  },
+  {
+    "file": "dashboard\\components\\admin\\feature-management.tsx",
+    "start": 11332,
+    "end": 11337,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-slate-100\">Feature Management</h1>"
+  },
+  {
+    "file": "dashboard\\components\\ai-incident-summary-dashboard.tsx",
+    "start": 6347,
+    "end": 6352,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-3xl font-bold\">AI Incident Summary</h1>"
+  },
+  {
+    "file": "dashboard\\components\\ai-sop-workflow-interface.tsx",
+    "start": 8335,
+    "end": 8340,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-3xl font-bold\">SOP Workflow</h1>"
+  },
+  {
+    "file": "dashboard\\components\\analytics-console.tsx",
+    "start": 11772,
+    "end": 11809,
+    "tag": "<header className=\"analytics-header\">",
+    "title": "<h1>Video Analytics & AI</h1>"
+  },
+  {
+    "file": "dashboard\\components\\analytics-dashboard.tsx",
+    "start": 4899,
+    "end": 4936,
+    "tag": "<header className=\"dashboard-header\">",
+    "title": "<h1>Analytics Dashboard</h1>"
+  },
+  {
+    "file": "dashboard\\components\\analytics-domain-workspace.tsx",
+    "start": 7711,
+    "end": 7848,
+    "tag": "<header className=\"relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl shadow-slate-950/30\">",
+    "title": "<h1 className=\"mt-2 text-3xl font-bold tracking-tight\">{preset.title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\anpr-workspace.tsx",
+    "start": 9235,
+    "end": 9240,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white\">\n                  Automatic Number Plate Recognition (ANPR)\n        "
+  },
+  {
+    "file": "dashboard\\components\\asset-replacement-manager.tsx",
+    "start": 4305,
+    "end": 4310,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight mt-1\">\r\n              Physical Hardware Replacement & Digital Twin Lin"
+  },
+  {
+    "file": "dashboard\\components\\audio-stream-monitoring-workspace.tsx",
+    "start": 11024,
+    "end": 11029,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white flex items-center gap-3\">\n                Audio Stream Monitoring\n    "
+  },
+  {
+    "file": "dashboard\\components\\banking-analytics-dashboard.tsx",
+    "start": 8640,
+    "end": 8746,
+    "tag": "<header className=\"relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6\">",
+    "title": "<h1 className=\"mt-2 text-3xl font-bold\">Banking analytics</h1>"
+  },
+  {
+    "file": "dashboard\\components\\behavioral-analytics-workspace.tsx",
+    "start": 11231,
+    "end": 11236,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-xl font-bold text-white tracking-tight flex items-center gap-2\">\r\n                Behavioral Analytics & Anoma"
+  },
+  {
+    "file": "dashboard\\components\\branch-command-center\\branch-header.tsx",
+    "start": 3147,
+    "end": 3152,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-gray-900 dark:text-white\">\r\n                Branch {snapshot.branchCode} — {snapshot.branch"
+  },
+  {
+    "file": "dashboard\\components\\branch-command-center\\branch-health-header.tsx",
+    "start": 2232,
+    "end": 2299,
+    "tag": "<div className=\"flex flex-wrap items-center justify-between gap-4\">",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-slate-100 mt-1\">\r\n            BRANCH {state.branchCode} — {state.branchName."
+  },
+  {
+    "file": "dashboard\\components\\branch-command-center\\camera-focus-mode.tsx",
+    "start": 3716,
+    "end": 3766,
+    "tag": "<div className=\"flex items-start justify-between\">",
+    "title": "<h1 className=\"text-2xl font-bold text-white mb-1\">\r\n              {camera.name}\r\n            </h1>"
+  },
+  {
+    "file": "dashboard\\components\\branch-gateway-fleet.tsx",
+    "start": 4347,
+    "end": 4374,
+    "tag": "<div className=\"max-w-3xl\">",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight sm:text-3xl\">Branch gateway fleet</h1>"
+  },
+  {
+    "file": "dashboard\\components\\camera-obstruction-workspace.tsx",
+    "start": 10606,
+    "end": 10633,
+    "tag": "<div className=\"space-y-1\">",
+    "title": "<h1 className=\"text-xl font-bold text-zinc-100 tracking-tight\">\n              Camera Obstruction & Dark Frame Detection\n          "
+  },
+  {
+    "file": "dashboard\\components\\camera-tamper-workspace.tsx",
+    "start": 11690,
+    "end": 11731,
+    "tag": "<div className=\"flex items-center gap-3\">",
+    "title": "<h1 className=\"text-2xl md:text-3xl font-bold tracking-tight text-white\">\n                Camera Tamper & Defocus Detection\n      "
+  },
+  {
+    "file": "dashboard\\components\\cold-cloud-archive-workspace.tsx",
+    "start": 8866,
+    "end": 8871,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white\">Cold Cloud Archive Export</h1>"
+  },
+  {
+    "file": "dashboard\\components\\crowd-analytics-workspace.tsx",
+    "start": 8742,
+    "end": 8747,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-xl font-bold text-white tracking-tight flex items-center gap-2\">\n                Crowd Density & Queue Length "
+  },
+  {
+    "file": "dashboard\\components\\device-configuration\\device-configuration-center.tsx",
+    "start": 6881,
+    "end": 6886,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-xl font-bold text-white tracking-tight flex items-center gap-2.5\">\r\n              <Sliders className=\"w-6 h-6 "
+  },
+  {
+    "file": "dashboard\\components\\device-connectivity-view.tsx",
+    "start": 8783,
+    "end": 8788,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight mt-1\">\r\n              Deterministic Device Adapters & 8-Factor Stream "
+  },
+  {
+    "file": "dashboard\\components\\digital-twin\\DigitalTwinPage.tsx",
+    "start": 516,
+    "end": 570,
+    "tag": "<header className=\"border-b border-gray-200 bg-white\">",
+    "title": "<h1 className=\"mt-1 text-3xl font-bold text-gray-900\">Infrastructure topology</h1>"
+  },
+  {
+    "file": "dashboard\\components\\digital-twin\\operational-twin.tsx",
+    "start": 11314,
+    "end": 11395,
+    "tag": "<div className=\"max-w-xl rounded-2xl border bg-white p-10 text-center shadow-sm\">",
+    "title": "<h1 className=\"mt-4 text-2xl font-bold\">Create branch Digital Twin</h1>"
+  },
+  {
+    "file": "dashboard\\components\\dvr-nvr-monitor-dashboard.tsx",
+    "start": 4932,
+    "end": 4937,
+    "tag": "<div>",
+    "title": "<h1>DVR/NVR Monitoring</h1>"
+  },
+  {
+    "file": "dashboard\\components\\edge-fleet-manager.tsx",
+    "start": 15363,
+    "end": 15368,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight mt-1\">\n              Edge Agent Management\n            </h1>"
+  },
+  {
+    "file": "dashboard\\components\\face\\cctv-enrollment-wizard.tsx",
+    "start": 4132,
+    "end": 4154,
+    "tag": "<div className=\"mb-8\">",
+    "title": "<h1 className=\"text-3xl font-bold text-slate-100 mb-2 flex items-center gap-3\">\r\n            <Camera className=\"w-8 h-8 text-indig"
+  },
+  {
+    "file": "dashboard\\components\\fall-detection-workspace.tsx",
+    "start": 6554,
+    "end": 6559,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-black text-white tracking-tight flex items-center gap-2\">\n                Worker & Elderly Fall Detec"
+  },
+  {
+    "file": "dashboard\\components\\global-command-center.tsx",
+    "start": 5307,
+    "end": 5312,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-3xl font-bold flex items-center gap-3\">\r\n            <Globe className=\"h-8 w-8 text-primary\" />\r\n            G"
+  },
+  {
+    "file": "dashboard\\components\\guardian-network-dashboard.tsx",
+    "start": 5421,
+    "end": 5426,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-4xl font-bold flex items-center gap-3\">\n            <Globe className=\"h-10 w-10 text-blue-500\" />\n            "
+  },
+  {
+    "file": "dashboard\\components\\ha-cluster-view.tsx",
+    "start": 4805,
+    "end": 4810,
+    "tag": "<div>",
+    "title": "<h1 className=\"mt-1 text-2xl font-bold text-white\">Cluster status</h1>"
+  },
+  {
+    "file": "dashboard\\components\\identity-watchlist-workspace.tsx",
+    "start": 12049,
+    "end": 12186,
+    "tag": "<header className=\"relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl shadow-slate-950/30\">",
+    "title": "<h1 className=\"mt-2 text-3xl font-bold tracking-tight\">{mode === \"face\" ? \"Face recognition\" : \"ANPR operations\"}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\login-form.tsx",
+    "start": 36350,
+    "end": 36380,
+    "tag": "<div className=\"login-header\">",
+    "title": "<h1>Change Password</h1>"
+  },
+  {
+    "file": "dashboard\\components\\maintenance\\dashboard-components.tsx",
+    "start": 13937,
+    "end": 13959,
+    "tag": "<div className=\"mb-8\">",
+    "title": "<h1 className=\"text-3xl font-bold text-gray-900\">\r\n            Maintenance Dashboard\r\n          </h1>"
+  },
+  {
+    "file": "dashboard\\components\\maintenance-command-center.tsx",
+    "start": 5730,
+    "end": 5735,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight mt-1\">\r\n              Automated Diagnostics, Field Work Orders & Spare"
+  },
+  {
+    "file": "dashboard\\components\\media-pipeline-scheduler-view.tsx",
+    "start": 6987,
+    "end": 6992,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight mt-1\">Workstation capacity plan</h1>"
+  },
+  {
+    "file": "dashboard\\components\\mobile-command-center.tsx",
+    "start": 11744,
+    "end": 11896,
+    "tag": "<div className=\"sticky top-0 z-50 p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 backdrop-blur-md space-y-2\">",
+    "title": "<h1 className=\"text-lg font-bold text-white tracking-tight\">{selectedIncident.title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\mobile-soc-operator-view.tsx",
+    "start": 5266,
+    "end": 5418,
+    "tag": "<div className=\"p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 space-y-2 sticky top-0 z-40 backdrop-blur-md\">",
+    "title": "<h1 className=\"text-lg font-bold text-white tracking-tight\">{selectedIncident.title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\module-page.tsx",
+    "start": 1023,
+    "end": 1055,
+    "tag": "<header className=\"module-hero\">",
+    "title": "<h1>{title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\nbfc-rules\\nbfc-rules-workspace.tsx",
+    "start": 40698,
+    "end": 40703,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white flex items-center gap-3\">\r\n                AI Rules & Automation\r\n    "
+  },
+  {
+    "file": "dashboard\\components\\notifications\\NotificationPolicyEditor.tsx",
+    "start": 10597,
+    "end": 10602,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-semibold text-gray-900\">Notification Policy</h1>"
+  },
+  {
+    "file": "dashboard\\components\\notifications\\RecipientGroupManager.tsx",
+    "start": 3747,
+    "end": 3752,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-semibold text-gray-900\">Recipient Groups</h1>"
+  },
+  {
+    "file": "dashboard\\components\\operational-health\\branch-detail\\branch-detail-view.tsx",
+    "start": 2710,
+    "end": 2715,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-gray-900 dark:text-gray-100\">\r\n                  {health.branchName}\r\n                </h1>"
+  },
+  {
+    "file": "dashboard\\components\\operational-health\\component-detail-page.tsx",
+    "start": 4270,
+    "end": 4275,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white\">{title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\operational-health\\infrastructure-health-dashboard.tsx",
+    "start": 2992,
+    "end": 2997,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-3xl font-bold text-gray-900 flex items-center gap-2\">\r\n            <Server className=\"text-blue-600\" size={32}"
+  },
+  {
+    "file": "dashboard\\components\\operational-health\\operational-dashboard.tsx",
+    "start": 2414,
+    "end": 2419,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-3xl font-bold text-gray-900 dark:text-gray-100\">\r\n                SURVEILLANCE OPERATIONS\r\n              </h1>"
+  },
+  {
+    "file": "dashboard\\components\\operational-health-dashboard.tsx",
+    "start": 5373,
+    "end": 5378,
+    "tag": "<div>",
+    "title": "<h1>Security estate at a glance</h1>"
+  },
+  {
+    "file": "dashboard\\components\\operations\\command-center-view.tsx",
+    "start": 15445,
+    "end": 15482,
+    "tag": "<div className=\"dashboard-hero-copy\">",
+    "title": "<h1>Your operations.<br /><span>One clear view.</span></h1>"
+  },
+  {
+    "file": "dashboard\\components\\operations\\signal-canvas.tsx",
+    "start": 10457,
+    "end": 10462,
+    "tag": "<div>",
+    "title": "<h1>Read the field.<br /><em>Move with intent.</em></h1>"
+  },
+  {
+    "file": "dashboard\\components\\page-hero.tsx",
+    "start": 602,
+    "end": 652,
+    "tag": "<header className={`page-hero page-hero-${tone}`}>",
+    "title": "<h1>{title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\person-reid-workspace.tsx",
+    "start": 6223,
+    "end": 6228,
+    "tag": "<div>",
+    "title": "<h1 className=\"mt-2 text-2xl font-bold tracking-tight text-white sm:text-3xl\">\r\n            Multi-Camera Person Re-Identification "
+  },
+  {
+    "file": "dashboard\\components\\recording-recovery-workspace.tsx",
+    "start": 7827,
+    "end": 7832,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight\">\n                Recording Gap Recovery & Edge Backfill\n             "
+  },
+  {
+    "file": "dashboard\\components\\recording-workspace.tsx",
+    "start": 10375,
+    "end": 10412,
+    "tag": "<header className=\"recording-header\">",
+    "title": "<h1>Recording playback</h1>"
+  },
+  {
+    "file": "dashboard\\components\\reports\\enhanced-report-wrapper.tsx",
+    "start": 2697,
+    "end": 2719,
+    "tag": "<div className=\"mb-6\">",
+    "title": "<h1 className=\"text-2xl sm:text-3xl font-bold\">{title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\retention\\retention-compliance-dashboard.tsx",
+    "start": 4060,
+    "end": 4065,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold tracking-tight text-white flex items-center gap-2.5\">\r\n            <HardDrive className=\"h-6 w-6"
+  },
+  {
+    "file": "dashboard\\components\\tailgating-detection-workspace.tsx",
+    "start": 9977,
+    "end": 10018,
+    "tag": "<div className=\"flex items-center gap-3\">",
+    "title": "<h1 className=\"text-xl font-bold text-slate-100\">Access Control Tailgating & Airlock Portal Detection</h1>"
+  },
+  {
+    "file": "dashboard\\components\\unified-incident-workflow.tsx",
+    "start": 10066,
+    "end": 10093,
+    "tag": "<div className=\"space-y-1\">",
+    "title": "<h1 className=\"text-xl font-bold text-white tracking-tight\">{incident.title}</h1>"
+  },
+  {
+    "file": "dashboard\\components\\video-bookmarks-workspace.tsx",
+    "start": 15691,
+    "end": 15696,
+    "tag": "<div>",
+    "title": "<h1 className=\"text-2xl font-bold text-white tracking-tight flex items-center gap-2\">\n                Video Timeline Bookmarks\n   "
+  },
+  {
+    "file": "dashboard\\components\\video-search-interface.tsx",
+    "start": 5359,
+    "end": 5364,
+    "tag": "<div>",
+    "title": "<h1>\r\n            <Video className=\"inline\" size={24} />\r\n            Video Search & Investigation\r\n          </h1>"
+  },
+  {
+    "file": "dashboard\\components\\video-search.tsx",
+    "start": 5075,
+    "end": 5106,
+    "tag": "<div className=\"search-header\">",
+    "title": "<h1>Video search & retrieval</h1>"
+  }
+]

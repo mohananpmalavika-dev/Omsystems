@@ -236,7 +236,7 @@ export default function AiRoiCalculatorPage() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between workspace-heading">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">AI ROI Calculator</h1>
           <p className="text-gray-600 mt-1">

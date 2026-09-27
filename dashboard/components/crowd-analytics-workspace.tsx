@@ -239,7 +239,7 @@ export function CrowdAnalyticsWorkspace({ branchId }: { branchId?: string }) {
   return (
     <div className="space-y-6">
       {/* Top Header & Operational Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900/80 border border-zinc-800 p-5 rounded-xl shadow-lg backdrop-blur-md">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-zinc-900/80 border border-zinc-800 p-5 rounded-xl shadow-lg backdrop-blur-md workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-lg bg-gradient-to-br from-indigo-500/20 to-cyan-500/20 border border-indigo-500/30 text-indigo-400">

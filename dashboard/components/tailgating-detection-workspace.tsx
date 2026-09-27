@@ -310,7 +310,7 @@ export function TailgatingDetectionWorkspace({ portalId }: { portalId?: string }
   return (
     <div className="space-y-6">
       {/* Top Header & Portal Selector */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-slate-800 bg-slate-900/90 p-5 shadow-xl workspace-heading">
         <div className="flex items-center gap-3">
           <div className="grid h-12 w-12 place-items-center rounded-xl bg-red-500/10 text-red-400 border border-red-500/20">
             <DoorClosed size={24} />

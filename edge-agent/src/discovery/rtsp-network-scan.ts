@@ -246,17 +246,83 @@ export async function discoverRtspDevices(
     return 0;
   }
   const defaultPaths = [
+    // Dahua / Amcrest / CP-Plus
     "/cam/realmonitor?channel=1&subtype=0",
     "/cam/realmonitor?channel=1&subtype=1",
+    "/cam/realmonitor?channel=2&subtype=0",
+    "/cam/realmonitor?channel=2&subtype=1",
+    // Hikvision
     "/Streaming/Channels/101",
     "/Streaming/Channels/102",
+    "/Streaming/Channels/201",
+    "/Streaming/Channels/202",
+    "/Streaming/Channels/1",
+    "/Streaming/Channels/2",
     "/h264/ch1/main/av_stream",
+    "/h264/ch1/sub/av_stream",
+    // TVT / Tiandy / Matrix / Honeywell
+    "/ch1/main/av_stream",
+    "/ch1/sub/av_stream",
+    "/ch01/0",
+    "/ch01/1",
+    // Axis
+    "/axis-media/media.amp?camera=1",
+    "/axis-media/media.amp?camera=1&videocodec=h264",
+    "/axis-media/media.amp",
+    "/axis-media/media.3gp",
+    // Uniview
+    "/media/video1",
+    "/media/video2",
+    "/unicast/c1/s0/live",
+    "/unicast/c1/s1/live",
+    // Reolink
+    "/h264Preview_01_main",
+    "/h264Preview_01_sub",
+    "/h265Preview_01_main",
+    "/Preview_01_main",
+    "/Preview_01_sub",
+    // Foscam
+    "/videoMain",
+    "/videoSub",
+    "/live/main",
+    "/live/sub",
+    // TP-Link (Tapo / Kasa)
     "/stream1",
     "/stream2",
-    "/onvif1",
-    "/live/ch0",
+    // Vivotek
     "/live.sdp",
+    "/live1.sdp",
+    "/live2.sdp",
+    "/video.mp4",
+    // D-Link
+    "/play1.sdp",
+    "/play2.sdp",
+    // Ubiquiti UniFi Protect
+    "/s0",
+    "/s1",
+    "/s2",
+    // Hanwha / Samsung Wisenet
+    "/profile1/media.smp",
+    "/profile2/media.smp",
+    "/onvif/profile1/media.smp",
+    // Bosch
+    "/rtsp_tunnel?line=1",
+    "/rtsp_tunnel?inst=1",
+    // Standard ONVIF & Generic Streams
+    "/onvif1",
+    "/onvif2",
+    "/onvif-media/media.amp",
+    "/live/ch0",
+    "/live/ch1",
+    "/live/ch2",
+    "/live",
     "/stream",
+    "/h264",
+    "/mpeg4",
+    "/media/media.amp",
+    "/video",
+    "/channel1",
+    "/mjpeg",
   ];
   const paths = options.paths.length ? options.paths : defaultPaths;
   const ffprobePath = options.ffprobePath;
@@ -434,18 +500,22 @@ export async function discoverRtspDevices(
                     return;
                   }
                 }
+                const cameraDetails = pathRecorder
+                  ? { vendor: recorderVendor(pathRecorder.vendor), manufacturer: pathRecorder.manufacturer, model: pathRecorder.model }
+                  : cameraDetailsForRtspPath(path);
+
                 const payload = {
                   edgeAgentId: agentId,
                   discoveryMethod: "configured-ip-range",
-                  vendor: "other",
-                  manufacturer: "unknown",
-                  model: "IP Camera",
+                  vendor: cameraDetails.vendor,
+                  manufacturer: cameraDetails.manufacturer,
+                  model: cameraDetails.model,
                   ipAddress: ip,
                   ...(macAddress ? { macAddress } : {}),
                   ...(hardwareId ? { hardwareId } : {}),
                   onvifPort: 80,
                   rtspPort: port,
-                  displayName: `Discovered camera ${ip}`,
+                  displayName: `${cameraDetails.manufacturer} camera ${ip}`,
                   credentialsRequired: false,
                   streamVerified: true,
                   rtspValidated: true,
@@ -658,6 +728,53 @@ export function recorderFingerprintForRtspPath(path: string): HttpRecorderFinger
 function recorderVendor(vendor: VendorStreamFamily | undefined): "hikvision" | "cp-plus" | "other" {
   if (vendor === "hikvision" || vendor === "cp-plus") return vendor;
   return "other";
+}
+
+export function cameraDetailsForRtspPath(path: string): {
+  vendor: "hikvision" | "cp-plus" | "other";
+  manufacturer: string;
+  model: string;
+} {
+  if (/\/cam\/realmonitor/i.test(path)) {
+    return { vendor: "other", manufacturer: "Dahua", model: "IP Camera" };
+  }
+  if (/\/Streaming\/Channels/i.test(path)) {
+    return { vendor: "hikvision", manufacturer: "Hikvision", model: "IP Camera" };
+  }
+  if (/\/axis-media/i.test(path)) {
+    return { vendor: "other", manufacturer: "Axis", model: "Network Camera" };
+  }
+  if (/\/h26[45]Preview|Preview_\d+/i.test(path)) {
+    return { vendor: "other", manufacturer: "Reolink", model: "IP Camera" };
+  }
+  if (/\/videoMain|videoSub/i.test(path)) {
+    return { vendor: "other", manufacturer: "Foscam", model: "IP Camera" };
+  }
+  if (/\/unicast\/c\d+\/s\d+|media\/video\d+/i.test(path)) {
+    return { vendor: "other", manufacturer: "Uniview", model: "IP Camera" };
+  }
+  if (/\/stream[12]/i.test(path)) {
+    return { vendor: "other", manufacturer: "TP-Link", model: "Tapo / Kasa Camera" };
+  }
+  if (/\/live\d*\.sdp|video\.mp4/i.test(path)) {
+    return { vendor: "other", manufacturer: "Vivotek", model: "Network Camera" };
+  }
+  if (/\/play\d+\.sdp/i.test(path)) {
+    return { vendor: "other", manufacturer: "D-Link", model: "IP Camera" };
+  }
+  if (/\/s[0-2]\b/i.test(path)) {
+    return { vendor: "other", manufacturer: "Ubiquiti", model: "UniFi Protect Camera" };
+  }
+  if (/\/profile\d+\/media\.smp/i.test(path)) {
+    return { vendor: "other", manufacturer: "Hanwha", model: "Wisenet Camera" };
+  }
+  if (/\/rtsp_tunnel/i.test(path)) {
+    return { vendor: "other", manufacturer: "Bosch", model: "Security Camera" };
+  }
+  if (/\/ch\d+\/(?:main|sub)\/av_stream/i.test(path)) {
+    return { vendor: "other", manufacturer: "TVT", model: "IP Camera" };
+  }
+  return { vendor: "other", manufacturer: "Generic RTSP", model: "IP Camera" };
 }
 
 export function normalizeRtspDiscoveryCodec(

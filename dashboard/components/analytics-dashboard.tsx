@@ -156,7 +156,7 @@ export function AnalyticsDashboard() {
 
   return (
     <div className="analytics-dashboard">
-      <header className="dashboard-header">
+      <header className="dashboard-header workspace-heading">
         <div>
           <h1>Analytics Dashboard</h1>
           <p>Operational intelligence and customer insights</p>

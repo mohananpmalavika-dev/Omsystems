@@ -50,7 +50,7 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   results?: SearchResult[];
-  timestamp: Date;
+  timestamp: Date | null;
 }
 
 export function AIChatWithVideo({ branchId }: { branchId?: string }) {
@@ -60,7 +60,7 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
       role: "assistant",
       content:
         "Hello! I can help you search through video footage using natural language. Try asking me something like:\n\n• Show the person entering with a red shirt\n• Find all white cars seen near the ATM\n• Show everyone who entered the vault corridor\n• Find a person carrying a black bag",
-      timestamp: new Date(),
+      timestamp: null,
     },
   ]);
   const [inputValue, setInputValue] = useState("");
@@ -355,7 +355,7 @@ export function AIChatWithVideo({ branchId }: { branchId?: string }) {
                   )}
 
                   <div className="text-xs opacity-70 mt-2">
-                    {message.timestamp.toLocaleTimeString()}
+                        {message.timestamp ? message.timestamp.toLocaleTimeString() : "Ready to search"}
                   </div>
                 </div>
               </div>

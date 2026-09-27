@@ -194,7 +194,7 @@ export default function MisReportsPage() {
     <AppLayout>
       <div className="space-y-6 pb-12 print:p-0 print:space-y-4">
         {/* Top Header & Executive Controls */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-md print:bg-white print:border-none print:shadow-none print:p-0">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-900/60 p-6 rounded-2xl border border-slate-800 shadow-xl backdrop-blur-md print:bg-white print:border-none print:shadow-none print:p-0 workspace-heading">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">

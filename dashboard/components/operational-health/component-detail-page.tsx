@@ -111,7 +111,7 @@ export function ComponentDetailPage({ title, component }: { title: string; compo
   return (
     <div className="page-container space-y-6">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/60 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-700/60 pb-5 workspace-heading">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>

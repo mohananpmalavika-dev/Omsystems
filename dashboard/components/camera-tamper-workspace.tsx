@@ -309,7 +309,7 @@ export function CameraTamperWorkspace({ cameraId }: { cameraId?: string }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 md:p-8 space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6 workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/5">

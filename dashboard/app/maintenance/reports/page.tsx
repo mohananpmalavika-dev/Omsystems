@@ -168,7 +168,7 @@ export default function MaintenanceReportsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
+      <div className="mb-8 workspace-heading">
         <h1 className="text-3xl font-bold text-gray-900">Maintenance Reports</h1>
         <p className="mt-2 text-gray-600">
           Generate, schedule, and manage maintenance reports

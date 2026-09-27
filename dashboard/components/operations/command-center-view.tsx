@@ -39,6 +39,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { CommandNetworkCanvas } from "./command-network-canvas";
 import { StatusBadge } from "../ui/status-badge";
 import { FleetFilterBar } from "../ui/fleet-filter-bar";
 import { ErrorBoundary } from "../ui/error-boundary";
@@ -346,76 +347,51 @@ export function CommandCenterView() {
 
   return (
     <ErrorBoundary fallback={<div className="p-6 rounded-xl bg-slate-900 border border-slate-800 text-rose-300 text-sm">Failed to render Surveillance Command Center. Please refresh or check connection.</div>}>
-      <div className="command-center-page space-y-4 pb-12 text-slate-100 font-sans">
-      {/* Top Banner & Header */}
-      <div className="command-center-hero flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 bg-gradient-to-r from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-xl shadow-lg">
-        <div>
-          <p className="command-center-kicker"><Sparkles size={13} /> Security operations</p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2">
-              <ShieldCheck className="w-6 h-6 text-blue-400" />
-              Surveillance Command Center
-            </h1>
-            <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}>
-              <span className="telemetry-truth-dot" />
-              {freshness.label}
-            </span>
-            {totalBranchesCount > 0 && (
-              <span className="text-xs text-slate-400 border-l border-slate-800 pl-3 hidden sm:inline">
-                Agent heartbeat: <strong className="text-slate-200">{summary?.agentHeartbeatSecondsAgo != null ? `${summary.agentHeartbeatSecondsAgo}s ago` : "Unknown"}</strong>
-              </span>
-            )}
+      <div className="command-center-page command-atlas command-deck pb-12">
+      <section className="atlas-stage" aria-label="Command Center overview">
+        <header className="atlas-stage-header">
+          <span className="atlas-wordmark"><span /><strong>KRYPTON / COMMAND</strong><small>SECURITY OPERATIONS</small></span>
+          <span className={`telemetry-truth-badge ${freshness.state}`} aria-label={`${freshness.label}. ${freshness.detail}`}><span className="telemetry-truth-dot" />{freshness.label}</span>
+          <button type="button" onClick={loadData} disabled={loading} className="atlas-refresh" aria-label="Refresh fleet telemetry"><RefreshCw size={15} className={loading ? "animate-spin" : ""} /><span>{loading ? "Syncing" : "Sync fleet"}</span></button>
+        </header>
+        <div className="atlas-stage-body">
+          <div className="atlas-intro">
+            <p className="atlas-eyebrow"><span>THE COMMAND FIELD</span> / 01</p>
+            <h1>Always<br /><em>in sight.</em></h1>
+            <p className="atlas-intro-description">A wider perspective.<br />A sharper response.</p>
+            <Link href="/control-room" onClick={navigateTo("/control-room")} className="atlas-live-link"><span><Play size={17} /></span> Enter live wall <ArrowUpRight size={17} /></Link>
+            <div className="atlas-intro-foot"><ShieldCheck size={16} /><span>{freshness.detail}</span></div>
           </div>
-          <p className="telemetry-truth-detail">Monitor branch coverage, recording health, and risk from one place. {freshness.detail}.</p>
-          <p className="text-xs text-slate-400 mt-1">
-            {totalBranchesCount} {totalBranchesCount === 1 ? "branch" : "branches"} · {totalCamerasCount.toLocaleString()} {totalCamerasCount === 1 ? "camera" : "cameras"} · Live telemetry
-          </p>
+          <CommandNetworkCanvas branches={branches} confirmed={hasBranchData} onSelect={setSelectedBranchWorkspace} />
+          <aside className="atlas-coverage" aria-label="Camera coverage">
+            <span className="atlas-eyebrow">COVERAGE</span>
+            <div className="atlas-coverage-instrument" style={{ "--coverage": `${hasCameraCountData && !cameraTelemetryUnavailable && totalCamerasCount > 0 ? Math.round(workingCamerasCount / totalCamerasCount * 100) : 0}%` } as React.CSSProperties}>
+              <div className="atlas-coverage-bars" aria-hidden="true">{Array.from({ length: 24 }, (_, i) => <i key={i} style={{ "--tick": `${i * 12 - 138}deg` } as React.CSSProperties} className={hasCameraCountData && !cameraTelemetryUnavailable && totalCamerasCount > 0 && i < Math.round(workingCamerasCount / totalCamerasCount * 24) ? "is-lit" : ""} />)}</div>
+              <strong>{hasCameraCountData && !cameraTelemetryUnavailable && totalCamerasCount > 0 ? Math.round(workingCamerasCount / totalCamerasCount * 100) : "—"}<small>{totalCamerasCount > 0 && !cameraTelemetryUnavailable ? "%" : ""}</small></strong>
+              <span>CAMERAS WORKING</span>
+            </div>
+            <p>{hasCameraCountData && !cameraTelemetryUnavailable ? `${workingCamerasCount.toLocaleString()} / ${totalCamerasCount.toLocaleString()} confirmed` : "No confirmed telemetry"}</p>
+            <Link href="/operations/cameras" onClick={navigateTo("/operations/cameras")}>Inspect fleet <ArrowUpRight size={15} /></Link>
+          </aside>
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/admin/branch-onboarding"
-            onClick={navigateTo("/admin/branch-onboarding")}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-900/30 transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span>Onboard Branch</span>
-          </Link>
-
-          <Link
-            href="/control-room"
-            onClick={navigateTo("/control-room")}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all cursor-pointer"
-          >
-            <Play className="w-3.5 h-3.5" />
-            <span>Live Wall</span>
-          </Link>
-
-          <button
-            onClick={exportHealthCsv}
-            disabled={branches.length === 0}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 disabled:opacity-50 text-slate-300 border border-slate-700 text-xs font-medium transition-colors"
-            title="Download CSV Device Health Report"
-          >
-            <span>Export health</span>
-          </button>
-
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 text-xs font-medium transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
-            <span>{loading ? "Refreshing..." : "Refresh"}</span>
-          </button>
+        <div className="atlas-metric-strip" aria-label="Operations at a glance">
+          {[
+            { label: "Connected branches", value: hasBranchCountData ? totalBranchesCount.toLocaleString() : "—", detail: hasHealthyBranchData ? `${healthyBranchesCount} healthy` : "Awaiting telemetry", icon: Building2, href: "/operations/branches", tone: "blue" },
+            { label: "Camera estate", value: hasCameraCountData ? totalCamerasCount.toLocaleString() : "—", detail: hasCameraCountData ? `${workingCamerasCount.toLocaleString()} working` : "Awaiting telemetry", icon: Camera, href: "/operations/cameras", tone: "cyan" },
+            { label: "Branches at risk", value: hasRiskData ? atRiskBranchesCount.toLocaleString() : "—", detail: hasRiskData ? "High + medium risk" : "Awaiting assessment", icon: ShieldAlert, href: "/operations/branches", tone: "rose" },
+            { label: "Camera issues", value: hasCameraCountData ? knownCameraFailures.toLocaleString() : "—", detail: hasCameraCountData ? `${cameraTotals.unknown.toLocaleString()} unknown` : "Awaiting diagnostics", icon: Activity, href: "/operations/cameras", tone: "amber" },
+          ].map(({ label, value, detail, icon: Icon, href, tone }, index) => <Link key={label} href={href} onClick={navigateTo(href)} className={`atlas-metric tone-${tone}`}><div><span>{String(index + 1).padStart(2, "0")}</span><Icon size={16} /><ArrowUpRight size={14} /></div><strong>{value}</strong><span>{label}</span><small>{detail}</small></Link>)}
         </div>
-      </div>
+        <footer className="atlas-stage-footer"><span><Radio size={13} /> TELEMETRY REFRESHES EVERY 15 SECONDS</span><div><Link href="/admin/branch-onboarding"><PlusCircle size={14} /> Onboard branch</Link><button type="button" onClick={exportHealthCsv} disabled={branches.length === 0}><FileCheck2 size={14} /> Export health</button></div></footer>
+      </section>
+
+      <div className="dashboard-action-grid">
 
       <section className="command-center-focus" aria-labelledby="command-center-focus-title">
         <div className="command-center-focus-heading">
           <div>
             <p className="command-center-focus-eyebrow"><span /> OPERATIONS PULSE</p>
-            <h2 id="command-center-focus-title">Focus now</h2>
+            <h2 id="command-center-focus-title">Your next move.</h2>
             <p>{focusItems.length > 0 ? "Operational signals are sorted into the next actions for your team." : "Choose the next step in your security workflow."}</p>
           </div>
           <span className="command-center-focus-count">{focusItems.length > 0 ? `${focusItems.length} ${focusItems.length === 1 ? "priority" : "priorities"}` : hasAnyConfirmedData ? "Ready for action" : "Awaiting data"}</span>
@@ -486,9 +462,10 @@ export function CommandCenterView() {
           </Link>
         </div>
       </nav>
+      </div>
 
       {loadError && (
-        <div className="p-3 rounded-xl border border-rose-800/60 bg-rose-950/30 text-sm text-rose-200" role="alert">
+        <div className="atlas-data-warning" role="alert">
           Live fleet data could not be refreshed: {typeof loadError === "string" ? loadError : JSON.stringify(loadError)}. {summary || hasBranchData ? "Showing the last confirmed values." : "Retry when the connection is restored."}
         </div>
       )}
@@ -696,7 +673,7 @@ export function CommandCenterView() {
             <h2 className="text-sm font-bold text-white uppercase tracking-wider">AI Operations Briefing</h2>
           </div>
           <span className="text-xs text-slate-400 font-mono">
-            {summary?.aiBriefing?.criticalItemsCount ?? 0} Active Triages
+            {summary?.aiBriefing?.criticalItemsCount != null ? `${summary.aiBriefing.criticalItemsCount} Active Triages` : "Analysis pending"}
           </span>
         </div>
 
@@ -704,13 +681,13 @@ export function CommandCenterView() {
           <div className="space-y-1">
             <div className={`text-sm font-bold ${summary?.aiBriefing?.criticalItemsCount > 0 ? "text-rose-300" : "text-emerald-300"} flex items-center gap-2`}>
               <span className={`w-2 h-2 rounded-full ${summary?.aiBriefing?.criticalItemsCount > 0 ? "bg-rose-400 animate-pulse" : "bg-emerald-400"}`} />
-              {summary?.aiBriefing?.headline || "System standby — awaiting camera feeds"}
+              {summary?.aiBriefing?.headline || "Awaiting an operations briefing"}
             </div>
             <div className="text-xs text-slate-300">
-              {summary?.aiBriefing?.summaryText || "No active hardware anomalies detected."}
+              {summary?.aiBriefing?.summaryText || "A confirmed briefing will appear when analysis is available."}
             </div>
             <div className="text-xs text-slate-400">
-              Action: <strong className="text-emerald-400">{summary?.aiBriefing?.recommendedAction || "Ready for camera connection."}</strong>
+              Action: <strong className="text-emerald-400">{summary?.aiBriefing?.recommendedAction || "Verify branch telemetry."}</strong>
             </div>
           </div>
         </div>
@@ -724,7 +701,7 @@ export function CommandCenterView() {
         </span>
         <div className="flex items-center gap-2.5">
           {(!summary?.liveIncidents || summary.liveIncidents.length === 0) ? (
-            <span className="text-slate-500 italic">No active incidents pending. Fleet in normal state.</span>
+            <span className="text-slate-500 italic">{Array.isArray(summary?.liveIncidents) ? "No active incidents reported." : "Awaiting incident telemetry."}</span>
           ) : (
             summary.liveIncidents.map((inc: any) => (
               <span

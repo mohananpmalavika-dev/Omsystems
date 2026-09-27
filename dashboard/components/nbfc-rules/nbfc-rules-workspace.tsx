@@ -1172,7 +1172,7 @@ export function NbfcRulesWorkspace() {
   return (
     <div className="flex flex-col min-h-screen bg-[#0b0f19] text-gray-100 p-6 space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-gray-800">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-4 border-b border-gray-800 workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400">

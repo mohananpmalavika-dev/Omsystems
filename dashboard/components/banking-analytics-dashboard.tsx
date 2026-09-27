@@ -185,7 +185,7 @@ export function BankingAnalyticsDashboard() {
   };
 
   return <main className="min-h-[calc(100vh-5rem)] bg-slate-950 p-4 text-slate-100 xl:p-6">
-    <header className="relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6">
+    <header className="relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6 workspace-heading">
       <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-blue-500/10 blur-3xl" />
       <div className="relative flex flex-wrap items-start justify-between gap-5">
         <div className="flex items-start gap-4"><span className="grid h-12 w-12 place-items-center rounded-2xl border border-blue-500/25 bg-blue-500/10 text-blue-300"><Landmark size={24} /></span><div><p className="text-[11px] font-bold tracking-[.22em] text-blue-300">BANKING OPERATIONS</p><h1 className="mt-2 text-3xl font-bold">Banking analytics</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">Cash-van arrival, personnel verification, dual control, secure-zone movement and evidence-bound compliance.</p></div></div>

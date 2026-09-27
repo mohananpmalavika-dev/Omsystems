@@ -64,7 +64,7 @@ export default function IntegrationsPage() {
   return (
     <main className="min-h-screen bg-slate-950 p-6 text-slate-100">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4 workspace-heading">
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-blue-400">Security device integrations</p>
             <h1 className="text-3xl font-semibold">Hikvision AX PRO</h1>

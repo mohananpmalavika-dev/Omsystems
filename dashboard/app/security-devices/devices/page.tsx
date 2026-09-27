@@ -43,7 +43,7 @@ export default function SecurityDeviceInventoryPage() {
 
   return <main className="min-h-screen bg-gray-50 p-6 text-gray-900">
     <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 workspace-heading">
         <div><Link href="/security-devices" className="mb-3 inline-flex items-center gap-2 text-sm text-blue-700 hover:underline"><ArrowLeft size={16} />Security Device Hub</Link><h1 className="text-3xl font-bold">{type || 'All'} devices</h1><p className="mt-1 text-sm text-gray-600">Live inventory filtered from the authenticated security-device API.</p></div>
         <button onClick={() => void load()} disabled={loading} className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm disabled:opacity-60"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} />Refresh</button>
       </div>

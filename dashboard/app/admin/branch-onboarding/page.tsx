@@ -6,7 +6,7 @@ export default function BranchOnboardingPage() {
   return (
     <AppLayout>
       <main className={styles.page}>
-        <header className={styles.header}>
+        <header className={(styles.header) + " workspace-heading"}>
           <p className={styles.eyebrow}>Branch setup</p>
           <h1>Branch camera onboarding</h1>
           <p>Connect a gateway, discover cameras and recorders, then approve verified devices.</p>

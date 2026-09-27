@@ -84,7 +84,7 @@ export default function CameraImportExportPage() {
     <AppLayout>
       <div className="p-6 max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-800 pb-5 workspace-heading">
           <div>
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-1">
               <Link

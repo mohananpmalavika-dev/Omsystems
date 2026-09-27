@@ -284,7 +284,7 @@ export function AISOPWorkflowInterface({ executionId }: { executionId?: string }
   return (
     <div className="space-y-6 p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between workspace-heading">
         <div>
           <h1 className="text-3xl font-bold">SOP Workflow</h1>
           <p className="text-gray-500 mt-1">{execution.sopName || "Standard Operating Procedure"}</p>

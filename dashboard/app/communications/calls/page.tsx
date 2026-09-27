@@ -474,7 +474,7 @@ export default function CommunicationsCallsPage() {
   return (
     <div className="communications-page">
       {/* Header */}
-      <header className="comm-header">
+      <header className="comm-header workspace-heading">
         <div className="comm-brand">
           <Phone size={24} className="comm-icon" />
           <div>

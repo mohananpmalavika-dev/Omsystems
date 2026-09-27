@@ -1,5 +1,7 @@
 import { loadEdgeConfig } from "./config.js";
 import { discoverOnvifDevices, type DiscoveredOnvifEndpoint } from "./discovery/onvif-discovery.js";
+import { discoverSsdpDevices } from "./discovery/ssdp-discovery.js";
+import { discoverMdnsDevices } from "./discovery/mdns-discovery.js";
 import { onvifEndpointRole, onvifServiceCandidates } from "./discovery/onvif-service-candidates.js";
 import { createDeviceFingerprint } from "./discovery/device-fingerprint.js";
 import { fingerprintHttpRecorder } from "./discovery/recorder-http-fingerprint.js";
@@ -564,6 +566,39 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
   logger.info(options.target
     ? `Probing only device ${options.target.ipAddress}`
     : `Discovered ${endpoints.length} ONVIF endpoint(s)`);
+
+  const multicastDiscoveredHosts = new Set<string>();
+
+  if (!options.target && configuredEndpoints.length === 0) {
+    if (config.SSDP_DISCOVERY_ENABLED) {
+      try {
+        const ssdpDevices = await discoverSsdpDevices(Math.min(config.DISCOVERY_TIMEOUT_MS, 4000));
+        for (const dev of ssdpDevices) {
+          if (dev.ip) multicastDiscoveredHosts.add(dev.ip);
+        }
+        logger.info(`Discovered ${ssdpDevices.length} UPnP SSDP device(s)`);
+      } catch (error) {
+        logger.debug("SSDP discovery failed (non-fatal)", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    if (config.MDNS_DISCOVERY_ENABLED) {
+      try {
+        const mdnsDevices = await discoverMdnsDevices(Math.min(config.DISCOVERY_TIMEOUT_MS, 4000));
+        for (const dev of mdnsDevices) {
+          if (dev.ip) multicastDiscoveredHosts.add(dev.ip);
+        }
+        logger.info(`Discovered ${mdnsDevices.length} mDNS Bonjour device(s)`);
+      } catch (error) {
+        logger.debug("mDNS discovery failed (non-fatal)", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
   let submitted = 0;
   const handledOnvifHosts = new Set<string>();
   const recorderFallbackHosts = new Set<string>();
@@ -1071,12 +1106,13 @@ async function scanBranch(options: { persistStreamSecrets?: boolean; target?: De
         });
         return [];
       });
-      const knownHosts = options.target ? [options.target.ipAddress] : await dbCredentialProvider.getKnownHosts().catch((error) => {
+      const dbHosts = options.target ? [options.target.ipAddress] : await dbCredentialProvider.getKnownHosts().catch((error) => {
         logger.warn("Unable to load saved camera addresses from the control plane", {
           error: error instanceof Error ? error.message : String(error),
         });
         return [];
       });
+      const knownHosts = [...new Set([...dbHosts, ...multicastDiscoveredHosts])];
       const rtspOptions = {
         ports,
         recorderHttpPorts,

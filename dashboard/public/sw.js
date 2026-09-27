@@ -1,5 +1,5 @@
 // KryptonVision PWA Service Worker
-const CACHE_NAME = "kryptonvision-pwa-v3";
+const CACHE_NAME = "kryptonvision-pwa-v4";
 const STATIC_ASSETS = [
   "/manifest.json",
   "/icon-192.png",
@@ -24,7 +24,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith("kryptonvision-pwa-") && name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       );
     }).then(() => self.clients.claim())
@@ -53,11 +53,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Only handle static assets and Next.js static files
+  // Next.js manages its own chunk caching. Development chunk URLs are reused
+  // after edits, so caching them here can keep old styles and scripts alive.
   const isPrecachedAsset = STATIC_ASSETS.includes(url.pathname);
-  const isNextStatic = url.pathname.startsWith("/_next/static/");
 
-  if (!isPrecachedAsset && !isNextStatic) {
+  if (url.origin !== self.location.origin || !isPrecachedAsset) {
     // Let the browser handle dynamic pages, RSC navigation, and data fetches natively
     return;
   }
@@ -79,20 +79,4 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache first for immutable next static chunks
-  event.respondWith(
-    caches.match(request).then(async (cached) => {
-      if (cached) return cached;
-      try {
-        const response = await fetch(request);
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-        }
-        return response;
-      } catch {
-        return new Response("Asset unavailable offline", { status: 503, statusText: "Service Unavailable" });
-      }
-    })
-  );
 });

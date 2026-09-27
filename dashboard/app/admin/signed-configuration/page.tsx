@@ -258,7 +258,7 @@ export default function SignedConfigurationConsolePage() {
     <AppLayout>
       <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-4 workspace-heading">
           <div>
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">

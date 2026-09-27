@@ -309,7 +309,7 @@ export default function DatabaseManagerPage() {
         )}
 
         {/* Page Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/80 pb-5 workspace-heading">
           <div className="flex items-center gap-3.5">
             <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400">
               <Database className="w-6 h-6" />

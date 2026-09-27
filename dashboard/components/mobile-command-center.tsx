@@ -366,7 +366,7 @@ export function MobileCommandCenter() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col max-w-md mx-auto border-x border-slate-800 shadow-2xl">
         {/* Header */}
-        <div className="sticky top-0 z-50 p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 backdrop-blur-md space-y-2">
+        <div className="sticky top-0 z-50 p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 backdrop-blur-md space-y-2 workspace-heading">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSelectedIncident(null)}

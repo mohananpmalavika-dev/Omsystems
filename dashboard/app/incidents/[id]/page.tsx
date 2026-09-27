@@ -694,7 +694,7 @@ export default function IncidentDetailPage() {
           </div>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
-            <div>
+            <div className="workspace-heading">
               <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
                 <h1 style={{ fontSize: "26px", fontWeight: "bold", margin: 0 }}>
                   {incident.incidentNumber}

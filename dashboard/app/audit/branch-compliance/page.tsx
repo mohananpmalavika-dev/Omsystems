@@ -109,7 +109,7 @@ export default function BranchCompliancePage() {
       <ComplianceHubNav />
 
       {/* Header */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 workspace-heading">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Branch Compliance & RBI Audit Summary</h1>
           <p className="text-gray-600 mt-1">Automated 90-day retention verification, camera health & statutory audits</p>

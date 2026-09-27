@@ -90,7 +90,7 @@ export function RetentionComplianceDashboard() {
       </div>
 
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 workspace-heading">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
             <HardDrive className="h-6 w-6 text-sky-400" />

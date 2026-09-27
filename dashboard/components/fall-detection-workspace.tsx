@@ -181,7 +181,7 @@ export function FallDetectionWorkspace({
       )}
 
       {/* Header & KPI Summary Cards */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-md">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-slate-900/80 border border-slate-800 rounded-2xl p-6 backdrop-blur-md workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-3 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-xl">

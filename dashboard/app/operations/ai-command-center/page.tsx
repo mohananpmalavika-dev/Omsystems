@@ -90,7 +90,7 @@ export default function AiCommandCenterPage() {
   };
 
   return <main className="min-h-[calc(100vh-7rem)] bg-slate-950 p-4 text-slate-100 xl:p-5">
-    <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <header className="mb-4 flex flex-wrap items-center justify-between gap-3 workspace-heading">
       <div>
         <p className="flex items-center gap-2 text-xs font-semibold tracking-[.2em] text-cyan-400"><Sparkles size={14}/> EVIDENCE-BOUND OPERATIONS</p>
         <h1 className="mt-1 text-2xl font-bold">AI Command Center</h1>

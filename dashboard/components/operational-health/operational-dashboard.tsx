@@ -59,7 +59,7 @@ export function OperationalDashboard() {
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="max-w-[1920px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between workspace-heading">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 SURVEILLANCE OPERATIONS

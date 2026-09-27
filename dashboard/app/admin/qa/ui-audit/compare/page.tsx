@@ -94,7 +94,7 @@ function QAComparisonContent() {
 
         {/* Comparison Header */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-6 workspace-heading">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-purple-400">
                 Run-to-Run Regression Analysis

@@ -86,7 +86,7 @@ export default function RCAAnalysisPage() {
   return (
     <main className="min-h-[calc(100vh-7rem)] bg-slate-950 p-4 text-slate-100 xl:p-5">
       {/* Header */}
-      <header className="mb-6">
+      <header className="mb-6 workspace-heading">
         <div className="flex items-center gap-2 text-xs font-semibold tracking-[.2em] text-cyan-400">
           <Sparkles size={14} />
           <span>AUTONOMOUS ROOT CAUSE ANALYSIS</span>

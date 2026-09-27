@@ -338,7 +338,7 @@ export function NotificationPolicyEditor() {
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 workspace-heading">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Notification Policy</h1>
             <p className="text-sm text-gray-600 mt-1">

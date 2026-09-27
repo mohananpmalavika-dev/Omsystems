@@ -1,0 +1,159 @@
+/* Complete product experience: legacy routes and specialist workspaces. */
+.experience-surface { --area-accent: var(--blue); }
+.experience-surface:is([data-area="analytics"], [data-area="digital-twin"], [data-area="infrastructure-twin"]) { --area-accent: var(--cyan); }
+.experience-surface:is([data-area="compliance"], [data-area="audit"]) { --area-accent: var(--green); }
+.experience-surface:is([data-area="incidents"], [data-area="security-operations"], [data-area="evidence"]) { --area-accent: var(--red); }
+.experience-surface:is([data-area="maintenance"], [data-area="security-devices"]) { --area-accent: var(--cyan); }
+.experience-surface { background: radial-gradient(950px 460px at 100% 0%, color-mix(in srgb, var(--area-accent) 10%, transparent), transparent 75%), var(--canvas) !important; }
+.experience-surface .product-section-shell { background: transparent; }
+html[data-theme] .app-shell .experience-surface :is(.governance-section, .audit-section) > div:not(.module-page) { background: transparent !important; border: 0; box-shadow: none; }
+html[data-theme] .app-shell .experience-surface :is(.governance-section, .audit-section) .min-h-screen { background: transparent !important; box-shadow: none; }
+html[data-theme] .app-shell .experience-surface :is(.maintenance-summary-card, .maintenance-feature-card, .metric-card, .metric-chart, .chart-card) { background: var(--surface) !important; border-color: var(--line) !important; box-shadow: var(--shadow-sm); }
+html[data-theme] .app-shell .experience-surface :is(.metric-label, .metric-chart h3, .chart-summary, .maintenance-summary-card > p:last-child) { color: var(--muted) !important; }
+html[data-theme] .app-shell .experience-surface :is(.metric-value, .maintenance-summary-card > p:nth-child(2)) { color: var(--ink) !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero, .module-hero) { background: radial-gradient(500px 290px at 100% 0%, #7371ff42, transparent 70%), radial-gradient(440px 260px at 65% 120%, #39c8e51c, transparent 75%), linear-gradient(125deg, var(--hero-start), var(--hero-end)) !important; border-color: #8f8ff033 !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero, .module-hero) h1 { color: #f5f6ff !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero-description, .module-description) { color: #bbc7e4 !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero-eyebrow, .module-eyebrow) { color: #b9b0ff !important; }
+html[data-theme] .app-shell .experience-surface :is(.page-hero-icon, .module-icon) { color: #c3beff !important; background: #9485ff28 !important; border-color: #b5b5ff38 !important; }
+html[data-theme] .app-shell .experience-surface .page-hero-actions :is(.page-hero-back, .btn-secondary) { color: #e0e6ff !important; background: #ffffff0a !important; border-color: #b5b5ff38 !important; }
+html[data-theme] .app-shell .experience-surface .page-hero-actions .btn-primary { color: #fff !important; }
+.experience-surface .investigation-page-body { width: min(1500px, calc(100% - 32px)); margin: 20px auto; }
+.experience-surface .investigation-page-body > .page-hero { margin-bottom: 24px; }
+
+/* Explicit heading markers keep styling away from player and dialog headers. */
+html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .admin-header, .recording-header, .record-form-hero) {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  padding: 28px 30px;
+  border: 1px solid color-mix(in srgb, var(--area-accent) 24%, var(--line));
+  border-radius: 22px;
+  background: radial-gradient(440px 240px at 100% 0%, color-mix(in srgb, var(--area-accent) 13%, transparent), transparent 75%), linear-gradient(120deg, var(--surface), var(--surface-soft)) !important;
+  color: var(--ink) !important;
+  box-shadow: var(--shadow-panel), inset 0 1px color-mix(in srgb, var(--surface) 75%, transparent);
+}
+.workspace-heading::before { content: ""; position: absolute; top: 25px; bottom: 25px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: linear-gradient(var(--area-accent), var(--blue)); pointer-events: none; }
+.experience-surface .workspace-heading { flex-wrap: wrap; gap: 20px; }
+html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .admin-header, .recording-header, .record-form-hero) h1 { color: var(--ink) !important; font-size: clamp(25px, 2.45vw, 35px) !important; line-height: 1.18; letter-spacing: -.045em; font-weight: 750; overflow-wrap: anywhere; }
+html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .admin-header, .recording-header, .record-form-hero) p { color: var(--muted) !important; font-size: 13px; line-height: 1.7; }
+.experience-surface .workspace-heading h1 svg { flex-shrink: 0; color: var(--area-accent); }
+.experience-surface :is(.admin-header, .recording-header, .record-form-hero) { margin-bottom: 22px; }
+.experience-surface .workspace-heading:has(+ .workspace-heading) { margin-bottom: 16px; }
+.experience-surface .admin-title > span { width: 48px; height: 48px; border-radius: 15px; color: var(--blue); border: 1px solid var(--line); background: var(--blue-soft); }
+.experience-surface .admin-back { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 18px; color: var(--muted); }
+
+/* Specialist panels use a consistent material without changing status signals. */
+.app-shell .experience-surface :is(.admin-panel, .device-card, .device-advanced, .ztp-panel, .incident-panel, .record-form-panel, .record-form-card, .branch-panel, .analytics-card, .recording-player-card, .recording-segment-card, .recording-health-card, .vms-truth-panel, .account-card, .security-card, .directory-group, .directory-quick-actions, .directory-toolbar, .directory-summary article) {
+  color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-sm);
+}
+.experience-surface :is(.device-card-heading, .panel-header, .admin-panel-heading, .recording-health-card > header) { border-color: var(--line); }
+.experience-surface :is(.device-card-heading, .panel-header, .admin-panel-heading) :is(h2, h3) { color: var(--ink); font-weight: 720; letter-spacing: -.025em; }
+.experience-surface :is(.device-card-heading, .panel-header, .admin-panel-heading) p { color: var(--muted); }
+.experience-surface :is(.device-empty, .module-state, .directory-empty) { color: var(--muted); }
+.experience-surface :is(.device-empty, .directory-empty) strong { color: var(--ink); }
+.app-shell .experience-surface :where(.rounded-lg.bg-white, .rounded-xl.bg-white, .rounded-lg.shadow-sm, .rounded-lg.shadow-md) { border: 1px solid var(--line); border-radius: 18px; background-color: var(--surface); box-shadow: var(--shadow-sm); }
+.experience-surface :is(.device-toolbar, .recording-filters, .fleet-filter-bar, .directory-toolbar) { background: color-mix(in srgb, var(--surface) 95%, var(--area-accent)); border: 1px solid var(--line); border-radius: 15px; box-shadow: var(--shadow-sm); }
+.experience-surface :is(.device-toolbar, .recording-filters) { padding: 18px 20px; }
+.experience-surface :is(.admin-tabs, .filter-tabs, .account-tabs, .tab-list, .tab-bar) { padding: 5px; gap: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-strong); }
+.experience-surface :is(.admin-tabs, .filter-tabs, .account-tabs, .tab-list, .tab-bar) > :is(button, a) { border-radius: 9px; }
+.experience-surface :is(.admin-tabs, .filter-tabs, .account-tabs, .tab-list, .tab-bar) > .active { color: var(--blue); background: var(--surface); box-shadow: 0 3px 10px #24265c10; }
+.experience-surface :is(.summary-card, .recording-summary article, .directory-summary article) { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow-sm); transition: transform .2s, border-color .2s; }
+.experience-surface :is(.summary-card, .recording-summary article, .directory-summary article)::after { content: ""; position: absolute; inset: auto 20px 0; height: 2px; background: linear-gradient(90deg, var(--area-accent), transparent); }
+.experience-surface :is(.summary-card, .recording-summary article, .directory-summary article):hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--area-accent) 30%, var(--line)); }
+.experience-surface :is(.summary-card, .recording-summary article, .directory-summary article) strong { color: var(--ink); font-weight: 750; letter-spacing: -.04em; }
+.experience-surface :is(.secondary-button, .btn-secondary, .admin-tabs button, .record-form-back) { border-color: var(--line); background: var(--surface-soft); color: var(--ink); border-radius: 11px; }
+.experience-surface :is(.secondary-button, .btn-secondary):hover:not(:disabled) { border-color: var(--ui-focus); background: var(--blue-soft); }
+.experience-surface :is(.record-form-panel, .record-form-card) { padding: 26px; }
+.experience-surface :is(.record-form-panel, .record-form-card) label { color: var(--muted); font-size: 12px; font-weight: 650; }
+.experience-surface :is(.record-form-panel, .record-form-card) :is(input, textarea, select) { min-height: 43px; border-radius: 11px; }
+
+/* The module directory becomes a collection of interactive capability cards. */
+.experience-surface .directory-group { padding: 24px; }
+.experience-surface .directory-group > header { margin-bottom: 20px; }
+.experience-surface .directory-group-icon, .experience-surface .directory-module-icon { color: var(--blue); background: var(--blue-soft); border: 1px solid color-mix(in srgb, var(--blue) 18%, var(--line)); border-radius: 13px; }
+.experience-surface .directory-group h2 { color: var(--ink); font-weight: 750; letter-spacing: -.035em; }
+.experience-surface .directory-module-grid { gap: 12px; }
+.experience-surface .directory-module-grid > a { min-height: 85px; padding: 17px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(130deg, var(--surface-soft), var(--surface)); transition: border-color .2s, transform .2s, box-shadow .2s; }
+.experience-surface .directory-module-grid > a:hover { transform: translateY(-3px); border-color: var(--ui-focus); box-shadow: var(--shadow-sm); }
+.experience-surface .directory-module-grid strong { color: var(--ink); }
+.experience-surface .directory-module-grid small { color: var(--muted); }
+.experience-surface .directory-quick-actions > div > a { border-radius: 12px; border-color: var(--line); background: var(--surface-soft); }
+html[data-theme] .app-shell .experience-surface .page-hero-status strong { color: #fff !important; }
+html[data-theme] .app-shell .experience-surface .page-hero-status span { color: #bbc7e4; }
+.app-shell .experience-surface .directory-quick-actions :is(h2, a strong) { color: var(--ink) !important; }
+.app-shell .experience-surface .directory-quick-actions header span { color: var(--blue); }
+.app-shell .experience-surface .directory-quick-actions header p,
+.app-shell .experience-surface .directory-quick-actions > div > p { color: var(--muted); }
+.app-shell .experience-surface .directory-quick-actions a > span { color: var(--blue); background: var(--blue-soft); }
+
+/* Communications has its own split workspace but the same visual language. */
+.app-shell .experience-surface .comm-container { color: var(--ink); background: transparent; }
+.app-shell .experience-surface .communications-page { min-height: calc(100dvh - 78px); height: auto; padding: 26px; gap: 18px; background: transparent; }
+.app-shell .experience-surface .comm-content { display: grid; grid-template-columns: 330px minmax(0, 1fr); min-height: 530px; gap: 20px; overflow: visible; }
+.app-shell .experience-surface .directory-sidebar { width: auto; border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-sm); }
+.app-shell .experience-surface .contact-panel { min-height: 530px; }
+.app-shell .experience-surface .view-tabs { width: fit-content; padding: 5px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface-strong); }
+.app-shell .experience-surface .view-tab { min-height: 40px; border-radius: 9px; }
+.app-shell .experience-surface .view-tab.active { border-color: transparent; background: var(--surface); color: var(--blue); box-shadow: var(--shadow-sm); }
+.app-shell .experience-surface .comm-brand { min-width: 0; }
+.app-shell .experience-surface .comm-icon { flex-shrink: 0; width: 45px; height: 45px; padding: 11px; border-radius: 13px; background: var(--blue-soft); color: var(--blue); }
+.app-shell .experience-surface .comm-layout { gap: 20px; }
+.app-shell .experience-surface :is(.comm-sidebar, .contact-panel, .setup-card, .config-card) { color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-sm); }
+.app-shell .experience-surface :is(.comm-sidebar, .contact-panel) { overflow: hidden; }
+.app-shell .experience-surface :is(.branch-item, .employee-item) { border-color: var(--line); border-radius: 11px; }
+.app-shell .experience-surface :is(.branch-item, .employee-item).selected { background: var(--blue-soft); color: var(--blue); border-color: var(--ui-focus); }
+.app-shell .experience-surface :is(.branch-name, .employee-name, .contact-header h2, .setup-card h1) { color: var(--ink); }
+.app-shell .experience-surface :is(.branch-code, .employee-role, .device-count) { color: var(--muted); }
+.app-shell .experience-surface .empty-state { color: var(--muted); }
+.app-shell .experience-surface .empty-state svg { color: var(--blue); }
+
+/* Video, maps and 3D keep the contrast their content needs. */
+.experience-surface :is(.camera-tile, .video-tile) { border-radius: 15px; overflow: hidden; border-color: #7785b533; box-shadow: 0 8px 28px #0a10252e; }
+.experience-surface :is(.wall-toolbar, .playback-toolbar, .evidence-toolbar) { border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-sm); }
+.experience-surface .camera-tile .feed-stage { background: #071522; }
+.experience-surface :is(.leaflet-container, .react-flow) { border-radius: 16px; }
+.experience-surface :is(.react-flow__controls, .react-flow__minimap) { overflow: hidden; border: 1px solid var(--line); border-radius: 11px; box-shadow: var(--shadow-sm); }
+.experience-surface .MuiPaper-root { border-radius: 16px; }
+.experience-surface .MuiButton-root { border-radius: 10px; text-transform: none; }
+
+/* Dialogs are distinct floating surfaces, with theme-aware text and controls. */
+.app-shell :is(.modal-card, .modal-content, .modal-dialog, .recording-settings-modal) { border: 1px solid var(--line); border-radius: 22px; background: var(--surface); color: var(--ink); box-shadow: 0 30px 100px #0a102540; }
+html[data-theme] .app-shell :is(.modal-card, .modal-content, .modal-dialog, .recording-settings-modal) .modal-header { background: var(--surface-soft); border-color: var(--line); }
+html[data-theme] .app-shell :is(.modal-card, .modal-content, .modal-dialog, .recording-settings-modal) .modal-header :is(h2, h3) { color: var(--ink) !important; }
+.app-shell :is(.modal-card, .modal-content, .modal-dialog) :is(input, select, textarea) { background: var(--surface); color: var(--ink); border-color: var(--line); border-radius: 11px; }
+
+/* Recovery, legal and enrollment pages receive the same public entry treatment. */
+.public-experience { min-height: 100dvh; color: var(--ink); background: var(--canvas); }
+.public-experience .login-container:not(.auth-entry) { background: radial-gradient(780px 600px at 15% 5%, #7665ee2e, transparent 75%), radial-gradient(700px 500px at 95% 100%, #35bddf1c, transparent 75%), var(--canvas); }
+.public-experience .login-container:not(.auth-entry) .login-card { width: min(480px, calc(100% - 32px)); border: 1px solid var(--line); border-radius: 24px; padding: 34px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-panel); }
+html[data-theme] .public-experience .login-brand h1 { color: var(--ink) !important; font-weight: 750; letter-spacing: -.04em; }
+html[data-theme] .public-experience .login-container:not(.auth-entry) :is(.login-input, .otp-input) { border: 1px solid var(--line) !important; border-radius: 11px; background: var(--surface-soft) !important; color: var(--ink) !important; caret-color: var(--ink) !important; }
+.public-experience .login-container:not(.auth-entry) :is(.form-group label, .login-subtitle, .login-footer) { color: var(--muted); }
+.public-experience .login-container:not(.auth-entry) .brand-icon { color: var(--blue); }
+.public-experience .login-container:not(.auth-entry) .login-button { border-radius: 11px; background: linear-gradient(125deg, var(--ui-accent), var(--ui-accent-hover)); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--ui-accent) 25%, transparent); }
+.public-experience:is([data-area="privacy"], [data-area="terms"]) { padding: 30px 16px; background: radial-gradient(800px 500px at 100% 0%, color-mix(in srgb, var(--blue) 12%, transparent), transparent), var(--canvas); }
+.public-experience:is([data-area="privacy"], [data-area="terms"]) > :is(main, div) { min-height: auto; max-width: 920px; margin-inline: auto; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow-panel); }
+.public-experience:is([data-area="privacy"], [data-area="terms"]) h1 { font-size: clamp(28px, 4vw, 42px); font-weight: 750; letter-spacing: -.045em; }
+
+@media (max-width: 760px) {
+  html[data-theme] .app-shell .experience-surface :is(.workspace-heading, .admin-header, .recording-header, .record-form-hero) { padding: 23px 20px; border-radius: 18px; }
+  .experience-surface .directory-group { padding: 20px; }
+  .experience-surface :is(.record-form-panel, .record-form-card) { padding: 20px; }
+  .public-experience .login-container:not(.auth-entry) .login-card { padding: 28px 22px; }
+  .app-shell .experience-surface .comm-layout { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .experience-surface .communications-page { padding: 16px; }
+  .app-shell .experience-surface .comm-content { grid-template-columns: minmax(0, 1fr); }
+  .app-shell .experience-surface .comm-header { flex-wrap: wrap; gap: 16px; }
+  .app-shell .experience-surface .directory-sidebar { max-height: 430px; }
+  .experience-surface .intelligence-section { overflow-x: clip; }
+  .experience-surface .maintenance-page-inner { padding-inline: 0 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .experience-surface :is(.summary-card, .recording-summary article, .directory-summary article, .directory-module-grid > a):hover { transform: none; }
+}
+@media print {
+  .experience-surface, .experience-surface .workspace-heading { background: white !important; color: black !important; box-shadow: none !important; }
+  .workspace-heading::before { display: none; }
+  html[data-theme] .app-shell .experience-surface .workspace-heading :is(h1, p) { color: black !important; }
+}

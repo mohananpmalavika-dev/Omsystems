@@ -97,7 +97,7 @@ export default function NewWorkOrderPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero">
+      <header className="record-form-hero workspace-heading">
         <div>
           <span>Field service</span>
           <h1>Create work order</h1>

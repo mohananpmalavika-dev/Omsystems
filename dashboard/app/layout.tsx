@@ -11,7 +11,10 @@ import { ApiErrorNotifier } from "@/components/api-error-notifier";
 import { GuardianFAB } from "@/components/guardian-ai/guardian-fab";
 import "./globals.css";
 import "./workspace.css";
-import "./premium.css";
+import "./rich.css";
+import "./dashboard-rich.css";
+import "./experience.css";
+import "./command-atlas.css";
 
 export const metadata: Metadata = {
   title: "KryptonVision | Security Operations",
@@ -50,7 +53,29 @@ const THEME_SCRIPT = `
   // Register PWA Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function() {
-      navigator.serviceWorker.register('/sw.js').then(function(reg) {
+      if (${process.env.NODE_ENV === "development"}) {
+        // A worker installed by an earlier preview can retain development CSS.
+        var workerUrl = new URL('/sw.js', window.location.origin).href;
+        var hadPreviewWorker = navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL === workerUrl;
+        Promise.all([
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            return Promise.all(registrations.filter(function(reg) {
+              var worker = reg.active || reg.waiting || reg.installing;
+              return worker && worker.scriptURL === workerUrl;
+            }).map(function(reg) { return reg.unregister(); }));
+          }),
+          window.caches ? caches.keys().then(function(names) {
+            return Promise.all(names.filter(function(name) { return name.indexOf('kryptonvision-pwa-') === 0; }).map(function(name) { return caches.delete(name); }));
+          }) : Promise.resolve()
+        ]).then(function() {
+          if (hadPreviewWorker && !sessionStorage.getItem('sentinel_preview_cache_recovered')) {
+            sessionStorage.setItem('sentinel_preview_cache_recovered', '1');
+            window.location.reload();
+          }
+        }).catch(function(err) { console.debug('Preview cache cleanup:', err); });
+        return;
+      }
+      navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then(function(reg) {
         reg.update();
       }).catch(function(err) {
         console.debug('ServiceWorker registration:', err);

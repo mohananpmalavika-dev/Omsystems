@@ -83,7 +83,7 @@ export default function NewAssetPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero">
+      <header className="record-form-hero workspace-heading">
         <div>
           <span>Asset registry</span>
           <h1>Register asset</h1>

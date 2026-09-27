@@ -360,7 +360,7 @@ export function AudioStreamMonitoringWorkspace() {
   return (
     <div className="flex flex-col gap-6 p-6 min-h-screen bg-slate-950 text-slate-100 font-sans">
       {/* Top Header & Fleet Status Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-6 workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400">

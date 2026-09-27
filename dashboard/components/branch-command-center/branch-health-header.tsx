@@ -64,7 +64,7 @@ export function BranchHealthHeader({ state, onRefresh }: BranchHealthHeaderProps
   return (
     <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
       {/* Top row: Branch Identity & Overall Severity */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 workspace-heading">
         <div>
           <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
             <span>HO Surveillance</span>

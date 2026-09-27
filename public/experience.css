@@ -1,0 +1,24 @@
+/* Standalone tools share the KryptonVision product identity. */
+:root { --bg-primary: #0b1020; --bg-secondary: #141c32; --bg-card: #19233c; --border-color: #2a3653; --text-primary: #f1f3ff; --text-secondary: #a0aecb; --accent-blue: #a6a2ff; --accent-green: #69d7b0; }
+:root { --bg: #0b1020; --surface: #141c32; --surface2: #19233c; --accent: #a6a2ff; --accent2: #8f81fa; --accent3: #65d5ee; --success: #69d7b0; --text: #f1f3ff; --text2: #a0aecb; --text3: #7f90b5; }
+.product-assistant { background: radial-gradient(900px 500px at 100% 0%, #7361ed22, transparent 75%), var(--bg); color: var(--text); }
+body { font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; background: radial-gradient(900px 500px at 100% 0%, #7361ed22, transparent 75%), #f3f4fc; color: #19213e; }
+body:has(.upload-zone), body:has(.drop-zone) { background: radial-gradient(900px 500px at 100% 0%, #7361ed22, transparent 75%), var(--bg-primary); color: var(--text-primary); }
+.header, header { position: relative; padding: 30px; border: 1px solid #8f8ff033; border-radius: 22px; background: radial-gradient(450px 260px at 100% 0%, #7371ff42, transparent 75%), linear-gradient(125deg, #202057, #111a34); color: #f5f6ff; box-shadow: 0 20px 50px -25px #22225d66; }
+.header h1, header h1 { color: #f5f6ff; font-size: clamp(28px, 3.8vw, 42px); font-weight: 750; letter-spacing: -.05em; }
+.header :is(.subtitle, .eyebrow), header p { color: #bbc7e4; }
+.header .eyebrow { color: #b9b0ff; letter-spacing: .13em; font-weight: 700; }
+.header .stat-card { background: #ffffff09; border: 1px solid #b5b5ff26; border-radius: 15px; }
+.header .stat-value { color: #fff; }
+.header .stat-label { color: #bbc7e4; }
+.card, .panel, .feature-card { border-radius: 18px; border-color: #e2e6f3; box-shadow: 0 12px 32px -16px #393c7424; }
+.tabs { padding: 5px; gap: 5px; border: 1px solid #e2e6f3; border-radius: 13px; background: #edf0fb; }
+.tab-btn { border-radius: 9px; color: #64708f; }
+.tab-btn.active { background: #fff; color: #5854db; border-color: #cbd1ff; box-shadow: 0 3px 10px #24265c10; }
+.upload-instructions code { white-space: normal; overflow-wrap: anywhere; }
+.btn, button, input, select, textarea { border-radius: 11px; }
+.btn-primary { background: linear-gradient(125deg, #5854db, #443dcc); color: white; box-shadow: 0 6px 18px #5854db33; }
+.btn-primary:hover { background: #443dcc; }
+:where(button, a, input, select, textarea):focus-visible { outline: 2px solid #7773ec; outline-offset: 3px; }
+input, select, textarea { border-color: #e2e6f3; }
+@media (max-width: 680px) { body { padding: 14px; } .header, header { padding: 24px 20px; border-radius: 18px; } .stats-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

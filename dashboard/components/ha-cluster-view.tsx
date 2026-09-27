@@ -127,7 +127,7 @@ export function HAClusterView() {
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl">
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center workspace-heading">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-indigo-400">
               <Network className="h-4 w-4" />

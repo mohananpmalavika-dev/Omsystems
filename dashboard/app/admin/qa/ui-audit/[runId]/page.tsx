@@ -121,7 +121,7 @@ export default function QARunReportPage(props: { params: Promise<{ runId: string
 
         {/* Executive Header Banner */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
-          <div className="flex flex-wrap items-center justify-between gap-6">
+          <div className="flex flex-wrap items-center justify-between gap-6 workspace-heading">
             <div>
               <div className="flex items-center gap-2.5">
                 <span className="text-xs font-bold uppercase tracking-wider text-blue-400">QA Run Report</span>

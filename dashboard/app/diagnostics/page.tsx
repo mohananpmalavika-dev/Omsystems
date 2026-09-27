@@ -149,7 +149,7 @@ export default function DiagnosticsPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="mx-auto max-w-4xl">
-        <div className="mb-8 rounded-lg bg-white p-6 shadow-md">
+        <div className="mb-8 rounded-lg bg-white p-6 shadow-md workspace-heading">
           <h1 className="mb-2 text-2xl font-bold text-gray-900">System Diagnostics</h1>
           <p className="text-sm text-gray-600">
             Checking live video wall configuration and connectivity

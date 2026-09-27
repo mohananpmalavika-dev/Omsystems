@@ -278,7 +278,7 @@ export function CameraObstructionWorkspace({ cameraId }: { cameraId?: string }) 
   return (
     <div className="space-y-6">
       {/* Top Banner & Camera Context */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-xl border border-zinc-800 bg-zinc-950/70 backdrop-blur-md shadow-2xl">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-xl border border-zinc-800 bg-zinc-950/70 backdrop-blur-md shadow-2xl workspace-heading">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <span className="p-2 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">

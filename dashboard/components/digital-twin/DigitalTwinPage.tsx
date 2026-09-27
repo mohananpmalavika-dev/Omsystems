@@ -11,7 +11,7 @@ export function DigitalTwinPage() {
 
   return (
     <main className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
+      <header className="border-b border-gray-200 bg-white workspace-heading">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-6 lg:px-8">
           <div>
             <div className="flex items-center gap-2 text-sm font-semibold text-blue-700"><Network className="h-4 w-4" aria-hidden="true" />LIVE INFRASTRUCTURE TWIN</div>

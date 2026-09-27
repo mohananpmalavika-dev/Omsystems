@@ -122,7 +122,7 @@ export default function AuthorizedPersonsPage() {
   return (
     <main className="min-h-[calc(100vh-5rem)] bg-slate-950 p-4 text-slate-100 xl:p-6">
       {/* Header */}
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur-md">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-4 rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-xl backdrop-blur-md workspace-heading">
         <div className="flex gap-4">
           <span className="grid h-12 w-12 place-items-center rounded-2xl bg-emerald-500/10 text-emerald-300">
             <LockKeyhole size={24} />

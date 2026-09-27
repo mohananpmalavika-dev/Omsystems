@@ -23,10 +23,13 @@ const schema = z.object({
   // Optional CIDR to scan (e.g. 192.168.1.0/24). If empty, the agent will infer local /24 networks.
   RTSP_SCAN_CIDR: z.preprocess((value) => value === "" ? undefined : value, z.string().optional()).default(undefined),
   // Comma-separated list of ports to probe for RTSP
-  RTSP_SCAN_PORTS: z.string().default("554,8554,5554,10554,37777,8000,34567"),
-  // Recorder web ports are separate from RTSP ports. They are used only to
-  // identify a recorder before authenticated channel enumeration.
-  RECORDER_HTTP_PORTS: z.string().default("80,8080,8899"),
+  RTSP_SCAN_PORTS: z.string().default("554,555,7447,8554,5554,10554,37777,8000,9527,34567,34599"),
+  // Recorder and camera web ports are used to identify web interfaces and fingerprint devices
+  RECORDER_HTTP_PORTS: z.string().default("80,81,88,443,8000,8080,8081,8088,8888,8899,9000"),
+  // Multicast mDNS (Bonjour) camera discovery
+  MDNS_DISCOVERY_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
+  // Multicast UPnP SSDP camera discovery
+  SSDP_DISCOVERY_ENABLED: z.enum(["true", "false"]).default("true").transform((value) => value === "true"),
   // Upper safety bound for automatic DVR/NVR channel enumeration. Discovery
   // stops earlier after consecutive empty channel batches.
   RECORDER_DISCOVERY_MAX_CHANNELS: z.coerce.number().int().min(1).max(256).default(64),

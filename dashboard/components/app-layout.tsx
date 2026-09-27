@@ -1215,7 +1215,7 @@ function AppLayoutFrame({ children, incidentCount = 0, cameraCount = 0 }: AppLay
             </Link>
           </div>
         </header>
-        <div className="route-surface" data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
+        <div className="route-surface experience-surface" data-area={pathname.split("/")[1] || "overview"} data-section={currentPage.section.toLowerCase().replaceAll(" ", "-")}>
           {isRouteAuthorized ? (
             children
           ) : (

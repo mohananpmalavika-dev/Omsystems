@@ -193,7 +193,7 @@ export function VideoSearchInterface() {
     <div className="video-search-container">
       {/* Header */}
       <div className="search-header">
-        <div>
+        <div className="workspace-heading">
           <h1>
             <Video className="inline" size={24} />
             Video Search & Investigation

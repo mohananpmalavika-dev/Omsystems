@@ -197,7 +197,7 @@ export function DeviceConfigurationCenter() {
     <div className="space-y-6">
       {/* Top Header & Breadcrumbs */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl backdrop-blur">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 workspace-heading">
           <div>
             <div className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-1.5">
               <span>KryptonVision Surveillance</span>

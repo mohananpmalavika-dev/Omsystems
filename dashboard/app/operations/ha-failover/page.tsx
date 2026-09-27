@@ -10,7 +10,7 @@ export default function HaFailoverPage() {
   return (
     <div className="min-h-screen bg-slate-950 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6">
+        <div className="mb-6 workspace-heading">
           <h1 className="text-2xl font-bold text-slate-100 tracking-tight">
             High Availability & Automated Camera Failover
           </h1>

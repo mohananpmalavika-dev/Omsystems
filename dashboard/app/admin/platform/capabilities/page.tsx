@@ -90,7 +90,7 @@ export default function PlatformCapabilitiesPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-6 sm:p-8">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-slate-800">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-6 border-b border-slate-800 workspace-heading">
         <div>
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">

@@ -61,7 +61,7 @@ export default function CameraPurposeAssignmentPage() {
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
+        <div className="workspace-heading">
           <h1>Assign a Purpose to Camera</h1>
           <p style={{ color: "#555" }}>
             Map a lawful CCTV purpose to a specific camera and track assignment details.

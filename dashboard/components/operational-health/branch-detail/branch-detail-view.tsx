@@ -50,7 +50,7 @@ export function BranchDetailView({ health, onClose, onRefresh }: BranchDetailVie
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="max-w-[1920px] mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between workspace-heading">
             <div className="flex items-center gap-4">
               <button
                 onClick={onClose}

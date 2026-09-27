@@ -95,7 +95,7 @@ export default function AssetDetailPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero">
+      <header className="record-form-hero workspace-heading">
         <div>
           <span>Asset registry · {asset.id}</span>
           <h1>Asset details</h1>

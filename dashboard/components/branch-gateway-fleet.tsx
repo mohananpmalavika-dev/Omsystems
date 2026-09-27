@@ -97,7 +97,7 @@ export function BranchGatewayFleet() {
   return <main className="page-container space-y-6">
     <section className="overflow-hidden rounded-2xl border border-blue-900/20 bg-slate-950 text-white shadow-xl shadow-slate-900/10">
       <div className="grid gap-8 bg-[radial-gradient(circle_at_top_right,rgba(37,99,235,.38),transparent_42%)] px-6 py-7 lg:grid-cols-[1fr_auto] lg:px-8">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl workspace-heading">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-300/20 bg-blue-400/10 px-3 py-1 text-xs font-semibold text-blue-100">
             <ShieldCheck size={14}/> Permission-scoped branch estate
           </div>

@@ -151,7 +151,7 @@ export function CCTVEnrollmentWizard({
     <div className="min-h-screen bg-slate-950 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 workspace-heading">
           <h1 className="text-3xl font-bold text-slate-100 mb-2 flex items-center gap-3">
             <Camera className="w-8 h-8 text-indigo-400" />
             CCTV Face Enrollment

@@ -193,7 +193,7 @@ export default function StorageFailoverConsolePage() {
     <AppLayout>
       <div className="p-6 max-w-7xl mx-auto space-y-6 text-gray-100">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-4 workspace-heading">
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold tracking-tight text-white">Storage Target Failover Console</h1>

@@ -285,7 +285,7 @@ export default function DeviceDetailPage() {
           Back to Device Hub
         </Link>
         
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between workspace-heading">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
               <h1 className="text-3xl font-bold text-gray-900">{device.name}</h1>

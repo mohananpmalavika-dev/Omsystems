@@ -44,7 +44,7 @@ html body .auth-entry.login-container {
 .auth-signal { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #8ad0ff; box-shadow: 0 0 14px #56b7ff; animation: auth-signal-pulse 2.6s ease-in-out infinite; }
 .auth-signal-one { left: 18%; top: 42%; }.auth-signal-two { right: 16%; bottom: 27%; animation-delay: 1.3s; }
 .auth-visual-caption { position: absolute; left: 0; bottom: -4px; display: flex; align-items: center; gap: 7px; color: #8bbce7; font-size: 9px; font-weight: 700; letter-spacing: .14em; }
-.auth-visual-pulse { width: 7px; height: 7px; border-radius: 50%; background: #3cdb9a; box-shadow: 0 0 0 4px rgb(60 219 154 / 12%), 0 0 13px rgb(60 219 154 / 64%); }
+.auth-visual-pulse { width: 7px; height: 7px; border-radius: 50%; background: #80b4ff; box-shadow: 0 0 0 4px rgb(128 180 255 / 12%), 0 0 13px rgb(128 180 255 / 64%); }
 .auth-entry .login-introduction-footer { display: flex; align-items: center; gap: 7px; font-size: 11px; color: #8faecb; margin: 0; }
 @keyframes auth-orbit-spin { to { transform: rotateX(67deg) rotateZ(348deg); } }
 @keyframes auth-orbit-spin-reverse { to { transform: rotateX(70deg) rotateZ(-308deg); } }
@@ -114,84 +114,87 @@ html body .auth-entry .login-footer p { color: #78869a !important; }
   .auth-entry .login-introduction-copy { padding: 32px 0; }
 }
 
-/* Match the standalone sign-in surface to the product palette. */
+/* Explicit blue entry palette, independent of saved workspace themes. */
 html body .auth-entry.login-container {
-  --ink: #172b32;
-  --muted: #657980;
-  --surface-soft: #f7f9f8;
-  --line: #dfe8e4;
-  --blue: #087f78;
-  --blue-dark: #05645f;
-  --blue-soft: #e7f5f1;
-  --card-border: #dfe8e4;
-  color: #172b32;
-  background: radial-gradient(750px 400px at 94% -8%, #d7eee8, transparent 72%), #f4f6f5 !important;
-  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --ink: #19213e;
+  --muted: #64708f;
+  --surface-soft: #f7f8fe;
+  --line: #e2e6f3;
+  --blue: #4966e8;
+  --blue-dark: #344fc5;
+  --blue-soft: #edf1ff;
+  --ui-accent: #4966e8;
+  --ui-accent-hover: #344fc5;
+  --ui-focus: #7c92f6;
+  --card-border: #e2e6f3;
+  color: #19213e;
+  background: radial-gradient(750px 400px at 94% -8%, #dee5ff, transparent 72%), #f3f4fc !important;
+  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif;
 }
 .auth-entry-layout {
-  border-color: #dfe8e4;
-  box-shadow: 0 30px 80px -38px rgb(17 55 53 / 32%);
+  border-color: #e2e6f3;
+  box-shadow: 0 30px 80px -38px rgb(35 47 110 / 32%);
 }
 .auth-entry .login-introduction {
   background:
-    radial-gradient(350px 300px at 82% 25%, rgb(87 176 157 / 23%), transparent 78%),
-    linear-gradient(145deg, #183c43 0%, #0e2b35 58%, #0a202b 100%);
+    radial-gradient(450px 360px at 95% 15%, rgb(104 125 255 / 32%), transparent 78%),
+    linear-gradient(145deg, #192b65 0%, #14234b 58%, #0c1734 100%);
 }
 .auth-entry .login-introduction::before {
-  border-color: rgb(181 227 213 / 20%);
-  box-shadow: 0 0 0 54px rgb(181 227 213 / 5%), 0 0 0 110px rgb(181 227 213 / 3%);
+  border-color: rgb(172 194 255 / 20%);
+  box-shadow: 0 0 0 54px rgb(172 194 255 / 5%), 0 0 0 110px rgb(172 194 255 / 3%);
 }
-.auth-entry .login-introduction::after { background: rgb(47 149 130 / 12%); }
+.auth-entry .login-introduction::after { background: rgb(93 120 255 / 16%); }
 .auth-brand-mark {
-  background: linear-gradient(145deg, #2ca393, #105951);
-  border-color: rgb(189 232 214 / 42%);
-  box-shadow: 0 10px 24px rgb(1 25 28 / 28%);
+  background: linear-gradient(145deg, #7798ff, #3857cf);
+  border-color: rgb(183 205 255 / 42%);
+  box-shadow: 0 10px 24px rgb(13 26 68 / 28%);
 }
-.auth-entry .login-kicker { color: #b6d5bf; }
-.auth-entry .login-introduction h2 em { color: #9bdfcc; text-shadow: none; }
-.auth-entry .login-introduction-copy > p:not(.login-kicker) { color: #c4dbd3; }
-.auth-entry .login-introduction li { color: #e2f0eb; }
-.auth-entry .login-introduction li svg { color: #91ddc6; }
+.auth-entry .login-kicker { color: #a9c2ff; }
+.auth-entry .login-introduction h2 em { color: #91bdff; text-shadow: none; }
+.auth-entry .login-introduction-copy > p:not(.login-kicker) { color: #bdcdec; }
+.auth-entry .login-introduction li { color: #e0e9ff; }
+.auth-entry .login-introduction li svg { color: #8abaff; }
 .auth-visual-grid {
-  background-image: linear-gradient(rgb(154 224 202 / 14%) 1px, transparent 1px), linear-gradient(90deg, rgb(154 224 202 / 14%) 1px, transparent 1px);
+  background-image: linear-gradient(rgb(154 192 255 / 14%) 1px, transparent 1px), linear-gradient(90deg, rgb(154 192 255 / 14%) 1px, transparent 1px);
 }
-.auth-orbit { border-color: rgb(154 224 202 / 48%); }
-.auth-orbit-one { box-shadow: 0 0 18px rgb(104 207 177 / 14%); }
-.auth-orbit-two { border-color: rgb(176 231 212 / 34%); }
+.auth-orbit { border-color: rgb(154 192 255 / 48%); }
+.auth-orbit-one { box-shadow: 0 0 18px rgb(104 150 255 / 14%); }
+.auth-orbit-two { border-color: rgb(176 204 255 / 34%); }
 .auth-core {
-  color: #edfff7;
-  background: radial-gradient(circle at 35% 30%, #48bda5, #167e75 52%, #124b51);
-  border-color: rgb(194 235 217 / 70%);
-  box-shadow: 0 0 0 9px rgb(104 207 177 / 9%), 0 0 36px rgb(59 179 148 / 39%);
+  color: #edf4ff;
+  background: radial-gradient(circle at 35% 30%, #7cb5ff, #416de6 52%, #243e94);
+  border-color: rgb(194 214 255 / 70%);
+  box-shadow: 0 0 0 9px rgb(104 150 255 / 9%), 0 0 36px rgb(88 132 244 / 39%);
 }
-.auth-signal { background: #9ce4cb; box-shadow: 0 0 14px #69cbaa; }
-.auth-visual-caption { color: #a4cdbf; }
-.auth-entry .login-introduction-footer { color: #a7c9bd; }
-.auth-entry .auth-entry-eyebrow { color: #087f78 !important; }
-.auth-entry .login-header h1 { color: #172b32 !important; }
-.auth-entry .login-header > p { color: #657980; }
-.auth-entry .auth-mode-selector { border-color: #dfe8e4; background: #f4f7f5; border-radius: 10px; }
-.auth-entry .auth-mode-btn { color: #657980; border-radius: 7px; }
-.auth-entry .auth-mode-btn.active { color: #087f78; }
-html body .auth-entry .login-form .form-group label { color: #274149 !important; }
+.auth-signal { background: #9cbcff; box-shadow: 0 0 14px #739aff; }
+.auth-visual-caption { color: #a6bce6; }
+.auth-entry .login-introduction-footer { color: #a7bce6; }
+.auth-entry .auth-entry-eyebrow { color: #4966e8 !important; }
+.auth-entry .login-header h1 { color: #19213e !important; }
+.auth-entry .login-header > p { color: #64708f; }
+.auth-entry .auth-mode-selector { border-color: #e2e6f3; background: #f0f3fc; border-radius: 12px; }
+.auth-entry .auth-mode-btn { color: #64708f; border-radius: 9px; }
+.auth-entry .auth-mode-btn.active { color: #4966e8; }
+html body .auth-entry .login-form .form-group label { color: #293756 !important; }
 html body .auth-entry .login-form .login-input {
-  border-color: #d4e1db !important;
-  border-radius: 9px;
-  color: #172b32 !important;
-  -webkit-text-fill-color: #172b32;
-  font-family: "Aptos", "Segoe UI Variable Text", "Segoe UI", sans-serif !important;
+  border-color: #d4dcef !important;
+  border-radius: 11px;
+  color: #19213e !important;
+  -webkit-text-fill-color: #19213e;
+  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif !important;
 }
-html body .auth-entry .login-form .login-input:focus { outline-color: #a9dcd3; border-color: #087f78 !important; }
-.auth-entry :is(.forgot-password-link, .support-link) { color: #087f78; }
+html body .auth-entry .login-form .login-input:focus { outline-color: #a8b8f5; border-color: #4966e8 !important; }
+.auth-entry :is(.forgot-password-link, .support-link) { color: #4966e8; }
 .auth-entry .login-button {
-  border-color: #087f78;
-  border-radius: 9px;
-  background: #087f78;
-  box-shadow: 0 5px 16px rgb(8 127 120 / 16%);
+  border-color: #4966e8;
+  border-radius: 11px;
+  background: linear-gradient(125deg, #4966e8, #344fc5);
+  box-shadow: 0 5px 16px rgb(73 102 232 / 22%);
 }
-.auth-entry .login-button:hover:not(:disabled) { background: #05645f; }
-.auth-entry .login-info { color: #086c66; background: #eef8f4; border-color: #cde8df; }
-.auth-entry :is(a, button, summary, input):focus-visible { outline-color: #32a99e; }
+.auth-entry .login-button:hover:not(:disabled) { background: #344fc5; }
+.auth-entry .login-info { color: #3452a7; background: #eef2ff; border-color: #d5def9; }
+.auth-entry :is(a, button, summary, input):focus-visible { outline-color: #7c92f6; }
 @media (prefers-reduced-motion: reduce) {
   .auth-orbit-one, .auth-orbit-two, .auth-core, .auth-signal { animation: none; }
 }

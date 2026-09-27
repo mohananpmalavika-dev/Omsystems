@@ -1,0 +1,14 @@
+import { chromium } from '../node_modules/playwright/index.mjs';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
+await page.route(/\/(api|v1)\//, route => route.fulfill({ status: 503, json: { message: 'Preview data unavailable' } }));
+await page.addInitScript(() => localStorage.setItem('sentinel-grid-active-theme', 'emerald'));
+await page.goto('http://127.0.0.1:3000/login', { waitUntil: 'domcontentloaded', timeout: 120000 });
+await page.waitForTimeout(1200);
+console.log(await page.evaluate(() => ({ savedTheme: document.documentElement.dataset.theme, introduction: getComputedStyle(document.querySelector('.login-introduction')).backgroundImage, button: getComputedStyle(document.querySelector('.login-button')).backgroundImage, overflow: document.documentElement.scrollWidth > innerWidth })));
+await page.screenshot({ path: 'tmp/experience-qa/login-blue.png' });
+await page.setViewportSize({ width: 390, height: 844 });
+await page.waitForTimeout(700);
+await page.screenshot({ path: 'tmp/experience-qa/login-blue-mobile.png' });
+console.log('Mobile overflow:', await page.evaluate(() => document.documentElement.scrollWidth > innerWidth));
+await browser.close();

@@ -88,7 +88,7 @@ export function InfrastructureHealthDashboard() {
   return (
     <div className="infrastructure-dashboard space-y-6 p-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between workspace-heading">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
             <Server className="text-blue-600" size={32} />

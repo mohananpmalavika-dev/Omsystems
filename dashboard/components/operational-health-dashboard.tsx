@@ -145,7 +145,7 @@ export default function OperationalHealthDashboard() {
       <section className="overview-hero">
         <div className="overview-hero-copy">
           <span className="overview-hero-icon"><ShieldCheck size={24} /></span>
-          <div>
+          <div className="workspace-heading">
             <div className="overview-eyebrow"><i /> Unified command health</div>
             <h1>Security estate at a glance</h1>
             <p>Live operational posture across branches, cameras, recording, storage and edge connectivity.</p>

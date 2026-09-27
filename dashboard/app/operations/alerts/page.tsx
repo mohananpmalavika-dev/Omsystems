@@ -160,7 +160,7 @@ export default function OperationalAlertsPage() {
   return (
     <div className="page-container">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 workspace-heading">
         <div>
           <h1 className="text-2xl font-bold mb-2">Operational Alerts</h1>
           <div className="flex items-center gap-4 text-sm">

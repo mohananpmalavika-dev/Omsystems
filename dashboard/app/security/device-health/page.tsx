@@ -168,7 +168,7 @@ export default function SecurityDeviceHealthPage() {
 
   return (
     <main className="min-h-[calc(100vh-5rem)] bg-slate-950 p-4 text-slate-100 xl:p-6">
-      <header className="relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6">
+      <header className="relative mb-5 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/90 p-6 workspace-heading">
         <div className="absolute -right-16 -top-24 h-64 w-64 rounded-full bg-red-500/10 blur-3xl" />
         <div className="relative flex flex-wrap items-start justify-between gap-5">
           <div className="flex items-start gap-4">

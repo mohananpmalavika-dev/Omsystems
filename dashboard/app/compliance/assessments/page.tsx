@@ -117,7 +117,7 @@ export default function AssessmentsPage() {
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center workspace-heading">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Compliance Assessments</h1>
             <p className="text-gray-600 mt-1">

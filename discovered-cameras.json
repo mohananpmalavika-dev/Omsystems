@@ -1,0 +1,35 @@
+[
+  {
+    "ip": "192.168.29.45",
+    "port": 80,
+    "manufacturer": "ONVIF Device",
+    "protocol": [
+      "ONVIF"
+    ],
+    "urls": [
+      "http://192.168.29.45/onvif/device_service"
+    ]
+  },
+  {
+    "ip": "192.168.29.171",
+    "port": 80,
+    "manufacturer": "ONVIF Device",
+    "protocol": [
+      "ONVIF"
+    ],
+    "urls": [
+      "http://192.168.29.171/onvif/device_service"
+    ]
+  },
+  {
+    "ip": "192.168.29.195",
+    "port": 80,
+    "manufacturer": "ONVIF Device",
+    "protocol": [
+      "ONVIF"
+    ],
+    "urls": [
+      "http://192.168.29.195/onvif/device_service"
+    ]
+  }
+]

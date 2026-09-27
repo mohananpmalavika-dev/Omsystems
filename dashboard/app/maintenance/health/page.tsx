@@ -205,7 +205,7 @@ export default function HealthMonitoringPage() {
       <section className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-950 text-white shadow-xl shadow-slate-950/10">
         <div className="relative px-6 py-7 sm:px-8">
           <div className="absolute inset-y-0 right-0 w-2/5 bg-[radial-gradient(circle_at_center,rgba(20,184,166,.22),transparent_65%)]" />
-          <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
+          <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-end workspace-heading">
             <div className="max-w-2xl">
               <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.18em] text-teal-300"><Activity size={14} /> Fleet operations</div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Device health, made actionable.</h1>

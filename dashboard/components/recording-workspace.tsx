@@ -184,7 +184,7 @@ export function RecordingWorkspace() {
 
   return (
     <main className="recording-workspace">
-      <header className="recording-header">
+      <header className="recording-header workspace-heading">
         <div><span className="eyebrow">RECORDING OPERATIONS</span><h1>Recording playback</h1><p>Search footage on camera SD cards and recorder hard disks, or review indexed recordings.</p></div>
         <a href="/" className="secondary-button"><Video size={15} />Live wall</a>
       </header>

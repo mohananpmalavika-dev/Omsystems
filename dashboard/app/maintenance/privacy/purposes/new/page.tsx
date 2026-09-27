@@ -41,7 +41,7 @@ export default function PrivacyPurposeNewPage() {
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
+        <div className="workspace-heading">
           <h1>New Privacy Purpose</h1>
           <p style={{ color: "#555" }}>
             Capture lawful basis and risk level for CCTV processing purposes.

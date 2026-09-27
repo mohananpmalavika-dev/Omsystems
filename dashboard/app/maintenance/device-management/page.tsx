@@ -126,7 +126,7 @@ export default function DeviceManagementPage() {
     <div className="content device-management-page font-sans">
       <div className="device-management-layout max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5 workspace-heading">
           <div>
             <div className="flex items-center space-x-2 text-xs text-indigo-400 font-mono mb-1">
               <Shield className="w-3.5 h-3.5" />

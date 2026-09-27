@@ -9,7 +9,7 @@ export default function MyFeaturesPage() {
   return (
     <div className="min-h-screen bg-slate-950 p-6">
       <div className="max-w-5xl mx-auto">
-        <div className="mb-8">
+        <div className="mb-8 workspace-heading">
           <h1 className="text-3xl font-bold text-slate-100 mb-2">
             My Features
           </h1>

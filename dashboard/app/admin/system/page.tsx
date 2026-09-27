@@ -207,7 +207,7 @@ export default function SystemManagementPage() {
   return (
     <AppLayout>
       <div className="admin-shell">
-        <header className="admin-header">
+        <header className="admin-header workspace-heading">
           <div>
             <a href="/admin" className="admin-back">
               <ArrowLeft size={15} /> Back to Admin

@@ -56,7 +56,9 @@ export async function fingerprintHttpRecorder(
 }
 
 export function looksLikeRouterOrGateway(value: string) {
-  return /\b(?:tenda|tp-link|tplink|d-link|dlink|netgear|asus|linksys|mikrotik|openwrt|dd-wrt|huawei|zte|broadband\s*router|wireless\s*router|home\s*gateway|wifi\s*router|mini_httpd|goahead-webs|rompager|boa\b|router\s*management|admin\s*login)\b/i.test(value);
+  const isCamera = /\b(?:camera|tapo|kasa|cam\b|ipcam|ipc\b|netcam|nvr|dvr|cctv|dome|bullet|ptz|reolink|foscam|vivotek|amcrest|hikvision|dahua|axis)\b/i.test(value);
+  if (isCamera) return false;
+  return /\b(?:tenda|tp-link|tplink|d-link|dlink|netgear|asus|linksys|mikrotik|openwrt|dd-wrt|huawei|zte|broadband\s*router|wireless\s*router|home\s*gateway|wifi\s*router|mini_httpd|goahead-webs|rompager|boa\b|router\s*management|router\s*login|gateway\s*login|admin\s*login)\b/i.test(value);
 }
 
 export async function isRouterHost(
@@ -97,10 +99,20 @@ function looksLikeRecorder(value: string) {
 function manufacturerFor(vendor: VendorStreamFamily, evidence: string) {
   if (vendor === "cp-plus") return "CP PLUS";
   if (vendor === "dahua") return "Dahua";
+  if (vendor === "amcrest") return "Amcrest";
   if (vendor === "hikvision") return "Hikvision";
   if (vendor === "uniview") return "Uniview";
+  if (vendor === "axis") return "Axis";
+  if (vendor === "reolink") return "Reolink";
+  if (vendor === "foscam") return "Foscam";
+  if (vendor === "vivotek") return "Vivotek";
+  if (vendor === "tp-link") return "TP-Link";
+  if (vendor === "d-link") return "D-Link";
+  if (vendor === "ubiquiti") return "Ubiquiti";
+  if (vendor === "hanwha") return "Hanwha";
+  if (vendor === "bosch") return "Bosch";
   if (vendor === "tvt") return "TVT";
-  const named = evidence.match(/\b(CP\s*[-_]*\s*PLUS|Dahua|Hikvision|Uniview|TVT|Secureye|Prama|Tiandy|Matrix|Honeywell)\b/i)?.[1];
+  const named = evidence.match(/\b(CP\s*[-_]*\s*PLUS|Dahua|Hikvision|Uniview|TVT|Secureye|Prama|Tiandy|Matrix|Honeywell|Reolink|Foscam|Vivotek|Amcrest|TP-Link|Tapo|D-Link|Ubiquiti|Hanwha|Bosch)\b/i)?.[1];
   return named?.replace(/cp\s*[-_]*\s*plus/i, "CP PLUS") ?? "Network DVR/NVR";
 }
 

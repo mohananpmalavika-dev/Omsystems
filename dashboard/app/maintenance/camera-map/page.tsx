@@ -168,7 +168,7 @@ export default function CameraMapPage() {
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between workspace-heading">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Camera Location Map</h1>
             <p className="text-sm text-gray-600 mt-1">

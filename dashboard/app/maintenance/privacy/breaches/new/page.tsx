@@ -44,7 +44,7 @@ export default function PrivacyBreachNewPage() {
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <div>
+        <div className="workspace-heading">
           <h1>Report a Privacy Breach</h1>
           <p style={{ color: "#555" }}>
             Log a new privacy breach so it can be triaged and tracked by the CCTV privacy team.

@@ -89,7 +89,7 @@ export function BranchHeader({ snapshot, onRefresh }: BranchHeaderProps) {
         </nav>
 
         {/* Header Content */}
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between workspace-heading">
           {/* Left: Branch Info */}
           <div>
             <div className="flex items-center gap-3 mb-2">

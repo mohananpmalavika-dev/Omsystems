@@ -124,6 +124,17 @@
     .status-badge.invalid { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); }
     .notice { font-size: 12px; color: var(--text-secondary); text-align: center; margin-top: 16px; }
   </style>
+  <style>
+    /* Keep the verifier self-contained for offline evidence review. */
+    :root { --bg-primary: #0b1020; --bg-secondary: #141c32; --bg-card: #19233c; --border-color: #2a3653; --text-primary: #f1f3ff; --text-secondary: #a0aecb; --accent-blue: #a6a2ff; --accent-green: #69d7b0; }
+    body { font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", sans-serif; background: radial-gradient(900px 500px at 100% 0%, #7361ed22, transparent 75%), var(--bg-primary); }
+    .header, header { padding: 30px; border: 1px solid #8f8ff033; border-radius: 22px; background: radial-gradient(450px 260px at 100% 0%, #7371ff42, transparent 75%), linear-gradient(125deg, #202057, #111a34); box-shadow: 0 20px 50px -25px #22225d66; }
+    h1 { font-size: clamp(26px, 3.8vw, 38px); letter-spacing: -.045em; }
+    .card, .panel { border-radius: 18px; box-shadow: 0 12px 32px -16px #00000055; }
+    button, .drop-zone { border-radius: 13px; }
+    :where(button, a, input):focus-visible { outline: 2px solid #a6a2ff; outline-offset: 3px; }
+    @media (max-width: 680px) { body { padding: 14px; } .header, header { padding: 24px 20px; } }
+  </style>
 </head>
 <body>
   <div class="container">

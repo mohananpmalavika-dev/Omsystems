@@ -451,7 +451,7 @@ export const MaintenanceDashboard: React.FC<{
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-8 workspace-heading">
           <h1 className="text-3xl font-bold text-gray-900">
             Maintenance Dashboard
           </h1>

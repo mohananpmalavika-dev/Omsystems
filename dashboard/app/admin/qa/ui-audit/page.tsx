@@ -244,7 +244,7 @@ export default function AutomatedUiAuditPage() {
     <AppLayout>
       <div className="space-y-6 pb-12">
         {/* Header Banner */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-5">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-5 workspace-heading">
           <div>
             <div className="flex items-center gap-2">
               <span className="rounded-md bg-blue-950 px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-blue-400 border border-blue-800">

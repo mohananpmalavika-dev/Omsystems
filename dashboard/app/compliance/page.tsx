@@ -61,7 +61,7 @@ export default function CompliancePage() {
   return (
     <div className="compliance-page">
       {/* Header */}
-      <header className="page-header">
+      <header className="page-header workspace-heading">
         <div className="header-content">
           <div className="header-title">
             <Shield size={32} className="header-icon" />

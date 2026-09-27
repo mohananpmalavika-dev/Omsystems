@@ -180,7 +180,7 @@ export function PersonReIdWorkspace({
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 py-5 text-slate-100 sm:px-6 lg:px-8 lg:py-7">
       {/* Header & Telemetry Stat Cards */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between workspace-heading">
         <div>
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-400">

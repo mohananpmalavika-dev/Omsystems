@@ -96,7 +96,7 @@ export default function AdminPage() {
     return (
       <AppLayout>
         <div className="admin-shell">
-          <header className="admin-header">
+          <header className="admin-header workspace-heading">
             <div>
               <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
               <div className="admin-title">

@@ -95,7 +95,7 @@ export function EnhancedReportWrapper({
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 sm:p-6">
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-6 workspace-heading">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
           <h1 className="text-2xl sm:text-3xl font-bold">{title}</h1>
           

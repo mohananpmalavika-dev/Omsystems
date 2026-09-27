@@ -12,7 +12,7 @@ export default function PerformancePage() {
     <AppLayout>
       <div className="min-h-screen bg-slate-950 p-6">
         <div className="mx-auto max-w-7xl">
-          <div className="mb-8">
+          <div className="mb-8 workspace-heading">
             <h1 className="text-3xl font-bold text-slate-100">Performance Observability</h1>
             <p className="mt-2 text-sm text-slate-400">
               Real-time performance metrics, API latency percentiles, database query analysis, and system health

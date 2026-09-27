@@ -171,7 +171,7 @@ export function MobileSocOperatorView() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between max-w-md mx-auto border-x border-slate-800 shadow-2xl pb-6">
         {/* Mobile Header Bar */}
-        <div className="p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 space-y-2 sticky top-0 z-40 backdrop-blur-md">
+        <div className="p-4 bg-gradient-to-r from-rose-950 via-slate-900 to-slate-950 border-b border-rose-900/50 space-y-2 sticky top-0 z-40 backdrop-blur-md workspace-heading">
           <div className="flex items-center justify-between">
             <button
               onClick={() => setSelectedIncident(null)}

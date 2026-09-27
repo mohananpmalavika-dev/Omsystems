@@ -59,7 +59,7 @@ export default function NewAmcContractPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero">
+      <header className="record-form-hero workspace-heading">
         <div>
           <span>Coverage & contracts</span>
           <h1>Create AMC contract</h1>

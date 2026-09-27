@@ -245,7 +245,7 @@ export function DeviceConnectivityView() {
     <div className="space-y-6 text-slate-100">
       {/* Header Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-emerald-950/40 border border-slate-800 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 workspace-heading">
           <div>
             <div className="flex items-center gap-2 text-emerald-400 text-xs font-mono font-bold uppercase tracking-widest">
               <Zap className="w-4 h-4 text-emerald-400" />

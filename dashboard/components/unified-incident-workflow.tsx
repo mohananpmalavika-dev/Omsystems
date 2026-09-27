@@ -292,7 +292,7 @@ export function UnifiedIncidentWorkflow({ incidentId }: { incidentId: string }) 
   return (
     <div className="space-y-6">
       {/* 1. Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4 workspace-heading">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
             <span className="text-xs font-mono font-bold px-2.5 py-1 bg-red-950 text-red-400 border border-red-800 rounded-md">

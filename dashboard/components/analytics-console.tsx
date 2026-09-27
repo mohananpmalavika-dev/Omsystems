@@ -269,7 +269,7 @@ export function AnalyticsConsole() {
 
   return (
     <>
-      <header className="analytics-header">
+      <header className="analytics-header workspace-heading">
         <div>
           <a href="/" className="admin-back"><ArrowLeft size={15} /> Security operations</a>
           <div className="analytics-title">

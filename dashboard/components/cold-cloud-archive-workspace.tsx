@@ -249,7 +249,7 @@ export function ColdCloudArchiveWorkspace() {
     <div className="space-y-6">
       {/* Header Banner */}
       <div className="rounded-xl border border-slate-700/60 bg-gradient-to-r from-slate-900 via-sky-950/40 to-slate-900 p-6 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between workspace-heading">
           <div>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/20 border border-sky-400/40 text-sky-400 shadow-inner">

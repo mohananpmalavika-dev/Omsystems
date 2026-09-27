@@ -261,7 +261,7 @@ export default function MediaGatewayFailoverConsolePage() {
     <AppLayout>
       <div className="min-h-screen bg-slate-950 text-slate-100 p-6 space-y-6">
         {/* Top Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5 workspace-heading">
           <div>
             <div className="flex items-center gap-2">
               <div className="p-2 bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/30">

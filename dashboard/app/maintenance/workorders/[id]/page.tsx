@@ -175,7 +175,7 @@ export default function WorkOrderDetailPage() {
 
   return (
     <main className="record-form-page work-order-form-page">
-      <header className="record-form-hero">
+      <header className="record-form-hero workspace-heading">
         <div>
           <span>Field service · {item.workOrderNumber}</span>
           <h1>Work order details</h1>
