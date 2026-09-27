@@ -179,7 +179,26 @@ export class EnhancedSecurityAnalytics extends BaseDetector {
   };
   
   constructor() {
-    super('enhanced-security-analytics');
+    super('enhanced-security-analytics', '1.0.0');
+  }
+
+  async initialize(): Promise<void> {
+    // No async setup required for enhanced security analytics
+  }
+
+  async cleanup(): Promise<void> {
+    this.trackedObjects.clear();
+    this.zones.clear();
+    this.lines.clear();
+    this.events = [];
+    this.healthHistory = [];
+  }
+
+  getHealth(): { status: 'healthy' | 'degraded' | 'unhealthy'; details?: string } {
+    return {
+      status: 'healthy',
+      details: 'Enhanced security analytics detector is available',
+    };
   }
   
   /**
